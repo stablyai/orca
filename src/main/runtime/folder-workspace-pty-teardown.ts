@@ -6,6 +6,7 @@ export type FolderWorkspacePtyTeardownDeps = {
   runtime: WorktreeTeardownRuntime
   getLocalProvider: () => IPtyProvider | null
   onPtyStopped: ((ptyId: string) => void) | null
+  deferSurfaceRetirement?: boolean
 }
 
 /** Removal must proceed even when PTY teardown is stuck or its host is unreachable. */
@@ -26,6 +27,7 @@ export async function teardownFolderWorkspacePtys(
     onPtyStopped: deps.onPtyStopped ?? undefined,
     // PTY sweeps miss structured chats; close them too before forgetting the workspace.
     closeStructuredSessions: teardownStops('folder-removal', 'structured-chat'),
+    deferSurfaceRetirement: deps.deferSurfaceRetirement,
     ...(connectionId ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
   }).catch((error) => {
     console.warn(`[worktree-teardown] failed for ${worktreeId}:`, error)

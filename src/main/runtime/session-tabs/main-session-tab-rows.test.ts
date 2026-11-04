@@ -4,7 +4,11 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import { withMainSessionTabRows, type MainSessionTabRows } from './main-session-tab-rows'
+import {
+  withCanonicalSessionSurfaces,
+  withMainSessionTabRows,
+  type MainSessionTabRows
+} from './main-session-tab-rows'
 
 const WT = 'repo::/wt'
 const NONE_EXITED = (): boolean => false
@@ -327,5 +331,79 @@ describe('session.tabs rows from main (layout-owner build)', () => {
 
     // Why: the saved session never records untitled, and the phone keeps such a tab read-only.
     expect(merged.tabs[0]).toMatchObject({ id: 'm1', isDirty: true, isUntitled: true })
+  })
+})
+
+describe('canonical content with device-owned presentation', () => {
+  it('retires stale terminal rows and bindings while preserving browser/editor placement and selection', () => {
+    const published = {
+      ...windowSnapshot(
+        [
+          browser('b1'),
+          terminal('t::a', { ptyId: 'old-resource', title: 'shell' }),
+          file('f1'),
+          terminal('closed::a')
+        ],
+        ['b1', 't', 'f1', 'closed'],
+        'f1'
+      ),
+      tabGroupLayout: { type: 'leaf' as const, groupId: 'g' }
+    }
+    const merged = withCanonicalSessionSurfaces(
+      published,
+      mainProjection(
+        [terminal('t::a', { ptyId: 'current-resource' }), terminal('new::a'), file('elsewhere')],
+        ['t', 'new', 'elsewhere'],
+        'new::a'
+      ),
+      NONE_EXITED
+    )
+
+    expect(merged.tabs.map((row) => row.id)).toEqual(['b1', 't::a', 'f1', 'new::a'])
+    expect(merged.tabs.find((row) => row.id === 't::a')).toMatchObject({
+      ptyId: 'current-resource',
+      title: 'shell'
+    })
+    expect(merged.tabGroups).toEqual([
+      { id: 'g', tabOrder: ['b1', 't', 'f1', 'new'], activeTabId: 'f1' }
+    ])
+    expect(merged).toMatchObject({
+      activeTabId: 'f1',
+      activeTabType: 'file',
+      tabGroupLayout: published.tabGroupLayout
+    })
+  })
+
+  it('keeps every device group and its selection when canonical order differs', () => {
+    const published = {
+      ...windowSnapshot([terminal('t::a'), browser('b1'), file('f1')], ['t', 'b1'], 'f1'),
+      activeGroupId: 'device-editor',
+      tabGroups: [
+        { id: 'g', activeTabId: 'b1', tabOrder: ['b1', 't'] },
+        { id: 'device-editor', activeTabId: 'f1', tabOrder: ['f1'] }
+      ]
+    }
+    const merged = withCanonicalSessionSurfaces(
+      published,
+      mainProjection([terminal('t::a')], ['t'], 't::a'),
+      NONE_EXITED
+    )
+    expect(merged.tabGroups).toEqual(published.tabGroups)
+    expect(merged).toMatchObject({ activeGroupId: 'device-editor', activeTabId: 'f1' })
+  })
+
+  it('treats initialized empty content as authoritative without clearing other tab kinds', () => {
+    const merged = withCanonicalSessionSurfaces(
+      windowSnapshot(
+        [terminal('closed::a'), file('f1'), browser('b1')],
+        ['closed', 'f1', 'b1'],
+        'b1'
+      ),
+      mainProjection([], [], null),
+      NONE_EXITED
+    )
+    expect(merged.tabs.map((row) => row.id)).toEqual(['f1', 'b1'])
+    expect(merged.tabGroups?.[0]?.tabOrder).toEqual(['f1', 'b1'])
+    expect(merged.activeTabId).toBe('b1')
   })
 })

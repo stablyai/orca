@@ -164,7 +164,7 @@ describe('a running turn whose record is older than the loaded page', () => {
   it('is not undone by an older page read while live frames moved on', async () => {
     await runLongTurn('turn-1', 250)
     const before = hydrate()
-    const older = readAgentSessionHistory(journal, {
+    const older = await readAgentSessionHistory(journal, {
       sessionId: 'session-1',
       direction: 'before',
       cursor: { epoch: before.epoch ?? '', sequence: before.items[0]?.sequence ?? 0 },

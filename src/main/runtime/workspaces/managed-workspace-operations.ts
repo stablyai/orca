@@ -311,7 +311,7 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
 
   /** The window reopened a slept agent whose tab is gone in a fresh tab; this record is spent. */
   async retireStrandedSleepRecord(worktreeId: string, paneKey: string): Promise<void> {
-    await this.commitWorkspaceSessionEdit(
+    await this.commitWorkspaceResumeRecordEdit(
       this.getWorkspaceSessionHostIdForWorktree(worktreeId),
       (session) => dropStrandedSleepRecord(session, worktreeId, paneKey)
     )

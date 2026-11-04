@@ -1,3 +1,9 @@
+import {
+  journalTable,
+  type JournalTableScope
+} from '../../../native-chat/agent-session-journal/journal-table-scope'
+import type { SQLInputValue } from 'node:sqlite'
+import type { JournalReadConnection } from '../../../native-chat/agent-session-journal/journal-sql-owner'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Load session/ledger rows once and persist only changed rows inside the journal transaction.
 // Unreadable records remain present and immutable; every mutation of their ids is refused.
@@ -75,7 +81,13 @@ function unreadableRecordReason(value: unknown): string {
 
 /** Loaded leases are unreconciled until this host proves ownership; persisted state alone grants no writer.
  * Unreadable operation/key/tab rows are skipped; unreadable records are set aside intact. */
-export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
+type StoreRead = { sql: string; parameters: SQLInputValue[]; one?: boolean }
+function* loadAgentSessionStoreSteps(): Generator<
+  StoreRead | null,
+  AgentSessionStoreState,
+  SqliteRow[]
+> {
+  let examined = 0
   const state: AgentSessionStoreState = {
     records: new Map(),
     operations: new Map(),
@@ -85,15 +97,21 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
   }
   // Read-only newer databases may lack tables; report no chats without creating them.
   if (
-    !db
-      .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?")
-      .get('agent_session_records')
+    (yield {
+      sql: "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?",
+      parameters: ['agent_session_records'],
+      one: true
+    }).length === 0
   ) {
     return state
   }
-  for (const row of db
-    .prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY rowid')
-    .all()) {
+  for (const row of yield {
+    sql: 'SELECT session_id, record_json FROM agent_session_records ORDER BY rowid',
+    parameters: []
+  }) {
+    if (++examined % 128 === 0) {
+      yield null
+    }
     const sessionId = text(row, 'session_id')
     if (sessionId === null) {
       continue
@@ -124,34 +142,45 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
       })
     }
   }
-  for (const row of db
-    .prepare('SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid')
-    .all()) {
+  for (const row of yield {
+    sql: 'SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid',
+    parameters: []
+  }) {
+    if (++examined % 128 === 0) {
+      yield null
+    }
     const key = text(row, 'operation_key')
     const parsed = parseJson(text(row, 'row_json'))
     if (key !== null && parsed.ok && isReadableAgentSessionStoreOperation(key, parsed.value)) {
       state.operations.set(key, parsed.value)
     }
   }
-  for (const row of db
-    .prepare(
-      'SELECT key_id AS keyId, retired_at AS retiredAt FROM agent_session_retired_claim_keys ORDER BY rowid'
-    )
-    .all()) {
+  for (const row of yield {
+    sql: 'SELECT key_id AS keyId, retired_at AS retiredAt FROM agent_session_retired_claim_keys ORDER BY rowid',
+    parameters: []
+  }) {
+    if (++examined % 128 === 0) {
+      yield null
+    }
     const entry = { keyId: row.keyId, retiredAt: Number(row.retiredAt) }
     if (isReadableRetiredAgentSessionClaimKey(entry)) {
       state.retiredClaimKeys.push(entry)
     }
   }
-  const recorded = db
-    .prepare('SELECT 1 AS present FROM agent_session_store_meta WHERE key = ?')
-    .get(SESSION_TABS_RECORDED)
+  const recorded =
+    (yield {
+      sql: 'SELECT 1 AS present FROM agent_session_store_meta WHERE key = ?',
+      parameters: [SESSION_TABS_RECORDED],
+      one: true
+    }).length > 0
   const table = new AgentSessionTabTable()
-  for (const row of db
-    .prepare(
-      'SELECT tab_id AS tabId, session_id AS sessionId FROM agent_session_tabs ORDER BY position'
-    )
-    .all()) {
+  for (const row of yield {
+    sql: 'SELECT tab_id AS tabId, session_id AS sessionId FROM agent_session_tabs ORDER BY position',
+    parameters: []
+  }) {
+    if (++examined % 128 === 0) {
+      yield null
+    }
     const entry = { tabId: row.tabId, sessionId: row.sessionId }
     if (
       isReadableAgentSessionStoreTab(entry) &&
@@ -167,32 +196,73 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
   return state
 }
 
+export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
+  const steps = loadAgentSessionStoreSteps()
+  let rows: SqliteRow[] = []
+  for (;;) {
+    const next = steps.next(rows)
+    if (next.done) {
+      return next.value
+    }
+    const query = next.value
+    if (query) {
+      const statement = db.prepare(query.sql)
+      const row = query.one ? statement.get(...query.parameters) : undefined
+      rows = query.one ? (row ? [row] : []) : statement.all(...query.parameters)
+    }
+  }
+}
+
+export async function loadAgentSessionStoreRowsAsync(
+  read: JournalReadConnection
+): Promise<AgentSessionStoreState> {
+  const steps = loadAgentSessionStoreSteps()
+  let rows: SqliteRow[] = []
+  for (;;) {
+    const next = steps.next(rows)
+    if (next.done) {
+      return next.value
+    }
+    const query = next.value
+    if (!query) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    } else {
+      const statement = read.prepare(query.sql)
+      const row = query.one ? await statement.get(...query.parameters) : undefined
+      rows = query.one ? (row ? [row] : []) : await statement.all(...query.parameters)
+    }
+  }
+}
+
 function writeTabIndex(
   db: Database.Database,
-  index: { recorded: boolean; tabs: readonly PersistedAgentSessionTab[] }
+  index: { recorded: boolean; tabs: readonly PersistedAgentSessionTab[] },
+  tableScope: JournalTableScope = 'main'
 ): void {
-  db.prepare('DELETE FROM agent_session_tabs').run()
+  db.prepare(`DELETE FROM ${journalTable(tableScope, 'agent_session_tabs')}`).run()
   const insert = db.prepare(
-    'INSERT INTO agent_session_tabs (tab_id, session_id, position) VALUES (?, ?, ?)'
+    `INSERT INTO ${journalTable(tableScope, 'agent_session_tabs')} (tab_id, session_id, position) VALUES (?, ?, ?)`
   )
   index.tabs.forEach(({ tabId, sessionId }, position) => insert.run(tabId, sessionId, position))
   if (index.recorded) {
-    db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
-      SESSION_TABS_RECORDED,
-      '1'
-    )
+    db.prepare(
+      `INSERT OR REPLACE INTO ${journalTable(tableScope, 'agent_session_store_meta')} (key, value) VALUES (?, ?)`
+    ).run(SESSION_TABS_RECORDED, '1')
   } else {
-    db.prepare('DELETE FROM agent_session_store_meta WHERE key = ?').run(SESSION_TABS_RECORDED)
+    db.prepare(
+      `DELETE FROM ${journalTable(tableScope, 'agent_session_store_meta')} WHERE key = ?`
+    ).run(SESSION_TABS_RECORDED)
   }
 }
 
 // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
 export function insertAgentSessionOperationRowsIfAbsent(
   db: Database.Database,
-  rows: AgentSessionStoreRowWrites['operations']['upsert']
+  rows: AgentSessionStoreRowWrites['operations']['upsert'],
+  tableScope: JournalTableScope = 'main'
 ): void {
   const insert = db.prepare(
-    'INSERT INTO agent_session_operations (operation_key, row_json) VALUES (?, ?) ON CONFLICT(operation_key) DO NOTHING'
+    `INSERT INTO ${journalTable(tableScope, 'agent_session_operations')} (operation_key, row_json) VALUES (?, ?) ON CONFLICT(operation_key) DO NOTHING`
   )
   for (const [key, json] of rows) {
     if (insert.run(key, json).changes === 0) {
@@ -206,36 +276,41 @@ export function insertAgentSessionOperationRowsIfAbsent(
 /** Exactly the rows a transaction changed. The caller holds the journal transaction. */
 export function writeAgentSessionStoreRows(
   db: Database.Database,
-  writes: AgentSessionStoreRowWrites
+  writes: AgentSessionStoreRowWrites,
+  tableScope: JournalTableScope = 'main'
 ): void {
   const upsertRecord = db.prepare(
-    'INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET record_json = excluded.record_json'
+    `INSERT INTO ${journalTable(tableScope, 'agent_session_records')} (session_id, record_json) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET record_json = excluded.record_json`
   )
   for (const [sessionId, json] of writes.records.upsert) {
     upsertRecord.run(sessionId, json)
   }
   for (const sessionId of writes.records.remove) {
-    db.prepare('DELETE FROM agent_session_records WHERE session_id = ?').run(sessionId)
+    db.prepare(
+      `DELETE FROM ${journalTable(tableScope, 'agent_session_records')} WHERE session_id = ?`
+    ).run(sessionId)
   }
   const upsertOperation = db.prepare(
-    'INSERT INTO agent_session_operations (operation_key, row_json) VALUES (?, ?) ON CONFLICT(operation_key) DO UPDATE SET row_json = excluded.row_json'
+    `INSERT INTO ${journalTable(tableScope, 'agent_session_operations')} (operation_key, row_json) VALUES (?, ?) ON CONFLICT(operation_key) DO UPDATE SET row_json = excluded.row_json`
   )
   for (const [key, json] of writes.operations.upsert) {
     upsertOperation.run(key, json)
   }
   for (const key of writes.operations.remove) {
-    db.prepare('DELETE FROM agent_session_operations WHERE operation_key = ?').run(key)
+    db.prepare(
+      `DELETE FROM ${journalTable(tableScope, 'agent_session_operations')} WHERE operation_key = ?`
+    ).run(key)
   }
   if (writes.retiredClaimKeys) {
-    db.prepare('DELETE FROM agent_session_retired_claim_keys').run()
+    db.prepare(`DELETE FROM ${journalTable(tableScope, 'agent_session_retired_claim_keys')}`).run()
     const insert = db.prepare(
-      'INSERT INTO agent_session_retired_claim_keys (key_id, retired_at) VALUES (?, ?)'
+      `INSERT INTO ${journalTable(tableScope, 'agent_session_retired_claim_keys')} (key_id, retired_at) VALUES (?, ?)`
     )
     for (const { keyId, retiredAt } of writes.retiredClaimKeys) {
       insert.run(keyId, retiredAt)
     }
   }
   if (writes.sessionTabs) {
-    writeTabIndex(db, writes.sessionTabs)
+    writeTabIndex(db, writes.sessionTabs, tableScope)
   }
 }

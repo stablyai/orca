@@ -86,13 +86,13 @@ function adapter(): StructuredAgentSessionAdapter {
   }
 }
 
-function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void {
+async function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): Promise<void> {
   host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW,
@@ -125,7 +125,7 @@ beforeEach(async () => {
     }
   }))
   store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
-  openHost()
+  await openHost()
 })
 
 afterEach(async () => {
@@ -154,7 +154,7 @@ describe('recovery exits', () => {
     })
 
     await reopenStore()
-    openHost({ mintSpawnToken: () => 'spawn-b' })
+    await openHost({ mintSpawnToken: () => 'spawn-b' })
 
     expect(await host.attach(CALLER, hostTestAttachParams(2))).toMatchObject({ ok: true })
     expect(acquire).toHaveBeenCalledTimes(2)
@@ -167,7 +167,7 @@ describe('recovery exits', () => {
 
     // Failed owner proof without cleanup proof leaves the committed reservation recovering.
     vi.spyOn(store, 'proveOwner').mockRejectedValueOnce(new Error('handle proof lost'))
-    openHost({
+    await openHost({
       mintSpawnToken: () => 'spawn-b',
       probeOwner: async () => ({ outcome: 'pid-absent' })
     })
@@ -184,7 +184,7 @@ describe('recovery exits', () => {
     })
 
     await reopenStore()
-    openHost({
+    await openHost({
       mintSpawnToken: () => 'spawn-c',
       probeOwner: async () => ({ outcome: 'pid-absent' })
     })
@@ -218,7 +218,7 @@ describe('recovery exits', () => {
     const stopOwnerProcess = vi.fn((_pid: number, _signal: 'SIGTERM' | 'SIGKILL') => {
       orphanAlive = false
     })
-    openHost({
+    await openHost({
       mintSpawnToken: () => 'spawn-b',
       probeOwner: async () =>
         orphanAlive
@@ -251,7 +251,7 @@ describe('recovery exits', () => {
     const stopOwnerProcess = vi.fn(() => {
       orphanAlive = false
     })
-    openHost({
+    await openHost({
       mintSpawnToken: () => 'spawn-b',
       probeOwner: async () =>
         orphanAlive
@@ -303,7 +303,7 @@ describe('recovery exits', () => {
     store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
     const realProbe = createStructuredAgentSessionOwnerProbe('local')
     let overlapDriven = false
-    openHost({
+    await openHost({
       mintSpawnToken: () => 'spawn-b',
       probeOwner: async (record) => {
         const probe = await realProbe(record)

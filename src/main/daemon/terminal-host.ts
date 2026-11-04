@@ -1,3 +1,4 @@
+import { TerminalHostSurfaceExecution } from './terminal-host-surface-execution'
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
 import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
@@ -45,6 +46,9 @@ const DEFAULT_MAX_TOMBSTONES = 1000
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
+  readonly surfaceExecution = new TerminalHostSurfaceExecution(this.sessions, (id) =>
+    this.kill(id, { immediate: true })
+  )
   // Serializes creates for one id across async spawn validation.
   private pendingCreations = new Map<string, PendingTerminalCreation>()
   private sessionTeardown = new TerminalSessionTeardown(this.sessions)
@@ -73,6 +77,10 @@ export class TerminalHost {
   }
 
   createOrAttach(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
+    return this.surfaceExecution.run(opts, (options) => this.createOwnedTerminal(options))
+  }
+
+  private createOwnedTerminal(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
     return runTerminalCreation(
       opts,
       this.sessions,
@@ -308,6 +316,7 @@ export class TerminalHost {
   }
 
   dispose(): Promise<void> {
+    this.surfaceExecution.disposeReader()
     this.creationFenced = true
     if (this.disposePromise) {
       return this.disposePromise

@@ -146,15 +146,9 @@ export function registerJournalLifecycleBoundaryTests(
       expect(await readdir(fixture.root)).toContain('agent-session-journal.db')
       expect(await readdir(fixture.root)).not.toContain('agent-session-journal')
       await journal.close()
-      await fixture.withJournalDatabase(fixture.root, (db) => {
-        expect(
-          db.prepare("SELECT value_json FROM journal_outcomes WHERE field = 'items'").get()
-            ?.value_json
-        ).toContain('"kind":"message"')
-        expect(db.prepare('SELECT epoch FROM journal_sessions').get()).toMatchObject({
-          epoch: journal.epoch
-        })
-      })
+      const saved = await fixture.savedJournalFacts()
+      expect(saved.item?.value_json).toContain('"kind":"message"')
+      expect(saved.epoch).toMatchObject({ epoch: journal.epoch })
     })
   })
 

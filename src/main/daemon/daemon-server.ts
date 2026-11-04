@@ -1,3 +1,8 @@
+import {
+  createSurfaceExecutionEventPublisher,
+  sampleDaemonStreamBacklog,
+  createTransientFactEventPublisher
+} from './daemon-control-event-relay'
 import { randomUUID } from 'node:crypto'
 import type { Socket } from 'node:net'
 import { setImmediate as waitForImmediate } from 'node:timers/promises'
@@ -72,18 +77,19 @@ export class DaemonServer {
         this.lifecycle.reevaluateIdleShutdown()
       }
     })
+    this.host.surfaceExecution.executor.onWake(
+      createSurfaceExecutionEventPublisher(
+        () => this.connections.values(),
+        () => this.streamDataBatcher
+      )
+    )
     this.attachments = new DaemonSessionAttachments(this.host)
-    this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) => {
-      const clientId = this.attachments.clientIdForSession(sessionId)
-      if (clientId) {
-        this.streamDataBatcher.enqueueControlEvent(clientId, sessionId, {
-          type: 'event',
-          event: 'transientFact',
-          sessionId,
-          payload: fact
-        })
-      }
-    })
+    this.transientFactRelay = new BackgroundTransientFactRelay(
+      createTransientFactEventPublisher(
+        () => this.attachments,
+        () => this.streamDataBatcher
+      )
+    )
     this.streamDataBatcher = new DaemonStreamDataBatcher(
       (clientId) => this.connections.get(clientId),
       {
@@ -227,14 +233,13 @@ export class DaemonServer {
       ptySpawnHealthCheck: options.ptySpawnHealthCheck ?? checkPtySpawnHealth,
       log: this.log
     })
-    this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(() => ({
-      clients: Array.from(this.connections.values(), (client) => ({
-        clientId: client.clientId,
-        socketBufferedBytes: client.streamSocket?.writableLength ?? 0,
-        batcherQueuedChars: this.streamDataBatcher.queuedCharsForClient(client.clientId)
-      })),
-      backgroundedSessionIdSuffixes: this.transientFactRelay.backgroundedSessionIdSuffixes()
-    }))
+    this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(() =>
+      sampleDaemonStreamBacklog(
+        this.connections.values(),
+        this.streamDataBatcher,
+        this.transientFactRelay
+      )
+    )
   }
 
   async start(): Promise<void> {
@@ -252,9 +257,7 @@ export class DaemonServer {
     this.automaticWork.start()
   }
 
-  shutdown(): Promise<void> {
-    return this.lifecycle.shutdown()
-  }
+  shutdown = (): Promise<void> => this.lifecycle.shutdown()
 
   private isIdle(): boolean {
     if (this.admission.inFlight > 0 || this.host.hasLiveSessions()) {

@@ -67,9 +67,9 @@ it('preserves actual TRUE writer-close through published close, join, and a heal
   await closing
   await fixture.drain()
   killEvidence()
-  const database = JournalHostDatabase.open(fixture.directory)
+  const database = await JournalHostDatabase.open(fixture.directory)
   try {
-    const reopened = AgentSessionRecordStore.open({
+    const reopened = await AgentSessionRecordStore.open({
       journalDatabase: database,
       hostId: 'local',
       legacySessionTabIds: []

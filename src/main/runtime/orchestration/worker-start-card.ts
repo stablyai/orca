@@ -21,11 +21,18 @@ export function prepareAgentCreationCard(
     if (!host || !destination) {
       return null
     }
+    const captured = Promise.resolve(destination).catch((error: unknown) => {
+      logStartCardFailure(error)
+      return null
+    })
     return (card) => {
       const observedAt = Date.now()
       void Promise.resolve()
         .then(async () => {
-          await host.appendAgentStart(destination, card(), observedAt)
+          const target = await captured
+          if (target) {
+            await host.appendAgentStart(target, card(), observedAt)
+          }
         })
         .catch(logStartCardFailure)
     }

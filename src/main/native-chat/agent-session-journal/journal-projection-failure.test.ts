@@ -1,4 +1,4 @@
-import { readJournalLegacyCards } from './journal-queue-import'
+import { readJournalLegacyCardsAsync } from './journal-queue-import'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,6 +9,16 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
+import { failNextNativeJournalStatement } from './journal-native-test-instrumentation'
+import {
+  commandReceiptFixture,
+  writeCommandReceiptTestRecord
+} from './command-receipt-test-support'
+import type { JournalPersistencePlan } from './journal-persistence-plan'
+import {
+  seedTestLegacyQueueRows,
+  setTestJournalTrigger
+} from './journal-native-fixture-test-support'
 import { journalInputOrder } from './journal-input-order'
 import { encodeJournalState } from './journal-state-codec'
 import { JournalStopMarks } from './journal-stop-marks'
@@ -29,7 +39,7 @@ let database: JournalHostDatabase
 let rig: ReturnType<typeof projectionWriter> | undefined
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcomes-failure-'))
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(async () => {
@@ -48,7 +58,7 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
     role: 'user',
     blocks: [{ type: 'text', text: 'Continue' }]
   }
-  const state = seedOutcomeRows(database, [
+  const state = await seedOutcomeRows(database, [
     projectionEpochRow,
     {
       ...base(2),
@@ -78,6 +88,7 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
       payloadFingerprint: 'legacy'
     }
   ])
+  await database.transaction((plan) => writeCommandReceiptTestRecord(plan, sessionId))
   rig = projectionWriter(database, state)
   const writer = rig.writer
   const stops = new JournalStopMarks({ state: rig.state })
@@ -99,10 +110,18 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
       providerHandle: { kind: 'codex', threadId: 'thread-1' },
       payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, user)
     })
-  database.db.exec('CREATE TABLE test_receipts (seq INTEGER)')
   const receipt = {
-    write: (db: JournalHostDatabase['db'], row?: JournalRow) => {
-      db.prepare('INSERT INTO test_receipts VALUES (?)').run(row?.seq ?? 0)
+    write: (plan: JournalPersistencePlan, row?: JournalRow) => {
+      const sequence = row?.seq ?? rig!.state().lastSequence + 2
+      plan.add({
+        kind: 'receipt',
+        scope: { kind: 'caller', callerKey: 'caller-1' },
+        receipt: commandReceiptFixture({
+          sessionId,
+          operationId: `receipt-${row?.seq ?? 0}`,
+          result: { kind: 'journal-row', epoch, sequence }
+        })
+      })
     },
     committed: vi.fn()
   }
@@ -110,16 +129,25 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
   expect(receipt.committed).toHaveBeenCalledOnce()
   expect(rig.state().submissions.has('preserved')).toBe(true)
   expect(stops.latest()?.settle).toBe(settle)
-  expectProjectionMatches(database, rig.state())
-  database.db
-    .prepare(`INSERT INTO queued_messages
-    (session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state)
-    VALUES (?,?,?,?,?,0,'legacy','waiting')`)
-    .run(sessionId, 'overlay', 2, JSON.stringify(user), 'overlay')
+  await expectProjectionMatches(database, rig.state())
+  await seedTestLegacyQueueRows(database, sessionId, [
+    {
+      messageId: 'overlay',
+      position: 2,
+      body: user,
+      fingerprint: 'overlay',
+      state: 'waiting',
+      holdReason: null,
+      returnedReason: null,
+      returnedRejection: null,
+      consumedAs: null,
+      queuedAt: null
+    }
+  ])
   const beforeRead = encodeJournalState(rig.state())
   journalInputOrder(rig.state()).overlay(
     rig.state(),
-    readJournalLegacyCards(database.db, rig.state())
+    await database.read((read) => readJournalLegacyCardsAsync(read, rig!.state()))
   )
   expect(encodeJournalState(rig.state())).toEqual(beforeRead)
   const saved = encodeJournalState(rig.state())
@@ -158,59 +186,48 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
     expect(live.inputCards.get('D')?.baseline).toBeDefined()
   }
   const scenarios = [
-    [
-      'outcome',
-      `CREATE TRIGGER failure BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'failure'); END`
-    ],
-    [
-      'coverage',
-      `CREATE TRIGGER failure BEFORE UPDATE ON journal_outcome_epochs BEGIN SELECT RAISE(ABORT, 'failure'); END`
-    ],
-    [
-      'receipt',
-      `CREATE TRIGGER failure BEFORE INSERT ON test_receipts BEGIN SELECT RAISE(ABORT, 'failure'); END`
-    ],
-    [
-      'outer',
-      `CREATE TRIGGER failure BEFORE INSERT ON test_receipts BEGIN SELECT RAISE(ROLLBACK, 'failure'); END`
-    ]
+    ['outcome', { event: 'INSERT', table: 'journal_outcomes' }],
+    ['coverage', { event: 'UPDATE', table: 'journal_outcome_epochs' }],
+    ['receipt', { event: 'INSERT', table: 'agent_session_command_receipts' }],
+    ['outer', { event: 'INSERT', table: 'agent_session_command_receipts', rollback: true }]
   ] as const
-  for (const [name, sql] of scenarios) {
-    database.db.exec(sql)
+  for (const [name, trigger] of scenarios) {
+    await setTestJournalTrigger(database, { name: 'failure', ...trigger })
     await expect(attempt(name)).rejects.toThrow('failure')
-    database.db.exec('DROP TRIGGER failure')
+    await setTestJournalTrigger(database, { remove: 'failure' })
     unchanged()
     expect(rig.state()).toBe(live)
     expect(encodeJournalState(live)).toEqual(saved)
     expect(receipt.committed).toHaveBeenCalledOnce()
     expect(stops.latest()?.settle).toBe(settle)
-    expectProjectionMatches(database, live)
+    await expectProjectionMatches(database, live)
   }
-  const exec = database.db.exec.bind(database.db)
-  const spy = vi.spyOn(database.db, 'exec').mockImplementation((sql) => {
-    if (sql === 'COMMIT') {
-      throw new Error('injected boundary failure')
-    }
-    exec(sql)
-  })
+  await failNextNativeJournalStatement(database, 'COMMIT', 'injected boundary failure')
   await expect(attempt('commit')).rejects.toThrow('injected boundary failure')
-  spy.mockRestore()
   unchanged()
   expect(rig.state()).toBe(live)
   expect(encodeJournalState(live)).toEqual(saved)
   expect(stops.latest()?.settle).toBe(settle)
   expect(receipt.committed).toHaveBeenCalledOnce()
-  expect(database.db.prepare('SELECT COUNT(*) AS n FROM test_receipts').get()?.n).toBe(1)
-  expectProjectionMatches(database, live)
+  expect(
+    (
+      await database.read((read) =>
+        read.prepare('SELECT COUNT(*) AS n FROM agent_session_command_receipts').get()
+      )
+    )?.n
+  ).toBe(1)
+  await expectProjectionMatches(database, live)
   await attempt('retry')
   expect(live.inputEntries.has('legacy')).toBe(false)
   expect(live.inputEntries.has('retry')).toBe(true)
   expect(live.inputCards.has('overlay')).toBe(true)
-  const overlayWrites = database.db
-    .prepare(
-      "SELECT seq,value_json FROM journal_outcomes WHERE field='inputCards' AND entry_key=? AND deleted=0 ORDER BY seq"
-    )
-    .all(JSON.stringify('overlay'))
+  const overlayWrites = await database.read((read) =>
+    read
+      .prepare(
+        "SELECT seq,value_json FROM journal_outcomes WHERE field='inputCards' AND entry_key=? AND deleted=0 ORDER BY seq"
+      )
+      .all(JSON.stringify('overlay'))
+  )
   // Both rows touch the introduced object after the legacy-baseline cleanup in the first row.
   expect(overlayWrites.map((row) => row.seq)).toEqual([live.lastSequence - 1, live.lastSequence])
   expect(overlayWrites.map((row) => row.value_json)).toEqual(
@@ -218,7 +235,7 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
   )
 
   expect(receipt.committed).toHaveBeenCalledTimes(2)
-  expectProjectionMatches(database, live)
+  await expectProjectionMatches(database, live)
   const first = rig.state().lastSequence + 1
   await writer.enqueueRows(() => [
     (seq, ts) => ({
@@ -236,14 +253,16 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
       change: { op: 'held', holdReason: 'edited' }
     })
   ])
-  const contributions = database.db
-    .prepare(`SELECT seq, value_json FROM journal_outcomes
+  const contributions = await database.read((read) =>
+    read
+      .prepare(`SELECT seq, value_json FROM journal_outcomes
     WHERE field = 'queue.cards' AND seq >= ? ORDER BY seq`)
-    .all(first)
+      .all(first)
+  )
   expect(
     contributions.map((entry) =>
       typeof entry.value_json === 'string' ? JSON.parse(entry.value_json)[1].holdReason : undefined
     )
   ).toEqual([null, 'edited'])
-  expectProjectionMatches(database, rig.state())
+  await expectProjectionMatches(database, rig.state())
 })

@@ -26,6 +26,7 @@ import type { RetiredNameRegistry } from './worktree/retired-name-registry'
 import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
 import type { WorktreeMeta } from './worktree/meta-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
+import type { SurfaceProfileDomain } from './workspace-surfaces/surface-profile-domain'
 import type { OrcadMigrationEvictedReceipt } from './orcad-migration/orcad-migration-evicted-receipts'
 import type {
   OrcadMigrationImportReceipt,
@@ -58,6 +59,8 @@ export type PersistedMobileClientTabSelections = Record<
 
 export type PersistedState = {
   schemaVersion: number
+  /** Owned by profile command transactions; saved window snapshots cannot replace it. */
+  workspaceSurfaces?: SurfaceProfileDomain
   repos: Repo[]
   projects: Project[]
   projectHostSetups: ProjectHostSetup[]

@@ -14,8 +14,7 @@ import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
 import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
 import { createTerminalShutdownGuardController } from './terminal-shutdown-guards'
 import { commitTerminalShutdownState } from './terminal-shutdown-state'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { recordPaneSleepThroughLayoutOwner } from './terminal-sleep-layout-owner'
+import { commitPaneSleepThroughLayoutOwner } from './terminal-sleep-layout-owner'
 
 type ExactTerminalStopResult = {
   stoppedPtyIds?: string[]
@@ -99,6 +98,20 @@ export function createTerminalShutdownActions(
             }
           }
         }
+      }
+
+      if (keepIdentifiers && !hostStop) {
+        await commitPaneSleepThroughLayoutOwner(
+          get(),
+          worktreeId,
+          Object.fromEntries(
+            Object.entries(sleepingAgentSessionRecords).map(([key, record]) => [
+              key,
+              { ...record, origin: 'live' as const }
+            ])
+          ),
+          true
+        )
       }
 
       if (expectedRuntimePtyIds.length === 0) {
@@ -189,10 +202,6 @@ export function createTerminalShutdownActions(
       }
 
       guards.commitHandlerSnapshots()
-      // Switch point: main records a sleep's resumes once the terminals stopped (none on removal).
-      if (ORCA_LAYOUT_OWNER_IS_MAIN && !hostStop) {
-        recordPaneSleepThroughLayoutOwner(get(), worktreeId, sleepingAgentSessionRecords)
-      }
       commitTerminalShutdownState({
         exitGuardPtyIds,
         get,
@@ -205,6 +214,9 @@ export function createTerminalShutdownActions(
         tabs,
         worktreeId
       })
+      if (keepIdentifiers && !hostStop) {
+        await commitPaneSleepThroughLayoutOwner(get(), worktreeId, sleepingAgentSessionRecords)
+      }
     }
   }
 }

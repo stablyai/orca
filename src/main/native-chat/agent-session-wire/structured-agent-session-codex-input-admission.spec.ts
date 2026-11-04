@@ -1,3 +1,4 @@
+import { setTestJournalTrigger } from '../agent-session-journal/journal-host-database-test-support'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -325,17 +326,21 @@ it.each(['stop', 'stop-save-refusal', 'exit', 'exit-after-close-record'] as cons
         expect(signal?.aborted).toBe(false)
       }
       if (ending === 'stop-save-refusal') {
-        const db = codexInputFinalizationFixture().database()
+        const database = await codexInputFinalizationFixture().database()
         const receipt = journal.receiptFor(id)
-        db.exec(`CREATE TRIGGER fail_stop_receipt BEFORE INSERT ON agent_session_command_receipts
-          BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)
+        await setTestJournalTrigger(database, {
+          name: 'fail_stop_receipt',
+          event: 'INSERT',
+          table: 'agent_session_command_receipts',
+          message: 'receipt unavailable'
+        })
         try {
           expect(await stop()).toMatchObject({
             ok: false,
             refusal: { details: { reason: 'stopFailed', agent: 'codex' } }
           })
         } finally {
-          db.exec('DROP TRIGGER fail_stop_receipt')
+          await setTestJournalTrigger(database, { remove: 'fail_stop_receipt' })
         }
         expect(journal.receiptFor(id)).toEqual(receipt)
         expect(journal.queuedMessages.pauses()).toEqual([])

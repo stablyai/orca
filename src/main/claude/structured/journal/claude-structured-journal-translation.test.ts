@@ -252,7 +252,7 @@ describe('Claude structured journal translation', () => {
   it('journals a count-to-200 stream as one assistant item carrying the complete reply', async () => {
     const journal = await openAgentSessionJournal({
       identity: JOURNAL_IDENTITY,
-      database: openTestJournalHostDatabase(journalRoot),
+      database: await openTestJournalHostDatabase(journalRoot),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
@@ -313,7 +313,7 @@ describe('Claude structured journal translation', () => {
   it('restores a cancelled prompt as terminal history after reopening the journal', async () => {
     const journal = await openAgentSessionJournal({
       identity: JOURNAL_IDENTITY,
-      database: openTestJournalHostDatabase(journalRoot),
+      database: await openTestJournalHostDatabase(journalRoot),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
@@ -342,7 +342,7 @@ describe('Claude structured journal translation', () => {
 
     const reopened = await openAgentSessionJournal({
       identity: JOURNAL_IDENTITY,
-      database: openTestJournalHostDatabase(journalRoot),
+      database: await openTestJournalHostDatabase(journalRoot),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-2'
     })

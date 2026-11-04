@@ -13,7 +13,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredRewindCut } from '../native-chat/agent-session-wire/structured-rewind-cut'
-import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
+import { loadTestJournal } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 
 export function registerCodexCatchUpEchoTests(input: {
   chat: typeof catchUpChat
@@ -121,7 +121,7 @@ export function registerCodexCatchUpEchoTests(input: {
     await c.open([...native, outside])
     expect(c.journal.snapshot()).toEqual(whole)
     expect(c.journal.queuedMessages.get('draft')).toEqual(draft)
-    const restored = restoreJournal(c.db, SESSION)
+    const restored = await loadTestJournal(c.root, SESSION)
     expect(restored?.state.queue.cards.get('draft')).toEqual(draft)
   })
 

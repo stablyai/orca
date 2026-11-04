@@ -135,6 +135,7 @@ export abstract class DaemonPtyRuntimeState {
   protected coldRestoreCache = new ColdRestorePayloadCache(undefined, (sessionId) => {
     this.sleepRestoreSessionIds.delete(sessionId)
   })
+  protected surfaceRecoveryInterests = new Set<symbol>()
   protected activeSessionIds = new Set<string>()
   protected getSizeUnsupported = false
   protected sessionsAwaitingDaemonRecovery = new Set<string>()

@@ -210,9 +210,9 @@ async function pipedChat() {
       expect(prompts).toHaveLength(2)
     },
     reopen: async () => {
-      const database = JournalHostDatabase.open(directory)
+      const database = await JournalHostDatabase.open(directory)
       try {
-        const store = AgentSessionRecordStore.open({
+        const store = await AgentSessionRecordStore.open({
           journalDatabase: database,
           hostId: 'local',
           legacySessionTabIds: []

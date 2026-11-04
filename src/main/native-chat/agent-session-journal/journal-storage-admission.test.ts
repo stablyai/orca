@@ -25,7 +25,11 @@ import { admitOutcomeFormat1 } from './journal-outcome-format-1'
 import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { storedFailureFact, storedProviderHandle } from './journal-storage-schema'
 import type { UndeclaredStorageKeys } from './journal-storage-strict'
-import { restoreJournal } from './journal-open'
+import { restoreJournalAsync } from './journal-async-open'
+import {
+  appendTestItemOutcome,
+  setTestStoredSenderAgent
+} from './journal-outcome-fixture-test-support'
 import type { JournalReducerState } from './journal-reducer'
 import {
   journalEntryJson,
@@ -97,15 +101,23 @@ async function writeItems(opener: typeof journals, ordinals: number[]): Promise<
   return journal.epoch
 }
 
-const db = () => openTestJournalHostDatabase(root).db
+const databaseOf = async () => await openTestJournalHostDatabase(root)
+const loadedState = async (sessionId: string) =>
+  (await databaseOf()).read((read) => restoreJournalAsync(read, sessionId))
 
 /** Every saved byte of the chat database: a refusal writes none of it. */
-function savedBytes(): unknown {
-  const tables = db()
-    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`)
-    .all()
-    .map(({ name }) => String(name))
-  return tables.map((table) => [table, db().prepare(`SELECT * FROM "${table}"`).all()])
+async function savedBytes(): Promise<unknown> {
+  return (await databaseOf()).read(async (read) => {
+    const tables = await read
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`)
+      .all()
+    const saved: unknown[] = []
+    for (const { name } of tables) {
+      const table = String(name).replaceAll('"', '""')
+      saved.push([name, await read.prepare(`SELECT * FROM "${table}"`).all()])
+    }
+    return saved
+  })
 }
 
 /** Adds a key no build declares inside an item's first text block, as a newer build would. */
@@ -115,35 +127,25 @@ function withLaterKey(json: string): string {
 
 it("refuses a newer build's record with an undeclared nested key before adopting it, writes nothing, and starts no epoch", async () => {
   await writeItems(journals, [0, 1, 2])
-  const database = openTestJournalHostDatabase(root)
-  const source = db().prepare('SELECT generation, through_seq FROM journal_outcome_epochs').get()
-  const generation = Number(source?.generation)
-  const through = Number(source?.through_seq)
-  expect(restoreJournal(db(), IDENTITY.sessionId)).toMatchObject({ newer: null, damage: null })
+  const database = await openTestJournalHostDatabase(root)
+  expect(await loadedState(IDENTITY.sessionId)).toMatchObject({ newer: null, damage: null })
 
   // The newer build revises item 2 with a key this build does not declare.
   const itemId = 'codex:thread-1:turn-1:2'
-  const latest = db()
-    .prepare(`SELECT value_json FROM journal_outcomes WHERE field = 'items' AND entry_key = ?
+  const latest = await database.read((read) =>
+    read
+      .prepare(`SELECT value_json FROM journal_outcomes WHERE field = 'items' AND entry_key = ?
       ORDER BY seq DESC LIMIT 1`)
-    .get(JSON.stringify(itemId))
+      .get(JSON.stringify(itemId))
+  )
   const revised = withLaterKey(String(latest?.value_json))
-  const next = through + 1
-  const ordinal = (index: number) =>
-    `s${String(next).padStart(16, '0')}:${String(index).padStart(16, '0')}`
-  database.transaction((write) => {
-    const insert = write.prepare(`INSERT INTO journal_outcomes
-      (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
-      VALUES (?, ?, ?, ?, 1, ?, ?, 0)`)
-    insert.run(generation, next, 'items', JSON.stringify(itemId), ordinal(0), revised)
-    write.prepare('UPDATE journal_outcome_epochs SET through_seq = ?').run(next)
-  })
-  const before = savedBytes()
+  await appendTestItemOutcome(database, IDENTITY.sessionId, itemId, revised)
+  const before = await savedBytes()
 
-  expect(restoreJournal(db(), IDENTITY.sessionId)).toMatchObject({ newer: { sequence: 1 } })
+  expect(await loadedState(IDENTITY.sessionId)).toMatchObject({ newer: { sequence: 1 } })
   // No handle exists for a refused chat, so nothing can replace, roll over or rewind its epoch.
   await expect(open(journals)).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-  expect(savedBytes()).toEqual(before)
+  expect(await savedBytes()).toEqual(before)
 })
 
 it.each([
@@ -155,13 +157,26 @@ it.each([
     await writeItems(inputs, [0, 1])
     if (later.length > 0) {
       await writeItems(journals, later)
-      expect(db().prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get()?.n).not.toBe(0)
+      expect(
+        (
+          await (
+            await databaseOf()
+          ).read((read) => read.prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get())
+        )?.n
+      ).not.toBe(0)
     }
-    const row = liveTestJournalRows(db(), IDENTITY.sessionId).find((stored) => stored.seq === 2)
-    updateTestJournalRowJson(db(), IDENTITY.sessionId, 2, withLaterKey(row?.rowJson ?? ''))
-    const before = savedBytes()
+    const row = (await liveTestJournalRows(await databaseOf(), IDENTITY.sessionId)).find(
+      (stored) => stored.seq === 2
+    )
+    await updateTestJournalRowJson(
+      await databaseOf(),
+      IDENTITY.sessionId,
+      2,
+      withLaterKey(row?.rowJson ?? '')
+    )
+    const before = await savedBytes()
     await expect(open(journals)).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-    expect(savedBytes()).toEqual(before)
+    expect(await savedBytes()).toEqual(before)
   }
 )
 
@@ -223,15 +238,22 @@ function plain(state: JournalReducerState): unknown {
   )
 }
 
-it('folds the checked-in input rows into the same chat, every value of which storage declares', () => {
-  const database = openTestJournalHostDatabase(root)
-  database.transaction((write) => {
+it('folds the checked-in input rows into the same chat, every value of which storage declares', async () => {
+  const database = await openTestJournalHostDatabase(root)
+  await database.transaction((write) => {
     publishTestJournalEpoch(write, prefix.sessionId, prefix.epoch)
     for (const [index, json] of prefix.rows.entries()) {
-      insertTestJournalRowJson(write, prefix.sessionId, index + 1, json, 1_001 + index)
+      insertTestJournalRowJson(
+        write,
+        prefix.sessionId,
+        index + 1,
+        json,
+        1_001 + index,
+        prefix.epoch
+      )
     }
   })
-  const loaded = restoreJournal(db(), prefix.sessionId)
+  const loaded = await loadedState(prefix.sessionId)
   expect(loaded).toMatchObject({ newer: null, damage: null })
   if (!loaded) {
     throw new Error('missing prefix chat')
@@ -278,7 +300,7 @@ it('folds the checked-in input rows into the same chat, every value of which sto
 })
 
 it('compacts past every collection emitted by the current writer, including native whole values', async () => {
-  const database = openTestJournalHostDatabase(root)
+  const database = await openTestJournalHostDatabase(root)
   // Hybrid golden input (authored plus release-emitted rows), restated by today's production writer.
   const rows = prefix.rows.map((json) => {
     const parsed = parseJournalRow(json)
@@ -287,7 +309,7 @@ it('compacts past every collection emitted by the current writer, including nati
     }
     return parsed.row
   })
-  const rig = projectionWriter(database, seedOutcomeRows(database, rows))
+  const rig = projectionWriter(database, await seedOutcomeRows(database, rows))
   try {
     await rig.writer.enqueue((seq) => ({
       ...projectionBase(seq),
@@ -307,27 +329,35 @@ it('compacts past every collection emitted by the current writer, including nati
         body: { kind: 'status', text: `revision ${revision}` }
       }))
     }
-    const saved = () =>
-      database.db.prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key').all()
-    const before = saved()
+    const saved = async () =>
+      await database.read((read) =>
+        read.prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key').all()
+      )
+    const before = await saved()
     const emitted = new Set(before.map((row) => row.field))
     for (const { path } of journalStateCollections(rig.state())) {
       expect(emitted.has(path), path).toBe(true)
     }
     expect(new Set(before.map((row) => row.format))).toEqual(new Set([JOURNAL_OUTCOME_FORMAT]))
-    const raw = database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
+    const raw = await database.read((read) =>
+      read.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
+    )
     const compaction = new JournalOutcomeCompaction()
-    while (compaction.page(database)) {
+    while (await compaction.page(database)) {
       /* bounded production pages */
     }
     expect(
-      saved().filter((row) => row.field === 'items' && row.entry_key === '"after-every-field"')
+      await (
+        await saved()
+      ).filter((row) => row.field === 'items' && row.entry_key === '"after-every-field"')
     ).toHaveLength(2)
-    for (const row of saved()) {
+    for (const row of await saved()) {
       expect(before).toContainEqual(row)
     }
-    expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(raw)
-    expectProjectionMatches(database, rig.state())
+    expect(
+      await database.read((read) => read.prepare('SELECT * FROM journal_rows ORDER BY seq').all())
+    ).toEqual(raw)
+    await expectProjectionMatches(database, rig.state())
   } finally {
     rig.queue.markClosed()
     await rig.queue.drain()
@@ -380,22 +410,8 @@ it.each(['codex', 'future-agent', undefined, 42])(
     await journal.queuedMessages.insert({ messageId: 'queued-1', body })
     await journals.closeAll()
     // A later or damaged writer can change this declared optional value without adding any key.
-    const records = db()
-      .prepare(
-        "SELECT generation, seq, ordinal, value_json FROM journal_outcomes WHERE field IN ('items', 'queue.cards')"
-      )
-      .all()
-    expect(records.length).toBeGreaterThanOrEqual(3)
-    for (const row of records) {
-      const json = JSON.stringify(JSON.parse(String(row.value_json)), (key, value) =>
-        key === 'agent' ? agent : value
-      )
-      db()
-        .prepare(
-          'UPDATE journal_outcomes SET value_json = ? WHERE generation = ? AND seq = ? AND ordinal = ?'
-        )
-        .run(json, Number(row.generation), Number(row.seq), String(row.ordinal))
-    }
+    const records = await setTestStoredSenderAgent(await openTestJournalHostDatabase(root), agent)
+    expect(records).toBeGreaterThanOrEqual(3)
     const reopened = await open(journals)
     const restored = reopened.snapshot().items
     expect(restored).toHaveLength(2)

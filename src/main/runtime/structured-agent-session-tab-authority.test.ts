@@ -1,3 +1,4 @@
+import { failNativeJournalStatements } from '../native-chat/agent-session-journal/journal-native-test-instrumentation'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -83,7 +84,7 @@ it.each([false, true])(
   'failed passive SQL and rejected hide do not spend the captured base, firstMessage=%s',
   async (first) => {
     const rig = await openAuthorityRuntime(await authorityProfile())
-    const allow = rejectVisibility(rig)
+    const allow = await rejectVisibility(rig)
     const release = await holdStartup(rig)
     expect(rig.host.getPersistedVisibleSessionTabIndex().present).toBe(false)
     replaceSaved(rig, [])
@@ -95,7 +96,7 @@ it.each([false, true])(
       : expect(createC(rig, first)).rejects.toThrow('visibility rejected'))
     expect(rig.store.getRecord(C)).toBeNull()
     expect(rig.host.getPersistedVisibleSessionTabIndex().present).toBe(false)
-    allow()
+    await allow()
     expect(await createC(rig, first)).toMatchObject({ ok: true })
     expect(rig.host.getPersistedVisibleSessionTabIndex().sessionIds).toEqual([B, C])
     await release()
@@ -161,7 +162,7 @@ it('preserves windowless explicit failed-show insertion and retention', async ()
   const rig = await openAuthorityRuntime(await authorityProfile())
   const release = await holdStartup(rig)
   await closeStructuredAgentSessionChild(B, { runtime: rig.runtime })
-  const allow = rejectVisibility(rig)
+  const allow = await rejectVisibility(rig)
   await rig.runtime.publishStructuredAgentSessionTab({
     workspaceId: rig.workspace,
     sessionId: B,
@@ -189,7 +190,7 @@ it('preserves windowless explicit failed-show insertion and retention', async ()
   expect(rig.runtime.live(B)).toBe(true)
   rig.runtime.mobileSessionTabsByWorktree.delete(rig.workspace)
   expect(rig.runtime.live(B)).toBe(false)
-  allow()
+  await allow()
   await rig.host.setSessionTabVisibility(B, true)
   await closeStructuredAgentSessionChild(B, { runtime: rig.runtime })
   await chatTabCommandsSettled()
@@ -259,9 +260,9 @@ it.each(['group', 'folder'] as const)(
   'keeps accepted %s removal and does not fabricate an owner from the captured base',
   async (kind) => {
     const rig = await openAuthorityRuntime(await authorityProfile())
-    const allow = rejectVisibility(rig)
+    const allow = await rejectVisibility(rig)
     const release = await holdStartup(rig)
-    allow()
+    await allow()
     const removed =
       kind === 'group'
         ? await rig.runtime.deleteProjectGroup(rig.groupId)
@@ -459,25 +460,16 @@ it.each([false, true])(
   'SQL COMMIT rejection adopts no authority or record, firstMessage=%s',
   async (first) => {
     const rig = await openAuthorityRuntime(await authorityProfile())
-    const db = rig.host.deps.journalDatabase.db
-    const exec = db.exec.bind(db)
-    const failure = vi.spyOn(db, 'exec').mockImplementation((sql) => {
-      if (
-        sql === 'COMMIT' &&
-        db
-          .prepare("SELECT value FROM agent_session_store_meta WHERE key='session_tabs_recorded'")
-          .get()
-      ) {
-        throw new Error('commit rejected')
-      }
-      return exec(sql)
-    })
+    const database = rig.host.deps.journalDatabase
+    await failNativeJournalStatements(database, [
+      { sql: 'COMMIT', message: 'commit rejected', visibility: true }
+    ])
     await (first
       ? expect(createC(rig, first)).resolves.toMatchObject({ ok: false })
       : expect(createC(rig, first)).rejects.toThrow('commit rejected'))
     expect(rig.store.getVisibleSessionTabIndex().present).toBe(false)
     expect(rig.store.getRecord(C)).toBeNull()
-    failure.mockRestore()
+    await failNativeJournalStatements(database, [])
     expect(await createC(rig, first)).toMatchObject({ ok: true })
     expect(rig.store.listVisibleSessionIds()).toEqual([B, C])
   }

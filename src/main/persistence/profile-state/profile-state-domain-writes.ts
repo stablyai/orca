@@ -1,3 +1,4 @@
+import { admitSurfaceCatalogImports } from '../../workspace-surfaces/surface-catalog-import'
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
 import type Database from '../../sqlite/sync-database'
 import { readCurrentAutomationRunsState } from './profile-state-automation-runs-storage'
@@ -22,6 +23,8 @@ import {
   validateProfileStateDomainTransaction,
   type PreparedProfileStateMutation
 } from './profile-state-domain-write-validation'
+import type { SurfaceProfileDomain } from '../../../shared/workspace-surfaces/surface-profile-domain'
+import { protectSurfaceProfileSave } from '../../workspace-surfaces/surface-profile-save'
 
 export { ProfileStateRevisionConflictError } from './profile-state-documents'
 
@@ -83,102 +86,135 @@ export function writeProfileStateDomains(
   const prepared = transaction.replacements.map(prepareProfileStateDomainMutation)
 
   return withProfileStateWriteTransaction(db, () => {
-    const actualRevision = readProfileStateRevision(db)
-    if (actualRevision !== transaction.expectedRevision) {
-      throw new ProfileStateRevisionConflictError(transaction.expectedRevision, actualRevision)
-    }
-    const currentAutomationRuns = readCurrentAutomationRunsState(db, actualRevision)
-
-    const updates: PreparedProfileStateMutation[] = []
-    for (const mutation of prepared) {
-      const existing = db
-        .prepare(
-          `SELECT domain, payload, domain_version, revision, updated_at, content_hash
-           FROM profile_state_documents WHERE domain = ?`
-        )
-        .get(mutation.domain)
-      const existingRow =
-        existing === undefined
-          ? undefined
-          : validateProfileStateDocumentRow(existing, {
-              // Identical incoming payloads already passed JSON validation.
-              validateJson: !(isRecord(existing) && existing.payload === mutation.payload)
-            })
-      if (existingRow) {
-        assertProfileStateDocumentRevision(existingRow.revision, actualRevision, mutation.domain)
-      }
-      if (mutation.domain === 'automationRuns') {
-        // Matching canonical history hashes avoid rebuilding the projection.
-        if (
-          currentAutomationRuns.presence === 'array' &&
-          mutation.payload?.startsWith('[') &&
-          currentAutomationRuns.contentHash === mutation.payloadHash
-        ) {
-          continue
-        }
-        const normalized = prepareProfileStateAutomationRunsReplacement(
-          db,
-          mutation,
-          actualRevision
-        )
-        if (normalized !== undefined) {
-          if (normalized.changed) {
-            updates.push({ ...mutation, automationRuns: normalized })
-          }
-          continue
-        }
-      }
-      const unchanged =
-        (mutation.payload === null && existingRow === undefined) ||
-        (mutation.payload !== null && existingRow?.payload === mutation.payload)
-      if (!unchanged) {
-        updates.push(mutation)
-      }
-    }
-    if (transaction.automationRunsAfter !== undefined) {
-      const delta = prepareProfileStateAutomationRunsDelta(
-        db,
-        transaction.automationRunsAfter,
-        PROFILE_STATE_DOCUMENT_VERSION,
-        Date.now,
-        actualRevision
+    const surfaceCommit = admitSurfaceCatalogImports(db, prepared)
+    return writePreparedProfileStateDomains(
+      db,
+      transaction,
+      protectSurfaceProfileSave(db, prepared, surfaceCommit).map(
+        (mutation) =>
+          prepared.find((prior) => prior === mutation) ??
+          prepareProfileStateDomainMutation(mutation)
       )
-      if (delta === undefined) {
-        throw new Error('Normalized automationRuns delta is unsupported')
-      }
-      if (delta.changed) {
-        updates.push({
-          domain: 'automationRuns',
-          payload: null,
-          domainVersion: PROFILE_STATE_DOCUMENT_VERSION,
-          payloadHash: null,
-          automationRuns: delta
-        })
-      }
-    }
+    )
+  })
+}
 
-    if (updates.length === 0) {
-      return { changed: false, revision: actualRevision, changedDomains: [] }
-    }
+/** Canonical commands and attached compatibility writes share the admitted owner's transaction. */
+export function writeProfileStateDomainsInTransaction(
+  db: Database.Database,
+  transaction: ProfileStateDomainTransaction,
+  surfaceCommit?: SurfaceProfileDomain
+): ProfileStateDomainTransactionResult {
+  if (!db.isTransaction) {
+    throw new Error('Profile state domain write requires an active transaction')
+  }
+  validateProfileStateDomainTransaction(transaction)
+  return writePreparedProfileStateDomains(
+    db,
+    transaction,
+    protectSurfaceProfileSave(db, transaction.replacements, surfaceCommit).map(
+      prepareProfileStateDomainMutation
+    )
+  )
+}
 
-    const nextRevision = actualRevision + 1
-    for (const mutation of updates) {
-      if (mutation.automationRuns) {
-        applyProfileStateAutomationRuns(db, mutation.automationRuns, nextRevision)
+function writePreparedProfileStateDomains(
+  db: Database.Database,
+  transaction: ProfileStateDomainTransaction,
+  prepared: readonly PreparedProfileStateMutation[]
+): ProfileStateDomainTransactionResult {
+  const actualRevision = readProfileStateRevision(db)
+  if (actualRevision !== transaction.expectedRevision) {
+    throw new ProfileStateRevisionConflictError(transaction.expectedRevision, actualRevision)
+  }
+  const currentAutomationRuns = readCurrentAutomationRunsState(db, actualRevision)
+
+  const updates: PreparedProfileStateMutation[] = []
+  for (const mutation of prepared) {
+    const existing = db
+      .prepare(
+        `SELECT domain, payload, domain_version, revision, updated_at, content_hash
+           FROM profile_state_documents WHERE domain = ?`
+      )
+      .get(mutation.domain)
+    const existingRow =
+      existing === undefined
+        ? undefined
+        : validateProfileStateDocumentRow(existing, {
+            // Identical incoming payloads already passed JSON validation.
+            validateJson: !(isRecord(existing) && existing.payload === mutation.payload)
+          })
+    if (existingRow) {
+      assertProfileStateDocumentRevision(existingRow.revision, actualRevision, mutation.domain)
+    }
+    if (mutation.domain === 'automationRuns') {
+      // Matching canonical history hashes avoid rebuilding the projection.
+      if (
+        currentAutomationRuns.presence === 'array' &&
+        mutation.payload?.startsWith('[') &&
+        currentAutomationRuns.contentHash === mutation.payloadHash
+      ) {
         continue
       }
-      if (mutation.domain === 'automationRuns') {
-        clearProfileStateAutomationRuns(db)
-      }
-      if (mutation.payload === null) {
-        db.prepare('DELETE FROM profile_state_documents WHERE domain = ?').run(mutation.domain)
-      } else {
-        const updatedAt = (mutation.now ?? Date.now)()
-        if (!Number.isSafeInteger(updatedAt) || updatedAt < 0) {
-          throw new Error(`Profile state domain update timestamp is invalid: ${mutation.domain}`)
+      const normalized = prepareProfileStateAutomationRunsReplacement(db, mutation, actualRevision)
+      if (normalized !== undefined) {
+        if (normalized.changed) {
+          updates.push({ ...mutation, automationRuns: normalized })
         }
-        db.prepare(
-          `INSERT INTO profile_state_documents
+        continue
+      }
+    }
+    const unchanged =
+      (mutation.payload === null && existingRow === undefined) ||
+      (mutation.payload !== null && existingRow?.payload === mutation.payload)
+    if (!unchanged) {
+      updates.push(mutation)
+    }
+  }
+  if (transaction.automationRunsAfter !== undefined) {
+    const delta = prepareProfileStateAutomationRunsDelta(
+      db,
+      transaction.automationRunsAfter,
+      PROFILE_STATE_DOCUMENT_VERSION,
+      Date.now,
+      actualRevision
+    )
+    if (delta === undefined) {
+      throw new Error('Normalized automationRuns delta is unsupported')
+    }
+    if (delta.changed) {
+      updates.push({
+        domain: 'automationRuns',
+        payload: null,
+        domainVersion: PROFILE_STATE_DOCUMENT_VERSION,
+        payloadHash: null,
+        automationRuns: delta
+      })
+    }
+  }
+
+  if (updates.length === 0) {
+    return { changed: false, revision: actualRevision, changedDomains: [] }
+  }
+
+  const nextRevision = actualRevision + 1
+  for (const mutation of updates) {
+    if (mutation.automationRuns) {
+      applyProfileStateAutomationRuns(db, mutation.automationRuns, nextRevision)
+      continue
+    }
+    if (mutation.domain === 'automationRuns') {
+      clearProfileStateAutomationRuns(db)
+    }
+    if (mutation.payload === null) {
+      db.prepare('DELETE FROM profile_state_documents WHERE domain = ?').run(mutation.domain)
+    } else {
+      const updatedAt = (mutation.now ?? Date.now)()
+      if (!Number.isSafeInteger(updatedAt) || updatedAt < 0) {
+        throw new Error(`Profile state domain update timestamp is invalid: ${mutation.domain}`)
+      }
+      db.prepare(
+        `INSERT INTO profile_state_documents
            (domain, payload, domain_version, revision, updated_at, content_hash)
            VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(domain) DO UPDATE SET
@@ -187,24 +223,23 @@ export function writeProfileStateDomains(
              revision = excluded.revision,
              updated_at = excluded.updated_at,
              content_hash = excluded.content_hash`
-        ).run(
-          mutation.domain,
-          mutation.payload,
-          mutation.domainVersion,
-          nextRevision,
-          updatedAt,
-          mutation.payloadHash
-        )
-      }
+      ).run(
+        mutation.domain,
+        mutation.payload,
+        mutation.domainVersion,
+        nextRevision,
+        updatedAt,
+        mutation.payloadHash
+      )
     }
-    db.prepare(
-      `INSERT INTO profile_state_meta (key, value) VALUES (?, ?)
+  }
+  db.prepare(
+    `INSERT INTO profile_state_meta (key, value) VALUES (?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-    ).run(PROFILE_STATE_META_REVISION, String(nextRevision))
-    return {
-      changed: true,
-      revision: nextRevision,
-      changedDomains: updates.map(({ domain }) => domain)
-    }
-  })
+  ).run(PROFILE_STATE_META_REVISION, String(nextRevision))
+  return {
+    changed: true,
+    revision: nextRevision,
+    changedDomains: updates.map(({ domain }) => domain)
+  }
 }

@@ -36,8 +36,12 @@ export class JournalEpochController {
     }
   ) {}
 
-  start(reason: AgentJournalEpochReason, fence: number, expectedEpoch: string | null): void {
-    publishNewEpoch({
+  async start(
+    reason: AgentJournalEpochReason,
+    fence: number,
+    expectedEpoch: string | null
+  ): Promise<void> {
+    await publishNewEpoch({
       expectedEpoch,
       database: this.deps.database(),
       identity: this.deps.identity,
@@ -52,9 +56,9 @@ export class JournalEpochController {
 
   /** Serialize rollover with appends and apply the same writable guard as every other journal write. */
   roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
-    return this.deps.serialize(() => {
+    return this.deps.serialize(async () => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
-      this.start(reason, fence, this.deps.state().epoch)
+      await this.start(reason, fence, this.deps.state().epoch)
       return this.deps.cursor()
     })
   }
@@ -65,10 +69,10 @@ export class JournalEpochController {
     items: readonly JournalReplacementItem[],
     receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
-    return this.deps.serialize(() => {
+    return this.deps.serialize(async () => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
       assertJournalFence(fence, this.deps.highestFence())
-      replaceJournalEpoch({
+      await replaceJournalEpoch({
         database: this.deps.database(),
         identity: this.deps.identity,
         reason,

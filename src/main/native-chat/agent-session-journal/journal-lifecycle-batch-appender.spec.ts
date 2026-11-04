@@ -70,8 +70,8 @@ export function registerJournalLifecycleBatchAppenderTests(): void {
       const before = journal.cursor().sequence
       await journal.appendLifecycleBatch(input)
       expect(commits).toHaveBeenCalledTimes(1)
-      const { db } = openTestJournalHostDatabase(root)
-      const rows = liveTestJournalRows(db, SESSION).flatMap((stored) => {
+      const db = await openTestJournalHostDatabase(root)
+      const rows = (await liveTestJournalRows(db, SESSION)).flatMap((stored) => {
         const parsed = parseJournalRow(stored.rowJson)
         if (!parsed.ok) {
           throw new Error('test row was not admitted')

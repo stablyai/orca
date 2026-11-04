@@ -138,7 +138,7 @@ async function startHost({ startupLimits, supportsGoals }: StartupHostOptions = 
       stop: vi.fn(),
       providerStarted
     },
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     idleSweep: { intervalMs: 60 * 60_000, idleMs: 60 * 60_000 },

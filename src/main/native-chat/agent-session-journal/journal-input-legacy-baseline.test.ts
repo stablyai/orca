@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from './journal-drained-fixture-test-support'
 import { journalInputOrder } from './journal-input-order'
 import {
   journalInputIndexProbe,
@@ -5,8 +6,10 @@ import {
 } from './journal-input-index-probe.test-support'
 import { JournalInputDomainIndex } from './journal-input-domain-index'
 import { JournalInputPlaceIndex } from './journal-input-place-index'
-import { insertCommandReceiptIfAbsent } from './command-receipt-table'
-import { writeCommandReceiptTestRecord } from './command-receipt-test-support'
+import {
+  writeCommandReceiptTestRecord,
+  writeTestCommandReceipt
+} from './command-receipt-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -48,7 +51,7 @@ it.each([10, 40])(
       providerHandle: claudeProviderHandle('thread', null)
     }
     let journal = await journals.open({ identity, stateDirectory: root })
-    const database = openTestJournalHostDatabase(root)
+    const database = await openTestJournalHostDatabase(root)
     const cost = { sets: 0, queries: 0, nodes: 0, reads: 0 }
     const inspect = journalInputIndexProbe(['index', 'left', 'right'], {
       allocated: () => {
@@ -85,59 +88,61 @@ it.each([10, 40])(
       const { epoch, sequence } = journal.cursor()
       let seq = sequence
       await journal.close()
-      const base = () => ({ v: 3, epoch, seq: ++seq, fence: 0, ts: 1 })
-      const queue = (
-        id: string,
-        queuedAt: { epoch: string; sequence: number } | null,
-        command = false
-      ) =>
-        insertTestJournalRow(database.db, identity.sessionId, {
-          ...base(),
-          kind: 'queue',
-          messageId: id,
-          change: {
-            op: 'queued',
-            body: command ? { ...message('/compact'), command: { name: 'compact' } } : message(id),
-            position: id === 'C' ? 1 : id === 'D' ? 2 : 3,
-            queuedAt
-          }
-        })
-      queue('C', { epoch, sequence: seq }, true)
-      queue('F', { epoch: 'original-foreign', sequence: 1 })
-      queue('N', null)
-      database.transaction((db) => writeCommandReceiptTestRecord(db, identity.sessionId))
       const ids = Array.from({ length: n }, (_, i) => `M${i + 1}`)
-      for (let i = 0; i < n; i++) {
-        queue(`ordinary-${i}`, { epoch, sequence: seq })
-      }
-      queue('D', { epoch: 'original-foreign', sequence: 1 })
-      seq = writeTestLegacyTerminalGaps(
-        database.db,
-        identity.sessionId,
-        {
-          epoch,
-          sequence: seq,
-          fence: 0,
-          providerHandle: agentSessionJournalProviderHandle(identity)
-        },
-        n
-      )
-      for (const id of ids) {
-        const target: JournalRow = {
-          ...base(),
-          kind: 'submission',
-          clientMessageId: id,
-          payloadFingerprint: id,
-          body: message(id),
-          providerHandle: agentSessionJournalProviderHandle(identity),
-          handoverRecorded: true,
-          origin: 'client'
+      await database.transaction((plan) => {
+        const base = () => ({ v: 3, epoch, seq: ++seq, fence: 0, ts: 1 })
+        const queue = (
+          id: string,
+          queuedAt: { epoch: string; sequence: number } | null,
+          command = false
+        ) =>
+          insertTestJournalRow(plan, identity.sessionId, {
+            ...base(),
+            kind: 'queue',
+            messageId: id,
+            change: {
+              op: 'queued',
+              body: command
+                ? { ...message('/compact'), command: { name: 'compact' } }
+                : message(id),
+              position: id === 'C' ? 1 : id === 'D' ? 2 : 3,
+              queuedAt
+            }
+          })
+        queue('C', { epoch, sequence: seq }, true)
+        queue('F', { epoch: 'original-foreign', sequence: 1 })
+        queue('N', null)
+        writeCommandReceiptTestRecord(plan, identity.sessionId)
+        for (let i = 0; i < n; i++) {
+          queue(`ordinary-${i}`, { epoch, sequence: seq })
         }
-        insertTestJournalRow(database.db, identity.sessionId, target)
-        if (id !== 'M2') {
-          database.transaction((db) =>
-            insertCommandReceiptIfAbsent(
-              db,
+        queue('D', { epoch: 'original-foreign', sequence: 1 })
+        seq = writeTestLegacyTerminalGaps(
+          plan,
+          identity.sessionId,
+          {
+            epoch,
+            sequence: seq,
+            fence: 0,
+            providerHandle: agentSessionJournalProviderHandle(identity)
+          },
+          n
+        )
+        for (const id of ids) {
+          const target: JournalRow = {
+            ...base(),
+            kind: 'submission',
+            clientMessageId: id,
+            payloadFingerprint: id,
+            body: message(id),
+            providerHandle: agentSessionJournalProviderHandle(identity),
+            handoverRecorded: true,
+            origin: 'client'
+          }
+          insertTestJournalRow(plan, identity.sessionId, target)
+          if (id !== 'M2') {
+            writeTestCommandReceipt(
+              plan,
               { kind: 'global' },
               {
                 operationId: id,
@@ -150,10 +155,10 @@ it.each([10, 40])(
                 result: { kind: 'journal-row', epoch: 'original-foreign', sequence: 100 }
               }
             )
-          )
+          }
         }
-      }
-      queue('later-F', { epoch: 'original-foreign', sequence: 1 })
+        queue('later-F', { epoch: 'original-foreign', sequence: 1 })
+      })
       journal = await journals.open({ identity, stateDirectory: root })
       expect(release.spy).not.toHaveBeenCalled()
       const check = (state: JournalReducerState) => {
@@ -200,11 +205,11 @@ it.each([10, 40])(
           await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
         }
         check(journal.queuedMessages.displayState())
-        const replay = loadTestJournal(root, identity.sessionId)!
+        const replay = (await loadTestJournal(root, identity.sessionId))!
         expect(replay.damage).toBeNull()
         check(replay.state)
         if (pass) {
-          const outcomes = readTestJournalOutcomes(database.db, identity.sessionId)
+          const outcomes = await readTestJournalOutcomes(database, identity.sessionId)
           const rows = [...new Set(outcomes.map((value) => value.seq))]
           expect(rows.length).toBeLessThanOrEqual(2 * n + 12)
           const baseline = [...journal.queuedMessages.displayState().inputCards.values()].filter(
@@ -270,7 +275,7 @@ it.each([10, 40])(
       console.info('frozen-baseline-raw-nodes', JSON.stringify({ n, ...rawCost }))
       expect(release.spy).toHaveBeenCalledOnce()
       expect(release.visits()).toBe(2 * n + 5)
-      const finished = loadTestJournal(root, identity.sessionId)!
+      const finished = (await loadTestJournal(root, identity.sessionId))!
       expect(finished.damage).toBeNull()
       expect(release.spy).toHaveBeenCalledTimes(2)
       expect(release.visits()).toBe(2 * (2 * n + 5))
@@ -317,20 +322,21 @@ it.each(['waiting', 'returned'] as const)(
       let journal = await journals.open({ identity, stateDirectory: root })
       await journal.queuedMessages.insert({ messageId: 'z-canonical', body })
       await journal.close()
-      const { db } = openTestJournalHostDatabase(root)
-      db.prepare(
-        `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
+      await mutateTestJournalFixture(await openTestJournalHostDatabase(root), (db) => {
+        db.prepare(
+          `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
            created_at, host_instance, state, returned_reason)
          VALUES (?, 'a-legacy', 1, ?, ?, 0, 'earlier', ?, ?)`
-      ).run(
-        identity.sessionId,
-        JSON.stringify(body),
-        agentSessionSendBodyFingerprint(identity.sessionId, body),
-        legacyState,
-        legacyState === 'returned' ? 'refused before start' : null
-      )
-      db.exec(`CREATE TEMP TRIGGER fail_import BEFORE DELETE ON queued_messages
+        ).run(
+          identity.sessionId,
+          JSON.stringify(body),
+          agentSessionSendBodyFingerprint(identity.sessionId, body),
+          legacyState,
+          legacyState === 'returned' ? 'refused before start' : null
+        )
+        db.exec(`CREATE TRIGGER fail_import BEFORE DELETE ON queued_messages
         BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
+      })
       journal = await journals.open({ identity, stateDirectory: root })
       expect(warned).toHaveBeenCalled()
       const state = journal.queuedMessages.inputState()

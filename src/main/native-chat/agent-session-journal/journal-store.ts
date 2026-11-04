@@ -24,9 +24,9 @@ import type { AgentSessionContextUsage } from '../../../shared/agent-session/age
 import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
 import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { journalWroteBeforeOpen, readJournalSince } from './journal-cursor'
+import { journalWroteBeforeOpen } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
-import { journalRowsAfterReader } from './journal-open'
+import { JournalHistoryReader } from './journal-history-read'
 import {
   markJournalPendingSubmissionsUnknown,
   rejectJournalPendingSubmissions,
@@ -77,6 +77,7 @@ export class AgentSessionJournal {
   private readonly submissionWriter: JournalCollaborators['submissionWriter']
   private readonly stepWriter: JournalCollaborators['stepWriter']
   private readonly restore: () => Promise<void>
+  private readonly history: JournalHistoryReader
   private readonly projection: JournalWriteProjection
   /** Queued cards never count as owed work. */
   readonly queuedMessages: JournalCollaborators['queuedMessages']
@@ -89,6 +90,7 @@ export class AgentSessionJournal {
     this.database = options.database
     this.state = createJournalReducerState(options.identity.sessionId, '')
     this.queue = new JournalWriteQueue(options.identity.sessionId)
+    this.history = new JournalHistoryReader(options, () => this.state, this.publicRead)
     this.projection = new JournalWriteProjection({
       ...options,
       state: () => this.state,
@@ -109,17 +111,17 @@ export class AgentSessionJournal {
       adopt: (loaded) => {
         journalInputOrder(loaded.state).carryRecovery(journalInputOrder(this.state))
         this.state = loaded.state
-        this.onCommitted?.()
+        this.database.notifyCommitted(() => this.onCommitted?.())
       },
       prepare: (db, rows, savedAt) => {
         this.queuedMessages.inputState()
         return this.projection.prepare(db, rows, savedAt)
       },
       commit: (rows) => {
-        this.onCommitted?.(rows)
-        this.projection.verify()
+        this.database.notifyCommitted(() => this.onCommitted?.(rows))
       },
-      notifyCommitted: () => this.onCommitted?.([]),
+      verify: () => this.projection.verify(),
+      notifyCommitted: () => this.database.notifyCommitted(() => this.onCommitted?.([])),
       journal: () => this,
       enqueue: (build, receipt) => this.rowWriter.enqueue(build, receipt)
     })
@@ -270,10 +272,11 @@ export class AgentSessionJournal {
   }
 
   readSince(cursor: AgentJournalCursor, limit?: number) {
-    const { sessionId } = this.identity
-    const rowsAfter = journalRowsAfterReader(this.database.db, sessionId, this.state.epoch, limit)
-    return readJournalSince({ state: this.state, rowsAfter }, cursor, () => this.cursor())
+    return this.history.readSince(cursor, limit)
   }
+
+  readSinceView: JournalHistoryReader['readSinceView'] = (...args) =>
+    this.history.readSinceView(...args)
 
   /** Assign revisions here so callers cannot publish reducer-stale upserts. */
   appendItem(...args: Parameters<typeof this.itemAppender.append>) {

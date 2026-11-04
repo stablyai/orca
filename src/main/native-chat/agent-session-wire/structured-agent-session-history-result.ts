@@ -12,6 +12,7 @@ import {
 } from './agent-session-history-page'
 import {
   withPublishedWorkResult,
+  capturePublishedWork,
   type AgentSessionPublishedWork
 } from './agent-session-published-work'
 
@@ -30,23 +31,26 @@ export function readStructuredAgentSessionHistoryResult(input: {
   replaceNormalizedHistory?: boolean
   /** The host's current-work projection, which the page's turn and prompt fields state. */
   work?: AgentSessionPublishedWork
-}): AgentSessionHistoryResult {
-  const result = withPublishedWorkResult(
-    readAgentSessionHistory(input.journal, input.request, {
-      scope: input.scope,
-      rowReplay: input.replaceNormalizedHistory === false
-    }),
-    input.work
-  )
+}): AgentSessionHistoryResult | Promise<AgentSessionHistoryResult> {
   const fence = input.record?.currentFence
   const providerSession = structuredAgentSessionProviderSessionMetadata(input.record)
-  if (fence === undefined) {
-    return providerSession ? { ...result, providerSession } : result
-  }
-  return {
-    ...result,
-    page: { ...result.page, fence },
-    ...(result.ok ? {} : { fence }),
-    ...(providerSession ? { providerSession } : {})
-  }
+  return readAgentSessionHistory(input.journal, input.request, {
+    scope: input.scope,
+    rowReplay: input.replaceNormalizedHistory === false,
+    captureResult: (snapshot) => {
+      const work = capturePublishedWork(snapshot, input.work)
+      return (read) => {
+        const result = withPublishedWorkResult(read, work)
+        if (fence === undefined) {
+          return providerSession ? { ...result, providerSession } : result
+        }
+        return {
+          ...result,
+          page: { ...result.page, fence },
+          ...(result.ok ? {} : { fence }),
+          ...(providerSession ? { providerSession } : {})
+        }
+      }
+    }
+  })
 }

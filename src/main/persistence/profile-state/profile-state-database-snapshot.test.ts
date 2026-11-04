@@ -40,11 +40,14 @@ afterEach(() => {
   }
 })
 
-function fixture() {
+function fixture(mode: 'delete' | 'wal' = 'delete') {
   const directory = mkdtempSync(join(tmpdir(), 'orca-profile-state-async-snapshot-'))
   directories.push(directory)
   const databasePath = profileStateDatabaseFile(directory)
   const { db } = openProfileStateDatabase(databasePath, 'profile-a')
+  if (mode === 'wal') {
+    db.pragma('journal_mode = WAL')
+  }
   databases.push(db)
   const originalJson = JSON.stringify({ settings: { theme: 'light' } })
   importProfileStateJson(db, originalJson)
@@ -66,7 +69,7 @@ function expectNoTemporaryFiles(directory: string): void {
 
 describe('asynchronous profile-state database snapshots', () => {
   it('publishes a hardened self-contained snapshot including committed WAL pages', async () => {
-    const { directory, databasePath, db, targetPath, originalJson } = fixture()
+    const { directory, databasePath, db, targetPath, originalJson } = fixture('wal')
     expect(existsSync(`${databasePath}-wal`)).toBe(true)
     const sourceFile = readFileSync(databasePath)
 

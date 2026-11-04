@@ -273,7 +273,7 @@ describe('committed adopting create RPC replay', () => {
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: sessionAdapter,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestJournalHostDatabase(root),
       claimKeyId: 'key-1'
     })
     setStructuredAgentSessionHost(host)

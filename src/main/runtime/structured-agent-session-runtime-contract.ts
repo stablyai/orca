@@ -1,3 +1,4 @@
+import type { SurfaceNativeRuntimeOwner } from '../workspace-surfaces/surface-native-runtime-owner'
 import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from './agent-session/structured-agent-session-transport-overrides'
@@ -19,6 +20,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Host state root. The record store and the journal database both hang off it. */
   stateDirectory: string
   legacySessionTabIds?: readonly string[]
+  surfaceOwner?: SurfaceNativeRuntimeOwner
   /** Execution host this runtime *is*. A record pinned elsewhere is not ours to
    *  probe and not ours to spawn for. */
   hostId: string

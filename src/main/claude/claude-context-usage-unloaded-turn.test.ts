@@ -119,8 +119,15 @@ function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegist
   return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
 }
 
-function attachTail(journal: AgentSessionJournal, limit: number): StructuredAgentSessionState {
-  const read = readAgentSessionHistory(journal, { sessionId: SESSION, direction: 'tail', limit })
+async function attachTail(
+  journal: AgentSessionJournal,
+  limit: number
+): Promise<StructuredAgentSessionState> {
+  const read = await readAgentSessionHistory(journal, {
+    sessionId: SESSION,
+    direction: 'tail',
+    limit
+  })
   if (!read.ok) {
     throw new Error('tail read failed')
   }
@@ -130,11 +137,11 @@ function attachTail(journal: AgentSessionJournal, limit: number): StructuredAgen
   })
 }
 
-function applyLive(
+async function applyLive(
   journal: AgentSessionJournal,
   state: StructuredAgentSessionState
-): StructuredAgentSessionState {
-  const read = readAgentSessionHistory(journal, {
+): Promise<StructuredAgentSessionState> {
+  const read = await readAgentSessionHistory(journal, {
     sessionId: SESSION,
     direction: 'after',
     cursor: state.cursor ?? undefined
@@ -161,14 +168,14 @@ function applyLive(
 const hasTurnRow = (state: StructuredAgentSessionState): boolean =>
   state.items.some((item) => readAgentJournalTurn(item.body) !== null)
 
-function catchUp(
+async function catchUp(
   journal: AgentSessionJournal,
   state: StructuredAgentSessionState
-): StructuredAgentSessionState {
-  let next = applyLive(journal, state)
+): Promise<StructuredAgentSessionState> {
+  let next = await applyLive(journal, state)
   while (next.cursor?.sequence !== state.cursor?.sequence) {
     state = next
-    next = applyLive(journal, state)
+    next = await applyLive(journal, state)
   }
   return next
 }
@@ -181,7 +188,7 @@ describe('context usage for a turn row outside the loaded page', () => {
     translator.handle(resultFrame(2_000, { 'claude-fable-5-1[1m]': { contextWindow: 1_000_000 } }))
     await settle()
 
-    const state = attachTail(journal, 3)
+    const state = await attachTail(journal, 3)
     expect(state.hasOlder).toBe(true)
     expect(hasTurnRow(state)).toBe(false)
     const options = await readOptions(journal, claudeAndCodexAgents())
@@ -206,7 +213,7 @@ describe('context usage for a turn row outside the loaded page', () => {
     const options = await readOptions(journal, NO_STRUCTURED_AGENTS)
     expect(options).not.toHaveProperty('contextUsage')
     // Older hosts omit context facts, so clients fall back to loaded rows.
-    expect(selectStructuredAgentContextUsage(attachTail(journal, 2).items)).toBeNull()
+    expect(selectStructuredAgentContextUsage((await attachTail(journal, 2)).items)).toBeNull()
   })
 
   it('marks a live context write on a turn row the window cannot take, and the host answer carries it', async () => {
@@ -216,13 +223,13 @@ describe('context usage for a turn row outside the loaded page', () => {
     translator.handle(resultFrame(2_000, { 'claude-fable-5-1[1m]': { contextWindow: 1_000_000 } }))
     runTurn(translator, 'turn-b', 3_000, [200_000, 210_000, 220_000, 230_000])
     await settle()
-    const attached = attachTail(journal, 3)
+    const attached = await attachTail(journal, 3)
     expect(hasTurnRow(attached)).toBe(false)
     expect(attached.unloadedTurnRevisions).toBeUndefined()
 
     translator.handle(assistantFrame('turn-b-reply-late', 4_000, 250_000))
     await settle()
-    const live = applyLive(journal, attached)
+    const live = await applyLive(journal, attached)
 
     expect(hasTurnRow(live)).toBe(false)
     expect(live.unloadedTurnRevisions).toBe(1)
@@ -241,7 +248,7 @@ describe('context usage for a turn row outside the loaded page', () => {
     await settle()
     const hostAnswer = async () =>
       (await readOptions(journal, claudeAndCodexAgents())).contextUsage?.current
-    let state = attachTail(journal, 200)
+    let state = await attachTail(journal, 200)
     let host = await hostAnswer()
     const respond = (index: number): void => {
       translator.handle(assistantFrame(`turn-b-reply-${index}`, 4_000 + index, 200_000 + index))
@@ -254,7 +261,7 @@ describe('context usage for a turn row outside the loaded page', () => {
       }
     }
     await settle()
-    state = catchUp(journal, state)
+    state = await catchUp(journal, state)
     expect(hasTurnRow(state)).toBe(true)
 
     let stepsAfterTrim = 0
@@ -262,7 +269,7 @@ describe('context usage for a turn row outside the loaded page', () => {
       respond(index++)
       await settle()
       const seen = state.unloadedTurnRevisions
-      state = catchUp(journal, state)
+      state = await catchUp(journal, state)
       if (state.unloadedTurnRevisions !== seen) {
         host = await hostAnswer()
       }

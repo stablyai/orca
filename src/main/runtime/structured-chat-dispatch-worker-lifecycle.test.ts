@@ -10,7 +10,7 @@ import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { idOf } from './rpc/orchestration-session-caller-test-fixture'
 import { closeStructuredAgentSessionChild } from './agent-session/structured-agent-session-close'
-import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
+import { loadTestJournal } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
@@ -301,7 +301,7 @@ describe("a chat assignee's liveness, stop and close", () => {
     const prefix = journal.cursor()
     await host.close(PEER_CHAT, 'evict')
     expect(host.hasSession(PEER_CHAT)).toBe(false)
-    const saved = restoreJournal(host.deps.journalDatabase.db, PEER_CHAT)?.state
+    const saved = (await loadTestJournal(root, PEER_CHAT))?.state
     expect(saved?.lastSequence).toBeGreaterThanOrEqual(prefix.sequence)
     const acquisitions = codex.connections.length
     const server = new OrcaRuntimeRpcServer({

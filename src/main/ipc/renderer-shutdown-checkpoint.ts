@@ -53,7 +53,10 @@ export type ShutdownCheckpointResult = { ok: boolean }
 /** Matches the will-quit teardown budget so a stalled disk can't strand a restart. */
 export const SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS = 20_000
 
-function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointResult> {
+function flushStagedStateWithDeadline(
+  store: Store,
+  recordsCommitted: Promise<unknown> = Promise.resolve()
+): Promise<ShutdownCheckpointResult> {
   const controller = new AbortController()
   let timer: ReturnType<typeof setTimeout> | null = null
   const deadline = new Promise<ShutdownCheckpointResult>((resolve) => {
@@ -64,8 +67,10 @@ function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointR
     }, SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS)
   })
   // Retry superseded staged writes without chasing unrelated mutations beyond the shutdown deadline.
-  const flush = store
-    .flushPendingOrThrowAsync({ signal: controller.signal, drainToStableGeneration: false })
+  const flush = recordsCommitted
+    .then(() =>
+      store.flushPendingOrThrowAsync({ signal: controller.signal, drainToStableGeneration: false })
+    )
     .then((): ShutdownCheckpointResult => ({ ok: true }))
     .catch((error): ShutdownCheckpointResult => {
       console.error('[app] Failed to persist staged renderer state:', error)
@@ -102,17 +107,44 @@ export function registerRendererShutdownCheckpointHandler(
 
   ipcMain.on('app:stage-before-unload-sync', (event, args: StageBeforeUnloadSyncArgs) => {
     let error: string | undefined
+    const recordWrites: Promise<unknown>[] = []
     try {
       // A window a WSL move rewrote under is stale; main reloads it and keeps what is on disk.
       const sessions = isWslMoveWindowWriteHeld() ? [] : args.sessions
       for (const { state, hostId } of sessions) {
         if (!isFrozenOrcadSourceSessionPartition(store, hostId)) {
+          const records = quitResumeRecordsFor(store.getWorkspaceSession(hostId))
           store.stageWorkspaceSessionBeforeUnload(
             ORCA_LAYOUT_OWNER_IS_MAIN
-              ? stagedSessionForMain(store, state, hostId, quitResumeRecordsFor, reconnectFactsFor)
+              ? stagedSessionForMain(store, state, hostId, () => records, reconnectFactsFor)
               : state,
             hostId
           )
+          if (store.workspaceSurfacesInitialized(hostId)) {
+            for (const [workspace, entries] of Map.groupBy(
+              records,
+              (record) => record.worktreeId
+            )) {
+              recordWrites.push(
+                store
+                  .applyLayoutCommand(
+                    {
+                      type: 'sleep',
+                      workspace,
+                      paneKeys: entries.map((record) => record.paneKey),
+                      records: entries,
+                      recordOnly: true
+                    },
+                    [hostId ?? LOCAL_EXECUTION_HOST_ID]
+                  )
+                  .then((reply) => {
+                    if (!reply.ok) {
+                      throw new Error('Quit resume information could not be saved')
+                    }
+                  })
+              )
+            }
+          }
         }
       }
       if (!isWslMoveWindowWriteHeld()) {
@@ -124,7 +156,9 @@ export function registerRendererShutdownCheckpointHandler(
       error = formatShutdownCheckpointFailureReason(stagingError)
     }
     pendingCheckpoint =
-      error === undefined ? flushStagedStateWithDeadline(store) : Promise.resolve({ ok: false })
+      error === undefined
+        ? flushStagedStateWithDeadline(store, Promise.all(recordWrites))
+        : Promise.allSettled(recordWrites).then(() => ({ ok: false }))
     event.returnValue = error === undefined ? { ok: true } : { ok: false, error }
   })
 

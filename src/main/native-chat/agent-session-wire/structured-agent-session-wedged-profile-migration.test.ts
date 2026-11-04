@@ -119,7 +119,7 @@ async function seedStore(record: PersistedAgentSessionRecord): Promise<void> {
   store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
 }
 
-function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void {
+async function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): Promise<void> {
   host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
@@ -136,7 +136,7 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
       setOption: vi.fn(),
       supportsCreate: () => true
     },
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-new',
     now: () => NOW,
@@ -205,7 +205,7 @@ async function seedRunningTurn(provider: 'codex' | 'claude' = 'codex'): Promise<
           ? codexProviderHandle(THREAD)
           : claudeProviderHandle('provider-session-alpha-1', null)
     },
-    database: openTestJournalHostDatabase(root)
+    database: await openTestJournalHostDatabase(root)
   })
   await journal.appendItem(
     provider === 'codex'
@@ -267,7 +267,7 @@ describe('already-wedged profiles become usable on load', () => {
             }
       await seedStore(providerRecord)
       await seedRunningTurn(provider)
-      openHost()
+      await openHost()
 
       await openTestChats(host)
 
@@ -282,7 +282,7 @@ describe('already-wedged profiles become usable on load', () => {
 
       await host.flushAllStreamedEvents()
       store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
-      openHost()
+      await openHost()
       await openTestChats(host)
 
       expect(restoredJournal().cursor()).toEqual(firstCursor)
@@ -324,7 +324,7 @@ describe('already-wedged profiles become usable on load', () => {
       await seedRunningTurn()
       const published: AgentSessionStatusSummary[] = []
       const remote = seeded.lease.ownerProcess?.hostId === 'remote-host'
-      openHost({
+      await openHost({
         statusSink: { publish: (summary) => published.push(summary), forget: () => {} },
         // Remote contact loss proves no death; probing stays indeterminate.
         ...(remote
@@ -372,7 +372,7 @@ describe('already-wedged profiles become usable on load', () => {
       wedgedRecord({ claimStatus: 'live', handoffStage: null, ownerProcess: DEAD_OWNER })
     )
     await seedRunningTurn()
-    openHost()
+    await openHost()
 
     // Adjudication advances the fence; retry attach at the returned fence.
     const stale = await host.attach(CALLER, hostTestAttachParams(13))
@@ -413,7 +413,7 @@ describe('already-wedged profiles become usable on load', () => {
     }
     await seedStore(record)
     await seedRunningTurn()
-    openHost()
+    await openHost()
 
     expect(await host.attach(CALLER, hostTestAttachParams(13))).toMatchObject({ ok: true })
 
@@ -448,7 +448,7 @@ describe('already-wedged profiles become usable on load', () => {
       const stopOwnerProcess = vi.fn(() => {
         ownerAlive = false
       })
-      openHost({
+      await openHost({
         probeOwner: async () =>
           ownerAlive
             ? { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
@@ -487,7 +487,7 @@ describe('already-wedged profiles become usable on load', () => {
       wedgedRecord({ claimStatus: 'live', handoffStage: null, ownerProcess: DEAD_OWNER })
     )
     const stopOwnerProcess = vi.fn()
-    openHost({
+    await openHost({
       probeOwner: async () => ({ outcome: 'identity-matched', matchedOn: ['spawn-token'] }),
       stopOwnerProcess
     })
@@ -528,7 +528,9 @@ describe('already-wedged profiles become usable on load', () => {
     'releases %s an older build left, and the chat starts again',
     async (_legacyRecord, lease) => {
       await seedStore(wedgedRecord({ handoffStage: 'manual-recovery', ...lease }))
-      openHost({ probeOwner: async () => ({ outcome: 'indeterminate', reason: 'no scan here' }) })
+      await openHost({
+        probeOwner: async () => ({ outcome: 'indeterminate', reason: 'no scan here' })
+      })
 
       await openTestChats(host)
 
@@ -547,7 +549,7 @@ describe('already-wedged profiles become usable on load', () => {
     // No exit was observed; a replaced generation with no later liveness evidence still needs settlement.
     await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: null }))
     await seedRunningTurn()
-    openHost()
+    await openHost()
 
     expect(await host.attach(CALLER, hostTestAttachParams(13))).toMatchObject({ ok: true })
 
@@ -570,7 +572,7 @@ describe('already-wedged profiles become usable on load', () => {
 
   it("leaves the live generation's running turn alone on a re-attach", async () => {
     await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: null }))
-    openHost({
+    await openHost({
       probeOwner: async () => ({ outcome: 'identity-matched', matchedOn: ['spawn-token'] })
     })
     const params = hostTestAttachParams(13)
@@ -596,7 +598,7 @@ describe('already-wedged profiles become usable on load', () => {
         ownerProcess: DEAD_OWNER
       })
     )
-    openHost()
+    await openHost()
 
     await openTestChats(host)
 
@@ -615,7 +617,7 @@ describe('already-wedged profiles become usable on load', () => {
   it('unlatches a released record that reloaded into recovery with nothing outstanding', async () => {
     // An ownerless released lease has nothing to probe; treating it as unproven relatches every boot.
     await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: 'recovering' }))
-    openHost()
+    await openHost()
 
     await openTestChats(host)
 
@@ -637,7 +639,7 @@ describe('already-wedged profiles become usable on load', () => {
     )
     // Restart cannot enumerate the token yet; the later recovery pass can.
     let probes = 0
-    openHost({
+    await openHost({
       probeOwner: async () => {
         probes += 1
         return probes === 1
@@ -683,7 +685,7 @@ describe('already-wedged profiles become usable on load', () => {
         }
       }
     })
-    openHost({
+    await openHost({
       scanSpawnTokenProcesses: scan,
       stopOwnerProcess: (pid) => order.push(`stop:${pid}`)
     })
@@ -707,7 +709,7 @@ describe('already-wedged profiles become usable on load', () => {
     )
     const stopOwnerProcess = vi.fn()
     let probe: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
-    openHost({ probeOwner: async () => probe, stopOwnerProcess })
+    await openHost({ probeOwner: async () => probe, stopOwnerProcess })
     await openTestChats(host)
 
     // An unanswered probe cannot authorize takeover of a TUI transport surviving restart.

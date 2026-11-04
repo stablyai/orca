@@ -1,8 +1,9 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import Database from '../../sqlite/sync-database'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
+import { observeNativeJournalSql } from '../agent-session-journal/journal-native-test-instrumentation'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
@@ -42,57 +43,56 @@ afterEach(async () => {
 
 async function seedJournal(count: number) {
   root = await mkdtemp(join(tmpdir(), 'orca-history-read-budget-'))
-  const { db } = openTestJournalHostDatabase(root)
+  const database = await openTestJournalHostDatabase(root)
   const base = {
     v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
     epoch: 'epoch-1',
     fence: 1,
     ts: 1_000
   }
-  db.exec('BEGIN IMMEDIATE')
-  publishTestJournalEpoch(db, identity.sessionId, base.epoch)
-  insertTestJournalRow(db, identity.sessionId, {
-    ...base,
-    kind: 'epoch',
-    seq: 1,
-    reason: 'session_created',
-    providerHandle: agentSessionJournalProviderHandle(identity)
-  })
-  for (let index = 0; index < count; index += 1) {
+  await database.transaction((db) => {
+    publishTestJournalEpoch(db, identity.sessionId, base.epoch)
     insertTestJournalRow(db, identity.sessionId, {
       ...base,
-      kind: 'item',
-      seq: index + 2,
-      itemId: `item-${index}`,
-      revision: 1,
-      body: {
-        kind: 'message',
-        role: 'assistant',
-        blocks: [{ type: 'text', text: `${index}:${'x'.repeat(4096)}` }]
-      }
+      kind: 'epoch',
+      seq: 1,
+      reason: 'session_created',
+      providerHandle: agentSessionJournalProviderHandle(identity)
     })
-  }
-  db.exec('COMMIT')
+    for (let index = 0; index < count; index += 1) {
+      insertTestJournalRow(db, identity.sessionId, {
+        ...base,
+        kind: 'item',
+        seq: index + 2,
+        itemId: `item-${index}`,
+        revision: 1,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: `${index}:${'x'.repeat(4096)}` }]
+        }
+      })
+    }
+  })
   return journals.open({ identity, stateDirectory: root })
 }
 
-function observeForwardReads() {
+function observeForwardReads(database: JournalHostDatabase) {
   const returnedRows: number[] = []
-  const observed = new WeakSet<object>()
-  const prepare = Database.prototype.prepare
-  vi.spyOn(Database.prototype, 'prepare').mockImplementation(function (this: Database, sql) {
-    const statement = prepare.call(this, sql)
-    if (sql.includes('seq > ?') && !observed.has(statement)) {
-      observed.add(statement)
-      const all = statement.all.bind(statement)
-      vi.spyOn(statement, 'all').mockImplementation((...args) => {
-        const rows = all(...args)
-        returnedRows.push(rows.length)
-        return rows
-      })
-    }
-    return statement
-  })
+  onTestFinished(
+    observeNativeJournalSql(database, (entry) => {
+      if (!entry.sql.includes('seq > ?')) {
+        return
+      }
+      if (entry.method === 'all') {
+        returnedRows.push(entry.rows)
+      } else if (entry.method === 'iterate') {
+        returnedRows.push(0)
+      } else if (entry.method === 'row') {
+        returnedRows[returnedRows.length - 1] += entry.rows
+      }
+    })
+  )
   const parse = vi.spyOn(rowSchema, 'parseJournalRow')
   return { returnedRows, parse }
 }
@@ -100,16 +100,24 @@ function observeForwardReads() {
 describe('forward history SQL read budget', () => {
   it.each([200, 2_000, 20_000])('bounds reconnect reads after %i missed rows', async (count) => {
     const journal = await seedJournal(count)
-    const { returnedRows, parse } = observeForwardReads()
+    const { returnedRows, parse } = observeForwardReads(await openTestJournalHostDatabase(root!))
     const events: AgentSessionSubscribeEvent[] = []
+    let delivered = () => {}
+    const ready = new Promise<void>((resolve) => {
+      delivered = resolve
+    })
     new AgentSessionSubscribers().open({
       id: 'reader',
       sessionId: identity.sessionId,
       journal,
       fence: 1,
       cursor: { epoch: journal.epoch, sequence: 1 },
-      emit: (event) => events.push(event)
+      emit: (event) => {
+        events.push(event)
+        delivered()
+      }
     })
+    await ready
     expect(events).toHaveLength(1)
     const event = events[0]!
     expect(event.type).toBe(count > 200 ? 'snapshot' : 'batch')
@@ -125,8 +133,8 @@ describe('forward history SQL read budget', () => {
   it('keeps an exact final page final and preserves unlimited journal readers', async () => {
     const journal = await seedJournal(6)
     const cursor = { epoch: journal.epoch, sequence: 1 }
-    expect(journal.readSince(cursor)).toMatchObject({ ok: true, rows: expect.any(Array) })
-    const first = readAgentSessionHistory(journal, {
+    expect(await journal.readSince(cursor)).toMatchObject({ ok: true, rows: expect.any(Array) })
+    const first = await readAgentSessionHistory(journal, {
       sessionId: identity.sessionId,
       direction: 'after',
       cursor,
@@ -136,22 +144,22 @@ describe('forward history SQL read budget', () => {
     if (!first.ok) {
       throw new Error('Expected first page')
     }
-    const last = readAgentSessionHistory(journal, {
+    const last = await readAgentSessionHistory(journal, {
       sessionId: identity.sessionId,
       direction: 'after',
       cursor: first.page.window.nextCursor,
       limit: 3
     })
     expect(last).toMatchObject({ ok: true, page: { hasNewer: false } })
-    const unlimited = journal.readSince(cursor)
+    const unlimited = await journal.readSince(cursor)
     expect(unlimited.ok && unlimited.rows).toHaveLength(6)
   })
 
   it('reports a sequence gap when the next page reaches it', async () => {
     const journal = await seedJournal(6)
-    const { db } = openTestJournalHostDatabase(root!)
-    deleteTestJournalRow(db, identity.sessionId, 4)
-    const first = readAgentSessionHistory(journal, {
+    const database = await openTestJournalHostDatabase(root!)
+    await deleteTestJournalRow(database, identity.sessionId, 4)
+    const first = await readAgentSessionHistory(journal, {
       sessionId: identity.sessionId,
       direction: 'after',
       cursor: { epoch: journal.epoch, sequence: 1 },
@@ -162,7 +170,7 @@ describe('forward history SQL read budget', () => {
       throw new Error('Expected first page')
     }
     expect(
-      readAgentSessionHistory(journal, {
+      await readAgentSessionHistory(journal, {
         sessionId: identity.sessionId,
         direction: 'after',
         cursor: first.page.window.nextCursor,
@@ -175,9 +183,9 @@ describe('forward history SQL read budget', () => {
     'preserves parse-stop behavior at lookahead: %s',
     async (rowJson) => {
       const journal = await seedJournal(6)
-      const { db } = openTestJournalHostDatabase(root!)
-      updateTestJournalRowJson(db, identity.sessionId, 4, rowJson)
-      const page = readAgentSessionHistory(journal, {
+      const database = await openTestJournalHostDatabase(root!)
+      await updateTestJournalRowJson(database, identity.sessionId, 4, rowJson)
+      const page = await readAgentSessionHistory(journal, {
         sessionId: identity.sessionId,
         direction: 'after',
         cursor: { epoch: journal.epoch, sequence: 1 },

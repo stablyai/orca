@@ -5,12 +5,22 @@ import {
   profileStateDatabaseBackupsAsync,
   type ProfileStateDatabaseBackup
 } from './profile-state-backup-path'
-import { runProfileStateBackup } from './profile-state-backup-worker'
+import { runProfileStateBackup, runProfileStateBackupWorker } from './profile-state-backup-worker'
 import { removeAbandonedProfileStateBackupFiles } from './profile-state-backup-temporary-files'
 
 const BACKUP_COUNT = 5
 const BACKUP_INTERVAL_MS = 60 * 60 * 1000
 const BACKUP_RETRY_MS = 60 * 1000
+
+export function createProfileStateWorkerBackupRotation(
+  databasePath: string,
+  profileId: string,
+  workerPath?: string
+): ProfileStateBackupRotation {
+  return new ProfileStateBackupRotation(databasePath, profileId, Date.now, (job, signal) =>
+    runProfileStateBackupWorker(job, { workerPath, signal })
+  )
+}
 
 /** Immutable generations keep every previous recovery point until publication succeeds. */
 export class ProfileStateBackupRotation {

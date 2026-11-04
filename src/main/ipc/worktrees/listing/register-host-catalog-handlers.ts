@@ -1,5 +1,6 @@
 import { getRepoDialableSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { ipcMain } from 'electron'
+import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal-scopes'
 import type {
   ListKnownWorktreesForExecutionHostArgs,
   HostQualifiedKnownWorktreeResult,
@@ -91,10 +92,10 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
 
   ipcMain.handle(
     'worktrees:forgetRemovedForExecutionHost',
-    (
+    async (
       _event,
       args: ForgetRemovedWorktreesForExecutionHostArgs
-    ): ForgetRemovedWorktreesForExecutionHostResult => {
+    ): Promise<ForgetRemovedWorktreesForExecutionHostResult> => {
       const nothingForgotten: ForgetRemovedWorktreesForExecutionHostResult = {
         forgottenWorktreeIds: []
       }
@@ -119,6 +120,16 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
       }
       const allMeta = readAllWorktreeMetaForHost(store, requestedExecutionHostId)
       const forgottenWorktreeIds: string[] = []
+      const captured = new Map(
+        worktreeIds
+          .filter((id) => typeof id === 'string')
+          .map((id) => [
+            id,
+            captureWorktreeOwnerRemoval(store, id, parsedHost.id, () =>
+              context.runtime.openAgentSessionRecordStore()
+            )
+          ])
+      )
       for (const worktreeId of worktreeIds) {
         const meta = typeof worktreeId === 'string' ? allMeta[worktreeId] : undefined
         if (!meta || getRepoIdFromWorktreeId(worktreeId) !== repo.id) {
@@ -128,8 +139,10 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
         if (meta.hostId && meta.hostId !== requestedExecutionHostId) {
           continue
         }
-        store.removeWorktreeMeta(
-          hostWorktreeTarget({ id: worktreeId, hostId: requestedExecutionHostId })
+        await captured.get(worktreeId)!(() =>
+          store.removeWorktreeMeta(
+            hostWorktreeTarget({ id: worktreeId, hostId: requestedExecutionHostId })
+          )
         )
         // Off-host rows bypass local GC, so this removal must also retire persisted agent status.
         agentHookServer.dropStatusEntriesForRemovedWorktree(worktreeId, parsedHost.id)

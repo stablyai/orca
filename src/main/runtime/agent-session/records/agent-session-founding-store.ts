@@ -44,7 +44,9 @@ export function createAgentSessionFoundingStore(
         committed: () => {
           receipt.committed()
           if (!heldBefore) {
-            firstRecordListeners.forEach((listener) => listener())
+            transactions.notifyCommitted(() =>
+              firstRecordListeners.forEach((listener) => listener())
+            )
           }
         }
       }

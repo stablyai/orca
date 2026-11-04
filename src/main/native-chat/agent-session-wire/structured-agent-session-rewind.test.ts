@@ -1,3 +1,6 @@
+import { rewindTestParams } from './structured-agent-session-rewind-request.test-fixture'
+import { mutateTestJournalFixture } from '../agent-session-journal/journal-drained-fixture-test-support'
+import { corruptTestRecordFence } from '../agent-session-journal/journal-retained-fault-test-support'
 import {
   expectLargeRetainedPrefixRewind,
   expectSupersededRewindReplay,
@@ -117,7 +120,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => clock,
     probeOwner: async () => ({ outcome: 'exit-observed' })
@@ -179,9 +182,9 @@ async function seed(acceptedSubmissions = false) {
       ).toMatchObject({ ok: true })
       await vi.waitFor(async () =>
         expect(
-          (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
-            (entry) => entry.clientMessageId === clientOperationId
-          )?.dispatchState
+          await (
+            await host.journalSnapshot(HOST_TEST_SESSION)
+          ).submissions.find((entry) => entry.clientMessageId === clientOperationId)?.dispatchState
         ).toBe('accepted')
       )
       if (i === 1) {
@@ -195,21 +198,12 @@ async function seed(acceptedSubmissions = false) {
   return selectedItemId
 }
 async function params(itemId: string, epoch?: string) {
-  const expectedEpoch = epoch ?? (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
-  return {
+  return rewindTestParams(
+    () => host,
+    () => store,
     itemId,
-    expectedEpoch,
-    envelope: {
-      sessionId: HOST_TEST_SESSION,
-      clientOperationId: hostTestOperationId(),
-      expectedRuntimeFence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.rewind',
-        sessionId: HOST_TEST_SESSION,
-        fields: { itemId, expectedEpoch }
-      })
-    }
-  }
+    epoch
+  )
 }
 
 const LATE = { provider: 'codex' as const, threadId: HOST_TEST_THREAD, turnId: 'late', ordinal: 0 }
@@ -244,11 +238,7 @@ describe('host rewind', () => {
     const request = await params(await seed())
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true })
     await host.flushAllStreamedEvents()
-    openTestJournalHostDatabase(directory)
-      .db.prepare(
-        "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
-      )
-      .run(HOST_TEST_SESSION)
+    await corruptTestRecordFence(await openTestJournalHostDatabase(directory), HOST_TEST_SESSION)
     const reopened = await openTestAgentSessionRecordStore(directory)
     const restored = new StructuredAgentSessionHost({ ...host.deps, store: reopened })
     const effects = rewind.mock.calls.length
@@ -311,7 +301,7 @@ describe('host rewind', () => {
     sink.appendItem(target, hostTestMessage('target'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await host.flushStreamedEvents(HOST_TEST_SESSION)
     expect(
-      (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId }) => itemId)
+      await (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId }) => itemId)
     ).toEqual([
       agentJournalItemKey(kept),
       agentJournalSubmissionKey(clientOperationId),
@@ -321,7 +311,7 @@ describe('host rewind', () => {
       ok: true
     })
     expect(
-      (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId }) => itemId)
+      await (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId }) => itemId)
     ).toEqual([agentJournalItemKey(kept)])
   })
 
@@ -448,9 +438,9 @@ describe('host rewind', () => {
       }
     })
     const sent = async () =>
-      (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
-        (entry) => entry.clientMessageId === clientOperationId
-      )
+      await (
+        await host.journalSnapshot(HOST_TEST_SESSION)
+      ).submissions.find((entry) => entry.clientMessageId === clientOperationId)
     await vi.waitFor(async () => expect((await sent())?.dispatchState).toBe('unknown'))
     expect(await host.rewind(caller, await params(target))).toMatchObject({
       ok: false,
@@ -641,7 +631,9 @@ describe('host rewind', () => {
     })
 
     expect(
-      (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId, body }) => ({
+      await (
+        await host.journalSnapshot(HOST_TEST_SESSION)
+      ).items.map(({ itemId, body }) => ({
         itemId,
         body
       }))
@@ -691,9 +683,9 @@ describe('host rewind', () => {
       ).toMatchObject({ ok: true })
       await vi.waitFor(async () =>
         expect(
-          (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
-            (entry) => entry.clientMessageId === clientOperationId
-          )?.dispatchState
+          await (
+            await host.journalSnapshot(HOST_TEST_SESSION)
+          ).submissions.find((entry) => entry.clientMessageId === clientOperationId)?.dispatchState
         ).toBe('accepted')
       )
       sink.appendItem(
@@ -778,7 +770,9 @@ describe('host rewind', () => {
     ).toMatchObject({ ok: true })
 
     expect(
-      (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId, body }) => ({
+      await (
+        await host.journalSnapshot(HOST_TEST_SESSION)
+      ).items.map(({ itemId, body }) => ({
         itemId,
         body
       }))
@@ -800,16 +794,20 @@ describe('host rewind', () => {
     const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
     const cut = await appendRewindUsageLimitedTurn(journal, clock)
     const request = await params(target)
-    const db = openTestJournalHostDatabase(directory).db
-    db.exec(`CREATE TEMP TRIGGER fail_rewind_completion BEFORE UPDATE ON agent_session_records
+    const database = await openTestJournalHostDatabase(directory)
+    await mutateTestJournalFixture(database, (db) => {
+      db.exec(`CREATE TRIGGER fail_rewind_completion BEFORE UPDATE ON agent_session_records
       WHEN instr(NEW.record_json, '"phase":"completed"') > 0
       BEGIN SELECT RAISE(ABORT, 'completion write failed'); END`)
+    })
     await expect(host.rewind(caller, request)).rejects.toThrow('completion write failed')
     const committed = await host.journalSnapshot(HOST_TEST_SESSION)
     expect(committed.cursor.epoch).not.toBe(request.expectedEpoch)
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
     expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toBeUndefined()
-    db.exec('DROP TRIGGER fail_rewind_completion')
+    await mutateTestJournalFixture(database, (db) => {
+      db.exec('DROP TRIGGER fail_rewind_completion')
+    })
     const replace = vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
     expect(
       await attachAndStart(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)

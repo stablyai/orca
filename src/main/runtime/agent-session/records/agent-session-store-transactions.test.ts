@@ -21,14 +21,22 @@ import {
   readPersistedTestAgentSessionStore
 } from './agent-session-record-store-test-harness'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { observeNativeJournalSql } from '../../../native-chat/agent-session-journal/journal-native-test-instrumentation'
 
 const NOW = 1_800_000_000_000
 
 let root: string
 let counter = 0
+let changes = 0
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-agent-session-store-transactions-'))
+  changes = 0
+  observeNativeJournalSql(await openTestJournalHostDatabase(root), (entry) => {
+    if (entry.method === 'run') {
+      changes += entry.changes
+    }
+  })
 })
 
 afterEach(async () => {
@@ -90,9 +98,7 @@ async function liveChat(
 }
 
 function totalChanges(): number {
-  return Number(
-    openTestJournalHostDatabase(root).db.prepare('SELECT total_changes() AS n').get()?.n ?? 0
-  )
+  return changes
 }
 
 describe('writing a transaction', () => {
@@ -101,7 +107,7 @@ describe('writing a transaction', () => {
     await liveChat(store, 'chat-a-0001')
     await liveChat(store, 'chat-b-0002')
     const renewed = await liveChat(store, 'chat-c-0003')
-    const before = totalChanges()
+    const before = await totalChanges()
 
     await store.renewLease({
       sessionId: 'chat-c-0003',
@@ -110,16 +116,17 @@ describe('writing a transaction', () => {
       now: NOW + 10_000
     })
 
-    expect(totalChanges() - before).toBe(1)
+    expect((await totalChanges()) - before).toBe(1)
     expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-c-0003')?.lease.lastRenewedAt
+      await (await openTestAgentSessionRecordStore(root)).getRecord('chat-c-0003')?.lease
+        .lastRenewedAt
     ).toBe(NOW + 10_000)
   })
 
   it('writes nothing for a transaction that changes nothing', async () => {
     const store = await openTestAgentSessionRecordStore(root)
     await liveChat(store, 'chat-a-0001')
-    const before = totalChanges()
+    const before = await totalChanges()
 
     await store.renewLeases([])
 
@@ -132,7 +139,9 @@ describe('writing a transaction', () => {
     await liveChat(store, 'chat-a-0001')
     let pending: Promise<unknown> | null = null
 
-    openTestJournalHostDatabase(root).transaction(() => {
+    await (
+      await openTestJournalHostDatabase(root)
+    ).transaction(() => {
       pending = store.setConversationName('chat-a-0001', 'renamed')
     })
 
@@ -186,7 +195,9 @@ describe('a receipt', () => {
         ...(insert ? { fingerprint: 'fp', now: NOW } : {})
       })
 
-      openTestJournalHostDatabase(root).transaction((db) => {
+      await (
+        await openTestJournalHostDatabase(root)
+      ).transaction((db) => {
         receipt.write(db)
         expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
           insert ? undefined : 'pending'
@@ -197,7 +208,7 @@ describe('a receipt', () => {
         insert ? undefined : 'pending'
       )
       expect(
-        (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
+        await (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
           ?.usageLimitContinueCancel
       ).toEqual(cancel)
       expect(await persistedStatus()).toBe('succeeded')
@@ -218,12 +229,12 @@ describe('a receipt', () => {
       ...(insert ? { fingerprint: 'fp', now: NOW } : {})
     })
 
-    expect(() =>
-      openTestJournalHostDatabase(root).transaction((db) => {
+    await expect(
+      (await openTestJournalHostDatabase(root)).transaction((db) => {
         receipt.write(db)
         throw new Error('the journal row was refused')
       })
-    ).toThrow('the journal row was refused')
+    ).rejects.toThrow('the journal row was refused')
 
     expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
       insert ? undefined : 'pending'
@@ -231,7 +242,7 @@ describe('a receipt', () => {
     expect(await persistedStatus()).toBe(insert ? undefined : 'pending')
     expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
     expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
+      await (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
         ?.usageLimitContinueCancel
     ).toBeUndefined()
     // A discarded draft must not become the next diff baseline.
@@ -273,7 +284,7 @@ describe('a receipt', () => {
     ).rejects.toThrow()
     expect(stale.getRecord('chat-a-0001')?.conversationName).not.toBe('lost')
     expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')?.conversationName
+      await (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')?.conversationName
     ).not.toBe('lost')
   })
 })
@@ -306,7 +317,8 @@ describe('a change a load would refuse', () => {
 
     expect(store.getRecord('chat-a-0001')).toBe(before)
     expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')?.providerHandleChain
+      await (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
+        ?.providerHandleChain
     ).toHaveLength(1)
   })
 })

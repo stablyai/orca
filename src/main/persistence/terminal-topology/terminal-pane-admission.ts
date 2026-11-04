@@ -107,7 +107,7 @@ export function applyCommandToSession(
     ? { ...nameBasedLoadContext(), editorViewsOf: (key: string) => views[key] }
     : nameBasedLoadContext()
   const loaded = loadWorkspaceLayout(hostId, session, context)
-  const taken = takenIds(loaded.layout, command)
+  const taken = existingLayoutCreateOutcome(loaded.layout, command)
   if (taken) {
     return { value: taken, session: null }
   }
@@ -213,7 +213,10 @@ function closedIds(
 }
 
 /** Runtime creates may target existing client tabs; only client IDs need collision checks. */
-function takenIds(layout: WorkspaceLayoutModel, command: LayoutCommand): LayoutApplyOutcome | null {
+export function existingLayoutCreateOutcome(
+  layout: WorkspaceLayoutModel,
+  command: LayoutCommand
+): LayoutApplyOutcome | null {
   if (command.type === 'createTerminalTab') {
     return takenTabId(layout, command)
   }

@@ -1,3 +1,4 @@
+import { journalTable, type JournalTableScope } from './journal-table-scope'
 import type Database from '../../sqlite/sync-database'
 import { journalPragmaNumber } from './journal-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
@@ -29,8 +30,10 @@ export type CommandReceiptInsert =
       existing: Extract<CommandReceiptRead, { verdict: 'unreadable' }>
     }
 
-const SELECT_RECEIPT = `SELECT session_id, caller_key, method, fingerprint, status,
-  result_json, rejection_json, accepted_at FROM agent_session_command_receipts`
+const selectReceipt = (
+  scope: JournalTableScope
+): string => `SELECT session_id, caller_key, method, fingerprint, status,
+  result_json, rejection_json, accepted_at FROM ${journalTable(scope, 'agent_session_command_receipts')}`
 
 type CommandReceiptCandidates =
   | { verdict: 'readable'; receipts: CommandReceipt[] }
@@ -43,7 +46,8 @@ function parseReceiptJson(value: unknown): unknown {
 function readCommandReceiptCandidates(
   db: Database.Database,
   scope: CommandReceiptScope,
-  operationId: string
+  operationId: string,
+  tableScope: JournalTableScope = 'main'
 ): CommandReceiptCandidates {
   const unreadable: Extract<CommandReceiptRead, { verdict: 'unreadable' }> = {
     verdict: 'unreadable',
@@ -51,20 +55,14 @@ function readCommandReceiptCandidates(
     operationId
   }
   try {
-    // Missing tables in newer read-only databases cannot authorize a command retry.
-    if (
-      !db
-        .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
-        .get('agent_session_command_receipts')
-    ) {
-      return unreadable
-    }
     const rows =
       scope.kind === 'caller'
         ? db
-            .prepare(`${SELECT_RECEIPT} WHERE caller_key = ? AND operation_id = ?`)
+            .prepare(`${selectReceipt(tableScope)} WHERE caller_key = ? AND operation_id = ?`)
             .all(scope.callerKey, operationId)
-        : db.prepare(`${SELECT_RECEIPT} WHERE operation_id = ? ORDER BY rowid`).all(operationId)
+        : db
+            .prepare(`${selectReceipt(tableScope)} WHERE operation_id = ? ORDER BY rowid`)
+            .all(operationId)
     const receipts: CommandReceipt[] = []
     for (const row of rows) {
       if (
@@ -109,9 +107,10 @@ function readCommandReceiptCandidates(
 export function readCommandReceipt(
   db: Database.Database,
   scope: CommandReceiptScope,
-  operationId: string
+  operationId: string,
+  tableScope: JournalTableScope = 'main'
 ): CommandReceiptRead {
-  const candidates = readCommandReceiptCandidates(db, scope, operationId)
+  const candidates = readCommandReceiptCandidates(db, scope, operationId, tableScope)
   if (candidates.verdict === 'unreadable') {
     return candidates
   }
@@ -123,10 +122,11 @@ export function readCommandReceipt(
 export function insertCommandReceiptIfAbsent(
   db: Database.Database,
   scope: CommandReceiptScope,
-  receipt: CommandReceipt
+  receipt: CommandReceipt,
+  tableScope: JournalTableScope = 'main'
 ): CommandReceiptInsert {
   assertJournalWritable(
-    journalPragmaNumber(db, 'user_version') > JOURNAL_DB_SCHEMA_VERSION,
+    journalPragmaNumber(db, `${tableScope}.user_version`) > JOURNAL_DB_SCHEMA_VERSION,
     receipt.sessionId
   )
   if (!db.isTransaction) {
@@ -137,7 +137,7 @@ export function insertCommandReceiptIfAbsent(
   if (claim.kind === 'caller' && claim.callerKey !== written.callerKey) {
     throw new Error('command caller does not match its scope')
   }
-  const candidates = readCommandReceiptCandidates(db, claim, written.operationId)
+  const candidates = readCommandReceiptCandidates(db, claim, written.operationId, tableScope)
   if (candidates.verdict === 'unreadable') {
     return { inserted: false, reason: 'unreadable', existing: candidates }
   }
@@ -152,7 +152,7 @@ export function insertCommandReceiptIfAbsent(
       reason: duplicate ? 'duplicate' : 'conflict'
     }
   }
-  db.prepare(`INSERT INTO agent_session_command_receipts
+  db.prepare(`INSERT INTO ${journalTable(tableScope, 'agent_session_command_receipts')}
       (operation_id, session_id, caller_key, method, fingerprint, status,
        result_json, rejection_json, accepted_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(

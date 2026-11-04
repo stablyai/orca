@@ -1,3 +1,4 @@
+import { afterWorkspaceLayoutCommands } from '@/runtime/layout-apply-call'
 import type { TerminalSurfaceCloseTarget } from '../../../../shared/terminal-surface-close-target'
 
 /** Commits a terminal tab or split-pane close in main, which owns membership: a renderer save
@@ -8,9 +9,13 @@ export function commitTerminalSurfaceClose(
   reason?: 'user' | 'cleanup'
 ): void {
   // Why optional: an older preload can linger through an in-place renderer reload.
-  void globalThis.window?.api?.session
-    ?.closeTerminalSurface?.({ worktreeId, target, ...(reason ? { reason } : {}) })
-    ?.catch((error: unknown) => {
-      console.warn('[terminal-close] main did not commit the close', error)
+  void afterWorkspaceLayoutCommands({ kind: 'local' }, worktreeId, async () =>
+    globalThis.window?.api?.session?.closeTerminalSurface?.({
+      worktreeId,
+      target,
+      ...(reason ? { reason } : {})
     })
+  ).catch((error: unknown) => {
+    console.warn('[terminal-close] main did not commit the close', error)
+  })
 }

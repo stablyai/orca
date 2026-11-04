@@ -1,3 +1,4 @@
+import { deleteTestCommandReceipt } from '../agent-session-journal/journal-retained-fault-test-support'
 import { structuredAgentSessionSeedCatalog } from '../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionOptions,
@@ -305,9 +306,7 @@ describe("a Stop's queue pause", () => {
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
     // Model legacy no-receipt acceptance that must reconstruct its result.
-    openTestJournalHostDatabase(rig.root)
-      .db.prepare('DELETE FROM agent_session_command_receipts WHERE operation_id = ?')
-      .run(working)
+    await deleteTestCommandReceipt(await openTestJournalHostDatabase(rig.root), working)
     const body = hostTestMessage('work on this')
     const replayed = await rig.host.send(QUEUED_RIG_CALLER, {
       envelope: rig.envelope({ body }, 'agentSession.send', working),

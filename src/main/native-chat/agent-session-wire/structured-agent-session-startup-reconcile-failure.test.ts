@@ -90,7 +90,7 @@ async function relaunch(
     },
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(relaunched),
+    journalDatabase: await openTestJournalHostDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     probeOwner,

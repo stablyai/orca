@@ -1,3 +1,4 @@
+import { deleteTestCommandReceipt } from '../agent-session-journal/journal-retained-fault-test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredQueueHold } from './structured-agent-session-queued-messages'
@@ -223,9 +224,7 @@ describe('the hand-off link on answers', () => {
     await eventually(async () => expect(await rig.handoff(clientOperationId)).toBeDefined())
     const handedOffAs = await rig.handoffId(clientOperationId)
     // Model legacy acceptance without a receipt, requiring effect reconstruction.
-    openTestJournalHostDatabase(rig.root)
-      .db.prepare('DELETE FROM agent_session_command_receipts WHERE operation_id = ?')
-      .run(clientOperationId)
+    await deleteTestCommandReceipt(await openTestJournalHostDatabase(rig.root), clientOperationId)
     const count = (await host.journalSnapshot(SESSION)).submissions.length
     expect(await host.send(CALLER, params)).toMatchObject({
       ok: true,

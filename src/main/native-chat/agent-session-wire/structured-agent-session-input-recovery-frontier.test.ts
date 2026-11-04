@@ -192,7 +192,7 @@ it('retains an automatic unentered link through two production replacements and 
         kind: 'submission',
         submission: { clientMessageId: h }
       })
-      const replay = loadTestJournal(rig.root, SESSION)!
+      const replay = (await loadTestJournal(rig.root, SESSION))!
       expect(replay.damage).toBeNull()
       expect(journalInputOrder(replay.state).lineage.cards.get('D')!.introduced).toBe(intro)
       expect(
@@ -212,7 +212,7 @@ it('retains an automatic unentered link through two production replacements and 
     expect(await rig.submission(h)).toMatchObject({ dispatchState: 'accepted' })
     expect(await rig.submission(m.id)).toMatchObject({ dispatchState: 'accepted' })
     expect(journal.queuedMessages.displayState().inputEntries.size).toBe(0)
-    expect(loadTestJournal(rig.root, SESSION)!.state.inputEntries.size).toBe(0)
+    expect((await loadTestJournal(rig.root, SESSION))!.state.inputEntries.size).toBe(0)
   } finally {
     release()
     await rig.dispose()
@@ -230,7 +230,7 @@ it.each([10, 100])(
     try {
       const original = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
       await rig.host.flushAllStreamedEvents()
-      writeLegacyGapFixture(rig.root, original, n)
+      await writeLegacyGapFixture(rig.root, original, n)
       const check = (state: JournalReducerState) => {
         const m = state.submissions.get('legacy-M')!
         expect.soft(journalInputOrder(state).forced('legacy-M')).toBe(true)
@@ -240,16 +240,16 @@ it.each([10, 100])(
           )
           .toEqual([true, true])
       }
-      check(loadTestJournal(rig.root, SESSION)!.state)
+      check((await loadTestJournal(rig.root, SESSION))!.state)
       const journal = new AgentSessionJournal({
         identity: original['identity'],
-        database: openTestJournalHostDatabase(rig.root)
+        database: await openTestJournalHostDatabase(rig.root)
       })
       await journal.open()
       for (let pass = 0; pass < 2; pass++) {
         await journal.replaceEpochItems('unreconcilable_prefix', 1, [])
         check(journal.queuedMessages.displayState())
-        check(loadTestJournal(rig.root, SESSION)!.state)
+        check((await loadTestJournal(rig.root, SESSION))!.state)
       }
       await journal.close()
       rig.crashRestartHostProcess()
@@ -288,7 +288,7 @@ it.each([10, 100])(
         .toEqual(['D', 'legacy-M'])
       expect(reopened.queuedMessages.list().filter((c) => c.state === 'waiting')).toEqual([])
       expect(reopened.queuedMessages.displayState().inputEntries.size).toBe(0)
-      expect(loadTestJournal(rig.root, SESSION)!.state.inputEntries.size).toBe(0)
+      expect((await loadTestJournal(rig.root, SESSION))!.state.inputEntries.size).toBe(0)
       expect([...reopened.inputOrder.lineage.cards.values()].every((c) => !c.baseline)).toBe(true)
     } finally {
       await rig.dispose()

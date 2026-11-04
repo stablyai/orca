@@ -7,7 +7,7 @@ import { staleSubagentRosterRevisions } from './journal-subagent-liveness'
 export async function openJournalStoreState(input: {
   sessionId: string
   replay: () => JournalLoad | null
-  start: () => void
+  start: () => void | Promise<void>
   adopt: (loaded: JournalLoad) => void
   appendItem: (
     identity: AgentJournalItemIdentity,
@@ -19,7 +19,7 @@ export async function openJournalStoreState(input: {
   const loaded = input.replay()
   // Empty epochs left by older repairs contain nothing to preserve; found afresh without deleting rows.
   if (!loaded || (!loaded.newer && !loaded.damage && loaded.state.lastSequence === 0)) {
-    input.start()
+    await input.start()
     return
   }
   failLoadOnUnloadableJournal(input.sessionId, loaded)

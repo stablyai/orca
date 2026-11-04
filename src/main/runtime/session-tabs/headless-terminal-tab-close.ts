@@ -215,6 +215,17 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
+    if (args.chatLeafId !== undefined) {
+      const reply = await this.applyLayoutCommand({
+        type: 'setChatPane',
+        workspace: worktreeId,
+        tabId: hostTabId,
+        leafId: args.chatLeafId
+      })
+      if (!reply.ok) {
+        throw new Error(reply.code)
+      }
+    }
     // Main owns pane renames; pass only geometry onward.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       args = await this.nameMainPanes(worktreeId, hostTabId, args)

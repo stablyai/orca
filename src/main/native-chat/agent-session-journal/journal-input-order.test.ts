@@ -1,6 +1,8 @@
 import { journalInputOrder } from './journal-input-order'
-import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
-import { writeCommandReceiptTestRecord } from './command-receipt-test-support'
+import {
+  writeCommandReceiptTestRecord,
+  writeTestCommandReceipt
+} from './command-receipt-test-support'
 import type { JournalRow } from './journal-row-schema'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionJournal } from './journal-store'
@@ -172,7 +174,7 @@ it.each(['resume', 'accepted'] as const)(
       expect(journal.submission('M')).toBeUndefined()
       expect(journal.reopenFloor()).toEqual(floor)
       expect(
-        loadTestJournal(root, identity.sessionId)!.state.queuePauseMarks.reopenedSequence
+        (await loadTestJournal(root, identity.sessionId))!.state.queuePauseMarks.reopenedSequence
       ).toBe(0)
       expect(committed).toBe(0)
       await expect(append('stale', undefined, 0)).rejects.toMatchObject({
@@ -204,9 +206,8 @@ it.each(['resume', 'accepted'] as const)(
       expect(target).toEqual(cursor)
       expect(committed).toBe(1)
       expect(journal.reopenFloor()).toBeNull()
-      const marks = readTestJournalOutcomes(
-        openTestJournalHostDatabase(root).db,
-        identity.sessionId
+      const marks = (
+        await readTestJournalOutcomes(await openTestJournalHostDatabase(root), identity.sessionId)
       ).filter((record) => record.field === '$' && record.key === '"queuePauseMarks"')
       expect(
         marks.some(
@@ -231,7 +232,7 @@ it.each(['resume', 'accepted'] as const)(
       const beforePrefixes = ['forced', 'M', 'ordinary-held'].map((id) =>
         knownPredecessors(journal, id)
       )
-      const replay = loadTestJournal(root, identity.sessionId)!
+      const replay = (await loadTestJournal(root, identity.sessionId))!
       expect(replay.damage).toBeNull()
       expect(replay.newer).toBeNull()
       expect(
@@ -287,16 +288,21 @@ it('keeps the receipt callback live after replacement of a legacy null-boundary 
   try {
     const cursor = journal.cursor()
     await journal.close()
-    insertTestJournalRow(openTestJournalHostDatabase(root).db, identity.sessionId, {
-      v: 3,
-      epoch: cursor.epoch,
-      seq: cursor.sequence + 1,
-      fence: 0,
-      ts: 1,
-      kind: 'queue',
-      messageId: 'legacy-C',
-      change: { op: 'queued', body, position: 1, queuedAt: null }
-    })
+    await (
+      await openTestJournalHostDatabase(root)
+    ).transaction((plan) =>
+      insertTestJournalRow(plan, identity.sessionId, {
+        v: 3,
+        epoch: cursor.epoch,
+        seq: cursor.sequence + 1,
+        fence: 0,
+        ts: 1,
+        kind: 'queue',
+        messageId: 'legacy-C',
+        change: { op: 'queued', body, position: 1, queuedAt: null }
+      })
+    )
+
     journal = await journals.open({ identity, stateDirectory: root })
     expect(journal.queuedMessages.get('legacy-C')?.queuedAt).toBeNull()
     await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
@@ -312,7 +318,7 @@ it('keeps the receipt callback live after replacement of a legacy null-boundary 
       })
     ).resolves.toMatchObject({ epoch: journal.epoch })
     expect(journal.submission('M-after-replace')).toMatchObject({ dispatchState: 'pending' })
-    const replay = loadTestJournal(root, identity.sessionId)!
+    const replay = (await loadTestJournal(root, identity.sessionId))!
     expect(replay.damage).toBeNull()
     expect(replay.state.queue.cards.get('legacy-C')?.queuedAt).toBeNull()
     expect(knownPredecessors(replay.state, 'M-after-replace')).toEqual(
@@ -337,7 +343,7 @@ it.each(['legacy', 'observed'] as const)(
       providerHandle: claudeProviderHandle('thread', null)
     }
     let journal = await journals.open({ identity, stateDirectory: root })
-    const database = openTestJournalHostDatabase(root)
+    const database = await openTestJournalHostDatabase(root)
     try {
       const a = journal.cursor()
       await journal.close()
@@ -345,28 +351,32 @@ it.each(['legacy', 'observed'] as const)(
       const row = (
         fields: Pick<Extract<JournalRow, { kind: 'queue' }>, 'kind' | 'messageId' | 'change'>
       ): JournalRow => ({ v: 3, epoch: a.epoch, seq: ++seq, fence: 0, ts: 1, ...fields })
-      for (const [id, queuedAt] of [
-        ['D', { epoch: 'foreign', sequence: 1 }],
-        ['N', null],
-        ['C', { epoch: a.epoch, sequence: seq }]
-      ] as const) {
-        insertTestJournalRow(
-          database.db,
-          identity.sessionId,
-          row({
-            kind: 'queue',
-            messageId: id,
-            change: {
-              op: 'queued',
-              body:
-                id === 'C' ? { ...message('/compact'), command: { name: 'compact' } } : message(id),
-              position: seq,
-              queuedAt
-            }
-          })
-        )
-      }
-      database.transaction((db) => writeCommandReceiptTestRecord(db, identity.sessionId))
+      await database.transaction((plan) => {
+        for (const [id, queuedAt] of [
+          ['D', { epoch: 'foreign', sequence: 1 }],
+          ['N', null],
+          ['C', { epoch: a.epoch, sequence: seq }]
+        ] as const) {
+          insertTestJournalRow(
+            plan,
+            identity.sessionId,
+            row({
+              kind: 'queue',
+              messageId: id,
+              change: {
+                op: 'queued',
+                body:
+                  id === 'C'
+                    ? { ...message('/compact'), command: { name: 'compact' } }
+                    : message(id),
+                position: seq,
+                queuedAt
+              }
+            })
+          )
+        }
+        writeCommandReceiptTestRecord(plan, identity.sessionId)
+      })
       journal = await journals.open({ identity, stateDirectory: root })
       const originals = new Map<string, string>()
       for (const id of ['M1', 'M2', 'M3']) {
@@ -374,17 +384,14 @@ it.each(['legacy', 'observed'] as const)(
           id === 'M2'
             ? undefined
             : {
-                write: (
-                  db: Parameters<typeof insertCommandReceiptIfAbsent>[0],
-                  target?: JournalRow
-                ) => {
+                write: (db: Parameters<typeof writeTestCommandReceipt>[0], target?: JournalRow) => {
                   expect(target).toMatchObject({ kind: 'submission', clientMessageId: id })
                   const result = {
                     kind: 'journal-row' as const,
                     epoch: target!.epoch,
                     sequence: target!.seq
                   }
-                  insertCommandReceiptIfAbsent(
+                  writeTestCommandReceipt(
                     db,
                     { kind: 'global' },
                     {
@@ -433,10 +440,10 @@ it.each(['legacy', 'observed'] as const)(
             origin: 'client',
             options: { effort: 'high' }
           }
-          insertTestJournalRow(database.db, identity.sessionId, target)
-          if (receipt) {
-            database.transaction((db) => receipt.write(db, target))
-          }
+          await database.transaction((plan) => {
+            insertTestJournalRow(plan, identity.sessionId, target)
+            receipt?.write(plan, target)
+          })
           journal = await journals.open({ identity, stateDirectory: root })
         }
       }
@@ -472,16 +479,26 @@ it.each(['legacy', 'observed'] as const)(
           await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
         }
         check(journal.queuedMessages.displayState())
-        const replay = loadTestJournal(root, identity.sessionId)!
+        const replay = (await loadTestJournal(root, identity.sessionId))!
         expect(replay.damage).toBeNull()
         expect(replay.newer).toBeNull()
         check(replay.state)
         for (const id of ['M1', 'M3']) {
-          expect(JSON.stringify(readCommandReceipt(database.db, { kind: 'global' }, id))).toContain(
-            originals.get(id)!
-          )
+          expect(
+            JSON.stringify(
+              await database.read(async (read) =>
+                (await read.receipts({ kind: 'global' }, [id])).get(id)
+              )
+            )
+          ).toContain(originals.get(id)!)
         }
-        expect(readCommandReceipt(database.db, { kind: 'global' }, 'M2').verdict).toBe('absent')
+        expect(
+          (
+            await database.read(async (read) =>
+              (await read.receipts({ kind: 'global' }, ['M2'])).get('M2')
+            )
+          )?.verdict
+        ).toBe('absent')
         expect(journal.itemBody(agentJournalSubmissionKey('M2'))).toEqual(message('M2'))
         expect(journal.submission('M2')?.options).toEqual({ effort: 'high' })
       }

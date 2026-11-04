@@ -120,7 +120,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     hostId: ExecutionHostId,
     closedTabIds: readonly string[]
   ): Promise<void> {
-    await this.commitWorkspaceSessionEdit(hostId, (session) =>
+    await this.commitWorkspaceResumeRecordEdit(hostId, (session) =>
       clearClosedWorktreeResumeRecords(session, worktreeId, closedTabIds)
     )
   }

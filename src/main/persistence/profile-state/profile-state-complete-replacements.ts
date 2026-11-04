@@ -1,5 +1,23 @@
 import type { ProfileStateDomainReplacement } from '../loading-store/profile-state-authority'
 import type { openProfileStateDatabase } from './profile-state-database'
+import { parseProfileStateRoot } from './profile-state-document-validation'
+
+export function serializedProfileDomainReplacements(
+  payload: Buffer
+): ProfileStateDomainReplacement[] {
+  const serialized = payload.toString('utf8')
+  if (!Buffer.from(serialized, 'utf8').equals(payload)) {
+    throw new Error('Profile state payload is not valid UTF-8')
+  }
+  const parsed = parseProfileStateRoot(serialized)
+  return Object.entries(parsed).map(([domain, value]) => {
+    const payload = JSON.stringify(value)
+    if (payload === undefined) {
+      throw new Error(`Profile state domain payload is not serializable: ${domain}`)
+    }
+    return { domain, payload }
+  })
+}
 
 export function buildCompleteDocumentReplacements(
   db: ReturnType<typeof openProfileStateDatabase>['db'],

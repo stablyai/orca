@@ -64,11 +64,11 @@ function journalSink(journal: AgentSessionJournal) {
   deferred.bind({
     journal,
     fence: 1,
-    publish: () => {
+    publish: async () => {
       if (subscriberCursor === null) {
         return
       }
-      const result = readAgentSessionHistory(journal, {
+      const result = await readAgentSessionHistory(journal, {
         sessionId: IDENTITY.sessionId,
         direction: 'after',
         cursor: subscriberCursor

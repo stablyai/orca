@@ -30,6 +30,7 @@ import {
 } from './session-snapshot-operations'
 import { scheduleSave } from './write-scheduling'
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
+import { canonicalSessionProjection } from './canonical-session-projection'
 
 export function setLocalWorkspaceSession(
   owner: SessionSnapshotOperations,
@@ -37,7 +38,8 @@ export function setLocalWorkspaceSession(
   deferSnapshotFiles = false
 ): void {
   const context = getSessionSnapshotOperationsContext(owner)
-  const prior = context.runtime.state.workspaceSession
+  const prior = context.sessions.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID)
+  session = canonicalSessionProjection(context.runtime, LOCAL_EXECUTION_HOST_ID, session)
   session = keepWslMoveFrozenSessionsForStore(session, prior)
   // Quit staging bypasses caller guards; preserve runtime fields at the shared write boundary.
   session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
@@ -97,6 +99,7 @@ export function setLocalWorkspaceSession(
     context.runtime.state.sshRemotePtyLeases = remappedLeases.leases
   }
   session = preserveMissingWorkspaceSessionTerminalBindings(session, prior, context.bindingRecovery)
+  session = canonicalSessionProjection(context.runtime, LOCAL_EXECUTION_HOST_ID, session)
   session = pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
   if (!deferSnapshotFiles) {
     const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(

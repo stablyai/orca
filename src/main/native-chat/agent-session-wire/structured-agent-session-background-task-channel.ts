@@ -53,7 +53,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       { store: this.deps.store, sessions: this.sessions },
       request.sessionId
     )
-    const result = readStructuredAgentSessionHistoryResult({
+    const result = await readStructuredAgentSessionHistoryResult({
       journal,
       record: this.deps.store.getConversation(request.sessionId),
       request,

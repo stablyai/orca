@@ -1,3 +1,4 @@
+import { seedTestLegacyQueueRows } from '../agent-session-journal/journal-native-fixture-test-support'
 import { afterEach, beforeEach, expect } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
@@ -27,7 +28,7 @@ beforeEach(async () => {
 
 afterEach(() => rig.dispose())
 
-export const db = () => openTestJournalHostDatabase(rig.root).db
+export const db = async () => await openTestJournalHostDatabase(rig.root)
 
 export const message = (text: string): AgentJournalMessageItem => ({
   kind: 'message',
@@ -46,9 +47,9 @@ export const words = (fact: 'providerRejected' | 'cancelled') =>
     { surface: 'rejection' }
   )
 
-export function journalFor(sessionId: string): AgentSessionJournal {
+export async function journalFor(sessionId: string): Promise<AgentSessionJournal> {
   return new AgentSessionJournal({
-    database: openTestJournalHostDatabase(rig.root),
+    database: await openTestJournalHostDatabase(rig.root),
     identity: {
       sessionId,
       workspaceId: 'workspace-1',
@@ -101,38 +102,41 @@ export type Legacy = [
   hold?: string
 ]
 
-export function seedLegacy(sessionId: string, rows: readonly Legacy[]): void {
-  const insert = db().prepare(
-    `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
-       created_at, host_instance, state, hold_reason, returned_reason, consumed_as)
-     VALUES (?, ?, ?, ?, ?, 0, 'earlier', ?, ?, ?, ?)`
-  )
-  rows.forEach(([id, state, text, consumedAs, hold], index) => {
-    const body = text === null ? '{' : JSON.stringify(message(text))
-    const print = text === null ? '' : agentSessionSendBodyFingerprint(sessionId, message(text))
-    const reason = state === 'returned' ? 'refused before' : null
-    insert.run(
-      sessionId,
-      id,
-      index + 1,
-      body,
-      print,
+export async function seedLegacy(sessionId: string, rows: readonly Legacy[]): Promise<void> {
+  await seedTestLegacyQueueRows(
+    await db(),
+    sessionId,
+    rows.map(([id, state, text, consumedAs, hold], index) => ({
+      messageId: id,
+      position: index + 1,
+      body: message(text ?? ''),
+      ...(text === null ? { rawBodyJson: '{' } : {}),
+      fingerprint: text === null ? '' : agentSessionSendBodyFingerprint(sessionId, message(text)),
       state,
-      hold ?? null,
-      reason,
-      consumedAs ?? null
-    )
-  })
+      holdReason: hold ?? null,
+      returnedReason: state === 'returned' ? 'refused before' : null,
+      returnedRejection: null,
+      consumedAs: consumedAs ?? null,
+      queuedAt: null
+    }))
+  )
 }
 
-export const legacyIds = (sessionId = SESSION) =>
-  db()
-    .prepare('SELECT message_id AS id FROM queued_messages WHERE session_id = ? ORDER BY position')
-    .all(sessionId)
-    .map((row) => (typeof row === 'object' && row !== null && 'id' in row ? row.id : null))
+export const legacyIds = async (sessionId = SESSION) =>
+  (
+    await (
+      await db()
+    ).read((read) =>
+      read
+        .prepare(
+          'SELECT message_id AS id FROM queued_messages WHERE session_id = ? ORDER BY position'
+        )
+        .all(sessionId)
+    )
+  ).map((row) => row.id)
 
-export function queueRows(sessionId = SESSION): string[] {
-  return readTestQueueChanges(db(), sessionId).map(
+export async function queueRows(sessionId = SESSION): Promise<string[]> {
+  return (await readTestQueueChanges(await db(), sessionId)).map(
     ({ messageId, op, returned }) => `${messageId}:${op}${returned ? '+refusal' : ''}`
   )
 }

@@ -1,4 +1,6 @@
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
+import type { CapturedOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal'
+import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal-scopes'
 import { usesNativeWindowsRemoval } from '../../../git/worktrees/removal/windows-worktree-removal'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -45,7 +47,13 @@ export async function removeUnregisteredWorktree(
   registeredWorktrees: GitWorktreeInfo[],
   removedMeta: WorktreeMeta | undefined,
   removedPushTarget: GitPushTarget | undefined,
-  localWorktreeGitOptions: LocalProjectWorktreeGitOptions
+  localWorktreeGitOptions: LocalProjectWorktreeGitOptions,
+  removeOwned: CapturedOwnerRemoval = captureWorktreeOwnerRemoval(
+    context.store,
+    args.worktreeId,
+    removalHostId,
+    () => context.runtime.openAgentSessionRecordStore()
+  )
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
   const removalHome = resolveWorktreeRemovalHomeForHost(removalHostId)
@@ -76,7 +84,8 @@ export async function removeUnregisteredWorktree(
     let removalCompleted = false
     try {
       await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
-        allowUnverifiedStop: args.allowUnverifiedPtyStop
+        allowUnverifiedStop: args.allowUnverifiedPtyStop,
+        deferSurfaceRetirement: true
       })
       await (usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
         ? removeWorktree(repo.path, worktreePath, args.force ?? false, {
@@ -86,32 +95,34 @@ export async function removeUnregisteredWorktree(
           })
         : removeLocalWorktreePath(worktreePath, localWorktreeGitOptions))
       removalCompleted = true
+      await cleanupUnusedWorktreePushTargetRemote(
+        repo.path,
+        args.worktreeId,
+        removedPushTarget,
+        store,
+        localWorktreeGitOptions
+      )
+      invalidateAuthorizedRootsCache()
+      runtime.clearOptimisticReconcileToken(args.worktreeId)
+      await removeOwned(() =>
+        removeWorktreeMetadataAndTransientState(
+          { store, runtime },
+          args.worktreeId,
+          removalHostId,
+          args.snapshotPruneBatchId
+        )
+      )
+      preservedBranchCleanupByScope.delete(
+        preservedBranchCleanupScopeKey({
+          worktreeId: args.worktreeId,
+          hostId: removalHostId
+        })
+      )
+      notifyWorktreesChanged(mainWindow, repoId)
+      return {}
     } finally {
       await removalGate.finish(removalCompleted)
     }
-    await cleanupUnusedWorktreePushTargetRemote(
-      repo.path,
-      args.worktreeId,
-      removedPushTarget,
-      store,
-      localWorktreeGitOptions
-    )
-    invalidateAuthorizedRootsCache()
-    runtime.clearOptimisticReconcileToken(args.worktreeId)
-    removeWorktreeMetadataAndTransientState(
-      { store, runtime },
-      args.worktreeId,
-      removalHostId,
-      args.snapshotPruneBatchId
-    )
-    preservedBranchCleanupByScope.delete(
-      preservedBranchCleanupScopeKey({
-        worktreeId: args.worktreeId,
-        hostId: removalHostId
-      })
-    )
-    notifyWorktreesChanged(mainWindow, repoId)
-    return {}
   }
   if (await isAlreadyRemovedWorktreePath(worktreePath, localWorktreeGitOptions)) {
     if (!args.force && !removedMeta) {
@@ -128,11 +139,13 @@ export async function removeUnregisteredWorktree(
     )
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
-    removeWorktreeMetadataAndTransientState(
-      { store, runtime },
-      args.worktreeId,
-      removalHostId,
-      args.snapshotPruneBatchId
+    await removeOwned(() =>
+      removeWorktreeMetadataAndTransientState(
+        { store, runtime },
+        args.worktreeId,
+        removalHostId,
+        args.snapshotPruneBatchId
+      )
     )
     preservedBranchCleanupByScope.delete(
       preservedBranchCleanupScopeKey({

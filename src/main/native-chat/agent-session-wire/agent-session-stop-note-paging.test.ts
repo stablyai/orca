@@ -37,7 +37,7 @@ it('shrinks the triggering row window without dropping the dependent note', asyn
     )
   }
   await turn('interrupted')
-  const first = readAgentSessionHistory(fixture.journal, {
+  const first = await readAgentSessionHistory(fixture.journal, {
     sessionId: 'session-1',
     direction: 'after',
     cursor: held,
@@ -47,7 +47,7 @@ it('shrinks the triggering row window without dropping the dependent note', asyn
     throw new Error(first.reset)
   }
   expect(first.page.hasNewer).toBe(true)
-  const next = readAgentSessionHistory(fixture.journal, {
+  const next = await readAgentSessionHistory(fixture.journal, {
     sessionId: 'session-1',
     direction: 'after',
     cursor: first.page.window.nextCursor,
@@ -74,7 +74,7 @@ it('refreshes at the exact tip using bounded frames and no durable writes', asyn
       }
     )
   }
-  const stored = rows()
+  const stored = await rows()
   const events: AgentSessionSubscribeEvent[] = []
   new AgentSessionSubscribers().open({
     id: 'reconnect',
@@ -102,7 +102,7 @@ it('refreshes at the exact tip using bounded frames and no durable writes', asyn
           item.body.kind === 'status' && item.body.text === ordinary.text && !item.body.failure
       )
   ).toBe(true)
-  expect(rows()).toEqual(stored)
+  expect(await rows()).toEqual(stored)
 })
 
 it('refreshes a phone within its frames, in bounded pages', async () => {

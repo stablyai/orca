@@ -60,6 +60,9 @@ export async function createOrAttachTerminalSession(
   // Checkpoint readers that require settled ownership use getSettledSnapshot.
   if (existing && existing.isAlive && !existing.isTerminating) {
     deps.assertCreateAllowed()
+    if (opts.expectedIncarnationId && opts.expectedIncarnationId !== existing.incarnationId) {
+      throw new SessionNotFoundError(opts.sessionId)
+    }
     const attachedSession = existing
     opts.onPhysicalOwner?.(
       attachedSession.physicalCompletion,

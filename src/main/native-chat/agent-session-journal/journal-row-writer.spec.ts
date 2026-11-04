@@ -7,7 +7,11 @@ import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
 import { JournalRowWriter } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
-import { readJournalRowsAfter } from './journal-row-table'
+import type { JournalPersistencePlan } from './journal-persistence-plan'
+import {
+  commandReceiptFixture,
+  writeCommandReceiptTestRecord
+} from './command-receipt-test-support'
 import {
   openTestJournalHostDatabase,
   readTestJournalRows,
@@ -40,8 +44,11 @@ export function registerJournalRowWriterTests(): void {
 
     beforeEach(async () => {
       root = await mkdtemp(join(tmpdir(), 'orca-journal-row-writer-'))
-      database = openTestJournalHostDatabase(root)
-      publishTestJournalEpoch(database.db, SESSION_ID, EPOCH)
+      database = await openTestJournalHostDatabase(root)
+      await database.transaction((plan) => {
+        publishTestJournalEpoch(plan, SESSION_ID, EPOCH)
+        writeCommandReceiptTestRecord(plan, SESSION_ID)
+      })
       readOnly = false
     })
 
@@ -74,21 +81,26 @@ export function registerJournalRowWriterTests(): void {
 
     it('prepares a receipt once from built rows, preserves its target, and leaves empty or failed plans unwritten', async () => {
       const { writer, committedRows } = writerHarness()
-      database.db.exec('CREATE TABLE receipt_fact (sequence INTEGER)')
       const build = vi.fn(row)
-      const write = vi.fn((db: JournalHostDatabase['db'], target?: JournalRow) => {
+      const write = vi.fn((plan: JournalPersistencePlan, target?: JournalRow) => {
         if (!target) {
           throw new Error('missing receipt target')
         }
-        db.prepare('INSERT INTO receipt_fact VALUES (?)').run(target.seq)
+        plan.add({
+          kind: 'receipt',
+          scope: { kind: 'caller', callerKey: 'caller-1' },
+          receipt: commandReceiptFixture({
+            sessionId: SESSION_ID,
+            result: { kind: 'journal-row', epoch: EPOCH, sequence: target.seq }
+          })
+        })
       })
       const committed = vi.fn(() => {
         expect(committedRows).toEqual([])
-        expect(database.db.prepare('SELECT sequence FROM receipt_fact').get()?.sequence).toBe(2)
       })
       const prepare = vi.fn((rows: readonly JournalRow[]) => {
         expect(rows.map((value) => value.seq)).toEqual([1, 2])
-        expect(readTestJournalRows(database.db, SESSION_ID, EPOCH)).toEqual([])
+        expect(committedRows).toEqual([])
         return { write, committed }
       })
       await writer.enqueueRows(
@@ -96,6 +108,10 @@ export function registerJournalRowWriterTests(): void {
         prepare,
         (rows) => rows[1]
       )
+      const receipt = await database.read((read) =>
+        read.prepare('SELECT result_json FROM agent_session_command_receipts').get()
+      )
+      expect(JSON.parse(String(receipt?.result_json))).toMatchObject({ sequence: 2 })
       expect(build).toHaveBeenCalledTimes(2)
       expect(prepare).toHaveBeenCalledTimes(1)
       expect(write).toHaveBeenCalledTimes(1)
@@ -109,20 +125,20 @@ export function registerJournalRowWriterTests(): void {
           throw new Error('prepare failed')
         })
       ).rejects.toThrow('prepare failed')
-      expect(readTestJournalRows(database.db, SESSION_ID, EPOCH)).toHaveLength(2)
+      expect(await readTestJournalRows(database, SESSION_ID, EPOCH)).toHaveLength(2)
       await writer.enqueue(row)
       expect(committedRows.map((value) => value.seq)).toEqual([1, 2, 3])
     })
 
     it('rolls the transaction back and sets no latch when the insert fails', async () => {
       const { writer, committedRows } = writerHarness()
-      insertTestJournalRow(database.db, SESSION_ID, row(1, 1))
+      await database.transaction((plan) => insertTestJournalRow(plan, SESSION_ID, row(1, 1)))
 
       await expect(writer.enqueue(row)).rejects.toThrow()
 
       expect(readOnly).toBe(false)
       expect(committedRows).toHaveLength(0)
-      expect(readTestJournalRows(database.db, SESSION_ID, EPOCH)).toHaveLength(1)
+      expect(await readTestJournalRows(database, SESSION_ID, EPOCH)).toHaveLength(1)
       // Rolled-back inserts leave the writer usable.
       await expect(writer.enqueue((seq, ts) => row(seq + 1, ts))).resolves.toMatchObject({
         kind: 'item'
@@ -131,13 +147,13 @@ export function registerJournalRowWriterTests(): void {
 
     it('writes several rows as one: a failure on the last leaves none', async () => {
       const { writer, committedRows } = writerHarness()
-      insertTestJournalRow(database.db, SESSION_ID, row(2, 1))
+      await database.transaction((plan) => insertTestJournalRow(plan, SESSION_ID, row(2, 1)))
 
       await expect(writer.enqueueRows(() => [row, row])).rejects.toThrow()
 
       expect(committedRows).toHaveLength(0)
       expect(
-        readTestJournalRows(database.db, SESSION_ID, EPOCH).map((stored) => stored.seq)
+        (await readTestJournalRows(database, SESSION_ID, EPOCH)).map((stored) => stored.seq)
       ).toEqual([2])
     })
 
@@ -150,7 +166,7 @@ export function registerJournalRowWriterTests(): void {
           ? writer.enqueue(pinned)
           : writer.enqueueRows(() => [pinned, pinned]))
 
-        const saved = readJournalRowsAfter(database.db, SESSION_ID, EPOCH, 0)
+        const saved = await readTestJournalRows(database, SESSION_ID, EPOCH)
         expect(saved).toHaveLength(kind === 'single' ? 1 : 2)
         expect(saved.map((entry) => entry.ts)).toEqual(saved.map(() => 1))
         expect(saved.map((entry) => JSON.parse(entry.rowJson))).toEqual(committedRows)

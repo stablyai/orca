@@ -1,4 +1,3 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { visibleGraphChangedWorktrees } from '../session-graph/visible-graph-changed-worktrees'
 import type { RuntimeSessionTabsInventoryPublication as SessionTabsInventoryPublicationMethods } from './session-tabs-inventory-publication'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
@@ -43,15 +42,19 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
 
   // Main's index answers with or without a window's graph: each layout write is a new partition.
   protected paneOfPty(pty: PtyPaneSource | null | undefined): PtyPane {
-    return paneOfPty(pty, (ptyId) => this.mainSurfaces().findPaneForPty(ptyId))
+    const surfaces = this.mainSurfaces()
+    return paneOfPty(
+      pty,
+      (ptyId) => surfaces.findPaneForPty(ptyId),
+      !!pty?.worktreeId && surfaces.ownsWorkspace(pty.worktreeId)
+    )
   }
 
   protected captureTerminalPaneReader(): PtyPaneOf {
-    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-      return (pty) => paneOfPty(pty, () => null)
-    }
-    const mainPane = this.mainSurfaces().capturePaneLookup()
-    return (pty) => paneOfPty(pty, mainPane)
+    const surfaces = this.mainSurfaces()
+    const mainPane = surfaces.capturePaneLookup()
+    const owned = surfaces.ownedWorkspaces()
+    return (pty) => paneOfPty(pty, mainPane, !!pty.worktreeId && owned.has(pty.worktreeId))
   }
 
   private mainSurfaces(): ReturnType<typeof mainTerminalSurfaces> {

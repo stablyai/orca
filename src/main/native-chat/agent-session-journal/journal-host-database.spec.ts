@@ -14,9 +14,13 @@ import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
-  readTestJournalRows
+  readTestJournalRows,
+  loadTestJournal
 } from './journal-host-database-test-support'
-import type Database from '../../sqlite/sync-database'
+import {
+  failNextNativeJournalStatement,
+  failNativeJournalStatements
+} from './journal-native-test-instrumentation'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalHostDatabaseTests(): void {
@@ -50,17 +54,6 @@ export function registerJournalHostDatabaseTests(): void {
 
   function item(ordinal: number): AgentJournalItemIdentity {
     return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
-  }
-
-  /** Deferred foreign-key failures leave COMMIT open, exercising shared-connection rollback recovery. */
-  function failCommits(db: Database.Database): () => void {
-    db.exec(`CREATE TEMP TABLE commit_probe_parent (id INTEGER PRIMARY KEY);
-  CREATE TEMP TABLE commit_probe_child (
-    parent INTEGER REFERENCES commit_probe_parent (id) DEFERRABLE INITIALLY DEFERRED
-  );
-  CREATE TEMP TRIGGER commit_probe AFTER INSERT ON main.journal_rows
-  BEGIN INSERT INTO commit_probe_child (parent) VALUES (1); END`)
-    return () => db.exec('DROP TRIGGER temp.commit_probe')
   }
 
   function text(value: string) {
@@ -111,23 +104,15 @@ export function registerJournalHostDatabaseTests(): void {
 
     it('fails only the write whose transaction could not begin', async () => {
       const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
-      const database = openTestJournalHostDatabase(root)
-      const exec = database.db.exec.bind(database.db)
-      const busy = Object.assign(new Error('database is locked'), {
-        code: 'ERR_SQLITE_ERROR',
-        errcode: 5
-      })
-      vi.spyOn(database.db, 'exec').mockImplementationOnce(() => {
-        throw busy
-      })
+      const database = await openTestJournalHostDatabase(root)
+      await failNextNativeJournalStatement(database, 'BEGIN IMMEDIATE', 'database is locked')
 
       await expect(
         journal.appendItem(item(1), text('refused'), {
           fence: 1,
           turnScope: AGENT_JOURNAL_THREAD_SCOPE
         })
-      ).rejects.toBe(busy)
-      vi.mocked(database.db.exec).mockImplementation(exec)
+      ).rejects.toThrow('database is locked')
       await expect(
         journal.appendItem(item(2), text('next'), {
           fence: 1,
@@ -140,25 +125,23 @@ export function registerJournalHostDatabaseTests(): void {
     it('frees the connection after a failed COMMIT: nothing adopted, published or acknowledged', async () => {
       const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
       const other = await journals.open({ identity: OTHER, stateDirectory: root })
-      const connection = openTestJournalHostDatabase(root).db
+      const database = await openTestJournalHostDatabase(root)
       const published = vi.fn()
       journal.observeCommits(published)
       const cursor = journal.cursor()
-      const rows = () =>
-        readTestJournalRows(connection, IDENTITY.sessionId, journal.epoch).map((row) => row.seq)
-      const rowsBefore = rows()
-      const stopFailing = failCommits(connection)
+      const rows = async () =>
+        (await readTestJournalRows(database, IDENTITY.sessionId, journal.epoch)).map(
+          (row) => row.seq
+        )
+      const rowsBefore = await rows()
+      await failNextNativeJournalStatement(database, 'COMMIT', 'commit refused')
 
-      await expect(journal.appendSubmission(SUBMISSION)).rejects.toThrow(
-        'FOREIGN KEY constraint failed'
-      )
-      expect(connection.isTransaction).toBe(false)
-      stopFailing()
+      await expect(journal.appendSubmission(SUBMISSION)).rejects.toThrow('commit refused')
 
       expect(published).not.toHaveBeenCalled()
       expect(journal.cursor()).toEqual(cursor)
       expect(journal.submissions()).toEqual([])
-      expect(rows()).toEqual(rowsBefore)
+      expect(await rows()).toEqual(rowsBefore)
       await expect(
         other.appendItem(item(1), text('another chat'), {
           fence: 1,
@@ -167,69 +150,72 @@ export function registerJournalHostDatabaseTests(): void {
       ).resolves.toBeDefined()
     })
 
-    it('refuses every chat while a failed transaction will not roll back, then serves them', async () => {
+    it('fences every chat after an indeterminate write until its owners close and recover', async () => {
+      const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
       const other = await journals.open({ identity: OTHER, stateDirectory: root })
-      const database = openTestJournalHostDatabase(root)
-      const connection = database.db
-      const exec = connection.exec.bind(connection)
-      let rollbackFails = true
-      vi.spyOn(connection, 'exec').mockImplementation((sql) => {
-        if (sql === 'ROLLBACK' && rollbackFails) {
-          throw Object.assign(new Error('disk I/O error'), {
-            code: 'ERR_SQLITE_ERROR',
-            errcode: 10
-          })
-        }
-        exec(sql)
+      const database = await openTestJournalHostDatabase(root)
+      await failNativeJournalStatements(database, [
+        { sql: 'COMMIT', message: 'commit refused' },
+        { sql: 'ROLLBACK', message: 'disk I/O error' }
+      ])
+      await expect(journal.appendSubmission(SUBMISSION)).rejects.toMatchObject({
+        name: 'JournalIndeterminateWriteError',
+        cause: expect.objectContaining({ message: 'commit refused' })
       })
-      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-      const stopFailing = failCommits(connection)
-
-      expect(() =>
-        database.transaction((db) =>
-          db
-            .prepare(
-              'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
-            )
-            .run('unknown', 'epoch-unknown', 1, 1, '{}')
-        )
-      ).toThrow('FOREIGN KEY constraint failed')
-      expect(connection.isTransaction).toBe(true)
+      expect(database.isFaulted).toBe(true)
       await expect(
         other.appendItem(item(1), text('refused'), {
           fence: 1,
           turnScope: AGENT_JOURNAL_THREAD_SCOPE
         })
-      ).rejects.toMatchObject({
-        refusal: {
-          code: 'agent_session_journal_unreadable',
-          details: { reason: 'journalUnavailable' }
-        }
-      })
-
-      rollbackFails = false
-      expect(database.db.isTransaction).toBe(false)
-      stopFailing()
+      ).rejects.toBeDefined()
+      await journals.closeAll()
+      const recovered = await journals.open({ identity: OTHER, stateDirectory: root })
       await expect(
-        other.appendItem(item(1), text('served'), {
+        recovered.appendItem(item(1), text('served after recovery'), {
           fence: 1,
           turnScope: AGENT_JOURNAL_THREAD_SCOPE
         })
       ).resolves.toBeDefined()
-      expect(readTestJournalRows(connection, OTHER.sessionId, other.epoch)).not.toHaveLength(0)
+      expect(recovered.snapshot().items.map((entry) => entry.body)).toEqual([
+        text('served after recovery')
+      ])
+      expect((await loadTestJournal(root, IDENTITY.sessionId))?.state.submissions.size).toBe(0)
     })
 
-    it('refuses a transaction body that awaits', () => {
-      const database = openTestJournalHostDatabase(root)
-      expect(() => database.transaction(async () => undefined)).toThrow('must not await')
-      expect(database.db.isTransaction).toBe(false)
+    it('serializes awaited preparation before the following transaction', async () => {
+      const database = await openTestJournalHostDatabase(root)
+      const order: string[] = []
+      let release: () => void = () => {}
+      const waiting = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const first = database.transaction(
+        async () => {
+          order.push('preparing')
+          await waiting
+          order.push('prepared')
+        },
+        false,
+        () => {
+          order.push('adopted')
+        }
+      )
+      const next = database.transaction(() => {
+        order.push('next')
+      })
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(order).not.toContain('next')
+      release()
+      await Promise.all([first, next])
+      expect(order).toEqual(['preparing', 'prepared', 'adopted', 'next'])
     })
   })
 
   describe('quit', () => {
     it('closes the one connection only after the host has flushed what was in flight', async () => {
       const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
-      const database = openTestJournalHostDatabase(root)
+      const database = await openTestJournalHostDatabase(root)
       const installed = {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown calls the supplied producer stop, flush and status-drain stages.
         host: {
@@ -237,7 +223,7 @@ export function registerJournalHostDatabaseTests(): void {
           drainStatusWrites: async () => {
             expect(database.isClosed).toBe(false)
             expect(
-              readTestJournalRows(database.db, IDENTITY.sessionId, journal.epoch).map(
+              (await readTestJournalRows(database, IDENTITY.sessionId, journal.epoch)).map(
                 (row) => row.seq
               )
             ).toEqual([1, 2])
@@ -259,9 +245,11 @@ export function registerJournalHostDatabaseTests(): void {
 
       expect(database.isClosed).toBe(true)
       await closeTestJournalHostDatabases()
-      const reopened = openTestJournalHostDatabase(root)
+      const reopened = await openTestJournalHostDatabase(root)
       expect(
-        readTestJournalRows(reopened.db, IDENTITY.sessionId, journal.epoch).map((row) => row.seq)
+        (await readTestJournalRows(reopened, IDENTITY.sessionId, journal.epoch)).map(
+          (row) => row.seq
+        )
       ).toEqual([1, 2])
     })
   })

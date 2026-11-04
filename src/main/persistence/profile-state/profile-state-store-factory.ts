@@ -4,6 +4,7 @@ import type { ProfileStateSqliteAuthority } from './profile-state-sqlite-authori
 import { Store } from '../loading-store/store'
 import { bootstrapProfileStateAuthority } from './profile-state-authority-bootstrap'
 import type { ProfileStateStorageClassification } from './profile-state-storage-classification'
+import { initializeProfileWorkspaceSurfaces } from '../../workspace-surfaces/surface-startup'
 
 export type ProfileStateStoreFactoryOptions = {
   userDataPath?: string
@@ -33,17 +34,19 @@ export function createProfileStateStore(
   options: ProfileStateStoreFactoryOptions
 ): ProfileStateStoreFactoryResult {
   const { initialState, ...prepared } = prepareProfileStateStore(options)
+  let store: Store | undefined
   try {
-    return {
-      ...prepared,
-      store: new Store({
-        dataFile: options.dataFile,
-        storageAuthority: options.storageAuthority,
-        profileStateAuthority: initialState.authority,
-        initialAuthorityState: initialState
-      })
-    }
+    store = new Store({
+      dataFile: options.dataFile,
+      storageAuthority: options.storageAuthority,
+      profileStateAuthority: initialState.authority,
+      initialAuthorityState: initialState
+    })
+    store.initializeWorkspaceSurfacesSync()
+    store.pruneDeregisteredTerminalSurfacesSync()
+    return { ...prepared, store }
   } catch (error) {
+    store?.freezeWrites()
     // Failed Store construction has not taken authority ownership yet.
     initialState.authority.close?.()
     throw error
@@ -70,7 +73,7 @@ export function prepareProfileStateStore(
   }
 
   return {
-    initialState: bootstrap.initialState,
+    initialState: initializeProfileWorkspaceSurfaces(bootstrap.initialState),
     backend: 'sqlite',
     classification: bootstrap.classification,
     migrated: bootstrap.migrated

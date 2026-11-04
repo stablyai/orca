@@ -1,3 +1,5 @@
+import type { RuntimeProjectGroupDependencies } from '../runtime-project-group-contract'
+import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import type * as Calls from './runtime-host-service-calls'
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
 
@@ -44,11 +46,10 @@ import { countRepoTerminalsNotKnownExited } from '../project-removal-impact'
 type SessionCreateOperation = TerminalContracts.AgentSessionCreateOperation
 
 export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
+  abstract openAgentSessionRecordStore(): Promise<AgentSessionRecordStore>
   declare addRepo: RuntimeRepositoryCommandSurface['addRepo']
   declare cloneRepo: RuntimeRepositoryCommandSurface['cloneRepo']
-  declare acquireFileWatcherRemoval: ConstructorParameters<
-    typeof RuntimeProjectGroupController
-  >[0]['acquireFileWatcherRemoval']
+  declare acquireFileWatcherRemoval: RuntimeProjectGroupDependencies['acquireFileWatcherRemoval']
   protected abstract tryGetWorkspaceSessionHostIdForWorktree(
     worktreeId: string
   ): ExecutionHostId | null
@@ -279,6 +280,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   protected readonly mobileDictation = new RuntimeMobileDictationController(() => this.store)
 
   protected readonly projectHostSetups = new RuntimeProjectHostSetupController({
+    openNativeOwnerStore: () => this.openAgentSessionRecordStore(),
     getStore: () => this.store,
     listRepos: () => this.listRepos(),
     addRepo: (path, kind, hostId) => this.addRepo(path, kind, hostId),
@@ -293,21 +295,18 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   })
 
   protected readonly projectGroups = new RuntimeProjectGroupController({
+    openNativeOwnerStore: () => this.openAgentSessionRecordStore(),
     getStore: () => this.store,
     resolveRepo: (...args) => this.managedWorktreeQueries.resolveRepoForConnection(...args),
     notifyReposChanged: () => this.notifyReposChanged(),
     resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
     acquireFileWatcherRemoval: (path, connectionId) =>
       this.acquireFileWatcherRemoval(path, connectionId),
-    teardownFolderWorkspacePtys: (...target) =>
-      teardownFolderWorkspacePtys(
-        {
-          runtime: this,
-          getLocalProvider: () => this.getLocalProvider(),
-          onPtyStopped: this.onPtyStopped
-        },
-        ...target
-      ),
+    teardownFolderWorkspacePtys: teardownFolderWorkspacePtys.bind(null, {
+      runtime: this,
+      getLocalProvider: () => this.getLocalProvider(),
+      onPtyStopped: this.onPtyStopped
+    }),
     cleanupRemovedFolderWorkspaceState: (worktreeId) => {
       if (this.store) {
         this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
@@ -336,6 +335,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   )
 
   protected readonly repositorySettings = new RuntimeRepositorySettingsController({
+    openNativeOwnerStore: () => this.openAgentSessionRecordStore(),
     ...this.repositoryCatalogDeps,
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     forgetTerminalTopology: (repoId) => this.terminalTopologyRevisionByRepoId.delete(repoId),

@@ -9,6 +9,8 @@ import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
 import { nameEmptyPersistedTerminalLayoutRoots } from '../restoring-sessions/empty-terminal-layout-root-repair'
 import { StoreRuntimeState, type StoreRuntimeOptions } from './store-runtime-state'
+import { SurfaceCatalog } from '../../workspace-surfaces/surface-catalog'
+import { surfaceProfileDomainSchema } from '../../../shared/workspace-surfaces/surface-profile-domain'
 import {
   createStoreDomains,
   installStoreDomainContexts,
@@ -109,6 +111,15 @@ export class Store {
       loaded = this.domains.loader.loadSerialized(options.serializedState)
     } else {
       throw new Error('Store requires an authority or a frozen serialized import')
+    }
+    if (loaded.workspaceSurfaces) {
+      this.runtime.workspaceSurfaces = new SurfaceCatalog(
+        surfaceProfileDomainSchema.parse(loaded.workspaceSurfaces)
+      )
+      // Live snapshots cannot carry command receipts or overwrite the owner's canonical document.
+      if (!imported) {
+        delete loaded.workspaceSurfaces
+      }
     }
     const normalized = normalizePersistedPaneIdentityState(
       nameEmptyPersistedTerminalLayoutRoots(loaded),

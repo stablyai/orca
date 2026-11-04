@@ -1,3 +1,10 @@
+import {
+  setTestOrdinaryOutcomeFormat,
+  setTestJournalOutcomeFormat,
+  setTestUnknownOutcome,
+  setTestInputEntryOrdinal
+} from './journal-native-fixture-test-support'
+import { restoreJournalAsync } from './journal-async-open'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,8 +24,7 @@ import {
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 import { JournalOutcomeCompaction } from './journal-outcome-compaction'
-import { JOURNAL_OUTCOME_FORMAT } from './journal-outcome-format'
-import { publishJournalOutcomeEpoch } from './journal-outcome-write'
+import { publishJournalOutcomeEpochPlan } from './journal-outcome-write'
 import { journalInputOrder } from './journal-input-order'
 import {
   expectProjectionMatches,
@@ -33,7 +39,6 @@ import {
 import type { JournalRow } from './journal-row-schema'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { encodeJournalState } from './journal-state-codec'
-import { restoreJournal } from './journal-open'
 import { applyJournalRow, createJournalReducerState, renderJournalState } from './journal-reducer'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -78,7 +83,7 @@ const journals = createTrackedJournalOpener()
 const rigs: ReturnType<typeof projectionWriter>[] = []
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-outcome-compaction-'))
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
 })
 afterEach(async () => {
   for (const rig of rigs.splice(0)) {
@@ -98,10 +103,12 @@ const item = (seq: number, itemId: string, revision: number): JournalRow => ({
   revision,
   body: { kind: 'status', text: `${itemId} ${revision}` }
 })
-const records = () =>
-  database.db.prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key').all()
-function compact(compaction = new JournalOutcomeCompaction()): void {
-  while (compaction.page(database)) {
+const records = async () =>
+  await database.read((read) =>
+    read.prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key').all()
+  )
+async function compact(compaction = new JournalOutcomeCompaction()): Promise<void> {
+  while (await compaction.page(database)) {
     // Each call commits at most one bounded page.
   }
 }
@@ -109,15 +116,16 @@ function compact(compaction = new JournalOutcomeCompaction()): void {
 it.each([1, 'mixed', 'upgrade', 2] as const)(
   'keeps format %s prefix bytes, masks and re-creation order',
   async (format) => {
-    const state = seedProjectionRows(database, [
+    const state = await seedProjectionRows(database, [
       projectionEpochRow,
       item(2, 'x', 1),
       item(3, 'y', 1)
     ])
     const rig = projectionWriter(database, state)
     rigs.push(rig)
-    const raw = () => database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
-    const prefix = raw()
+    const raw = async () =>
+      await database.read((read) => read.prepare('SELECT * FROM journal_rows ORDER BY seq').all())
+    const prefix = await raw()
     for (let revision = 2; revision <= 40; revision++) {
       await rig.writer.enqueue((seq) => item(seq, 'x', revision))
       if (revision === 10) {
@@ -131,7 +139,7 @@ it.each([1, 'mixed', 'upgrade', 2] as const)(
           revision: 21
         }))
         // Synthetic old-format records: ordinary values have the same frozen meaning in formats 1/2.
-        database.db.prepare('UPDATE journal_outcomes SET format = 1').run()
+        await setTestJournalOutcomeFormat(database, 1, false, false)
       }
     }
     await rig.writer.enqueue((seq) => ({
@@ -151,39 +159,39 @@ it.each([1, 'mixed', 'upgrade', 2] as const)(
       ]
     }))
     if (format === 1 || format === 'upgrade') {
-      database.db.prepare('UPDATE journal_outcomes SET format = 1').run()
-      database.db.prepare('UPDATE journal_outcome_epochs SET format = 1').run()
+      await setTestJournalOutcomeFormat(database, 1, false, false)
+      await setTestJournalOutcomeFormat(database, 1)
     }
     const compaction = new JournalOutcomeCompaction()
     if (format === 'upgrade') {
       // The pass has captured a format-1 boundary; a real write raises the epoch during its rest.
-      expect(compaction.page(database)).toBe(true)
+      expect(await compaction.page(database)).toBe(true)
       await rig.writer.enqueue((seq) => item(seq, 'x', 43))
     }
-    const before = records()
-    const rows = raw()
+    const before = await records()
+    const rows = await raw()
     const facts = before.filter((row) => row.deleted === 1 || row.field === 'tombstones')
     expect(facts.some((row) => row.field === 'items' && row.entry_key === '"y"')).toBe(true)
-    compact(compaction)
-    expect(records().length).toBeLessThan(before.length)
+    await compact(compaction)
+    expect((await records()).length).toBeLessThan(before.length)
     const xValues = before.filter(
       (row) => row.field === 'items' && row.entry_key === '"x"' && row.deleted === 0
     )
     expect(
-      records().filter(
-        (row) => row.field === 'items' && row.entry_key === '"x"' && row.deleted === 0
-      )
+      await (
+        await records()
+      ).filter((row) => row.field === 'items' && row.entry_key === '"x"' && row.deleted === 0)
     ).toEqual([xValues[0], xValues.at(-1)])
-    expect(records().filter((row) => row.deleted === 1 || row.field === 'tombstones')).toEqual(
-      facts
-    )
-    expect(raw()).toEqual(rows)
-    expect(raw().slice(0, prefix.length)).toEqual(prefix)
-    for (const row of records()) {
+    expect(
+      (await records()).filter((row) => row.deleted === 1 || row.field === 'tombstones')
+    ).toEqual(facts)
+    expect(await raw()).toEqual(rows)
+    expect((await raw()).slice(0, prefix.length)).toEqual(prefix)
+    for (const row of await records()) {
       expect(before).toContainEqual(row)
     }
     expect([...rig.state().items.keys()]).toEqual(['z', 'x'])
-    expectProjectionMatches(database, rig.state())
+    await expectProjectionMatches(database, rig.state())
   }
 )
 
@@ -192,7 +200,7 @@ it.each([4, 40])(
   async (size) => {
     const rig = projectionWriter(
       database,
-      seedProjectionRows(database, [projectionEpochRow, item(2, 'prefix', 1)])
+      await seedProjectionRows(database, [projectionEpochRow, item(2, 'prefix', 1)])
     )
     rigs.push(rig)
     const text = 'large saved body '.repeat(16_384)
@@ -234,56 +242,74 @@ it.each([4, 40])(
       expect(journal.context.floor()).toEqual(floor)
       expect(journal.cursor().epoch).toBe(epoch)
     }
-    const saved = encodeJournalState(restoreJournal(database.db, sessionId)!.state)
+    const saved = encodeJournalState(
+      (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state
+    )
     const snapshot = journal.snapshot()
-    const raw = database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
-    const before = records()
+    const raw = await database.read((read) =>
+      read.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
+    )
+    const before = await records()
     const removals = before.filter(
       (row) => row.deleted !== 0 || row.field === 'tombstones' || row.field === 'removedTurnIds'
     )
     const catchUp = () =>
-      Array.from({ length: journal.cursor().sequence + 1 }, (_, sequence) => {
-        const since = journal.readSince({ epoch, sequence })
-        if (!since.ok) {
-          throw new Error('missing catch-up')
-        }
-        return projectJournalBatch({
-          rows: since.rows,
-          snapshot: journal.snapshot(),
-          afterSequence: sequence
+      Promise.all(
+        Array.from({ length: journal.cursor().sequence + 1 }, async (_, sequence) => {
+          const since = await journal.readSince({ epoch, sequence })
+          if (!since.ok) {
+            throw new Error('missing catch-up')
+          }
+          return projectJournalBatch({
+            rows: since.rows,
+            snapshot: journal.snapshot(),
+            afterSequence: sequence
+          })
         })
-      })
-    const expectedCatchUp = catchUp()
-    compact()
+      )
+    const expectedCatchUp = await catchUp()
+    await compact()
     for (const id of ['large', agentJournalItemKey(kept.identity)]) {
       expect(
-        records().filter(
+        await (
+          await records()
+        ).filter(
           (row) =>
             row.field === 'items' && row.entry_key === JSON.stringify(id) && row.deleted === 0
         )
       ).toHaveLength(2)
     }
     expect(
-      records().filter(
+      await (
+        await records()
+      ).filter(
         (row) => row.deleted !== 0 || row.field === 'tombstones' || row.field === 'removedTurnIds'
       )
     ).toEqual(removals)
-    for (const row of records()) {
+    for (const row of await records()) {
       expect(before).toContainEqual(row)
     }
-    expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(raw)
-    expect(encodeJournalState(restoreJournal(database.db, sessionId)!.state)).toEqual(saved)
-    expect(catchUp()).toEqual(expectedCatchUp)
+    expect(
+      await database.read((read) => read.prepare('SELECT * FROM journal_rows ORDER BY seq').all())
+    ).toEqual(raw)
+    expect(
+      encodeJournalState(
+        (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state
+      )
+    ).toEqual(saved)
+    expect(await catchUp()).toEqual(expectedCatchUp)
     await journals.closeAll()
-    database = openTestJournalHostDatabase(root)
+    database = await openTestJournalHostDatabase(root)
     journal = await journals.open({ identity, stateDirectory: root })
     expect(journal.snapshot()).toEqual(snapshot)
-    expect(catchUp()).toEqual(expectedCatchUp)
+    expect(await catchUp()).toEqual(expectedCatchUp)
     // Continued writes use the retained latest ordinal and removal facts after a real cold reopen.
     await journal.context.rewind(floor, 1, [kept], () => receipt)
-    expect(renderJournalState(restoreJournal(database.db, sessionId)!.state)).toEqual(
-      journal.snapshot()
-    )
+    expect(
+      renderJournalState(
+        (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state
+      )
+    ).toEqual(journal.snapshot())
     expect(journal.snapshot().items.map((value) => value.itemId)).toEqual(
       snapshot.items.map((value) => value.itemId)
     )
@@ -292,48 +318,23 @@ it.each([4, 40])(
 
 it.each(['format', 'collection', 'scalar', 'old-native', 'epoch'] as const)(
   'stops at an unknown record %s and never deletes anything after it',
-  (unknown) => {
-    seedOutcomeRows(database, [
+  async (unknown) => {
+    await seedOutcomeRows(database, [
       projectionEpochRow,
       ...Array.from({ length: 100 }, (_, n) => item(n + 2, 'x', n + 1))
     ])
     // A mismatched summary also exercises the per-record fence rather than only the fast summary.
-    if (unknown === 'format') {
-      database.db
-        .prepare('UPDATE journal_outcomes SET format = ? WHERE seq = 40')
-        .run(JOURNAL_OUTCOME_FORMAT + 1)
-    } else if (unknown === 'epoch') {
-      database.db
-        .prepare('UPDATE journal_outcome_epochs SET format = ?')
-        .run(JOURNAL_OUTCOME_FORMAT + 1)
-    } else if (unknown === 'collection') {
-      database.db
-        .prepare(
-          "UPDATE journal_outcomes SET field = 'futureCollection' WHERE seq = 40 AND field = 'items'"
-        )
-        .run()
-    } else if (unknown === 'old-native') {
-      database.db
-        .prepare(
-          "UPDATE journal_outcomes SET format = 1, field = 'inputEntries' WHERE seq = 40 AND field = 'items'"
-        )
-        .run()
-    } else {
-      database.db
-        .prepare(
-          `UPDATE journal_outcomes SET field = '$', entry_key = '"futureScalar"' WHERE seq = 40 AND field = 'items'`
-        )
-        .run()
-    }
-    database.transaction((db) => {
-      publishTestJournalEpoch(db, 'healthy-successor', epoch)
-      publishJournalOutcomeEpoch(db, 'healthy-successor', epoch, [
+    await setTestUnknownOutcome(database, unknown)
+    const publication = await database.transaction(async (plan) => {
+      publishTestJournalEpoch(plan, 'healthy-successor', epoch)
+      return publishJournalOutcomeEpochPlan(plan, 'healthy-successor', epoch, [
         projectionEpochRow,
         ...Array.from({ length: 100 }, (_, n) => item(n + 2, 'healthy', n + 1))
       ])
     })
-    const affected = () => records().filter((row) => row.generation === 1)
-    const before = affected()
+    publication.adopt()
+    const affected = async () => (await records()).filter((row) => row.generation === 1)
+    const before = await affected()
     const atOrAfterUnknown = (row: (typeof before)[number]) =>
       Number(row.seq) > 40 ||
       (row.seq === 40 &&
@@ -343,22 +344,24 @@ it.each(['format', 'collection', 'scalar', 'old-native', 'epoch'] as const)(
             : unknown === 'old-native'
               ? 'inputEntries'
               : '$'))
-    compact()
+    await compact()
     if (unknown === 'epoch') {
-      expect(affected()).toEqual(before)
+      expect(await affected()).toEqual(before)
     } else {
-      expect(affected().length).toBeLessThan(before.length)
+      expect((await affected()).length).toBeLessThan(before.length)
     }
-    expect(affected().filter(atOrAfterUnknown)).toEqual(before.filter(atOrAfterUnknown))
+    expect((await affected()).filter(atOrAfterUnknown)).toEqual(before.filter(atOrAfterUnknown))
     expect(
-      records().filter((row) => row.field === 'items' && row.entry_key === '"healthy"')
+      await (
+        await records()
+      ).filter((row) => row.field === 'items' && row.entry_key === '"healthy"')
     ).toHaveLength(2)
   }
 )
 
 it('delivers cleaned storage through bounded history, desktop/phone reducers, requests and worker text', async () => {
   const prefix = [projectionEpochRow, item(2, 'deleted-prefix', 1), item(3, 'prefix', 1)]
-  const rig = projectionWriter(database, seedProjectionRows(database, prefix))
+  const rig = projectionWriter(database, await seedProjectionRows(database, prefix))
   rigs.push(rig)
   const historical = new Map<number, AgentJournalSnapshot>()
   const capture = (snapshot: AgentJournalSnapshot) => {
@@ -482,11 +485,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
     }
     if (revision === 6) {
       // Synthetic old-format ordinary records; native joins exist only in format 2.
-      database.db
-        .prepare(
-          "UPDATE journal_outcomes SET format = 1 WHERE field NOT IN ('inputEntries', 'inputCards')"
-        )
-        .run()
+      await setTestOrdinaryOutcomeFormat(database)
     }
   }
   await append((seq) => ({
@@ -541,11 +540,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
     }
   }))
   // Synthetic ordinal control: native b claims no ordinary prefix membership.
-  database.db
-    .prepare(
-      "UPDATE journal_outcomes SET ordinal = 'b' WHERE field = 'inputEntries' AND entry_key = ?"
-    )
-    .run('"pending"')
+  await setTestInputEntryOrdinal(database, 'pending', 'b')
   const identity = {
     sessionId,
     workspaceId: 'ws',
@@ -571,7 +566,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
     )
     expect(workerText.join('\n')).toContain('x re-created')
     expect(workerText.join('\n')).toContain('hello')
-    const tail = readAgentSessionHistory(
+    const tail = await readAgentSessionHistory(
       journal,
       { sessionId, direction: 'tail', limit: 3 },
       { reader }
@@ -584,10 +579,12 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
     let backwardPages = 1
     while (page.hasOlder) {
       const requestedCursor = page.window.nextCursor
-      page = readAgentSessionHistory(
-        journal,
-        { sessionId, direction: 'before', cursor: requestedCursor, limit: 3 },
-        { reader }
+      page = (
+        await readAgentSessionHistory(
+          journal,
+          { sessionId, direction: 'before', cursor: requestedCursor, limit: 3 },
+          { reader }
+        )
       ).page
       backward = reduceStructuredAgentSession(backward, {
         type: 'older-page',
@@ -643,7 +640,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
       let cursor = { epoch, sequence }
       let pages = 0
       for (;;) {
-        const result = readAgentSessionHistory(
+        const result = await readAgentSessionHistory(
           journal,
           { sessionId, direction: 'after', cursor, limit: 3 },
           { reader, rowReplay: true }
@@ -652,7 +649,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
         const next = result.page.window.nextCursor
         if (result.page.hasNewer) {
           expect(next.sequence).toBeGreaterThan(cursor.sequence)
-          const available = journal.readSince(cursor, 3)
+          const available = await journal.readSince(cursor, 3)
           if (
             available.ok &&
             available.rows.filter((row) => row.seq <= next.sequence).length <
@@ -702,8 +699,10 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
   expect(expectedNative.cut).toBeTypeOf('number')
   expect(expectedNative.introduced).toBeTypeOf('number')
   const expected = await consumers()
-  const raw = database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
-  const before = records()
+  const raw = await database.read((read) =>
+    read.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
+  )
+  const before = await records()
   expect(before).toContainEqual(
     expect.objectContaining({
       field: 'inputEntries',
@@ -720,29 +719,37 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
       deleted: 1
     })
   )
-  compact()
-  expect(records().length).toBeLessThan(before.length / 2)
-  expect(native(restoreJournal(database.db, sessionId)!.state)).toEqual(expectedNative)
+  await compact()
+  expect((await records()).length).toBeLessThan(before.length / 2)
   expect(
-    records().filter((row) => row.field === 'inputEntries' || row.field === 'inputCards')
+    native((await database.read((read) => restoreJournalAsync(read, sessionId)))!.state)
+  ).toEqual(expectedNative)
+  expect(
+    await (
+      await records()
+    ).filter((row) => row.field === 'inputEntries' || row.field === 'inputCards')
   ).toEqual(before.filter((row) => row.field === 'inputEntries' || row.field === 'inputCards'))
-  expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(raw)
-  for (const row of records()) {
+  expect(
+    await database.read((read) => read.prepare('SELECT * FROM journal_rows ORDER BY seq').all())
+  ).toEqual(raw)
+  for (const row of await records()) {
     expect(before).toContainEqual(row)
   }
   expect(await consumers()).toEqual(expected)
   await journals.closeAll()
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
   journal = await journals.open({ identity, stateDirectory: root })
   expect(journal.snapshot()).toEqual(snapshot)
-  expect(native(restoreJournal(database.db, sessionId)!.state)).toEqual(expectedNative)
+  expect(
+    native((await database.read((read) => restoreJournalAsync(read, sessionId)))!.state)
+  ).toEqual(expectedNative)
   expect(await consumers()).toEqual(expected)
   await journal.appendItem(
     { provider: 'orca', clientMessageId: 'after-cleanup' },
     { kind: 'status', text: 'continued after mixed-format cleanup' },
     { fence: 1, turnScope: { kind: 'thread' } }
   )
-  expect(renderJournalState(restoreJournal(database.db, sessionId)!.state)).toEqual(
-    journal.snapshot()
-  )
+  expect(
+    renderJournalState((await database.read((read) => restoreJournalAsync(read, sessionId)))!.state)
+  ).toEqual(journal.snapshot())
 })

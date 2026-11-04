@@ -44,7 +44,7 @@ async function openJournal(root: string): Promise<AgentSessionJournal> {
       agent: 'codex',
       providerHandle: codexProviderHandle(PARENT)
     },
-    database: openTestJournalHostDatabase(root),
+    database: await openTestJournalHostDatabase(root),
     now: () => 1_000
   })
 }

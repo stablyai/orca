@@ -100,18 +100,18 @@ export function createFixture() {
       .map((card) => [card.messageId, queuePauseHolding(pauses, card) !== undefined])
   }
 
-  function stopEvents(): unknown[] {
+  async function stopEvents(): Promise<unknown[]> {
     const db = new Database(journalDatabasePath(root), { readonly: true })
     try {
       // An outcome epoch (every replaced one) stores the Stop as pause marks, not as an input row.
-      const marks = readTestJournalOutcomes(db, IDENTITY.sessionId).filter(
+      const marks = (await readTestJournalOutcomes(db, IDENTITY.sessionId)).filter(
         (value) => value.field === '$' && value.key === JSON.stringify('queuePauseMarks')
       )
       if (marks.length > 0) {
         const stop = fields.queuePauseMarks.parse(JSON.parse(marks.at(-1)!.json)).latestStop
         return stop ? [stop.event] : []
       }
-      return liveTestJournalRows(db, IDENTITY.sessionId).flatMap((stored) => {
+      return (await liveTestJournalRows(db, IDENTITY.sessionId)).flatMap((stored) => {
         const parsed = parseJournalRow(stored.rowJson)
         return parsed.ok && parsed.row.kind === 'tombstone' && parsed.row.stopEvent
           ? [parsed.row.stopEvent]
@@ -122,10 +122,10 @@ export function createFixture() {
     }
   }
 
-  function rewriteRows(keys: Record<number, [string, unknown]>): void {
+  async function rewriteRows(keys: Record<number, [string, unknown]>): Promise<void> {
     const db = new Database(journalDatabasePath(root))
     try {
-      for (const stored of liveTestJournalRows(db, IDENTITY.sessionId)) {
+      for (const stored of await liveTestJournalRows(db, IDENTITY.sessionId)) {
         const rewrite = keys[stored.seq]
         if (rewrite) {
           const row: Record<string, unknown> = JSON.parse(stored.rowJson)

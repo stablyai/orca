@@ -1,3 +1,6 @@
+import { publishedClientBrowserTab } from '../../session-tabs/published-client-browser-tab'
+import { persistedUnifiedSessionTabProps } from '../../session-tabs/persisted-session-tab-props'
+import { closeCanonicalTerminalSurface } from '../../canonical-terminal-surface-close'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
 import type {
@@ -74,21 +77,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     })
     const publishedClientTabs = getRuntimeBrowserPageRegistry(this)
       .listPages(worktreeId)
-      .map((page) => ({
-        type: 'browser' as const,
-        id: page.browserPageId,
-        title: page.title || page.url || 'Browser',
-        browserWorkspaceId: page.browserPageId,
-        browserPageId: page.browserPageId,
-        browserProfileId: page.browserProfileId,
-        executionHostKey: page.executionHostKey,
-        placement: page.placement,
-        url: page.url,
-        loading: page.loading,
-        canGoBack: page.canGoBack,
-        canGoForward: page.canGoForward,
-        isActive: page.active
-      }))
+      .map(publishedClientBrowserTab)
     return [...publishedServerTabs, ...publishedClientTabs]
   }
 
@@ -96,11 +85,11 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     worktreeId: string,
     tabId: string
   ): Pick<Tab, 'color' | 'isPinned'> | null {
-    const tab =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
-        (candidate) => candidate.id === tabId || candidate.entityId === tabId
-      ) ?? null
-    return tab ? { color: tab.color, isPinned: tab.isPinned } : null
+    return persistedUnifiedSessionTabProps(
+      this.getWorkspaceSessionForWorktree(worktreeId),
+      worktreeId,
+      tabId
+    )
   }
 
   protected captureTerminalTabRetirement(worktreeId: string, tabId: string) {
@@ -130,6 +119,16 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     const store = this.store
     if (!store?.getWorkspaceSession || !store.setWorkspaceSession || !store.runDurableMutation) {
       throw new Error('workspace_session_unavailable')
+    }
+    const canonical = await closeCanonicalTerminalSurface(
+      store,
+      this.getWorkspaceSessionHostIdsForTab(worktreeId, target.tabId),
+      worktreeId,
+      target,
+      options
+    )
+    if (canonical !== null) {
+      return canonical
     }
     // Already-removed layout tabs have no newer owner to protect; refusing would strand them.
     const acknowledgeTabRetirement =
@@ -224,19 +223,17 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
   ): Promise<void> {
-    // Failed kill must not retain a pane the user explicitly closed.
     const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
-    if (pty) {
-      this.ptyController?.kill(pty.ptyId)
-    } else if (!this.tabs.has(tab.parentTabId) && tab.ptyId && parseAppSshPtyId(tab.ptyId)) {
-      // Without renderer kill ownership, a dormant SSH pane's durable id is the stop authority.
-      this.ptyController?.kill(tab.ptyId)
-    }
     await this.closeTerminalPane(worktreeId, {
       kind: 'pane',
       tabId: tab.parentTabId,
       leafId: tab.leafId
     })
+    if (pty) {
+      this.ptyController?.kill(pty.ptyId)
+    } else if (!this.tabs.has(tab.parentTabId) && tab.ptyId && parseAppSshPtyId(tab.ptyId)) {
+      this.ptyController?.kill(tab.ptyId)
+    }
   }
 
   private retireClosedTerminalLeafFromMobileSnapshot(

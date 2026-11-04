@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { layoutFramesFlowing } from '@/runtime/layout-frame-position'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -24,7 +25,7 @@ function sendPaneCloseToLayoutOwner(
     {
       apply: (result) => {
         // Already gone from main's copy (a workspace it lacks): no frame will drop it.
-        if (result.alreadyClosed || !layoutFramesFlowing()) {
+        if (result.alreadyClosed || !ORCA_LAYOUT_OWNER_IS_MAIN || !layoutFramesFlowing()) {
           forget()
           on.closeHere()
         }

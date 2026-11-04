@@ -1,4 +1,5 @@
 import type { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
+import type { CapturedOwnerRemoval } from './canonical-owner-removal'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from '../runtime-worktree-selection'
 import type { Repo } from '../../../shared/repo-types'
@@ -33,7 +34,8 @@ export async function removeOrphanOrFolderWorktree({
   removalTarget,
   cleanupHostId,
   removalHostId,
-  repo
+  repo,
+  removeOwned
 }: {
   runtime: WorkspaceRegistrationRemovalRuntime
   store: RuntimeStore
@@ -41,6 +43,7 @@ export async function removeOrphanOrFolderWorktree({
   cleanupHostId?: ExecutionHostId
   removalHostId?: ExecutionHostId
   repo?: Repo
+  removeOwned: CapturedOwnerRemoval
 }): Promise<{ warning?: string } | undefined> {
   if (!repo) {
     const orphanHost = parseExecutionHostId(store.getWorktreeMeta(removalTarget.id)?.hostId)
@@ -63,6 +66,7 @@ export async function removeOrphanOrFolderWorktree({
         onPtyStopped: runtime.onPtyStopped ?? undefined,
         // PTY sweeps miss structured chats; close them best-effort before forgetting the workspace.
         closeStructuredSessions: teardownStops('worktree-removal', 'structured-chat'),
+        deferSurfaceRetirement: true,
         ...(externalOrphanHost
           ? { includeProviderInventory: false, includeLocalRegistry: false }
           : {})
@@ -85,10 +89,12 @@ export async function removeOrphanOrFolderWorktree({
         .catch(() => {})
     }
     runtime.clearOptimisticReconcileToken(removalTarget.id)
-    runtime.removeWorktreeMetadataAndHistory(
-      store,
-      removalTarget.id,
-      cleanupHostId ?? orphanHost?.id
+    await removeOwned(() =>
+      runtime.removeWorktreeMetadataAndHistory(
+        store,
+        removalTarget.id,
+        cleanupHostId ?? orphanHost?.id
+      )
     )
     runtime.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
     runtime.invalidateResolvedWorktreeCache()
@@ -115,12 +121,15 @@ export async function removeOrphanOrFolderWorktree({
       {
         runtime,
         getLocalProvider: () => runtime.getLocalProvider(),
-        onPtyStopped: runtime.onPtyStopped
+        onPtyStopped: runtime.onPtyStopped,
+        deferSurfaceRetirement: true
       },
       removalTarget.id,
       folderConnectionId
     )
-    runtime.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
+    await removeOwned(() =>
+      runtime.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
+    )
     runtime.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
     runtime.invalidateResolvedWorktreeCache()
     runtime.notifyWorktreesChanged(repo.id)

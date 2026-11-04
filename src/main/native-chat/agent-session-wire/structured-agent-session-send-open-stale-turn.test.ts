@@ -74,7 +74,7 @@ async function relaunchAfterCrashMidTurn(
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: { ...adapter(), acquire },
-    journalDatabase: openTestJournalHostDatabase(relaunched),
+    journalDatabase: await openTestJournalHostDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     probeOwner: async () => probe,
@@ -116,9 +116,9 @@ it.each(PROBES)(
     })
     await eventually(async () =>
       expect(
-        (await host.journalSnapshot(SESSION)).submissions.find(
-          (entry) => entry.clientMessageId === sendEnvelope.clientOperationId
-        )
+        await (
+          await host.journalSnapshot(SESSION)
+        ).submissions.find((entry) => entry.clientMessageId === sendEnvelope.clientOperationId)
       ).toMatchObject({ dispatchState: 'rejected' })
     )
 

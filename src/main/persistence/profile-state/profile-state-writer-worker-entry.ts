@@ -1,3 +1,7 @@
+import { journalSqlFailure } from '../../native-chat/agent-session-journal/journal-sql-protocol'
+import { JournalUnitUpload } from '../../native-chat/agent-session-journal/journal-unit-upload'
+import { journalResultPackets } from '../../native-chat/agent-session-journal/journal-unit-transfer'
+import type { ProfileStateWriterJournalPackets } from './profile-state-writer-protocol'
 import { parentPort, workerData } from 'node:worker_threads'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
@@ -20,8 +24,9 @@ let authority: ProfileStateSqliteAuthority | undefined
 let busy = false
 let stopping = false
 let previousId = 0
+const journalUpload = new JournalUnitUpload()
 
-function reply(response: ProfileStateWriterResponse): void {
+function reply(response: ProfileStateWriterResponse | ProfileStateWriterJournalPackets): void {
   port.postMessage(response)
 }
 
@@ -39,7 +44,33 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
     throw new Error('Profile state writer is not initialized')
   }
   let exportedRevision: number | null | undefined
+  let surfaceResult: Extract<ProfileStateWriterResponse, { ok: true }>['surfaceResult']
+  let surfaceResults: Extract<ProfileStateWriterResponse, { ok: true }>['surfaceResults']
   switch (request.command) {
+    case 'stage-surface-journal':
+      if (request.packets === null) {
+        journalUpload.clear()
+      } else {
+        journalUpload.append(request.packets)
+      }
+      break
+    case 'write-surface-joint': {
+      const committed = authority.executeSurfaceJournalUnit(
+        request.transaction,
+        journalUpload.take(request.transaction.effectCount ?? 0)
+      )
+      surfaceResults = committed.surfaces
+      for (const journalPackets of journalResultPackets(committed.values)) {
+        reply({ id: request.id, journalPackets })
+      }
+      break
+    }
+    case 'write-surfaces':
+      surfaceResults = authority.executeSurfaceTransaction(request.surfaces)
+      break
+    case 'write-surface':
+      surfaceResult = authority.executeSurfaceCommand(request.surface)
+      break
     case 'write-state':
       authority.writeSerializedState(Buffer.from(request.payload))
       break
@@ -79,6 +110,8 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
     id: request.id,
     ok: true,
     revision: authority.revision,
+    ...(surfaceResult === undefined ? {} : { surfaceResult }),
+    ...(surfaceResults === undefined ? {} : { surfaceResults }),
     ...(exportedRevision === undefined ? {} : { exportedRevision })
   }
 }
@@ -112,6 +145,9 @@ async function accept(value: unknown): Promise<void> {
   } catch (error) {
     // Export staging accepts both JSON versions; only uncertain SQL outcomes retire the writer.
     const failure = encodeProfileStateWriterError(error, value.command === 'close')
+    if (value.command === 'write-surface-joint' && failure.outcome === 'known-failure') {
+      failure.journal = journalSqlFailure(error)
+    }
     reply({ id: value.id, ok: false, error: failure })
     stopping ||= failure.outcome === 'indeterminate'
   } finally {

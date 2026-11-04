@@ -14,12 +14,12 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type Database from '../../sqlite/sync-database'
+import { openJournalDatabase } from './journal-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'
 import type { AgentSessionJournal } from './journal-store'
 import {
   createTrackedJournalOpener,
-  openTestJournalHostDatabase,
   liveTestJournalRows,
   insertTestJournalRowJson,
   SAVED_BY_NEWER_ORCA
@@ -61,12 +61,13 @@ export function registerJournalStoreSchemaTests(): void {
     })
   }
 
-  async function withDatabase(run: (db: Database.Database) => void): Promise<void> {
-    const opened = openTestJournalHostDatabase(root)
+  async function withDatabase(run: (db: Database.Database) => void | Promise<void>): Promise<void> {
+    await journals.closeAll()
+    const opened = openJournalDatabase(journalDatabasePath(root))
     try {
-      run(opened.db)
+      await run(opened.db)
     } finally {
-      await opened.close()
+      opened.db.close()
     }
   }
 
@@ -77,8 +78,8 @@ export function registerJournalStoreSchemaTests(): void {
   }
 
   async function appendRawRow(epoch: string, seq: number, rowJson: string): Promise<void> {
-    await withDatabase((db) => {
-      expect(liveTestJournalRows(db, IDENTITY.sessionId)[0]?.epoch).toBe(epoch)
+    await withDatabase(async (db) => {
+      expect((await liveTestJournalRows(db, IDENTITY.sessionId))[0]?.epoch).toBe(epoch)
       insertTestJournalRowJson(db, IDENTITY.sessionId, seq, rowJson)
     })
   }
@@ -115,7 +116,9 @@ export function registerJournalStoreSchemaTests(): void {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
       await journal.close()
-      await withDatabase((db) => db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`))
+      await withDatabase((db) => {
+        db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`)
+      })
       const before = await digest(journalDatabasePath(root))
 
       await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
@@ -149,7 +152,9 @@ export function registerJournalStoreSchemaTests(): void {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
       await journal.close()
-      await withDatabase((db) => db.pragma('user_version = 0'))
+      await withDatabase((db) => {
+        db.pragma('user_version = 0')
+      })
 
       const reopened = await open()
       expect(reopened.snapshot().items).toHaveLength(1)
@@ -173,8 +178,8 @@ export function registerJournalStoreSchemaTests(): void {
       await appendRawRow(epoch, nextSeq, futureRow(epoch, nextSeq))
 
       await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-      await withDatabase((db) => {
-        const stored = liveTestJournalRows(db, IDENTITY.sessionId).find(
+      await withDatabase(async (db) => {
+        const stored = (await liveTestJournalRows(db, IDENTITY.sessionId)).find(
           (row) => row.seq === nextSeq
         )
         expect(stored?.rowJson).toContain('"v":99')
@@ -200,8 +205,8 @@ export function registerJournalStoreSchemaTests(): void {
           }
         })
       }
-      await withDatabase((db) => {
-        const stored = liveTestJournalRows(db, IDENTITY.sessionId)
+      await withDatabase(async (db) => {
+        const stored = await liveTestJournalRows(db, IDENTITY.sessionId)
         expect(stored.map((row) => row.seq)).toEqual([1, 2, nextSeq])
         expect(stored.at(-1)?.rowJson).toBe('{not json')
       })

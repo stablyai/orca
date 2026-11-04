@@ -34,6 +34,7 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   ui: 'rewrite',
   githubCache: 'keep',
   workspaceSession: 'rewrite',
+  workspaceSurfaces: 'rewrite',
   // Partitions of SSH and paired hosts; the local partition is `workspaceSession`.
   workspaceSessionsByHostId: 'keep',
   remoteLayoutSnapshots: 'keep',

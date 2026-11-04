@@ -1,3 +1,7 @@
+import {
+  openTestJournalHostDatabase,
+  setTestLaterRowFailure
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { registerCodexCatchUpEchoTests } from './codex-structured-thread-catch-up-echo.spec'
 import { projectStructuredItemsToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { expect, it } from 'vitest'
@@ -129,13 +133,12 @@ it('commits a 600-message import once, rolls back a later partition failure, and
     }))
   }
   const seq = c.journal.cursor().sequence
-  c.db.exec(
-    `CREATE TRIGGER fail_later_partition BEFORE INSERT ON journal_rows WHEN NEW.seq > ${seq + 1} BEGIN SELECT RAISE(ABORT, 'injected later partition failure'); END`
-  )
+  const database = await openTestJournalHostDatabase(c.root)
+  await setTestLaterRowFailure(database, { afterSequence: seq + 1 })
   expect((await c.open([turn(1), large])).ok).toBe(false)
   expect(c.deferred.state().failed).toBe(true)
   expect(c.journal.snapshot()).toEqual(before)
-  c.db.exec('DROP TRIGGER fail_later_partition')
+  await setTestLaterRowFailure(database, null)
   await c.reopen()
   expect(c.journal.snapshot()).toEqual(before)
   c.publications.length = 0

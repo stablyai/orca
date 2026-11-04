@@ -1,3 +1,4 @@
+import { deleteTestOperationLedger } from '../agent-session-journal/journal-retained-fault-test-support'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session/agent-session-host-authority'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
@@ -74,7 +75,7 @@ describe('send without ledger policy', () => {
 
   it('still refuses a write to a newer database', async () => {
     await attach()
-    const database = openTestJournalHostDatabase(root)
+    const database = await openTestJournalHostDatabase(root)
     Object.defineProperty(database, 'readOnly', { value: true })
     expect(store.readOnly).toBe(true)
     try {
@@ -108,8 +109,7 @@ describe('send without ledger policy', () => {
     const params = sendParams('receipt survives the ledger')
     await host.send(CALLER, params)
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
-    const db = openTestJournalHostDatabase(root).db
-    db.prepare('DELETE FROM agent_session_operations').run()
+    await deleteTestOperationLedger(await openTestJournalHostDatabase(root))
     await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
     expect(dispatch).toHaveBeenCalledTimes(1)
   })

@@ -110,7 +110,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -340,7 +340,9 @@ it('a card sent now into the running turn comes back paused when Claude reports 
   await eventually(() => expect(connection.sent).toHaveLength(2))
   lifecycleCancelled.push(String(connection.sent.at(-1)!.uuid))
   const sends = async () =>
-    (await host.journalSnapshot(SESSION)).submissions
+    await (
+      await host.journalSnapshot(SESSION)
+    ).submissions
       .filter((entry) => entry.queuedMessageId === cardId)
       .map((entry) => ({ state: entry.dispatchState, reason: entry.reason }))
   await eventually(async () => expect((await sends())[0]?.state).toBe('pending'))
@@ -379,9 +381,9 @@ it('ends the captured child when a named Stop sees its next turn open during acc
   const stoppedTurn = await openFirstTurn(connection)
   const laneDrained = () => host['tasks'].serialize(SESSION, async () => {})
   const statusTexts = async () =>
-    (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
-      item.body.kind === 'status' ? [String(item.body.text)] : []
-    )
+    await (
+      await host.journalSnapshot(SESSION)
+    ).items.flatMap((item) => (item.body.kind === 'status' ? [String(item.body.text)] : []))
   await send('Already handed-over follow-up.')
   await eventually(() => expect(wrote(connection, 'Already handed-over follow-up.')).toBe(true))
   const followUp = connection.sent.at(-1)!

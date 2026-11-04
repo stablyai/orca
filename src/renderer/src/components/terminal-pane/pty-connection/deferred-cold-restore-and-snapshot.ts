@@ -6,7 +6,7 @@ import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-ou
 import { executeTerminalStartupCommandPaste } from '../terminal-startup-command-paste'
 import { resolveTerminalPasteRuntime } from '../terminal-paste-runtime'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/terminal-sleep-layout-owner'
+import { recordPaneSleepThroughLayoutOwner } from '@/store/terminals/terminal-sleep-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 import { shouldKeepHiddenStartupRendererQueriesLive } from './hidden-startup-renderer-query'
@@ -61,13 +61,6 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       return
     }
     const state = useAppStore.getState()
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      if (!startup.useLiveEntry && startup.sleepingRecordEntry) {
-        recordPaneWakeThroughLayoutOwner(state, session.deps.worktreeId, session.cacheKey)
-        session.clearSleepingRecordProviderDuplicates(state, startup.sleepingRecordEntry)
-      }
-      return
-    }
     const captured = startup.sleepingRecordEntry
     if (captured && state.sleepingAgentSessionsByPaneKey[captured.paneKey] !== captured.record) {
       return
@@ -86,6 +79,12 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     // Spawn proves a PTY exists, not that the agent has replaced its resume identity.
     const record = paneResumeRecord(session, startup)
     if (record) {
+      recordPaneSleepThroughLayoutOwner(
+        state,
+        session.deps.worktreeId,
+        { [record.paneKey]: record },
+        true
+      )
       state.rememberSleepingAgentSession(
         record,
         captured && captured.paneKey === session.cacheKey ? captured.record : undefined

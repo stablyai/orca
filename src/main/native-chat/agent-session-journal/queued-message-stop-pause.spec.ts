@@ -132,7 +132,7 @@ export function registerQueuedMessageStopPauseTests(
         0
       )
       const db = new Database(journalDatabasePath(fixture.root), { readonly: true })
-      const stored = liveTestJournalRows(db, fixture.IDENTITY.sessionId)
+      const stored = await liveTestJournalRows(db, fixture.IDENTITY.sessionId)
       db.close()
       const parsed = parseJournalRow(stored.at(-1)?.rowJson ?? '')
       expect(parsed).toMatchObject({

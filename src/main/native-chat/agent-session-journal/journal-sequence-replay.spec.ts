@@ -11,8 +11,6 @@ import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-sessio
 import { AgentSessionJournalError } from './journal-write-guards'
 import {
   openTestJournalHostDatabase,
-  liveTestJournalRows,
-  deleteTestJournalRow,
   seedLegacyTestJournal,
   pinTestJournalInputMode
 } from './journal-host-database-test-support'
@@ -235,11 +233,11 @@ export function registerJournalSequenceReplayTests(
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
 
-      const resumed = journal.readSince(cursor)
+      const resumed = await journal.readSince(cursor)
       expect(resumed.ok && resumed.rows).toHaveLength(1)
 
       await journal.rollEpoch('handle_forked', 2)
-      expect(journal.readSince(cursor)).toEqual({ ok: false, reset: 'epoch_changed' })
+      expect(await journal.readSince(cursor)).toEqual({ ok: false, reset: 'epoch_changed' })
     })
 
     it('rebuilds from a clean epoch after a rollover', async () => {
@@ -257,7 +255,7 @@ export function registerJournalSequenceReplayTests(
     })
 
     it('refuses a journal with a gap and keeps every row', async () => {
-      seedLegacyTestJournal(openTestJournalHostDatabase(fixture.root), {
+      await seedLegacyTestJournal(await openTestJournalHostDatabase(fixture.root), {
         identity: fixture.IDENTITY,
         now: fixture.tick
       })
@@ -270,17 +268,13 @@ export function registerJournalSequenceReplayTests(
         })
       }
       await journal.close()
-      await fixture.withJournalDatabase(fixture.root, (db) => {
-        deleteTestJournalRow(db, fixture.IDENTITY.sessionId, 3)
-      })
+      await fixture.deleteSavedJournalRow(3)
 
       await expect(fixture.open()).rejects.toMatchObject({
         refusal: { details: { reason: 'journalCorrupt' } }
       })
-      await fixture.withJournalDatabase(fixture.root, (db) => {
-        const rows = liveTestJournalRows(db, fixture.IDENTITY.sessionId)
-        expect(rows.map((row) => row.seq)).toEqual([1, 2, 4, 5])
-      })
+      const rows = await fixture.savedRows()
+      expect(rows.map((row) => row.seq)).toEqual([1, 2, 4, 5])
     })
   })
 }

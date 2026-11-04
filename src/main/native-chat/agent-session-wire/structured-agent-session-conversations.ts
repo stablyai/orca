@@ -1,3 +1,4 @@
+import { advancePromptProjection } from './structured-agent-session-actionable-prompts'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -72,6 +73,7 @@ export class StructuredAgentSessionConversations extends Map<
     }
     const current = () => this.attachments.get(sessionId) === source
     const releaseCommit = journal.observeCommits((rows) => {
+      advancePromptProjection(journal, rows)
       if (!current()) {
         return
       }

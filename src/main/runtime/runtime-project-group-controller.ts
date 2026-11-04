@@ -1,8 +1,15 @@
-import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachment-mutation'
-import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
+import type {
+  RuntimeProjectGroupDependencies,
+  FolderWorkspaceUpdates
+} from './runtime-project-group-contract'
+import {
+  captureFolderOwnerRemoval,
+  captureProjectGroupOwnerRemoval
+} from './workspaces/canonical-owner-removal-scopes'
+import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
+import type { ProjectGroup } from '../../shared/project-group-types'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -14,8 +21,6 @@ import {
   getFolderWorkspacePathStatusForPath
 } from '../project-groups/folder-workspace-path-status'
 import { FolderWorkspaceCreateRefusedError } from '../project-groups/folder-workspace-create-refusal'
-import type { RuntimeStore } from './runtime-store-contract'
-import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
 import {
   runtimeVisibleFolderWorkspaces,
   runtimeVisibleProjectGroups
@@ -28,45 +33,6 @@ import {
   isLocalWslMoveRow,
   shouldDropWslMoveProjectUpdate
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
-
-type RuntimeProjectGroupDependencies = {
-  getStore: () => RuntimeStore | null
-  // `connectionId` narrows twins by their SSH target; undefined keeps the plain selector.
-  resolveRepo: (selector: string, connectionId?: string | null) => Promise<Repo>
-  notifyReposChanged: () => void
-  resolveFolderConnectionId: (workspace: FolderWorkspace) => string | null
-  teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) => Promise<void>
-  acquireFileWatcherRemoval: (
-    path: string,
-    connectionId?: string
-  ) => Promise<{ finish(removed: boolean): Promise<void> }>
-  cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void
-  emitWorktreeLifecycle: (event: RuntimeWorktreeLifecycleEvent) => void
-}
-
-type FolderWorkspaceUpdates = Partial<
-  Pick<
-    FolderWorkspace,
-    | 'name'
-    | 'folderPath'
-    | 'linkedTask'
-    | 'linkedItems'
-    | 'linkedTaskSourceContext'
-    | 'comment'
-    | 'isArchived'
-    | 'isUnread'
-    | 'isPinned'
-    | 'sortOrder'
-    | 'manualOrder'
-    | 'workspaceStatus'
-    | 'createdWithAgent'
-    | 'pendingFirstAgentMessageRename'
-    | 'firstAgentMessageRenameError'
-    | 'lastActivityAt'
-    | 'diffComments'
-  >
-> &
-  WorkspaceAttachmentMutation
 
 export class RuntimeProjectGroupController {
   constructor(private readonly deps: RuntimeProjectGroupDependencies) {}
@@ -130,7 +96,12 @@ export class RuntimeProjectGroupController {
     if (!store?.deleteProjectGroup) {
       throw new Error('runtime_unavailable')
     }
-    const deleted = store.deleteProjectGroup(groupId)
+    const removeOwned = captureProjectGroupOwnerRemoval(
+      store,
+      groupId,
+      this.deps.openNativeOwnerStore
+    )
+    const deleted = await removeOwned(() => store.deleteProjectGroup!(groupId))
     if (deleted) {
       this.deps.notifyReposChanged()
     }
@@ -271,6 +242,12 @@ export class RuntimeProjectGroupController {
     if (workspace && isLocalWslMoveRow(workspace)) {
       assertWslMoveProjectWritable(store, { folderWorkspaceId })
     }
+    const removeOwned = captureFolderOwnerRemoval(
+      store,
+      folderWorkspaceId,
+      this.deps.openNativeOwnerStore
+    )
+    let deleted = false
     let gate:
       | Awaited<ReturnType<RuntimeProjectGroupDependencies['acquireFileWatcherRemoval']>>
       | undefined
@@ -289,11 +266,23 @@ export class RuntimeProjectGroupController {
             workspace.folderPath,
             connectionId ?? undefined
           )
+          await removeOwned(() => {
+            this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
+            deleted = store.removeFolderWorkspace!(folderWorkspaceId)
+          })
           await this.deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
         }
-        this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
+        if (connectionId === undefined) {
+          await removeOwned(() => {
+            this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
+            deleted = store.removeFolderWorkspace!(folderWorkspaceId)
+          })
+        }
+      } else {
+        await removeOwned(() => {
+          deleted = store.removeFolderWorkspace!(folderWorkspaceId)
+        })
       }
-      const deleted = store.removeFolderWorkspace(folderWorkspaceId)
       if (deleted) {
         this.deps.notifyReposChanged()
         // The same removal a worktree announces, so its consumers end work held there too.

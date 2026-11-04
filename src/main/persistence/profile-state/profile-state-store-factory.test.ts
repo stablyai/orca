@@ -126,12 +126,13 @@ describe('profile state Store authority factory', () => {
 
     expect(() => createProfileStateStore({ ...options })).toThrow('injected normalization failure')
     expect(close).toHaveBeenCalledOnce()
-    expect(readInitialState).toHaveBeenCalledOnce()
-    const initial = readInitialState.mock.results[0]
-    if (initial?.type !== 'return') {
-      throw new Error('Expected a startup token before normalization')
+    expect(readInitialState).toHaveBeenCalled()
+    for (const initial of readInitialState.mock.results) {
+      if (initial.type !== 'return') {
+        throw new Error('Expected a startup token before normalization')
+      }
+      expect(() => initial.value.takeParsedState?.()).toThrow('already been consumed')
     }
-    expect(() => initial.value.takeParsedState?.()).toThrow('already been consumed')
   })
 
   it('imports legacy state by default and preserves its original bytes', () => {

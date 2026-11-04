@@ -49,8 +49,8 @@ export function registerJournalItemProvenanceTests(): void {
 
   type StoredItemWrite = { kind?: string; ownerFence?: number; mutations?: StoredItemWrite[] }
 
-  function storedOwnerFences(): (number | undefined)[] {
-    return liveTestJournalRows(database.db, IDENTITY.sessionId).flatMap((row) => {
+  async function storedOwnerFences(): Promise<(number | undefined)[]> {
+    return (await liveTestJournalRows(database, IDENTITY.sessionId)).flatMap((row) => {
       const parsed: StoredItemWrite = JSON.parse(row.rowJson)
       const writes = parsed.kind === 'lifecycle-batch' ? (parsed.mutations ?? []) : [parsed]
       return writes.flatMap((write) => (write.kind === 'item' ? [write.ownerFence] : []))
@@ -63,7 +63,7 @@ export function registerJournalItemProvenanceTests(): void {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-journal-provenance-'))
-    database = openTestJournalHostDatabase(root)
+    database = await openTestJournalHostDatabase(root)
   })
 
   afterEach(async () => {
@@ -85,7 +85,7 @@ export function registerJournalItemProvenanceTests(): void {
 
       expect(journal.itemFence(TURN_ID)).toBe(3)
       expect(journal.itemFence(agentJournalItemKey(item(2)))).toBe(6)
-      expect(storedOwnerFences()).toEqual([3, 3, 3, 6])
+      expect(await storedOwnerFences()).toEqual([3, 3, 3, 6])
       await journals.closeAll()
       expect((await open()).itemFence(TURN_ID)).toBe(3)
     })
@@ -108,7 +108,7 @@ export function registerJournalItemProvenanceTests(): void {
 
       expect(journal.itemFence(TURN_ID)).toBe(2)
       expect(journal.itemFence(agentJournalItemKey(item(2)))).toBe(3)
-      expect(storedOwnerFences()).toEqual([2, 3, 2])
+      expect(await storedOwnerFences()).toEqual([2, 3, 2])
     })
   })
 }

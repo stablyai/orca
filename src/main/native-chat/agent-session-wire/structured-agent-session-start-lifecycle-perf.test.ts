@@ -165,7 +165,7 @@ async function runStarts(count: number) {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: router,
-    journalDatabase: openTestJournalHostDatabase(join(root, `starts-${count}`)),
+    journalDatabase: await openTestJournalHostDatabase(join(root, `starts-${count}`)),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${codex.connections.length}`,
     startupLimits: { ceilingMs: CEILING_MS },
@@ -208,11 +208,13 @@ async function runStarts(count: number) {
     vi.waitFor(assertion, { timeout: 10_000, interval: 0 })
 
   const submission = async (id: string) =>
-    (await host!.journalSnapshot(SESSION)).submissions.find((row) => row.clientMessageId === id)
+    await (
+      await host!.journalSnapshot(SESSION)
+    ).submissions.find((row) => row.clientMessageId === id)
   const failureRows = async () =>
-    (await host!.journalSnapshot(SESSION)).items.filter(
-      (item) => item.body.kind === 'status' && item.body.tone === 'error'
-    ).length
+    await (
+      await host!.journalSnapshot(SESSION)
+    ).items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error').length
   const phase = () => host!.collaboratorsForTests().sessions.get(SESSION)?.child?.phase
   const exitChild = (connection = codex.connections.at(-1)!) => {
     connection.closed = true

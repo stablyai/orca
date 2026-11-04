@@ -10,12 +10,12 @@ import {
 import { HOST_TEST_NOW, HOST_TEST_THREAD } from './structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 
-export function seedQueuedRigLegacyJournal(
+export async function seedQueuedRigLegacyJournal(
   root: string,
   sessionId: string,
   agent?: 'claude'
-): (host: StructuredAgentSessionHost) => void {
-  seedLegacyTestJournal(openTestJournalHostDatabase(root), {
+): Promise<(host: StructuredAgentSessionHost) => void> {
+  await seedLegacyTestJournal(await openTestJournalHostDatabase(root), {
     identity: {
       sessionId,
       workspaceId: 'workspace-1',

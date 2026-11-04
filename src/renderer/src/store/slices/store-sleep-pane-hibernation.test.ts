@@ -245,22 +245,43 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         { tabId: 'tab-1', worktreeId: wt },
         { providerSession: { key: 'session_id', id: 'sess-ordering-1' } }
       )
+    let committedAtKillTime = false
     let recordAtKillTime: unknown = null
     let suppressionAtKillTime: boolean | undefined
     mockApi.pty.kill.mockImplementationOnce(async () => {
       const atKill = store.getState()
+      committedAtKillTime = mockApi.runtime.call.mock.calls.some(
+        ([args]) =>
+          args.method === 'layout.apply' &&
+          args.params.command.type === 'sleep' &&
+          args.params.command.recordOnly === true
+      )
       recordAtKillTime = atKill.sleepingAgentSessionsByPaneKey[targetPaneKey]
       suppressionAtKillTime = atKill.suppressedPtyExitIds['pty-agent']
     })
 
-    await store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
+    let releaseCommit!: () => void
+    mockApi.runtime.call.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseCommit = () =>
+            resolve({ id: 'local-rpc', ok: true, result: { ok: true, result: {} } })
+        })
+    )
+    const hibernation = store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
       paneKey: targetPaneKey,
       tabId: 'tab-1',
       leafId: targetLeaf,
       ptyId: 'pty-agent'
     })
 
+    await vi.waitFor(() => expect(releaseCommit).toBeTypeOf('function'))
+    expect(mockApi.pty.kill).not.toHaveBeenCalled()
+    releaseCommit()
+    await hibernation
+
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', { keepHistory: true })
+    expect(committedAtKillTime).toBe(true)
     expect(recordAtKillTime).toMatchObject({
       paneKey: targetPaneKey,
       providerSession: { key: 'session_id', id: 'sess-ordering-1' }

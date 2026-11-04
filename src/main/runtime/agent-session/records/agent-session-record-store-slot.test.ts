@@ -125,35 +125,32 @@ it('publishes source installation and release even when opening an empty record 
   }
 })
 
-it.each(['standalone', 'construction'] as const)(
-  'retains failed %s database closure for retry',
-  async (path) => {
-    const { AgentSessionRecordStore } = await import('./agent-session-record-store')
-    let database: JournalHostDatabase | undefined
-    const realClose = JournalHostDatabase.prototype.close
-    const realOpen = JournalHostDatabase.open
-    vi.spyOn(JournalHostDatabase, 'open').mockImplementation((directory) => {
-      const opened = realOpen(directory)
-      database = opened
-      return opened
-    })
-    const close = vi
-      .spyOn(JournalHostDatabase.prototype, 'close')
-      .mockRejectedValueOnce(new Error('close failed'))
-    if (path === 'construction') {
-      vi.spyOn(AgentSessionRecordStore, 'open').mockImplementationOnce(() => {
-        throw new Error('construction failed')
-      })
-      await expect(openAgentSessionRecordStoreOnce(location())).rejects.toThrow('close failed')
-    } else {
-      await openAgentSessionRecordStoreOnce(location())
-      await expect(stopStructuredAgentSessionRuntime()).rejects.toThrow('close failed')
-    }
-    expect(database?.isClosed).toBe(false)
-    close.mockImplementation(realClose)
-    const retiring = database
-    // A new admission must first finish retiring the old connection.
-    await openAgentSessionRecordStoreOnce(location())
-    expect(retiring?.isClosed).toBe(true)
-  }
-)
+it('retains failed standalone database closure for retry', async () => {
+  const { journalDatabase } = await openAgentSessionRecordStoreOnce(location())
+  const realClose = JournalHostDatabase.prototype.close
+  const close = vi
+    .spyOn(JournalHostDatabase.prototype, 'close')
+    .mockRejectedValueOnce(new Error('close failed'))
+  await expect(stopStructuredAgentSessionRuntime()).rejects.toThrow('close failed')
+  expect(journalDatabase.isClosed).toBe(false)
+  close.mockImplementation(realClose)
+  await openAgentSessionRecordStoreOnce(location())
+  expect(journalDatabase.isClosed).toBe(true)
+})
+
+it('keeps terminal journal admission independent of provider record construction', async () => {
+  const { openSurfaceJournalOnce } =
+    await import('../../../workspace-surfaces/surface-journal-slot')
+  const { AgentSessionRecordStore } = await import('./agent-session-record-store')
+  const journal = await openSurfaceJournalOnce(location())
+  vi.spyOn(AgentSessionRecordStore, 'open').mockImplementationOnce(() => {
+    throw new Error('construction failed')
+  })
+  await expect(openAgentSessionRecordStoreOnce(location())).rejects.toThrow('construction failed')
+  expect(journal.isClosed).toBe(false)
+  expect(await openSurfaceJournalOnce(location())).toBe(journal)
+  const records = await openAgentSessionRecordStoreOnce(location())
+  expect(records.journalDatabase).toBe(journal)
+  await stopStructuredAgentSessionRuntime()
+  expect(journal.isClosed).toBe(true)
+})

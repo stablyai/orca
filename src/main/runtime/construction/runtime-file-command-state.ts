@@ -32,7 +32,7 @@ import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
 import type { RuntimeRepoSelector } from '../runtime-repo-selector'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../runtime-layout-apply'
 import { createRuntimeEditorFileOpener } from '../files/editor-open-through-layout-owner'
 import { resolveNativeChatMediaPath } from '../../native-chat/native-chat-media-path'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -152,7 +152,10 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     }
   })
 
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: Pick<LayoutCommandRunOptions, 'admit'>
+  ): Promise<LayoutApplyReply>
 
   protected abstract editorOpenGroupFor(worktreeId: string): string | undefined
 

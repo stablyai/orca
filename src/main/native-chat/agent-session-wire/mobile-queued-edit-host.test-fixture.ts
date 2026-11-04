@@ -177,7 +177,7 @@ export const createMobileCommandMenuHostFixture: MobileCommandMenuHostFixtureMod
       agents,
       store,
       adapter: new StructuredAgentSessionAdapterRouter(agents, async () => {}),
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestJournalHostDatabase(root),
       claimKeyId: 'key',
       logger: recordingStructuredAgentSessionLogger().logger,
       probeOwner: async () => ({ outcome: 'pid-absent' })

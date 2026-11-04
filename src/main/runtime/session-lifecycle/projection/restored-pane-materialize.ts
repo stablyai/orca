@@ -47,6 +47,10 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     ...args: Parameters<AgentSessionResume['commitWorkspaceSessionEdit']>
   ): ReturnType<AgentSessionResume['commitWorkspaceSessionEdit']>
 
+  protected abstract commitWorkspaceResumeRecordEdit(
+    ...args: Parameters<AgentSessionResume['commitWorkspaceSessionEdit']>
+  ): ReturnType<AgentSessionResume['commitWorkspaceSessionEdit']>
+
   abstract subscribeWorkspaceLayouts(
     listener: Parameters<WorkspaceLayoutStream['subscribe']>[0]
   ): ReturnType<WorkspaceLayoutStream['subscribe']>
@@ -311,7 +315,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       if (created.tab.ptyId && resumedRecord) {
         const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
         void markResumedRecordLive(
-          (edit) => this.commitWorkspaceSessionEdit(hostId, edit),
+          (edit) => this.commitWorkspaceResumeRecordEdit(hostId, edit),
           paneKey,
           resumedRecord
         ).catch((err: unknown) => console.warn('[layout] could not mark a resumed pane live', err))

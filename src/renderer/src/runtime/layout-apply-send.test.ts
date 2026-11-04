@@ -35,12 +35,66 @@ vi.mock('@/runtime/layout-owner-pane-intents', () => ({
 }))
 
 import { sendLayoutApply } from './layout-apply-send'
+import { afterWorkspaceLayoutCommands } from './layout-apply-call'
 import { isDrawnGroupLayoutHeld } from './layout-owner-drawn-tab-holds'
+import { recordSleepingRecordChangesThroughLayoutOwner } from '@/store/terminals/terminal-sleep-layout-owner'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import { LayoutApplyParams } from '../../../shared/rpc-contract/workspace-layout-params'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the owner lookup is mocked and never reads the state.
 const NO_STATE = {} as never
 
 const RENAME = { type: 'renamePane', tabId: 'tab-1', leafId: 'leaf-1', title: 'Pane' } as const
+
+it('carries the observed record or observed absence through the existing renderer sleep/wake intent', async () => {
+  vi.useRealTimers()
+  mocks.frame.arrives = true
+  mocks.owner.kind = 'resolved'
+  mocks.sent.reply = { ok: true, result: {} }
+  vi.mocked(callRuntimeRpc).mockClear()
+  const workspace = 'resume-observation'
+  const record: SleepingAgentSessionRecord = {
+    paneKey: 'tab:11111111-1111-4111-8111-111111111111',
+    worktreeId: workspace,
+    agent: 'codex',
+    providerSession: { key: 'session_id', id: 'observed-session' },
+    prompt: '',
+    state: 'done',
+    capturedAt: 1,
+    updatedAt: 1,
+    origin: 'live'
+  }
+  const state = {
+    tabsByWorktree: {
+      [workspace]: [
+        {
+          id: 'tab',
+          ptyId: null,
+          worktreeId: workspace,
+          title: '',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    }
+  }
+  const captured = { [record.paneKey]: record }
+  recordSleepingRecordChangesThroughLayoutOwner(state, {}, captured)
+  await afterWorkspaceLayoutCommands({ kind: 'local' }, workspace, async () => {})
+  const first = LayoutApplyParams.parse(vi.mocked(callRuntimeRpc).mock.calls[0]![2]).command
+  expect(first).toMatchObject({ type: 'sleep', expectedRecords: { [record.paneKey]: null } })
+  mocks.sent.reply = { ok: false, code: 'pane_structure_changed' }
+  const conflict = vi.fn()
+  recordSleepingRecordChangesThroughLayoutOwner(state, captured, {}, conflict)
+  await afterWorkspaceLayoutCommands({ kind: 'local' }, workspace, async () => {})
+  const second = LayoutApplyParams.parse(vi.mocked(callRuntimeRpc).mock.calls[1]![2]).command
+  expect(second).toMatchObject({ type: 'wake', expectedRecords: captured })
+  expect(conflict).toHaveBeenCalledExactlyOnceWith(workspace, [record.paneKey])
+  expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+})
 
 describe('sendLayoutApply holds with no answer', () => {
   const RATIOS: Parameters<typeof sendLayoutApply>[2] = {
@@ -113,5 +167,61 @@ describe('sendLayoutApply holds with no answer', () => {
 
     expect(console.warn).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('ordinary content command ordering', () => {
+  it('defers a close until its earlier creation has settled, without blocking another workspace', async () => {
+    let finishCreate!: () => void
+    const order: string[] = []
+    const creation = afterWorkspaceLayoutCommands(
+      { kind: 'local' },
+      'ordered-create-close',
+      () =>
+        new Promise<void>((resolve) => {
+          order.push('create-dispatched')
+          finishCreate = resolve
+        })
+    )
+    const close = afterWorkspaceLayoutCommands(
+      { kind: 'local' },
+      'ordered-create-close',
+      async () => {
+        order.push('close-dispatched')
+      }
+    )
+    await afterWorkspaceLayoutCommands({ kind: 'local' }, 'independent-workspace', async () => {
+      order.push('other-dispatched')
+    })
+    expect(order).toEqual(['create-dispatched', 'other-dispatched'])
+    finishCreate()
+    await Promise.all([creation, close])
+    expect(order).toEqual(['create-dispatched', 'other-dispatched', 'close-dispatched'])
+  })
+
+  it('releases a rejected creation and later reuses the workspace after settlement', async () => {
+    let rejectCreate!: (error: Error) => void
+    const creation = afterWorkspaceLayoutCommands(
+      { kind: 'local' },
+      'refused-create-close',
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectCreate = reject
+        })
+    )
+    const close = vi.fn(async () => 'closed')
+    const closing = afterWorkspaceLayoutCommands({ kind: 'local' }, 'refused-create-close', close)
+    const rejected = expect(creation).rejects.toThrow('refused')
+    rejectCreate(new Error('refused'))
+    await rejected
+    expect(await closing).toBe('closed')
+    expect(close).toHaveBeenCalledOnce()
+    expect(
+      await afterWorkspaceLayoutCommands(
+        { kind: 'local' },
+        'refused-create-close',
+        async () => 'reused'
+      )
+    ).toBe('reused')
   })
 })

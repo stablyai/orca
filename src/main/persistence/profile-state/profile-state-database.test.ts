@@ -30,6 +30,33 @@ function createDirectory(): string {
 }
 
 describe('profile state database', () => {
+  it('recovers a supported WAL profile into rollback mode without losing its last commit', () => {
+    const dbPath = profileStateDatabaseFile(createDirectory())
+    const initial = openProfileStateDatabase(dbPath, 'profile-a')
+    importProfileStateJson(initial.db, '{"workspaceSurfaces":{"retained":"obligation"}}')
+    initial.db.close()
+    const oldOwner = new Database(dbPath)
+    expect(oldOwner.pragma('journal_mode = WAL', { simple: true })).toBe('wal')
+    oldOwner.exec(
+      "CREATE TABLE old_runtime_probe (value TEXT); INSERT INTO old_runtime_probe VALUES ('committed')"
+    )
+    oldOwner.close()
+    const reopened = openProfileStateDatabase(dbPath, 'profile-a')
+    try {
+      expect(reopened.db.pragma('journal_mode', { simple: true })).toBe('delete')
+      expect(reopened.db.prepare('SELECT value FROM old_runtime_probe').get()).toEqual({
+        value: 'committed'
+      })
+      expect(
+        reopened.db
+          .prepare('SELECT payload FROM profile_state_documents WHERE domain = ?')
+          .get('workspaceSurfaces')
+      ).toEqual({ payload: '{"retained":"obligation"}' })
+    } finally {
+      reopened.db.close()
+    }
+  })
+
   it('creates an isolated per-profile schema with durable pragmas', () => {
     const directory = createDirectory()
     const dbPath = profileStateDatabaseFile(directory)
@@ -41,8 +68,9 @@ describe('profile state database', () => {
       expect(profileStatePragmaNumber(opened.db, 'user_version')).toBe(
         PROFILE_STATE_DATABASE_SCHEMA_VERSION
       )
-      expect(opened.db.pragma('journal_mode', { simple: true })).toBe('wal')
+      expect(opened.db.pragma('journal_mode', { simple: true })).toBe('delete')
       expect(profileStatePragmaNumber(opened.db, 'synchronous')).toBe(2)
+      expect(profileStatePragmaNumber(opened.db, 'fullfsync')).toBe(1)
       expect(profileStatePragmaNumber(opened.db, 'busy_timeout')).toBe(
         PROFILE_STATE_BUSY_TIMEOUT_MS
       )
@@ -311,21 +339,25 @@ describe('profile state database', () => {
     )
   })
 
-  it('restricts the database and WAL sidecars on POSIX', () => {
+  it('restricts the database and active rollback journal on POSIX', () => {
     if (process.platform === 'win32') {
       return
     }
     const directory = createDirectory()
     const dbPath = profileStateDatabaseFile(directory)
     const opened = openProfileStateDatabase(dbPath, 'profile-a')
-    opened.db
-      .prepare('INSERT INTO profile_state_documents VALUES (?, ?, ?, ?, ?, ?)')
-      .run('settings', '{}', 1, 1, Date.now(), 'hash')
     try {
-      for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
+      opened.db.exec('BEGIN IMMEDIATE')
+      opened.db
+        .prepare('INSERT INTO profile_state_documents VALUES (?, ?, ?, ?, ?, ?)')
+        .run('settings', '{}', 1, 1, Date.now(), 'hash')
+      for (const path of [dbPath, `${dbPath}-journal`]) {
         expect(statSync(path).mode & 0o777).toBe(0o600)
       }
     } finally {
+      if (opened.db.isTransaction) {
+        opened.db.exec('ROLLBACK')
+      }
       opened.db.close()
     }
   })

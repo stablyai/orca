@@ -1,7 +1,8 @@
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readCommandReceipt } from './command-receipt-table'
+import { readCommandReceipt, type CommandReceiptRead } from './command-receipt-table'
+import type { JournalReadConnection } from './journal-sql-owner'
 
 /** Only the original send's accepted coordinate can compare a retired enqueue boundary. */
 export function journalInputAcceptance(
@@ -9,7 +10,13 @@ export function journalInputAcceptance(
   sessionId: string,
   id: string
 ): AgentJournalCursor | undefined {
-  const read = readCommandReceipt(db, { kind: 'global' }, id)
+  return journalReceiptAcceptance(readCommandReceipt(db, { kind: 'global' }, id), sessionId)
+}
+
+function journalReceiptAcceptance(
+  read: CommandReceiptRead,
+  sessionId: string
+): AgentJournalCursor | undefined {
   if (
     read.verdict === 'readable' &&
     read.receipt.status === 'accepted' &&
@@ -31,6 +38,18 @@ export function journalQueueRebase(
   queued: readonly AgentJournalSubmission[],
   rebuilt: ReadonlyMap<string, number>
 ): (queuedAt: AgentJournalCursor | null) => AgentJournalCursor | null {
+  return journalQueueRebaseWithAcceptance(epoch, previousEpoch, queued, rebuilt, (id) =>
+    journalInputAcceptance(db, sessionId, id)
+  )
+}
+
+export function journalQueueRebaseWithAcceptance(
+  epoch: string,
+  previousEpoch: string | undefined,
+  queued: readonly AgentJournalSubmission[],
+  rebuilt: ReadonlyMap<string, number>,
+  acceptance: (id: string) => AgentJournalCursor | undefined
+): (queuedAt: AgentJournalCursor | null) => AgentJournalCursor | null {
   type Position = { sequence: number; rebased: number }
   const comparableByEpoch = new Map<string, Position[]>()
   let originalPositions: Map<string, Position[]> | undefined
@@ -38,7 +57,7 @@ export function journalQueueRebase(
     if (!originalPositions) {
       originalPositions = new Map()
       for (const submission of queued) {
-        const original = journalInputAcceptance(db, sessionId, submission.clientMessageId)
+        const original = acceptance(submission.clientMessageId)
         if (original) {
           const positions = originalPositions.get(original.epoch) ?? []
           positions.push({
@@ -107,5 +126,21 @@ export function journalQueueRebase(
       }
     }
     return queuedAt
+  }
+}
+
+/** A missing prepared fact is an integration error, never evidence of an absent receipt. */
+export async function prepareJournalAcceptance(
+  read: Pick<JournalReadConnection, 'receipts'>,
+  sessionId: string,
+  ids: readonly string[]
+): Promise<(id: string) => AgentJournalCursor | undefined> {
+  const receipts = await read.receipts({ kind: 'global' }, [...new Set(ids)])
+  return (id) => {
+    const receipt = receipts.get(id)
+    if (!receipt) {
+      throw new Error('Journal input acceptance was not prepared')
+    }
+    return journalReceiptAcceptance(receipt, sessionId)
   }
 }

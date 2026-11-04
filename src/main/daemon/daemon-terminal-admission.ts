@@ -1,3 +1,4 @@
+import { surfaceExecutorAdmissionSchema } from '../../shared/workspace-surfaces/surface-executor-contract'
 import { performance } from 'node:perf_hooks'
 import type { BackgroundTransientFactRelay } from './daemon-background-transient-facts'
 import type { DaemonClientConnections } from './daemon-client-connections'
@@ -107,6 +108,9 @@ export class DaemonTerminalAdmission {
             : undefined
       result = await this.options.host.createOrAttach({
         sessionId: payload.sessionId,
+        ...(payload.surfaceExecution
+          ? { surfaceExecution: surfaceExecutorAdmissionSchema.parse(payload.surfaceExecution) }
+          : {}),
         cols: payload.cols,
         rows: payload.rows,
         cwd: payload.cwd,

@@ -213,7 +213,7 @@ const PANE_KEYED_UI_RECORDS = [
 type PaneAddress = { tabId: string; leafId: string }
 
 export function rekeyPaneProfileRecords(
-  state: Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>,
+  state: Partial<Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>>,
   from: PaneAddress,
   to: PaneAddress
 ): { ui?: PersistedState['ui']; sshRemotePtyLeases?: SshRemotePtyLease[] } {
@@ -246,7 +246,7 @@ export function rekeyPaneProfileRecords(
 }
 
 export function rekeyMovedLeafProfileRecords(
-  state: Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>,
+  state: Partial<Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>>,
   move: TerminalLeafMoveRequest
 ): { ui?: PersistedState['ui']; sshRemotePtyLeases?: SshRemotePtyLease[] } {
   return rekeyPaneProfileRecords(

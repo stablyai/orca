@@ -121,12 +121,12 @@ export function registerJournalRowContextUsageTests(): void {
         { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       await journal.close()
-      const opened = openTestJournalHostDatabase(root)
+      const opened = await openTestJournalHostDatabase(root)
       try {
-        const rowJson = liveTestJournalRows(opened.db, IDENTITY.sessionId)[1]?.rowJson ?? ''
+        const rowJson = (await liveTestJournalRows(opened, IDENTITY.sessionId))[1]?.rowJson ?? ''
         const future = JSON.parse(rowJson)
         future.body.contextUsage = { used: { kind: 'unknown', capturedAt: 'later' } }
-        updateTestJournalRowJson(opened.db, IDENTITY.sessionId, 2, JSON.stringify(future))
+        updateTestJournalRowJson(opened, IDENTITY.sessionId, 2, JSON.stringify(future))
       } finally {
         await opened.close()
       }

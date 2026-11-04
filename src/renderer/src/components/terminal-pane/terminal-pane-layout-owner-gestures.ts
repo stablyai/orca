@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { PaneManager, PaneManagerOptions } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
@@ -55,7 +56,15 @@ export function layoutOwnerPaneGestures(pane: {
         worktreeId,
         { type: 'movePane', tabId, leafId, targetLeafId, side: zone },
         // A refusal left main's tree, which frames draw, as it was: the window keeps its shape.
-        { apply: () => {}, asToday: move, refused: () => {} }
+        {
+          apply: () => {
+            if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+              move()
+            }
+          },
+          asToday: move,
+          refused: () => {}
+        }
       )
     },
     onDividerRatiosCommitted: saveRatios

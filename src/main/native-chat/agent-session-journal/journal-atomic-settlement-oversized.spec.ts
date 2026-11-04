@@ -1,3 +1,4 @@
+import { setTestSettlementFailure } from './journal-native-fixture-test-support'
 import type { createFixture } from './journal-atomic-settlement-contract-test-fixture'
 import { expect, it } from 'vitest'
 import {
@@ -31,7 +32,7 @@ export function registerJournalAtomicSettlementOversizedTests(
     await fixture.journal.appendLifecycleBatch(input)
     expect(fixture.journal.snapshot().items).toEqual([])
     expect(fixture.journal.cursor().sequence).toBe(before.sequence + 1)
-    expect(fixture.rows().at(-1)).toMatchObject({ kind: 'tombstone', recovered: true })
+    expect((await fixture.rows()).at(-1)).toMatchObject({ kind: 'tombstone', recovered: true })
     await fixture.journal.appendLifecycleBatch(input)
     expect(fixture.journal.cursor().sequence).toBe(before.sequence + 1)
   })
@@ -75,32 +76,32 @@ export function registerJournalAtomicSettlementOversizedTests(
         showUnexpectedExitOutcome: mode === 'startup',
         ...(mode === 'startup' ? { exitedDuringStartup: { generation: 'start-7' } } : {})
       }
-      const database = openTestJournalHostDatabase(fixture.root)
+      const database = await openTestJournalHostDatabase(fixture.root)
       const before = fixture.journal.snapshot()
-      const diskBefore = fixture.rows()
+      const diskBefore = await fixture.rows()
       const published: AgentJournalSnapshot[] = []
       fixture.journal.observeCommits(() => published.push(fixture.journal.snapshot()))
-      database.db.exec(`CREATE TEMP TRIGGER reject_submission_settlement_item
-    BEFORE INSERT ON journal_rows
-    WHEN NEW.session_id = '${fixture.SESSION}' AND json_extract(NEW.row_json, '$.recovered') = 1
-      AND json_extract(NEW.row_json, '$.kind') = 'item'
-    BEGIN SELECT RAISE(ABORT, 'item rejected after submission'); END`)
+      await setTestSettlementFailure(database, {
+        sessionId: fixture.SESSION,
+        kind: 'item',
+        afterSequence: 0
+      })
       expect(await settleObservedExitForTest(input)).toMatchObject({ ok: false })
       expect(fixture.journal.snapshot()).toEqual(before)
-      expect(fixture.rows()).toEqual(diskBefore)
+      expect(await fixture.rows()).toEqual(diskBefore)
       expect(published).toEqual([])
-      database.db.exec('DROP TRIGGER reject_submission_settlement_item')
+      await setTestSettlementFailure(database, null)
       expect(await settleObservedExitForTest(input)).toMatchObject({ ok: true })
       expect(fixture.journal.submission('unanswered')).toMatchObject({
         dispatchState: 'rejected',
         recovered: true,
         rejection: { kind: mode === 'stop' ? 'cancelled' : 'providerStartFailed' }
       })
-      const committed = fixture.rows().slice(diskBefore.length)
+      const committed = (await fixture.rows()).slice(diskBefore.length)
       expect(committed.filter((row) => row.kind === 'dispatch')).toHaveLength(1)
       expect(published).toEqual([fixture.journal.snapshot()])
       expect(await settleObservedExitForTest(input)).toMatchObject({ ok: true })
-      expect(fixture.rows().slice(diskBefore.length)).toEqual(committed)
+      expect((await fixture.rows()).slice(diskBefore.length)).toEqual(committed)
       expect(published).toHaveLength(1)
     }
   )

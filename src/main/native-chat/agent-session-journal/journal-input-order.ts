@@ -11,7 +11,7 @@ import { JournalSubmissionIndex } from './journal-submission-index'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { JournalNewestTurn } from './journal-newest-turn'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { refreshJournalInputSubmissions } from './journal-input-submission-refresh'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
@@ -56,11 +56,21 @@ export class JournalInputOrder {
 
   constructor(
     private readonly state: JournalReducerState,
-    private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined,
+    private originalAcceptance?: (id: string) => AgentJournalCursor | undefined,
     readonly newestTurn = new JournalNewestTurn(state)
   ) {
     this.lineage = new JournalInputLineageOwner(state.inputCards)
     this.cards = new JournalInputCardIndex(this.lineage)
+  }
+
+  withAcceptance<T>(acceptance: (id: string) => AgentJournalCursor | undefined, run: () => T): T {
+    const previous = this.originalAcceptance
+    this.originalAcceptance = acceptance
+    try {
+      return run()
+    } finally {
+      this.originalAcceptance = previous
+    }
   }
 
   beforeRow(state: JournalReducerState, row: JournalRow): void {
@@ -227,29 +237,7 @@ export class JournalInputOrder {
     if (journalInputOrderChanged(state, row, (key) => this[key])) {
       this.revision++
     }
-    if (row.kind === 'submission' || row.kind === 'dispatch') {
-      this.refresh(state, row.clientMessageId)
-    } else if (row.kind === 'tombstone' && row.retireSubmission) {
-      this.refreshItem(state, row.itemId)
-    } else if (row.kind === 'item') {
-      this.refreshItem(state, state.aliases.get(row.itemId) ?? row.itemId)
-    } else if (row.kind === 'lifecycle-batch') {
-      for (const mutation of row.mutations) {
-        this.refreshItem(state, state.aliases.get(mutation.itemId) ?? mutation.itemId)
-      }
-    } else if (row.kind === 'queue') {
-      const id = state.queue.cards.get(row.messageId)?.consumedAs
-      if (id) {
-        this.refresh(state, id)
-      }
-    }
-  }
-
-  private refreshItem(state: JournalReducerState, itemId: string): void {
-    const identity = parseAgentJournalItemKey(itemId)
-    if (identity?.provider === 'orca') {
-      this.refresh(state, identity.clientMessageId)
-    }
+    refreshJournalInputSubmissions(state, row, (id) => this.refresh(state, id))
   }
 
   private refresh(state: JournalReducerState, id: string): void {

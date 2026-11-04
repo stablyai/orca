@@ -1,3 +1,6 @@
+import { readDaemonAsyncIoHealth } from './daemon-async-io-health-request'
+import { surfaceExecutorAdmissionSchema } from '../../shared/workspace-surfaces/surface-executor-contract'
+import { DaemonSurfaceExecution } from './daemon-surface-execution'
 import {
   isPtyFencedTerminationOutcome,
   type PtyFencedTerminationRequest,
@@ -23,11 +26,43 @@ import {
 } from '../../shared/host-spawn-admission'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
-import type { DaemonAsyncIoHealth, DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
-import { observeDaemonAsyncIoHealth } from './daemon-async-io-telemetry-event'
-import { sameEndpointIdentity } from './daemon-endpoint-incarnation'
+import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+  readonly surfaceExecution = new DaemonSurfaceExecution({
+    retainRecoveryInterest: () => {
+      const interest = Symbol()
+      this.surfaceRecoveryInterests.add(interest)
+      return () => {
+        this.surfaceRecoveryInterests.delete(interest)
+      }
+    },
+    version: () => this.protocolVersion,
+    ready: () => this.ensureConnected(),
+    request: (payload) => this.client.request('surfaceExecution', payload),
+    onWake: (listener) => {
+      const connected = this.client.onConnected(() => listener())
+      const event = this.client.onEvent((value) => {
+        if (
+          !value ||
+          typeof value !== 'object' ||
+          !('event' in value) ||
+          value.event !== 'surfaceExecutionChanged' ||
+          !('payload' in value)
+        ) {
+          return
+        }
+        const admission = surfaceExecutorAdmissionSchema.safeParse(value.payload)
+        if (admission.success) {
+          listener(admission.data)
+        }
+      })
+      return () => {
+        connected()
+        event()
+      }
+    }
+  })
   constructor(opts: DaemonPtyAdapterOptions) {
     super(opts)
     // Registered after the base listener, which marks the sessions awaiting recovery first.
@@ -76,36 +111,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
   }
 
   async getAsyncIoHealth(): Promise<DaemonAsyncIoStatus> {
-    if (!this.client.isConnected()) {
-      return { state: 'unverifiable' }
-    }
-    const identity = this.client.getDaemonIdentity()
-    try {
-      const health = await this.client.request<unknown>('asyncIoHealth', undefined, 7_000)
-      if (
-        health &&
-        typeof health === 'object' &&
-        'state' in health &&
-        (health.state === 'healthy' || health.state === 'stalled') &&
-        'pendingMs' in health &&
-        typeof health.pendingMs === 'number' &&
-        Number.isFinite(health.pendingMs) &&
-        health.pendingMs >= 0
-      ) {
-        const result: DaemonAsyncIoHealth = { state: health.state, pendingMs: health.pendingMs }
-        // A reply that crossed a reconnect cannot be attributed to either incarnation.
-        const current = this.client.getDaemonIdentity()
-        if (identity && current && sameEndpointIdentity(identity, current)) {
-          observeDaemonAsyncIoHealth(identity, this.protocolVersion, result)
-        }
-        return result
-      }
-    } catch (error) {
-      if (isUnknownRequestTypeError(error)) {
-        return { state: 'unsupported' }
-      }
-    }
-    return { state: 'unverifiable' }
+    return readDaemonAsyncIoHealth(this.client, () => this.protocolVersion)
   }
 
   async getFullDiskAccessStatus(): Promise<DeveloperPermissionStatus> {

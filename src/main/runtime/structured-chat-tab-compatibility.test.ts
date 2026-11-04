@@ -55,11 +55,11 @@ it.each([false, true])(
           clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
         }
       )
-    const allow = rejectVisibility(rig)
+    const allow = await rejectVisibility(rig)
     expect(await reveal()).toMatchObject({ ok: false })
     expect(rig.store.getSessionTabId(B)).toBeNull()
     expect(rig.runtime.live(B)).toBe(false)
-    allow()
+    await allow()
     const publication = vi
       .spyOn(rig.runtime, 'reopenMobileSessionTabForClient')
       .mockReturnValueOnce(false)
@@ -84,7 +84,7 @@ it('a valid failed hide retires captured raw presentation and stops through the 
   const rpc = new RpcDispatcher({ runtime: rig.runtime, methods: SESSION_TAB_METHODS })
   rig.runtime.attachWindow(1)
   rig.runtime.markGraphReady(1)
-  const allow = rejectVisibility(rig)
+  const allow = await rejectVisibility(rig)
   const response = await rpc.dispatch(
     {
       id: 'failed-hide',
@@ -107,7 +107,7 @@ it('a valid failed hide retires captured raw presentation and stops through the 
   expect(stop).toHaveBeenCalledWith(B, 'user-close')
   expect(rig.runtime.live(B)).toBe(false)
   expect(rig.store.getSessionTabId(B)).toBe(structuredAgentSessionTabId(B))
-  allow()
+  await allow()
 })
 
 it.each(['stop', 'discard', 'sweep'] as const)(
@@ -271,7 +271,7 @@ it('cancellation carries the actual create reservation across a held commit, nev
 it('retires the actual legacy Retry presentation after a worker stop even when advisory show never committed', async () => {
   const rig = await openAuthorityRuntime(await authorityProfile([B], { visible: [] }))
   await rig.runtime.restoreStructuredAgentSessionTabs()
-  const allow = rejectVisibility(rig)
+  const allow = await rejectVisibility(rig)
   try {
     await rig.runtime.publishStructuredAgentSessionTab({
       workspaceId: rig.workspace,
@@ -289,7 +289,7 @@ it('retires the actual legacy Retry presentation after a worker stop even when a
     })
     expect(rig.runtime.live(B)).toBe(false)
   } finally {
-    allow()
+    await allow()
   }
 })
 
@@ -343,7 +343,7 @@ it('captures an admitted but unsaved failed-SHOW open, then removes exactly that
     return { value: undefined }
   })
   await gate.started.promise
-  const allow = rejectVisibility(rig)
+  const allow = await rejectVisibility(rig)
   try {
     await rig.runtime.publishStructuredAgentSessionTab({
       workspaceId: workspace,
@@ -373,7 +373,7 @@ it('captures an admitted but unsaved failed-SHOW open, then removes exactly that
   } finally {
     gate.finish.resolve()
     await holding
-    allow()
+    await allow()
   }
 })
 

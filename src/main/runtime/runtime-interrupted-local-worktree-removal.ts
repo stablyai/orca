@@ -1,4 +1,9 @@
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import { captureWorktreeOwnerRemoval } from './workspaces/canonical-owner-removal-scopes'
+import type {
+  CapturedOwnerRemoval,
+  OpenNativeOwnerRemovalStore
+} from './workspaces/canonical-owner-removal'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { RuntimeStore } from './runtime-store-contract'
 import {
@@ -47,7 +52,9 @@ type InterruptedWorktreeRemovalHost = {
   closeWatchers: (path: string) => Promise<void>
   preservedBranchCleanup: Pick<RuntimePreservedBranchCleanup, 'preserveHead' | 'remember'>
   /** A retry's teardown: terminals opened in the folder before the user removed it. */
-  stopPtys?: () => Promise<void>
+  stopPtys?: (worktreeId: string) => Promise<void>
+  removeOwned?: CapturedOwnerRemoval
+  openNativeOwnerStore?: OpenNativeOwnerRemovalStore
   /** Drops the worktree's host state (metadata, history, caches), as every removal path does. */
   purge: (record: WorktreeRemovalRecord) => void
   onRemoved: (record: WorktreeRemovalRecord) => void
@@ -59,6 +66,14 @@ export function interruptedLocalWorktreeRemovalJob(
   record: WorktreeRemovalRecord,
   host: InterruptedWorktreeRemovalHost
 ): BackgroundWorktreeRemovalJob {
+  const removeOwned =
+    host.removeOwned ??
+    captureWorktreeOwnerRemoval(
+      host.store,
+      record.worktreeId,
+      LOCAL_EXECUTION_HOST_ID,
+      host.openNativeOwnerStore
+    )
   const resolveRemovedPushTarget = () =>
     resolveWorktreeRemovalMetadata(
       host.store,
@@ -80,20 +95,21 @@ export function interruptedLocalWorktreeRemovalJob(
           return host.acquireWatcherRemoval(path)
         },
         closeWatchers: host.closeWatchers,
-        stopPtys: host.stopPtys,
+        stopPtys: host.stopPtys ? () => host.stopPtys!(record.worktreeId) : undefined,
         preserveBranchHead: (result, fallbackHead) =>
           host.preservedBranchCleanup.preserveHead(result, fallbackHead),
         // remember() clears the cleanup target when no branch was preserved.
-        finishRemoval: (result, _rememberBranch, fallbackHead) => {
-          host.preservedBranchCleanup.remember(
-            record.worktreeId,
-            undefined,
-            result,
-            fallbackHead,
-            removedPushTarget
-          )
-          host.purge(record)
-        }
+        finishRemoval: (result, _rememberBranch, fallbackHead) =>
+          removeOwned(() => {
+            host.preservedBranchCleanup.remember(
+              record.worktreeId,
+              undefined,
+              result,
+              fallbackHead,
+              removedPushTarget
+            )
+            host.purge(record)
+          })
       })
       host.onRemoved(record)
       return result
@@ -133,6 +149,7 @@ async function finishInterruptedLocalWorktreeRemoval(
   const repo = store.getRepo(record.repoId)
   if (!repo) {
     console.warn(`[worktrees] dropping removal of ${record.worktreePath}: its repo is gone`)
+    await args.finishRemoval(undefined, false, record.head)
     return {}
   }
   const localOptions = getLocalProjectWorktreeGitOptions(store, repo)
@@ -241,11 +258,11 @@ async function finishInterruptedLocalWorktreeRemoval(
       )
     }
     removed = true
+    await cleanupRemovedWorktreePushTarget(finishArgs)
+    await args.finishRemoval(result, true, record.head)
   } finally {
     await gate.finish(removed)
   }
-  await cleanupRemovedWorktreePushTarget(finishArgs)
-  args.finishRemoval(result, true, record.head)
   return result
 }
 

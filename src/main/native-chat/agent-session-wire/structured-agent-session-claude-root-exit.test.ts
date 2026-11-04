@@ -123,7 +123,7 @@ describe('Claude root-exit stop', () => {
       store,
       adapter,
       agents: NO_STRUCTURED_AGENTS,
-      journalDatabase: openTestJournalHostDatabase(stateDirectory),
+      journalDatabase: await openTestJournalHostDatabase(stateDirectory),
       claimKeyId: 'key-1',
       logger: createStructuredAgentSessionLogger()
     }

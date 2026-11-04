@@ -40,7 +40,7 @@ beforeEach(async () => {
       agent: 'codex',
       providerHandle: codexProviderHandle(THREAD)
     },
-    database: openTestJournalHostDatabase(root),
+    database: await openTestJournalHostDatabase(root),
     now: () => 1_000
   })
 })
@@ -405,7 +405,7 @@ describe('dead structured-session generation settlement', () => {
         agent: 'codex',
         providerHandle: codexProviderHandle(THREAD)
       },
-      database: openTestJournalHostDatabase(root),
+      database: await openTestJournalHostDatabase(root),
       now: () => 1_000
     })
     expect(settledProducers()).toEqual(settled)

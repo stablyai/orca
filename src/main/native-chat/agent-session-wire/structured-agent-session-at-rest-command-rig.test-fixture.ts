@@ -127,7 +127,7 @@ export async function openHost(
     agents,
     store,
     adapter: deliveryAdapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     logger: recordingStructuredAgentSessionLogger().logger,
     now: () => clock,

@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from './journal-drained-fixture-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,8 +11,7 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/age
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentSessionHistory } from '../agent-session-wire/agent-session-history-page'
 import { projectJournalBatch } from '../agent-session-wire/agent-session-journal-batch'
-import { readJournalOutcomeGroups } from './journal-read-row'
-import { journalOutcomeSource } from './journal-outcome-format'
+import { readJournalOutcomeGroupsAsync } from './journal-read-row'
 import {
   projectionEpoch as epoch,
   projectionEpochRow,
@@ -54,7 +54,7 @@ afterEach(async () => {
 
 it('keeps sparse sequence groups whole across catch-up, lookahead, history limits and byte shrinking', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcomes-wire-'))
-  const database = openTestJournalHostDatabase(root)
+  const database = await openTestJournalHostDatabase(root)
   const rows: JournalRow[] = [projectionEpochRow]
   for (let seq = 2; seq <= 30; seq++) {
     rows.push({
@@ -65,10 +65,10 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
       body: { kind: 'status', text: `revision ${seq}` }
     })
   }
-  seedOutcomeRows(database, rows)
+  await seedOutcomeRows(database, rows)
   const journal = await journals.open({ identity, stateDirectory: root })
   const before = { epoch, sequence: 1 }
-  const old = journal.readSince(before)
+  const old = await journal.readSince(before)
   if (!old.ok) {
     throw new Error('dense read failed')
   }
@@ -78,12 +78,16 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
     afterSequence: 1
   })
   // Retention keeps a key's first and latest records, leaving whole sequences without any.
-  database.db.prepare('DELETE FROM journal_outcomes WHERE seq BETWEEN 3 AND 29').run()
-  const source = journalOutcomeSource(database.db, sessionId, epoch)
+  await mutateTestJournalFixture(database, (db) => {
+    db.prepare('DELETE FROM journal_outcomes WHERE seq BETWEEN 3 AND 29').run()
+  })
+  const source = await database.read((read) => read.source(sessionId, epoch))
   if (!source) {
     throw new Error('missing outcome records')
   }
-  const sparse = readJournalOutcomeGroups(database.db, epoch, source, 1)
+  const sparse = await database.read((read) =>
+    readJournalOutcomeGroupsAsync(read, epoch, source, 1)
+  )
   expect(sparse.length).toBeLessThan(old.rows.length)
   expect(
     projectJournalBatch({ rows: sparse, snapshot: journal.snapshot(), afterSequence: 1 })
@@ -105,7 +109,7 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await writeNoOp(journal)
-  const first = readAgentSessionHistory(journal, {
+  const first = await readAgentSessionHistory(journal, {
     sessionId,
     direction: 'after',
     cursor,
@@ -122,7 +126,7 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
   if (!first.ok) {
     throw new Error('first group missing')
   }
-  const second = readAgentSessionHistory(journal, {
+  const second = await readAgentSessionHistory(journal, {
     sessionId,
     direction: 'after',
     cursor: first.page.window.nextCursor,
@@ -137,7 +141,7 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
       window: { nextCursor: journal.cursor() }
     }
   })
-  const bounded = readAgentSessionHistory(
+  const bounded = await readAgentSessionHistory(
     journal,
     { sessionId, direction: 'after', cursor, limit: 5 },
     { reader: { budgetBytes: 1, form: (value) => ({ item: value, bytes: 100 }) } }
@@ -147,8 +151,8 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
 
 it('moves subscribers and prompt reuse to the newest write when that write saved nothing', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcomes-wire-'))
-  const database = openTestJournalHostDatabase(root)
-  seedOutcomeRows(database, [projectionEpochRow])
+  const database = await openTestJournalHostDatabase(root)
+  await seedOutcomeRows(database, [projectionEpochRow])
   const journal = await journals.open({ identity, stateDirectory: root })
   const subscribers = new AgentSessionSubscribers()
   const frames: AgentSessionSubscribeEvent[] = []

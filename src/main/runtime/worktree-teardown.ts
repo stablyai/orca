@@ -56,6 +56,7 @@ export type WorktreeTeardownDeps = {
   includeLocalRegistry?: boolean
   /** Close structured sessions for destructive folder removals even without PTY proof. This is separate from requirePhysicalStop; reconciliation sets neither and must never close sessions. */
   closeStructuredSessions?: boolean
+  deferSurfaceRetirement?: boolean
 }
 
 export type WorktreeTeardownResult = {
@@ -184,7 +185,9 @@ export async function killAllProcessesForWorktree(
     )
     if (forced.incomplete) {
       // Force still removes chat tabs and reports structured closes even when skipping the PTY verdict.
-      await retireStructuredSessionTabsForWorktree(structured.retirable, deps.runtime)
+      if (!deps.deferSurfaceRetirement) {
+        await retireStructuredSessionTabsForWorktree(structured.retirable, deps.runtime)
+      }
       return { ...forced.stopped, ...(structuredStopped > 0 ? { structuredStopped } : {}) }
     }
     runtimeResult = { stopped: forced.stopped.runtimeStopped }
@@ -200,7 +203,7 @@ export async function killAllProcessesForWorktree(
       ])
     } catch (error) {
       // Best-effort callers may swallow teardown errors and forget metadata; retire chat tabs before rethrowing.
-      if (!deps.requirePhysicalStop) {
+      if (!deps.requirePhysicalStop && !deps.deferSurfaceRetirement) {
         await retireStructuredSessionTabsForWorktree(structured.retirable, deps.runtime)
       }
       // Wrap provider wording so the desktop can offer Force Delete; preserve the original cause (#11960).
@@ -242,7 +245,9 @@ export async function killAllProcessesForWorktree(
   }
 
   // Retire tabs only after all refusal points; a refused deletion must leave the workspace's chats in place.
-  await retireStructuredSessionTabsForWorktree(structured.retirable, deps.runtime)
+  if (!deps.deferSurfaceRetirement) {
+    await retireStructuredSessionTabsForWorktree(structured.retirable, deps.runtime)
+  }
   return {
     runtimeStopped: runtimeResult.stopped,
     providerStopped,
@@ -285,7 +290,8 @@ async function sweepStructuredSessions(
       closeStructuredSessionsForWorktree(progress, deadline, {
         ...(deps.runtime ? { runtime: deps.runtime } : {}),
         // Only proof-requiring, unforced removals can leave the workspace and chat tabs in place.
-        mayRefuse: Boolean(deps.requirePhysicalStop) && !deps.allowUnverifiedStop
+        mayRefuse: Boolean(deps.requirePhysicalStop) && !deps.allowUnverifiedStop,
+        deferSurfaceRetirement: deps.deferSurfaceRetirement
       })
     ),
     undefined,

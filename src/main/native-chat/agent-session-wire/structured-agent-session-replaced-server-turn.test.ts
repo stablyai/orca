@@ -113,7 +113,7 @@ async function startServer(options: { newProcess: boolean }): Promise<void> {
   rig.host = new StructuredAgentSessionHost({
     ...old.deps,
     store: rig.store,
-    journalDatabase: openTestJournalHostDatabase(rig.root),
+    journalDatabase: await openTestJournalHostDatabase(rig.root),
     probeOwner: async () => UNPROVABLE,
     now: () => rig.clock.now
   })

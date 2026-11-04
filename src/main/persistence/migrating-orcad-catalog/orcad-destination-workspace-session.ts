@@ -36,7 +36,7 @@ export type PreparedOrcadMigrationWorkspaceSession = {
 
 export function prepareOrcadMigrationWorkspaceSession(
   incoming: WorkspaceSessionState | undefined,
-  state: PersistedState
+  state: Pick<PersistedState, 'workspaceSession'>
 ): PreparedOrcadMigrationWorkspaceSession {
   if (!incoming) {
     return { incoming: undefined, merged: undefined }

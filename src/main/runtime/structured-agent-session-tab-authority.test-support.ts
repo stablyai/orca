@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../native-chat/agent-session-journal/journal-drained-fixture-test-support'
 import { randomUUID } from 'node:crypto'
 import type { MockInstance } from 'vitest'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
@@ -184,22 +185,25 @@ export async function holdStartup(rig: AuthorityRig) {
     await chatTabCommandsSettled()
   }
 }
-export function rejectVisibility(rig: AuthorityRig) {
-  const db = rig.host.deps.journalDatabase.db
-  db.exec(
-    "CREATE TEMP TRIGGER reject_initial_tabs BEFORE INSERT ON agent_session_store_meta WHEN NEW.key='session_tabs_recorded' BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
-  )
-  db.exec(
-    "CREATE TEMP TRIGGER reject_tab_delta BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
-  )
-  db.exec(
-    "CREATE TEMP TRIGGER reject_tab_insert BEFORE INSERT ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
-  )
-  return () => {
-    db.exec('DROP TRIGGER reject_tab_insert')
-    db.exec('DROP TRIGGER reject_initial_tabs')
-    db.exec('DROP TRIGGER reject_tab_delta')
-  }
+export async function rejectVisibility(rig: AuthorityRig) {
+  const database = rig.host.deps.journalDatabase
+  await mutateTestJournalFixture(database, (db) => {
+    db.exec(
+      "CREATE TRIGGER reject_initial_tabs BEFORE INSERT ON agent_session_store_meta WHEN NEW.key='session_tabs_recorded' BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
+    )
+    db.exec(
+      "CREATE TRIGGER reject_tab_delta BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
+    )
+    db.exec(
+      "CREATE TRIGGER reject_tab_insert BEFORE INSERT ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
+    )
+  })
+  return () =>
+    mutateTestJournalFixture(database, (db) => {
+      db.exec('DROP TRIGGER reject_tab_insert')
+      db.exec('DROP TRIGGER reject_initial_tabs')
+      db.exec('DROP TRIGGER reject_tab_delta')
+    })
 }
 export async function createC(
   rig: AuthorityRig,

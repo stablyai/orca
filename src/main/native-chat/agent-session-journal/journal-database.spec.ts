@@ -84,12 +84,13 @@ export function registerJournalDatabaseTests(): void {
             'journal_set_aside'
           ])
         )
-        expect(db.pragma('journal_mode', { simple: true })).toBe('wal')
+        expect(db.pragma('journal_mode', { simple: true })).toBe('delete')
         expect(journalPragmaNumber(db, 'synchronous')).toBe(2)
-        expect(journalPragmaNumber(db, 'checkpoint_fullfsync')).toBe(1)
+        expect(journalPragmaNumber(db, 'fullfsync')).toBe(1)
+        expect(db.pragma('locking_mode', { simple: true })).toBe('normal')
         expect(journalPragmaNumber(db, 'busy_timeout')).toBe(JOURNAL_BUSY_TIMEOUT_MS)
         expect(journalPragmaNumber(db, 'foreign_keys')).toBe(1)
-        // INCREMENTAL takes effect only on empty files before WAL.
+        // INCREMENTAL takes effect only on empty files.
         expect(journalPragmaNumber(db, 'auto_vacuum')).toBe(2)
         expect(journalPragmaNumber(db, 'journal_size_limit')).toBe(JOURNAL_SIZE_LIMIT_BYTES)
         expect(journalPragmaNumber(db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)

@@ -120,7 +120,7 @@ async function seedClaudeToolTurn(): Promise<void> {
       agent: 'claude',
       providerHandle: claudeProviderHandle(PROVIDER_SESSION, null)
     },
-    database: openTestJournalHostDatabase(root),
+    database: await openTestJournalHostDatabase(root),
     now: () => now
   })
   await journal.appendSubmission({
@@ -154,7 +154,7 @@ async function seedClaudeToolTurn(): Promise<void> {
   await journal.close()
 }
 
-function openHost(overrides: Partial<StructuredAgentSessionHostDeps>): void {
+async function openHost(overrides: Partial<StructuredAgentSessionHostDeps>): Promise<void> {
   host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
@@ -170,7 +170,7 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps>): void {
       setOption: vi.fn(),
       supportsCreate: () => true
     },
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-new',
     now: () => RELAUNCHED_AT,
@@ -201,7 +201,7 @@ afterEach(async () => {
 
 describe('a turn a crash cut short mid-tool', () => {
   it('ends at the last renewal, not at the tool call the provider last reported', async () => {
-    openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
+    await openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
 
     await openTestChats(host)
 
@@ -216,13 +216,15 @@ describe('a turn a crash cut short mid-tool', () => {
     })
     // Lease renewal proves 27s of work; the last provider row alone accounts for only 2s.
     const [timing] = selectStructuredAgentTurnTimings(
-      (await host.journalSnapshot(SESSION)).items
+      await (
+        await host.journalSnapshot(SESSION)
+      ).items
     ).values()
     expect(completedStructuredAgentTurnSeconds(timing)).toBe(27)
   })
 
   it('explains the cut once, with one notice row and a turn bar that does not repeat it', async () => {
-    openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
+    await openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
 
     await openTestChats(host)
 
@@ -257,7 +259,7 @@ describe('a turn a crash cut short mid-tool', () => {
     const stopOwnerProcess = vi.fn(() => {
       alive = false
     })
-    openHost({ probeOwner, stopOwnerProcess })
+    await openHost({ probeOwner, stopOwnerProcess })
 
     await openTestChats(host)
 
@@ -300,7 +302,7 @@ function drainSession(): Promise<void> {
 // Visible chats may open before ownership probes; replaced-runtime evidence already ends old work.
 describe('a turn a read reached before the reconcile proved its owner dead', () => {
   it('reads interrupted at the last renewal from the first open, and a subscriber is sent it once', async () => {
-    openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
+    await openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
     const events: AgentSessionSubscribeEvent[] = []
     const unsubscribe = await host.subscribe({
       id: 'reader-1',
@@ -322,7 +324,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
 
   it('reports the open to the status feed as an interruption, which the chat folds as worked', async () => {
     const published: AgentSessionStatusSummary[] = []
-    openHost({
+    await openHost({
       probeOwner: async () => ({ outcome: 'pid-absent' }),
       statusSink: { publish: (summary) => published.push(summary), forget: () => {} }
     })
@@ -338,7 +340,9 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
 
     expect(outcomes().at(-1)).toBe('interruption')
     const [timing] = selectStructuredAgentTurnTimings(
-      (await host.journalSnapshot(SESSION)).items
+      await (
+        await host.journalSnapshot(SESSION)
+      ).items
     ).values()
     expect(
       describeNativeChatTurnStatus({
@@ -365,7 +369,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     })
     beginAgentSessionRuntimeRecord(root, 'runtime-crashed', TOOL_STARTED_AT - 60_000)
     store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
-    openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
+    await openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
     expect(await settledTurn()).toMatchObject(INTERRUPTED_TURN)
 
     await host.reconcileRestartLeases()
@@ -384,7 +388,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
   })
 
   it('revises nothing twice, whoever re-runs the settle', async () => {
-    openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
+    await openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
     await host.history({ sessionId: SESSION, direction: 'tail' })
     await host.reconcileRestartLeases()
     await drainSession()
@@ -414,7 +418,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
       alive = false
     })
     const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>()
-    openHost({
+    await openHost({
       adapter: {
         open: async () => ({
           reportedOptions: { model: '' }
@@ -473,7 +477,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
         }
       }
     )
-    openHost({
+    await openHost({
       adapter: {
         open: async () => ({
           reportedOptions: { model: '' }
@@ -517,7 +521,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
       }
       return append.call(this, input)
     })
-    openHost({ now: () => now, logger: log.logger })
+    await openHost({ now: () => now, logger: log.logger })
 
     await host.history({ sessionId: SESSION, direction: 'tail' })
 
@@ -553,7 +557,7 @@ async function hostWithFailingFirstStart(failure: Error) {
       }
     }
   )
-  openHost({
+  await openHost({
     adapter: {
       open: async () => ({
         reportedOptions: { model: '' }

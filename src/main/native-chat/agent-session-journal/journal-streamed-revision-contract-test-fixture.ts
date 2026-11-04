@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { journalPragmaNumber } from './journal-database'
+import { observeNativeJournalTransactions } from './journal-native-test-instrumentation'
 import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener,
@@ -47,15 +47,13 @@ export function openJournal(sessionId = 'stream') {
   })
 }
 
-export function commitLevels() {
-  const { db } = openTestJournalHostDatabase(root)
+export async function commitLevels() {
+  const database = await openTestJournalHostDatabase(root)
   const levels: number[] = []
-  const exec = db.exec.bind(db)
-  vi.spyOn(db, 'exec').mockImplementation((sql) => {
-    if (sql === 'COMMIT') {
-      levels.push(journalPragmaNumber(db, 'synchronous'))
+  observeNativeJournalTransactions(database, (boundary) => {
+    if (boundary.sql === 'COMMIT') {
+      levels.push(boundary.synchronous)
     }
-    exec(sql)
   })
   return levels
 }

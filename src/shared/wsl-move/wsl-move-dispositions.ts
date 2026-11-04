@@ -67,6 +67,11 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   ui: { disposition: 'per-field', item: 38 },
   githubCache: notApplicableDisposition(21, 'Cache keyed by repoId, which the move keeps.'),
   workspaceSession: { disposition: 'per-field', item: 22 },
+  workspaceSurfaces: {
+    disposition: 'rederive',
+    item: 22,
+    note: 'The destination admits moved terminal state under its own authority; source resource obligations remain with their executor.'
+  },
   workspaceSessionsByHostId: {
     disposition: 'rewrite-desktop',
     item: 22,

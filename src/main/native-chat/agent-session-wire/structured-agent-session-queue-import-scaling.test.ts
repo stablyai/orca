@@ -1,3 +1,4 @@
+import { setTestJournalTrigger } from '../agent-session-journal/journal-native-fixture-test-support'
 import * as provenance from '../agent-session-journal/journal-input-provenance'
 import { JournalDraftMap } from '../agent-session-journal/journal-transition-collections'
 import * as transitions from '../agent-session-journal/journal-reducer-transition'
@@ -27,7 +28,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
   'publication reuse: $size historical items, adopted=$adopt',
   async ({ size, adopt }) => {
     const corrections = size / 10
-    const earlier = journalFor(SESSION)
+    const earlier = await journalFor(SESSION)
     await earlier.open()
     await handOff(earlier, 'u-0', 'q-0', 'stopped words', 'cancelled', 0, async () => {
       for (let ordinal = 0; ordinal < size; ordinal++) {
@@ -42,17 +43,21 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       await handOff(earlier, `u-${index}`, `q-${index}`, 'stopped words', 'cancelled')
     }
     await earlier.close()
-    seedLegacy(
+    await seedLegacy(
       SESSION,
       Array.from({ length: corrections }, (_, i): Legacy => [`q-${i}`, 'waiting', 'stopped words'])
     )
     if (!adopt) {
-      db().exec(`CREATE TEMP TRIGGER b2_perf_fail_import BEFORE DELETE ON queued_messages
-      BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
+      await setTestJournalTrigger(await db(), {
+        name: 'b2_perf_fail_import',
+        event: 'DELETE',
+        table: 'queued_messages',
+        message: 'disk full'
+      })
     }
-    const journal = journalFor(SESSION)
+    const journal = await journalFor(SESSION)
     await journal.open()
-    expect(legacyIds()).toHaveLength(adopt ? 0 : corrections)
+    expect(await legacyIds()).toHaveLength(adopt ? 0 : corrections)
     const display = journal.queuedMessages.displayState()
     const feed = new AgentSessionSubscribers()
     const events: AgentSessionSubscribeEvent[] = []
@@ -167,7 +172,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
         spy.mockRestore()
       }
       if (!adopt) {
-        db().exec('DROP TRIGGER b2_perf_fail_import')
+        await setTestJournalTrigger(await db(), { remove: 'b2_perf_fail_import' })
       }
     }
     expect(events.filter((event) => event.type === 'snapshot')).toHaveLength(2)
@@ -177,18 +182,22 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
 
 it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (n) => {
   const session = 'overlay-scale'
-  const seed = journalFor(session)
+  const seed = await journalFor(session)
   await seed.open()
   await seed.queuedMessages.insert({ messageId: 'C', body: message('/compact') })
   await seed.close()
-  seedLegacy(
+  await seedLegacy(
     session,
     Array.from({ length: n }, (_, i): Legacy => [`D${i}`, 'waiting', `body${i}`])
   )
-  db().exec(`CREATE TEMP TRIGGER overlay_scale_import_failure BEFORE DELETE ON queued_messages
-    BEGIN SELECT RAISE(ABORT, 'import failure'); END`)
+  await setTestJournalTrigger(await db(), {
+    name: 'overlay_scale_import_failure',
+    event: 'DELETE',
+    table: 'queued_messages',
+    message: 'import failure'
+  })
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const journal = journalFor(session)
+  const journal = await journalFor(session)
   let indexed = 0
   let draftKeys = 0
   let receiptQueries = 0
@@ -436,7 +445,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     // Each native entry contains fixed IDs/cursors and one witness, never card bodies/populations.
     expect(bytes).toBeLessThanOrEqual(400 * n)
     reset()
-    db().exec('DROP TRIGGER overlay_scale_import_failure')
+    await setTestJournalTrigger(await db(), { remove: 'overlay_scale_import_failure' })
     const old = journal.queuedMessages.get('D0')!
     expect(
       await journal.queuedMessages.update({
@@ -457,7 +466,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     reset()
     await journal.queuedMessages.withdraw(Array.from({ length: n }, (_, i) => `D${i}`))
     expect(journal['state'].inputCards.size).toBe(1)
-    expect(legacyIds(session)).toEqual([])
+    expect(await legacyIds(session)).toEqual([])
     measurements.retirement = measure()
     // One bulk adoption, withdrawals, then current-cohort retirement; not n separate flushes.
     expect(cards).toBe(n)
@@ -467,7 +476,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     console.info('overlay-operation-counts', JSON.stringify({ n, measurements }))
     expect(fixture.rig.dispatch).not.toHaveBeenCalled()
   } finally {
-    db().exec('DROP TRIGGER IF EXISTS overlay_scale_import_failure')
+    await setTestJournalTrigger(await db(), { remove: 'overlay_scale_import_failure' })
     for (const spy of [
       indexSpy,
       introduction,

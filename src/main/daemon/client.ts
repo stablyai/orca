@@ -1,7 +1,7 @@
 import type { Socket } from 'node:net'
 import { readDaemonClientToken } from './daemon-client-token'
 import { randomUUID } from 'node:crypto'
-import { encodeNdjson } from './ndjson'
+import { writeDaemonControlNotification } from './daemon-client-notify'
 import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
@@ -57,6 +57,7 @@ export class DaemonClient {
 
   private pendingRequests = new DaemonPendingRequests()
   private eventListeners = new DaemonClientListeners<(event: unknown) => void>()
+  private connectedListeners = new DaemonClientListeners<() => void>()
   private disconnectedListeners = new DaemonClientListeners<() => void>()
   private requestCounter = 0
   private cleanupSocketListeners: (() => void) | null = null
@@ -168,6 +169,11 @@ export class DaemonClient {
       this.daemonResizeModel = controlHello.resizeModel
       this.disconnectArmed = true
       this.connectionGeneration++
+      this.connectedListeners.each((listener) => {
+        try {
+          listener()
+        } catch {}
+      })
 
       const gen = this.connectionGeneration
       pendingListenerCleanups.push(
@@ -230,14 +236,7 @@ export class DaemonClient {
     }
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
-    const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
-    try {
-      this.controlSocket.write(encodeNdjson(msg))
-      return true
-    } catch {
-      // Notifications are best-effort; an oversized payload must not tear down the caller.
-      return false
-    }
+    return writeDaemonControlNotification(this.controlSocket, id, type, payload)
   }
 
   async notifyWithSettlement(
@@ -266,6 +265,10 @@ export class DaemonClient {
 
   onEvent(listener: (event: unknown) => void): () => void {
     return this.eventListeners.add(listener)
+  }
+
+  onConnected(listener: () => void): () => void {
+    return this.connectedListeners.add(listener)
   }
 
   onDisconnected(listener: () => void): () => void {

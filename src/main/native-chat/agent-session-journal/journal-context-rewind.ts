@@ -1,3 +1,4 @@
+import { settleJournalCommit } from './journal-committed-effects'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import {
   agentJournalItemKey,
@@ -101,13 +102,15 @@ export async function rewindJournalContext(input: {
       return plan
     },
     {
-      write: (db) => {
-        adoption?.receipt.write(db)
-        receipt!.write(db)
+      write: async (db) => {
+        await adoption?.receipt.write(db)
+        await receipt!.write(db)
       },
       committed: () => {
-        adoption?.receipt.committed()
-        receipt!.committed()
+        settleJournalCommit(
+          () => adoption?.receipt.committed(),
+          () => receipt!.committed()
+        )
       }
     }
   )

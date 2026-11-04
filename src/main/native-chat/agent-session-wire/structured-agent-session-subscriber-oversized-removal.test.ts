@@ -61,13 +61,13 @@ it('catches a subscriber up past a pre-existing unsendable removal with a bounde
   ]
   // Direct writes model legacy persisted rows.
   await seeded.close()
-  const opened = openTestJournalHostDatabase(journalDir)
+  const opened = await openTestJournalHostDatabase(journalDir)
   try {
-    opened.db.exec('BEGIN IMMEDIATE')
-    for (const row of rows) {
-      insertTestJournalRow(opened.db, SESSION, row)
-    }
-    opened.db.exec('COMMIT')
+    await opened.transaction((plan) => {
+      for (const row of rows) {
+        insertTestJournalRow(plan, SESSION, row)
+      }
+    })
   } finally {
     await opened.close()
   }

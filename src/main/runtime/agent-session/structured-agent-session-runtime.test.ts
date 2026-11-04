@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../../native-chat/agent-session-journal/journal-drained-fixture-test-support'
 import { readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -85,30 +86,33 @@ describe('structured agent-session store presence', () => {
   it('reports a profile whose database holds no chat absent', async () => {
     await (await openProfileDatabase()).close()
 
-    expect(hasPersistedStructuredAgentSessionStore(profile)).toBe(false)
+    expect(await hasPersistedStructuredAgentSessionStore(profile)).toBe(false)
   })
 
   it('reports a chat record in the database', async () => {
     const database = await openProfileDatabase()
-    database.db
-      .prepare('INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?)')
-      .run('session-1', '{}')
+    await mutateTestJournalFixture(database, (db) => {
+      db.prepare('INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?)').run(
+        'session-1',
+        '{}'
+      )
+    })
     await database.close()
 
-    expect(hasPersistedStructuredAgentSessionStore(profile)).toBe(true)
+    expect(await hasPersistedStructuredAgentSessionStore(profile)).toBe(true)
   })
 
   it('reports a database it cannot read present', async () => {
     profile = await mkdtemp(join(tmpdir(), 'orca-session-presence-'))
     await writeFile(journalDatabasePath(profile), 'not a database')
 
-    expect(hasPersistedStructuredAgentSessionStore(profile)).toBe(true)
+    expect(await hasPersistedStructuredAgentSessionStore(profile)).toBe(true)
   })
 
-  it('reports a fresh profile absent after one presence check', () => {
+  it('reports a fresh profile absent after one presence check', async () => {
     const fileExists = vi.fn(() => false)
 
-    expect(hasPersistedStructuredAgentSessionStore('/profile', fileExists)).toBe(false)
+    expect(await hasPersistedStructuredAgentSessionStore('/profile', fileExists)).toBe(false)
     expect(fileExists).toHaveBeenCalledTimes(1)
   })
 })
@@ -272,9 +276,11 @@ describe('structured agent-session runtime install', () => {
       stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-backfill-'))
       await seedTestAgentSessionRecordStore(stateDirectory, { records: [oldChat('codex')] })
       if (failWrite) {
-        openTestJournalHostDatabase(stateDirectory).db.exec(
-          "CREATE TRIGGER fail_permission_backfill BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk full'); END"
-        )
+        await mutateTestJournalFixture(await openTestJournalHostDatabase(stateDirectory), (db) => {
+          db.exec(
+            "CREATE TRIGGER fail_permission_backfill BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+          )
+        })
       }
       const logged = recordingStructuredAgentSessionLogger()
       const host = await installOver(['codex'], logged.logger)

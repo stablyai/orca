@@ -1,5 +1,7 @@
+import { removeRuntimeStaleLocalWorktreeRegistration } from '../runtime-stale-local-worktree-removal'
 import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
-import { isStaleLocalWorktreeRegistration } from './stale-worktree-registration-preflight'
+import { captureWorktreeOwnerRemoval } from './canonical-owner-removal-scopes'
+import type { CapturedOwnerRemoval } from './canonical-owner-removal'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { OrcaRuntimeWithCreateManagedRemoteWorktree } from './workspace-metadata'
@@ -29,8 +31,6 @@ import { listWorktreesOnRemovalRoute } from '../worktree-removal-route-listing'
 import { authorizeUnregisteredWindowsRemoval } from '../../git/worktrees/removal/windows-worktree-removal'
 import { findRegisteredDeletableWorktree } from '../../workspaces/removal/worktree-removal-safety'
 import { removeRuntimeUnregisteredWorktree } from '../runtime-unregistered-worktree-removal'
-import { removeStaleLocalWorktreeRegistration } from '../../workspaces/removal/local-worktree-removal-recovery'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../ipc/worktree-remote'
 import { removeRuntimeRegisteredLocalWorktree } from '../runtime-registered-local-worktree-removal'
 import { removeOrphanOrFolderWorktree } from './workspace-registration-removal'
 import {
@@ -63,7 +63,8 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
     target: { id: string; path: string },
     registeredWorktrees: readonly GitWorktreeInfo[],
     options: RemoveManagedWorktreeOptions,
-    localOptions: LocalProjectWorktreeGitOptions
+    localOptions: LocalProjectWorktreeGitOptions,
+    removeOwned?: CapturedOwnerRemoval
   ): Promise<boolean>
 
   async removeManagedWorktree(
@@ -105,13 +106,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
       worktreeId: removalTarget.id,
       hostId: cleanupHostId
     })
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey({
-      force,
-      runHooks,
-      allowUnverifiedPtyStop,
-      allowFailedArchiveHook,
-      deleteBranch: options.deleteBranch
-    })
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(options)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
       removalTarget.id,
@@ -122,8 +117,9 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
         ? finishAcceptedWorktreeRemoval(await inFlightRemoval, removalTarget.id, cleanupHostId)
         : inFlightRemoval
     }
-    const removal = (async (): Promise<RemoveWorktreeResult & { warning?: string }> => {
-      return withWorktreeSpan({ stage: 'remove', path: removalTarget.path }, async () => {
+    const removal = withWorktreeSpan(
+      { stage: 'remove', path: removalTarget.path },
+      async (): Promise<RemoveWorktreeResult & { warning?: string }> => {
         const repoOwner = resolveWorktreeRemovalRepoOwner(
           store,
           removalTarget.repoId,
@@ -136,15 +132,25 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
         }
         const repo = repoOwner.kind === 'resolved' ? repoOwner.repo : undefined
         const removalHostId = repo ? (cleanupHostId ?? getRepoExecutionHostId(repo)) : cleanupHostId
-        const purgeRemovedWorktree = (): void =>
-          this.purgeRemovedWorktree(store, removalTarget.id, removalTarget.repoId, removalHostId)
+        const removeOwned = captureWorktreeOwnerRemoval(
+          store,
+          removalTarget.id,
+          removalHostId,
+          () => this.openAgentSessionRecordStore()
+        )
+        const purgeRemovedWorktree = (bookkeeping: () => void = () => {}) =>
+          removeOwned(() => {
+            bookkeeping()
+            this.purgeRemovedWorktree(store, removalTarget.id, removalTarget.repoId, removalHostId)
+          })
         const orphanOrFolderResult = await removeOrphanOrFolderWorktree({
           runtime: this,
           store,
           removalTarget,
           cleanupHostId,
           removalHostId,
-          repo
+          repo,
+          removeOwned
         })
         if (orphanOrFolderResult) {
           return orphanOrFolderResult
@@ -183,7 +189,8 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
             removalTarget,
             registeredWorktrees,
             options,
-            localWorktreeGitOptions
+            localWorktreeGitOptions,
+            removeOwned
           )
         ) {
           return { removing: true }
@@ -203,49 +210,43 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
             acquireWatcherRemoval: this.acquireFileWatcherRemoval,
             stopPtys: (worktreeId, allowUnverifiedPtyStop) =>
               this.stopPtysForDestructiveWorktreeRemoval(worktreeId, {
-                allowUnverifiedStop: allowUnverifiedPtyStop
+                allowUnverifiedStop: allowUnverifiedPtyStop,
+                deferSurfaceRetirement: true
               }),
-            finishRemoval: () => {
-              this.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
-              purgeRemovedWorktree()
+            finishRemoval: async () => {
+              await purgeRemovedWorktree(() =>
+                this.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
+              )
               this.notifyWorktreesChanged(repo!.id)
             }
           })
         }
-        const canonicalWorktreePath = registeredWorktree.path
         const deleteBranch = options.deleteBranch ?? removedMeta?.preserveBranchOnDelete !== true
-        if (
-          await isStaleLocalWorktreeRegistration(
-            registeredWorktree,
-            force,
-            removedMeta,
-            localWorktreeGitOptions
-          )
-        ) {
-          const removalResult = await removeStaleLocalWorktreeRegistration({
-            canonicalWorktreePath,
-            repoPath: repo!.path,
-            localWorktreeGitOptions,
-            registeredWorktree,
-            deleteBranch
-          })
-          await cleanupUnusedWorktreePushTargetRemote(
-            repo!.path,
-            removalTarget.id,
-            removedPushTarget,
-            store,
-            localWorktreeGitOptions
-          )
-          this.preservedBranchCleanup.remember(
-            removalTarget.id,
-            cleanupHostId,
-            removalResult,
-            registeredWorktree.head,
-            removedPushTarget
-          )
-          purgeRemovedWorktree()
-          this.notifyWorktreesChanged(repo!.id)
-          return removalResult ?? {}
+        const staleRemoval = await removeRuntimeStaleLocalWorktreeRegistration({
+          registeredWorktree,
+          force,
+          removedMeta,
+          localOptions: localWorktreeGitOptions,
+          repo: repo!,
+          target: removalTarget,
+          deleteBranch,
+          removedPushTarget,
+          store,
+          finishRemoval: async (result) => {
+            await purgeRemovedWorktree(() =>
+              this.preservedBranchCleanup.remember(
+                removalTarget.id,
+                cleanupHostId,
+                result,
+                registeredWorktree.head,
+                removedPushTarget
+              )
+            )
+            this.notifyWorktreesChanged(repo!.id)
+          }
+        })
+        if (staleRemoval) {
+          return staleRemoval
         }
         return removeRuntimeRegisteredLocalWorktree({
           repo: repo!,
@@ -264,30 +265,27 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
           acquireWatcherRemoval: this.acquireFileWatcherRemoval,
           stopPtys: () =>
             this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
-              allowUnverifiedStop: allowUnverifiedPtyStop
+              allowUnverifiedStop: allowUnverifiedPtyStop,
+              deferSurfaceRetirement: true
             }),
           closeWatchers: (path) => this.closeFileWatchersForRemoval(path),
           preserveBranchHead: (result, fallbackHead) =>
             this.preservedBranchCleanup.preserveHead(result, fallbackHead),
-          finishRemoval: (result, rememberBranch, fallbackHead) => {
-            if (rememberBranch) {
+          finishRemoval: (result, rememberBranch, fallbackHead) =>
+            purgeRemovedWorktree(() => {
               this.preservedBranchCleanup.remember(
                 removalTarget.id,
                 cleanupHostId,
-                result,
+                rememberBranch ? result : undefined,
                 fallbackHead,
                 removedPushTarget
               )
-            } else {
-              this.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
-            }
-            purgeRemovedWorktree()
-          },
+            }),
           onRemoved: emitRemoved,
           publish: () => this.publishWorktreeRemovalChange(repo!.id)
         })
-      })
-    })()
+      }
+    )
     this.removeManagedWorktreeInFlight.track(cleanupScopeKey, optionsKey, removal)
     try {
       const accepted = await removal

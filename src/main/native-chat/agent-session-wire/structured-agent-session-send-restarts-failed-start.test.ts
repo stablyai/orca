@@ -153,7 +153,7 @@ beforeEach(async () => {
         reportedOptions: { model: '' }
       })
     }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${generation + 1}`,
     now: () => NOW
@@ -228,7 +228,9 @@ describe('a send into a published session whose child ended before startup', () 
       recovered: true
     })
     expect(
-      (await host.journalSnapshot(SESSION)).submissions.filter((e) => e.dispatchState === 'pending')
+      await (
+        await host.journalSnapshot(SESSION)
+      ).submissions.filter((e) => e.dispatchState === 'pending')
     ).toEqual([])
     expect((await journalStatuses()).slice(rowsBefore)).toEqual([
       'Codex stopped before it finished starting. Send your message to try again.'

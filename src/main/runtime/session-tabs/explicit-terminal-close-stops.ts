@@ -5,7 +5,7 @@ import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../runtime-layout-apply'
 import { closeMainOwnedPaneByHandle } from './main-handle-close'
 import {
   NO_STOP,
@@ -19,7 +19,10 @@ import {
 
 export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithExplicitCloseTabPtyStops {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: Pick<LayoutCommandRunOptions, 'admit'>
+  ): Promise<LayoutApplyReply>
   protected abstract refreshPtyWorktreeRecordsFromController(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId?: string | null,

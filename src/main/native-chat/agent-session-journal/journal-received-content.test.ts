@@ -130,7 +130,7 @@ it.each(['claude', 'codex'] as const)(
     expect(await written).toEqual({ ok: true })
     await deferred.drained()
     const reopened = await rig.reopenJournal()
-    const replay = reopened.readSince(cursor)
+    const replay = await reopened.readSince(cursor)
     if (!replay.ok) {
       throw new Error('Expected the held writes to remain replayable')
     }
@@ -206,7 +206,7 @@ it('hands an ACP omitted-field completion to SQLite before root exit with a bloc
   await blocked
   expect(await written).toEqual({ ok: true })
   const reopened = await rig.reopenJournal()
-  const replay = reopened.readSince(cursor)
+  const replay = await reopened.readSince(cursor)
   if (!replay.ok) {
     throw new Error('Expected the held writes to remain replayable')
   }

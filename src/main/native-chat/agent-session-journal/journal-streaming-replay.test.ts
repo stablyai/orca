@@ -1,21 +1,22 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalHostDatabase } from './journal-host-database'
+import { journalDatabasePath } from './journal-host-database'
+import { openJournalDatabase } from './journal-database'
+import type Database from '../../sqlite/sync-database'
 import { replayJournal } from './journal-open'
 import type { JournalRow } from './journal-row-schema'
 import * as reducer from './journal-reducer'
 import {
-  openTestJournalHostDatabase,
   insertTestJournalRow,
   publishTestJournalEpoch,
   insertTestJournalRowJson
 } from './journal-host-database-test-support'
 
 let root: string
-let opened: JournalHostDatabase
+let opened: { db: Database.Database }
 const sessionId = 'streaming-session'
 const epoch = 'epoch-1'
 
@@ -52,13 +53,13 @@ function put(row: JournalRow): void {
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-stream-replay-'))
-  opened = openTestJournalHostDatabase(root)
+  opened = openJournalDatabase(journalDatabasePath(root))
   publishTestJournalEpoch(opened.db, sessionId, epoch)
 })
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  await opened.close()
+  opened.db.close()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -98,22 +99,31 @@ describe('streaming journal replay', () => {
     expect(peak - initial).toBeLessThan(8 * 1024 * 1024)
   })
 
-  it('holds no read snapshot while reducing, so a checkpoint can pass mid-replay', () => {
+  it('holds no read snapshot while reducing, so a rollback writer can commit mid-replay', () => {
     put(anchor())
     for (let seq = 2; seq <= 300; seq++) {
       put(revision(seq))
     }
     const apply = reducer.applyJournalRow
-    const checkpoints: { busy: number }[] = []
+    const commits: number[] = []
+    const writer = openJournalDatabase(journalDatabasePath(root)).db
+    onTestFinished(() => writer.close())
     vi.spyOn(reducer, 'applyJournalRow').mockImplementation((state, row) => {
       if (row.seq === 2 || row.seq === 200) {
-        checkpoints.push(...(opened.db.pragma('wal_checkpoint(PASSIVE)') as { busy: number }[]))
+        writer.exec('BEGIN IMMEDIATE')
+        writer
+          .prepare(
+            "INSERT OR REPLACE INTO agent_session_store_meta(key, value) VALUES ('replay-write', ?)"
+          )
+          .run(String(row.seq))
+        writer.exec('COMMIT')
+        commits.push(row.seq)
       }
       apply(state, row)
     })
     const loaded = replayJournal(opened.db, sessionId)!
     expect(loaded.state.lastSequence).toBe(300)
-    expect(checkpoints.map((entry) => entry.busy)).toEqual([0, 0])
+    expect(commits).toEqual([2, 200])
   })
 
   it('reads past a gap to a future row, which names the newer row and no damage', () => {
@@ -125,8 +135,8 @@ describe('streaming journal replay', () => {
     expect(loaded).toMatchObject({ newer: { sequence: 5 }, damage: null })
     expect(loaded.state.items.get('message-1')?.revision).toBe(2)
     expect(loaded.state.lastSequence).toBe(2)
-    const checkpoint = opened.db.pragma('wal_checkpoint(TRUNCATE)') as { busy: number }[]
-    expect(checkpoint[0].busy).toBe(0)
+    opened.db.exec('BEGIN IMMEDIATE')
+    opened.db.exec('COMMIT')
   })
 
   it('names the first damage when a later row is malformed too', () => {

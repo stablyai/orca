@@ -1,3 +1,5 @@
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { QueuedMessageRow } from './queued-message-table'
 import { readJournalLegacyCards } from './journal-queue-import'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
@@ -31,6 +33,24 @@ export function restoreJournalNativeState(
   format: number,
   fold: JournalOutcomeFold,
   prefix: JournalNativePrefix
+): void {
+  restoreJournalNativeFacts(
+    state,
+    format,
+    fold,
+    prefix,
+    (id) => journalInputAcceptance(db, state.sessionId, id),
+    (state) => readJournalLegacyCards(db, state)
+  )
+}
+
+export function restoreJournalNativeFacts(
+  state: JournalReducerState,
+  format: number,
+  fold: JournalOutcomeFold,
+  prefix: JournalNativePrefix,
+  acceptance: (id: string) => AgentJournalCursor | undefined,
+  cards: (state: JournalReducerState) => readonly QueuedMessageRow[]
 ): void {
   if (format < 2) {
     for (const [id, own] of prefix.entries) {
@@ -76,12 +96,10 @@ export function restoreJournalNativeState(
       }
     }
   }
-  const owner = initializeJournalInputOrder(state, (id) =>
-    journalInputAcceptance(db, state.sessionId, id)
-  )
+  const owner = initializeJournalInputOrder(state, acceptance)
   owner.beginReconstruction()
   owner.restore(state)
-  owner.overlay(state, readJournalLegacyCards(db, state))
+  owner.overlay(state, cards(state))
   owner.finishReconstruction(state)
 }
 

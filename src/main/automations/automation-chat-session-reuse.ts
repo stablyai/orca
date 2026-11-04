@@ -95,7 +95,7 @@ export async function reuseAutomationChat(
         store.selectWritableRecord(id).kind === 'missing' &&
         !store.isSessionUnreadable(id) &&
         !store.getOperationRow(callerKey, operationId) &&
-        store.readCommandReceipt({ kind: 'global' }, operationId).verdict === 'absent'
+        (await store.readCommandReceipt({ kind: 'global' }, operationId)).verdict === 'absent'
       ) {
         return null
       }

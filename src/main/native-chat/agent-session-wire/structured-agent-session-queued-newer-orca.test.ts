@@ -38,7 +38,7 @@ async function queuedDraft(text: string): Promise<string> {
 /** Stamp the existing rig database with a newer open verdict; writes must honor it too. */
 async function reopenOnNewerOrcaDatabase(close: () => Promise<unknown>): Promise<void> {
   await close()
-  Object.defineProperty(openTestJournalHostDatabase(rig.root), 'readOnly', { value: true })
+  Object.defineProperty(await openTestJournalHostDatabase(rig.root), 'readOnly', { value: true })
 }
 
 async function expectHistoryRefused(): Promise<void> {

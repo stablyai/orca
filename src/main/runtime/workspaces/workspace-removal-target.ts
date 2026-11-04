@@ -1,4 +1,5 @@
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
+import type { CapturedOwnerRemoval } from './canonical-owner-removal'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
 import type {
@@ -18,10 +19,7 @@ import { forgetFailedAgentLaunches } from '../../agent-launch/agent-launch-pane-
 import { closeClientHostedBrowserPagesForWorktree } from '../worktree-browser-client-page-close'
 import { teardownStops } from '../owned-session-teardown-policy'
 import { deleteRemovedOwnerBrowserProfile } from '../browser-host/managed-browser-profile-removal'
-import type {
-  ForceDeleteWorktreeBranchResult,
-  RemoveWorktreeResult
-} from '../../../shared/worktree/create-types'
+import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import type {
   RuntimeTerminalRename,
   RuntimeTerminalSetPaneTitle
@@ -94,7 +92,8 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     target: { id: string; path: string },
     registeredWorktrees: readonly GitWorktreeInfo[],
     options: RemoveManagedWorktreeOptions,
-    localOptions: LocalProjectWorktreeGitOptions
+    localOptions: LocalProjectWorktreeGitOptions,
+    removeOwned?: CapturedOwnerRemoval
   ): Promise<boolean> {
     const store = this.store
     if (route.kind !== 'local' || !store) {
@@ -114,9 +113,11 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
           (record) =>
             interruptedLocalWorktreeRemovalJob(record, {
               ...this.localRemovalJobHost(store),
+              removeOwned,
               stopPtys: () =>
                 this.stopPtysForDestructiveWorktreeRemoval(record.worktreeId, {
-                  allowUnverifiedStop: allowUnverifiedPtyStop
+                  allowUnverifiedStop: allowUnverifiedPtyStop,
+                  deferSurfaceRetirement: true
                 })
             }),
           options.force === true,
@@ -128,6 +129,9 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
   protected localRemovalJobHost(store: RuntimeStore) {
     return {
       store,
+      openNativeOwnerStore: () => this.openAgentSessionRecordStore(),
+      stopPtys: (worktreeId: string) =>
+        this.stopPtysForDestructiveWorktreeRemoval(worktreeId, { deferSurfaceRetirement: true }),
       acquireWatcherRemoval: this.acquireFileWatcherRemoval,
       closeWatchers: (path) => this.closeFileWatchersForRemoval(path),
       preservedBranchCleanup: this.preservedBranchCleanup,
@@ -221,19 +225,9 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     deleteRemovedOwnerBrowserProfile({ kind: 'worktree', id: worktreeId })
   }
 
-  async forceDeletePreservedBranch(
-    worktreeSelector: string,
-    branchName: string,
-    expectedHead: string,
-    hostId?: string
-  ): Promise<ForceDeleteWorktreeBranchResult> {
-    return this.preservedBranchCleanup.forceDelete(
-      worktreeSelector,
-      branchName,
-      expectedHead,
-      hostId
-    )
-  }
+  forceDeletePreservedBranch = this.preservedBranchCleanup.forceDelete.bind(
+    this.preservedBranchCleanup
+  )
 
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
     // Switch point: a terminal main owns is renamed in main's layout, with or without a window.

@@ -121,7 +121,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${claude.connections.length + 1}`,
     now: () => NOW
@@ -256,7 +256,9 @@ describe('a fresh chat whose Claude start fails', () => {
       const sent = await send('reply with exactly: alpha')
       await eventually(async () =>
         expect(
-          (await host.journalSnapshot(SESSION)).submissions.find((s) => s.clientMessageId === sent)
+          await (
+            await host.journalSnapshot(SESSION)
+          ).submissions.find((s) => s.clientMessageId === sent)
         ).toMatchObject({ dispatchState: 'rejected', reason: startFailure })
       )
       await settleExits()

@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../agent-session-journal/journal-drained-fixture-test-support'
 import { cp, rm } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
@@ -54,7 +55,7 @@ async function relaunchWith(
     recursive: true,
     filter: (source) => !source.includes('.lock')
   })
-  edit(openTestJournalHostDatabase(relaunched).db)
+  await mutateTestJournalFixture(await openTestJournalHostDatabase(relaunched), edit)
   const store = await openTestAgentSessionRecordStore(relaunched, {
     legacySessionTabIds: [SESSION]
   })
@@ -63,7 +64,7 @@ async function relaunchWith(
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(relaunched),
+    journalDatabase: await openTestJournalHostDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     now: () => NOW
@@ -73,8 +74,8 @@ async function relaunchWith(
 }
 
 const damaged = (db: Database.Database) => updateTestJournalRowJson(db, SESSION, 1, '}{')
-const savedByNewerOrca = (db: Database.Database) => {
-  const epochRow = liveTestJournalRows(db, SESSION).find((row) => row.seq === 1)!
+const savedByNewerOrca = async (db: Database.Database) => {
+  const epochRow = (await liveTestJournalRows(db, SESSION)).find((row) => row.seq === 1)!
   const newer = { ...JSON.parse(epochRow.rowJson), v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION + 2 }
   updateTestJournalRowJson(db, SESSION, 1, JSON.stringify(newer))
 }

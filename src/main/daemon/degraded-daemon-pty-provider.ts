@@ -1,3 +1,11 @@
+import {
+  subscribeDegradedBackground,
+  subscribeDegradedListener,
+  subscribeDegradedWriteUnavailable,
+  fanoutDegradedSyntheticExits,
+  subscribeDegradedReplay
+} from './degraded-daemon-event-fanout'
+import { RoutedSurfaceExecution } from '../providers/routed-surface-execution'
 import { shutdownRoutedDegradedSession } from './daemon-routed-session-shutdown'
 import { terminateResolvedDaemonSession } from './daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
@@ -26,6 +34,12 @@ import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly isDegraded = true
+  readonly surfaceExecution = new RoutedSurfaceExecution(
+    () => this.allProviders(),
+    async (candidate) =>
+      this.findProviderForExistingSession(candidate.resourceId) ??
+      (this.freshSpawns.routesToFallback ? this.fallback : this.current)
+  )
 
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
@@ -88,7 +102,20 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   canProvideAuthoritativeBufferSnapshot = (id: string): boolean =>
     this.freshSpawns.canProvideSnapshot(id)
 
-  spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.ownerRecovery.spawn(opts)
+  spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
+    if (!opts.surfaceExecution || opts.attachOnly) {
+      return this.ownerRecovery.spawn(opts)
+    }
+    const target = await this.surfaceExecution.provider(opts.surfaceExecution)
+    if (!target) {
+      throw new Error('terminal_executor_unavailable')
+    }
+    const result = await target.spawn(opts)
+    if (!result.exitedBeforeSpawnReply) {
+      this.sessionProviders.set(result.id, target)
+    }
+    return result
+  }
 
   attach = (id: string): ReturnType<IPtyProvider['attach']> =>
     attachDaemonOwnedSession(this.providerFor(id), this.fallback, id)
@@ -230,54 +257,23 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   onData(callback: (payload: PtyDataEvent) => void): () => void {
-    this.dataListeners.push(callback)
-    return () => {
-      const idx = this.dataListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.dataListeners.splice(idx, 1)
-      }
-    }
+    return subscribeDegradedListener(this.dataListeners, callback)
   }
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
-    return combineUnsubscribes(
-      this.allProviders().flatMap((provider) => provider.onBackgroundStreamEvent?.(callback) ?? [])
-    )
+    return subscribeDegradedBackground(this.allProviders(), callback)
   }
 
-  // Forward daemon endpoint failures so every affected pane can recover (STA-2373).
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
-    return combineUnsubscribes(
-      this.allDaemonAdapters().map((adapter) => adapter.onWriteUnavailable(callback))
-    )
+    return subscribeDegradedWriteUnavailable(this.allDaemonAdapters(), callback)
   }
 
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void {
-    const unsubscribes = this.allProviders().map((provider) => provider.onReplay(callback))
-    let active = true
-    const trackedUnsubscribe = (): void => {
-      if (!active) {
-        return
-      }
-      active = false
-      const idx = this.unsubscribers.indexOf(trackedUnsubscribe)
-      if (idx !== -1) {
-        this.unsubscribers.splice(idx, 1)
-      }
-      combineUnsubscribes(unsubscribes)()
-    }
-    this.unsubscribers.push(trackedUnsubscribe)
-    return trackedUnsubscribe
+    return subscribeDegradedReplay(this.allProviders(), this.unsubscribers, callback)
   }
 
   onExit(callback: Parameters<IPtyProvider['onExit']>[0]): () => void {
-    this.exitListeners.push(callback)
-    return () => {
-      const idx = this.exitListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.exitListeners.splice(idx, 1)
-      }
-    }
+    return subscribeDegradedListener(this.exitListeners, callback)
   }
 
   ackColdRestore(sessionId: string): void {
@@ -320,14 +316,13 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   fanoutCurrentDaemonSyntheticExits(code: number, exit: { replacedByRestart?: true } = {}): void {
-    for (const id of this.getSessionIdsRoutedTo('current-daemon')) {
-      this.ownerRecovery.forgetRoute(id)
-      // Restart also kills listed sessions the adapter never tracked as active.
-      // Why: listeners may unsubscribe during iteration.
-      for (const listener of Array.from(this.exitListeners)) {
-        listener({ id, code, ...exit })
-      }
-    }
+    fanoutDegradedSyntheticExits(
+      this.getSessionIdsRoutedTo('current-daemon'),
+      (id) => this.ownerRecovery.forgetRoute(id),
+      this.exitListeners,
+      code,
+      exit
+    )
   }
 
   async disconnectOnly(): Promise<void> {

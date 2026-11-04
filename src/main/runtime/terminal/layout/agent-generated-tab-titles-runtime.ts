@@ -4,10 +4,13 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../../runtime-layout-apply'
 
 export abstract class OrcaRuntimeWithAgentGeneratedTabTitles extends OrcaRuntimeWithWorktreeSleepResumeRecording {
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: Pick<LayoutCommandRunOptions, 'admit'>
+  ): Promise<LayoutApplyReply>
 
   private readonly agentGeneratedTabTitles = new AgentGeneratedTabTitles({
     enabled: () => this.store?.getSettings?.()?.tabAutoGenerateTitle === true,

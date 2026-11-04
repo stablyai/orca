@@ -163,7 +163,7 @@ describe('codex turn lifecycle rows', () => {
     translator.handle(notification('turn/started', { turn: { id: TURN_ID } }, 1_000))
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
 
-    const appended = journal.readSince(before)
+    const appended = await journal.readSince(before)
     expect(appended.ok && appended.rows).toEqual([
       expect.objectContaining({ kind: 'outcome', seq: before.sequence + 1 })
     ])

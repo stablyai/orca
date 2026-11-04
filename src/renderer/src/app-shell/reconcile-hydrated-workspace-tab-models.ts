@@ -18,7 +18,7 @@ export function reconcileHydratedWorkspaceTabModels(
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     showStartupLayoutFrames()
     showServerLayoutFrames()
-    followSleepingRecordsInLayoutOwner()
   }
+  followSleepingRecordsInLayoutOwner()
   return reconciled
 }

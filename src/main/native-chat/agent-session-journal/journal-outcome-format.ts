@@ -1,3 +1,4 @@
+import { journalTable, type JournalTableScope } from './journal-table-scope'
 import type Database from '../../sqlite/sync-database'
 import { readJournalSessionEpoch } from './journal-row-table'
 import { AgentSessionJournalError } from './journal-write-guards'
@@ -45,14 +46,15 @@ export function ensureJournalOutcomeTables(db: Database.Database): void {
 export function journalOutcomeSource(
   db: Database.Database,
   sessionId: string,
-  epoch: string
+  epoch: string,
+  tableScope: JournalTableScope = 'main'
 ): JournalOutcomeSource | null {
-  if (readJournalSessionEpoch(db, sessionId) !== epoch) {
+  if (readJournalSessionEpoch(db, sessionId, tableScope) !== epoch) {
     throw new AgentSessionJournalError('journal_row_rejected', 'the chat epoch changed')
   }
   const source = db
     .prepare(
-      `SELECT generation, format, through_seq, prefix_seq FROM journal_outcome_epochs
+      `SELECT generation, format, through_seq, prefix_seq FROM ${journalTable(tableScope, 'journal_outcome_epochs')}
     WHERE session_id = ? AND epoch = ?`
     )
     .get(sessionId, epoch)
@@ -73,7 +75,7 @@ export function journalOutcomeSource(
   }
   // Only the marker follows the prefix: a row after it is no row this build writes.
   const [marker, after] = db
-    .prepare(`SELECT seq, row_json FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq > ?
+    .prepare(`SELECT seq, row_json FROM ${journalTable(tableScope, 'journal_rows')} WHERE session_id = ? AND epoch = ? AND seq > ?
       ORDER BY seq LIMIT 2`)
     .all(sessionId, epoch, prefix)
   if (after) {
@@ -105,22 +107,27 @@ export function startJournalOutcomeLog(
   sessionId: string,
   epoch: string,
   prefix: number,
-  savedAt: number
+  savedAt: number,
+  tableScope: JournalTableScope = 'main'
 ): JournalOutcomeSource {
   const tip = db
-    .prepare('SELECT MAX(seq) AS seq FROM journal_rows WHERE session_id = ? AND epoch = ?')
+    .prepare(
+      `SELECT MAX(seq) AS seq FROM ${journalTable(tableScope, 'journal_rows')} WHERE session_id = ? AND epoch = ?`
+    )
     .get(sessionId, epoch)
   if ((tip?.seq ?? 0) !== prefix) {
     throw new Error('journal outcome log would not start at the input tip')
   }
   const generation = Number(
     db
-      .prepare('INSERT INTO journal_outcome_generations (session_id, epoch) VALUES (?, ?)')
+      .prepare(
+        `INSERT INTO ${journalTable(tableScope, 'journal_outcome_generations')} (session_id, epoch) VALUES (?, ?)`
+      )
       .run(sessionId, epoch).lastInsertRowid
   )
   const seq = prefix + 1
   db.prepare(
-    'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
+    `INSERT INTO ${journalTable(tableScope, 'journal_rows')} (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)`
   ).run(
     sessionId,
     epoch,
@@ -129,7 +136,7 @@ export function startJournalOutcomeLog(
     JSON.stringify({ v: JOURNAL_OUTCOME_MARKER_VERSION, kind: 'outcomes', epoch, seq, ts: savedAt })
   )
   db.prepare(
-    `INSERT INTO journal_outcome_epochs VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO ${journalTable(tableScope, 'journal_outcome_epochs')} VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(session_id) DO UPDATE SET epoch = excluded.epoch, generation = excluded.generation,
     format = excluded.format, through_seq = excluded.through_seq, prefix_seq = excluded.prefix_seq`
   ).run(sessionId, epoch, generation, JOURNAL_OUTCOME_FORMAT, prefix, prefix)
@@ -141,8 +148,9 @@ export function advanceJournalOutcomeSource(
   db: Database.Database,
   sessionId: string,
   epoch: string,
-  through: number
+  through: number,
+  tableScope: JournalTableScope = 'main'
 ): void {
-  db.prepare(`UPDATE journal_outcome_epochs SET through_seq = ?, format = MAX(format, ?)
+  db.prepare(`UPDATE ${journalTable(tableScope, 'journal_outcome_epochs')} SET through_seq = ?, format = MAX(format, ?)
     WHERE session_id = ? AND epoch = ?`).run(through, JOURNAL_OUTCOME_FORMAT, sessionId, epoch)
 }

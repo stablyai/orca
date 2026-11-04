@@ -99,7 +99,7 @@ describe('a Stop pressed again', () => {
       logger: createStructuredAgentSessionLogger(),
       store: relaunchedStore,
       adapter: adapter(),
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-next',
       probeOwner: async () => ({ outcome: 'pid-absent' }),

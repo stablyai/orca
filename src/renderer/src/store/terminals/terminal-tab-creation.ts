@@ -271,7 +271,7 @@ export function createTerminalTabCreationActions(
         }
       })
       // Switch point: main writes the tab under these ids before any later command names it.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      {
         recordCreatedTerminalTabInLayoutOwner(get(), terminalTabCreateCommand(get(), tab), {
           tab,
           store: { getState: get, setState: (patch) => set(patch), subscribe }

@@ -1,7 +1,6 @@
 // Wait for main’s terminal start and attach, or show its failure; the window cannot spawn a replacement.
 
 import { useAppStore } from '@/store'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { recordPtyConnectDiagnostic } from './pty-connect-limits'
 import type { PaneStartStatus } from '../../../../../shared/workspace-layout/workspace-layout-published'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -29,9 +28,6 @@ export function waitsForMainPaneStart(
   connect: () => void,
   onFailed?: () => void
 ): boolean {
-  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-    return false
-  }
   const start = useAppStore.getState().terminalPaneStartsByPaneKey[session.cacheKey]
   if (!start || !gated(start.status)) {
     return false

@@ -1,4 +1,5 @@
 import { OrcaRuntimeWithReadKittyFile } from '../orca-runtime-read-kitty-file'
+import { localWorktreeRemovalOwners } from '../../workspaces/removal/worktree-removal-owner-residue'
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
@@ -228,7 +229,9 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
             ok: true,
             worktrees: await withUnregisteredRemovalCheckouts(
               repo.id,
-              withoutInFlightWorktreeCreates(repo.id, scan.worktrees)
+              withoutInFlightWorktreeCreates(repo.id, scan.worktrees),
+              (records) =>
+                this.store ? localWorktreeRemovalOwners(this.store, records) : new Set()
             )
           }
         : scan

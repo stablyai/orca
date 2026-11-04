@@ -9,6 +9,7 @@ import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
 import { ownerKeyWorktreeIds } from '../../orca-profiles/profile-project-worktree-identity'
+import type { WorkspaceSurface } from '../../../shared/workspace-surfaces/surface-content'
 
 /** Paired-host catalogs live on the remote host. */
 const isPairedHost = (hostId: string | null | undefined): boolean =>
@@ -24,7 +25,10 @@ function ownerKeyRepoIds(ownerKey: string | null | undefined): string[] {
 }
 
 /** Retain paired-host rows: their absent local catalog cannot prove deletion before pairing (#17776). */
-export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
+export function collectDeregisteredRepoIds(
+  state: PersistedState,
+  surfaces: readonly WorkspaceSurface[] = []
+): Set<string> {
   const liveRepoIds = new Set(state.repos.map((repo) => repo.id))
   const retainOwner = (ownerKey: string | null | undefined): void => {
     for (const repoId of ownerKeyRepoIds(ownerKey)) {
@@ -33,6 +37,11 @@ export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
   }
   // This walker requires the shape but uses only addOwner.
   const retainCollector = { owners: new Set<string>(), addOwner: retainOwner }
+  for (const surface of surfaces) {
+    if (surface.content && isPairedHost(surface.hostId)) {
+      retainOwner(surface.workspaceId)
+    }
+  }
   for (const [hostId, session] of Object.entries(state.workspaceSessionsByHostId ?? {})) {
     if (session && isPairedHost(hostId)) {
       addWorkspaceSessionWorktreeOwners(session, retainCollector)
@@ -69,6 +78,12 @@ export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
       for (const repoId of repoIds) {
         orphanRepoIds.add(repoId)
       }
+    }
+  }
+
+  for (const surface of surfaces) {
+    if (surface.content) {
+      addWorktreeId(surface.workspaceId)
     }
   }
 

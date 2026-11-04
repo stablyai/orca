@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../../../native-chat/agent-session-journal/journal-drained-fixture-test-support'
 import { afterEach, expect, it, vi } from 'vitest'
 import * as naming from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed-deps'
 import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
@@ -54,23 +55,23 @@ it.each([10, 100])('filters cold naming notes with linear work for %i healthy ro
     }
   )
   await seedTestAgentSessionRecordStore(rig.root, { records })
-  const database = openTestJournalHostDatabase(rig.root)
-  database.db
-    .prepare(
+  const database = await openTestJournalHostDatabase(rig.root)
+  await mutateTestJournalFixture(database, (db) => {
+    db.prepare(
       "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
-    )
-    .run('session-codex')
-  database.db
-    .prepare(
+    ).run('session-codex')
+    db.prepare(
       "UPDATE agent_session_records SET record_json = json_set(record_json, '$.providerHandleChain', 'invalid') WHERE session_id = ?"
-    )
-    .run('session-raw-only')
-  const rawRows = database.db
-    .prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY session_id')
-    .all()
+    ).run('session-raw-only')
+  })
+  const rawRows = await database.read((read) =>
+    read
+      .prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY session_id')
+      .all()
+  )
   await closeTestJournalHostDatabase(rig.root)
   const store = await openTestAgentSessionRecordStore(rig.root)
-  const reopened = openTestJournalHostDatabase(rig.root)
+  const reopened = await openTestJournalHostDatabase(rig.root)
   const host = new StructuredAgentSessionHost({
     ...rig.host.deps,
     store,
@@ -106,13 +107,13 @@ it.each([10, 100])('filters cold naming notes with linear work for %i healthy ro
     expect(rawRows.map((row) => row.session_id)).toEqual(
       [...healthyIds, 'session-codex', 'session-pi', 'session-raw-only'].sort()
     )
-    expect(reopened.db.prepare('SELECT session_id FROM journal_sessions').all()).toEqual([])
+    expect(
+      await reopened.read((read) => read.prepare('SELECT session_id FROM journal_sessions').all())
+    ).toEqual([])
     expect(host.hasSession('session-codex')).toBe(false)
     expect(host.readStatusSummary('session-codex')).toBeUndefined()
     const work = countStoreWork(store)
-    const queries = countRecordQueries(rig.root)
-    // Observe the actual cached loader statement even if a future caller reuses it directly.
-    reopened.db.prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY rowid')
+    const queries = await countRecordQueries(rig.root)
     const names = vi.spyOn(naming, 'structuredAgentSessionNamingSnapshot')
     const flatten = vi.spyOn(Array.prototype, 'flatMap')
     const unsubscribe = vi.spyOn(StructuredAgentSessionStatusFeed.prototype, 'unsubscribe')
@@ -203,11 +204,15 @@ it.each([10, 100])('filters cold naming notes with linear work for %i healthy ro
     expect(rig.acquire).not.toHaveBeenCalled()
     expect(rig.dispatch).not.toHaveBeenCalled()
     expect(
-      reopened.db
-        .prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY session_id')
-        .all()
+      await reopened.read((read) =>
+        read
+          .prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY session_id')
+          .all()
+      )
     ).toEqual(rawRows)
-    expect(reopened.db.prepare('SELECT session_id FROM journal_sessions').all()).toEqual([])
+    expect(
+      await reopened.read((read) => read.prepare('SELECT session_id FROM journal_sessions').all())
+    ).toEqual([])
   } finally {
     closeStream()
     await abandonStructuredAgentSessionHost(host)

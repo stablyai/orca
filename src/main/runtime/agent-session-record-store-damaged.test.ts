@@ -213,7 +213,7 @@ describe('damaged saved conversation observations', () => {
       const original = await openStructuredAgentSessionConversationJournal(
         {
           store: first,
-          journalDatabase: openTestJournalHostDatabase(directory),
+          journalDatabase: await openTestJournalHostDatabase(directory),
           logger
         },
         first.getConversation('session-alpha')!
@@ -246,14 +246,14 @@ describe('damaged saved conversation observations', () => {
       const reopened = await openStructuredAgentSessionConversationJournal(
         {
           store,
-          journalDatabase: openTestJournalHostDatabase(directory),
+          journalDatabase: await openTestJournalHostDatabase(directory),
           logger
         },
         record
       )
       const journal = reopened.session.journal
       try {
-        const history = readStructuredAgentSessionHistoryResult({
+        const history = await readStructuredAgentSessionHistoryResult({
           journal,
           record,
           request: { sessionId: 'session-alpha', direction: 'tail' }

@@ -54,6 +54,12 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'profile-state-writer-worker-entry': resolve(
     'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts'
   ),
+  'surface-executor-reader-entry': resolve(
+    'src/main/workspace-surfaces/surface-executor-reader-entry.ts'
+  ),
+  'journal-sql-worker-entry': resolve(
+    'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts'
+  ),
   // Isolate native @parcel/watcher faults from main (#7547).
   'parcel-watcher-process-entry': resolve(
     'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts'

@@ -22,12 +22,12 @@ function logOpenFailureOnce(logger: StructuredAgentSessionLogger, error: unknown
 }
 
 /** Record the journal refusal for the gate and throw; the next install retries. */
-export function openStructuredAgentSessionJournalDatabase(args: {
+export async function openStructuredAgentSessionJournalDatabase(args: {
   stateDirectory: string
   logger: StructuredAgentSessionLogger
-}): JournalHostDatabase {
+}): Promise<JournalHostDatabase> {
   try {
-    const opened = JournalHostDatabase.open(args.stateDirectory)
+    const opened = await JournalHostDatabase.open(args.stateDirectory)
     recordStructuredAgentSessionHostInstallRefusal(null)
     lastLoggedOpenFailure = null
     return opened

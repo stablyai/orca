@@ -1,3 +1,4 @@
+import { JournalOutcomeSweeper } from '../../native-chat/agent-session-journal/journal-outcome-cleanup'
 import { existsSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,9 +10,9 @@ import { createStructuredAgentSessionLogger } from '../../native-chat/agent-sess
 import * as attachmentSweeps from '../../native-chat/agent-session-attachments/agent-session-attachment-sweep'
 import {
   closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
+  openTestJournalHostDatabase,
+  seedTestOutcomeSweepPopulation
 } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
-import type Database from '../../sqlite/sync-database'
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 import {
   installAgentSessionAttachments,
@@ -40,17 +41,20 @@ const records: Pick<AgentSessionRecordStore, 'getRecord' | 'isSessionUnreadable'
 function install(directory = stateDirectory): void {
   // Written by a newer Orca: the sweeps read no claims, so nothing here touches the connection.
   const journal: Parameters<typeof installAgentSessionAttachments>[0]['journalDatabase'] = {
-    writeAutocommit: () => {
+    read: () => {
+      throw new Error('not opened in this test')
+    },
+    scan: () => {
       throw new Error('not opened in this test')
     },
     transaction: () => {
       throw new Error('not opened in this test')
     },
-    readOnly: true,
-    isClosed: false,
-    get db(): Database.Database {
+    maintenance: () => {
       throw new Error('not opened in this test')
-    }
+    },
+    readOnly: true,
+    isClosed: false
   }
   installAgentSessionAttachments({
     stateDirectory: directory,
@@ -80,25 +84,27 @@ describe('installAgentSessionAttachments', () => {
   })
 
   it("starts the chat database's sweep of retired records and stops it with the attachments", async () => {
-    vi.useFakeTimers()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     vi.spyOn(attachmentSweeps, 'startAgentSessionAttachmentSweeps').mockReturnValue({
       stop: () => undefined
     })
-    const database = openTestJournalHostDatabase(stateDirectory)
-    const retire = () =>
-      database.transaction((db) => {
-        const generation = db
-          .prepare('INSERT INTO journal_outcome_generations (session_id, epoch) VALUES (?, ?)')
-          .run('gone', 'gone-epoch').lastInsertRowid
-        db.prepare(`INSERT INTO journal_outcomes
-          (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
-          VALUES (?, 1, 'aliases', '"k"', 1, 's0000000000000001:0000000000000000', '["k","v"]', 0)`).run(
-          generation
+    const database = await openTestJournalHostDatabase(stateDirectory)
+    const retire = () => seedTestOutcomeSweepPopulation(database, 0, 'gone-epoch', 1)
+    const pass = JournalOutcomeSweeper.prototype.pass
+    const passes = vi.spyOn(JournalOutcomeSweeper.prototype, 'pass').mockImplementation(function (
+      this: JournalOutcomeSweeper
+    ) {
+      // Native page pacing must run on real timers after the launch timer fires.
+      vi.useRealTimers()
+      return pass.call(this)
+    })
+    const retired = async () =>
+      (
+        await database.read((read) =>
+          read.prepare('SELECT COUNT(*) AS n FROM journal_outcome_generations').get()
         )
-      })
-    const retired = () =>
-      database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcome_generations').get()?.n
-    retire()
+      )?.n
+    await retire()
     installAgentSessionAttachments({
       stateDirectory,
       store: records,
@@ -106,13 +112,15 @@ describe('installAgentSessionAttachments', () => {
       logger: createStructuredAgentSessionLogger()
     })
     await vi.advanceTimersByTimeAsync(59_999)
-    expect(retired()).toBe(1)
+    expect(await retired()).toBe(1)
     // The first pass a minute after launch: the records page, a rest, then the generation row.
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(retired()).toBe(0)
-    retire()
+    await passes.mock.results[0]!.value
+    expect(await retired()).toBe(0)
+    await retire()
     stopAgentSessionAttachments()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     await vi.advanceTimersByTimeAsync(12 * 60 * 60_000)
-    expect(retired()).toBe(1)
+    expect(await retired()).toBe(1)
   })
 })

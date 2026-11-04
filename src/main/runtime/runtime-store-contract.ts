@@ -3,6 +3,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { VoiceSettings } from '../../shared/speech-types'
 
 export type RuntimeStore = {
+  readDeregisteredWorkspaceSurfaces?: Store['readDeregisteredWorkspaceSurfaces']
   getRepos: Store['getRepos']
   getSshTargets?: Store['getSshTargets']
   getRepo: Store['getRepo']
@@ -77,6 +78,13 @@ export type RuntimeStore = {
   getPtyBindingGeneration?: Store['getPtyBindingGeneration']
   getLayoutEditorViews?: Store['getLayoutEditorViews']
   admitTerminalPane?: Store['admitTerminalPane']
+  admitTerminalRun?: Store['admitTerminalRun']
+  captureWorkspaceSurfaceRun?: Store['captureWorkspaceSurfaceRun']
+  executeWorkspaceSurfaceCommand?: Store['executeWorkspaceSurfaceCommand']
+  readWorkspaceSurfaces?: Store['readWorkspaceSurfaces']
+  workspaceSurfacesInitialized?: Store['workspaceSurfacesInitialized']
+  executeWorkspaceSurfaceTransaction?: Store['executeWorkspaceSurfaceTransaction']
+  executeWorkspaceSurfaceJournalUnit?: Store['executeWorkspaceSurfaceJournalUnit']
   withdrawTerminalPane?: Store['withdrawTerminalPane']
   applyLayoutCommand?: Store['applyLayoutCommand']
   applyTabRenames?: Store['applyTabRenames']

@@ -374,7 +374,7 @@ describe('frames to a bounded-frame subscriber', () => {
       EMPTY_STRUCTURED_AGENT_SESSION
     )
     for (let cursor = oldestStructuredAgentSessionCursor(state); state.hasOlder && cursor;) {
-      const older = readAgentSessionHistory(journal, {
+      const older = await readAgentSessionHistory(journal, {
         sessionId: SESSION,
         direction: 'before',
         cursor

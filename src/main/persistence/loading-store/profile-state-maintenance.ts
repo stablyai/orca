@@ -17,6 +17,12 @@ export function freezeProfileStateWrites(runtime: StoreRuntimeState): void {
     throw new Error('Live profile persistence requires an awaited close')
   }
   runtime.writesFrozen = true
+  for (const listener of runtime.profilePersistenceFinalizedListeners) {
+    try {
+      listener()
+    } catch {}
+  }
+  runtime.profilePersistenceFinalizedListeners.clear()
   if (runtime.writeTimer) {
     clearTimeout(runtime.writeTimer)
     runtime.writeTimer = null
@@ -26,6 +32,12 @@ export function freezeProfileStateWrites(runtime: StoreRuntimeState): void {
 
 export async function freezeProfileStateWritesAsync(runtime: StoreRuntimeState): Promise<void> {
   runtime.quitFlushStarted = true
+  for (const listener of runtime.profilePersistenceFinalizedListeners) {
+    try {
+      listener()
+    } catch {}
+  }
+  runtime.profilePersistenceFinalizedListeners.clear()
   if (runtime.writeTimer) {
     clearTimeout(runtime.writeTimer)
     runtime.writeTimer = null

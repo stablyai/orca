@@ -40,7 +40,7 @@ let providerEnd:
 let exitObservedFirst: boolean
 let closeCalls = 0
 
-beforeEach(() => {
+beforeEach(async () => {
   const state = hostTestState()
   providerEnd = 'mapped'
   exitObservedFirst = false
@@ -76,7 +76,7 @@ beforeEach(() => {
         return true
       }
     },
-    journalDatabase: openTestJournalHostDatabase(state.root),
+    journalDatabase: await openTestJournalHostDatabase(state.root),
     recoveryCapsule: new AgentSessionRecoveryCapsule(state.root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',

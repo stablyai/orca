@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../../native-chat/agent-session-journal/journal-drained-fixture-test-support'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -56,23 +57,25 @@ it.each([100, 300])('bounds the added failure display with %i readable legacy ca
     })
   }
   await r.journal.close()
-  const db = openTestJournalHostDatabase(r.root).db
-  const insert = db.prepare(`INSERT INTO queued_messages
+  const database = await openTestJournalHostDatabase(r.root)
+  await mutateTestJournalFixture(database, (db) => {
+    const insert = db.prepare(`INSERT INTO queued_messages
     (session_id, message_id, position, body_json, fingerprint, created_at, host_instance,
      state, hold_reason, returned_reason, consumed_as)
     VALUES (?, ?, ?, ?, ?, 0, 'earlier', 'dispatched', NULL, NULL, ?)`)
-  for (let index = 0; index < n; index++) {
-    insert.run(
-      SESSION,
-      `card:${index}`,
-      index,
-      JSON.stringify(body),
-      fingerprint,
-      `legacy:${index}`
-    )
-  }
-  db.exec(`CREATE TEMP TRIGGER fail_import BEFORE DELETE ON queued_messages
+    for (let index = 0; index < n; index++) {
+      insert.run(
+        SESSION,
+        `card:${index}`,
+        index,
+        JSON.stringify(body),
+        fingerprint,
+        `legacy:${index}`
+      )
+    }
+    db.exec(`CREATE TRIGGER fail_import BEFORE DELETE ON queued_messages
     BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
+  })
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   const ops = countLegacyFailureDisplay()
   const journal = await journals.open({
@@ -90,7 +93,9 @@ it.each([100, 300])('bounds the added failure display with %i readable legacy ca
     error: 'disk full'
   })
   expect(
-    db.prepare('SELECT message_id FROM queued_messages WHERE session_id = ?').all(SESSION)
+    await database.read((read) =>
+      read.prepare('SELECT message_id FROM queued_messages WHERE session_id = ?').all(SESSION)
+    )
   ).toHaveLength(n)
   expect(journal.queuedMessages.list()).toHaveLength(n)
   const cold = structuredClone(ops.counts)

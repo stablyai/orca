@@ -1,3 +1,5 @@
+import type { TerminalCreationWork } from '../../daemon/terminal-creation-work'
+import type { SurfaceExecutionControl } from '../../workspace-surfaces/surface-run-executor'
 import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { mkdir } from 'node:fs/promises'
@@ -13,7 +15,7 @@ import {
   validateWorkingDirectory,
   WorkingDirectoryValidationAbortedError
 } from '../working-directory-validation'
-import { allocatePtyId, ptyShutdownOperations } from './local-pty-provider-state'
+import { allocatePtyId, ptyShutdownOperations, ptyIncarnations } from './local-pty-provider-state'
 import { activateLocalPtySession } from './local-pty-session-activation'
 import {
   buildLocalPtySpawnEnvironment,
@@ -32,13 +34,20 @@ import type { PtySpawnResult } from '../pty-spawn-result'
 
 export async function spawnLocalPty(
   args: PtySpawnOptions,
-  getOptions: () => LocalPtyProviderOptions
+  getOptions: () => LocalPtyProviderOptions,
+  execution?: { control: SurfaceExecutionControl; work: TerminalCreationWork }
 ): Promise<PtySpawnResult> {
   const reattachId = normalizeLocalCallerSessionId(args.sessionId, args.attachOnly === true)
   if (reattachId) {
     const pendingShutdown = ptyShutdownOperations.get(reattachId)
     if (pendingShutdown) {
       await pendingShutdown.promise
+    }
+    if (
+      args.expectedIncarnationId &&
+      ptyIncarnations.get(reattachId) !== args.expectedIncarnationId
+    ) {
+      throw new SessionNotFoundError(reattachId)
     }
     const existing = reattachLocalPty(reattachId, args.cols, args.rows)
     if (existing) {
@@ -102,6 +111,7 @@ export async function spawnLocalPty(
     const [spawn] = await Promise.all([loadLocalPtyRuntimeSpawn(), prepareMacosTccLoginShell()])
     return reserveLocalPtySpawn(id, async () => {
       const checkCanceled = (): void => {
+        execution?.control.assertAllowed()
         throwIfCanceled()
         if (args.signal?.aborted) {
           throw new Error('client_disconnected')
@@ -114,6 +124,7 @@ export async function spawnLocalPty(
         return concurrentWinner
       }
       const pendingSpawn = spawn({
+        ...(execution ? { creationWork: execution.work, assertCreateAllowed: checkCanceled } : {}),
         shellPath: plan.shellPath,
         shellArgs: plan.shellArgs,
         cols: args.cols,

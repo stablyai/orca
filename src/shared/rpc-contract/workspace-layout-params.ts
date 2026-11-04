@@ -1,3 +1,4 @@
+import { TerminalPaneLayoutNodeSchema } from './session-tabs-schemas-params'
 import { z } from 'zod'
 import { isTerminalLeafId } from '../stable-pane-id'
 import { SleepCommand, StartPaneCommand, WakeCommand } from './workspace-layout-sleep-wake-params'
@@ -39,6 +40,8 @@ const SplitPaneCommand = z.object({
   type: z.literal('splitPane'),
   ...OnPane,
   direction: z.enum(['horizontal', 'vertical']),
+  ratio: z.number().gt(0).lt(1).optional(),
+  proposedRoot: TerminalPaneLayoutNodeSchema.optional(),
   newLeafId: z.string().refine(isTerminalLeafId).optional()
 })
 

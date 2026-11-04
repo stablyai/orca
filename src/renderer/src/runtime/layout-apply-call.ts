@@ -12,9 +12,11 @@ export function callLayoutApply(
   command: WindowLayoutCommand,
   answer: (reply: LayoutApplyReply | null) => void
 ): void {
-  void callRuntimeRpc<LayoutApplyReply>(target, 'layout.apply', {
-    command: { ...command, workspace: worktreeId }
-  })
+  void afterWorkspaceLayoutCommands(target, worktreeId, () =>
+    callRuntimeRpc<LayoutApplyReply>(target, 'layout.apply', {
+      command: { ...command, workspace: worktreeId }
+    })
+  )
     .then(
       (reply) =>
         afterLayoutFrame(reply.frameSeq, () => answer(reply), layoutFramePositionKey(target)),
@@ -32,4 +34,25 @@ export function callLayoutApply(
 
 function errorMessage(error: unknown): unknown {
   return error instanceof Error ? error.message : error
+}
+
+const pendingWorkspaceCommands = new Map<string, Promise<unknown>>()
+
+/** Creation settles before a later close/split can address its admitted occurrence. */
+export function afterWorkspaceLayoutCommands<T>(
+  target: RuntimeClientTarget,
+  worktreeId: string,
+  run: () => Promise<T>
+): Promise<T> {
+  const key = JSON.stringify([layoutFramePositionKey(target), worktreeId])
+  const previous = pendingWorkspaceCommands.get(key)
+  const result = previous ? previous.then(run, run) : run()
+  pendingWorkspaceCommands.set(key, result)
+  const release = (): void => {
+    if (pendingWorkspaceCommands.get(key) === result) {
+      pendingWorkspaceCommands.delete(key)
+    }
+  }
+  void result.then(release, release)
+  return result
 }

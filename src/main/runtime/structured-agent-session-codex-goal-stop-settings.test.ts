@@ -433,9 +433,11 @@ it.each([
           expect(await host.cancel(CALLER, request)).toMatchObject({ ok: true, replayed: false })
           await settleStop(host)
           expect(
-            host.deps.store.readCommandReceipt(
-              { kind: 'caller', callerKey: CALLER.callerKey },
-              request.envelope.clientOperationId
+            (
+              await host.deps.store.readCommandReceipt(
+                { kind: 'caller', callerKey: CALLER.callerKey },
+                request.envelope.clientOperationId
+              )
             ).verdict
           ).toBe('readable')
           expect(firstOutcome?.errors).toEqual(firstErrors)

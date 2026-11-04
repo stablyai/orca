@@ -24,7 +24,6 @@ import {
 import type { RefusedPaneResume } from '../../../../shared/agent-status-types'
 import { type ExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRuntimeWithStopTerminalsForWorktree {
@@ -49,7 +48,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
     source?: SleepingAgentSessionRecord
   ): Promise<void> {
     await this.inResumeRecordOrder(() =>
-      this.commitWorkspaceSessionEdit(
+      this.commitWorkspaceResumeRecordEdit(
         this.getWorkspaceSessionHostIdForWorktree(worktreeId),
         (session) => {
           const saved = session.sleepingAgentSessionsByPaneKey?.[paneKey]
@@ -89,8 +88,8 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   }
 
   protected readonly sleepResumeRecords: WorktreeSleepResumeRecorder = {
-    capture: (worktreeId, ptyIds) =>
-      captureWorktreeSleepResumeRecords({
+    capture: async (worktreeId, ptyIds) => {
+      const capture = await captureWorktreeSleepResumeRecords({
         worktreeId,
         paneKeysByPtyId: new Map(
           [...ptyIds].map((ptyId) => [ptyId, this.collectAgentStatusPaneKeysForPty(ptyId)])
@@ -104,16 +103,33 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
         readRows: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
         checkAgentPresence: this.checkHookAgentPresenceFn,
         capturedAt: Date.now()
-      }),
+      })
+      const liveCapture = new Map(
+        [...capture].map(([ptyId, entry]) => [
+          ptyId,
+          {
+            retiredPaneKeys: [],
+            records: entry.records.map((record) => ({ ...record, origin: 'live' as const }))
+          }
+        ])
+      )
+      await this.inResumeRecordOrder(() =>
+        this.commitWorkspaceResumeRecordEdit(
+          this.getWorkspaceSessionHostIdForWorktree(worktreeId),
+          (session) => applyWorktreeSleepResumeRecords(session, liveCapture, [...ptyIds])
+        )
+      )
+      return capture
+    },
     persist: async (worktreeId, capture, stoppedPtyIds) => {
       const commit = (): Promise<void> =>
-        this.commitWorkspaceSessionEdit(
+        this.commitWorkspaceResumeRecordEdit(
           this.getWorkspaceSessionHostIdForWorktree(worktreeId),
           (session) => applyWorktreeSleepResumeRecords(session, capture, stoppedPtyIds)
         )
       try {
         // Switch point: a status accepted before the sleep is saved is written before it, as in the window.
-        await (ORCA_LAYOUT_OWNER_IS_MAIN ? this.inResumeRecordOrder(commit) : commit())
+        await this.inResumeRecordOrder(commit)
       } catch (error) {
         // Why: the PTYs already stopped; a lost record costs the resume, not the sleep.
         console.error('[runtime] could not record slept agent sessions', { worktreeId, error })

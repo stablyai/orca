@@ -1,3 +1,8 @@
+import type {
+  SurfaceExecutorCandidate,
+  SurfaceExecutorAdmission,
+  SurfaceExecutorDecision
+} from '../../shared/workspace-surfaces/surface-executor-contract'
 import type { TerminalStartFailure } from '../../shared/terminal-start-failure'
 import type {
   AsyncIoHealthRequest,
@@ -62,6 +67,7 @@ export type CreateOrAttachRequest = {
   id: string
   type: 'createOrAttach'
   payload: HistorySeedProtocol.CreateOrAttachHistorySeedPayload & {
+    surfaceExecution?: SurfaceExecutorAdmission
     sessionId: string
     cols: number
     rows: number
@@ -257,7 +263,17 @@ export type TakePendingOutputResult = {
   snapshot: TerminalSnapshot | null
 }
 
+export type SurfaceExecutionRequest = {
+  id: string
+  type: 'surfaceExecution'
+  payload:
+    | { operation: 'identify'; candidate: SurfaceExecutorCandidate }
+    | { operation: 'query' | 'release'; admission: SurfaceExecutorAdmission }
+    | { operation: 'settle'; decision: SurfaceExecutorDecision }
+}
+
 export type DaemonRequest =
+  | SurfaceExecutionRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest

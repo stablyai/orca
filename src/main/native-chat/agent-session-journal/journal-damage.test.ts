@@ -12,6 +12,8 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import Database from '../../sqlite/sync-database'
+import { openJournalDatabase } from './journal-database'
+import { closeTestJournalHostDatabase } from './journal-host-database-test-support'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import {
   createTrackedJournalOpener,
@@ -58,17 +60,18 @@ function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> 
   })
 }
 
-async function withJournalDatabase<T>(run: (db: Database.Database) => T): Promise<T> {
-  const opened = openTestJournalHostDatabase(root)
+async function withJournalDatabase<T>(run: (db: Database.Database) => T | Promise<T>): Promise<T> {
+  await closeTestJournalHostDatabase(root)
+  const fixture = openJournalDatabase(join(root, 'agent-session-journal.db'))
   try {
-    return run(opened.db)
+    return await run(fixture.db)
   } finally {
-    await opened.close()
+    fixture.db.close()
   }
 }
 
 async function storedRows(): Promise<{ seq: number; rowJson: string }[]> {
-  return withJournalDatabase((db) => liveTestJournalRows(db, IDENTITY.sessionId))
+  return withJournalDatabase(async (db) => await liveTestJournalRows(db, IDENTITY.sessionId))
 }
 
 async function writeChat(): Promise<void> {
@@ -100,22 +103,22 @@ describe('a damaged chat', () => {
     ],
     [
       'a row of a known kind missing a field',
-      (db: Database.Database) =>
+      async (db: Database.Database) =>
         updateTestJournalRowJson(
           db,
           IDENTITY.sessionId,
           3,
-          JSON.stringify({ ...JSON.parse(storedRowJson(db, 3)), itemId: 5 })
+          JSON.stringify({ ...JSON.parse(await storedRowJson(db, 3)), itemId: 5 })
         )
     ],
     [
       'a row numbered against its key',
-      (db: Database.Database) =>
+      async (db: Database.Database) =>
         updateTestJournalRowJson(
           db,
           IDENTITY.sessionId,
           3,
-          JSON.stringify({ ...JSON.parse(storedRowJson(db, 3)), seq: 9 })
+          JSON.stringify({ ...JSON.parse(await storedRowJson(db, 3)), seq: 9 })
         )
     ],
     [
@@ -138,7 +141,7 @@ describe('a damaged chat', () => {
     await writeChat()
     await withJournalDatabase((db) => deleteTestJournalRow(db, IDENTITY.sessionId, 4))
 
-    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({
+    expect(await loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({
       newer: null,
       damage: { sequence: 4, cause: 'sequence-gap' }
     })
@@ -148,9 +151,9 @@ describe('a damaged chat', () => {
     "reads past damage at row %i to a newer build's row, which fails the load as a newer Orca's instead",
     async (damaged) => {
       await writeChat()
-      await withJournalDatabase((db) => {
+      await withJournalDatabase(async (db) => {
         updateTestJournalRowJson(db, IDENTITY.sessionId, damaged, '}{')
-        const newer = { ...JSON.parse(storedRowJson(db, 5)), kind: 'checkpoint' }
+        const newer = { ...JSON.parse(await storedRowJson(db, 5)), kind: 'checkpoint' }
         updateTestJournalRowJson(db, IDENTITY.sessionId, 5, JSON.stringify(newer))
       })
       const before = await storedRows()
@@ -212,8 +215,8 @@ describe('a chat whose saved state cannot be read right now', () => {
   })
 })
 
-function storedRowJson(db: Database.Database, seq: number): string {
-  const row = liveTestJournalRows(db, IDENTITY.sessionId).find((entry) => entry.seq === seq)
+async function storedRowJson(db: Database.Database, seq: number): Promise<string> {
+  const row = (await liveTestJournalRows(db, IDENTITY.sessionId)).find((entry) => entry.seq === seq)
   if (!row) {
     throw new Error(`no row at ${seq}`)
   }
@@ -249,9 +252,9 @@ describe('a row the reader would reject', () => {
     const journal = await open()
     await journal.appendItem(item(0), body('kept'), scope)
     // Closing the shared test connection would also close the live journal.
-    const liveRows = () =>
-      liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId)
-    const before = liveRows()
+    const liveRows = async () =>
+      await liveTestJournalRows(await openTestJournalHostDatabase(root), IDENTITY.sessionId)
+    const before = await liveRows()
 
     await expect(
       journal.replaceEpochItems('legacy_import', 1, [
@@ -260,7 +263,7 @@ describe('a row the reader would reject', () => {
       ])
     ).rejects.toMatchObject({ code: 'journal_row_rejected' })
 
-    expect(liveRows()).toEqual(before)
+    expect(await liveRows()).toEqual(before)
     await journal.appendItem(item(1), body('still writable'), scope)
     await journal.close()
     await expect(open()).resolves.toBeTruthy()
@@ -270,12 +273,12 @@ describe('a row the reader would reject', () => {
 describe('an epoch named with no rows at all', () => {
   it('is founded afresh on open, with nothing deleted, and takes writes', async () => {
     await writeChat()
-    await withJournalDatabase((db) => {
-      for (const row of liveTestJournalRows(db, IDENTITY.sessionId)) {
+    await withJournalDatabase(async (db) => {
+      for (const row of await liveTestJournalRows(db, IDENTITY.sessionId)) {
         deleteTestJournalRow(db, IDENTITY.sessionId, row.seq)
       }
     })
-    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({
+    expect(await loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({
       newer: null,
       damage: null,
       state: { lastSequence: 0 }

@@ -3,6 +3,7 @@
 import { ensureJournalOutcomeTables } from './journal-outcome-format'
 import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
+import { configureSqliteRollbackDurability } from '../../sqlite/rollback-durability'
 import {
   createAgentSessionRecordTablesSql,
   createJournalTablesSql,
@@ -16,7 +17,6 @@ import { ensureAgentSessionAttachmentClaimTables } from '../agent-session-attach
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
 export const JOURNAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024
-const JOURNAL_SYNCHRONOUS = 'FULL'
 
 export type OpenJournalDatabase = {
   db: Database.Database
@@ -91,15 +91,11 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
 
 function configureJournalPragmas(db: Database.Database, stored: number): void {
   if (stored === 0) {
-    // INCREMENTAL must precede WAL/table creation to permit later bounded page reclamation.
+    // INCREMENTAL must precede table creation to permit later bounded page reclamation.
     db.pragma('auto_vacuum = INCREMENTAL')
   }
-  db.pragma('journal_mode = WAL')
-  db.pragma(`busy_timeout = ${JOURNAL_BUSY_TIMEOUT_MS}`)
+  configureSqliteRollbackDurability(db, 'main', JOURNAL_BUSY_TIMEOUT_MS)
   db.pragma('foreign_keys = ON')
-  // FULL fsyncs submissions before dispatch; checkpoint_fullfsync also flushes macOS drive caches.
-  db.pragma(`synchronous = ${JOURNAL_SYNCHRONOUS}`)
-  db.pragma('checkpoint_fullfsync = ON')
   db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)
 }
 

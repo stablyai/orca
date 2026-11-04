@@ -57,8 +57,24 @@ import {
 } from '../runtime-visible-catalog'
 import { isWorkspaceNotificationMuted } from '../workspace-notification-mute'
 import { WorkerAutoReleaseActivity } from '../orchestration/worker-auto-release-activity'
+import type { SurfaceNativeRuntimeOwner } from '../../workspace-surfaces/surface-native-runtime-owner'
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktreePsDependencies {
+  private nativeSurfaceOwner(): SurfaceNativeRuntimeOwner {
+    const store = this.requireStore()
+    if (
+      !store.readWorkspaceSurfaces ||
+      !store.executeWorkspaceSurfaceJournalUnit ||
+      !store.readDeregisteredWorkspaceSurfaces
+    ) {
+      throw new Error('Native membership requires its profile surface owner')
+    }
+    return {
+      readWorkspaceSurfaces: store.readWorkspaceSurfaces.bind(store),
+      readDeregisteredWorkspaceSurfaces: store.readDeregisteredWorkspaceSurfaces.bind(store),
+      executeWorkspaceSurfaceJournalUnit: store.executeWorkspaceSurfaceJournalUnit.bind(store)
+    }
+  }
   protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
     () => this._orchestrationDb
   )
@@ -204,6 +220,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
   async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
     const { store } = await openAgentSessionRecordStoreOnce({
       stateDirectory: getProfileUserDataPath(),
+      surfaceOwner: this.nativeSurfaceOwner(),
       legacySessionTabIds: this.legacyStructuredSessionTabIds,
       hostId: LOCAL_EXECUTION_HOST_ID,
       logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
@@ -236,6 +253,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     const { stateDirectory, ...catalogDeps } = this.structuredAgentCatalogDependencies()
     await installStructuredAgentSessionHost({
       stateDirectory,
+      surfaceOwner: this.nativeSurfaceOwner(),
       legacySessionTabIds: this.legacyStructuredSessionTabIds,
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,

@@ -31,6 +31,7 @@ import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { StartupCwdFallback } from '../../shared/startup-cwd-fallback'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { PaneResumeOutcome } from '../../shared/workspace-layout/workspace-layout-published'
+import type { SurfaceRunTarget } from '../../shared/workspace-surfaces/surface-allocation'
 
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean
@@ -100,6 +101,7 @@ export type RuntimePtyController = {
     initiallyHidden?: boolean
     persistHostSessionBinding?: boolean
     expectedSourceBinding?: PtyBindingSourceExpectation
+    surfaceRunTarget?: SurfaceRunTarget
     placement?: TerminalPanePlacement
     terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }

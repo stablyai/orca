@@ -1,0 +1,463 @@
+import { randomUUID } from 'node:crypto'
+import { existsSync, linkSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { build } from 'esbuild'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from 'vitest'
+import Database from '../sqlite/sync-database'
+import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
+import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
+import { readSurfaceProfileDomain } from './surface-profile-storage'
+import { openWritableProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
+import type { SurfaceStorageMutation } from '../../shared/workspace-surfaces/surface-storage-command'
+import { ProfileStateWriteWorkerClient } from '../persistence/profile-state/profile-state-writer-worker-client'
+import { JOURNAL_DB_SCHEMA_VERSION } from '../native-chat/agent-session-journal/journal-database-schema'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+
+let directory: string
+let authority: ProfileStateSqliteAuthority
+let databasePath: string
+const journals: JournalHostDatabase[] = []
+const sessionId = 'chat-00000001'
+const workspaceId = 'folder::/workspace'
+let bundleRoot: string
+let worker: ProfileStateWriteWorkerClient | undefined
+
+beforeAll(async () => {
+  bundleRoot = mkdtempSync(join(tmpdir(), 'orca-joint-writer-bundle-'))
+  await build({
+    entryPoints: [
+      resolve('src/main/persistence/profile-state/profile-state-writer-worker-entry.ts')
+    ],
+    outfile: join(bundleRoot, 'profile-state-writer-worker-entry.js'),
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    logLevel: 'silent'
+  })
+})
+afterAll(() => rmSync(bundleRoot, { recursive: true, force: true }))
+
+beforeEach(() => {
+  directory = mkdtempSync(join(tmpdir(), 'orca-surface-joint-'))
+  databasePath = join(directory, 'profile-state.db')
+  authority = new ProfileStateSqliteAuthority(databasePath, 'joint-test')
+  authority.readInitialState()
+  authority.executeSurfaceCommand({ type: 'initialize', hostId: 'local' })
+})
+afterEach(async () => {
+  await worker?.close()
+  worker = undefined
+  await Promise.all(journals.splice(0).map((journal) => journal.close()))
+  authority.close()
+  rmSync(directory, { recursive: true, force: true })
+})
+
+it('does not create a missing journal or mutate a future journal when joint admission is refused', () => {
+  const journalPath = journalDatabasePath(directory)
+  const before = readHost()
+  expect(() => joint()).toThrow()
+  expect(existsSync(journalPath)).toBe(false)
+  const future = new Database(journalPath)
+  future.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`)
+  future.close()
+  const bytes = readFileSync(journalPath)
+  expect(() => joint()).toThrow('cannot accept surface membership')
+  expect(readFileSync(journalPath)).toEqual(bytes)
+  expect(readHost()).toEqual(before)
+})
+
+it('rejects a hard-link alias of the profile database before attaching it as a journal', () => {
+  const journalPath = journalDatabasePath(directory)
+  linkSync(databasePath, journalPath)
+  expect(() => joint()).toThrow('separate native journal')
+})
+
+async function oldIndex(visible: boolean, tabId = 'chat-tab'): Promise<void> {
+  const journal = await openTestJournalHostDatabase(directory)
+  journals.push(journal)
+  const store = await AgentSessionRecordStore.open({
+    journalDatabase: journal,
+    hostId: 'local',
+    legacySessionTabIds: []
+  })
+  if (!store.getRecord(sessionId)) {
+    await store.reserveOwner({
+      sessionId,
+      location: { executionHostId: 'local', wslDistro: null, workspaceId, workspaceKind: 'folder' },
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/disposable/codex' },
+      expectedFence: null,
+      spawnToken: 'spawn',
+      claimKeyId: 'key',
+      handoffOperationId: null,
+      probe: { outcome: 'reservation-unused' },
+      operation: {
+        callerKey: 'test',
+        operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
+        fingerprint: 'found'
+      },
+      now: Date.now()
+    })
+  }
+  await store.setSessionTabVisibility(sessionId, visible, tabId)
+  await journal.close()
+}
+
+function joint(
+  commands: readonly SurfaceStorageMutation[] = [{ hostId: 'local', type: 'initialize' }]
+) {
+  return authority.executeSurfaceJointTransaction({
+    journalPath: journalDatabasePath(directory),
+    commands
+  })
+}
+
+function readHost() {
+  const db = openWritableProfileStateDatabase(databasePath, 'joint-test').db
+  try {
+    return readSurfaceProfileDomain(db).hosts.local!
+  } finally {
+    db.close()
+  }
+}
+
+function closeRequest(commandId: string): SurfaceStorageMutation {
+  const surface = readHost().surfaces.find((row) => row.content?.kind === 'agent-session')!
+  return {
+    type: 'replace',
+    hostId: 'local',
+    request: {
+      hostId: 'local',
+      workspaceId,
+      hostTabId: surface.hostTabId,
+      expected: { occurrence: surface.occurrence, revision: surface.revision },
+      content: null,
+      callerId: 'window',
+      commandId,
+      expiresAt: Date.now() + 60_000
+    }
+  }
+}
+
+it('imports and co-writes actual native membership with matching attribution, then observes an old hide without a profile edit', async () => {
+  await oldIndex(true)
+  const [imported] = joint()
+  expect(imported.host.chatInitialization).toBe('verified')
+  expect(imported.host.surfaces).toContainEqual(
+    expect.objectContaining({
+      hostTabId: 'chat-tab',
+      content: { kind: 'agent-session', sessionId, agent: 'codex' }
+    })
+  )
+  const before = readHost().chatBaseline!
+  await oldIndex(false)
+  expect(readHost().chatBaseline).toEqual(before)
+  const [hidden] = joint()
+  expect(hidden.host.surfaces.filter((row) => row.content?.kind === 'agent-session')).toEqual([])
+  const journal = await openTestJournalHostDatabase(directory)
+  journals.push(journal)
+  expect(
+    await journal.read((read) => read.prepare('SELECT * FROM agent_session_tabs').all())
+  ).toEqual([])
+  expect(
+    await journal.read((read) =>
+      read
+        .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
+        .get(sessionId)
+    )
+  ).toBeDefined()
+  const marker = await journal.read((read) =>
+    read
+      .prepare('SELECT value FROM agent_session_store_meta WHERE key = ?')
+      .get('workspace_surface_projection:local')
+  )
+  expect(JSON.parse(String(marker?.value))).toEqual(readHost().chatBaseline)
+})
+
+it('rolls back canonical retirement, receipt, profile output and native index together when native publication fails', async () => {
+  await oldIndex(true)
+  joint()
+  const before = readHost()
+  const close = closeRequest('close-rejected')
+  const journal = await openTestJournalHostDatabase(directory)
+  journals.push(journal)
+  await journal.close()
+  const fixture = new Database(journalDatabasePath(directory))
+  fixture.exec(
+    "CREATE TRIGGER reject_native_close BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'reject native close'); END"
+  )
+  fixture.close()
+  expect(() => joint([close])).toThrow('reject native close')
+  expect(readHost()).toEqual(before)
+  const reopened = await openTestJournalHostDatabase(directory)
+  journals.push(reopened)
+  expect(
+    await reopened.read((read) => read.prepare('SELECT session_id FROM agent_session_tabs').all())
+  ).toEqual([{ session_id: sessionId }])
+  expect(
+    await reopened.read((read) =>
+      read
+        .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
+        .get(sessionId)
+    )
+  ).toBeDefined()
+  await reopened.close()
+  const repaired = new Database(journalDatabasePath(directory))
+  repaired.exec('DROP TRIGGER reject_native_close')
+  repaired.close()
+  const [closed] = joint([close])
+  expect(closed.outcome).toMatchObject({ status: 'accepted' })
+  expect(readHost().surfaces.find((row) => row.hostTabId === 'chat-tab')?.content).toBeNull()
+})
+
+it('preserves a live terminal when an older native index creates a colliding visible tab identity', async () => {
+  const leafId = randomUUID()
+  const command: SurfaceStorageMutation = {
+    type: 'layout',
+    hostId: 'local',
+    session: authority.executeSurfaceCommand({ type: 'query', hostId: 'local' }).session,
+    facts: { startingLeafIds: [], bindings: [] },
+    request: {
+      hostId: 'local',
+      callerId: 'window',
+      commandId: 'terminal',
+      expiresAt: Date.now() + 60_000,
+      targets: [{ workspaceId, hostTabId: 'chat-tab', expected: null }],
+      command: { type: 'createTerminalTab', workspace: workspaceId, tabId: 'chat-tab', leafId }
+    }
+  }
+  authority.executeSurfaceCommand(command)
+  const terminal = readHost().surfaces.find((row) => row.content?.kind === 'terminal')!
+  await oldIndex(true)
+  joint()
+  const host = readHost()
+  expect(host.surfaces).toContainEqual(terminal)
+  const chat = host.surfaces.find((row) => row.content?.kind === 'agent-session')!
+  expect(chat.hostTabId).not.toBe(terminal.hostTabId)
+  expect(chat.content).toEqual({ kind: 'agent-session', sessionId, agent: 'codex' })
+  expect(host.identityMappings).toContainEqual({
+    workspaceId,
+    kind: 'host-tab',
+    previousId: 'chat-tab',
+    currentId: chat.hostTabId
+  })
+})
+
+it('retains unreadable native references through healthy actions and respects their local presentation dismissal', async () => {
+  await oldIndex(true)
+  const unknown = { tabId: 'unreadable-tab', sessionId: 'unreadable-session' }
+  const fixture = new Database(journalDatabasePath(directory))
+  fixture
+    .prepare('INSERT INTO agent_session_records(session_id, record_json) VALUES (?, ?)')
+    .run(unknown.sessionId, '{invalid')
+  fixture
+    .prepare('INSERT INTO agent_session_tabs(tab_id, session_id, position) VALUES (?, ?, ?)')
+    .run(unknown.tabId, unknown.sessionId, 1)
+  fixture.close()
+  const session = getDefaultWorkspaceSession()
+  session.unifiedTabs = {
+    [workspaceId]: [
+      {
+        id: unknown.tabId,
+        entityId: unknown.sessionId,
+        worktreeId: workspaceId,
+        groupId: 'group',
+        contentType: 'agent-session',
+        label: 'Unavailable chat',
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 1
+      }
+    ]
+  }
+  authority.writeSerializedDomains([
+    { domain: 'workspaceSession', payload: JSON.stringify(session) }
+  ])
+  const [imported] = joint()
+  expect(imported.session.unifiedTabs?.[workspaceId]?.map((tab) => tab.entityId)).toContain(
+    unknown.sessionId
+  )
+  expect(imported.host.nativeTabs).toContainEqual(unknown)
+  const [closed] = joint([closeRequest('healthy-close-beside-unreadable')])
+  expect(closed.outcome).toMatchObject({ status: 'accepted' })
+  expect(closed.host.nativeTabs).toEqual([unknown])
+  expect(closed.session.unifiedTabs?.[workspaceId]?.map((tab) => tab.entityId)).toEqual([
+    unknown.sessionId
+  ])
+  const dismissed = structuredClone(closed.session)
+  dismissed.unifiedTabs = {}
+  authority.writeSerializedDomains([
+    { domain: 'workspaceSession', payload: JSON.stringify(dismissed) }
+  ])
+  expect(joint()[0].session.unifiedTabs?.[workspaceId] ?? []).toEqual([])
+  const saved = new Database(journalDatabasePath(directory))
+  try {
+    expect(saved.prepare('SELECT tab_id, session_id FROM agent_session_tabs').all()).toEqual([
+      { tab_id: unknown.tabId, session_id: unknown.sessionId }
+    ])
+    expect(
+      saved
+        .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
+        .get(unknown.sessionId)?.record_json
+    ).toBe('{invalid')
+  } finally {
+    saved.close()
+  }
+})
+
+it('commits native membership through the typed profile worker and preserves it after reopening', async () => {
+  await oldIndex(true)
+  authority.close()
+  const bootstrap = new ProfileStateSqliteAuthority(databasePath, 'joint-test')
+  bootstrap.readInitialState()
+  worker = new ProfileStateWriteWorkerClient(bootstrap.retireForWorker(), {
+    workerPath: join(bundleRoot, 'profile-state-writer-worker-entry.js')
+  })
+  await worker.ready
+  const [committed] = await worker.executeSurfaceJointTransaction({
+    journalPath: journalDatabasePath(directory),
+    commands: [{ type: 'initialize', hostId: 'local' }]
+  })
+  expect(committed.host.surfaces).toContainEqual(
+    expect.objectContaining({ content: { kind: 'agent-session', sessionId, agent: 'codex' } })
+  )
+  await worker.close()
+  worker = undefined
+  const reopened = new ProfileStateSqliteAuthority(databasePath, 'joint-test')
+  try {
+    reopened.readInitialState()
+    expect(reopened.executeSurfaceCommand({ type: 'query', hostId: 'local' }).host).toEqual(
+      committed.host
+    )
+  } finally {
+    reopened.close()
+  }
+})
+
+it('writes one native projection for a joint local chat close and SSH terminal create', async () => {
+  await oldIndex(true)
+  joint()
+  authority.executeSurfaceCommand({ type: 'initialize', hostId: 'ssh:remote' })
+  const remote: SurfaceStorageMutation = {
+    type: 'layout',
+    hostId: 'ssh:remote',
+    session: authority.executeSurfaceCommand({ type: 'query', hostId: 'ssh:remote' }).session,
+    facts: { startingLeafIds: [], bindings: [] },
+    request: {
+      hostId: 'ssh:remote',
+      callerId: 'mixed-owner',
+      commandId: 'remote-terminal',
+      expiresAt: Date.now() + 60_000,
+      targets: [{ workspaceId, hostTabId: 'ssh-terminal', expected: null }],
+      command: {
+        type: 'createTerminalTab',
+        workspace: workspaceId,
+        tabId: 'ssh-terminal',
+        leafId: randomUUID()
+      }
+    }
+  }
+  const close = closeRequest('mixed-owner-close')
+  authority.close()
+  const bootstrap = new ProfileStateSqliteAuthority(databasePath, 'joint-test')
+  bootstrap.readInitialState()
+  worker = new ProfileStateWriteWorkerClient(bootstrap.retireForWorker(), {
+    workerPath: join(bundleRoot, 'profile-state-writer-worker-entry.js')
+  })
+  await worker.ready
+  const results = await worker.executeSurfaceJointTransaction({
+    journalPath: journalDatabasePath(directory),
+    commands: [close, remote]
+  })
+  expect(results.map((result) => result.outcome)).toEqual([
+    expect.objectContaining({ status: 'accepted' }),
+    expect.objectContaining({ status: 'accepted' })
+  ])
+  expect(results.map((result) => result.host.nativeTabs)).toEqual([[], []])
+  const journal = new Database(journalDatabasePath(directory), { readonly: true })
+  try {
+    expect(journal.prepare('SELECT * FROM agent_session_tabs').all()).toEqual([])
+    expect(
+      journal
+        .prepare('SELECT session_id FROM agent_session_records WHERE session_id = ?')
+        .get(sessionId)
+    ).toBeDefined()
+  } finally {
+    journal.close()
+  }
+  await worker.close()
+  worker = undefined
+  const reopened = new ProfileStateSqliteAuthority(databasePath, 'joint-test')
+  try {
+    reopened.readInitialState()
+    expect(
+      reopened
+        .executeSurfaceCommand({ type: 'query', hostId: 'local' })
+        .host.surfaces.find((row) => row.hostTabId === 'chat-tab')?.content
+    ).toBeNull()
+    expect(
+      reopened.executeSurfaceCommand({ type: 'query', hostId: 'ssh:remote' }).host.surfaces
+    ).toContainEqual(
+      expect.objectContaining({
+        hostTabId: 'ssh-terminal',
+        content: expect.objectContaining({ kind: 'terminal' })
+      })
+    )
+  } finally {
+    reopened.close()
+  }
+})
+
+it('streams native effects into the common commit and rolls them back with a rejected native index', async () => {
+  await oldIndex(true)
+  joint()
+  const before = readHost()
+  const command = closeRequest('joint-unit-close')
+  authority.close()
+  const bootstrap = new ProfileStateSqliteAuthority(databasePath, 'joint-test')
+  bootstrap.readInitialState()
+  worker = new ProfileStateWriteWorkerClient(bootstrap.retireForWorker(), {
+    workerPath: join(bundleRoot, 'profile-state-writer-worker-entry.js')
+  })
+  await worker.ready
+  const fixture = new Database(journalDatabasePath(directory))
+  fixture.exec(
+    "CREATE TRIGGER reject_joint_unit BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'reject joint unit'); END"
+  )
+  fixture.close()
+  const rows = Array.from({ length: 160 }, (_, index) => ({
+    epoch: 'joint-unit',
+    seq: index + 1,
+    savedAt: Date.now(),
+    json: JSON.stringify({ text: 'x'.repeat(2048), index })
+  }))
+  const transaction = { journalPath: journalDatabasePath(directory), commands: [command] }
+  const effects = [{ kind: 'rows' as const, sessionId, rows }]
+  await expect(worker.executeSurfaceJournalUnit(transaction, effects)).rejects.toThrow(
+    'reject joint unit'
+  )
+  expect(readHost()).toEqual(before)
+  const rejected = new Database(journalDatabasePath(directory))
+  expect(
+    rejected.prepare('SELECT COUNT(*) AS n FROM journal_rows WHERE epoch = ?').get('joint-unit')?.n
+  ).toBe(0)
+  rejected.exec('DROP TRIGGER reject_joint_unit')
+  rejected.close()
+  const committed = await worker.executeSurfaceJournalUnit(transaction, effects)
+  expect(committed.values).toEqual([null])
+  expect(committed.surfaces[0].outcome).toMatchObject({ status: 'accepted' })
+  const saved = new Database(journalDatabasePath(directory))
+  try {
+    expect(
+      saved.prepare('SELECT COUNT(*) AS n FROM journal_rows WHERE epoch = ?').get('joint-unit')?.n
+    ).toBe(rows.length)
+    expect(saved.prepare('SELECT * FROM agent_session_tabs').all()).toEqual([])
+  } finally {
+    saved.close()
+  }
+})

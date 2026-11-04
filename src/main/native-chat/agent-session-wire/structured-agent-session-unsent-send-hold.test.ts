@@ -568,9 +568,9 @@ describe('/clear carries a kept card', () => {
     const turnId = turn.ok ? turn.value.clientMessageId : ''
     await eventually(async () =>
       expect(
-        (await rig.host.journalSnapshot(replacementId)).submissions.find(
-          (entry) => entry.clientMessageId === turnId
-        )?.handedOverAt
+        await (
+          await rig.host.journalSnapshot(replacementId)
+        ).submissions.find((entry) => entry.clientMessageId === turnId)?.handedOverAt
       ).toBeDefined()
     )
     await rig.host.settleLateDispatch({
@@ -712,7 +712,7 @@ async function peekSubmission(id: string) {
   })
   const peeked = await openAgentSessionJournal({
     identity: journalIdentityFor(record, params),
-    database: openTestJournalHostDatabase(rig.root)
+    database: await openTestJournalHostDatabase(rig.root)
   })
   try {
     return peeked.submission(id)

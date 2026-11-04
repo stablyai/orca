@@ -1,6 +1,4 @@
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import { restoreJournal } from '../agent-session-journal/journal-open'
-import { failLoadOnUnloadableJournal } from '../agent-session-journal/journal-open-failure'
 import { renderJournalState } from '../agent-session-journal/journal-reducer'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type {
@@ -268,16 +266,15 @@ export async function applyStructuredRewindRecovery(
   ): JournalOperationReceipt {
     let staged: JournalOperationReceipt
     return {
-      write: (db, row) => {
+      write: async (db, row) => {
         // Every path writes its resulting history before this receipt: context and fork rows in this
         // transaction, normal replacement already committed. The cancel comes from that saved result.
-        const load = restoreJournal(db, sessionId)!
-        failLoadOnUnloadableJournal(sessionId, load)
-        const cancel = latestUsageLimitContinueIdentity(renderJournalState(load.state))
+        const result = db.preparedState ? renderJournalState(db.preparedState) : journal.snapshot()
+        const cancel = latestUsageLimitContinueIdentity(result)
         staged =
           receipt?.(completed, fence, cursor, cancel) ??
           store.conversationReceipts.rewind(sessionId, fence, completed, cursor, cancel)
-        staged.write(db, row)
+        await staged.write(db, row)
       },
       committed: () => staged.committed()
     }

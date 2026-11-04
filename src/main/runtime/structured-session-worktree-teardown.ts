@@ -162,6 +162,7 @@ export async function closeStructuredSessionsForWorktree(
     runtime?: StructuredWorktreeSweepRuntime
     /** Restore tabs after unproven close only if removal can refuse; force/folder paths discard the workspace regardless. */
     mayRefuse?: boolean
+    deferSurfaceRetirement?: boolean
   } = {}
 ): Promise<void> {
   const { runtime } = options
@@ -175,7 +176,8 @@ export async function closeStructuredSessionsForWorktree(
     const surface = host ? captureStructuredSessionSurface(host, session.sessionId, runtime) : null
     const outcome = await closeStructuredAgentSessionChild(session.sessionId, {
       ...(runtime ? { runtime } : {}),
-      surface
+      surface,
+      deferSurfaceRetirement: options.deferSurfaceRetirement
     })
     if (outcome.stopped) {
       progress.closed += 1
@@ -183,7 +185,7 @@ export async function closeStructuredSessionsForWorktree(
       // Read post-attempt state; a thrown close may never have observed it.
       const status = observeStructuredSession(session.sessionId).status
       if (status === 'exited' || structuredSessionCloseSettled(session.sessionId)) {
-        if (host && surface) {
+        if (host && surface && !options.deferSurfaceRetirement) {
           await retireCapturedStructuredSessionSurface(host, session.sessionId, surface, runtime)
         }
         progress.closed += 1

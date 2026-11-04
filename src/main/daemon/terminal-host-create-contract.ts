@@ -1,3 +1,4 @@
+import type { SurfaceExecutorAdmission } from '../../shared/workspace-surfaces/surface-executor-contract'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
@@ -11,6 +12,8 @@ import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type CreateOrAttachOptions = {
+  surfaceExecution?: SurfaceExecutorAdmission
+  expectedIncarnationId?: PtyIncarnationId
   sessionId: string
   cols: number
   rows: number

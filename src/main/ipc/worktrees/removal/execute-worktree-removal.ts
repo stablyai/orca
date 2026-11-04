@@ -1,4 +1,6 @@
 import type { Repo } from '../../../../shared/repo-types'
+import type { CapturedOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal'
+import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal-scopes'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'
@@ -49,11 +51,17 @@ export async function executeWorktreeRemoval(
   repo: Repo,
   repoId: string,
   worktreePath: string,
-  removalHostId: ExecutionHostId
+  removalHostId: ExecutionHostId,
+  removeOwned: CapturedOwnerRemoval = captureWorktreeOwnerRemoval(
+    context.store,
+    args.worktreeId,
+    removalHostId,
+    () => context.runtime.openAgentSessionRecordStore()
+  )
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
   if (isFolderRepo(repo)) {
-    return removeFolderWorkspace(context, args, repo, repoId, removalHostId)
+    return removeFolderWorkspace(context, args, repo, repoId, removalHostId, removeOwned)
   }
   assertRemovalHostMatchesRepoRow(repo, repoId, removalHostId)
   if (repo.connectionId) {
@@ -90,7 +98,7 @@ export async function executeWorktreeRemoval(
       worktreePath,
       registeredWorktrees,
       localWorktreeGitOptions,
-      () => retryFailedLocalWorktreeRemoval(context, args, removalHostId)
+      () => retryFailedLocalWorktreeRemoval(context, args, removalHostId, removeOwned)
     )
   ) {
     return { removing: true }
@@ -106,7 +114,8 @@ export async function executeWorktreeRemoval(
       registeredWorktrees,
       removedMeta,
       removedPushTarget,
-      localWorktreeGitOptions
+      localWorktreeGitOptions,
+      removeOwned
     )
   }
   const canonicalWorktreePath = registeredWorktree.path
@@ -151,11 +160,13 @@ export async function executeWorktreeRemoval(
       removedPushTarget
     )
     runtime.clearOptimisticReconcileToken(args.worktreeId)
-    removeWorktreeMetadataAndTransientState(
-      { store, runtime },
-      args.worktreeId,
-      removalHostId,
-      args.snapshotPruneBatchId
+    await removeOwned(() =>
+      removeWorktreeMetadataAndTransientState(
+        { store, runtime },
+        args.worktreeId,
+        removalHostId,
+        args.snapshotPruneBatchId
+      )
     )
     invalidateAuthorizedRootsCache()
     notifyWorktreesChanged(mainWindow, repoId)
@@ -199,7 +210,8 @@ export async function executeWorktreeRemoval(
     removedPushTarget,
     localWorktreeGitOptions,
     hasLocalWorktreeGitOptions,
-    deleteBranch
+    deleteBranch,
+    removeOwned
   )
   return archiveHookOverride ? { ...result, archiveHookOverride } : result
 }

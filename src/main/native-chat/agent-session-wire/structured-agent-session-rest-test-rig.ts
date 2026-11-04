@@ -172,6 +172,7 @@ export async function createRestTestRig(
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } }))
   }
   const starts = structuredAgentSessionHeldStarts(() => rig.host)
+  const journalDatabase = await openTestJournalHostDatabase(root)
   const hostFor = (overrides: Partial<StructuredAgentSessionHostDeps>) =>
     new StructuredAgentSessionHost({
       agents: claudeAndCodexAgents(),
@@ -184,7 +185,7 @@ export async function createRestTestRig(
         answerPrompt: async ({ commit }) => commit(),
         setOption: async () => undefined
       }),
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase,
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       probeOwner: async () => ({ outcome: 'pid-absent' }),

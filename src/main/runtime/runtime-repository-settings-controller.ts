@@ -1,3 +1,5 @@
+import { captureRepositoryOwnerRemoval } from './workspaces/canonical-owner-removal-scopes'
+import type { OpenNativeOwnerRemovalStore } from './workspaces/canonical-owner-removal'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { commitProvenRepoKindChange } from '../workspaces/catalog/folder-repo-git-conversion'
 import type { Repo } from '../../shared/repo-types'
@@ -12,6 +14,7 @@ import { teardownStops } from './owned-session-teardown-policy'
 const PROJECT_TERMINAL_STOP_BUDGET_MS = 10_000
 
 type RuntimeRepositorySettingsDependencies = {
+  openNativeOwnerStore?: OpenNativeOwnerRemovalStore
   getStore: () => RuntimeStore | null
   resolveRepo: (selector: RuntimeRepoSelector) => Promise<Repo>
   forgetTerminalTopology: (repoId: string) => void
@@ -149,6 +152,12 @@ export class RuntimeRepositorySettingsController {
     const repo = typeof target === 'string' ? await this.deps.resolveRepo(target) : target
     assertWslMoveRepoWritable(store, repo)
     // Host owns all shells; clients may stop only loaded workspaces or none. Bound teardown inside repo.rm timeout.
+    const removeOwned = captureRepositoryOwnerRemoval(
+      store,
+      repo,
+      this.deps.openNativeOwnerStore,
+      () => assertWslMoveRepoWritable(store, repo)
+    )
     const deadline = Date.now() + PROJECT_TERMINAL_STOP_BUDGET_MS
     const stopProjectTerminals = async (closeStructuredSessions: boolean): Promise<void> => {
       await this.deps
@@ -160,7 +169,7 @@ export class RuntimeRepositorySettingsController {
     await stopProjectTerminals(false)
     // Recheck WSL fence after stop awaits.
     assertWslMoveRepoWritable(store, repo)
-    store.removeProjectForHost(repo)
+    await removeOwned(() => store.removeProjectForHost!(repo))
     // Sweep again for terminals spawned during stop. Retire chats only after the final WSL fence because that step is irreversible.
     await stopProjectTerminals(teardownStops('project-removal', 'structured-chat'))
     this.deps.forgetTerminalTopology(repo.id)

@@ -4,7 +4,6 @@ import type {
 } from '../../../shared/agent-session/journal/agent-journal-creation-facts'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readJournalSessionEpoch } from '../agent-session-journal/journal-row-table'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -30,12 +29,21 @@ export function structuredAgentStartJournal(
   conversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession>
 ) {
   /** Record only in this transcript; opening at rest neither follows clears nor starts its agent. */
-  const captureAgentStartDestination = (sessionId: string): AgentStartDestination | null => {
-    const record = deps().store.getConversation(sessionId)
-    const epoch = readJournalSessionEpoch(deps().journalDatabase.db, sessionId)
-    return record && epoch
-      ? { sessionId, epoch, contextId: record.providerContextBoundary?.operationId ?? null }
-      : null
+  const captureAgentStartDestination = (
+    sessionId: string
+  ): Promise<AgentStartDestination | null> => {
+    const host = deps()
+    return host.journalDatabase.transaction(async (plan) => {
+      const record = host.store.getConversation(sessionId)
+      const epoch = (
+        await plan.read
+          .prepare('SELECT epoch FROM journal_sessions WHERE session_id = ?')
+          .get(sessionId)
+      )?.epoch
+      return record && typeof epoch === 'string'
+        ? { sessionId, epoch, contextId: record.providerContextBoundary?.operationId ?? null }
+        : null
+    })
   }
 
   const appendAgentStart = async (
@@ -44,14 +52,14 @@ export function structuredAgentStartJournal(
     observedAt: number
   ): Promise<void> => {
     const { sessionId } = destination
-    const stillSameContext = () => {
-      const current = captureAgentStartDestination(sessionId)
-      return current?.epoch === destination.epoch && current?.contextId === destination.contextId
-    }
-    if (!stillSameContext()) {
+    const currentRecord = () => deps().store.getConversation(sessionId)
+    if ((currentRecord()?.providerContextBoundary?.operationId ?? null) !== destination.contextId) {
       return
     }
     const { journal } = await conversation(sessionId)
+    const stillSameContext = () =>
+      journal.epoch === destination.epoch &&
+      (currentRecord()?.providerContextBoundary?.operationId ?? null) === destination.contextId
     const identity = {
       provider: 'orca' as const,
       clientMessageId: agentStartClientMessageId(body)

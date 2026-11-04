@@ -16,11 +16,13 @@ export type MainSessionTabRows = Omit<
 >
 
 /** Merge window facts into terminal/edit rows; keep window browser/chat/diff/preview rows whole while listed, including diff-draft dirty state. */
-function isMainRow(row: Row): boolean {
+function isMainRow(row: Row, surfaceOnly = false): boolean {
   return (
     row.type === 'terminal' ||
-    (row.type === 'file' && row.mode !== 'diff') ||
-    (row.type === 'markdown' && row.mode === 'edit')
+    (surfaceOnly
+      ? row.type === 'agent-session'
+      : (row.type === 'file' && row.mode !== 'diff') ||
+        (row.type === 'markdown' && row.mode === 'edit'))
   )
 }
 
@@ -31,6 +33,7 @@ function isNamed(row: Extract<Row, { type: 'terminal' }>): boolean {
 
 type MergeRules = {
   exited: (ptyId: string) => boolean
+  surfaceOnly?: boolean
   /** Whether a terminal runs now; given, a running window terminal outranks a binding that runs nowhere. */
   live?: (ptyId: string) => boolean
   /** Keeps every window row main does not list, terminals too, where they stood in the window. */
@@ -66,7 +69,9 @@ function withWindowFacts(row: Row, windowRow: Row | undefined, rules: MergeRules
       ...(!isNamed(row) && !isNamed(windowRow) ? { title: windowRow.title } : {}),
       ...(windowRow.terminalTheme ? { terminalTheme: windowRow.terminalTheme } : {}),
       ...(windowRow.agentStatus !== undefined ? { agentStatus: windowRow.agentStatus } : {}),
-      ...(keepsWindowPtyId(row.ptyId, windowRow.ptyId, rules) ? { ptyId: windowRow.ptyId } : {}),
+      ...(!rules.surfaceOnly && keepsWindowPtyId(row.ptyId, windowRow.ptyId, rules)
+        ? { ptyId: windowRow.ptyId }
+        : {}),
       ...(windowRow.launchDraft !== undefined ? { launchDraft: windowRow.launchDraft } : {}),
       ...(windowRow.launchDraftCreatedAt !== undefined
         ? { launchDraftCreatedAt: windowRow.launchDraftCreatedAt }
@@ -122,11 +127,11 @@ export function withMainSessionTabRows(
   const windowRows = new Map(published.tabs.map((row) => [row.id, row]))
   const projectedIds = new Set(projected.tabs.map((row) => row.id))
   const windowOnly = published.tabs.filter(
-    (row) => !projectedIds.has(row.id) && (rules.keepUnlisted || !isMainRow(row))
+    (row) => !projectedIds.has(row.id) && (rules.keepUnlisted || !isMainRow(row, rules.surfaceOnly))
   )
   // A main-held row is main's; a browser or chat row stays the window's while both list it.
   const rows = projected.tabs.map((row) =>
-    isMainRow(row)
+    isMainRow(row, rules.surfaceOnly)
       ? withWindowFacts(row, windowRows.get(row.id), rules)
       : (windowRows.get(row.id) ?? row)
   )
@@ -206,4 +211,57 @@ export function withMainSessionTabRows(
       row.isActive === (row.id === activeId) ? row : { ...row, isActive: row.id === activeId }
     )
   }
+}
+
+/** Canonical content membership; the publishing device retains other kinds, placement and selection. */
+export function withCanonicalSessionSurfaces(
+  published: RuntimeMobileSessionTabsSnapshot,
+  projected: MainSessionTabRows,
+  exited: (ptyId: string) => boolean
+): RuntimeMobileSessionTabsSnapshot {
+  const surface = (row: Row): boolean => row.type === 'terminal' || row.type === 'agent-session'
+  const canonical = new Map(projected.tabs.filter(surface).map((row) => [row.id, row]))
+  const publishedIds = new Set(published.tabs.map((row) => row.id))
+  const tabs = [
+    ...published.tabs.flatMap((row) => {
+      if (!surface(row)) {
+        return [row]
+      }
+      const current = canonical.get(row.id)
+      return current ? [current] : []
+    }),
+    ...projected.tabs.filter((row) => surface(row) && !publishedIds.has(row.id))
+  ]
+  const valid = new Set(tabs.map(orderIdOf))
+  const groups = (published.tabGroups ?? []).map((group) => ({
+    ...group,
+    tabOrder: group.tabOrder.filter((id) => valid.has(id))
+  }))
+  const placed = new Set(groups.flatMap((group) => group.tabOrder))
+  for (const source of projected.tabGroups ?? []) {
+    const added = source.tabOrder.filter((id) => valid.has(id) && !placed.has(id))
+    if (!added.length) {
+      continue
+    }
+    const group = groups.find((entry) => entry.id === source.id)
+    if (group) {
+      group.tabOrder.push(...added)
+    } else {
+      groups.push({ ...source, tabOrder: added })
+    }
+    for (const id of added) {
+      placed.add(id)
+    }
+  }
+  return withMainSessionTabRows(
+    published,
+    {
+      ...projected,
+      tabs,
+      tabGroups: groups,
+      tabGroupLayout: published.tabGroupLayout
+    },
+    exited,
+    { surfaceOnly: true }
+  )
 }

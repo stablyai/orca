@@ -107,16 +107,12 @@ export async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<Ag
       }) as JournalRow
   )
   await journal.close()
-  const opened = openTestJournalHostDatabase(root)
-  try {
-    opened.db.exec('BEGIN IMMEDIATE')
+  const opened = await openTestJournalHostDatabase(root)
+  await opened.transaction((plan) => {
     for (const row of full) {
-      insertTestJournalRow(opened.db, IDENTITY.sessionId, row)
+      insertTestJournalRow(plan, IDENTITY.sessionId, row)
     }
-    opened.db.exec('COMMIT')
-  } finally {
-    await opened.close()
-  }
+  })
   return journals.open({ identity: IDENTITY, stateDirectory: root, now: tick })
 }
 

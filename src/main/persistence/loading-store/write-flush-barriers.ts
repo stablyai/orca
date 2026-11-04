@@ -22,6 +22,7 @@ type WriteFlushBarrierOperationsRuntime = Pick<
   | 'pendingProfileFlushes'
   | 'pendingProfileMaintenance'
   | 'profileMaintenancePending'
+  | 'profilePersistenceFinalizedListeners'
   | 'profileStateAuthority'
   | 'quitFlushPromise'
   | 'quitFlushStarted'
@@ -87,6 +88,12 @@ export class WriteFlushBarrierOperations {
       return runtime.quitFlushPromise
     }
     runtime.quitFlushStarted = true
+    for (const listener of runtime.profilePersistenceFinalizedListeners) {
+      try {
+        listener()
+      } catch {}
+    }
+    runtime.profilePersistenceFinalizedListeners.clear()
     runtime.quitFlushPromise = Promise.resolve(runtime.pendingProfileMaintenance)
       .catch((error: unknown) => {
         // Failed maintenance may re-admit unchanged storage before this final checkpoint.

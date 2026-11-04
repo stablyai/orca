@@ -1,3 +1,8 @@
+import { onTestFinished } from 'vitest'
+import {
+  observeNativeJournalSql,
+  failNextNativeJournalStatement
+} from '../../../../native-chat/agent-session-journal/journal-native-test-instrumentation'
 import {
   expectWorkerStartPopulation,
   expectWorkerStartSourcePlans
@@ -179,18 +184,30 @@ it.each([10, 100])(
             )
         )
       )
-    const connection = openTestJournalHostDatabase(current.root).db
-    const epochReads = vi.spyOn(
-      connection.prepare('SELECT epoch FROM journal_sessions WHERE session_id = ?'),
-      'get'
+    const connection = await openTestJournalHostDatabase(current.root)
+    const epochReads = vi.fn()
+    const inserts = vi.fn()
+    const journalQueries = vi.fn<(sql: string) => void>()
+    onTestFinished(
+      observeNativeJournalSql(connection, (entry) => {
+        if (entry.method === 'prepare') {
+          journalQueries(entry.sql)
+        }
+        if (
+          entry.method === 'get' &&
+          entry.sql === 'SELECT epoch FROM journal_sessions WHERE session_id = ?'
+        ) {
+          epochReads()
+        }
+        if (
+          entry.method === 'run' &&
+          entry.sql ===
+            'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
+        ) {
+          inserts()
+        }
+      })
     )
-    const inserts = vi.spyOn(
-      connection.prepare(
-        'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
-      ),
-      'run'
-    )
-    const journalQueries = vi.spyOn(connection, 'prepare')
     const serialized = vi.spyOn(journalSchema, 'serializeJournalRow')
     const activeSource = vi.spyOn(db, 'getActiveDispatchForTerminal')
     const recordedSource = vi.spyOn(db, 'getDispatchContextById')
@@ -223,11 +240,15 @@ it.each([10, 100])(
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const before = journal.snapshot()
     snapshot.mockClear()
+    const captures = vi.spyOn(current.host, 'captureAgentStartDestination')
     const fail = prepareWorkerStartCard(runtime, admitted.caller)
+    await captures.mock.results[0]!.value
     expect(epochReads).toHaveBeenCalledTimes(1)
-    inserts.mockImplementationOnce(() => {
-      throw new Error('fixture insert failed')
-    })
+    await failNextNativeJournalStatement(
+      connection,
+      'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)',
+      'fixture insert failed'
+    )
     fail(facts[0])
     await eventually(() => expect(append).toHaveBeenCalledTimes(1))
     await Promise.allSettled(append.mock.results.map((result) => result.value))
@@ -247,9 +268,11 @@ it.each([10, 100])(
     expect(tabVisits).toBe(9 * count + 1)
     expect(journal.snapshot()).toEqual(before)
     expect(
-      connection
-        .prepare('SELECT COUNT(*) AS count FROM journal_rows WHERE session_id = ?')
-        .get(COORD)?.count
+      (
+        await connection.read((read) =>
+          read.prepare('SELECT COUNT(*) AS count FROM journal_rows WHERE session_id = ?').get(COORD)
+        )
+      )?.count
     ).toBe(before.cursor.sequence)
     for (const counter of [
       epochReads,
@@ -272,6 +295,7 @@ it.each([10, 100])(
     snapshotSources.length = 0
     tabVisits = dispatchVisits = taskVisits = workerVisits = 0
     const publishers = facts.map(() => prepareWorkerStartCard(runtime, admitted.caller))
+    await Promise.all(captures.mock.results.map((result) => result.value))
     expect(epochReads).toHaveBeenCalledTimes(count)
     facts.forEach((fact, index) => publishers[index](fact))
     await eventually(() => expect(append).toHaveBeenCalledTimes(count))
@@ -309,7 +333,7 @@ it.each([10, 100])(
     ).toEqual([])
     expect(warn).not.toHaveBeenCalled()
     expectWorkerStartSourcePlans(sourceQueries.mock.calls, prepareSource)
-    expectWorkerStartPopulation({ journal, facts, count, connection, before })
+    await expectWorkerStartPopulation({ journal, facts, count, connection, before })
     console.info('start population/operations', {
       count,
       sourceRecords: 10 * count,

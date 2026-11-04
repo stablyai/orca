@@ -81,9 +81,9 @@ export const PROJECT_RUNTIME_METHODS = [
     name: 'projectHostSetup.delete',
     permission: 'workspace',
     params: ProjectHostSetupDelete,
-    handler: (params, context) => ({
+    handler: async (params, context) => ({
       result: projectRepoResultVisibilityForClient(
-        context.runtime.deleteProjectHostSetup(params),
+        await context.runtime.deleteProjectHostSetup(params),
         context
       )
     })

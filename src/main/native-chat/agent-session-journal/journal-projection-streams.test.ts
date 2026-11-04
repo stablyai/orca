@@ -1,3 +1,4 @@
+import { restoreJournalAsync } from './journal-async-open'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -17,7 +18,7 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import { restoreJournal } from './journal-open'
+import { JournalWriteProjection } from './journal-write-projection'
 import { applyJournalRow, renderJournalState } from './journal-reducer'
 import {
   expectProjectionMatches,
@@ -39,9 +40,11 @@ const journals = createTrackedJournalOpener()
 const disposals: (() => void)[] = []
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-projection-streams-'))
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
+  JournalWriteProjection.verifyEachCommit = true
 })
 afterEach(async () => {
+  JournalWriteProjection.verifyEachCommit = false
   for (const dispose of disposals.splice(0)) {
     dispose()
   }
@@ -80,7 +83,7 @@ it.each(['claude', 'codex'] as const)(
         agent === 'codex' ? codexProviderHandle('thread-1') : claudeProviderHandle('claude-1', null)
     }
     let journal = await journals.open({ identity, stateDirectory: root, now: () => at })
-    const expected = restoreJournal(database.db, sessionId)!.state
+    const expected = (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state
     let commits = 0
     let planRevisions = 0
     journal.observeCommits((rows) => {
@@ -97,14 +100,16 @@ it.each(['claude', 'codex'] as const)(
           row.body.kind === 'status' &&
           row.body.providerFrame?.kind === 'notification:turn/plan/updated'
       ).length
-      const saved = restoreJournal(database.db, sessionId)?.state
+    })
+    const checkSaved = async () => {
+      const saved = (await database.read((read) => restoreJournalAsync(read, sessionId)))?.state
       expect(saved?.lastSequence).toBe(journal.cursor().sequence)
       if (!saved) {
         throw new Error('missing saved chat')
       }
-      expectProjectionMatches(database, expected)
+      await expectProjectionMatches(database, expected)
       expect(renderJournalState(saved)).toStrictEqual(journal.snapshot())
-    })
+    }
     const failed = vi.fn()
     const sink = createDeferredStructuredAgentSessionEventSink({
       sessionId,
@@ -128,6 +133,7 @@ it.each(['claude', 'codex'] as const)(
         run()
       }
       expect(await sink.drained()).toEqual({ ok: true })
+      await checkSaved()
     }
     if (agent === 'claude') {
       const translator = createClaudeJournalTranslator({ sink: sink.sink, schedule })
@@ -220,22 +226,30 @@ it.each(['claude', 'codex'] as const)(
     expect(journal.stopMarks.latest()?.settle).toBe(settle)
     journal.stopMarks.settled(settle)
     expect(
-      restoreJournal(database.db, sessionId)?.state.appliedSettlementIds.has('stop-settlement')
+      (
+        await database.read((read) => restoreJournalAsync(read, sessionId))
+      )?.state.appliedSettlementIds.has('stop-settlement')
     ).toBe(true)
-    const count = () =>
-      Number(database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get()?.n)
-    const before = count()
+    const count = async () =>
+      Number(
+        (
+          await database.read((read) =>
+            read.prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get()
+          )
+        )?.n
+      )
+    const before = await count()
     const sweeper = new JournalOutcomeSweeper({ database: () => database, delay: async () => {} })
     disposals.push(() => sweeper.stop())
     await sweeper.pass()
-    expect(count()).toBeLessThan(before)
-    expectProjectionMatches(database, expected)
+    expect(await count()).toBeLessThan(before)
+    await expectProjectionMatches(database, expected)
     const cleaned = journal.snapshot()
     await journals.closeAll()
-    database = openTestJournalHostDatabase(root)
+    database = await openTestJournalHostDatabase(root)
     journal = await journals.open({ identity, stateDirectory: root, now: () => at })
     expect(journal.snapshot()).toEqual(cleaned)
-    expectProjectionMatches(database, expected)
+    await expectProjectionMatches(database, expected)
     await journal.replaceEpochItems('handle_forked', 1, [
       {
         identity: stoppedTurn,
@@ -244,14 +258,24 @@ it.each(['claude', 'codex'] as const)(
       }
     ])
     const rewound = journal.snapshot()
-    const saved = encodeJournalState(restoreJournal(database.db, sessionId)!.state)
+    const saved = encodeJournalState(
+      (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state
+    )
     await sweeper.pass()
-    expect(encodeJournalState(restoreJournal(database.db, sessionId)!.state)).toEqual(saved)
     expect(
-      database.db
-        .prepare(`SELECT COUNT(*) AS n FROM journal_outcomes WHERE generation NOT IN
+      encodeJournalState(
+        (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state
+      )
+    ).toEqual(saved)
+    expect(
+      (
+        await database.read((read) =>
+          read
+            .prepare(`SELECT COUNT(*) AS n FROM journal_outcomes WHERE generation NOT IN
       (SELECT generation FROM journal_outcome_epochs)`)
-        .get()?.n
+            .get()
+        )
+      )?.n
     ).toBe(0)
     await journals.closeAll()
     expect(
@@ -282,11 +306,11 @@ it.each(['written', 'over a prefix'] as const)(
     const rig = projectionWriter(
       database,
       path === 'written'
-        ? seedOutcomeRows(database, [projectionEpochRow, first])
-        : seedProjectionRows(database, [projectionEpochRow, first])
+        ? await seedOutcomeRows(database, [projectionEpochRow, first])
+        : await seedProjectionRows(database, [projectionEpochRow, first])
     )
     await rig.writer.enqueue((seq, ts) => ({ ...batch, seq, ts }))
     expect([...rig.state().items.keys()]).toEqual(['y', 'x'])
-    expectProjectionMatches(database, rig.state())
+    await expectProjectionMatches(database, rig.state())
   }
 )

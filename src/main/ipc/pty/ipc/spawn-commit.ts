@@ -81,6 +81,9 @@ function ipcSpawnPaneBinding(ctx: PtyIpcSpawnState): PtySpawnPaneBinding | undef
       tabId: args.tabId,
       leafId: ctx.validatedLeafId,
       ptyId: ctx.result.id,
+      ...(ctx.canonicalRun?.bindingTarget
+        ? { surfaceRunTarget: ctx.canonicalRun.bindingTarget }
+        : {}),
       ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
       ...(startupCwd ? { startupCwd } : {}),
       ...(placement ? { placement } : {}),

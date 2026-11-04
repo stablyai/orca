@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../agent-session-journal/journal-drained-fixture-test-support'
 import { writeFile, rm } from 'node:fs/promises'
 vi.mock(
   '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
@@ -186,10 +187,12 @@ it.each(['adopted', 'blank'] as const)(
   async (nextSource) => {
     const first = { clientMessageId: hostTestOperationId(), body: hostTestMessage('first attempt') }
     const adopted = await adoptedParams('old imported history')
-    const db = openTestJournalHostDatabase(fixture.rig.root).db
-    db.exec(
-      `CREATE TRIGGER refuse_first BEFORE INSERT ON journal_outcomes WHEN NEW.field = 'submissions' BEGIN SELECT RAISE(ABORT, 'simulated first write failure'); END`
-    )
+    const database = await openTestJournalHostDatabase(fixture.rig.root)
+    await mutateTestJournalFixture(database, (db) => {
+      db.exec(
+        `CREATE TRIGGER refuse_first BEFORE INSERT ON journal_outcomes WHEN NEW.field = 'submissions' BEGIN SELECT RAISE(ABORT, 'simulated first write failure'); END`
+      )
+    })
     expect(
       await fixture.rig.host.create(CALLER, createTestParams(first, adopted), {
         firstMessage: first
@@ -197,7 +200,9 @@ it.each(['adopted', 'blank'] as const)(
     ).toMatchObject({ ok: false })
     expect(fixture.rig.store.getRecord(SESSION)).toBeNull()
     expect(fixture.rig.store.listOperationRows()).toEqual([])
-    db.exec('DROP TRIGGER refuse_first')
+    await mutateTestJournalFixture(database, (db) => {
+      db.exec('DROP TRIGGER refuse_first')
+    })
     const next = { clientMessageId: hostTestOperationId(), body: hostTestMessage('next attempt') }
     const nextParams =
       nextSource === 'adopted'

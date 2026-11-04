@@ -91,7 +91,7 @@ beforeEach(async () => {
       setOption: vi.fn(async () => undefined),
       open: async () => ({ reportedOptions: { model: '' } })
     },
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     assertNoTerminalWriter,
@@ -126,8 +126,9 @@ async function rejection(id: string, sessionId = SESSION) {
   await vi.waitFor(
     async () =>
       expect(
-        (await host.journalSnapshot(sessionId)).submissions.find((s) => s.clientMessageId === id)
-          ?.dispatchState
+        await (
+          await host.journalSnapshot(sessionId)
+        ).submissions.find((s) => s.clientMessageId === id)?.dispatchState
       ).toBe('rejected'),
     { timeout: 10_000 }
   )

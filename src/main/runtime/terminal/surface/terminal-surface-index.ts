@@ -65,6 +65,7 @@ export class TerminalSurfaceIndex {
       reads: () => WorkspaceLayoutReads | null
       /** Every session partition the Store holds. */
       hostIds: () => readonly ExecutionHostId[]
+      ownsHost?: (hostId: ExecutionHostId) => boolean
       /** The partition that owns a workspace key; null when none does. */
       homeHostId: (key: string) => ExecutionHostId | null
       generatedTitlesEnabled: () => boolean
@@ -96,7 +97,7 @@ export class TerminalSurfaceIndex {
   /** Main's surfaces now: re-projected only when a partition the projection holds was rewritten. */
   surfaces(): MainTerminalSurfaces {
     const reads = this.deps.reads()
-    const hostIds = this.deps.hostIds()
+    const hostIds = this.deps.hostIds().filter((id) => this.deps.ownsHost?.(id) ?? true)
     const loaded = hostIds.map((hostId) => reads?.readPartition(hostId) ?? null)
     const samePartitions =
       loaded.length === this.projectedFrom.length &&
@@ -132,7 +133,8 @@ export class TerminalSurfaceIndex {
     const json = JSON.stringify({
       tabs: next.tabs,
       leaves: next.leaves,
-      paneFacts: [...next.paneFacts]
+      paneFacts: [...next.paneFacts],
+      worktreeIds: [...next.worktreeIds]
     })
     // The same object when nothing changed, so a write that moves no pane installs nothing.
     if (!this.current || json !== this.currentJson) {

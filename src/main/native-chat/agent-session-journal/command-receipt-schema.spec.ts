@@ -47,12 +47,26 @@ export function registerCommandReceiptSchemaTests(): void {
   }
 
   describe('command receipt schema at writable open', () => {
-    it('creates the operation/caller primary key and session index on a fresh host database', () => {
-      const database = openTestJournalHostDatabase(root)
-      expect(hasReceiptTable(database.db)).toBe(true)
-      expect(journalPragmaNumber(database.db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
+    it('creates the operation/caller primary key and session index on a fresh host database', async () => {
+      const database = await openTestJournalHostDatabase(root)
       expect(
-        database.db.prepare('PRAGMA table_info(agent_session_command_receipts)').all()
+        await database.read(async (read) =>
+          Boolean(
+            await read
+              .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+              .get('agent_session_command_receipts')
+          )
+        )
+      ).toBe(true)
+      expect(
+        await database.read(async (read) =>
+          Number((await read.prepare('PRAGMA user_version').get())?.user_version)
+        )
+      ).toBe(JOURNAL_DB_SCHEMA_VERSION)
+      expect(
+        await database.read((read) =>
+          read.prepare('PRAGMA table_info(agent_session_command_receipts)').all()
+        )
       ).toEqual([
         expect.objectContaining({ name: 'operation_id', pk: 1 }),
         expect.objectContaining({ name: 'session_id', pk: 0 }),
@@ -64,7 +78,9 @@ export function registerCommandReceiptSchemaTests(): void {
         expect.objectContaining({ name: 'rejection_json', pk: 0 }),
         expect.objectContaining({ name: 'accepted_at', pk: 0 })
       ])
-      const indexes = database.db.prepare('PRAGMA index_list(agent_session_command_receipts)').all()
+      const indexes = await database.read((read) =>
+        read.prepare('PRAGMA index_list(agent_session_command_receipts)').all()
+      )
       expect(indexes).toHaveLength(2)
       expect(indexes).toEqual(
         expect.arrayContaining([
@@ -76,10 +92,14 @@ export function registerCommandReceiptSchemaTests(): void {
         ])
       )
       expect(
-        database.db.prepare('PRAGMA index_info(agent_session_command_receipts_session)').all()
+        await database.read((read) =>
+          read.prepare('PRAGMA index_info(agent_session_command_receipts_session)').all()
+        )
       ).toEqual([expect.objectContaining({ name: 'session_id' })])
       expect(
-        database.db.prepare('PRAGMA foreign_key_list(agent_session_command_receipts)').all()
+        await database.read((read) =>
+          read.prepare('PRAGMA foreign_key_list(agent_session_command_receipts)').all()
+        )
       ).toEqual([
         expect.objectContaining({
           table: 'agent_session_records',
@@ -141,13 +161,15 @@ export function registerCommandReceiptSchemaTests(): void {
         const write = () => insertCommandReceiptIfAbsent(db, scope, receipt)
         expect(write).toThrow(AgentSessionJournalError)
         expect(write).toThrow(expect.objectContaining({ code: 'journal_read_only' }))
-        expect(() => buildCommandReceiptTransaction(scope, receipt).write(db)).toThrow(
-          expect.objectContaining({ code: 'journal_read_only' })
-        )
       } finally {
         db.close()
       }
 
+      const host = await openTestJournalHostDatabase(root)
+      await expect(
+        host.transaction((plan) => buildCommandReceiptTransaction(scope, receipt).write(plan))
+      ).rejects.toMatchObject({ code: 'journal_read_only' })
+      await host.close()
       expect(await readFile(dbPath)).toEqual(before)
       expect((await stat(`${dbPath}-wal`).catch(() => null))?.size ?? 0).toBe(0)
     })

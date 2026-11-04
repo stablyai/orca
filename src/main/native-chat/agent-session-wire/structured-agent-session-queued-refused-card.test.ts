@@ -36,8 +36,8 @@ async function queuedDraft(text: string): Promise<string> {
   return queued.value.queued.messageId
 }
 
-function queueRows(): { messageId: string; op: string }[] {
-  return readTestQueueChanges(openTestJournalHostDatabase(rig.root).db, SESSION).map(
+async function queueRows(): Promise<{ messageId: string; op: string }[]> {
+  return (await readTestQueueChanges(await openTestJournalHostDatabase(rig.root), SESSION)).map(
     ({ messageId, op }) => ({ messageId, op })
   )
 }
@@ -79,7 +79,7 @@ it('holds the cards behind it through a rewind, a new epoch, a restart and a Res
   ]
   await eventually(async () => expect(await rig.drafts()).toEqual(held))
   // Refusal returns the same card in place: its own state changes, and no card is added.
-  expect(queueRows()).toEqual([
+  expect(await queueRows()).toEqual([
     ...[a, b, c].map((messageId) => ({ messageId, op: 'queued' })),
     { messageId: a, op: 'dispatched' },
     { messageId: a, op: 'returned' }

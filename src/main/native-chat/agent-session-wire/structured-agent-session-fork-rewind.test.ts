@@ -141,7 +141,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
     probeOwner: async () => ({ outcome: 'exit-observed' })
@@ -325,12 +325,12 @@ describe('rewinding a chat whose agent forks', () => {
     expect(forkForRewind).toHaveBeenCalledTimes(1)
     await expectRestoredUsageLimitCancelled(host, store, cut)
     expect(
-      (await openTestAgentSessionRecordStore(directory)).getRecord(HOST_TEST_SESSION)
+      await (await openTestAgentSessionRecordStore(directory)).getRecord(HOST_TEST_SESSION)
         ?.usageLimitContinueCancel
     ).toEqual(cut)
     expect(
       latestUsageLimitContinueIdentity(
-        renderJournalState(loadTestJournal(directory, HOST_TEST_SESSION)!.state)
+        renderJournalState((await loadTestJournal(directory, HOST_TEST_SESSION))!.state)
       )
     ).toEqual(cut)
     await expectNoUsageLimitAutoContinue(host)

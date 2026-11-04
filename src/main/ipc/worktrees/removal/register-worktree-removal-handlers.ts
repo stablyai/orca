@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal-scopes'
 import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -66,6 +67,9 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
     }
 
     // Coalesce concurrent UI requests so only one operation touches Git and disk.
+    const removeOwned = captureWorktreeOwnerRemoval(store, args.worktreeId, removalHostId, () =>
+      context.runtime.openAgentSessionRecordStore()
+    )
     const removal = withWorktreeSpan({ stage: 'remove', path: worktreePath }, async () => {
       const nestedPreservedBranches = args.approvedNestedWorktrees
         ? await removeApprovedNestedWorktrees({
@@ -91,7 +95,8 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
               repo,
               repoId,
               worktreePath,
-              removalHostId
+              removalHostId,
+              removeOwned
             )
       let accepted: RemoveWorktreeResult
       let result: RemoveWorktreeResult

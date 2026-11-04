@@ -222,3 +222,61 @@ describe('divider ratios through main', () => {
     ).toBe('group_set_changed')
   })
 })
+
+it('admits the requested before-subtree split while preserving existing divider ratios and refuses stale or wrong-anchor proposals', () => {
+  const { ctx, model, tabA, leafA, leafA2 } = setup()
+  const original = terminalTab(model, tabA).panes.root!
+  if (original.type !== 'split') {
+    throw new Error('expected a split')
+  }
+  original.ratio = 0.35
+  const newLeafId = '99999999-9999-4999-8999-999999999999'
+  const proposed = {
+    type: 'split' as const,
+    direction: 'horizontal' as const,
+    ratio: 0.2,
+    first: { type: 'leaf' as const, leafId: newLeafId },
+    second: { ...original, ratio: 0.9 }
+  }
+  const command = {
+    type: 'splitPane' as const,
+    workspace: WS,
+    tabId: tabA,
+    leafId: leafA,
+    newLeafId,
+    direction: 'horizontal' as const,
+    proposedRoot: proposed
+  }
+  const accepted = applyLayoutCommand(model, command, ctx)
+  if (!accepted.ok) {
+    throw new Error(accepted.code)
+  }
+  expect(terminalTab(accepted.model, tabA).panes.root).toEqual({ ...proposed, second: original })
+  expect(accepted.effects.startPaneKeys).toEqual([`${tabA}:${newLeafId}`])
+  expect(
+    refusal(model, {
+      ...command,
+      proposedRoot: { ...proposed, second: { type: 'leaf', leafId: leafA } }
+    })
+  ).toBe('pane_structure_changed')
+  expect(
+    refusal(model, {
+      ...command,
+      proposedRoot: {
+        ...original,
+        second: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: leafA2 },
+          second: { type: 'leaf', leafId: newLeafId }
+        }
+      }
+    })
+  ).toBe('pane_structure_changed')
+  expect(refusal(model, { ...command, proposedRoot: { ...proposed, direction: 'vertical' } })).toBe(
+    'pane_structure_changed'
+  )
+  expect(refusal(model, { ...command, proposedRoot: { ...proposed, ratio: 1.7 } })).toBe(
+    'pane_structure_changed'
+  )
+})

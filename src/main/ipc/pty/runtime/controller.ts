@@ -1,3 +1,4 @@
+import { installSurfaceAllocationRecovery } from '../provider/surface-allocation-recovery'
 import { adoptMaterializedRuntimePtySpawn } from './spawn-early'
 import { createRuntimePtySpawnState } from './spawn-state'
 import { localProvider } from '../provider/registry'
@@ -45,6 +46,9 @@ import {
 
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
+  if (deps.store) {
+    installSurfaceAllocationRecovery(deps.store, deps.getLocalPtyProviderStartupPromise())
+  }
 
   runtime?.setPtyController({
     claimStablePaneCreate: (args) => {

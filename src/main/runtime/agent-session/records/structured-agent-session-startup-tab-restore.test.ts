@@ -20,7 +20,7 @@ import {
   SAVED_BY_NEWER_ORCA
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import * as journalFactory from '../../../native-chat/agent-session-journal/journal-store-factory'
-import { publishJournalSessionEpoch } from '../../../native-chat/agent-session-journal/journal-row-table'
+import { publishTestJournalEpoch } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createQueuedRigProvider } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { createStructuredSessionObservationClock } from '../../../native-chat/agent-session-wire/structured-agent-session-observation-clock.test-fixture'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
@@ -137,7 +137,7 @@ async function seedProfile(
         }
       : {})
   })
-  const database = openTestJournalHostDatabase(root)
+  const database = await openTestJournalHostDatabase(root)
   for (const record of options.history ?? records) {
     const fence = record.lease.runtimeFence
     const journal = await journalFactory.openAgentSessionJournal({
@@ -266,15 +266,13 @@ describe('restoring the chat tabs open at quit', () => {
     const record = chatRecord(sessionId, { codex: true })
     // Companion record/profile are fixtures; only these two raw journal rows are recorded state.
     await seedProfile([record], { visible: [sessionId], history: [] })
-    const database = openTestJournalHostDatabase(root)
-    publishJournalSessionEpoch(
-      database.db,
-      { sessionId, workspaceId: record.location.workspaceId },
-      epoch
-    )
-    for (const row of recordedRows) {
-      insertTestJournalRowJson(database.db, sessionId, row.seq, row.json, row.ts)
-    }
+    const database = await openTestJournalHostDatabase(root)
+    await database.transaction((plan) => {
+      publishTestJournalEpoch(plan, sessionId, epoch, record.location.workspaceId)
+      for (const row of recordedRows) {
+        insertTestJournalRowJson(plan, sessionId, row.seq, row.json, row.ts, epoch)
+      }
+    })
     await closeTestJournalHostDatabase(root)
 
     const installs: {
@@ -421,9 +419,9 @@ describe('restoring the chat tabs open at quit', () => {
       }
       expect(delivered.page.queuedMessages).toEqual([])
       expect(
-        (await next.host.journalSnapshot(sessionId)).submissions.filter(
-          (entry) => entry.queuedMessageId === messageId
-        )
+        await (
+          await next.host.journalSnapshot(sessionId)
+        ).submissions.filter((entry) => entry.queuedMessageId === messageId)
       ).toEqual([
         expect.objectContaining({
           clientMessageId: operationId,

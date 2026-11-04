@@ -1,3 +1,13 @@
+import { publishAgentSessionStoreChanges } from './agent-session-store-publication'
+import type { SurfaceJointResult } from '../../../workspace-surfaces/surface-joint-transaction'
+import { AgentSessionTabTable } from '../agent-session-tab-table'
+import { freezeRows } from './agent-session-store-row-freeze'
+import { stageAgentSessionMembership } from './agent-session-store-membership-plan'
+import type { SurfaceStorageMutation } from '../../../../shared/workspace-surfaces/surface-storage-command'
+import { changesAgentSenderIdentity } from '../../agent-session-sender-identity-revision'
+import { clearSuccessor } from '../../agent-session-sender-identity-revision'
+import { AgentSessionRecordLineage } from '../../agent-session-record-lineage'
+import { listAgentSessionConversations } from './agent-session-store-state'
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/journal-row-writer'
@@ -7,11 +17,6 @@ import {
   requireWritableAgentSessionRecord,
   type AgentSessionStoreState
 } from './agent-session-store-state'
-import {
-  insertAgentSessionOperationRowsIfAbsent,
-  writeAgentSessionStoreRows
-} from './agent-session-record-rows'
-import { readCommandReceipt } from '../../../native-chat/agent-session-journal/command-receipt-table'
 import type { CommandReceiptScope } from '../../../native-chat/agent-session-journal/command-receipt-schema'
 import {
   agentSessionRuntimeIncarnation,
@@ -30,44 +35,11 @@ import {
   draftAgentSessionStoreState,
   type AgentSessionStoreRowWrites
 } from './agent-session-store-draft'
-import { changesAgentSenderIdentity } from '../../agent-session-sender-identity-revision'
 
 // Commit validated draft rows atomically before publication; failures discard the draft.
 // The promise queue preserves FIFO and defers BEGIN beyond the caller's open journal transaction.
 
 // Identity-based diffs miss in-place edits; freeze rows in dev/tests to catch them.
-const FREEZE_ROWS = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
-
-function deepFreeze(value: unknown): void {
-  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) {
-    return
-  }
-  Object.freeze(value)
-  for (const child of Object.values(value)) {
-    deepFreeze(child)
-  }
-}
-
-function freezeRows(
-  state: AgentSessionStoreState,
-  writes: AgentSessionStoreRowWrites | null
-): void {
-  if (!FREEZE_ROWS) {
-    return
-  }
-  const records = writes ? writes.records.upsert.map(([key]) => key) : state.records.keys()
-  for (const sessionId of records) {
-    deepFreeze(state.records.get(sessionId))
-  }
-  const operations = writes ? writes.operations.upsert.map(([key]) => key) : state.operations.keys()
-  for (const key of operations) {
-    deepFreeze(state.operations.get(key))
-  }
-  if (!writes || writes.retiredClaimKeys) {
-    state.retiredClaimKeys.forEach(deepFreeze)
-  }
-}
-
 function readOnlyStoreRefusal(): Error {
   return journalOpenRefusalError(
     new AgentSessionJournalError(
@@ -91,8 +63,9 @@ export class AgentSessionStoreTransactions {
   private readonly admittedSends = new Map<string, number>()
   readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
   private published: AgentSessionStoreState
-  /** Moves only when a commit changes what chat sender identity reads. */
+  /** Moves only when a committed draft changes chat sender identity. */
   senderIdentityRevision = 0
+  readonly predecessors = new AgentSessionRecordLineage()
   /** Replaced only when a record joins or leaves, or a /clear links one conversation to the next:
    *  lookups derived from every record's lineage stay valid across admission and lease writes. */
   private lineage: object = {}
@@ -112,6 +85,9 @@ export class AgentSessionStoreTransactions {
       ...loaded,
       runtimeEnds: readAgentSessionRuntimeEnds(journalDatabase.stateDirectory)
     }
+    for (const record of listAgentSessionConversations(this.published)) {
+      this.predecessors.set(record.sessionId, clearSuccessor(record))
+    }
     this.replacedRuntimes = agentSessionReplacedRuntimes(this.published, {
       hostId,
       incarnation: agentSessionRuntimeIncarnation()
@@ -122,6 +98,46 @@ export class AgentSessionStoreTransactions {
       agentSessionRuntimeIncarnation(),
       Date.now()
     )
+  }
+
+  notifyCommitted(notify: () => void): void {
+    this.journalDatabase.notifyCommitted(notify)
+  }
+
+  /** Prepared records stay in History; current membership changes only through the common owner. */
+  commitSurfaceCommands(
+    commands: readonly SurfaceStorageMutation[],
+    admit?: () => void,
+    afterCommitted?: (result: SurfaceJointResult) => void
+  ) {
+    const run = this.queue.then(async () => {
+      const commit = this.journalDatabase.surfaceCommands
+      if (!commit) {
+        throw new Error('Native membership requires its profile surface owner')
+      }
+      return commit(
+        commands,
+        (result) => {
+          const host = result.surfaces.at(-1)?.host
+          if (!host?.nativeTabs) {
+            throw new Error('Committed native membership is missing')
+          }
+          this.published = {
+            ...this.published,
+            sessionTabs: new AgentSessionTabTable(
+              host.nativeTabs.map(({ tabId, sessionId }) => [tabId, sessionId])
+            )
+          }
+          this.journalDatabase.notifyCommitted(() =>
+            sessionCrewChanges.notify(new Set(['records']))
+          )
+        },
+        admit,
+        afterCommitted
+      )
+    })
+    this.queue = run.catch(() => {})
+    return run
   }
 
   get state(): AgentSessionStoreState {
@@ -139,7 +155,9 @@ export class AgentSessionStoreTransactions {
   admittedSendCount = (sessionId: string): number => this.admittedSends.get(sessionId) ?? 0
 
   readCommandReceipt(scope: CommandReceiptScope, operationId: string) {
-    return readCommandReceipt(this.journalDatabase.db, scope, operationId)
+    return this.journalDatabase.read(async (read) =>
+      (await read.receipts(scope, [operationId])).get(operationId)!
+    )
   }
 
   /** Mutate only the draft. Newer databases refuse writes; inMemoryWhenReadOnly permits startup-derived verdicts. */
@@ -182,16 +200,12 @@ export class AgentSessionStoreTransactions {
         this.staged = { transaction, draft: staged.draft }
         const writes = staged.writes
         if (writes) {
-          // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
-          if (options.insertOperationsIfAbsent) {
-            insertAgentSessionOperationRowsIfAbsent(db, writes.operations.upsert)
-          }
-          writeAgentSessionStoreRows(
-            db,
-            options.insertOperationsIfAbsent
-              ? { ...writes, operations: { ...writes.operations, upsert: [] } }
-              : writes
-          )
+          stageAgentSessionMembership(db, base, staged.draft, staged.writes)
+          db.add({
+            kind: 'store',
+            writes,
+            insertOperationsIfAbsent: options.insertOperationsIfAbsent === true
+          })
         }
       },
       committed: () => {
@@ -202,7 +216,8 @@ export class AgentSessionStoreTransactions {
         if (admitted) {
           this.admittedSends.set(admitted, this.admittedSendCount(admitted) + 1)
           for (const listener of this.acceptedSendListeners) {
-            listener(admitted)
+            const sessionId = admitted
+            this.journalDatabase.notifyCommitted(() => listener(sessionId))
           }
         }
         staged = null
@@ -213,25 +228,41 @@ export class AgentSessionStoreTransactions {
 
   /** Commit a receipt separately when its command made no journal write. */
   commitReceipt(receipt: JournalOperationReceipt): Promise<void> {
-    const run = this.queue.then(() => {
-      this.journalDatabase.transaction((db) => receipt.write(db))
-      receipt.committed()
-    })
+    const run = this.queue.then(() =>
+      this.journalDatabase.transaction(
+        (db) => receipt.write(db),
+        false,
+        () => receipt.committed()
+      )
+    )
     this.queue = run.catch(() => {})
     return run
   }
 
-  private commit<T>(apply: (draft: AgentSessionStoreState) => T, inMemoryWhenReadOnly: boolean): T {
-    const readOnly = this.journalDatabase.readOnly
-    if (readOnly && !inMemoryWhenReadOnly) {
-      throw readOnlyStoreRefusal()
+  private async commit<T>(
+    apply: (draft: AgentSessionStoreState) => T,
+    inMemoryWhenReadOnly: boolean
+  ): Promise<T> {
+    if (this.journalDatabase.readOnly) {
+      if (!inMemoryWhenReadOnly) {
+        throw readOnlyStoreRefusal()
+      }
+      const staged = this.stage(apply)
+      staged.adopt()
+      return staged.result
     }
-    const staged = this.stage(apply)
-    const writes = staged.writes
-    if (writes && !readOnly) {
-      this.journalDatabase.transaction((db) => writeAgentSessionStoreRows(db, writes))
-    }
-    staged.adopt()
+    const staged = await this.journalDatabase.transaction(
+      (plan) => {
+        const staged = this.stage(apply)
+        if (staged.writes) {
+          stageAgentSessionMembership(plan, this.published, staged.draft, staged.writes)
+          plan.add({ kind: 'store', writes: staged.writes, insertOperationsIfAbsent: false })
+        }
+        return staged
+      },
+      false,
+      (staged) => staged.adopt()
+    )
     return staged.result
   }
 
@@ -253,6 +284,12 @@ export class AgentSessionStoreTransactions {
           if (changesAgentSenderIdentity(published, draft, writes)) {
             this.senderIdentityRevision++
           }
+          for (const id of writes.records.remove) {
+            this.predecessors.set(id, null)
+          }
+          for (const [id] of writes.records.upsert) {
+            this.predecessors.set(id, clearSuccessor(draft.records.get(id)!))
+          }
           this.published = draft
           const lineageChanged =
             writes.records.remove.length > 0 ||
@@ -263,35 +300,7 @@ export class AgentSessionStoreTransactions {
           if (lineageChanged) {
             this.lineage = {}
           }
-          const topologyChanged =
-            writes.sessionTabs !== null ||
-            writes.records.remove.length > 0 ||
-            writes.records.upsert.some(([id]) => {
-              const before = published.records.get(id)
-              const after = draft.records.get(id)
-              return (
-                !before ||
-                !after ||
-                before.lease.claimStatus !== after.lease.claimStatus ||
-                before.provider !== after.provider ||
-                before.location !== after.location ||
-                before.conversationCommand !== after.conversationCommand
-              )
-            })
-          const renamed = writes.records.upsert
-            .filter(
-              ([id]) =>
-                published.records.get(id)?.conversationName !==
-                draft.records.get(id)?.conversationName
-            )
-            .map(([id]) => id)
-          if (topologyChanged) {
-            sessionCrewChanges.notify(new Set(['records']))
-          } else if (renamed.length) {
-            sessionCrewChanges.notify(
-              Object.assign(new Set(['names'] as const), { recordIds: renamed })
-            )
-          }
+          publishAgentSessionStoreChanges(this.journalDatabase, published, draft, writes)
         }
       }
     }

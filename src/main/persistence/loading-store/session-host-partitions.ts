@@ -30,6 +30,7 @@ import {
 } from '../restoring-sessions/session-owner-removal'
 
 import type { StoreRuntimeState } from './store-runtime-state'
+import { canonicalSessionProjection } from './canonical-session-projection'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
 import {
@@ -45,7 +46,7 @@ import {
 
 type SessionHostPartitionOperationsRuntime = Pick<
   StoreRuntimeState,
-  'state' | 'terminalScrollbackSnapshotStorage'
+  'state' | 'terminalScrollbackSnapshotStorage' | 'workspaceSurfaces'
 >
 
 const sessionHostPartitionOperationsContext = Symbol('SessionHostPartitionOperations')
@@ -72,17 +73,12 @@ export class SessionHostPartitionOperations {
 
   getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
     const resolved = resolveHostId(hostId)
-    if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      return (
-        this[sessionHostPartitionOperationsContext].runtime.state.workspaceSession ??
-        getDefaultWorkspaceSession()
-      )
-    }
-    return (
-      this[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[
-        resolved
-      ] ?? getDefaultWorkspaceSession()
-    )
+    const runtime = this[sessionHostPartitionOperationsContext].runtime
+    const session =
+      resolved === LOCAL_EXECUTION_HOST_ID
+        ? runtime.state.workspaceSession
+        : runtime.state.workspaceSessionsByHostId?.[resolved]
+    return session ?? getDefaultWorkspaceSession()
   }
 
   getWorkspaceSessionHostIds(): ExecutionHostId[] {
@@ -281,7 +277,11 @@ export function setHostWorkspaceSession(
   )
   owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = {
     ...owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId,
-    [hostId]: withRequiredWorkspaceSessionMaps(orderTerminalRowsByTabGroups(pruned))
+    [hostId]: canonicalSessionProjection(
+      owner[sessionHostPartitionOperationsContext].runtime,
+      hostId,
+      withRequiredWorkspaceSessionMaps(orderTerminalRowsByTabGroups(pruned))
+    )
   }
   scheduleSave(
     owner[sessionHostPartitionOperationsContext].scheduling,

@@ -34,6 +34,8 @@ export type StructuredAgentSessionCloseOptions = {
   afterClose?: () => void
   // Last word in the session lane before Stop.
   admitClose?: () => boolean
+  /** A captured workspace removal retires all membership after its physical refusal gates. */
+  deferSurfaceRetirement?: boolean
 }
 
 export async function closeStructuredAgentSessionChild(
@@ -84,7 +86,9 @@ export async function closeStructuredAgentSessionChild(
         'The structured session is still attached after close.'
     }
   }
-  await retireCapturedStructuredSessionSurface(host, sessionId, surface, options.runtime)
+  if (!options.deferSurfaceRetirement) {
+    await retireCapturedStructuredSessionSurface(host, sessionId, surface, options.runtime)
+  }
   return { stopped: true, closeAttempted: true }
 }
 

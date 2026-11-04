@@ -27,6 +27,10 @@ import {
 } from './worktree-removal-listing'
 import { readWorktreeRemovalRecords } from './worktree-removal-records'
 import { loadWorktreeRemovalRecordsForStore } from '../../startup/worktree-removal-records-load'
+import { WorkspaceOwnerRemovalError } from '../../runtime/workspaces/canonical-owner-removal'
+import { localWorktreeRemovalOwners } from './worktree-removal-owner-residue'
+import type { WorkspaceSurface } from '../../../shared/workspace-surfaces/surface-content'
+import { resolveRuntimeWorktreeRemovalTarget } from '../../runtime/runtime-worktree-removal-target'
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn(async () => []))
 
@@ -110,6 +114,124 @@ const leftoverRow = (): GitWorktreeInfo => ({
 })
 
 describe('a delete that fails after Git dropped the registration', () => {
+  it.each(['native', 'metadata'] as const)(
+    'retains refused %s cleanup through listing and reload before explicit retry',
+    async (kind) => {
+      const message = 'Chat storage refused workspace removal'
+      let outstanding = true
+      const owner = {
+        getRepos: () => [{ id: 'repo-1', path: '/work/repo' }],
+        getAllWorktreeMeta: () =>
+          kind === 'metadata' && outstanding
+            ? {
+                [worktreeId]: {
+                  hostId: 'local' as const,
+                  displayName: 'Topic',
+                  comment: '',
+                  linkedIssue: null,
+                  linkedPR: null,
+                  linkedLinearIssue: null,
+                  isArchived: false,
+                  isUnread: false,
+                  isPinned: false,
+                  sortOrder: 0,
+                  lastActivityAt: 1
+                }
+              }
+            : {},
+        workspaceSurfacesInitialized: () => true,
+        readWorkspaceSurfaces: (): readonly WorkspaceSurface[] =>
+          kind === 'native' && outstanding
+            ? [
+                {
+                  hostId: 'local',
+                  workspaceId: worktreeId,
+                  hostTabId: 'chat-tab',
+                  occurrence: 'captured-chat',
+                  revision: 1,
+                  createdAt: 1,
+                  content: { kind: 'agent-session', sessionId: 'chat', agent: 'codex' }
+                }
+              ]
+            : []
+      }
+      const hasOwner = (records: Parameters<typeof localWorktreeRemovalOwners>[1]) =>
+        localWorktreeRemovalOwners(owner, records)
+      await expect(
+        startFailingRemoval({
+          run: async () => {
+            await rm(checkout, { recursive: true })
+            throw new WorkspaceOwnerRemovalError(new Error(message))
+          }
+        })
+      ).rejects.toThrow(message)
+      await _settlePendingWorktreeRemovalsForTests()
+      expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toMatchObject([
+        { worktreeId, failure: { message } }
+      ])
+      const [accepted] = await readWorktreeRemovalRecords(join(directory, 'profile'))
+      const reads = [
+        vi.spyOn(owner, 'getRepos'),
+        vi.spyOn(owner, 'getAllWorktreeMeta'),
+        vi.spyOn(owner, 'readWorkspaceSurfaces')
+      ]
+      const candidates = Array.from({ length: 200 }, (_, index) => ({
+        ...accepted,
+        worktreeId: index === 0 ? worktreeId : `repo-1::/missing/${index}`
+      }))
+      expect(localWorktreeRemovalOwners(owner, candidates)).toEqual(new Set([worktreeId]))
+      for (const read of reads) {
+        expect(read).toHaveBeenCalledTimes(1)
+        read.mockRestore()
+      }
+      expect(await withUnregisteredRemovalCheckouts('repo-1', [mainWorktree], hasOwner)).toEqual([
+        mainWorktree,
+        { ...leftoverRow(), removalError: message }
+      ])
+      const resolveTarget = (selector: string, requiredHostId: 'local' | 'ssh:other') =>
+        resolveRuntimeWorktreeRemovalTarget({
+          selector,
+          requiredHostId,
+          store: { ...owner, getWorktreeMeta: () => undefined },
+          resolveWorktree: async () => {
+            throw new Error('selector_not_found')
+          },
+          resolveExplicitWorktreeIdScoped: async () => null
+        })
+      await expect(resolveTarget(worktreeId, 'local')).resolves.toMatchObject({
+        id: worktreeId,
+        path: checkout
+      })
+      await expect(resolveTarget(worktreeId, 'ssh:other')).rejects.toThrow('selector_not_found')
+      await expect(resolveTarget('feature', 'local')).rejects.toThrow('selector_not_found')
+      _resetPendingWorktreeRemovalsForTests()
+      await loadWorktreeRemovalRecordsForStore({
+        ...owner,
+        getProfileStorageDirectory: () => join(directory, 'profile')
+      })
+      expect(await withUnregisteredRemovalCheckouts('repo-1', [mainWorktree], hasOwner)).toEqual([
+        mainWorktree,
+        { ...leftoverRow(), removalError: message }
+      ])
+      expect(() =>
+        retryFailedWorktreeRemoval(worktreeId, 'local', vi.fn(), undefined, false)
+      ).toThrow('different branch choice')
+      const run = vi.fn(async () => {
+        outstanding = false
+        return {}
+      })
+      await expect(
+        retryFailedWorktreeRemoval(worktreeId, 'local', () => ({
+          run,
+          publish: () => {}
+        }))
+      ).resolves.toEqual({})
+      await _settlePendingWorktreeRemovalsForTests()
+      expect(run).toHaveBeenCalledTimes(1)
+      expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toEqual([])
+    }
+  )
+
   it('keeps the leftover listed with the error, recorded on disk, and not pending', async () => {
     await failRemoval()
 

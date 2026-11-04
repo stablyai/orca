@@ -1,3 +1,4 @@
+import { captureRepositoryOwnerRemoval } from '../../runtime/workspaces/canonical-owner-removal-scopes'
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
@@ -29,7 +30,7 @@ import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
 export function registerRepoCatalogHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: Pick<OrcaRuntimeService, 'removeProject'>
+  runtime: Pick<OrcaRuntimeService, 'removeProject' | 'openAgentSessionRecordStore'>
 ): void {
   // Enrichment deduplicates by callback identity; per-call closures accumulate broadcasts during slow sweeps.
   const broadcastReposChanged = (): void => notifyReposChanged(mainWindow)
@@ -131,7 +132,10 @@ export function registerRepoCatalogHandlers(
         scheduleCurrentWorktreeBaseDirectoryWatcherSync()
         return
       }
-      store.removeProjectForHost({ id: args.repoId, executionHostId: hostId })
+      const target = { id: args.repoId, executionHostId: hostId }
+      await captureRepositoryOwnerRemoval(store, target, () =>
+        runtime.openAgentSessionRecordStore()
+      )(() => store.removeProjectForHost(target))
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
     }
