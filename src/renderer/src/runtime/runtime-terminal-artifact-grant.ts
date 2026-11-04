@@ -1,6 +1,8 @@
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
+  TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES,
   TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY,
+  TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY,
   type RuntimeTerminalPathResolution
 } from '../../../shared/runtime-file-contracts'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
@@ -37,7 +39,12 @@ export function isRenewableGrantError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && RENEWABLE_GRANT_ERRORS.has(error.message)
 }
 
-export type RenewedTerminalArtifactGrant = { grantId: string; readOnly: boolean }
+export type RenewedTerminalArtifactGrant = {
+  grantId: string
+  readOnly: boolean
+  /** The file's size when granted; older hosts omit it. */
+  byteLength?: number
+}
 
 /** A grant for a restored tab's host file, which never kept its grant; rejects when the host lacks it. */
 export async function renewRestoredHostFileGrant(
@@ -59,7 +66,13 @@ export async function renewTerminalArtifactGrant(
   if (granted && granted.absolutePath !== args.absolutePath) {
     throw new Error(`The host no longer grants ${args.absolutePath}`)
   }
-  return granted ? { grantId: granted.grantId, readOnly: granted.readOnly } : null
+  return granted
+    ? {
+        grantId: granted.grantId,
+        readOnly: granted.readOnly,
+        ...(granted.byteLength === undefined ? {} : { byteLength: granted.byteLength })
+      }
+    : null
 }
 
 /** First acquisition adopts the canonical path the host bound to its grant. */
@@ -84,7 +97,8 @@ export async function acquireTerminalArtifactGrant(
     return {
       absolutePath: openTarget.absolutePath,
       grantId: openTarget.grantId,
-      readOnly: openTarget.readOnly === true
+      readOnly: openTarget.readOnly === true,
+      ...(openTarget.byteLength === undefined ? {} : { byteLength: openTarget.byteLength })
     }
   }
   if (!resolved.exists) {
@@ -116,4 +130,18 @@ export async function hostSavesGrantedFiles(environmentId: string): Promise<bool
     // Why: an unanswered probe must not block opening; the tab just opens read-only.
     return false
   }
+}
+
+/** Whether this host serves a desktop client a granted file as large as a workspace one; rejects when unanswered. */
+export function hostOpensGrantedFilesInPlace(environmentId: string): Promise<boolean> {
+  return runtimeEnvironmentSupportsCapability(
+    environmentId,
+    TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY,
+    15_000
+  )
+}
+
+/** A grant too large to read or save in one reply; the workspace holding the file pages it instead. */
+export function grantExceedsDesktopBudget(byteLength: number | undefined): boolean {
+  return byteLength === undefined || byteLength > TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES
 }

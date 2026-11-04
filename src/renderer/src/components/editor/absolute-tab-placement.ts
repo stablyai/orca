@@ -9,9 +9,11 @@ import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-wor
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY } from '../../../../shared/runtime-file-contracts'
+import {
+  grantExceedsDesktopBudget,
+  hostOpensGrantedFilesInPlace
+} from '@/runtime/runtime-terminal-artifact-grant'
 import { grantRestoredHostFile } from './restored-host-file-grant'
 
 /** Where an absolute-path tab reads from: moved to the workspace holding it, granted by its host, or read as it is. */
@@ -56,14 +58,13 @@ export async function placeAbsoluteTab(
       return { kind: 'read' }
     }
     // Why unswallowed: an unreachable host fails the load retryably; moving would be permanent.
-    const savesGrants = await runtimeEnvironmentSupportsCapability(
-      readTarget.environmentId,
-      TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY,
-      15_000
-    )
-    if (savesGrants) {
+    if (await hostOpensGrantedFilesInPlace(readTarget.environmentId)) {
       try {
-        return await grantHere(args.readTarget, worktreeId, tab.filePath)
+        const granted = await grantHere(args.readTarget, worktreeId, tab.filePath)
+        // Why: a file too large for one grant reply opens where it lives, which pages it.
+        if (!grantExceedsDesktopBudget(granted.byteLength)) {
+          return granted
+        }
       } catch (error) {
         // Why: only a host that answered it cannot grant here (its own SSH workspaces) serves the holding workspace.
         if (!(error instanceof RuntimeRpcCallError && error.code === 'runtime_error')) {
@@ -84,7 +85,7 @@ async function grantHere(
   readTarget: RuntimeClientTarget,
   worktreeId: string | null | undefined,
   filePath: string
-): Promise<AbsoluteTabPlacement> {
+): Promise<Extract<AbsoluteTabPlacement, { kind: 'grant' }> & { byteLength?: number }> {
   const pairing =
     readTarget.kind === 'environment'
       ? captureRuntimeEnvironmentRequestRevision(readTarget.environmentId)

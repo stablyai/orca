@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import { placeAbsoluteTab } from './absolute-tab-placement'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import {
+  TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES,
+  TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY
+} from '../../../../shared/runtime-file-contracts'
 
 const mocks = vi.hoisted(() => ({
   findWorkspaceFileRoute: vi.fn(),
@@ -33,7 +37,9 @@ const serverTab = {
 beforeEach(() => {
   mocks.findWorkspaceFileRoute.mockReset()
   mocks.supportsCapability.mockReset().mockResolvedValue(true)
-  mocks.grantRestoredHostFile.mockReset().mockResolvedValue({ grantId: 'g-1', readOnly: false })
+  mocks.grantRestoredHostFile
+    .mockReset()
+    .mockResolvedValue({ grantId: 'g-1', readOnly: false, byteLength: 1024 })
 })
 
 describe('an absolute-path tab whose file another workspace holds', () => {
@@ -51,6 +57,11 @@ describe('an absolute-path tab whose file another workspace holds', () => {
       FILE,
       undefined
     )
+    expect(mocks.supportsCapability).toHaveBeenCalledWith(
+      'env-1',
+      TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY,
+      15_000
+    )
   })
 
   it('keeps reading through the grant it already holds', async () => {
@@ -63,7 +74,16 @@ describe('an absolute-path tab whose file another workspace holds', () => {
   })
 
   it.each([
-    ['cannot save granted files', () => mocks.supportsCapability.mockResolvedValue(false)],
+    ['predates in-place files', () => mocks.supportsCapability.mockResolvedValue(false)],
+    [
+      'grants a file too large for one reply',
+      () =>
+        mocks.grantRestoredHostFile.mockResolvedValue({
+          grantId: 'g-1',
+          readOnly: false,
+          byteLength: TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES + 1
+        })
+    ],
     [
       'refuses the grant',
       () =>

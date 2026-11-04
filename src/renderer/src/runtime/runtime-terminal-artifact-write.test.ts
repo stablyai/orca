@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { writeRuntimeTerminalArtifactFile } from './runtime-terminal-artifact-write'
 import {
   runtimeEnvironmentCall,
+  runtimeEnvironmentTransportCall,
   installRuntimeFileClientEnvironment,
   type RuntimeRpcRequest
 } from './runtime-file-client-test-harness'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
+import { TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY } from '../../../shared/runtime-file-contracts'
 
 installRuntimeFileClientEnvironment()
 
@@ -123,5 +125,38 @@ describe('saving a granted host file outside every workspace', () => {
       return read(calls > 0 ? '# new' : '# old')
     })
     await expect(save('# new', '# old')).resolves.toEqual({ ok: true })
+  })
+
+  describe('larger than a phone can read', () => {
+    // Past the old 512 KB grant cap, inside one request frame.
+    const large = 'x'.repeat(600 * 1024)
+
+    function hostAdvertises(capabilities: string[]): void {
+      const answer = runtimeEnvironmentTransportCall.getMockImplementation()!
+      runtimeEnvironmentTransportCall.mockImplementation(async (args) => {
+        const reply = (await answer(args)) as { result?: { capabilities?: string[] } }
+        if (args.method === 'status.get' && reply.result) {
+          reply.result.capabilities = [...(reply.result.capabilities ?? []), ...capabilities]
+        }
+        return reply
+      })
+    }
+
+    it('saves on a host that serves desktop clients workspace-sized grants', async () => {
+      hostAdvertises([TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY])
+      runtimeEnvironmentCall.mockImplementation(async ({ method }) =>
+        method === 'files.writeTerminalArtifact' ? ok({ ok: true }) : read('# old')
+      )
+
+      await expect(save(large, '# old')).resolves.toEqual({ ok: true })
+      expect(callsTo('files.writeTerminalArtifact')).toHaveLength(1)
+    })
+
+    it('refuses before sending to an older host', async () => {
+      runtimeEnvironmentCall.mockImplementation(async () => read('# old'))
+
+      await expect(save(large, '# old')).rejects.toThrow('512 KB limit')
+      expect(callsTo('files.writeTerminalArtifact')).toHaveLength(0)
+    })
   })
 })

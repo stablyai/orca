@@ -14,7 +14,11 @@ import {
   type RuntimeTerminalPathResolution
 } from '../../../../shared/runtime-file-contracts'
 import { HostFileRefusal, hostAbsentRefusal } from './host-file-refusal'
-import { hostSavesGrantedFiles } from '@/runtime/runtime-terminal-artifact-grant'
+import {
+  grantExceedsDesktopBudget,
+  hostOpensGrantedFilesInPlace,
+  hostSavesGrantedFiles
+} from '@/runtime/runtime-terminal-artifact-grant'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { useAppStore } from '@/store'
@@ -110,12 +114,25 @@ async function resolveInClickedWorkspace(
     }
     throw error
   }
-  if (inPlace.relativePath !== null || inPlace.openTarget?.kind === 'absolute-file') {
+  if (inPlace.relativePath !== null) {
     return inPlace
+  }
+  if (inPlace.openTarget?.kind === 'absolute-file') {
+    // Why: a file too large for one grant reply opens where it lives, which pages it.
+    return grantExceedsDesktopBudget(inPlace.openTarget.byteLength) ? resolveOnHost(true) : inPlace
   }
   // Why: hosts grant files, not folders, and a missing file a workspace holds must read as missing on
   // its host, never as this computer's same-path file; the holding workspace answers both.
   return inPlace.exists || isInKnownWorkspace() ? resolveOnHost(true) : inPlace
+}
+
+/** An unanswered probe opens the file where it lives, as before. */
+async function opensInPlace(environmentId: string): Promise<boolean> {
+  try {
+    return await hostOpensGrantedFilesInPlace(environmentId)
+  } catch {
+    return false
+  }
 }
 
 function isHostRefusal(error: unknown): boolean {
@@ -152,7 +169,7 @@ export async function resolveHostWorkspaceFile(
     )
   // Why existence asks for the holder: a hover needs only a stat, and a grant hashes the file.
   const resolved =
-    !source.existenceOnly && (await hostSavesGrantedFiles(environmentId))
+    !source.existenceOnly && (await opensInPlace(environmentId))
       ? await resolveInClickedWorkspace(
           resolveOnHost,
           () =>

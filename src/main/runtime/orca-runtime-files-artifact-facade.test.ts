@@ -49,8 +49,8 @@ it('preserves artifact optional slots and the same artifact receiver', () => {
     commands.readTerminalArtifactFile('worktree', 'grant', '/artifact', undefined)
   ).toThrow('artifact_owner_reached')
   expect(read.mock.calls).toEqual([
-    ['worktree', 'grant', '/artifact', undefined],
-    ['worktree', 'grant', '/artifact', undefined]
+    ['worktree', 'grant', '/artifact', undefined, undefined],
+    ['worktree', 'grant', '/artifact', undefined, undefined]
   ])
 
   expect(() => commands.readTerminalArtifactPreview('worktree', 'grant', '/artifact')).toThrow(
@@ -71,8 +71,8 @@ it('preserves artifact optional slots and the same artifact receiver', () => {
     commands.writeTerminalArtifactFile('worktree', 'grant', '/artifact', 'text', undefined)
   ).toThrow('artifact_owner_reached')
   expect(write.mock.calls).toEqual([
-    ['worktree', 'grant', '/artifact', 'text', undefined],
-    ['worktree', 'grant', '/artifact', 'text', undefined]
+    ['worktree', 'grant', '/artifact', 'text', undefined, undefined],
+    ['worktree', 'grant', '/artifact', 'text', undefined, undefined]
   ])
 
   expect(() => commands.revokeTerminalFileGrantsForClient('client')).toThrow(

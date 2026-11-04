@@ -124,13 +124,15 @@ export class RuntimeFileCommands {
     worktreeSelector: string,
     grantId: string,
     absolutePath: string,
-    clientId?: string
+    clientId?: string,
+    maxTextBytes?: number
   ) {
     return this.artifacts.readTerminalArtifactFile(
       worktreeSelector,
       grantId,
       absolutePath,
-      clientId
+      clientId,
+      maxTextBytes
     )
   }
 
@@ -155,14 +157,16 @@ export class RuntimeFileCommands {
     grantId: string,
     absolutePath: string,
     content: string,
-    clientId?: string
+    clientId?: string,
+    maxTextBytes?: number
   ) {
     return this.artifacts.writeTerminalArtifactFile(
       worktreeSelector,
       grantId,
       absolutePath,
       content,
-      clientId
+      clientId,
+      maxTextBytes
     )
   }
 

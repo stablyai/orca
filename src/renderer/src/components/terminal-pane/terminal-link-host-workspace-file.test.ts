@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import * as filePreview from '@/lib/file-preview'
+import { TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES } from '../../../../shared/runtime-file-contracts'
 
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -64,6 +65,7 @@ describe('a paired-server link outside its own workspace', () => {
       isDirectory: false,
       openTarget: {
         kind: 'absolute-file',
+        byteLength: 100,
         provider: 'local',
         absolutePath: '/tmp/report.html',
         grantId: 'file-grant'
@@ -100,6 +102,7 @@ describe('a paired-server link outside its own workspace', () => {
       isDirectory: false,
       openTarget: {
         kind: 'absolute-file',
+        byteLength: 100,
         provider: 'local',
         absolutePath: '/tmp/report.html',
         grantId: 'file-grant',
@@ -243,6 +246,7 @@ describe('a paired-server link outside its own workspace', () => {
       isDirectory: false,
       openTarget: {
         kind: 'absolute-file',
+        byteLength: 100,
         provider: 'local',
         absolutePath: '/repo/src/index.ts',
         grantId: 'grant-main'
@@ -266,6 +270,41 @@ describe('a paired-server link outside its own workspace', () => {
       expect.anything()
     )
     expect(openFileMock.mock.calls[0]![0]).not.toHaveProperty('readOnly')
+  })
+
+  it('opens a file too large for one grant reply in the workspace holding it', async () => {
+    hostAnswers({
+      worktree: 'wt-feat',
+      relativePath: null,
+      absolutePath: '/repo/package-lock.json',
+      exists: true,
+      isDirectory: false,
+      openTarget: {
+        kind: 'absolute-file',
+        byteLength: TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES + 1,
+        provider: 'local',
+        absolutePath: '/repo/package-lock.json',
+        grantId: 'grant-main'
+      }
+    })
+    hostAnswers({
+      worktree: 'wt-main',
+      relativePath: 'package-lock.json',
+      absolutePath: '/repo/package-lock.json',
+      exists: true,
+      isDirectory: false
+    })
+
+    openDetectedFilePath('/repo/package-lock.json', null, null, featureWorktree)
+    await flushDoubleRaf()
+
+    expect(runtimeEnvironmentCallMock.mock.calls[1]![0].params).toMatchObject({
+      crossWorkspace: true
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ relativePath: 'package-lock.json', worktreeId: 'wt-main' }),
+      expect.anything()
+    )
   })
 
   it('opens in the holding workspace when the host refuses a grant here', async () => {

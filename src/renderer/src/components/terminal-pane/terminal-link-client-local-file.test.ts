@@ -240,6 +240,7 @@ describe('a link to this computer printed in a paired-server terminal', () => {
         isDirectory: false,
         openTarget: {
           kind: 'absolute-file',
+          byteLength: 100,
           provider: 'local',
           absolutePath: '/tmp/artifact.txt',
           grantId: 'g-1'

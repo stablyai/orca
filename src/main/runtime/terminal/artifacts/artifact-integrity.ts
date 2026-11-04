@@ -88,17 +88,20 @@ export function assertTerminalFileGrantFresh(
   }
 }
 
-export function truncateMobileFilePreview(content: string): {
+export function truncateMobileFilePreview(
+  content: string,
+  maxBytes: number = MOBILE_FILE_READ_MAX_BYTES
+): {
   content: string
   truncated: boolean
   byteLength: number
 } {
   const buffer = Buffer.from(content, 'utf8')
-  if (buffer.byteLength <= MOBILE_FILE_READ_MAX_BYTES) {
+  if (buffer.byteLength <= maxBytes) {
     return { content, truncated: false, byteLength: buffer.byteLength }
   }
   return {
-    content: buffer.subarray(0, MOBILE_FILE_READ_MAX_BYTES).toString('utf8'),
+    content: buffer.subarray(0, maxBytes).toString('utf8'),
     truncated: true,
     byteLength: buffer.byteLength
   }

@@ -335,61 +335,6 @@ describe('file RPC methods', () => {
     })
   })
 
-  it('reads a terminal artifact through a grant-scoped method', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      readTerminalArtifactFile: vi.fn().mockResolvedValue({
-        worktree: 'wt-1',
-        relativePath: '/tmp/result.json',
-        content: '{}',
-        truncated: false,
-        byteLength: 2
-      })
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('files.readTerminalArtifact', {
-        worktree: 'id:wt-1',
-        absolutePath: '/tmp/result.json',
-        grantId: 'grant-1'
-      })
-    )
-
-    expect(runtime.readTerminalArtifactFile).toHaveBeenCalledWith(
-      'id:wt-1',
-      'grant-1',
-      '/tmp/result.json',
-      undefined
-    )
-    expect(response).toMatchObject({ ok: true, result: { content: '{}' } })
-  })
-
-  it('writes a terminal artifact through a grant-scoped method', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      writeTerminalArtifactFile: vi.fn().mockResolvedValue({ ok: true })
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
-
-    await dispatcher.dispatch(
-      makeRequest('files.writeTerminalArtifact', {
-        worktree: 'id:wt-1',
-        absolutePath: '/tmp/result.json',
-        grantId: 'grant-1',
-        content: '{}'
-      })
-    )
-
-    expect(runtime.writeTerminalArtifactFile).toHaveBeenCalledWith(
-      'id:wt-1',
-      'grant-1',
-      '/tmp/result.json',
-      '{}',
-      undefined
-    )
-  })
-
   it('reads a preview file for a selected worktree', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

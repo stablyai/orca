@@ -13,7 +13,7 @@ export async function grantRestoredHostFile(
   worktreeId: string | null | undefined,
   filePath: string,
   expectedEnvironmentPairingRevision?: number
-): Promise<{ grantId: string; readOnly: boolean }> {
+): Promise<{ grantId: string; readOnly: boolean; byteLength?: number }> {
   if (target.kind !== 'environment' || !worktreeId) {
     throw new Error(REMOTE_EXTERNAL_FILE_UNAVAILABLE_MESSAGE)
   }
@@ -28,6 +28,7 @@ export async function grantRestoredHostFile(
   }
   return {
     grantId: renewed.grantId,
+    ...(renewed.byteLength === undefined ? {} : { byteLength: renewed.byteLength }),
     // Why: match a fresh open, which stays read-only where the host can't renew grants.
     readOnly: renewed.readOnly || !(await hostSavesGrantedFiles(target.environmentId))
   }

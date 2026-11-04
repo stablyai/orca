@@ -18,12 +18,13 @@ import {
 import {
   isRenewableGrantError,
   pinTerminalArtifactGrantTarget,
+  hostOpensGrantedFilesInPlace,
   renewTerminalArtifactGrant,
   type TerminalArtifactGrantTarget
 } from './runtime-terminal-artifact-grant'
 
-// Why: hosts cap a grant write at their mobile read budget; refuse before sending the bytes.
-const TERMINAL_ARTIFACT_WRITE_MAX_BYTES = 512 * 1024
+// Why: older hosts cap a grant write at their mobile read budget; refuse before sending the bytes.
+const LEGACY_TERMINAL_ARTIFACT_WRITE_MAX_BYTES = 512 * 1024
 
 type GrantTarget = TerminalArtifactGrantTarget
 
@@ -107,7 +108,10 @@ export async function writeRuntimeTerminalArtifactFile(
   }
 ): Promise<FileWriteResult> {
   const args = pinTerminalArtifactGrantTarget(unpinned)
-  if (new TextEncoder().encode(args.content).byteLength > TERMINAL_ARTIFACT_WRITE_MAX_BYTES) {
+  if (
+    new TextEncoder().encode(args.content).byteLength > LEGACY_TERMINAL_ARTIFACT_WRITE_MAX_BYTES &&
+    !(await hostOpensGrantedFilesInPlace(args.target.environmentId))
+  ) {
     throw new Error('This file is too large to save to its host (512 KB limit).')
   }
   // Why: escaping can push a smaller file past the host's inbound frame budget.

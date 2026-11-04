@@ -21,9 +21,10 @@ export async function writeTerminalArtifactFile(
   grantId: string,
   absolutePath: string,
   content: string,
-  clientId?: string
+  clientId?: string,
+  maxTextBytes: number = MOBILE_FILE_READ_MAX_BYTES
 ): Promise<{ ok: true }> {
-  if (Buffer.byteLength(content, 'utf8') > MOBILE_FILE_READ_MAX_BYTES) {
+  if (Buffer.byteLength(content, 'utf8') > maxTextBytes) {
     throw new Error('file_too_large')
   }
   const { grant } = await grants.requireTerminalFileGrant(
@@ -47,11 +48,11 @@ export async function writeTerminalArtifactFile(
         if (fileStats.isDirectory()) {
           throw new Error('Cannot write to a directory')
         }
-        if (fileStats.size > MOBILE_FILE_READ_MAX_BYTES) {
+        if (fileStats.size > maxTextBytes) {
           throw new Error('file_too_large')
         }
         assertTerminalFileGrantFresh(grant, fileStats)
-        const buffer = await readFileHandleBufferBounded(handle, MOBILE_FILE_READ_MAX_BYTES + 1)
+        const buffer = await readFileHandleBufferBounded(handle, maxTextBytes + 1)
         assertTerminalArtifactContentUnchanged(grant, buffer)
         if (isBinaryBuffer(buffer)) {
           throw new Error('binary_file')
@@ -73,7 +74,7 @@ export async function writeTerminalArtifactFile(
           assertTerminalFileGrantFresh(grant, await freshHandle.stat())
           assertTerminalArtifactContentUnchanged(
             grant,
-            await readFileHandleBufferBounded(freshHandle, MOBILE_FILE_READ_MAX_BYTES + 1)
+            await readFileHandleBufferBounded(freshHandle, maxTextBytes + 1)
           )
         } finally {
           await freshHandle.close()

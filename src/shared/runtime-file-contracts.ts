@@ -62,6 +62,8 @@ export type RuntimeTerminalPathOpenTarget =
       absolutePath: string
       grantId: string
       readOnly?: true
+      /** The file's size when granted; hosts with in-place files report it. */
+      byteLength?: number
     }
   | { kind: 'unsupported'; reason: string }
 
@@ -77,6 +79,14 @@ export const TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY =
 // Why: older hosts grant a path outside their workspaces only to the terminal that printed it.
 export const TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY =
   'files.resolve-terminal-path.absolute-files.v1' as const
+
+// Why: older hosts cap a grant's reads and saves at 512 KB, so a desktop client opens a larger
+// file another workspace holds there, as before.
+export const TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY =
+  'files.resolve-terminal-path.in-place-files.v1' as const
+
+/** Text a desktop client reads or saves through a grant; half the 4 MB reply leaves room for JSON escaping. */
+export const TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES = 2 * 1024 * 1024
 
 export type RuntimeTerminalPathResolution = {
   worktree: string

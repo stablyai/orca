@@ -52,7 +52,8 @@ export class RuntimeTerminalArtifacts {
             kind: 'absolute-file',
             provider: grant.provider,
             absolutePath: canonicalPath,
-            grantId: grant.id
+            grantId: grant.id,
+            byteLength: stats.size
           }
         : undefined
     }
@@ -62,7 +63,8 @@ export class RuntimeTerminalArtifacts {
     worktreeSelector: string,
     grantId: string,
     absolutePath: string,
-    clientId?: string
+    clientId?: string,
+    maxTextBytes?: number
   ): Promise<RuntimeFileReadResult> {
     const { grant, target } = await this.grants.requireTerminalFileGrant(
       worktreeSelector,
@@ -76,12 +78,12 @@ export class RuntimeTerminalArtifacts {
     let content: string
     const handle = await openLocalTerminalArtifactGrant(grant, constants.O_RDONLY)
     try {
-      content = await readLocalTerminalArtifactFileFromHandle(handle, grant)
+      content = await readLocalTerminalArtifactFileFromHandle(handle, grant, maxTextBytes)
     } finally {
       await handle.close()
     }
     this.grants.refreshTerminalFileGrant(grant)
-    const truncated = truncateMobileFilePreview(content)
+    const truncated = truncateMobileFilePreview(content, maxTextBytes)
 
     return {
       worktree: target.worktree.id,
@@ -128,7 +130,8 @@ export class RuntimeTerminalArtifacts {
     grantId: string,
     absolutePath: string,
     content: string,
-    clientId?: string
+    clientId?: string,
+    maxTextBytes?: number
   ): Promise<{ ok: true }> {
     return writeTerminalArtifactFile(
       this.grants,
@@ -136,7 +139,8 @@ export class RuntimeTerminalArtifacts {
       grantId,
       absolutePath,
       content,
-      clientId
+      clientId,
+      maxTextBytes
     )
   }
 }
