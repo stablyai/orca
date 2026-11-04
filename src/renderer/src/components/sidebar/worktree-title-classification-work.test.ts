@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as AgentNameTokenMatchModule from '../../../../shared/agent-status/title/agent-name-token-match'
-import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import * as Evidence from '../../../../shared/agent-status/title/agent-title-evidence'
 import * as Frames from '../../../../shared/agent-status/title/agent-title-name-anchoring'
 import { createTerminalTitleTracker } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolveTabAgentFromSignalSnapshot } from '../../../../shared/tab-agent-from-signals'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 import type * as OpenCode from '../../../../shared/agent-status/title/providers/opencode-terminal-title'
 import * as Status from '../../../../shared/agent-status/title/agent-title-status'
-import * as Wrappers from '../../../../shared/terminal-title-wrapper-segments'
+import * as Wrappers from '../../../../shared/agent-status/title/terminal-title-wrapper-segments'
 import * as Ingress from '../terminal-pane/terminal-title-evidence'
 
 const work = vi.hoisted((): { strict: boolean; frames: number[] } => ({
@@ -36,10 +36,13 @@ vi.mock('../../../../shared/agent-status/title/agent-title-status', async (impor
   const actual = await importOriginal<typeof Status>()
   return { ...actual, normalizeTerminalTitle: vi.fn(actual.normalizeTerminalTitle) }
 })
-vi.mock('../../../../shared/terminal-title-wrapper-segments', async (importOriginal) => {
-  const actual = await importOriginal<typeof Wrappers>()
-  return { ...actual, getWrapperTitleSegments: vi.fn(actual.getWrapperTitleSegments) }
-})
+vi.mock(
+  '../../../../shared/agent-status/title/terminal-title-wrapper-segments',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof Wrappers>()
+    return { ...actual, getWrapperTitleSegments: vi.fn(actual.getWrapperTitleSegments) }
+  }
+)
 vi.mock('../terminal-pane/terminal-title-evidence', async (importOriginal) => {
   const actual = await importOriginal<typeof Ingress>()
   return { ...actual, resolvePaneTitleDecision: vi.fn(actual.resolvePaneTitleDecision) }

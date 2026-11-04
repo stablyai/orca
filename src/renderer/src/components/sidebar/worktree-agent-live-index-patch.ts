@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { isWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 
 export type LiveEntriesByWorktreeCache = {
   tabsByWorktree: AppState['tabsByWorktree']

@@ -11,7 +11,7 @@ import {
   resetWorktreeSliceModuleMemory
 } from './worktrees-slice-test-harness'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 function installReviewRead() {
   const read = vi.fn<(args: HostedReviewForBranchArgs) => Promise<HostedReviewInfo | null>>()

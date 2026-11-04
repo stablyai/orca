@@ -1,6 +1,6 @@
 import { getWorktreeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceRowFactReader } from '../../../../shared/workspace-view/workspace-row-filters'
 import {
   isAutomationGeneratedWorkspace,

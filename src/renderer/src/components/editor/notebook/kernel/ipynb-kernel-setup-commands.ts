@@ -1,4 +1,4 @@
-import { quotePosixShell } from '../../../../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../../../../shared/shell/launch/shell-argument-quoting'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { venvInterpreterSegments } from '../../../../../../shared/notebook-venv-location'
 import { quotePowerShellLiteral } from '../../../../../../shared/powershell-native-argument'

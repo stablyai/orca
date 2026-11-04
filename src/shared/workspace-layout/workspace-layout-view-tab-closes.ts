@@ -1,6 +1,6 @@
 // Choose post-close selection while the old order is available: most recent survivor, then closed-tab neighbour. Empty-group collapse selects its split sibling, matching the window.
 
-import { pickNextActiveTabAfterClose } from '../workspace-session-terminal-tab-close'
+import { pickNextActiveTabAfterClose } from '../workspace-session/workspace-session-terminal-tab-close'
 import { findSiblingGroupId, removeGroupLayoutLeaf } from './tab-group-layout-tree'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import type { LayoutViewRecord } from './workspace-layout-views'

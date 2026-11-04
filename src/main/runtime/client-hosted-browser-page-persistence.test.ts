@@ -3,9 +3,9 @@ import {
   CLIENT_HOSTED_BROWSER_PAGE_MAX_AGE_MS,
   CLIENT_HOSTED_BROWSER_PAGE_REFRESH_MS,
   persistedClientHostedBrowserPageSchema
-} from '../../shared/client-hosted-browser-page-record'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { parseWorkspaceSessionSalvaging } from '../../shared/workspace-session-salvage'
+} from '../../shared/workspace-session/client-hosted-browser-page-record'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import { parseWorkspaceSessionSalvaging } from '../../shared/workspace-session/workspace-session-salvage'
 import {
   isRestoredClientHostedBrowserPlacement,
   persistClientHostedBrowserPages,

@@ -13,7 +13,7 @@ import type {
 } from '../../../../shared/automation-owner-ref'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   makeAutomation,
   makeAutomationListRow,

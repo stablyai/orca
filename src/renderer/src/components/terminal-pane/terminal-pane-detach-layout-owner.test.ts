@@ -3,7 +3,7 @@ import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../../../shared/terminal-leaf-move'
+} from '../../../../shared/workspace-layout/terminal-leaf-move'
 import { moveLeafThroughLayoutOwner } from './terminal-pane-detach-layout-owner'
 import { detachTerminalPaneToTab } from './terminal-pane-tab-detach'
 import {

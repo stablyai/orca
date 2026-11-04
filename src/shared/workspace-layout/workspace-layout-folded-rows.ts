@@ -1,7 +1,7 @@
 // Persist touched legacy duplicates in their loaded form; otherwise closing/moving the canonical claimant can resurrect stale stored rows on the next load.
 
-import type { TerminalTab } from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import {
   readCanonicalPtyOwners,
   readPersistedTerminalPtyIds,

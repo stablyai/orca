@@ -1,10 +1,10 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { terminalLayoutEqual } from '../../../../shared/terminal-layout-equality'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-layout-equality'
 import {
   normalizeTerminalLayoutPtyOwnership,
   resolveTerminalLayoutPtyOwnershipTransfers
-} from '../../../../shared/terminal-layout-pty-ownership'
+} from '../../../../shared/workspace-layout/terminal-layout-pty-ownership'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
   resolvePrimaryLayoutPtyId,

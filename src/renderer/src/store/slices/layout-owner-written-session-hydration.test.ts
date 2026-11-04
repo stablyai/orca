@@ -8,7 +8,7 @@ import {
 } from '../../../../shared/__fixtures__/layout-owner-written-session-golden-paths'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 

@@ -1,4 +1,4 @@
-import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
+import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type { AgentIdleEdgeMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import type {
   RestoreSpawnIntent,
@@ -20,7 +20,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type {

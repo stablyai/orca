@@ -4,8 +4,8 @@ import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
 } from '../../../shared/runtime-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'

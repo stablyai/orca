@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import 'zustand'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import './slices/editor/buffers/editor-buffer-record'
 
 import './slices/editor/buffers/editor-buffer-views'

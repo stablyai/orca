@@ -9,7 +9,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import { translateMain } from '../i18n/main-i18n'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
-import { toHostSessionPaneKey } from '../../shared/terminal-surface-id'
+import { toHostSessionPaneKey } from '../../shared/workspace-layout/terminal-surface-id'
 import { isNotificationSourceEnabled } from '../../shared/notification-source-gate'
 import { notificationDeliveryId } from '../../shared/notification-delivery-id'
 

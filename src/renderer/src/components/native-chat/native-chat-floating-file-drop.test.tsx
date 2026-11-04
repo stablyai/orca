@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { createUuidV4 } from '../../../../shared/uuid-v4'
 import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
 import { useNativeChatFileDrops } from './use-native-chat-file-drops'

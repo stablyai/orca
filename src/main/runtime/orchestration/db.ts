@@ -13,7 +13,6 @@ export type {
   AttemptArtifactGitEvidence,
   AttemptCoordinatorAcknowledgment,
   AttemptFreshness,
-  AttemptLivenessObservation,
   AttemptObservationFact,
   AttemptObservationFactInput,
   AttemptOutcomeProjection,

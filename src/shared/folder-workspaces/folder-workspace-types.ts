@@ -12,12 +12,6 @@ import type {
   WorkspaceStatus
 } from '../worktree/types'
 
-export type WorkspaceScope =
-  | { type: 'worktree'; worktreeId: string }
-  | { type: 'folder'; folderWorkspaceId: string }
-
-export type WorkspaceKey = `worktree:${string}` | `folder:${string}`
-
 export type FolderWorkspace = {
   id: string
   projectGroupId: string

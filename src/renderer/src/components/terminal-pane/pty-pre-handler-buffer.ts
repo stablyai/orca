@@ -1,4 +1,4 @@
-import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
+import { isPtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import { clampUtf8Tail } from './pty-eager-buffer-clamp'
 import type { PtyDataMeta } from './pty-dispatcher'
 

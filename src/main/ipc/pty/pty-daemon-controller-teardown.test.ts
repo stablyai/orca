@@ -6,7 +6,7 @@ import { setLocalPtyProvider } from './provider/registry'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import type { RuntimePtyController } from '../../runtime/runtime-pty-controller-contract'
 import { TerminalIntentionalStops } from '../../runtime/terminal-intentional-stops'
-import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../shared/pty-liveness-verdict'
+import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))

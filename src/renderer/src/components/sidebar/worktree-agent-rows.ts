@@ -12,12 +12,12 @@ import {
   makePaneKey,
   parseLegacyNumericPaneKey,
   parsePaneKey
-} from '../../../../shared/stable-pane-id'
+} from '../../../../shared/workspace-layout/stable-pane-id'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../../shared/terminal-tab-types'
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveRuntimePaneTitleLeafId } from '../../../../shared/runtime-pane-title-leaf-id'
 import { resolveDecayedAgentRowState } from '../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'

@@ -2,14 +2,14 @@ import type { Repo } from '../../../shared/repo-types'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
+import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session/workspace-session-partition-owner'
 import {
   parseWorkspaceKey,
   normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId
@@ -25,7 +25,7 @@ import {
 import {
   contestedPartitionHosts,
   pickPrimaryHostForClaims
-} from '../../../shared/workspace-session-contested-primary-host'
+} from '../../../shared/workspace-session/workspace-session-contested-primary-host'
 import {
   nonLocalHostSessionEntries,
   splitWorkspaceSessionByHost,
@@ -40,7 +40,7 @@ import {
   buildWorktreeIdByTabId,
   extendWorktreeIdByTabId,
   type WorkspaceTabOwnerCatalog
-} from '../../../shared/workspace-session-host-records'
+} from '../../../shared/workspace-session/workspace-session-host-records'
 
 export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]

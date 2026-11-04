@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
 import {
   planTerminalLiveLayoutRemovals,
   selectRetiredPaneIds,
