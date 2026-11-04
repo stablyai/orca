@@ -1,12 +1,17 @@
 import { expect } from 'vitest'
 import WebSocket from 'ws'
-import { parsePairingCode } from '../../shared/pairing'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
-import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from '../../shared/e2ee-crypto'
+import {
+  decrypt,
+  deriveSharedKey,
+  encrypt,
+  generateKeyPair
+} from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 
 export const REPO_ID = 'repo-1'
 export const FOLDER_REPO_ID = 'folder-repo-1'

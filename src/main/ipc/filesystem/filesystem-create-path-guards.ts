@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises'
 import { basename } from 'node:path'
-import { isENOENT } from './filesystem-path-containment'
+import { isENOENT } from './access/filesystem-path-containment'
 
 /** Translate raw filesystem errors, including exclusive-create EEXIST, into renderer-facing messages. */
 export function rethrowWithUserMessage(error: unknown, targetPath: string): never {

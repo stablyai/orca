@@ -11,7 +11,7 @@ import {
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
 import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 // Older catalogs lack serviceTiers and cannot safely construct Fast requests.
 const SCHEMA_VERSION = 3
@@ -78,7 +78,14 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),
-    ...(serviceTiers ? { serviceTiers } : {})
+    ...(serviceTiers ? { serviceTiers } : {}),
+    ...(Array.isArray(row.chatEfforts)
+      ? {
+          chatEfforts: row.chatEfforts
+            .map(parseChoice)
+            .filter((choice): choice is AgentSessionOptionChoice => choice !== null)
+        }
+      : {})
   }
 }
 

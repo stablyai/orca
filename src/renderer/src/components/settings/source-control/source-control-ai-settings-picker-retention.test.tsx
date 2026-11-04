@@ -17,7 +17,7 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import {
   getDefaultSourceControlAiSettings,
   normalizeSourceControlAiSettings
-} from '../../../../../shared/source-control-ai'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), dismiss: vi.fn() }
 }))

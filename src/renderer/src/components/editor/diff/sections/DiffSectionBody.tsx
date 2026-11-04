@@ -1,0 +1,270 @@
+import { DiffTooLargeNotice } from '../large-files/DiffTooLargeNotice'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useAppStore } from '@/store'
+import type { editor } from 'monaco-editor'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { AlertCircle, RefreshCw } from 'lucide-react'
+import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { combinedDiffSectionScrollbarOptions } from '../monaco-view/diff-editor-scrollbar-options'
+import { isCombinedDiffSizeUnknown } from '../../combined-diff/load-sections/combined-diff-on-demand-load'
+import type { DiffSection } from './diff-section-types'
+import { translate } from '@/i18n/i18n'
+import { LargeDiffFallback } from '../large-files/LargeDiffFallback'
+import { LargeDiffLoadPrompt } from '../large-files/LargeDiffLoadPrompt'
+import { buildDiffEditorWhitespaceOptions } from '../monaco-view/diff-editor-whitespace-options'
+import {
+  buildDiffEditorWordWrapOptions,
+  syncDiffEditorOriginalWordWrap
+} from '../monaco-view/diff-editor-word-wrap-options'
+import { monacoFindOptions } from '../../monaco-find-options'
+import { installDiffEditorShiftWheelScroll } from '../monaco-view/diff-editor-shift-wheel-scroll'
+import { installCombinedDiffCursorReveal } from '../../combined-diff/scroll-viewport/combined-diff-cursor-reveal'
+import { usePluginSyntaxLanguage } from '../../use-plugin-syntax-language'
+import {
+  PLUGIN_SYNTAX_EDITOR_OPTIONS,
+  applyModelLanguage
+} from '@/lib/monaco-languages/plugin-syntax-editor-options'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { monacoTypographyOptions, type EditorTypography } from '@/lib/editor-typography'
+
+const ImageDiffViewer = lazy(() => import('../large-files/ImageDiffViewer'))
+
+type DiffSectionBodyProps = {
+  section: DiffSection
+  index: number
+  sectionBodyHeight: number | undefined
+  useIntrinsicImageHeight: boolean
+  isBranchMode: boolean
+  sideBySide: boolean
+  isDark: boolean
+  language: string
+  modelPathBase: string
+  isEditable: boolean
+  typography: EditorTypography
+  diffWordWrap?: boolean
+  diffShowWhitespace?: boolean
+  onRetrySection: (index: number) => void
+  onLoadDeferredSection: (index: number) => void
+  onSaveLimitedDiff: () => void
+  onMount: DiffOnMount
+}
+
+export function DiffSectionBody({
+  section,
+  index,
+  sectionBodyHeight,
+  useIntrinsicImageHeight,
+  isBranchMode,
+  sideBySide,
+  isDark,
+  language: coreLanguage,
+  modelPathBase,
+  isEditable,
+  typography,
+  diffWordWrap,
+  diffShowWhitespace,
+  onRetrySection,
+  onLoadDeferredSection,
+  onSaveLimitedDiff,
+  onMount
+}: DiffSectionBodyProps): React.JSX.Element {
+  const editorLineNumbers = useAppStore((s) => s.settings?.editorLineNumbers !== false)
+  const language = usePluginSyntaxLanguage(section.path, coreLanguage)
+  const monacoTheme = useMonacoTheme(isDark)
+  const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
+  const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
+  const wordWrapOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
+  const wordWrapMountFrameRef = useRef(0)
+  const diffWordWrapRef = useRef(diffWordWrap)
+  // Why: @monaco-editor/react calls updateOptions whenever this object's identity changes.
+  const editorOptions = useMemo<editor.IDiffEditorConstructionOptions>(
+    () => ({
+      dropIntoEditor: { enabled: false },
+      // Native EditContext focus scrolls its hidden input into the combined viewport.
+      editContext: false,
+      readOnly: !isEditable,
+      originalEditable: false,
+      renderSideBySide: sideBySide,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
+      ...monacoTypographyOptions(typography),
+      lineNumbers: editorLineNumbers ? 'on' : 'off',
+      ...buildDiffEditorWordWrapOptions(diffWordWrap),
+      ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
+      automaticLayout: true,
+      renderOverviewRuler: false,
+      scrollbar: combinedDiffSectionScrollbarOptions,
+      hideUnchangedRegions: { enabled: true },
+      find: monacoFindOptions
+    }),
+    [isEditable, sideBySide, typography, editorLineNumbers, diffWordWrap, diffShowWhitespace]
+  )
+  useLayoutEffect(() => {
+    diffWordWrapRef.current = diffWordWrap
+  }, [diffWordWrap])
+  useEffect(() => {
+    const models = diffEditorRef.current?.getModel()
+    applyModelLanguage([models?.original, models?.modified], language)
+  }, [language])
+  const handleEditorMount: DiffOnMount = (diffEditor, monaco) => {
+    diffEditorRef.current = diffEditor
+    applyModelLanguage([diffEditor.getModel()?.original, diffEditor.getModel()?.modified], language)
+    const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(diffEditor)
+    const cleanupCursorReveal = installCombinedDiffCursorReveal(diffEditor)
+    diffEditor.getModifiedEditor().onDidDispose(() => {
+      cleanupShiftWheelScroll()
+      cleanupCursorReveal()
+      if (diffEditorRef.current !== diffEditor) {
+        return
+      }
+      cancelAnimationFrame(wordWrapMountFrameRef.current)
+      wordWrapOptionsSubRef.current?.dispose()
+      wordWrapOptionsSubRef.current = null
+      diffEditorRef.current = null
+    })
+    // Monaco applies its inline wrap override after mount when width is known.
+    wordWrapMountFrameRef.current = requestAnimationFrame(() => {
+      if (diffEditorRef.current !== diffEditor) {
+        return
+      }
+      wordWrapOptionsSubRef.current?.dispose()
+      wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(
+        diffEditor,
+        diffWordWrapRef.current
+      )
+    })
+    onMount(diffEditor, monaco)
+  }
+
+  useEffect(() => {
+    cancelAnimationFrame(wordWrapMountFrameRef.current)
+    const diffEditor = diffEditorRef.current
+    if (!diffEditor) {
+      return () => {
+        cancelAnimationFrame(wordWrapMountFrameRef.current)
+      }
+    }
+    wordWrapOptionsSubRef.current?.dispose()
+    wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(diffEditor, diffWordWrap)
+    return () => {
+      cancelAnimationFrame(wordWrapMountFrameRef.current)
+      wordWrapOptionsSubRef.current?.dispose()
+      wordWrapOptionsSubRef.current = null
+    }
+  }, [diffWordWrap, sideBySide])
+
+  return (
+    <div
+      className={cn('relative', useIntrinsicImageHeight && 'overflow-visible')}
+      style={sectionBodyHeight === undefined ? undefined : { height: sectionBodyHeight }}
+    >
+      {section.loadOnDemand ? (
+        <LargeDiffLoadPrompt
+          sizeUnknown={isCombinedDiffSizeUnknown(section)}
+          onLoad={() => onLoadDeferredSection(index)}
+        />
+      ) : section.loading ? (
+        <div className="flex h-full items-center gap-2 bg-muted/10 px-3 text-[11px] text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+          <span>
+            {translate('auto.components.editor.DiffSectionBody.f5cf81cec2', 'Loading diff...')}
+          </span>
+        </div>
+      ) : section.error ? (
+        <div className="flex h-full items-center justify-between gap-3 bg-muted/10 px-3 text-[11px] text-muted-foreground">
+          <div className="flex min-w-0 items-center gap-2">
+            <AlertCircle className="size-3.5 shrink-0 text-destructive" />
+            <span className="truncate">{section.error}</span>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="h-6 shrink-0 px-2 text-[11px]"
+            onClick={(event) => {
+              event.stopPropagation()
+              onRetrySection(index)
+            }}
+          >
+            <RefreshCw className="size-3" />
+            {translate('auto.components.editor.DiffSectionBody.cef4cf0ff5', 'Retry')}
+          </Button>
+        </div>
+      ) : section.diffResult?.kind === 'binary' ? (
+        section.diffResult.tooLarge ? (
+          <DiffTooLargeNotice />
+        ) : section.diffResult.isImage ? (
+          // Why: without a row-local boundary the chunk load hides the whole virtualized list, which
+          // then drops this overscan row, un-suspends, re-shows it, and loops into React #185.
+          <Suspense fallback={null}>
+            <ImageDiffViewer
+              originalContent={section.diffResult.originalContent}
+              modifiedContent={section.diffResult.modifiedContent}
+              filePath={section.path}
+              mimeType={section.diffResult.mimeType}
+              sideBySide={sideBySide}
+              layout={useIntrinsicImageHeight ? 'intrinsic' : 'fill'}
+            />
+          </Suspense>
+        ) : (
+          <div className="flex h-full items-center justify-center px-6 text-center">
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-foreground">
+                {translate(
+                  'auto.components.editor.DiffSectionBody.35d6afb5be',
+                  'Binary file changed'
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {isBranchMode
+                  ? translate(
+                      'auto.components.editor.DiffSectionBody.7ce8436458',
+                      'Text diff is unavailable for this file in branch compare.'
+                    )
+                  : translate(
+                      'auto.components.editor.DiffSectionBody.72f71f52eb',
+                      'Text diff is unavailable for this file.'
+                    )}
+              </div>
+            </div>
+          </div>
+        )
+      ) : renderLimit?.limited ? (
+        <LargeDiffFallback
+          filePath={section.path}
+          renderLimit={renderLimit}
+          action={
+            isEditable && section.dirty
+              ? {
+                  label: translate('auto.components.editor.DiffSectionBody.b5675b0694', 'Save'),
+                  description: translate(
+                    'auto.components.editor.DiffSectionBody.593f2193f6',
+                    'This draft crossed the safe display limit, but it can still be saved.'
+                  ),
+                  onClick: onSaveLimitedDiff
+                }
+              : undefined
+          }
+        />
+      ) : (
+        <DiffEditor
+          height="100%"
+          language={language}
+          original={section.originalContent}
+          modified={section.modifiedContent}
+          theme={monacoTheme}
+          onMount={handleEditorMount}
+          // The React wrapper may dispose models before widgets; retain them through teardown and dispose unattached models next tick.
+          originalModelPath={`${modelPathBase}:original`}
+          modifiedModelPath={`${modelPathBase}:modified`}
+          keepCurrentOriginalModel
+          keepCurrentModifiedModel
+          options={editorOptions}
+        />
+      )}
+    </div>
+  )
+}

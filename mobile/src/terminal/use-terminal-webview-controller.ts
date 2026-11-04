@@ -1,4 +1,4 @@
-import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal-kitty-keyboard-flags'
+import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
 import { fitDimensionsFromCell } from './terminal-grid-fit'

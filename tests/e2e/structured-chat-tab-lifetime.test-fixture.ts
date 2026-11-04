@@ -68,7 +68,7 @@ export function resolveActiveSessionTab47713<T extends SessionTabLike>(
   }
 }
 
-import { parsePaneKey } from '../../src/shared/stable-pane-id'
+import { parsePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId

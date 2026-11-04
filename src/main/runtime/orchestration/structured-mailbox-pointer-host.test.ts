@@ -55,7 +55,7 @@ describe('structured mailbox pointer host', () => {
     // Read the full timeline: a busy turn's lifecycle item may be far from the tail, and false idle can interrupt it.
     const items = [runningTurn(), ...transcript(500)]
     hostRef.current = {
-      journalSnapshot: () => ({ items, submissions: [] }),
+      journalCurrentRead: () => ({ items, submissions: [] }),
       currentWork: () => null
     }
     expect(await readStructuredSessionGateFacts('s1')).toEqual({

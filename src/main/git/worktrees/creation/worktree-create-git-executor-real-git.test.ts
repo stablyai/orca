@@ -17,8 +17,8 @@ import {
   acquireGitAdmission,
   _resetGitAdmissionForTests
 } from '../../command-runner/git-subprocess-admission'
-import { GitAdmissionScheduler } from '../../../../shared/git-admission-scheduler'
-import type { GitAdmissionEvent } from '../../../../shared/git-admission-state'
+import { GitAdmissionScheduler } from '../../../../shared/git/admission/git-admission-scheduler'
+import type { GitAdmissionEvent } from '../../../../shared/git/admission/git-admission-state'
 
 const roots: string[] = []
 afterEach(async () => {

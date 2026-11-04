@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   CODEX_REMOTE_VIEWER_SSH_CONNECTION,
   REMOTE_VIEWER_CLIPBOARD_ENV

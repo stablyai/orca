@@ -134,8 +134,8 @@ export function buildHttpLinkActions(
       ? [
           {
             label: translate(
-              'auto.components.terminal.pane.TerminalLinkActionPopover.openInThisGroup',
-              'Open in this group'
+              'auto.components.terminal.pane.TerminalLinkActionPopover.openInNewTab',
+              'Open in new tab'
             ),
             run: source.openInSourceGroup
           }

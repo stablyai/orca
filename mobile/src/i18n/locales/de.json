@@ -110,13 +110,8 @@
       "tryAgain": "Erneut versuchen"
     },
     "terminalSettings": {
-      "autocomplete": "Autovervollständigung & Autokorrektur",
-      "autocompleteOff": "Aus",
-      "autocompleteOn": "Ein",
       "defaultText": "Standard (100 %)",
       "keepPhoneSize": "Smartphone-Größe beibehalten (Standard)",
-      "keyboardInputDescription": "Autovervollständigung, Autokorrektur und Rechtschreibvorschläge gelten nur für die gepufferte Befehlseingabe. Mit der Doppelpfeil-Schaltfläche über der Tastatur von der direkten zur gepufferten Eingabe wechseln und den Befehl vor dem Tippen auf „Senden“ bearbeiten. Standardmäßig deaktiviert, damit Befehle, Flags und Pfade nicht verändert werden.",
-      "keyboardInputHeading": "TASTATUREINGABE",
       "largeText": "Groß (125 %)",
       "largerText": "Größer (150 %)",
       "largestText": "Am größten (200 %)",
@@ -283,7 +278,8 @@
       "stoppedManually": "Manuell gestoppt",
       "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
       "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
-      "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes)."
+      "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
+      "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "Die Unterhaltung kann fortgesetzt werden.",
@@ -330,7 +326,10 @@
       "emptyAnswer": "Leere Antwort",
       "resolved": "Erledigt",
       "resolver": "Auf {{device}} beantwortet",
-      "unavailable": "Ausgewählte Antwort nicht verfügbar"
+      "unavailable": "Ausgewählte Antwort nicht verfügbar",
+      "thisPhone": "diesem Smartphone",
+      "computer": "dem Computer",
+      "otherDevice": "einem anderen Gerät"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "Nach dem Sitzungsstart verfügbar.",
@@ -529,6 +528,24 @@
     "agentMessage": {
       "handedOffToAgent": "An Agenten übergeben",
       "startedAgent": "Agent gestartet"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "Die Antwort zum Anhang ist nicht lesbar. Erneut versuchen.",
+      "incompleteReply": "Der Anhang wurde geändert oder die Antwort war unvollständig. Schließen und erneut versuchen.",
+      "notText": "Diese Datei kann nicht als Text angezeigt werden. Speichere sie, um sie in einer anderen App zu öffnen.",
+      "openFailed": "Anhang konnte nicht geöffnet werden. Erneut versuchen.",
+      "hostUpdate": "Dieser Host kann Textanhänge noch nicht öffnen. Aktualisiere Orca auf diesem Host und versuche es erneut.",
+      "copyTooLarge": "Diese Datei ist zu groß zum Kopieren. Speichere sie stattdessen.",
+      "connectionChanged": "Die Verbindung hat sich geändert. Versuche erneut, den Anhang zu öffnen.",
+      "hostChanged": "Der Host des Anhangs hat sich geändert. Schließe den Anhang und öffne ihn erneut.",
+      "readFailed": "Anhang konnte nicht gelesen werden. Stelle die Verbindung wieder her und versuche es erneut. Die Datei wurde möglicherweise entfernt oder geändert.",
+      "copyFrame": "Für „Vollständig kopieren“ bei diesem Anhang ist das kommende Smartphone-Update erforderlich.",
+      "copyFailed": "Anhang konnte nicht kopiert werden. Erneut versuchen.",
+      "pastedText": "Eingefügter Text",
+      "textAttachment": "Textanhang",
+      "byteSize": "{{size}} Byte",
+      "saveUpdate": "Speichern wird mit einem Smartphone-Update verfügbar sein.",
+      "fullCopySaveUpdate": "„Vollständig kopieren“ und Speichern werden für diesen Anhang mit einem Smartphone-Update verfügbar sein."
     }
   },
   "common": {
@@ -803,7 +820,8 @@
     },
     "prSidebar": {
       "loading": "Pull Request wird geladen…",
-      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden."
+      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden.",
+      "retryLoading": "Pull Request erneut laden"
     },
     "protocolBlockScreen": {
       "backToHosts": "Zurück zu Hosts",
@@ -1643,7 +1661,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Aktueller Branch nicht verfügbar.",
-      "providerUnavailable": "Gehostetes Review-Panel für diesen Anbieter nicht verfügbar."
+      "githubRemoteRequired": "Dieser Tab benötigt ein GitHub-Remote, um Pull-Request-Details anzuzeigen. Für andere unterstützte Plattformen kannst du unter Änderungen ein Review erstellen und im Browser öffnen."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Personen konnten nicht geladen werden.",
@@ -1666,15 +1684,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Tastatur ausblenden",
       "sendKey": "{{label}} senden",
-      "modifierHint": "Gilt für die nächste Taste. Doppeltippen zum Beibehalten.",
       "typeCharacter": "{{character}} eingeben",
       "interrupt": "Terminal unterbrechen",
       "keysModeLabel": "Tastenmodus: Eingaben gehen direkt an das Terminal. Zum Nachrichtenmodus wechseln",
       "messageModeLabel": "Nachrichtenmodus: Schreiben, dann senden. Zum Tastenmodus wechseln",
-      "keysMode": "Tasten",
-      "messageMode": "Nachricht",
       "moreKeys": "Weitere Tasten und Aktionen",
-      "showKeyboard": "Tastatur anzeigen"
+      "showKeyboard": "Tastatur anzeigen",
+      "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt die aktuelle Terminal-Sitzung geöffnet.",
+      "switchToDesktopMode": "In den Desktop-Modus wechseln",
+      "switchToPhoneMode": "In den Smartphone-Modus wechseln",
+      "pasteFromClipboard": "Aus der Zwischenablage einfügen",
+      "paste": "Einfügen",
+      "addCustomShortcut": "Benutzerdefiniertes Tastenkürzel hinzufügen"
     },
     "activeContent": {
       "createTab": "Tab erstellen",
@@ -1785,11 +1806,7 @@
     },
     "commandDock": {
       "liveInputHint": "Eingegebener Text wird direkt an das aktive Terminal gesendet",
-      "liveInputLabel": "Live-Eingabe im Terminal",
-      "sendCommand": "Befehl senden",
-      "messageAgentPlaceholder": "Nachricht an {{agent}}",
-      "writeCommandPlaceholder": "Befehl schreiben und dann senden",
-      "theAgent": "dem Agenten"
+      "liveInputLabel": "Live-Eingabe im Terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Warnung zur Erstellung des Arbeitsbereichs ausblenden"
@@ -2042,7 +2059,8 @@
       "promptUnconfirmed": "Der Agent wurde gestartet, aber der Versand des Prompts konnte nicht bestätigt werden."
     },
     "prActionsEngine": {
-      "mergeFailed": "Pull Request konnte nicht gemergt werden."
+      "mergeFailed": "Pull Request konnte nicht gemergt werden.",
+      "refreshFailed": "Pull Request konnte nicht aktualisiert werden."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent gestartet",
@@ -2470,14 +2488,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "Layout konnte nicht gespeichert werden",
       "saveFailedMessage": "Dieses Layout gilt vorerst. Wähle es erneut aus, um das Speichern zu wiederholen."
-    },
-    "terminalArrowPad": {
-      "label": "Pfeiltasten",
-      "hint": "Eine Seite antippen für einen Tastendruck oder gedrückt halten und ziehen zum Wiederholen",
-      "up": "Nach oben",
-      "down": "Nach unten",
-      "left": "Nach links",
-      "right": "Nach rechts"
     },
     "terminalMoreKeys": {
       "sendKey": "{{label}} senden",
@@ -3198,7 +3208,6 @@
       "pipelineJobs_one": "{{count}} Job",
       "pipelineJobs_other": "{{count}} Jobs",
       "rerunAll": "Alle erneut ausführen",
-      "rerunFailed": "Fehlgeschlagene erneut ausführen",
       "subIssueTitle": "Titel des Unter-Issues",
       "subIssues": "Untergeordnete Issues"
     },
@@ -3429,7 +3438,6 @@
       "requestReview": "Review anfordern",
       "requestReviewers": "Prüfer anfordern",
       "rerunAll": "Alle erneut ausführen",
-      "rerunFailed": "Fehlgeschlagene erneut ausführen",
       "reviewers": "Prüfer",
       "viewFile": "Anzeigen"
     },

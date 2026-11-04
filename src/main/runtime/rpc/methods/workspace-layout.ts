@@ -10,7 +10,7 @@ import { LayoutReopenHeldPanesParams } from '../../../../shared/rpc-contract/wor
 import type { WorkspaceLayoutStreamFrame } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { getAppEnvironment } from '../../../../shared/app-environment'
-import { listEnvironments } from '../../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 
 let layoutSubscriptionSeq = 0
 

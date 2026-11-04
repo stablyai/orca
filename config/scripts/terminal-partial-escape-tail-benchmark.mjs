@@ -9,7 +9,7 @@ const ROUNDS = 7
 // Use jiti: Node type stripping cannot resolve graph’s extensionless relative imports.
 const jiti = createJiti(import.meta.url)
 const { advancePartialEscapeTail, extractPartialEscapeTail, MAX_PARTIAL_ESCAPE_TAIL_LENGTH } =
-  await jiti.import('../../src/shared/terminal-partial-escape-tail.ts')
+  await jiti.import('../../src/shared/terminal/protocol/escape/terminal-partial-escape-tail.ts')
 
 function baselineAdvance(pendingTail, chunk) {
   const tail = extractPartialEscapeTail(pendingTail + chunk)

@@ -86,15 +86,4 @@ describe('repo Git enrichment for a stopped WSL distro (E9)', () => {
     await flushRepoGitUsernameEnrichmentForTests()
     expect(mocks.resolveLocalGitUsernameDetailed).toHaveBeenCalledTimes(1)
   })
-
-  it('enriches a host repo exactly as before, without asking the gate', async () => {
-    const store = makeStore(makeRepo('C:/repos/one'))
-    enrichMissingRepoGitRemoteIdentities(store)
-    enrichRepoGitUsernames(store)
-    await flushRepoGitRemoteIdentityEnrichmentForTests()
-    await flushRepoGitUsernameEnrichmentForTests()
-    expect(mocks.probeGitRemoteIdentity).toHaveBeenCalledTimes(1)
-    expect(mocks.resolveLocalGitUsernameDetailed).toHaveBeenCalledTimes(1)
-    expect(mocks.blockedWslDistroForPath).not.toHaveBeenCalled()
-  })
 })

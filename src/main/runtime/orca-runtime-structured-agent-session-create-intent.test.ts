@@ -1,4 +1,4 @@
-import type { AgentLaunchChoices } from '../../shared/agent-launch-choices'
+import type { AgentLaunchChoices } from '../../shared/agent-launch/choices/agent-launch-choices'
 import { prepareStructuredAgentSessionCreateForWorktree } from './rpc/methods/structured-agent-session-create'
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { prepareAdoptedTranscript } from '../native-chat/agent-session-wire/structured-agent-session-adopted-import'

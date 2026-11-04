@@ -1,10 +1,11 @@
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { AgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import type {
@@ -95,7 +96,7 @@ vi.mock('./NativeChatComposer', async () => {
 
 const { NativeChatResolvedView } = await import('./NativeChatResolvedView')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
-const { useAppStore } = await import('../../store')
+const { useAppStore } = await import('../../store/index')
 const { installNativeChatMessageListTestViewport } =
   await import('./native-chat-message-list-test-viewport')
 const { resetNativeChatPtySendQueuesForTests } = await import('./native-chat-runtime-send')
@@ -240,7 +241,7 @@ describe('a prompt card hides the composer without unmounting it', () => {
     expect(document.querySelector('[data-native-chat-approval-card="true"]')).not.toBeNull()
     expect(pty.verified.mock.calls.map((call) => call[1])).not.toContain('\r')
     // Only the pre-body clear: retiring the send types nothing under the card.
-    expect(pty.raw.mock.calls.map((call) => call[1])).toEqual(['\x15'])
+    expect(pty.raw.mock.calls.map((call) => call[1])).toEqual([AGENT_TUI_CLEAR_INPUT_MAX])
     expect(screen.getByTestId('composer-send').closest('[hidden]')).not.toBeNull()
     expect(screen.getAllByText(MESSAGE).length).toBeGreaterThan(0)
     expect(screen.getByText('Message not sent')).toBeInTheDocument()

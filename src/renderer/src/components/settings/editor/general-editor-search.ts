@@ -3,9 +3,11 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getVisibleEditorTypographySearchEntries } from './editor-typography-search'
 import { getFormatOnSaveSearchEntry } from './EditorFormatOnSaveSetting'
+import { getInsertFinalNewlineSearchEntry } from './EditorInsertFinalNewlineSetting'
 
 export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
   getFormatOnSaveSearchEntry(),
+  getInsertFinalNewlineSearchEntry(),
   {
     title: translate('auto.components.settings.general.search.ae21e806ce', 'Auto Save Files'),
     description: translate(
@@ -129,6 +131,25 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.e3919429c0', 'overview'),
       ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code'),
       ...translateSearchKeyword('auto.components.settings.general.search.a0014961ae', 'scroll')
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.general.search.markdownDefaultView',
+      'Default Markdown View'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.markdownDefaultViewDesc',
+      'The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.d05f629d2c', 'markdown'),
+      ...translateSearchKeyword('auto.components.settings.general.search.2b463f0bf9', 'view'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.markdownSourceKw',
+        'source'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.markdownRichKw', 'rich')
     ]
   },
   {

@@ -1,7 +1,7 @@
 import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
-import type { AgentType } from '../../shared/agent-status-types'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import {
   resolveNativeChatTranscriptAgent,
   type NativeChatTranscriptAgent
@@ -14,7 +14,7 @@ import {
   codexHomeSessionsDir,
   uniqueDirs
 } from '../ai-vault/session-scanner-roots'
-import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir

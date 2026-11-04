@@ -4,7 +4,7 @@ import {
   readPairingInputFromLocation,
   type WebPairingOffer
 } from './web-pairing'
-import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/mobile-pairing-protocol-limits'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
 
 describe('web pairing input', () => {
   const offer: WebPairingOffer = {

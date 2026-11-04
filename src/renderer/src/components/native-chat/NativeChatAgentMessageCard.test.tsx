@@ -39,6 +39,26 @@ import { nativeChatTurnFoldRow } from '../../../../shared/native-chat/transcript
 import { isNoiseMessage } from '../../../../shared/native-chat/native-chat-noise'
 import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native-chat-trailing-run'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { orchestrationMailFixture } from '../../../../shared/agent-session/orchestration-mail.test-fixture'
+
+it('renders and copies structured mail content without the agent envelope', async () => {
+  const message = orchestrationMailFixture({ body: 'The **result** is ready.' })
+  const writeClipboardText = vi.fn(async () => {})
+  vi.stubGlobal('api', { ui: { writeClipboardText } })
+  render(card(message))
+  expect(screen.queryByText('Review complete')).toBeNull()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy message' })))
+  expect(writeClipboardText).toHaveBeenCalledWith('Review complete\n\nThe **result** is ready.')
+  expect(screen.getByRole('button', { name: 'Update from worker' })).toHaveAttribute(
+    'aria-expanded',
+    'false'
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Update from worker' }))
+  expect(screen.getByText('Review complete')).toBeInTheDocument()
+  expect(screen.getByText('result', { selector: 'strong' })).toBeInTheDocument()
+  expect(screen.getByText('Review worker')).toBeInTheDocument()
+  expect(screen.queryByText(/Subject:|──── From:|orchestration reply/)).toBeNull()
+})
 
 it('reloads a positioned worker start into the shared card with full task, Copy and navigation', async () => {
   const task = `  Task with [a link][target].\n\n${'More task text.\n'.repeat(20)}END  \n\n[target]: https://example.com\n`
@@ -86,21 +106,21 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
     />
   )
   expect(screen.getByText('Started worker')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Build cards' })).toHaveAttribute(
+    'title',
+    'Build cards'
+  )
+  expect(screen.queryByRole('link', { name: 'a link' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Started worker' }))
   expect(screen.getByRole('link', { name: 'a link' })).toHaveAttribute(
     'href',
     'https://example.com'
   )
-  expect(screen.getByRole('button', { name: 'Show more' })).toHaveAttribute(
-    'aria-expanded',
-    'false'
-  )
-  fireEvent.click(screen.getByRole('button', { name: 'Show more' }))
-  expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true')
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy message' })))
   expect(writeClipboardText).toHaveBeenCalledWith(task)
   expect(nativeChatSlotCopyText(slots(message), message.id)).toBe(task)
-  fireEvent.click(screen.getByRole('button', { name: 'Show less' }))
-  expect(screen.getByRole('button', { name: 'Show more' })).toHaveAttribute(
+  fireEvent.click(screen.getByRole('button', { name: 'Started worker' }))
+  expect(screen.getByRole('button', { name: 'Started worker' })).toHaveAttribute(
     'aria-expanded',
     'false'
   )
@@ -161,6 +181,7 @@ it.each([
   // With no task the card is the agent's name alone: nothing to copy.
   expect(screen.getByText('Build cards')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Copy message' }) !== null).toBe(task !== '')
+  expect(screen.queryByRole('button', { name: title }) !== null).toBe(task !== '')
 })
 
 it('renders unreadable worker metadata with the existing unnamed fallback and no navigation', () => {
@@ -190,6 +211,7 @@ it('renders unreadable worker metadata with the existing unnamed fallback and no
   )
   expect(screen.getByText('Started worker')).toBeInTheDocument()
   expect(screen.getByText('an agent')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Started worker' }))
   expect(screen.getByText('Keep the complete task')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'an agent' })).toBeNull()
 })
@@ -427,6 +449,10 @@ it.each(['task', 'mail'] as const)(
     const convert = vi.spyOn(display, 'agentMessageTranscriptText')
     const renderMarkdown = vi.spyOn(markdown, 'NativeChatMarkdown')
     let mounted = render(card(message))
+    if (kind === 'mail') {
+      expect(renderMarkdown).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByRole('button', { name: 'Message from' }))
+    }
     expect(
       screen.getByText(kind === 'task' ? 'Task from coordinator' : 'Message from')
     ).toBeInTheDocument()
@@ -466,45 +492,47 @@ it.each(['task', 'mail'] as const)(
     expect(navigation.toast).toHaveBeenCalledWith(
       'The structured agent session is not available yet. Retry in a moment.'
     )
-    expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull()
-    act(() => {
-      height = 120
-      resize()
-    })
-    const more = screen.getByRole('button', { name: 'Show more' })
-    expect(more).toHaveAttribute('aria-expanded', 'false')
-    const clip = document.getElementById(more.getAttribute('aria-controls')!)!
-    const first = screen.getByRole('link', { name: 'link' })
-    const second = screen.getByRole('link', { name: 'another link' })
-    const documentFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-    first.focus()
-    clip.scrollTop = 74
-    second.focus()
-    expect(second).toHaveFocus()
-    expect(clip.scrollTop).toBe(74)
-    documentFocus.mockReturnValue(false)
-    second.blur()
-    expect(clip.scrollTop).toBe(74)
-    documentFocus.mockReturnValue(true)
-    second.focus()
-    more.focus()
-    expect(more).toHaveFocus()
-    expect(clip.scrollTop).toBe(0)
-    expect(more).toHaveAttribute('aria-expanded', 'false')
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy message' })))
-    expect(writeClipboardText).toHaveBeenCalledWith(text)
-    expect(nativeChatSlotCopyText(slots(message), message.id)).toBe(text)
-    fireEvent.click(screen.getByRole('button', { name: 'Show more' }))
-    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute(
-      'aria-expanded',
-      'true'
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Show less' }))
-    act(() => {
-      height = 48
-      resize()
-    })
-    expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull()
+    if (kind === 'task') {
+      expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull()
+      act(() => {
+        height = 120
+        resize()
+      })
+      const more = screen.getByRole('button', { name: 'Show more' })
+      expect(more).toHaveAttribute('aria-expanded', 'false')
+      const clip = document.getElementById(more.getAttribute('aria-controls')!)!
+      const first = screen.getByRole('link', { name: 'link' })
+      const second = screen.getByRole('link', { name: 'another link' })
+      const documentFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+      first.focus()
+      clip.scrollTop = 74
+      second.focus()
+      expect(second).toHaveFocus()
+      expect(clip.scrollTop).toBe(74)
+      documentFocus.mockReturnValue(false)
+      second.blur()
+      expect(clip.scrollTop).toBe(74)
+      documentFocus.mockReturnValue(true)
+      second.focus()
+      more.focus()
+      expect(more).toHaveFocus()
+      expect(clip.scrollTop).toBe(0)
+      expect(more).toHaveAttribute('aria-expanded', 'false')
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy message' })))
+      expect(writeClipboardText).toHaveBeenCalledWith(text)
+      expect(nativeChatSlotCopyText(slots(message), message.id)).toBe(text)
+      fireEvent.click(screen.getByRole('button', { name: 'Show more' }))
+      expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute(
+        'aria-expanded',
+        'true'
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Show less' }))
+      act(() => {
+        height = 48
+        resize()
+      })
+      expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull()
+    }
     for (const remount of [false, true]) {
       if (remount) {
         mounted.unmount()
@@ -556,6 +584,9 @@ it.each(['task', 'mail'] as const)(
     for (const spy of [convert, renderMarkdown]) {
       expect(spy).not.toHaveBeenCalled()
     }
+    if (kind === 'mail') {
+      fireEvent.click(screen.getByRole('button', { name: 'Message from' }))
+    }
     const edited = { ...message, blocks: [{ type: 'text' as const, text: `${prefix}Edited task` }] }
     mounted.rerender(card(edited))
     expect(screen.getByText('Edited task')).toBeInTheDocument()
@@ -577,7 +608,9 @@ it.each(['task', 'mail'] as const)(
       `${prefix}Edited task\n\nAnother paragraph`
     )
     mounted.unmount()
-    expect(disconnects).toBeGreaterThan(0)
+    if (kind === 'task') {
+      expect(disconnects).toBeGreaterThan(0)
+    }
   }
 )
 
@@ -759,7 +792,9 @@ it.each([10, 100])(
     messages = readRows()
     await act(async () => mounted.rerender(rows()))
     expect(conversions).toBe(1)
-    expect(markdownRender).toHaveBeenCalledTimes(1)
+    expect(markdownRender).not.toHaveBeenCalled()
+    expect(screen.queryByText('Changed task')).toBeNull()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Started worker' })[0])
     expect(screen.getByText('Changed task')).toBeInTheDocument()
     expect(
       navigation.rpc.mock.calls.filter(([, method]) =>

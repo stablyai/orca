@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { switchBrowserHostClientProfile } from './browser-host-client-profile-switch'
-import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../shared/browser-client-profile-switch-protocol'
+import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 
 afterEach(() => vi.useRealTimers())
 

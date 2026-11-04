@@ -8,8 +8,8 @@ import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   resolveDesktopAuthorizedPath,
   resolveLocalWriteRequestPath
-} from '../local-file-access-resolution'
-import { isENOENT } from './filesystem-path-containment'
+} from './access/local-file-access-resolution'
+import { isENOENT } from './access/filesystem-path-containment'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { registerAgentSessionAttachmentUploadHandlers } from '../agent-session-attachment-upload-ipc'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'

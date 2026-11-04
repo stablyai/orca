@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 
-import { ipcMain } from 'electron'
-import type { BrowserWindow } from 'electron'
+import { ipcMain, type BrowserWindow } from 'electron'
+
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
-import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
-import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-reveal-identity'
+import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { requestAgentLaunchTabPublishFromRenderer } from './agent-launch-tab-publish-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'

@@ -3,6 +3,7 @@
 export const BROWSER_AGENT_ACTIVITY_CHANNEL = 'browser:agentActivity'
 export const BROWSER_AGENT_CURSOR_CHANNEL = 'browser:agentCursor'
 export const BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL = 'browser:agentCursorArrived'
+export const BROWSER_AGENT_VIEWPORT_CHANNEL = 'browser:agentViewportApplied'
 
 export type BrowserAgentActivityEvent = {
   browserPageId: string
@@ -22,4 +23,11 @@ export type BrowserAgentCursorEvent = {
   press: boolean
   /** Main waits for `BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL` with this sequence before acting. */
   awaitsArrival: boolean
+}
+
+/** An agent set the page's viewport; the pane sizes its page box to it, as a preset does. */
+export type BrowserAgentViewportEvent = {
+  browserPageId: string
+  width: number
+  height: number
 }

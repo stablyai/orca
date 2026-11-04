@@ -8,12 +8,12 @@ import {
   encodeTerminalStreamFrame,
   decodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
 } from '../../../shared/browser-screencast-protocol'
-import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/paired-e2ee-compressed-frame'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {
   declareRelayedPhoneCapabilities,

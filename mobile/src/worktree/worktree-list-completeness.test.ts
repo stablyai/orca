@@ -52,7 +52,7 @@ function visibleWorktreeIds(
     state.workspaceStatuses,
     new Set(state.collapsedGroups)
   )
-  return sections.flatMap((section) => section.data.map((w) => w.worktreeId)).sort()
+  return sections.flatMap((section) => section.data.map((item) => item.row.worktreeId)).sort()
 }
 
 describe('every worktree stays visible regardless of repo.list contents', () => {

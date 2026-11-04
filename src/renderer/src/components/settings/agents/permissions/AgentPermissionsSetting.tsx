@@ -1,5 +1,5 @@
 import { Trans } from 'react-i18next'
-import type { AgentPermissionMode } from '../../../../../../shared/tui-agent-permissions'
+import type { AgentPermissionMode } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import { getIntlLocale, i18n, translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
-import type { AgentInterruptInputIntent } from '../../shared/agent-interrupt-intent'
+import type { AgentInterruptInputIntent } from '../../shared/agent-status/lifecycle/agent-interrupt-intent'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),

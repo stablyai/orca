@@ -1,4 +1,4 @@
-import { parseGitRemoteVerboseOutput } from '../../shared/git-remote-identity'
+import { parseGitRemoteVerboseOutput } from '../../shared/git/remotes/git-remote-identity'
 import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import { isGitHubHostAuthenticated } from '../github/github-enterprise-repository'
 import { parseGitHubRemoteIdentity } from '../github/github-remote-identity-parsing'

@@ -9,8 +9,8 @@ import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
   type AgentLaunchSettingsSource
-} from '../../../../../shared/agent-launch-settings'
-import { resolveAgentPermission } from '../../../../../shared/tui-agent-permission-choice'
+} from '../../../../../shared/agent-launch/choices/agent-launch-settings'
+import { resolveAgentPermission } from '../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { AgentChoiceControls } from './AgentChoiceControls'
 
 vi.stubGlobal(

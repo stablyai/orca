@@ -8,17 +8,9 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   WorkspaceSpaceWorktree,
   WorkspaceSpaceWorktreeMeasurement
-} from '../../../../shared/workspace-space-types'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupHostIdentity } from '../../../../shared/workspace-cleanup-host-identity'
-
-export {
-  getWorkspaceCleanupCandidateHostId,
-  getWorkspaceCleanupCandidateIdentity,
-  getWorkspaceCleanupHostIdentity,
-  getWorkspaceCleanupIdentityWorktreeId,
-  resolveWorkspaceCleanupRemovalHostId
-} from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-disk-space/workspace-space-types'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import { getWorkspaceCleanupHostIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 
 /** Structural subset of `Worktree` kept in sync with the persisted source. */
 export type WorkspaceCleanupWorktreeFacts = Pick<Worktree, 'id'> &

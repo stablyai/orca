@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Check, ChevronDown, ExternalLink } from 'lucide-react'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -11,9 +11,9 @@ import {
   type AgentSessionSourceHomeControl,
   AgentSessionSourceHomeInput
 } from '../../../agent/launch-settings/codex-session-source-home-control'
-import { resolveTuiAgentPermissionMode } from '../../../../../../shared/tui-agent-permissions'
+import { resolveTuiAgentPermissionMode } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import { stringifyAgentDefaultEnvDraft } from '../../../agent/launch-settings/agent-default-env-draft'
-import { liftAgentPermissionArgs } from '../../../../../../shared/tui-agent-permission-lift'
+import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import {
   AgentPermissionExceptionBadge,
   AgentRowPermissionControl,

@@ -215,6 +215,15 @@ describe('Bitbucket client', () => {
       state: 'open',
       url: 'https://bitbucket.org/team/repo/pull-requests/7',
       status: 'success',
+      checksSummary: {
+        state: 'success',
+        total: 1,
+        passed: 1,
+        failed: 0,
+        cancelled: 0,
+        pending: 0,
+        neutral: 0
+      },
       updatedAt: '2026-05-10T00:00:00.000Z',
       mergeable: 'UNKNOWN',
       headSha: 'abc123'

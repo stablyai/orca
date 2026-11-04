@@ -1,4 +1,4 @@
-import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
+import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeLeafRecord,

@@ -1,4 +1,4 @@
-import type { CommitMessageModel } from './commit-message-agent-spec'
+import type { CommitMessageModel } from './source-control/ai/generation/commit-message-agent-spec'
 import { labelFromModelId } from './model-id-label'
 
 // Use OMP’s only machine-readable listing; provider-grouped tables require brittle parsing.

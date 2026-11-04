@@ -1,14 +1,12 @@
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
-  type AgentStatusState
-} from '../../../../shared/agent-status-types'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type {
-  ActivityEventState,
-  ActivityHookLiveAgentState,
-  ActivityLiveAgentState
-} from './activity-thread-types'
+  AgentStatusEntry,
+  AgentStatusState,
+  AgentStatusState as ActivityEventState
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+
+import type { ActivityHookLiveAgentState, ActivityLiveAgentState } from './activity-thread-types'
 
 function isActivityHookLiveAgentState(
   state: AgentStatusState

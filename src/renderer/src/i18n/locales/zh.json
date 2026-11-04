@@ -62,7 +62,18 @@
         "searchTerminal": "终端",
         "searchCli": "CLI"
       },
-      "permissionsDescriptionOwnAgents": "新聊天遵循设置 → 智能体中各智能体的权限。"
+      "permissionsDescriptionOwnAgents": "新聊天遵循设置 → 智能体中各智能体的权限。",
+      "launch": {
+        "on": "Chat UI 已开启",
+        "off": "Chat UI 已关闭",
+        "agents": "每个智能体的默认启动模式",
+        "agentsDescription": "选择每个智能体在 Chat UI 还是 CLI 中打开。",
+        "chatDescription": "新智能体默认以聊天模式启动。",
+        "cliDescription": "新智能体默认以 CLI 启动。",
+        "turnOn": "开启",
+        "turnOff": "关闭",
+        "toggle": "默认使用 Chat UI"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC 或 U.S. — Option 键发送 Alt/Esc 序列",
@@ -520,6 +531,28 @@
         "notPng": "仓库图标必须是 PNG 文件。",
         "tooLarge": "仓库图标图片不得超过 256 KB。"
       }
+    },
+    "editorFormatOnSave": {
+      "title": "保存时格式化",
+      "description": "在手动保存和自动保存前格式化文本。在设置 > 项目中配置格式化程序命令。默认关闭。",
+      "keywords": "格式化程序 保存时格式化 prettier biome gofmt"
+    },
+    "editorInsertFinalNewline": {
+      "title": "插入末尾换行符",
+      "description": "保存非空代码文件时，如果文件末尾没有换行符，则添加一个。默认关闭。",
+      "keywordNewline": "换行",
+      "keywordEndOfFile": "文件末尾"
+    },
+    "repositoryFormatter": {
+      "title": "格式化程序命令",
+      "description": "保存时格式化使用此项目的格式化程序。",
+      "saveFailed": "无法保存格式化程序设置。",
+      "command": "命令",
+      "saving": "正在保存…",
+      "save": "保存格式化程序",
+      "commandHelp": "在文件所在主机的工作区根目录中运行。从 stdin 读取缓冲区，并且只能向 stdout 输出格式化后的文本。使用 ${file} 或 ${relativeFile} 表示路径。参数直接传递，不经过 shell。请勿使用 --write。留空可在此项目中禁用。",
+      "include": "包含的 glob（每行一个）",
+      "includeHelp": "匹配相对于工作区根目录的路径。没有匹配的 glob 时不会格式化。* 和 ** 会跳过以点开头的名称；请明确列出，例如 .github/**/*.yml。要使用此命令，请在通用 > 编辑器中启用“保存时格式化”。"
     }
   },
   "menu": {
@@ -1646,7 +1679,6 @@
         "9c3ba11a05": "状态：",
         "934d87ab96": "正在加载检查详细信息...",
         "71c11aff84": "重新运行所有检查",
-        "e31651a224": "重新运行失败的检查",
         "1b56e28faa": "重新运行",
         "f4b1292569": "在这些检查中启动默认的 AI 智能体",
         "9a1004fc76": "刷新检查",
@@ -2143,7 +2175,6 @@
         "662bc2998d": "状态：",
         "d8e82b7f15": "正在加载检查详细信息...",
         "54cddd1858": "重新运行所有检查",
-        "68605516dd": "重新运行失败的检查",
         "522d9353e1": "重新运行",
         "0fa8b8faec": "在这些检查中启动默认的 AI 智能体",
         "5d0f42766d": "刷新检查",
@@ -3608,7 +3639,7 @@
             "copyLinkFailed": "复制链接失败",
             "downloadOpenWithDefaultApp": "下载并使用默认应用程序打开",
             "downloadOpenFailed": "无法下载“{{value0}}”。",
-            "openInThisGroup": "在此分组中打开",
+            "openInNewTab": "在新标签页中打开",
             "openInThisGroupRefused": "无法在此分组中打开 {{value0}}"
           },
           "TerminalQuickCommandsSubmenu": {
@@ -4016,7 +4047,6 @@
             "5c938d39ac": "周",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "没有其他账户",
             "d450654fa2": "Claude 账户",
             "11e2354daf": "Claude 使用量运行时",
             "3dd7ddfae1": "打开 Claude 详情和账户切换器",
@@ -7033,7 +7063,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "开放计算机使用",
-          "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装计算机使用技能； macOS 还需要隐私权限。",
+          "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装 Orca Computer Use 技能； macOS 还需要隐私权限。",
           "333984cf90": "使用现有的浏览器会话"
         },
         "BrowserUseEnableSwitch": {
@@ -7153,7 +7183,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "使智能体能够检查和操作本地桌面应用程序。",
-          "93255aaf18": "计算机控制技能",
+          "93255aaf18": "Orca Computer Use 技能",
           "45f8e22c2e": "打开",
           "d95d1cfab8": "刷新",
           "0c29da5805": "就绪",
@@ -7997,8 +8027,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "提示词模板",
-          "2b2f38652b": "自定义命令",
-          "0ffb081b3a": "使用默认智能体",
           "f4310cf63f": "智能体",
           "1cd88d470a": "定制",
           "403876bb48": "使用全局",
@@ -8539,7 +8567,7 @@
           "902f5dee1f": "选择时复制",
           "9129b7e805": "将鼠标悬停在终端窗格上即可将其激活，无需单击。",
           "8eefeaa3da": "焦点跟随鼠标",
-          "96fe15def8": "终端窗格的鼠标和剪贴板行为。",
+          "96fe15def8": "终端窗格的滚动、鼠标和剪贴板行为。",
           "45721f3e67": "终端交互",
           "9c0b1c1792": "开",
           "c1fc9e9444": "GPU加速",
@@ -10576,7 +10604,8 @@
                   "supportedAgents": "此预设支持的智能体：{{value0}}。",
                   "unsupportedSavedAgent": "{{value0}} 无法运行此文本生成预设。请在下方选择一个支持的智能体。",
                   "resolveComments": "从选中的未解决 PR 或 MR 评论启动智能体。",
-                  "fixPushFailure": "当 pre-push 钩子或 git push 失败时启动智能体。"
+                  "fixPushFailure": "当 pre-push 钩子或 git push 失败时启动智能体。",
+                  "commitMessageSharedModel": "拉取请求详情、分支名称和聊天名称未选择自己的模型时也可以使用此模型；其“与默认值相同”选项会显示所用模型。"
                 }
               }
             }
@@ -12425,13 +12454,16 @@
         "AppearanceThemeControl": {
           "useTerminalTheme": "使用其终端配色",
           "matchTerminal": "匹配终端",
-          "dynamic": "动态"
+          "dynamic": "动态",
+          "searchThemes": "搜索主题…",
+          "noThemes": "没有与搜索内容匹配的主题。"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "图标主题",
             "description": "来自已启用插件的文件和文件夹图标。",
-            "builtIn": "内置"
+            "builtIn": "内置",
+            "search": "搜索图标主题…"
           },
           "lightTheme": "浅色主题",
           "darkTheme": "深色主题",
@@ -12734,6 +12766,9 @@
         },
         "PluginContributionActionNewFile": {
           "create": "创建"
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "没有匹配项。"
         }
       },
       "right": {
@@ -14368,7 +14403,6 @@
           "ae3b00ca82": "设置 GitHub 任务",
           "ff92d15436": "Orca 会在智能体完成工作或需要帮助时通知你。",
           "b054332836": "设置通知",
-          "04ae28d8ca": "选择你想盯着看几个小时的主题。",
           "f396db9f20": "让这里有家的感觉",
           "322fc50a18": "Orca 支持所有 CLI 智能体。选择你最常用的一个，随时可切换。",
           "198b148b3c": "选择默认智能体",
@@ -18772,8 +18806,6 @@
         "toggleDetails": "切换回合详情"
       },
       "jumpToLatest": "跳到最新消息",
-      "newRowsAnnouncement": "你离开期间有新消息",
-      "newRowsMarker": "新消息",
       "find": {
         "label": "在聊天中查找",
         "noResults": "没有结果",
@@ -18881,7 +18913,10 @@
         "cancelled": "取消",
         "resolved": "已解决",
         "resolver": "回复于 {{device}}",
-        "cancelledBy": "于 {{device}} 取消"
+        "cancelledBy": "于 {{device}} 取消",
+        "thisComputer": "此电脑",
+        "computer": "电脑",
+        "otherDevice": "其他设备"
       },
       "notices": {
         "contextCleared": "上下文已清除",
@@ -18972,7 +19007,7 @@
           "stoppedCount_other": "{{count}} 个已停止",
           "unverifiableCount_other": "{{count}} 个状态不可用"
         },
-        "tokens": "{{value0}} 代币",
+        "tokens": "{{value0}} token",
         "unnamed": "子智能体",
         "started_other": "已启动 {{count}} 个子智能体",
         "ran_other": "已运行 {{count}} 个子智能体"
@@ -18999,7 +19034,11 @@
         "handedOffToAgent": "已移交给智能体",
         "startedAgent": "已启动智能体",
         "taskFromCoordinator": "来自协调者的任务",
-        "updateFromWorker": "来自工作者的更新"
+        "updateFromWorker": "来自工作者的更新",
+        "senderReplaced": "{{name}} 已不在其终端中运行；现在有另一个智能体在该终端中运行。如有需要，请从侧边栏打开该终端。",
+        "senderAmbiguous": "Orca 无法确定 {{name}} 在哪个终端中运行。请从侧边栏打开终端。",
+        "senderNotRunning": "{{name}} 已停止运行。请从侧边栏启动新智能体以继续其工作。",
+        "unnamedSenderSubject": "一个智能体"
       },
       "goal": {
         "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
@@ -19031,7 +19070,6 @@
       "dismissDeliveryNotice": "关闭",
       "addSelectionToChat": "添加到聊天",
       "messageNotSent": "消息未发送",
-      "deliveryUnconfirmed": "无法确认送达 — 重试前请检查聊天",
       "messageSending": "正在发送…",
       "userMessage": {
         "showFull": "显示完整消息",
@@ -19094,7 +19132,6 @@
         "continue": "继续",
         "failed": "无法继续此聊天。请重试，或发送一条消息。",
         "explanation": "继续后，智能体会先检查其上一步是否已完成。",
-        "unconfirmed": "无法确认 {{agent}} 是否收到“继续”。在重试之前请检查聊天记录。",
         "usageLimitExplanation": "让智能体从中断处继续。请在上限重置后使用。"
       },
       "rewind": {
@@ -19287,6 +19324,24 @@
         "cancelled": "Orca 不会自动继续此聊天。",
         "scheduled": "Orca 将在 {{time}} 继续此聊天。",
         "cancel": "不要继续"
+      },
+      "settings": "聊天设置",
+      "textAttachmentPreview": {
+        "copiedContents": "已复制内容",
+        "textAttachment": "文本附件",
+        "byteSize": "{{size}} 字节",
+        "copyContents": "复制内容",
+        "saveFile": "保存文件",
+        "copyTooLarge": "此文件过大，无法复制。请改为保存文件。",
+        "exportError": "无法导出附件。请重试。",
+        "unreadableReply": "无法读取附件响应。请重试。",
+        "incompleteReply": "附件已更改或响应不完整。请关闭后重试。",
+        "notText": "无法以文本形式预览此文件。请保存后在其他应用中打开。",
+        "openFailed": "无法打开附件。请重试。",
+        "hostUpdate": "此主机尚无法打开文本附件。请更新该主机上的 Orca，然后重试。",
+        "hostUnavailable": "附件所在主机不可用。请重新连接后重试。",
+        "connectionChanged": "连接已更改。请关闭并重新打开此附件。",
+        "readFailed": "无法在主机上读取此附件。请重新连接后重试。文件可能已被删除或更改。"
       }
     },
     "tab": {
@@ -19649,7 +19704,32 @@
           "system": "匹配操作系统",
           "dark": "轻松护眼",
           "light": "明亮、清脆"
-        }
+        },
+        "looks": {
+          "activeNow": "当前",
+          "browsePlugins": "浏览插件",
+          "browseThemePlugins": "浏览主题插件",
+          "colorMode": "颜色模式",
+          "colorModeCaption": "浅色、深色或跟随系统。",
+          "darkLook": "深色外观",
+          "darkLooks": "深色外观",
+          "lightLook": "浅色外观",
+          "lightLooks": "浅色外观",
+          "moreThemes": "更多主题",
+          "next": "更多外观",
+          "orcaDark": "Orca 深色",
+          "orcaLight": "Orca 浅色",
+          "pluginsHint": "更多主题以插件形式提供。",
+          "previous": "上一组外观",
+          "showsWhenDark": "系统为深色时显示",
+          "showsWhenLight": "系统为浅色时显示",
+          "slotLabel": "要编辑的外观",
+          "sourceBuiltIn": "内置",
+          "sourceCommunity": "终端调色板",
+          "themes": "主题",
+          "themesCaption": "可选。使用应用主题和终端调色板进一步自定义。"
+        },
+        "subtitle": "选择浅色或深色，也可以再选一个主题。两者都可以随时在设置中更改。"
       },
       "integrations": {
         "capabilities": {
@@ -19685,7 +19765,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "修剪副本上的装订线",
         "copyTrimsGutterDescription": "将左侧装订线智能体输出绘制在后面，因此复制的文本不会缩进。仅删除每个选定行共享的缩进。",
-        "copyOnSelectDescription": "自动将在终端或聊天中选择的文本复制到剪贴板。"
+        "copyOnSelectDescription": "自动将在终端或聊天中选择的文本复制到剪贴板。",
+        "scrollOnUserInput": "输入时滚动到底部",
+        "scrollOnUserInputDescription": "向上滚动时键入或粘贴会跳至最新输出。关闭此项可保持当前位置。"
       },
       "terminal": {
         "clipboard": {
@@ -19700,6 +19782,15 @@
             "highlight": "高亮",
             "chat": "聊天"
           }
+        },
+        "search": {
+          "typing": "键入",
+          "input": "输入",
+          "jump": "跳转",
+          "bottom": "底部",
+          "scrollback": "回滚",
+          "snap": "吸附",
+          "position": "位置"
         }
       },
       "nativeChat": {
@@ -19867,6 +19958,11 @@
     },
     "wslHostMark": {
       "runsOn": "在 WSL 上运行：{{distro}}（Linux）"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "无法格式化 {{file}}。将不经格式化直接保存：{{reason}}"
+      }
     }
   },
   "dashboardPopout": {
@@ -21086,7 +21182,10 @@
         "review": "查看",
         "restartCount_other": "重启 {{count}} 个会话",
         "reviewBody_other": "其他 {{count}} 个 Claude 会话未移至 {{next}}。",
-        "body_other": "{{count}} 个 Claude 会话仍在 {{previous}} 上运行。重启后，各对话将在 {{next}} 上继续。忙碌的会话会等待空闲后再重启。"
+        "body_other": "{{count}} 个 Claude 会话仍在 {{previous}} 上运行。重启后，各对话将在 {{next}} 上继续。忙碌的会话会等待空闲后再重启。",
+        "reasonSharedSession": "在另一个窗格中也已打开",
+        "sharedOne": "由于另一个窗格打开了同一对话，1 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
+        "sharedOther": "由于另一个窗格打开了同一对话，{{count}} 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。"
       }
     },
     "hostSignIn": {
@@ -22335,9 +22434,14 @@
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
     "legacyModelCount": "{{total}} 个模型",
+    "use": "使用",
     "select": "选择智能体",
     "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
-    "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件"
+    "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件",
+    "workspaceStartupFailed": "无法启动 {{agent}}。请检查此设置中的参数并重试。",
+    "sameAsTextDefault": "与默认值相同 · {{value0}}",
+    "chatChoicesNote": "没有 CLI 标志的 {{agent}} 模型或推理力度选项适用于聊天。",
+    "composedChoicesNote": "{{agent}} 的推理力度和速度选项包含在模型参数中。"
   },
   "wslMove": {
     "entry": {

@@ -1,5 +1,5 @@
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import type { CheckRunDetailsTabPatch } from '@/components/editor/check-run-details-tab'
+import type { CheckRunDetailsTabPatch } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type {
   CombinedDiffAlternate,
   ConflictReviewEntry,
@@ -10,8 +10,8 @@ import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
   GitCommitCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
 import type {
   BranchCompareLike,

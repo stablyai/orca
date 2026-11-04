@@ -1,18 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentStatusEntry,
-  AgentStateHistoryEntry
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStateHistoryEntry } from '../../../../shared/agent-status/lifecycle/agent-state-history'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   buildActivityEvents,
   createActivityEventBuildCache,
-  newestActivityHistoryEntries
+  newestActivityHistoryEntries,
+  type ActivityEventBuildCache
 } from './activity-event-builder'
-import type { ActivityEventBuildCache } from './activity-event-builder'
-import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
-import type { AgentPaneThreadReuseCache } from './activity-thread-builder'
+
+import {
+  buildAgentPaneThreads,
+  createAgentPaneThreadReuseCache,
+  type AgentPaneThreadReuseCache
+} from './activity-thread-builder'
+
 import {
   LEAF_ID,
   LEAF_ID_2,
