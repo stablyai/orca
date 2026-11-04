@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
@@ -220,5 +221,20 @@ describe('getWorkspaceDeleteLineage', () => {
     )
 
     expect(lineage.deleteAllTargets).toEqual([sshChild, sshParent])
+  })
+
+  it('never targets a child saved in another store', () => {
+    const parent = makeWorktree('parent', '/workspaces/parent')
+    const serverChild: Worktree = {
+      ...makeWorktree('child', '/workspaces/parent/child'),
+      hostId: toRuntimeExecutionHostId('build-box')
+    }
+
+    const lineage = getWorkspaceDeleteLineage(parent, [parent, serverChild], {
+      [serverChild.id]: makeLineage(serverChild, parent)
+    })
+
+    expect(lineage.descendants).toEqual([])
+    expect(lineage.deleteAllTargets).toEqual([parent])
   })
 })

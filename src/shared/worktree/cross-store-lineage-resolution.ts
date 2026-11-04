@@ -1,0 +1,127 @@
+import { parseExecutionHostId } from '../execution-host'
+import type { WorkspaceKey } from '../folder-workspaces/folder-workspace-types'
+import {
+  lastVerifiedRuntimeStatus,
+  type RuntimeEnvironmentStatus
+} from '../remote-runtime/host-status/runtime-host-status'
+import { worktreeWorkspaceKey } from '../workspace-scope'
+import { validCrossStoreLineage } from './cross-store-lineage-records'
+import type { Worktree } from './types'
+
+/** The viewer's own store; other stores are keyed by their paired runtime environment id. */
+export const OWN_LINEAGE_STORE_KEY = ''
+
+/** One Orca store as the viewer sees it: its installationId (identity) and its saved cross-store records. */
+export type LineageStoreView = {
+  installationId: string | undefined
+  crossStoreLineageByChildKey: Readonly<Record<string, unknown>> | undefined
+}
+
+/** Every store the viewer can see, by store key. Store keys only group rows; never identity. */
+export type CrossStoreLineageView = ReadonlyMap<string, LineageStoreView>
+
+type LineageStoreRow = Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>
+
+/** Paired-runtime rows live in that runtime's store; local, SSH and WSL rows live in ours. */
+export function lineageStoreKeyOfRow(row: LineageStoreRow): string {
+  if (row.runtimeOwnerEnvironmentId) {
+    return row.runtimeOwnerEnvironmentId
+  }
+  const host = parseExecutionHostId(row.hostId)
+  return host?.kind === 'runtime' ? host.environmentId : OWN_LINEAGE_STORE_KEY
+}
+
+function workspaceKeyOfRow(row: Pick<Worktree, 'id'>): WorkspaceKey {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: folder rows carry their folder WorkspaceKey as id (folderWorkspaceToWorktree).
+  return row.id.startsWith('folder:') ? (row.id as WorkspaceKey) : worktreeWorkspaceKey(row.id)
+}
+
+/** Paired stores are identified by the installationId each server reports in its verified status. */
+export function buildCrossStoreLineageView(args: {
+  own: LineageStoreView
+  statusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
+  crossStoreLineageByEnvironmentId: ReadonlyMap<string, Readonly<Record<string, unknown>>>
+}): CrossStoreLineageView {
+  const view = new Map<string, LineageStoreView>([[OWN_LINEAGE_STORE_KEY, args.own]])
+  for (const [environmentId, entry] of args.statusByEnvironmentId) {
+    view.set(environmentId, {
+      installationId: lastVerifiedRuntimeStatus(entry)?.hostDescriptor?.installationId,
+      crossStoreLineageByChildKey: args.crossStoreLineageByEnvironmentId.get(environmentId)
+    })
+  }
+  return view
+}
+
+function pushTo<Key, Value>(map: Map<Key, Value[]>, key: Key, value: Value): void {
+  const values = map.get(key)
+  if (values) {
+    values.push(value)
+  } else {
+    map.set(key, [value])
+  }
+}
+
+function soleRow<Row>(rows: readonly Row[] | undefined): Row | undefined {
+  return rows?.length === 1 ? rows[0] : undefined
+}
+
+/** Child identity → parent row for every cross-store record that resolves to exactly one visible parent. */
+export function resolveCrossStoreLineageParents<Row extends Worktree>(
+  rowsByIdentity: ReadonlyMap<string, Row>,
+  view: CrossStoreLineageView
+): Map<string, Row> {
+  const childRowsByStoreAndKey = new Map<string, Map<WorkspaceKey, [string, Row][]>>()
+  const rowsByStoreAndInstance = new Map<string, Map<string, Row[]>>()
+  for (const [identity, row] of rowsByIdentity) {
+    if (!row.instanceId) {
+      continue
+    }
+    const storeKey = lineageStoreKeyOfRow(row)
+    let byKey = childRowsByStoreAndKey.get(storeKey)
+    let byInstance = rowsByStoreAndInstance.get(storeKey)
+    if (!byKey || !byInstance) {
+      byKey = new Map()
+      byInstance = new Map()
+      childRowsByStoreAndKey.set(storeKey, byKey)
+      rowsByStoreAndInstance.set(storeKey, byInstance)
+    }
+    pushTo(byKey, workspaceKeyOfRow(row), [identity, row])
+    pushTo(byInstance, row.instanceId, row)
+  }
+  const storeKeysByInstallationId = new Map<string, string[]>()
+  for (const [storeKey, store] of view) {
+    if (store.installationId) {
+      pushTo(storeKeysByInstallationId, store.installationId, storeKey)
+    }
+  }
+
+  const parents = new Map<string, Row>()
+  for (const [childStoreKey, store] of view) {
+    // A store without a known identity cannot tell its own copies from a parent store.
+    if (!store.installationId) {
+      continue
+    }
+    for (const lineage of Object.values(
+      validCrossStoreLineage(store.crossStoreLineageByChildKey)
+    )) {
+      const child = soleRow(
+        childRowsByStoreAndKey
+          .get(childStoreKey)
+          ?.get(lineage.childWorkspaceKey)
+          ?.filter(([, row]) => row.instanceId === lineage.childInstanceId)
+      )
+      // Two stores reporting one installationId are a copied profile; neither is the parent's.
+      const parentStoreKey = soleRow(storeKeysByInstallationId.get(lineage.parent.installationId))
+      if (!child || parentStoreKey === undefined) {
+        continue
+      }
+      const parent = soleRow(
+        rowsByStoreAndInstance.get(parentStoreKey)?.get(lineage.parent.instanceId)
+      )
+      if (parent && parent !== child[1]) {
+        parents.set(child[0], parent)
+      }
+    }
+  }
+  return parents
+}

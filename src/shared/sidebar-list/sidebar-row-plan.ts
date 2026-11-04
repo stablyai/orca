@@ -3,6 +3,7 @@ import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
+import type { CrossStoreLineageView } from '../worktree/cross-store-lineage-resolution'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './group-keys'
@@ -72,6 +73,8 @@ export type SidebarRowPlanInputs = {
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   projectOrderBy: ProjectOrderBy
   lineageById: Record<string, WorktreeLineage>
+  /** Visible stores' cross-store parent records; nests with the same parent map as visible-worktrees. */
+  crossStoreLineage?: CrossStoreLineageView
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
   projectGroups: readonly ProjectGroup[]
@@ -100,6 +103,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     workspaceStatuses,
     projectOrderBy,
     lineageById,
+    crossStoreLineage,
     worktreeMap,
     nestLineage,
     projectGroups,
@@ -130,7 +134,13 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     rows: worktrees,
     identityOf: getWorktreeHostIdentity,
     childrenByParentIdentity: nestLineage
-      ? getSidebarLineageChildren(worktrees, lineageById, worktreeMap, filterRepoIds)
+      ? getSidebarLineageChildren(
+          worktrees,
+          lineageById,
+          worktreeMap,
+          filterRepoIds,
+          crossStoreLineage
+        )
       : new Map<string, Worktree[]>(),
     isPinned: (worktree) => worktree.isPinned === true,
     duplicatePinned: pinnedDisplayPolicy === 'duplicate-in-groups',

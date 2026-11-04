@@ -119,6 +119,24 @@ export function getPublishedHostDescriptor(runtimeId: string): RuntimeHostDescri
   return publishedByRuntimeId.get(runtimeId) ?? null
 }
 
+/** This store's lineage identity: the published descriptor's installationId, else the profile's own file. */
+export async function readStoreInstallationId(
+  runtimeId: string,
+  userDataPath: string
+): Promise<string | undefined> {
+  const published = getPublishedHostDescriptor(runtimeId)?.installationId
+  if (published) {
+    return published
+  }
+  try {
+    return await loadOrCreateHostInstallationId(userDataPath)
+  } catch (error) {
+    // Unknown identity leaves every cross-store child standalone.
+    console.warn('[runtime] Store installation id unavailable:', error)
+    return undefined
+  }
+}
+
 /** Null until this runtime publishes a descriptor; unstamped processes keep the unfenced CLI path. */
 export function getRuntimeSourceStamp(
   runtime: { getRuntimeId?: () => string } | null | undefined,

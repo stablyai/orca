@@ -9,6 +9,10 @@ import {
   getWorktreeHostIdentity
 } from '../worktree/host-qualified-identity'
 import type { WorktreeLineage } from '../worktree/lineage-types'
+import {
+  resolveCrossStoreLineageParents,
+  type CrossStoreLineageView
+} from '../worktree/cross-store-lineage-resolution'
 import type { Worktree } from '../worktree/types'
 
 export type LineageRenderInfo =
@@ -32,6 +36,7 @@ type LineageProjection = {
   cyclicLineageIds?: Set<string>
   childrenByParentId?: Map<string, Worktree[]>
   sidebarParentByIdentity?: Map<string, Worktree>
+  sidebarParentByIdentityByView?: WeakMap<CrossStoreLineageView, Map<string, Worktree>>
 }
 
 /** Repeated O(worktrees) projections cache by both immutable input identities. Weak keys avoid retaining replaced store collections. */
@@ -191,16 +196,23 @@ export function getSidebarLineageParent(
     : undefined
 }
 
-/** Host-keyed nesting parents; cycles have none. Cache assumes callers replace both inputs rather than mutate them. */
+/** Host-keyed nesting parents from same-store edges and, when given, resolved cross-store records;
+ * a valid same-store edge wins and cycles have none. Cache assumes callers replace inputs rather than mutate them. */
 export function getSidebarLineageParentsByIdentity(
   lineageById: Readonly<Record<string, WorktreeLineage>>,
-  rowsByHostIdentity: ReadonlyMap<string, Worktree>
+  rowsByHostIdentity: ReadonlyMap<string, Worktree>,
+  crossStoreLineage?: CrossStoreLineageView
 ): ReadonlyMap<string, Worktree> {
   const projection = getLineageProjection(lineageById, rowsByHostIdentity)
-  if (projection.sidebarParentByIdentity) {
-    return projection.sidebarParentByIdentity
+  const cached = crossStoreLineage
+    ? projection.sidebarParentByIdentityByView?.get(crossStoreLineage)
+    : projection.sidebarParentByIdentity
+  if (cached) {
+    return cached
   }
-  const parentByIdentity = new Map<string, Worktree>()
+  const parentByIdentity = crossStoreLineage
+    ? resolveCrossStoreLineageParents(rowsByHostIdentity, crossStoreLineage)
+    : new Map<string, Worktree>()
   for (const [identity, row] of rowsByHostIdentity) {
     const parent = getSidebarLineageParent(row, lineageById, rowsByHostIdentity)
     if (parent) {
@@ -215,7 +227,12 @@ export function getSidebarLineageParentsByIdentity(
   for (const identity of cyclic) {
     parentByIdentity.delete(identity)
   }
-  projection.sidebarParentByIdentity = parentByIdentity
+  if (crossStoreLineage) {
+    projection.sidebarParentByIdentityByView ??= new WeakMap()
+    projection.sidebarParentByIdentityByView.set(crossStoreLineage, parentByIdentity)
+  } else {
+    projection.sidebarParentByIdentity = parentByIdentity
+  }
   return parentByIdentity
 }
 

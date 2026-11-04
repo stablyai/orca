@@ -1,6 +1,7 @@
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getProjectedWorktreeLineageChildrenByParentId } from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { lineageStoreKeyOfRow } from '../../../../shared/worktree/cross-store-lineage-resolution'
 
 type WorkspaceDeleteLineage = {
   descendants: Worktree[]
@@ -13,8 +14,13 @@ export function getWorkspaceDeleteLineage(
   lineageById: Record<string, WorktreeLineage>
 ): WorkspaceDeleteLineage {
   // Lineage IDs omit hosts; prefer the parent’s host so descendant deletion cannot reach another machine.
+  // Only the parent's own store is a delete target: a cross-store child never is, even when it nests.
+  const parentStoreKey = lineageStoreKeyOfRow(parent)
   const worktreeById = new Map<string, Worktree>()
   for (const worktree of worktrees) {
+    if (lineageStoreKeyOfRow(worktree) !== parentStoreKey) {
+      continue
+    }
     const claimed = worktreeById.get(worktree.id)
     if (claimed && claimed.hostId === parent.hostId && worktree.hostId !== parent.hostId) {
       continue
