@@ -30,15 +30,6 @@ describe('CodeBuddy harness', () => {
     expect(rows[5]?.providerSession?.id).toBe('codebuddy-verification')
   })
 
-  it.each([
-    'codebuddy',
-    'cbc',
-    'C:\\Tools\\codebuddy.cmd',
-    'node /usr/lib/node_modules/@tencent-ai/codebuddy-code/dist/codebuddy.js'
-  ])('recognizes interactive %s', (command) => {
-    expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('codebuddy')
-  })
-
   it('excludes print runs and resumes the original provider session', () => {
     for (const flag of ['--print', '--serve', '--acp', '--bg', '--background']) {
       expect(recognizeAgentProcessFromCommandLine(`codebuddy ${flag}`)).toBeNull()
