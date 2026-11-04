@@ -116,7 +116,7 @@ describe('clone reuses only a project on this machine', () => {
     beforeEach(async () => {
       await mkdir(join(root, 'real'))
       alias = join(root, 'alias')
-      await symlink(join(root, 'real'), alias)
+      await symlink(join(root, 'real'), alias, 'junction')
     })
 
     it('reuses the first of two queued clones', async () => {

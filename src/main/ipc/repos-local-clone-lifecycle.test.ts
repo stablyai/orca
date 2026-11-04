@@ -757,7 +757,7 @@ describe('repos:add + repos:clone', () => {
       const root = await createTempRoot()
       await mkdir(join(root, 'real'))
       const destination = join(root, 'alias')
-      await symlink(join(root, 'real'), destination)
+      await symlink(join(root, 'real'), destination, 'junction')
       // Saved before clone paths were resolved, so it keeps the typed spelling.
       const saved = savedProject(join(destination, 'orca'), {
         gitRemoteIdentity: identity('example.com/orca')
@@ -774,7 +774,7 @@ describe('repos:add + repos:clone', () => {
       const root = await createTempRoot()
       await mkdir(join(root, 'real'))
       const destination = join(root, 'alias')
-      await symlink(join(root, 'real'), destination)
+      await symlink(join(root, 'real'), destination, 'junction')
       // Clone saves Git's resolved path; the typed alias must still find it.
       const saved = savedProject(join(root, 'real', 'orca'), {
         gitRemoteIdentity: identity('github.com/stablyai/orca')

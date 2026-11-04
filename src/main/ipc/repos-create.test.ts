@@ -468,6 +468,24 @@ describe('repos:create', () => {
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
+  it('creates a local project when only an SSH project is saved at the target path', async () => {
+    const remote = {
+      id: 'ssh-repo',
+      path: tmpPath('shared-name'),
+      displayName: 'shared-name',
+      kind: 'git',
+      connectionId: 'devbox'
+    }
+    mockStore.getRepos.mockReturnValue([remote])
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'shared-name', kind: 'git' })
+
+    expect(result).not.toEqual({ repo: remote })
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: tmpPath('shared-name') })
+    )
+  })
+
   it('returns existing badgeColor unchanged on repos:create dedupe', async () => {
     const existing = {
       id: 'abc',

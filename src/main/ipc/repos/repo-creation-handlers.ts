@@ -8,7 +8,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
 import { probeGitAvailability } from '../../git/git-availability'
 import { gitExecFileAsync } from '../../git/runner'
@@ -104,8 +104,10 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
 
       const targetPath = join(parentPath, name)
       let targetPathKeys = await getSavedProjectPathKeys(targetPath)
+      // This creates a folder on this machine, so a remote project at the same path is not it.
       const isTargetRepo = (r: Repo): boolean =>
-        targetPathKeys.includes(getClonePathComparisonKey(r.path))
+        targetPathKeys.includes(getClonePathComparisonKey(r.path)) &&
+        getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
 
       // Repeated Create requests must share one registration.
       const existing = store.getRepos().find(isTargetRepo)
