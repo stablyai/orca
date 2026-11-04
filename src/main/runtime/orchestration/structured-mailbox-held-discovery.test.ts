@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './db'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
 import type {
@@ -7,10 +7,15 @@ import type {
 } from './structured-mailbox-pointer-host-contract'
 
 const databases: OrchestrationDb[] = []
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-11-03T12:00:00Z'))
+})
 afterEach(() => {
   for (const db of databases.splice(0)) {
     db.close()
   }
+  vi.useRealTimers()
 })
 const drain = async () => {
   for (let n = 0; n < 5; n++) {

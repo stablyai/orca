@@ -73,6 +73,7 @@ for (const withCut of [false, true]) {
   })
 }
 
+// This scaling contract writes 2,200 durable turns before measuring the streamed update.
 it('a streamed turn row never copies untouched retained graph entries', async () => {
   const copied: number[] = []
   for (const n of [200, 2000]) {

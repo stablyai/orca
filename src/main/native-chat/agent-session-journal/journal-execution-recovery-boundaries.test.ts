@@ -1,4 +1,4 @@
-import { it, expect } from 'vitest'
+import { afterEach, beforeEach, it, expect, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,6 +12,11 @@ import { agentSessionFailureFact } from '../../../shared/agent-session/failures/
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 const turn = { provider: 'claude' as const, sessionId: 'thread', uuid: 'turn-B' }
 const options = { fence: 0, turnScope: { kind: 'thread' as const } }
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-11-03T12:00:00Z'))
+})
+afterEach(() => vi.useRealTimers())
 async function fixture(name: string) {
   const root = await mkdtemp(join(tmpdir(), 'pr37743-close4-independent-'))
   const journals = createTrackedJournalOpener()

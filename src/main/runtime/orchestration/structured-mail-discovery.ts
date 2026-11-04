@@ -7,7 +7,7 @@ import type {
 } from './structured-mailbox-pointer-host-contract'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 
-type MailScope = StructuredMailEligibility & StructuredPointerTarget & { db: object }
+type MailScope = StructuredMailEligibility & StructuredPointerTarget & { db: OrchestrationDb }
 
 /** Only an unfinished discovery retains its bounded page; completed walks retain no row frontier. */
 export class MailDiscoveryWalk {
@@ -29,9 +29,9 @@ export class MailDiscoveryWalk {
   }
 
   sameAttachment(
-    db: object,
+    db: OrchestrationDb,
     target: StructuredPointerTarget,
-    host: object | null,
+    host: StructuredMailEligibility['host'] | null,
     fence: number | null
   ): boolean {
     const last = this.scope
@@ -46,7 +46,7 @@ export class MailDiscoveryWalk {
   }
 
   reconcile(
-    db: object,
+    db: OrchestrationDb,
     target: StructuredPointerTarget,
     eligibility: StructuredMailEligibility,
     waiters: ReadonlySet<OrchestrationMessageWaiter> | undefined

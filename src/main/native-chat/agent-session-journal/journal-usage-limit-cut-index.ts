@@ -5,7 +5,7 @@ import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { agentTurnVerdict } from '../../../shared/agent-turn-outcome'
+import { agentTurnVerdict } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { isStructuredAgentSessionCommandTurn } from '../../../shared/agent-session/structured-agent-session-command-entry'
 import { isStructuredAgentSessionNonRequestRow } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { readAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
