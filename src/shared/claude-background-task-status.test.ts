@@ -67,14 +67,29 @@ describe('Claude background task status', () => {
         background_tasks: [{ id: 'ws-1', type: 'monitor', status: 'running', ambient: true }]
       }).hasRunningNonAgentTask
     ).toBe(false)
-    // A model-started websocket Monitor is still live work.
     expect(
       readClaudeBackgroundAgentTasks({
         background_tasks: [
-          { id: 'ws-2', type: 'monitor', status: 'running', description: 'Watch deploy events' }
+          {
+            ...artifactWatch,
+            description:
+              'live updates for artifact https://claude.ai/code/artifact/0f6c2d1e-4b7a-4c55-9d3e-2a1b3c4d5e6f (published)'
+          }
         ]
       }).hasRunningNonAgentTask
-    ).toBe(true)
+    ).toBe(false)
+    // A model-started websocket Monitor is still live work, even when it reuses the label without a claude.ai artifact URL.
+    for (const description of [
+      'Watch deploy events',
+      'live updates for artifact build-42',
+      'live updates for artifact https://example.com/artifact/abc123'
+    ]) {
+      expect(
+        readClaudeBackgroundAgentTasks({
+          background_tasks: [{ id: 'ws-2', type: 'monitor', status: 'running', description }]
+        }).hasRunningNonAgentTask
+      ).toBe(true)
+    }
 
     const state = createHookListenerState()
     claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'publish it' })
