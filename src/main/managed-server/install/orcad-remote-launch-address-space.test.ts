@@ -1,9 +1,13 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { ORCAD_LOG_FILENAME, ORCAD_READINESS_FILENAME } from './orcad-remote-host-support'
+import {
+  ORCAD_LOG_FILENAME,
+  ORCAD_PID_FILENAME,
+  ORCAD_READINESS_FILENAME
+} from './orcad-remote-host-support'
 import { orcadLaunchCommand } from './orcad-remote-launch'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { WORKER_CODE_RANGE_MB } from '../../worker-threads/worker-thread-spawn'
@@ -34,18 +38,35 @@ const server = require('node:http').createServer((_req, res) => res.end()).liste
 })
 `
 
-const dirs: string[] = []
+const slots: string[] = []
 afterEach(() => {
-  for (const dir of dirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
+  for (const slot of slots.splice(0)) {
+    // A hung launch would otherwise outlive the test with live workers.
+    const pid = Number(read(slot, ORCAD_PID_FILENAME))
+    if (pid > 0) {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        // Already exited.
+      }
+    }
+    rmSync(join(slot, '..'), { recursive: true, force: true })
   }
 })
 
+function read(slot: string, name: string): string {
+  try {
+    return readFileSync(join(slot, name), 'utf8')
+  } catch {
+    return ''
+  }
+}
+
 function pinnedNodeSlot(): string {
   const root = mkdtempSync(join(tmpdir(), 'orcad-address-space-'))
-  dirs.push(root)
   const slot = join(root, 'orcad-0.2.0+bb01')
   mkdirSync(slot)
+  slots.push(slot)
   writeFileSync(join(slot, '.runtime-node'), `${NODE_SHA}\n`)
   const binDir = join(root, 'runtimes', `node-${NODE_SHA}`, 'bin')
   mkdirSync(binDir, { recursive: true })
@@ -56,6 +77,7 @@ function pinnedNodeSlot(): string {
 
 // RLIMIT_AS is enforced only on Linux.
 describe.skipIf(process.platform !== 'linux')('orcad under an address-space limit', () => {
+  // Covers the 20 s wait for the detached launch below.
   it('starts workers after a fetch within 8 GiB of virtual memory', async () => {
     const slot = pinnedNodeSlot()
     const command = orcadLaunchCommand(host, {
@@ -72,22 +94,14 @@ describe.skipIf(process.platform !== 'linux')('orcad under an address-space limi
       args: ['-c', `ulimit -v ${ADDRESS_SPACE_LIMIT_KB}; ${command}`],
       timeoutMs: 10_000
     })
-    const read = (name: string): string => {
-      try {
-        return readFileSync(join(slot, name), 'utf8')
-      } catch {
-        return ''
-      }
-    }
-    const deadline = Date.now() + 20_000
-    while (
-      !read(ORCAD_READINESS_FILENAME).includes(READY_LINE) &&
-      !read(ORCAD_LOG_FILENAME).includes('Fatal') &&
-      Date.now() < deadline
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 50))
-    }
-    expect(read(ORCAD_LOG_FILENAME)).not.toContain('Fatal')
-    expect(read(ORCAD_READINESS_FILENAME)).toContain(READY_LINE)
+    // Spawning 24 isolates under a VM limit takes seconds on a loaded CI runner.
+    await vi.waitFor(
+      () => {
+        const log = read(slot, ORCAD_LOG_FILENAME)
+        expect(log).not.toContain('Fatal')
+        expect(read(slot, ORCAD_READINESS_FILENAME), log).toContain(READY_LINE)
+      },
+      { timeout: 20_000, interval: 50 }
+    )
   }, 30_000)
 })

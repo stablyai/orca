@@ -61,10 +61,11 @@ export function selectOrcadSlotRuntimeCommand(
   const runtime = quotePosixShell(joinRemotePath(host, directory, orcadBunRuntimeFilename(host.os)))
   const target = quotePosixShell(joinRemotePath(host, directory, ORCAD_BUILD_TARGET_FILENAME))
   return (
-    `orcad_runtime_flags=; if [ -e ${nodeMarker} ]; then ${orcadNodeSlotRuntimeCommand(host, directory)}` +
+    // One compound command: launch chains it with && after cd.
+    `if [ -e ${nodeMarker} ]; then ${orcadNodeSlotRuntimeCommand(host, directory)}` +
     `orcad_runtime_flags=${quotePosixShell(ORCAD_PINNED_NODE_FLAGS)}; ` +
     `elif [ -e ${target} ] || [ -e ${runtime} ]; then ` +
-    `[ -x ${runtime} ] || exit 78; orcad_runtime=${runtime}; ` +
-    `else orcad_runtime=${quotePosixShell(legacyNodePath)}; fi`
+    `[ -x ${runtime} ] || exit 78; orcad_runtime=${runtime}; orcad_runtime_flags=; ` +
+    `else orcad_runtime=${quotePosixShell(legacyNodePath)}; orcad_runtime_flags=; fi`
   )
 }

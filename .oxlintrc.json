@@ -134,12 +134,6 @@
                 "name": "ssh2",
                 "allowTypeImports": true,
                 "message": "Value-importing ssh2 hoists it into the eager main-process require block and blocks startup (#35731). Use `import type` plus loadSsh2() from src/main/ssh/ssh2-module-load.ts."
-              },
-              {
-                "name": "node:worker_threads",
-                "importNames": ["Worker"],
-                "allowTypeImports": true,
-                "message": "A default Worker reserves ~600 MB of address space and crashes `ulimit -v` hosts (#37538). Use spawnWorkerThread() from src/main/worker-threads/worker-thread-spawn.ts."
               }
             ],
             "patterns": [

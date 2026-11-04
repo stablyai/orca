@@ -1,4 +1,3 @@
-// oxlint-disable-next-line no-restricted-imports -- the one sanctioned Worker constructor
 import { Worker, type WorkerOptions } from 'node:worker_threads'
 
 /** V8's default CodeRange (512 MB on x64) costs every worker ~600 MB of address space, so a few
