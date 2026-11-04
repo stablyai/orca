@@ -7,6 +7,7 @@ import type { NativeChatFileLinkContext } from './native-chat-file-link'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 
 const mocks = vi.hoisted(() => {
   const noSettings: Record<string, unknown> = {}
@@ -80,26 +81,28 @@ function ToolTarget({
   linkContext?: NativeChatFileLinkContext
 }): React.JSX.Element {
   const onLinkClick = useNativeChatFileLinkClick(linkContext, request)
-  return surface === 'tool' ? (
-    <NativeChatToolLine
-      block={{ type: 'tool-call', name: 'Read', input: { file_path: path } }}
-      result={{ type: 'tool-result', output: 'contents' }}
-      onLinkClick={onLinkClick}
-    />
-  ) : (
-    <NativeChatDiffCard
-      file={{
-        path,
-        oldPath: null,
-        changeKind: 'edited',
-        lines: [{ kind: 'add', text: 'new', oldLineNumber: null, newLineNumber: 1 }],
-        added: 1,
-        removed: 0,
-        lineNumbersKnown: true,
-        truncated: false
-      }}
-      onLinkClick={onLinkClick}
-    />
+  return (
+    <NativeChatLinkClickContext value={onLinkClick}>
+      {surface === 'tool' ? (
+        <NativeChatToolLine
+          block={{ type: 'tool-call', name: 'Read', input: { file_path: path } }}
+          result={{ type: 'tool-result', output: 'contents' }}
+        />
+      ) : (
+        <NativeChatDiffCard
+          file={{
+            path,
+            oldPath: null,
+            changeKind: 'edited',
+            lines: [{ kind: 'add', text: 'new', oldLineNumber: null, newLineNumber: 1 }],
+            added: 1,
+            removed: 0,
+            lineNumbersKnown: true,
+            truncated: false
+          }}
+        />
+      )}
+    </NativeChatLinkClickContext>
   )
 }
 

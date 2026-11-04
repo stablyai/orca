@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type {
   NativeChatBlock,
   NativeChatMessage
@@ -26,14 +25,10 @@ export function useNativeChatWorkRun(
   members: readonly NativeChatMessage[] | undefined,
   {
     revealedDiff,
-    activeTurnIsWorking,
-    onLinkClick,
-    allowFileUriLinks
+    activeTurnIsWorking
   }: {
     revealedDiff: NativeChatDiffReveal | undefined
     activeTurnIsWorking: boolean | undefined
-    onLinkClick: CommentMarkdownLinkClickHandler | undefined
-    allowFileUriLinks: boolean
   }
 ): NativeChatWorkRun | undefined {
   const entries = useMemo(() => {
@@ -48,8 +43,6 @@ export function useNativeChatWorkRun(
         message={message}
         markdown={deriveNativeChatRowContent(message.blocks).markdown}
         turnIsWorking={activeTurnIsWorking}
-        onLinkClick={onLinkClick}
-        allowFileUriLinks={allowFileUriLinks}
       />
     )
     const before = new Map<NativeChatBlock, React.JSX.Element[]>()
@@ -60,7 +53,7 @@ export function useNativeChatWorkRun(
       blocks,
       asides: { before, after: thoughtsAfter.map(thought) }
     }
-  }, [members, activeTurnIsWorking, onLinkClick, allowFileUriLinks])
+  }, [members, activeTurnIsWorking])
   const runReveal = useMemo(() => {
     const editKey =
       entries && revealedDiff

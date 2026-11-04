@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type {
   NativeChatBlock,
   NativeChatToolCallBlock
@@ -23,7 +22,6 @@ export function NativeChatToolRunMemberList({
   revealedDiff,
   onRevealDiff,
   disclosureId,
-  onLinkClick,
   asides
 }: {
   /** Every tool block of the run; `headerBlocks` is those minus its asks. */
@@ -36,7 +34,6 @@ export function NativeChatToolRunMemberList({
   revealedDiff?: NativeChatDiffReveal
   onRevealDiff?: (element: HTMLElement) => void
   disclosureId?: string
-  onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
   const taskLists = useMemo(
     () =>
@@ -75,7 +72,6 @@ export function NativeChatToolRunMemberList({
                   : undefined
               }
               onReveal={onRevealDiff}
-              onLinkClick={onLinkClick}
               disclosureKey={
                 disclosureId === undefined
                   ? undefined
@@ -96,7 +92,6 @@ export function NativeChatToolRunMemberList({
         key={lineIdentity}
         block={block}
         result={block.type === 'tool-call' ? resultByCall.get(block) : undefined}
-        onLinkClick={onLinkClick}
         disclosureKey={
           disclosureId === undefined ? undefined : `line:${disclosureId}:${lineIdentity}`
         }

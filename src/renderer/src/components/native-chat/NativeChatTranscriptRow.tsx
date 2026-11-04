@@ -1,5 +1,4 @@
 import { memo, useContext } from 'react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
@@ -27,10 +26,8 @@ export type NativeChatTranscriptRowContext = {
   expandedTurnIds: ReadonlySet<string>
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
-  allowFileUriLinks: boolean
   structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
-  onLinkClick?: CommentMarkdownLinkClickHandler
   onToggleExpandedTurn: (turnKey: string) => void
   subagentDisclosure: NativeChatSubagentDisclosure
   onScrollMessageToTop: (element: HTMLElement) => void
@@ -97,7 +94,6 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {!slot.drawsMessage ? null : receipt ? (
         <NativeChatResolutionReceipt
           body={receipt}
-          onLinkClick={context.onLinkClick}
           disclosureId={message.id}
           awaiting={isActionableStructuredAgentSessionPrompt(
             message.id,
@@ -120,8 +116,6 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           trailingRun={slot.trailingRun}
           continuesTurn={slot.continuesTurn}
           onScrollMessageToTop={context.onScrollMessageToTop}
-          onLinkClick={context.onLinkClick}
-          allowFileUriLinks={context.allowFileUriLinks}
           deliveryNotice={deliveryNotice}
           subagentRoster={slot.subagentRoster}
           subagentDisclosure={context.subagentDisclosure}

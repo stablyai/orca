@@ -349,7 +349,6 @@ function card(message: NativeChatMessage) {
       message={message}
       from={message.from!}
       runtimeContext={context}
-      allowFileUriLinks={false}
       onRefolded={() => {}}
     />
   )

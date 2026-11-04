@@ -12,6 +12,7 @@ import {
   useNativeChatDisclosures
 } from './native-chat-disclosure-store'
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 
 vi.mock('./NativeChatDiffCard', () => ({ NativeChatDiffCard: () => null }))
 vi.mock('./NativeChatDiffView', () => ({ NativeChatDiffView: () => null }))
@@ -181,7 +182,11 @@ describe('inline tool annotations', () => {
       state: 'completed',
       webSearchResults: [{ title: 'Reference docs', url: 'https://example.com/docs' }]
     }
-    render(<NativeChatToolRun blocks={[block]} expandSignal onLinkClick={onLinkClick} />)
+    render(
+      <NativeChatLinkClickContext value={onLinkClick}>
+        <NativeChatToolRun blocks={[block]} expandSignal />
+      </NativeChatLinkClickContext>
+    )
     expect(screen.queryByRole('link')).toBeNull()
     fireEvent.click(screen.getByText('Searched the web').closest('button')!)
     const link = screen.getByRole('link', { name: /Reference docs/ })
@@ -247,25 +252,26 @@ it.each([
 it('filters untrusted persisted result URLs at the renderer boundary', () => {
   const onLinkClick = vi.fn((event) => event.preventDefault())
   render(
-    <NativeChatToolRun
-      blocks={[
-        {
-          type: 'tool-call',
-          name: 'web_search',
-          input: null,
-          webSearchResults: [
-            { title: 'Script', url: 'javascript:alert(1)' },
-            { title: 'Local file', url: 'file:///tmp/secret' },
-            { title: 'App route', url: 'orca://open' },
-            { title: 'Protocol relative', url: '//example.com' },
-            { title: 'Data', url: 'data:text/html,hello' },
-            { title: 'Docs', url: 'https://example.com/docs' }
-          ]
-        }
-      ]}
-      expandSignal
-      onLinkClick={onLinkClick}
-    />
+    <NativeChatLinkClickContext value={onLinkClick}>
+      <NativeChatToolRun
+        blocks={[
+          {
+            type: 'tool-call',
+            name: 'web_search',
+            input: null,
+            webSearchResults: [
+              { title: 'Script', url: 'javascript:alert(1)' },
+              { title: 'Local file', url: 'file:///tmp/secret' },
+              { title: 'App route', url: 'orca://open' },
+              { title: 'Protocol relative', url: '//example.com' },
+              { title: 'Data', url: 'data:text/html,hello' },
+              { title: 'Docs', url: 'https://example.com/docs' }
+            ]
+          }
+        ]}
+        expandSignal
+      />
+    </NativeChatLinkClickContext>
   )
   openToolRunMembers()
   const links = screen.getAllByRole('link')

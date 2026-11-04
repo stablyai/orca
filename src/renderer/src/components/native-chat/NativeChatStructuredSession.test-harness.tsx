@@ -29,6 +29,7 @@ import type {
   SessionOptionValue
 } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { absent, nullable, widened } from './native-chat-mock-slot-types.test-support'
+import { useNativeChatLinkClick } from './native-chat-link-click-context'
 
 type StopBackgroundTaskSpy = (sessionId: string, taskId?: string) => unknown
 
@@ -303,7 +304,8 @@ export function createStructuredSessionMocks() {
     }),
     nativeChatMessageList: () => ({
       NativeChatMessageList: (props: typeof mocks.messageListProps) => {
-        mocks.messageListProps = props
+        const onLinkClick = useNativeChatLinkClick()
+        mocks.messageListProps = props && { ...props, onLinkClick }
         useImperativeHandle(props?.ref, () => ({
           revealLatest: mocks.revealLatest,
           readerAtEnd: () => true,

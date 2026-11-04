@@ -397,7 +397,6 @@ describe('GitHub callouts', () => {
         content={'Done.\n\n> [!IMPORTANT]\n> Restart the app to pick up `config.ts`.'}
         variant="document"
         renderCodeBlock={NativeChatCodeBlock}
-        onLinkClick={() => {}}
         linkifyFilePaths
       />
     )

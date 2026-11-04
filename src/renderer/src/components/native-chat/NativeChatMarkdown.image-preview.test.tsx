@@ -30,6 +30,7 @@ import type * as HttpLinkRouting from '@/lib/http-link-routing'
 import { getDefaultSettings } from '../../../../shared/constants'
 import * as imageCachePinning from '@/components/editor/document-images/local-image-cache-pinning'
 import { ImageVisibilityObserver } from './native-chat-image-visibility-observer.test-fixture'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 
 const mocks = vi.hoisted(() => ({
   readRuntimeFilePreview: vi.fn(),
@@ -90,13 +91,9 @@ function Transcript({
     <TooltipProvider>
       <NativeChatMarkdownImageOwnerContext.Provider value={owner}>
         <div ref={rootRef}>
-          <NativeChatMarkdown
-            content={content}
-            variant={variant}
-            growing={growing}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks
-          />
+          <NativeChatLinkClickContext value={onLinkClick}>
+            <NativeChatMarkdown content={content} variant={variant} growing={growing} />
+          </NativeChatLinkClickContext>
           <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
         </div>
       </NativeChatMarkdownImageOwnerContext.Provider>
@@ -155,7 +152,7 @@ describe('native chat Markdown image preview', () => {
     const view = render(
       <TooltipProvider>
         <NativeChatMarkdownImageOwnerProvider tabId="chat-0" isVisible sessionId="session-0">
-          <NativeChatMarkdown content="![Chart](chart.png)" variant="document" allowFileUriLinks />
+          <NativeChatMarkdown content="![Chart](chart.png)" variant="document" />
         </NativeChatMarkdownImageOwnerProvider>
       </TooltipProvider>
     )

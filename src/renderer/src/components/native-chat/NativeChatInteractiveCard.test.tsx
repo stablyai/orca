@@ -42,6 +42,8 @@ import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-ca
 import { asyncQuestionSourceScope } from '../../../../shared/native-chat/input/native-chat-ask'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
 import { nativeChatPromptDismissals } from './native-chat-prompt-dismissals'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
+import { NativeChatFileLinkExistenceContext } from './native-chat-file-link-existence'
 
 // Answered occurrences outlive a view by design; each test starts with none.
 beforeEach(nativeChatPromptDismissals.clearForTests)
@@ -743,5 +745,43 @@ describe('terminal async contributors through the production hooks and card', ()
     view.rerender(cardElement(true, [row('one', 'Revised Q1?')]))
     expect(screen.getByRole('button', { name: /Spaces/ })).toHaveAttribute('aria-pressed', 'false')
     expect(mocks.cancelPending).not.toHaveBeenCalled()
+  })
+})
+
+const planLinkClick = vi.fn((event: { preventDefault: () => void }) => event.preventDefault())
+const planFileSnapshot = {
+  check: (link: { pathText: string }) => link.pathText === 'src/app.ts',
+  peek: () => false
+}
+const planFileExistence = {
+  watch: () => ({ subscribe: () => () => {}, getSnapshot: () => planFileSnapshot }),
+  recheck: () => {}
+}
+
+describe('terminal-backed plan approval links', () => {
+  afterEach(cleanup)
+  it('underlines an existing file in the plan and opens it through the chat', () => {
+    render(
+      <NativeChatFileLinkExistenceContext.Provider value={planFileExistence}>
+        <NativeChatLinkClickContext value={planLinkClick}>
+          <TooltipProvider>
+            <NativeChatInteractiveCard
+              card={{
+                kind: 'approval',
+                approval: {
+                  title: 'Review proposed plan',
+                  subject: { kind: 'plan', text: 'First edit src/app.ts, then run tests.' },
+                  options: [{ label: 'Approve', send: 'approve' }]
+                }
+              }}
+              send={SEND}
+              onDismiss={vi.fn()}
+            />
+          </TooltipProvider>
+        </NativeChatLinkClickContext>
+      </NativeChatFileLinkExistenceContext.Provider>
+    )
+    fireEvent.click(screen.getByRole('link', { name: 'src/app.ts' }))
+    expect(planLinkClick).toHaveBeenCalledOnce()
   })
 })

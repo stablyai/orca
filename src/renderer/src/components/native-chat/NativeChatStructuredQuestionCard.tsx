@@ -5,7 +5,7 @@ import {
   structuredQuestionAnswers,
   structuredQuestionCard
 } from '../../../../shared/structured-agent-question-card'
-import { NativeChatQuestionCard, type NativeChatQuestionCardProps } from './NativeChatQuestionCard'
+import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 
 export function NativeChatStructuredQuestionCard({
   questions,
@@ -13,8 +13,7 @@ export function NativeChatStructuredQuestionCard({
   onCancel,
   isSubmitting,
   shouldFocus,
-  answerInputRef,
-  onLinkClick
+  answerInputRef
 }: {
   questions: readonly AgentJournalQuestion[]
   onAnswer: (response: AgentSessionPromptResponse) => void
@@ -22,7 +21,7 @@ export function NativeChatStructuredQuestionCard({
   isSubmitting?: boolean
   shouldFocus?: boolean
   answerInputRef?: RefObject<HTMLInputElement | null>
-} & Pick<NativeChatQuestionCardProps, 'onLinkClick'>): React.JSX.Element {
+}): React.JSX.Element {
   const card = structuredQuestionCard(questions)
   return (
     <NativeChatQuestionCard
@@ -39,7 +38,6 @@ export function NativeChatStructuredQuestionCard({
       isSubmitting={isSubmitting}
       shouldFocus={shouldFocus}
       answerInputRef={answerInputRef}
-      onLinkClick={onLinkClick}
     />
   )
 }
