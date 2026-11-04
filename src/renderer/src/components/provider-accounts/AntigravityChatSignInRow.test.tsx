@@ -345,7 +345,7 @@ it('preserves moved setup owner, actions and failure states through collapse and
       new Error('Sign-in refused. Try again.')
     )
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(owner, 'Start')
+    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(owner, 'Start', { intent: 'signIn' })
     await screen.findByText('Sign-in refused. Try again.')
     const late = Promise.withResolvers<{ flowId: string }>()
     fake.start = late.promise
@@ -382,4 +382,42 @@ it('preserves moved setup owner, actions and failure states through collapse and
     })
     cleanup()
   }
+})
+
+it('carries the displayed action and preserves the accepted replacement intent through remount and changed auth', async () => {
+  const owner = { kind: 'environment', environmentId: 'intent-retry' } as const
+  publish(owner, null, 'signedIn')
+  const row = await showRow(owner)
+  await userEvent.click(screen.getByRole('button', { name: 'Change account' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+    intent: 'changeAccount'
+  })
+  await act(async () =>
+    publish(owner, { flowId: 'f', phase: 'cancelled', intent: 'changeAccount' })
+  )
+  row.unmount()
+  await showRow(owner)
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+    intent: 'changeAccount'
+  })
+})
+
+it('retries a failed Start with its attempted action until a different host flow supersedes it', async () => {
+  const owner = { kind: 'environment', environmentId: 'intent-request-error' } as const
+  publish(owner, null, 'signedIn')
+  await showRow(owner)
+  vi.mocked(callAntigravityChatSignIn).mockRejectedValueOnce(new Error('Request failed.'))
+  await userEvent.click(screen.getByRole('button', { name: 'Change account' }))
+  await screen.findByText('Request failed.')
+  await act(async () => publish(owner, null, 'signedOut'))
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+    intent: 'changeAccount'
+  })
+  await act(async () =>
+    publish(owner, { flowId: 'new-check', phase: 'failed', intent: 'signIn' }, 'signedIn')
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', { intent: 'signIn' })
 })

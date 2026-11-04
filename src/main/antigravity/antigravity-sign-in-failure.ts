@@ -27,3 +27,17 @@ export function antigravitySignInFailure(error: unknown): string {
   }
   return SIGN_IN_FAILED
 }
+
+export function antigravitySignInSessionFailure(error: unknown): never {
+  const plain = error instanceof AcpAgentError && error.code === -32603
+  throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
+    ? new AntigravitySignInSentence(
+        'Antigravity authenticated, but could not initialize a session or load models.'
+      )
+    : error
+}
+
+export const SECOND_LINK = {
+  phase: 'failed',
+  error: 'Antigravity started more than one Google sign-in request.'
+} as const

@@ -1,5 +1,6 @@
 import type {
   AntigravityChatAuth,
+  AntigravityChatSignInIntent,
   AntigravityChatSignInState,
   AntigravityChatSignInStatus
 } from '../../../shared/antigravity-account-types'
@@ -27,9 +28,12 @@ export type AntigravityChatSignInView = {
   error: string | null
   /** The browser could not open the link this client asked for. */
   openFailed: boolean
+  retryIntent: AntigravityChatSignInIntent
 }
 
-type Notes = Pick<AntigravityChatSignInView, 'error' | 'openFailed'>
+type Notes = Pick<AntigravityChatSignInView, 'error' | 'openFailed'> & {
+  attempt: { intent: AntigravityChatSignInIntent; previousFlow: string | null | undefined } | null
+}
 type Local = {
   owner: RuntimeClientTarget
   observers: number
@@ -39,14 +43,20 @@ type Local = {
   notes: Notes
 }
 
-const NO_NOTES: Notes = { error: null, openFailed: false }
+const NO_NOTES: Notes = { error: null, openFailed: false, attempt: null }
 const hostKey = (owner: RuntimeClientTarget): string =>
   owner.kind === 'local' ? '' : owner.environmentId
 
 const signIns = createRevisionedHostStateStore<RuntimeClientTarget, AntigravityChatSignInStatus>({
   key: hostKey,
   hostKey,
-  subscribe: subscribeAntigravityChatSignIn
+  subscribe: (owner, handlers) => {
+    const local = localFor(owner)
+    // A new host stream supersedes requests from the previous subscription.
+    local.starts += 1
+    note(local, { attempt: null })
+    return subscribeAntigravityChatSignIn(owner, handlers)
+  }
 })
 const locals = new Map<string, Local>()
 type Shown = {
@@ -101,15 +111,21 @@ function openStartedLinks(): void {
 signIns.subscribe(openStartedLinks)
 
 /** Starts a sign-in on the host, or rejoins this client's running one; the host's status shows it. */
-export async function startAntigravityChatSignIn(owner: RuntimeClientTarget): Promise<void> {
+export async function startAntigravityChatSignIn(
+  owner: RuntimeClientTarget,
+  intent: AntigravityChatSignInIntent
+): Promise<void> {
   const local = localFor(owner)
   const ticket = ++local.starts
-  note(local, NO_NOTES)
+  note(local, { ...NO_NOTES, attempt: { intent, previousFlow: flowOf(owner)?.flowId } })
   try {
-    const { flowId } = await callAntigravityChatSignIn<{ flowId: string }>(owner, 'Start')
+    const { flowId } = await callAntigravityChatSignIn<{ flowId: string }>(owner, 'Start', {
+      intent
+    })
     // A row that left before the host answered opens nothing; one shown later shows the flow.
     if (ticket === local.starts) {
       local.opens = local.observers > 0 ? flowId : null
+      note(local, { attempt: null })
       openStartedLinks()
     }
   } catch (cause) {
@@ -173,7 +189,12 @@ export function readAntigravityChatSignIn(owner: RuntimeClientTarget): Antigravi
     status: snapshot.kind,
     flow: known?.flow ?? null,
     auth: known?.auth ?? 'unknown',
-    ...notes
+    error: notes.error,
+    openFailed: notes.openFailed,
+    retryIntent:
+      notes.attempt && notes.attempt.previousFlow === known?.flow?.flowId
+        ? notes.attempt.intent
+        : (known?.flow?.intent ?? 'signIn')
   }
   views.set(hostKey(owner), { snapshot, notes, view })
   return view

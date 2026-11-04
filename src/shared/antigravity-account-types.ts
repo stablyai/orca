@@ -30,11 +30,15 @@ export const ANTIGRAVITY_CHAT_SIGN_IN_PHASES = [
   'expired'
 ] as const
 
+export type AntigravityChatSignInIntent = 'signIn' | 'changeAccount'
+
 /** Where a chat sign-in flow on the execution host stands; `url` is the Google page to open. */
 export type AntigravityChatSignInState = {
   /** Null, with no `url`, for every client but the one that started the flow: only it can act. */
   flowId: string | null
   phase: (typeof ANTIGRAVITY_CHAT_SIGN_IN_PHASES)[number]
+  /** The initiating action; absent on older hosts and other clients' flows. */
+  intent?: AntigravityChatSignInIntent
   url?: string
   error?: string
 }

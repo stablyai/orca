@@ -1,9 +1,11 @@
 import type {
   AntigravityAccountState,
+  AntigravityChatSignInIntent,
   AntigravityAccountTarget
 } from '../../../shared/antigravity-account-types'
 import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY
 } from '../../../shared/account-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -44,11 +46,20 @@ async function assertChatSignInHost(owner: RuntimeClientTarget): Promise<void> {
 export async function callAntigravityChatSignIn<TResult>(
   owner: RuntimeClientTarget,
   action: 'Start' | 'Cancel' | 'Complete',
-  params?: { flowId: string; callbackUrl?: string }
+  params?: { flowId: string; callbackUrl?: string } | { intent: AntigravityChatSignInIntent }
 ): Promise<TResult> {
   await assertChatSignInHost(owner)
   return callRuntimeRpc(owner, `accounts.antigravityChatSignIn${action}`, params, {
-    timeoutMs: 20_000
+    timeoutMs: 20_000,
+    ...(action === 'Start'
+      ? {
+          paramsForStatus: (status) =>
+            owner.kind === 'local' ||
+            status?.capabilities?.includes(ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY)
+              ? params
+              : undefined
+        }
+      : {})
   })
 }
 

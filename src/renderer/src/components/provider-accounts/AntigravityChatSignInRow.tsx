@@ -120,7 +120,8 @@ const NOT_FOLLOWED: AntigravityChatSignInView = {
   flow: null,
   auth: 'unknown',
   error: null,
-  openFailed: false
+  openFailed: false,
+  retryIntent: 'signIn'
 }
 
 export function useAntigravityChatSignIn(
@@ -244,7 +245,8 @@ export function useAntigravityChatSignInControls(props: {
     copy,
     copyLabel: translate('accounts.antigravity.chatCopyLink', 'Copy sign-in link'),
     signInDisabled: props.disabled || pending || status !== 'known' || otherClients(flow),
-    start: () => act(() => startAntigravityChatSignIn(owner)),
+    start: () =>
+      act(() => startAntigravityChatSignIn(owner, action === 'retry' ? view.retryIntent : action)),
     cancel: () => act(() => cancelAntigravityChatSignIn(owner)),
     send: (callbackUrl: string, refused: (message: string) => void) =>
       act(async () => {
