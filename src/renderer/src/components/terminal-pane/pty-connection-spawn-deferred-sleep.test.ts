@@ -3,14 +3,19 @@ import { registerMainOwnedResumeDrainTests } from './pty-connection-main-owned-r
 import type { ConnectPanePtySession } from './pty-connection/connect-pane-pty-session'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   expectWindowStartAskedMain,
   mainLayoutApplyTransport
 } from './pty-connection-test-main-pane-start-fixtures'
 import { flushAsyncTicks } from './pty-connection-test-async'
-import { createMockTransport, createPane, createManager } from './pty-connection-test-pane-fixtures'
+import {
+  createMockTransport,
+  createPane,
+  createManager,
+  type MockTransport
+} from './pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
@@ -18,7 +23,7 @@ import {
 } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
+
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals

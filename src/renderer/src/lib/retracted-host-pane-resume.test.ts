@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.

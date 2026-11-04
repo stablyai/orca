@@ -1,6 +1,6 @@
 /** List this target's legacy sockets/pipes and their own bridge commands without changing them; other desktops hash different target ids. COMPAT(legacy-relay-bridge): revisit 2027-01-15. */
 import type { SshConnection } from '../connection/ssh-connection'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../remote-exec/remote-frame-protocol'
 import { SHORT_RELAY_SOCKET_DIR_PREFIX } from '../relay-socket-path-limit'
 import { execCommand } from '../remote-exec/remote-exec-command'

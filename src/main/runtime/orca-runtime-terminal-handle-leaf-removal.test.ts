@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { DISCONNECTED_PTY_RECORD_MAX } from './orca-runtime-postlude'
 import {
   createHarness,

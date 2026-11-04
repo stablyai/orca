@@ -1,6 +1,6 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { resolveRootlessTerminalLayoutLeafId } from '../../../shared/workspace-layout/terminal-pane-tree'
 import { deriveHeadlessLegacyTerminalLeafId } from '../../runtime/mobile-session-layout-projection'
 

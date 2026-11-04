@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const FIXTURE_REPO_ID = 'dev-fixture-repo'

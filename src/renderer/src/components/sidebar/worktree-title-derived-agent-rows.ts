@@ -19,8 +19,11 @@ import {
   resolveRuntimePaneTitleLeafIdFromSparseSlots,
   collectRuntimePaneLeafIds
 } from '../../../../shared/runtime-pane-title-leaf-id'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner,

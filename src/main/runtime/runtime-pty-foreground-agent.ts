@@ -1,5 +1,5 @@
 import { recognizeAgentProcess } from '../../shared/agent-status/process/agent-process-recognition'
-import type { TerminalAgent } from '../../shared/terminal-agent'
+import type { TerminalAgent } from '../../shared/agent-status/identity/terminal-agent'
 import { withTimeoutResult } from './runtime-async-boundaries'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './orca-runtime-core'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'

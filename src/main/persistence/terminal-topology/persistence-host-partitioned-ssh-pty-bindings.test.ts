@@ -10,7 +10,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 
 import { TEST_LEAF_1 } from '../persistence-session-fixtures'

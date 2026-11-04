@@ -17,17 +17,17 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
-import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
+import type { PaneLaunchRecipe } from '../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
-} from '../../shared/terminal-pane-reveal'
+} from '../../shared/workspace-layout/terminal-pane-reveal'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {
   ProjectMovePauseRequest,
   ProjectMovePauseResponse
 } from '../../shared/project-move-pause'
-import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
@@ -52,11 +52,11 @@ import type {
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
-import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
+import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-reveal-identity'
 import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
-} from '../../shared/terminal-tab-close'
+} from '../../shared/workspace-layout/terminal-tab-close'
 import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse

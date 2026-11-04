@@ -1,14 +1,14 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   NativeChatVisualGuestThemePublisher,
   publishNativeChatVisualGuestTheme
 } from './NativeChatVisualGuestThemePublisher'
 import { readNativeChatVisualTheme } from './use-native-chat-visual-theme'
 
-vi.mock('@/store', async () => {
+vi.mock('@/store/index', async () => {
   const { create } = await import('zustand')
   return { useAppStore: create(() => ({ settings: { theme: 'dark' }, noise: 0 })) }
 })

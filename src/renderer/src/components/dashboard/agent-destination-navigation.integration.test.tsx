@@ -9,7 +9,7 @@ import {
   seedAlreadyActiveWorktree
 } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import type * as WebRuntimeSessionEnvironment from '@/runtime/web-runtime-session-environment'

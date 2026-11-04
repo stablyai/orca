@@ -3,11 +3,11 @@ import { getDefaultWorkspaceSession } from '../constants'
 import {
   CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION,
   type PersistedClientHostedBrowserPage
-} from '../client-hosted-browser-page-record'
+} from '../workspace-session/client-hosted-browser-page-record'
 import type { BrowserWorkspace } from '../browser-workspace-types'
 import { assertOrcadMigrationDormantWorkspaceSessionReferences } from './orcad-migration-dormant-session-validation'
 import { parseOrcadMigrationClientState } from './orcad-migration-client-state'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 const OWNER = 'repo-1::/srv/worktree'
 const BROWSER_WORKSPACE_ID = 'browser-workspace-1'

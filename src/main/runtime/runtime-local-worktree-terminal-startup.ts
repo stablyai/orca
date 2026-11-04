@@ -1,4 +1,4 @@
-import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
+import { formatTerminalStartFailure } from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'

@@ -17,7 +17,7 @@ import {
   installStructuredHostStub
 } from './rpc/methods/structured-agent-session-rpc.test-fixture'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-session-contracts'
-import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
 
 const SPLIT_ROOT: TerminalPaneLayoutNode = {
   type: 'split',

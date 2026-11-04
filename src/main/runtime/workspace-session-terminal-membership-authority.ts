@@ -2,8 +2,8 @@ import type { Tab, TabGroup } from '../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { pruneTabGroupLayoutAfterRetirement } from './mobile-session-terminal-retirement'
 

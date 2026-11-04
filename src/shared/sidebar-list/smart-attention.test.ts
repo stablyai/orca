@@ -9,7 +9,7 @@ import {
   resolveAttention,
   type PaneInput
 } from './smart-attention'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../workspace-layout/terminal-tab-types'
 import type { Worktree } from '../worktree/types'
 
 function hookPane(entry: AgentStatusEntry, hasLivePty = false): PaneInput {

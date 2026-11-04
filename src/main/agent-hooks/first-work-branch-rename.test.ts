@@ -7,7 +7,8 @@ import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from './first-work-structured-session-rename'
-import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
+import '../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 const {
   gitExecFileAsyncMock,

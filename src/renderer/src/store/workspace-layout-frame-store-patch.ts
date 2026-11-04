@@ -2,7 +2,7 @@
 
 import { BROWSER_TAB_LAYOUT_FIELDS } from '../../../shared/workspace-layout/workspace-layout-beside'
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { isEditorTabContentType } from './slices/editor/tabs/editor-tab-content-type'
 import type { AppState } from './types'
 import type { LayoutFrameSlices } from './workspace-layout-frame-slices'

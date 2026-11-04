@@ -4,7 +4,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../../shared/terminal-tab-types'
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   EMPTY_LIVE_PTY_IDS,
   EMPTY_PANE_FOREGROUND_AGENTS,

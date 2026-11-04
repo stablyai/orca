@@ -9,7 +9,7 @@ import {
   type DragReorderCallbacks
 } from './pane-drag-reorder'
 
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
 import {
   insertLeafBeside,

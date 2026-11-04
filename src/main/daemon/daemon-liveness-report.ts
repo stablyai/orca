@@ -7,7 +7,7 @@ import { getDaemonEndpointFacts, readDaemonPidRecord } from './daemon-provider-s
 import {
   confirmPtyProcessCeiling,
   type PtyProcessCeilingState
-} from '../../shared/pty-process-ceiling-state'
+} from '../../shared/terminal/pty/native-process/pty-process-ceiling-state'
 
 export type TerminalDaemonLivenessReport = {
   verdict: 'live' | 'unverifiable' | 'exited'

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { NotesSendAgentTarget } from '@/lib/notes-send-agent-targets'
 import {
   TAB_A,

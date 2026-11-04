@@ -1,6 +1,6 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TerminalModes } from './types'
-import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { TerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
 
 /** Shared checkpoint.json shape; generation pairs it with the matching output.log header. */
 export type TerminalCheckpointFile = {

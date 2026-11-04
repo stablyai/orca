@@ -8,7 +8,7 @@ import {
   WS
 } from '../../shared/workspace-layout/workspace-layout-command.test-fixture'
 import { saveWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-save'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { layoutModelOf, windowSaveDivergences } from './window-save-divergence'
 

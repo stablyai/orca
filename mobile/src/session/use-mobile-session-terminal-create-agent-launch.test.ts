@@ -6,7 +6,7 @@ import type {
   AgentLaunchOutcome,
   AgentLaunchPromptReceipt
 } from '../../../src/shared/agent-launch/contracts/agent-launch-intent'
-import { parsePaneKey } from '../../../src/shared/stable-pane-id'
+import { parsePaneKey } from '../../../src/shared/workspace-layout/stable-pane-id'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'

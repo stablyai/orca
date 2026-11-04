@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { buildTitleDerivedAgentRows } from '@/components/sidebar/worktree-title-derived-agent-rows'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
 import { getWorktreeStatus } from './worktree-status'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
