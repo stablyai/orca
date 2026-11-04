@@ -557,6 +557,7 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     expect(first.initializationResult()).toBe(response)
     expect(proof).not.toHaveBeenCalled()
     first.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
+    await Promise.resolve()
     first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
     first.close = async () => false
     options.holdInit = true
