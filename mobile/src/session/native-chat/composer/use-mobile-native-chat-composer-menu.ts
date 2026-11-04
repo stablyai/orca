@@ -113,7 +113,10 @@ export function useMobileNativeChatComposerMenu(input: {
 
   const { onNeedFiles, onNeedSkills, onSlashMenuOpen } = input
   // Scan disk skills only once a token needs them, as desktop does.
-  const skillsTriggered = isSkillPickerTriggered(beforeCaret, catalog.profile)
+  // A restored draft's leading skill was never typed here, yet its chip needs the catalog too.
+  const skillsTriggered =
+    isSkillPickerTriggered(beforeCaret, catalog.profile) ||
+    isSkillPickerTriggered(value.split(' ', 1)[0] ?? '', catalog.profile)
   useEffect(() => {
     if (skillsTriggered) {
       onNeedSkills?.()
