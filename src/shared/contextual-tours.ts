@@ -1,4 +1,8 @@
-import type { FeatureInteractionId } from './feature-interactions'
+import {
+  hasFeatureInteraction,
+  type FeatureInteractionId,
+  type FeatureInteractionState
+} from './feature-interactions'
 
 export type ContextualTourId =
   | 'workspace-board'
@@ -248,6 +252,32 @@ export function isContextualTourId(value: unknown): value is ContextualTourId {
 
 export function getContextualTour(id: ContextualTourId): ContextualTour {
   return CONTEXTUAL_TOURS.find((tour) => tour.id === id)!
+}
+
+// A step that waits for a user action is done only once that action succeeded, never when it is shown.
+export function isContextualTourStepDone(
+  step: ContextualTourStep,
+  featureInteractions: FeatureInteractionState
+): boolean {
+  return (
+    step.advanceOnFeatureInteraction !== undefined &&
+    hasFeatureInteraction(featureInteractions, step.advanceOnFeatureInteraction)
+  )
+}
+
+export function hasContextualTourActionStep(tour: ContextualTour): boolean {
+  return tour.steps.some((step) => step.advanceOnFeatureInteraction !== undefined)
+}
+
+export function hasUndoneContextualTourAction(
+  tour: ContextualTour,
+  featureInteractions: FeatureInteractionState
+): boolean {
+  return tour.steps.some(
+    (step) =>
+      step.advanceOnFeatureInteraction !== undefined &&
+      !isContextualTourStepDone(step, featureInteractions)
+  )
 }
 
 export function normalizeContextualTourIds(value: unknown): ContextualTourId[] {
