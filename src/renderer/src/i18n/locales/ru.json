@@ -20299,8 +20299,6 @@
         "stateUnverifiableCount_many": "Статус недоступен: {{value0}}"
       },
       "jumpToLatest": "К последним сообщениям",
-      "newRowsAnnouncement": "Пока вас не было, появились новые сообщения",
-      "newRowsMarker": "Новое",
       "find": {
         "label": "Найти в чате",
         "noResults": "Ничего не найдено",

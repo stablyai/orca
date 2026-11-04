@@ -19965,8 +19965,6 @@
         "stateUnverifiableCount_other": "{{value0}} with status unavailable"
       },
       "jumpToLatest": "Jump to latest",
-      "newRowsAnnouncement": "New messages arrived while you were away",
-      "newRowsMarker": "New",
       "find": {
         "label": "Find in chat",
         "noResults": "No results",
