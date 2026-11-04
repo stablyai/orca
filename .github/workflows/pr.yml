@@ -314,9 +314,13 @@ jobs:
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           node node_modules/oxlint/bin/oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings
 
+      # The phone/host contract bodies' imports exist only as emitted declarations; they lint in that program below.
       - name: Enforce type-aware code-quality baseline
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node node_modules/oxlint/bin/oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings
+        run: |
+          mapfile -t args < <(node config/scripts/phone-host-contract-bodies.mjs)
+          [ "${#args[@]}" -gt 3 ]
+          node node_modules/oxlint/bin/oxlint "${args[@]}" src config tests --deny-warnings
 
       # Mobile installation changes import resolution for the native cycle check.
       - wait: native-code-quality
@@ -324,6 +328,11 @@ jobs:
       # Install mobile before type-aware changed-code lint or unresolved mobile types become phantom error-type findings.
       - uses: ./.github/actions/install-mobile-dependencies
         if: needs.code_paths.outputs.static_analysis == 'true' && needs.code_paths.outputs.mobile_dependencies == 'true'
+
+      # Both producers emit the contract declarations, then the same type-aware rules check the bodies against them.
+      - name: Enforce type-aware code-quality on phone/host contract bodies
+        if: needs.code_paths.outputs.static_analysis == 'true' && needs.code_paths.outputs.mobile_dependencies == 'true'
+        run: node mobile/scripts/check-node-tests-typecheck.mjs --lint
 
       - name: Enforce changed-code quality
         if: '!cancelled()'

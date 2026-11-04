@@ -145,6 +145,29 @@ it.each([
   }
 )
 
+// Contract tests import implementation through source namespaces, not workspace packages.
+it('follows contract source aliases and keeps phone-reaching bodies selected for any change', () => {
+  const graph = collectUnitDependencyGraph(
+    fixture({
+      'src/renderer/src/receipt.tsx': 'export const receipt = 1',
+      'src/contract.test.ts':
+        "import '@orca/test-host/renderer/src/receipt'; import '@orca/test-mobile/bridge/harness'"
+    })
+  )
+  const tests = [...graph.files].filter((file) => file.endsWith('.test.ts')).sort()
+  expect(graph.reverse.get('src/renderer/src/receipt.tsx')).toEqual(
+    new Set(['src/contract.test.ts'])
+  )
+  expect(graph.opaque.has('src/contract.test.ts')).toBe(true)
+  expect(selectUnitFiles(tests, ['src/renderer/src/receipt.tsx'], graph).files).toContain(
+    'src/contract.test.ts'
+  )
+  expect(
+    selectUnitFiles(tests, ['src/packages/byte-buffer/src/byte-buffer.ts'], graph).files
+  ).toContain('src/contract.test.ts')
+  expect(selectUnitFiles(tests, ['mobile/src/bridge/harness.ts'], graph).full).toBe(true)
+})
+
 describe('unit graph import resolution', () => {
   it('retains every existing candidate across literal paths, extensions and index files', () => {
     const sources = new Map([

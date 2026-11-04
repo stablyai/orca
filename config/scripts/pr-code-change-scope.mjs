@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
 import { SHELL_PREFIXES } from './pr-shell-contract-prefixes.mjs'
+import { needsMobileDependencies } from './phone-host-contract-bodies.mjs'
 import {
   isCloudTestRunnerInput,
   isWindowsProcessProbePath,
@@ -484,10 +485,7 @@ export function shouldRunPrChecks(changedFiles) {
   return changedFiles.some((file) => !isDocsOnlyPath(file) && !isDesktopIrrelevantPath(file))
 }
 
-export function needsMobileDependencies(changedFiles) {
-  // Changed-mobile type-aware lint needs mobile/node_modules: root-only install resolves mobile types as error and produces phantom findings.
-  return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
-}
+export { needsMobileDependencies }
 
 export const DAEMON_INIT_TEST_SUPPORT = 'src/main/daemon/daemon-init-dependency-mocks.ts'
 

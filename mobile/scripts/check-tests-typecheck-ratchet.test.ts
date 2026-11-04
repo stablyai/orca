@@ -7,6 +7,7 @@ import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal'
 import {
   checkNodeTestProgram,
   findShadowedPhoneAliases,
+  lintExternalBodies,
   parseCompilerPass,
   partitionNodeTestBodies,
   readNodeTestBodies
@@ -352,6 +353,33 @@ describe('checked transfers', () => {
     } finally {
       removeTreeSync(root)
     }
+  })
+
+  // The desktop bodies' typed lint passes only when it read every body and found nothing.
+  it.each([
+    { name: 'clean', files: 2, diagnostics: [], code: 0, ok: true },
+    { name: 'a body left unread', files: 1, diagnostics: [], code: 0, ok: false },
+    { name: 'a finding', files: 2, diagnostics: [{ message: 'any union' }], code: 1, ok: false },
+    { name: 'no bodies', files: 0, diagnostics: [], code: 0, ok: false, bodies: [] }
+  ])('lints the contract bodies against their declarations: $name', (row) => {
+    const bodies = row.bodies ?? external
+    const run = vi.fn((_invocation: { args: string[] }) => ({
+      code: row.code,
+      stdout: JSON.stringify({ diagnostics: row.diagnostics, number_of_files: row.files }),
+      stderr: ''
+    }))
+    expect(lintExternalBodies(bodies, path.resolve(import.meta.dirname, '../..'), run).ok).toBe(
+      row.ok
+    )
+    expect(run.mock.calls[0]![0].args).toEqual(
+      expect.arrayContaining([
+        '--type-aware',
+        '--tsconfig',
+        'mobile/tsconfig.test.node.json',
+        '--deny-warnings',
+        ...bodies
+      ])
+    )
   })
 
   it('names a missing helper, leaked implementation source and native globals in the program', () => {

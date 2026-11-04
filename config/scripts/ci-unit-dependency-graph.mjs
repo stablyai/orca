@@ -27,6 +27,14 @@ function localPath(file, specifier) {
   if (specifier.startsWith('@/')) {
     return `src/renderer/src/${specifier.slice(2)}`
   }
+  // Contract tests' source namespaces (config/vitest.config.ts); not workspace packages. Phone paths
+  // fall outside the collected sources, so their importers stay opaque and always run.
+  if (specifier.startsWith('@orca/test-host/')) {
+    return `src/${specifier.slice(16)}`
+  }
+  if (specifier.startsWith('@orca/test-mobile/')) {
+    return `mobile/src/${specifier.slice(18)}`
+  }
   return null
 }
 
@@ -58,8 +66,9 @@ export function buildUnitDependencyGraph(
       if (imported.fileName === 'module' || imported.fileName === 'node:module') {
         opaque.add(file)
       }
-      const workspaceSource = workspace.resolve(imported.fileName)
-      const path = workspaceSource?.file ?? localPath(file, imported.fileName)
+      const local = localPath(file, imported.fileName)
+      const workspaceSource = local === null ? workspace.resolve(imported.fileName) : null
+      const path = workspaceSource?.file ?? local
       if (path === null) {
         continue
       }

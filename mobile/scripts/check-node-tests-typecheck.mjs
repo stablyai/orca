@@ -4,6 +4,15 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolveProjectCompilerInfo } from '../../config/scripts/run-typecheck-projects-in-parallel.mjs'
+import { resolveOxlintInvocation } from '../../config/scripts/oxlint-cli-invocation.mjs'
+import {
+  CONTRACT_LINT_CONFIG,
+  NODE_TEST_PROJECT,
+  partitionNodeTestBodies,
+  readNodeTestBodies
+} from '../../config/scripts/phone-host-contract-bodies.mjs'
+
+export { NODE_TEST_PROJECT, partitionNodeTestBodies, readNodeTestBodies }
 
 // Phone tests that drive real desktop sources cannot join the RN test program: RN's global timers
 // and Expo's process.env augmentation break the desktop graph. Each source graph emits genuine
@@ -11,7 +20,6 @@ import { resolveProjectCompilerInfo } from '../../config/scripts/run-typecheck-p
 // bodies against those declarations. Vitest still runs the tests against the original sources.
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
-export const NODE_TEST_PROJECT = 'mobile/tsconfig.test.node.json'
 // Mobile first, host second: the host owner rewrites every root src declaration, shared types included.
 export const DECLARATION_PROJECTS = [
   'mobile/tsconfig.test.mobile-declarations.json',
@@ -25,26 +33,6 @@ const LEAKED_NATIVE_GLOBALS = [
   /\/expo\/types\/metro-require\.d\.ts$/
 ]
 const toPosix = (filePath) => filePath.replaceAll('\\', '/')
-
-// The checked bodies are the node test config's non-declaration roots, so no second list names them.
-// Each is normalized to a repository path; phone bodies sit under mobile/, desktop ones under src/.
-export function readNodeTestBodies(root = repoRoot) {
-  const config = JSON.parse(fs.readFileSync(path.join(root, NODE_TEST_PROJECT), 'utf8'))
-  const base = path.posix.dirname(NODE_TEST_PROJECT)
-  return config.files
-    .filter((file) => /\.tsx?$/.test(file) && !file.endsWith('.d.ts'))
-    .map((file) => path.posix.normalize(path.posix.join(base, toPosix(file))))
-    .sort()
-}
-
-// Phone test roots, relative to mobile/, run under the phone's Bun role; the rest stay desktop-owned.
-export function partitionNodeTestBodies(bodies) {
-  const local = bodies.filter((file) => file.startsWith('mobile/') && /\.test\.tsx?$/.test(file))
-  return {
-    local: local.map((file) => file.slice('mobile/'.length)),
-    external: bodies.filter((file) => !file.startsWith('mobile/'))
-  }
-}
 
 // Declarations and the phone test bodies share one `@/` namespace; a phone `@/` path that a renderer
 // file also occupies would silently resolve to the renderer, so name it instead.
@@ -177,8 +165,63 @@ function mirrorDeclarationInputs(passes, root, output) {
   }
 }
 
-// Sequential: two declaration producers, then the strict check of the test bodies.
-export function runNodeTestsTypecheck({ root = repoRoot, run = runProcessSync } = {}) {
+// The desktop bodies' imported APIs exist only as these declarations, so their type-aware lint runs
+// against this program while the fresh output exists; a pass that checked fewer bodies fails.
+export function lintExternalBodies(external, root, run) {
+  const { command, prefixArgs } = resolveOxlintInvocation(root)
+  const result = run({
+    program: command,
+    args: [
+      ...prefixArgs,
+      '--type-aware',
+      '--config',
+      CONTRACT_LINT_CONFIG,
+      '--tsconfig',
+      NODE_TEST_PROJECT,
+      '--deny-warnings',
+      '--format',
+      'json',
+      ...external
+    ],
+    cwd: root,
+    timeoutMs: null,
+    maxOutputBytes: 16 * 1024 * 1024
+  })
+  let report = { diagnostics: [], number_of_files: 0 }
+  try {
+    report = JSON.parse(result.stdout ?? '')
+  } catch {
+    report.diagnostics = [{ message: `${result.stdout ?? ''}${result.stderr ?? ''}` }]
+  }
+  const checked = report.number_of_files
+  return {
+    project: `type-aware lint of ${external.length} contract bodies`,
+    code: result.code,
+    ok:
+      result.code === 0 &&
+      report.diagnostics.length === 0 &&
+      external.length > 0 &&
+      checked === external.length,
+    files: [],
+    diagnostics: [
+      ...(checked === external.length
+        ? []
+        : [`linted ${checked} of ${external.length} contract bodies`]),
+      ...report.diagnostics.map(
+        (diagnostic) =>
+          `${diagnostic.filename ?? ''}:${diagnostic.labels?.[0]?.span?.line ?? ''}: ${diagnostic.code ?? ''} ${diagnostic.message}`
+      )
+    ]
+  }
+}
+
+// Sequential: two declaration producers, then the strict check of the test bodies, then (when asked)
+// their type-aware lint, all inside the one owned declaration output.
+export function runNodeTestsTypecheck({
+  root = repoRoot,
+  run = runProcessSync,
+  lint = false
+} = {}) {
   const bodies = readNodeTestBodies(root)
   const { local: expected, external } = partitionNodeTestBodies(bodies)
   const output = ownOutputDirectory(root)
@@ -213,13 +256,20 @@ export function runNodeTestsTypecheck({ root = repoRoot, run = runProcessSync } 
     const inProgram = check.files
       .filter((file) => file.startsWith(prefix))
       .map((file) => file.slice(prefix.length))
+    const failures = check.ok ? [] : [check]
+    if (lint && check.ok && problems.length === 0) {
+      const linted = lintExternalBodies(external, root, run)
+      if (!linted.ok) {
+        failures.push(linted)
+      }
+    }
     return {
-      ok: check.ok && problems.length === 0,
+      ok: failures.length === 0 && problems.length === 0,
       expected,
       external,
       programTestFiles: expected.filter((file) => inProgram.includes(`mobile/${file}`)),
       programExternalFiles: external.filter((file) => inProgram.includes(file)),
-      failures: check.ok ? [] : [check],
+      failures,
       problems
     }
   } finally {
@@ -244,12 +294,13 @@ export function printNodeTestsFailure(result) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const result = runNodeTestsTypecheck()
+  const lint = process.argv.includes('--lint')
+  const result = runNodeTestsTypecheck({ lint })
   if (!result.ok) {
     printNodeTestsFailure(result)
     process.exit(1)
   }
   console.log(
-    `phone/host contract tests check: ${[...result.programTestFiles.map((file) => `mobile/${file}`), ...result.programExternalFiles].join(', ')}`
+    `phone/host contract tests check${lint ? ' and type-aware lint' : ''}: ${[...result.programTestFiles.map((file) => `mobile/${file}`), ...result.programExternalFiles].join(', ')}`
   )
 }
