@@ -101,12 +101,19 @@ export async function createFolderWorkspaceFromSidebar(
   }
 }
 
+function directFolderProgressMode(repo: Repo): 'stepped' | 'indeterminate' {
+  // The setup panel stays hidden only for an explicit stepped request, which is what an ordinary folder submit uses unless the repo is on an environment.
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  return host?.kind === 'runtime' ? 'indeterminate' : 'stepped'
+}
+
 function startFolderRepoWorkspace(repo: Repo): void {
   dismissCoveringModal()
   const state = useAppStore.getState()
   runBackgroundWorktreeCreation({
     repoId: repo.id,
     executionHostId: getRepoExecutionHostId(repo),
+    worktreeCreateProgressMode: directFolderProgressMode(repo),
     name: getSuggestedCreatureName(selectWorktreesByRepo(state)),
     nameWasGenerated: true,
     setupDecision: 'skip',

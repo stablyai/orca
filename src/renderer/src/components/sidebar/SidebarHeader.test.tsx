@@ -379,10 +379,38 @@ describe('SidebarHeader', () => {
         repoId: 'notes',
         setupDecision: 'skip',
         agent: null,
-        telemetrySource: 'sidebar'
+        telemetrySource: 'sidebar',
+        worktreeCreateProgressMode: 'stepped'
       })
     )
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
+  it('keeps the setup panel for an Open as Folder repo on an environment', async () => {
+    mockState.activeWorkspaceKey = 'worktree:notes::/tmp/notes'
+    mockState.activeWorktreeId = 'notes::/tmp/notes'
+    mockState.repos = [
+      {
+        id: 'notes',
+        kind: 'folder',
+        path: '/tmp/notes',
+        executionHostId: 'runtime:folder-host'
+      }
+    ]
+    mockState.worktreesByRepo = {
+      notes: [{ id: 'notes::/tmp/notes', repoId: 'notes', path: '/tmp/notes' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.runBackgroundWorktreeCreation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'notes',
+        executionHostId: 'runtime:folder-host',
+        worktreeCreateProgressMode: 'indeterminate'
+      })
+    )
   })
 
   it('creates and reveals a default folder workspace in the current folder project', async () => {
