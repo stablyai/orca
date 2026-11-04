@@ -136,6 +136,13 @@ thousands of module requests, so the first render and full reloads are faster. W
 pending, a newly opened pop-out, space, or web window may briefly get placeholder HTML. If the
 renderer misbehaves, set `ORCA_DEV_BUNDLED=0` (PowerShell: `$env:ORCA_DEV_BUNDLED='0'`) and report it.
 
+Renderer and web dependency caches live in `.cache/vite/{renderer,web}`. The cache retention
+plugin creates `.cache/vite/tsconfig.json` with `allowJs: true` before dependency optimization
+starts. This keeps Vite/Oxc's cached JavaScript transforms from searching an enclosing checkout
+for a tsconfig. An empty config does not match JavaScript and still allows that search. Keeping
+the boundary inside the cache preserves source files' referenced and nested tsconfigs, following
+[Vite's per-file discovery guidance](https://vite.dev/config/shared-options#tsconfig).
+
 Local installs use pnpm's global virtual store: each package version is one slot
 under `~/pnpm/store` that every worktree links to, instead of a full `node_modules` per worktree.
 An existing worktree converts on its next `pnpm install`, and an older branch without the setting
