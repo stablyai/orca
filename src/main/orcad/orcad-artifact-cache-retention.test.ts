@@ -46,6 +46,27 @@ describe('orcad artifact cache retention', () => {
     }
   })
 
+  it('never treats the shared node runtime directory as a version slot (#38181)', async () => {
+    const root = cacheRoot()
+    const target = 'linux-x64-glibc'
+    const nodeBinary = join(root, target, 'runtimes', 'node-abc123', 'bin', 'node')
+    mkdirSync(join(root, target, 'runtimes', 'node-abc123', 'bin'), { recursive: true })
+    writeFileSync(nodeBinary, '')
+    // The shared runtime is older than every slot, which is exactly when it was evicted.
+    const old = new Date(Date.now() - 24 * 60 * 60_000)
+    utimesSync(join(root, target, 'runtimes'), old, old)
+    const kept = [1, 2, 3].map((age) => slot(root, target, `v${age}`, age))
+    const evicted = [4, 5].map((age) => slot(root, target, `v${age}`, age))
+
+    const removed = await pruneOrcadArtifactCache(root)
+
+    expect(removed.sort()).toEqual(evicted.sort())
+    expect(existsSync(nodeBinary)).toBe(true)
+    for (const path of kept) {
+      expect(existsSync(path)).toBe(true)
+    }
+  })
+
   it('keeps an in-use version (even a repair copy) plus the two most recent others', async () => {
     const root = cacheRoot()
     const recent = [1, 2].map((age) => slot(root, 'linux-x64-glibc', `v${age}`, age))
