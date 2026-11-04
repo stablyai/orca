@@ -4,7 +4,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { launchAgentWithPrompt, promptedLaunchNotice } from './pr-ai-triage-launch'
-import { confirmNoRebaseBeforeMobileReviewAction } from './mobile-review-action-rebase-check'
+import { confirmNoRebaseBeforeMobileReviewAction } from '../../session/mobile-review-action-rebase-check'
 import {
   resolveMobileAgentLaunchAvailability,
   type MobileAgentLaunchAvailability
@@ -102,7 +102,10 @@ export function useMobilePrAiTriage(input: Input) {
           ...TRIAGE_LAUNCH[key],
           // Review actions need the desktop rule: no launch while the owner is rebasing.
           ...(scope === 'review'
-            ? { admitLaunch: () => confirmNoRebaseBeforeMobileReviewAction(client, worktreeId) }
+            ? {
+                admitLaunch: ({ repo }) =>
+                  confirmNoRebaseBeforeMobileReviewAction(client, worktreeId, repo)
+              }
             : {})
         })
         const notice = promptedLaunchNotice(result, workspaceLabel)

@@ -1,3 +1,4 @@
+import type { RepoKind } from '../../../../src/shared/repo-types'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import '../../terminal/terminal-reply-schema'
@@ -11,6 +12,7 @@ import '../../terminal/quick-commands/mobile-quick-command-reply-schema'
 import '../../files/workspace-file-paths-reply-schema'
 
 export type MobileRuntimeRepoSummary = {
+  kind?: RepoKind
   id: string
   connectionId?: string | null
   executionHostId?: string | null

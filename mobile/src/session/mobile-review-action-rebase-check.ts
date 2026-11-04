@@ -1,4 +1,6 @@
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { MobileRuntimeRepoSummary } from './agent-launch/mobile-runtime-repo-operations'
+import { isFolderRepo } from '../../../src/shared/repo-kind'
 import { gitRebaseVerdictRead } from '../source-control/mobile-git-read-operations'
 import { translate } from '../i18n/mobile-i18n'
 import { workspaceKindForWorktreeId } from '../../../src/shared/workspace-launch-kind'
@@ -11,9 +13,12 @@ export type MobileReviewActionAdmission = { ok: true } | { ok: false; message: s
  */
 export async function confirmNoRebaseBeforeMobileReviewAction(
   client: RpcOperationSender,
-  worktreeId: string
+  worktreeId: string,
+  /** The repo the launch resolved for this workspace (host ambiguity already settled). */
+  repo: Pick<MobileRuntimeRepoSummary, 'kind'> | null
 ): Promise<MobileReviewActionAdmission> {
-  if (workspaceKindForWorktreeId(worktreeId) !== 'git-worktree') {
+  // Folders, native or repo-backed, run no Git operation, so their review launches are unchanged.
+  if (workspaceKindForWorktreeId(worktreeId) !== 'git-worktree' || (repo && isFolderRepo(repo))) {
     return { ok: true }
   }
   let verdict: 'active' | 'none' | 'unverifiable' | undefined
