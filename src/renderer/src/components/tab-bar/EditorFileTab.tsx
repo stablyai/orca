@@ -26,7 +26,7 @@ import {
   getTabRootStateClasses,
   getTabStripBorderClasses
 } from './drop-indicator'
-import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
+import { canOpenMarkdownPreview } from '@/components/editor/view-mode/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'

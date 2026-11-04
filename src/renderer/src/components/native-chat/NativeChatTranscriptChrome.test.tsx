@@ -5,11 +5,11 @@ import { fireEvent, screen, within } from '@testing-library/react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { loadLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
 import {
-  invalidateLocalImageSrcCacheForTests,
-  loadLocalImageSrc,
-  resetLocalImageSrcStateForTests
-} from '@/components/editor/useLocalImageSrc'
+  invalidateLocalImageCache as invalidateLocalImageSrcCacheForTests,
+  resetLocalImageCacheState as resetLocalImageSrcStateForTests
+} from '@/components/editor/document-images/local-image-src-cache'
 import { chatImageAccess } from '@/lib/local-file-access'
 import { useAppStore } from '@/store'
 import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'

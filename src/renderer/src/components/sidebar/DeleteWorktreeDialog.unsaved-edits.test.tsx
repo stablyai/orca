@@ -93,7 +93,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
 vi.mock('./delete-worktree-flow', () => ({ runWorktreeDeletesInParallel: vi.fn() }))
 
-vi.mock('@/components/editor/editor-model-owner', () => ({
+vi.mock('@/components/editor/model-lifetime/identity/editor-model-owner', () => ({
   resolveEditorModelOwner: () => ({ environmentId: null, hostId: 'local' }),
   getEditorModelOwnerKey: () => ''
 }))

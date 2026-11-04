@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Selection } from 'monaco-editor'
 import type * as DiffCommentZoneCardModule from './diff-comment-zone-card'
-import type { NotesSendMenu } from '../editor/NotesSendMenu'
+import type { NotesSendMenu } from '../editor/review-note-delivery/NotesSendMenu'
 
 vi.mock('monaco-editor', () => import('monaco-editor/esm/vs/editor/editor.api.js'))
 
@@ -13,7 +13,9 @@ const notesMenuFixture = vi.hoisted(() => ({
   })
 }))
 
-vi.mock('../editor/NotesSendMenu', () => ({ NotesSendMenu: notesMenuFixture.NotesSendMenu }))
+vi.mock('../editor/review-note-delivery/NotesSendMenu', () => ({
+  NotesSendMenu: notesMenuFixture.NotesSendMenu
+}))
 
 const storeFixture = vi.hoisted(() => ({
   activeGroupIdByWorktree: {},
