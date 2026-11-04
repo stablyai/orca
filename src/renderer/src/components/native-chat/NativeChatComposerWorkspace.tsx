@@ -25,7 +25,9 @@ export function NativeChatComposerWorkspace({
     () =>
       createNativeChatComposerWorkspaceSelector(
         terminalTabId,
-        hasTransport ? { worktreeId, runtimeEnvironmentId } : undefined
+        hasTransport
+          ? { worktreeId, runtimeEnvironmentId: runtimeEnvironmentId ?? null }
+          : undefined
       ),
     [terminalTabId, worktreeId, runtimeEnvironmentId, hasTransport]
   )
@@ -86,7 +88,7 @@ export function NativeChatComposerWorkspace({
               type="button"
               variant="ghost"
               size="xs"
-              className="min-w-0 flex-1 justify-start font-normal text-chat-foreground-faint focus-visible:ring-2 focus-visible:ring-ring"
+              className="min-w-0 flex-1 justify-start"
               aria-label={translate(
                 'components.native-chat.composerWorkspace.copyIdentity',
                 'Copy {{value0}}',

@@ -29,7 +29,17 @@ describe('composer workspace context', () => {
         ]
       },
       tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'chat', worktreeId: 'wt-1', executionHostId: 'ssh:box' })]
+        'wt-1': [makeTab({ id: 'chat', worktreeId: 'wt-1' })]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          makeUnifiedTab({
+            id: 'chat',
+            worktreeId: 'wt-1',
+            groupId: 'group',
+            executionHostId: 'ssh:box'
+          })
+        ]
       }
     })
     expect(createNativeChatComposerWorkspaceSelector('chat')(store.getState())).toMatchObject({

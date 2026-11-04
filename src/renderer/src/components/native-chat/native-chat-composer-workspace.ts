@@ -29,7 +29,6 @@ export function createNativeChatComposerWorkspaceSelector(
   target?: NativeChatComposerWorkspaceTarget
 ) {
   const selectOwner = createNativeChatTabOwnerSelector(tabId)
-  let terminalBucket: AppState['tabsByWorktree'][string] | undefined
   let unifiedBucket: AppState['unifiedTabsByWorktree'][string] | undefined
   let tabHost: ExecutionHostId | undefined
   let inputs: unknown[] | undefined
@@ -43,13 +42,9 @@ export function createNativeChatComposerWorkspaceSelector(
   } = {}
   return (state: AppState) => {
     const worktreeId = target?.worktreeId ?? selectOwner(state)
-    const terminals = worktreeId ? state.tabsByWorktree[worktreeId] : undefined
     const unified = worktreeId ? state.unifiedTabsByWorktree[worktreeId] : undefined
-    if (terminalBucket !== terminals || unifiedBucket !== unified) {
-      tabHost =
-        terminals?.find((tab) => tab.id === tabId)?.executionHostId ??
-        unified?.find((tab) => tab.id === tabId)?.executionHostId
-      terminalBucket = terminals
+    if (unifiedBucket !== unified) {
+      tabHost = unified?.find((tab) => tab.id === tabId)?.executionHostId
       unifiedBucket = unified
     }
     // A structured transport's null environment positively identifies this host.

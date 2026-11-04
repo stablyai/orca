@@ -91,9 +91,7 @@ describe('chat composer workspace', () => {
           })
         ],
         tabsByWorktree: {
-          'folder:folder-1': [
-            makeTab({ id: 'tab-1', worktreeId: 'folder:folder-1', executionHostId: 'local' })
-          ]
+          'folder:folder-1': [makeTab({ id: 'tab-1', worktreeId: 'folder:folder-1' })]
         }
       })
     )
