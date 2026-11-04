@@ -99,7 +99,6 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
         sessionTabActionSheetKeyboardHideSubRef: { current: null },
         deviceTokenRef: { current: null },
         ptyModesRef: { current: new Map() },
-        commandInputRef: { current: null },
         liveInputRef: { current: null },
         handleLiveInputAccessoryBytes: props.preflight ?? preflight,
         worktreeId: 'workspace',

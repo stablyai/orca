@@ -6,7 +6,7 @@ import type {
   WorkspaceAttachment,
   WorkspaceAttachmentOrigin
 } from '../../../../shared/worktree/types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { singlePaneLayoutSnapshot } from '../../store/slices/terminal-helpers'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { WorktreeLinkedItemRow } from './WorktreeLinkedItemRow'

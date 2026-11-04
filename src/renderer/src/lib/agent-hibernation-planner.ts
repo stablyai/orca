@@ -1,6 +1,6 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   getEligiblePane,
   getEntryTabId,

@@ -1,3 +1,4 @@
+import type { TerminalOrphanRecoveryOptions } from './web-session-terminal-orphan-recovery-options'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
@@ -45,20 +46,15 @@ import {
   clearTerminalRecoveryRpcLaneForTests,
   runInTerminalRecoveryRpcLane
 } from './web-session-terminal-orphan-recovery-rpc-lane'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import {
+  isWebTerminalSurfaceTabId,
+  toHostSessionTabId
+} from '../../../shared/workspace-layout/terminal-surface-id'
 import { buildWebTerminalOrphanTopologyProposal } from './web-session-terminal-orphan-topology'
 import {
   clearRetainedTerminalRetirementProofsForTests,
   mergeRetainedTerminalRetirementProofs
 } from './web-session-terminal-retirement-proof-ledger'
-
-export type TerminalOrphanRecoveryOptions = {
-  expectedEnvironmentPairingRevision?: number
-  expectedRuntimeId?: string
-  call?: TerminalOrphanRecoveryCall
-  /** Reads live renderer topology so an RPC cannot apply a stale local claim. */
-  getCurrentState?: () => TerminalOrphanRecoveryState
-}
 
 function recoveryKey(
   environmentId: string,

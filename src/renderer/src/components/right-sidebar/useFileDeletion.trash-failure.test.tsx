@@ -26,7 +26,7 @@ vi.mock('./file-explorer-operation-owner', async (importOriginal) => ({
 vi.mock('./file-explorer-deletion-editors', () => ({
   getFileExplorerDeletionEditors: () => [{ id: 'tab-1', isDirty: false }]
 }))
-vi.mock('@/components/editor/editor-autosave', () => ({
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   requestEditorFileSave: vi.fn(async () => undefined),
   requestEditorSaveQuiesce: vi.fn(async () => undefined)
 }))

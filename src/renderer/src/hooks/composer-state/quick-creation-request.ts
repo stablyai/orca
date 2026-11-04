@@ -7,7 +7,8 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
-import { toFolderWorkspaceLinkedTask } from '@/components/sidebar/folder-workspace-composer-helpers'
+import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
+import { toFolderWorkspaceLinkedTask } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 
 export type QuickCreationRequestInput = {
   repoId: string

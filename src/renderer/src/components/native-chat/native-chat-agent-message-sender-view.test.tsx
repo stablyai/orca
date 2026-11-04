@@ -8,7 +8,7 @@ import { makeTab, makeWorktree, TEST_REPO } from '@/store/slices/store-test-help
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
 import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'

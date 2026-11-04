@@ -10,7 +10,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     disposition: 'rewrite-desktop',
     item: 42
   },
-  'src/renderer/src/components/editor/ipynb-kernel-store.ts': {
+  'src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-store.ts': {
     disposition: 'rewrite-desktop',
     item: 43
   },

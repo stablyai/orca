@@ -9,14 +9,12 @@ import {
 } from '../../shared/worktree/removal'
 import {
   NO_OBSERVING_PROVIDER_REASON,
-  type PtyLivenessVerdict
-} from '../../shared/pty-liveness-verdict'
+  type PtyLivenessVerdict as UnstoppedPtyVerdict
+} from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { settleBeforeDeadline } from './settle-before-deadline'
 
 // Floor for the verification window when the sweep ran on a very short budget.
 export const WORKTREE_TEARDOWN_VERIFY_GRACE_MS = 2_000
-
-export type UnstoppedPtyVerdict = PtyLivenessVerdict
 
 /** Give post-stop verification its own budget; the spent sweep deadline falsely timed out reachable inventories and blocked removal (#11960). Preserve live/exited/unverifiable distinctions. */
 export async function verifyUnstoppedPtys(

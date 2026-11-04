@@ -1,4 +1,4 @@
-import { terminalStartError } from '../../../shared/terminal-start-failure'
+import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from './errors'
 import {

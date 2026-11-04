@@ -1,9 +1,9 @@
 import type { Store } from '../../persistence/loading-store/store'
 import type { PersistPtyBindingArgs } from '../../persistence/loading-store/pty-binding-persistence'
 import { ptyBindingIsRefused } from '../../persistence/loading-store/pty-binding-refusals'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
-import { createTerminalSessionStateSaveFailureMessage } from '../../../shared/terminal-session-state-save-failure'
+import { createTerminalSessionStateSaveFailureMessage } from '../../../shared/workspace-session/terminal-session-state-save-failure'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../../providers/pty-provider-contract'
 import {

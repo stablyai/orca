@@ -1,6 +1,6 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { VISIBLE_PTY_SETTLE_MS } from './pty-connection-test-constants'

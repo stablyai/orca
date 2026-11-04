@@ -4,7 +4,10 @@ import type {
   AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { AppState } from '@/store/types'

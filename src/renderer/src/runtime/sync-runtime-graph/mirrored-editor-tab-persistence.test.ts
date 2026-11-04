@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { parseWorkspaceSessionSalvaging } from '../../../../shared/workspace-session-salvage'
+import { parseWorkspaceSessionSalvaging } from '../../../../shared/workspace-session/workspace-session-salvage'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../../shared/runtime-types'
 import { buildEditorSessionData } from '../../lib/workspace-session'
 import { buildHydratedEditorSessionState } from '../../store/slices/editor/actions/hydrated-editor-session-state'

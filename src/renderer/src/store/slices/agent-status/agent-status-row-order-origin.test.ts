@@ -4,7 +4,7 @@ import { wslHookRelayConnectionId } from '../../../../../shared/wsl-hook-relay-c
 import { createTestStore } from '../store-test-helpers'
 import { buildWorktreeAgentRows } from '@/components/sidebar/worktree-agent-rows'
 import { AGENT_STATE_HISTORY_MAX } from '../../../../../shared/agent-status/lifecycle/agent-state-history'
-import { makePaneKey, parsePaneKey } from '../../../../../shared/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusTiming } from './agent-status-contract'
 import { retainedAgentEntryFromLive } from './agent-status-pane-key-tab-binding'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'

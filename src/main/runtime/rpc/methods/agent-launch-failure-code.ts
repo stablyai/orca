@@ -1,4 +1,4 @@
-import { formatTerminalStartFailure } from '../../../../shared/terminal-start-failure'
+import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS

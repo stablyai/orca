@@ -6,9 +6,9 @@ import { agentPickerPanelArguments } from './agent-launch-picker-arguments'
 import { agentPickerArgumentsKnown } from './agent-launch-picker-authority'
 
 import { agentPickerOptions } from './agent-launch-picker-catalog'
-
 import { projectAgentLaunchInputViews } from '../choices/agent-launch-profile'
 import type { AgentChoicePatch, AgentDedicatedChoices } from '../choices/agent-launch-choices'
+import { terminalAgentChoices } from '../choices/agent-launch-choices'
 import {
   reconcileAgentChoiceArgs,
   reconcileAgentChoiceArgsDetailed
@@ -100,7 +100,10 @@ export function agentPickerEffectiveChoices(
   const resolved = resolveAgentChoiceLayers({
     agent: entry.agent,
     defaults,
-    explicit: agentPickerLaunchChoices(draft).choices,
+    explicit:
+      draft.surface === 'terminal'
+        ? terminalAgentChoices(entry.agent, agentPickerLaunchChoices(draft).choices)
+        : agentPickerLaunchChoices(draft).choices,
     userArgs:
       draft.surface === 'chat'
         ? undefined
@@ -253,13 +256,7 @@ export function agentPickerButtonOrder(entry: AgentPickerEntry): AgentPickerSurf
 
 export { type AgentPickerSetup } from './agent-launch-picker-search'
 
-export function agentPickerSessionOptions(choices: AgentDedicatedChoices): Record<string, string> {
-  return {
-    ...choices.options,
-    ...(choices.model ? { model: choices.model } : {}),
-    ...(choices.permissionMode ? { permissionMode: choices.permissionMode } : {})
-  }
-}
+export { agentPickerSessionOptions } from '../choices/agent-launch-choices'
 
 export function agentPickerEntriesFromRows(
   rows: readonly NewTabAgentMenuRow[],

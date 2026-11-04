@@ -1,7 +1,7 @@
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
 import type { AppState } from '../types'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   getWorkspaceCleanupCandidateIdentity,
   resolveWorkspaceCleanupRemovalHostId

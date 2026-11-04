@@ -5,7 +5,7 @@ import type {
   LayoutApplyOutcome,
   LayoutCommand
 } from '../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 import { ServeBrowserTabs } from './serve-browser-tabs'
 

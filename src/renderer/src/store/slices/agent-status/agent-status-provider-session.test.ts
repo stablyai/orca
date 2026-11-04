@@ -7,7 +7,7 @@ import type { AppState } from '../../types'
 import '../../../../../shared/sleeping-record-legacy-pane-key'
 import { createTestStore, seedStore } from '../store-test-helpers'
 import { makeTab } from '../store-session-test-harness'
-import '../../../../../shared/stable-pane-id'
+import '../../../../../shared/workspace-layout/stable-pane-id'
 
 const PI_COMPATIBLE_CASES = [
   { agent: 'pi' as const, label: 'Pi' },

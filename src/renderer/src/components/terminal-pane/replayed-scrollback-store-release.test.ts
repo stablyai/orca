@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RepoConnection } from '../../../../shared/workspace-session-terminal-buffers'
+import type { RepoConnection } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import { canReleaseReplayedScrollbackFromStore } from './replayed-scrollback-store-release'
 
 const LOCAL_REPO: RepoConnection = {

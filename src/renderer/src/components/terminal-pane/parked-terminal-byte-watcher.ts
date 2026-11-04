@@ -3,7 +3,7 @@ import { isClaudeIdleEdge } from '@/lib/agent-idle-edge'
 import type { AgentIdleEdgeMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import {

@@ -6,7 +6,7 @@ import type {
   AgentLaunchOutcome,
   AgentLaunchPromptReceipt
 } from '../../../src/shared/agent-launch/contracts/agent-launch-intent'
-import { parsePaneKey } from '../../../src/shared/stable-pane-id'
+import { parsePaneKey } from '../../../src/shared/workspace-layout/stable-pane-id'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
@@ -80,7 +80,6 @@ function scope(client: RpcClient, hostCapabilities: string[] = LAUNCH_CAPABILITI
     terminalsRef: { current: [] },
     setSessionTabs: vi.fn(),
     sessionTabsRef: mutableRef<MobileSessionTab[]>([]),
-    defaultTerminalHandlesToLiveInput: vi.fn(),
     setActiveHandle: vi.fn(),
     activeSessionTabId: 'existing-tab',
     activeSessionTabIdRef: mutableRef<string | null>('existing-tab'),

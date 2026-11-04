@@ -8,7 +8,7 @@ import {
   INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE,
   advanceDroppedSynchronizedOutputLatch
 } from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
-import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
+import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import { recordCrashBreadcrumb } from '../../../crash-reporting/crash-breadcrumb-store'
 import { terminalOutputBacklogCapChars } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { isHiddenPtyDeliveryGateEnabled } from './pty-hidden-delivery-gate'

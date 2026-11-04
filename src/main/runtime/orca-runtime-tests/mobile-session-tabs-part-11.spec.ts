@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { committingSpawn, registerLivePty } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,

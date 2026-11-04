@@ -21,7 +21,7 @@ import {
   countCustomEditorMergingView,
   useCustomEditorOutsideMerge
 } from './use-custom-editor-outside-merge'
-import { registerEditorFrameFlush } from './editor-pending-flush'
+import { registerEditorFrameFlush } from './save/flush/editor-pending-flush'
 import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
 import { PluginEditorNeedsDesktopNotice } from './PluginEditorNeedsDesktopNotice'
 import {

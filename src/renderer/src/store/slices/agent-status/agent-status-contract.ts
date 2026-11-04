@@ -13,7 +13,7 @@ import type {
   ResumableTuiAgent,
   SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 export type RetainedAgentEntry = {
   entry: AgentStatusEntry
