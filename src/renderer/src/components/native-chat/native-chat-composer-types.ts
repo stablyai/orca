@@ -164,6 +164,7 @@ export type NativeChatLaunchSeed = {
 }
 
 export type NativeChatComposerHandle = {
+  resend?: (text: string, imagePaths?: string[]) => boolean
   insertAgentReferences: (references: OrchestrationAgentReference[]) => boolean
   isComposing?: () => boolean
   focus: () => boolean

@@ -15,7 +15,7 @@ import { useAppStore } from '@/store'
 import { makeTab, makeUnifiedTab, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
 import * as presentation from '@/lib/program-status/agent-row-presentation'
 import * as worktreeStatus from '@/lib/worktree-status'
-import * as sessionTime from '@/components/right-sidebar/ai-vault-session-time'
+import * as sessionTime from '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-time'
 import { readStoreListenerCount } from '@/store/store-listener-census'
 
 import { type OrchestrationCrewRow, emptyCrew } from '../../../../shared/orchestration-crew'
