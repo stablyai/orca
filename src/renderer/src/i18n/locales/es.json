@@ -3272,7 +3272,6 @@
             "e8b3741ff7": "ignorado",
             "a9957007eb": "Ignorar {{value0}}",
             "bef0adef9b": "Rama",
-            "0b1766738a": "Repositorio",
             "bbb1ab6a6f": "Selecciona {{value0}}",
             "b771c92598": "Eliminar seleccionados",
             "7eee951968": "Verificando seguridad del espacio de trabajo",
@@ -3306,7 +3305,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Confirmaciones",
             "contextLabel": "Contexto",
             "flagsLabel": "Indicadores",
             "collapseDetails": "Contraer detalles",

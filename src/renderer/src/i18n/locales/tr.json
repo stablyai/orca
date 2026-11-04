@@ -3719,7 +3719,6 @@
             "e8b3741ff7": "Yok sayıldı",
             "a9957007eb": "{{value0}} öğesini yok say",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "{{value0}} seç",
             "b771c92598": "Seçilenleri sil",
             "7eee951968": "Çalışma alanları taranıyor",
@@ -3753,7 +3752,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commit'ler",
             "contextLabel": "Bağlam",
             "flagsLabel": "Bayraklar",
             "collapseDetails": "Ayrıntıları daralt",

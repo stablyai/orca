@@ -386,7 +386,7 @@ function WorkspaceCleanupDialogContent({
                 <WorkspaceCleanupRowList
                   rows={rows}
                   now={facetNow}
-                  scannedCount={candidates.length}
+                  scannedCandidates={candidates}
                   hasScanned={scan != null}
                   loading={loading}
                   deletionPhaseByIdentity={deletionPhaseByIdentity}

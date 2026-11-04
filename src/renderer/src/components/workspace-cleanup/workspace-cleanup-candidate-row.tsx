@@ -2,19 +2,14 @@ import React from 'react'
 import {
   AlertTriangle,
   Check,
-  ChevronDown,
   CircleDot,
-  Clock3,
-  EyeOff,
-  ExternalLink,
   FileWarning,
   GitBranch,
   GitPullRequest,
-  HardDrive,
   Loader2,
+  Lock,
   Monitor,
-  SquareTerminal,
-  Trash2
+  SquareTerminal
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -35,7 +30,7 @@ import {
   formatBranchSafetyDetails,
   formatContextDetails,
   formatGitStatus,
-  getCandidateFactStatuses,
+  getCandidateRowSignals,
   getContextCount,
   getDirtyGitLabel,
   getWorkspaceCleanupBlockerLabels,
@@ -46,16 +41,25 @@ import {
   getReviewStateTone
 } from '@/components/github/review-state-presentation'
 import { StatusPill } from './workspace-cleanup-status-pill'
-import { WorkspaceCleanupMetadataChip } from './workspace-cleanup-metadata-chip'
-import { WorkspaceCleanupForgetLocallyButton } from './workspace-cleanup-forget-locally-button'
+import {
+  WorkspaceCleanupMetadataChip,
+  WorkspaceCleanupMetadataText
+} from './workspace-cleanup-metadata-chip'
+import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { resolveRepoHeaderColor } from '@/components/sidebar/worktree-list/rows/project-header-color'
+import type { Repo } from '../../../../shared/repo-types'
+import { CandidateRowActions } from './workspace-cleanup-candidate-row-actions'
 import {
   getWorkspaceCleanupCandidateAccessibleName,
   getWorkspaceCleanupCandidateHostLabel
 } from './workspace-cleanup-host-label'
-import { formatCompactActivityLabel, getReviewTooltip } from './workspace-cleanup-row-labels'
+import { getReviewTooltip } from './workspace-cleanup-row-labels'
 import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
 
 export type WorkspaceCleanupDeletionPhase = 'deleting' | 'queued'
+
+// Beyond this many flags, collapse the tail into a "+N" that opens the details listing them all.
+const FLAG_LIMIT = 3
 
 type CandidateRowProps = {
   candidate: WorkspaceCleanupCandidate
@@ -74,6 +78,12 @@ type CandidateRowProps = {
   /** User-configured status label; null when this broad-scan row is not in renderer state. */
   workspaceStatusLabel?: string | null
   reviewInfo: WorkspaceCleanupReviewInfo
+  /** Store record for the row's project; null when the repo is not loaded in this renderer. */
+  repo: Pick<Repo, 'badgeColor' | 'repoIcon'> | null
+  /** Host repeats on every row when the fleet is single-host, so it only shows once hosts differ. */
+  showHostLabel: boolean
+  /** False until any row has a measured size; the scan card is the action to fill it. */
+  showSizeColumn: boolean
   selected: boolean
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
@@ -98,6 +108,9 @@ export const CandidateRow = React.memo(function CandidateRow({
   sizeLabel = null,
   workspaceStatusLabel = null,
   reviewInfo,
+  repo,
+  showHostLabel,
+  showSizeColumn,
   selected,
   onIgnore,
   onRemove,
@@ -115,7 +128,9 @@ export const CandidateRow = React.memo(function CandidateRow({
   const blockers = getWorkspaceCleanupBlockerLabels(candidate)
   const contextDetails = formatContextDetails(candidate)
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
-  const factStatuses = getCandidateFactStatuses(candidate)
+  const { gitStatuses, flags } = getCandidateRowSignals(candidate)
+  // Main/folder/disconnected rows can never be queued, and git is not read for them, so "unknown" would be a false alarm.
+  const protectedRow = !canQueueWorkspaceCleanupCandidate(candidate)
   const dirtyLabel = getDirtyGitLabel(candidate)
   const gitState = getWorkspaceCleanupGitState(candidate)
   const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
@@ -131,6 +146,9 @@ export const CandidateRow = React.memo(function CandidateRow({
     contextDetails !== null ||
     branchSafetyDetails.length > 0
 
+  const visibleFlags = flags.length > FLAG_LIMIT ? flags.slice(0, FLAG_LIMIT - 1) : flags
+  const hiddenFlagCount = flags.length - visibleFlags.length
+
   return (
     <div
       className={cn(
@@ -140,40 +158,68 @@ export const CandidateRow = React.memo(function CandidateRow({
         last && 'border-b-0'
       )}
     >
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2.5 gap-y-1">
-        {selectable ? (
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={selected}
-            aria-label={translate(
-              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.bbb1ab6a6f',
-              'Select {{value0}}',
-              { value0: candidateAccessibleName }
-            )}
-            onClick={() => onToggleSelected(identity)}
-            className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            {selected ? <Check className="size-3" strokeWidth={3} /> : null}
-          </button>
-        ) : deleting ? (
-          <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" />
-        ) : (
-          <div className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        )}
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3">
+        <div className="flex h-6 items-center">
+          {selectable ? (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={selected}
+              aria-label={translate(
+                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.bbb1ab6a6f',
+                'Select {{value0}}',
+                { value0: candidateAccessibleName }
+              )}
+              onClick={() => onToggleSelected(identity)}
+              className="flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+            </button>
+          ) : deleting ? (
+            <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          ) : protectedRow ? (
+            <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
+              <Lock className="size-3.5 text-muted-foreground/70" />
+            </span>
+          ) : (
+            <div className="size-4 shrink-0" aria-hidden="true" />
+          )}
+        </div>
 
         <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <div className="flex h-6 min-w-0 items-center gap-2">
             <span data-workspace-cleanup-row-name className="min-w-0 truncate text-sm font-medium">
               {candidate.displayName}
             </span>
-            <WorkspaceCleanupMetadataChip
-              icon={Monitor}
-              label={translate('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
-                value0: hostLabel
-              })}
-              value={hostLabel}
-            />
+            <span
+              className="inline-flex min-w-0 max-w-48 shrink-[4] items-center gap-1 text-xs text-muted-foreground"
+              aria-label={translate(
+                'components.workspace.cleanup.browse.projectNamed',
+                'Project: {{value0}}',
+                { value0: candidate.repoName }
+              )}
+            >
+              <RepoIconGlyph
+                repoIcon={repo?.repoIcon}
+                color={resolveRepoHeaderColor(repo?.badgeColor)}
+                className="size-3 shrink-0"
+                iconClassName="size-3"
+              />
+              <span className="truncate">{candidate.repoName}</span>
+            </span>
+            {showHostLabel ? (
+              <WorkspaceCleanupMetadataText
+                icon={Monitor}
+                label={translate('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
+                  value0: hostLabel
+                })}
+                value={hostLabel}
+                className="min-w-0 max-w-40 shrink-[4]"
+              />
+            ) : null}
+          </div>
+
+          <div className="mt-0.5 flex min-h-5 min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
             {deletionPhase ? (
               <StatusPill tone="destructive">
                 {deletionPhase === 'queued'
@@ -187,14 +233,63 @@ export const CandidateRow = React.memo(function CandidateRow({
                     )}
               </StatusPill>
             ) : (
-              factStatuses.map((status) => (
+              gitStatuses.map((status) => (
                 <StatusPill key={status.label} tone={status.tone}>
                   {status.label}
                 </StatusPill>
               ))
             )}
-            {workspaceStatusLabel ? (
+            {gitEvidencePending ? (
+              <span
+                role="status"
+                className="inline-flex h-5 shrink-0 items-center gap-1 text-xs text-muted-foreground"
+              >
+                <Loader2
+                  className="size-3 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+                {translate(
+                  'components.workspace.cleanup.browse.checkingGitRow',
+                  'Checking git status'
+                )}
+              </span>
+            ) : protectedRow || !showGitMetadataChip ? null : dirtyLabel ? (
               <WorkspaceCleanupMetadataChip
+                icon={FileWarning}
+                label={dirtyLabel}
+                value={dirtyLabel}
+                tone="destructive"
+              />
+            ) : (
+              <WorkspaceCleanupMetadataChip
+                icon={GitBranch}
+                label={formatGitStatus(candidate)}
+                value={getWorkspaceCleanupGitChipLabel(gitState)}
+                tone={gitState === 'clean' ? 'ready' : 'review'}
+              />
+            )}
+            {!deletionPhase && visibleFlags.length > 0 ? (
+              <span className="inline-flex h-5 min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                <span className="truncate">{visibleFlags.join(' · ')}</span>
+                {hiddenFlagCount > 0 ? (
+                  <Button
+                    variant="link"
+                    size="inline"
+                    aria-expanded={expanded}
+                    aria-label={translate(
+                      'components.workspace.cleanup.browse.moreFlags',
+                      'Show {{value0}} more flags',
+                      { value0: hiddenFlagCount }
+                    )}
+                    onClick={() => onToggleExpanded(identity)}
+                  >
+                    <span className="text-xs">+{hiddenFlagCount}</span>
+                  </Button>
+                ) : null}
+              </span>
+            ) : null}
+            {workspaceStatusLabel ? (
+              <WorkspaceCleanupMetadataText
                 icon={CircleDot}
                 label={translate(
                   'components.workspace.cleanup.browse.workspaceStatus',
@@ -204,52 +299,8 @@ export const CandidateRow = React.memo(function CandidateRow({
                 value={workspaceStatusLabel}
               />
             ) : null}
-            <WorkspaceCleanupMetadataChip
-              icon={Clock3}
-              label={translate(
-                'components.workspace.cleanup.browse.lastActive',
-                'Last active {{value0}}',
-                { value0: lastActivityLabel }
-              )}
-              value={formatCompactActivityLabel(lastActivityLabel)}
-            />
-            <WorkspaceCleanupMetadataChip
-              icon={HardDrive}
-              label={translate(
-                'components.workspace.cleanup.browse.sizeOnDisk',
-                'Size on disk: {{value0}}',
-                { value0: sizeValue }
-              )}
-              value={sizeValue}
-            />
-            {gitEvidencePending ? (
-              <span
-                role="status"
-                className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-border bg-background px-1.5 text-[11px] font-medium text-muted-foreground"
-                aria-label={translate(
-                  'components.workspace.cleanup.browse.checkingGitRow',
-                  'Checking git status'
-                )}
-              >
-                <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-              </span>
-            ) : dirtyLabel && showGitMetadataChip ? (
-              <WorkspaceCleanupMetadataChip
-                icon={FileWarning}
-                label={dirtyLabel}
-                value={dirtyLabel}
-                tone="destructive"
-              />
-            ) : showGitMetadataChip ? (
-              <WorkspaceCleanupMetadataChip
-                icon={GitBranch}
-                label={formatGitStatus(candidate)}
-                value={getWorkspaceCleanupGitChipLabel(gitState)}
-                tone={gitState === 'clean' ? 'ready' : 'review'}
-              />
-            ) : null}
             {contextDetails ? (
-              <WorkspaceCleanupMetadataChip
+              <WorkspaceCleanupMetadataText
                 icon={SquareTerminal}
                 label={contextDetails}
                 value={String(contextCount)}
@@ -266,7 +317,7 @@ export const CandidateRow = React.memo(function CandidateRow({
           </div>
 
           {failure ? (
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-destructive">
+            <div className="mt-1 flex min-h-5 items-center gap-1.5 text-xs text-destructive">
               <AlertTriangle className="size-3.5" />
               <span>{failure.message}</span>
               {failure.canDeleteAnyway && onDeleteAnyway ? (
@@ -284,127 +335,79 @@ export const CandidateRow = React.memo(function CandidateRow({
 
           {hasExpandableDetails ? (
             <CandidateRowDetails
-              blockers={blockers}
+              flags={flags}
               branchSafetyDetails={branchSafetyDetails}
               candidate={candidate}
               contextDetails={contextDetails}
               expanded={expanded}
+              gitChecked={!protectedRow}
             />
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-0.5">
-          {hasExpandableDetails ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={
-                    expanded
-                      ? translate(
-                          'auto.components.workspace.cleanup.candidateRow.collapseDetails',
-                          'Collapse details'
-                        )
-                      : translate(
-                          'auto.components.workspace.cleanup.candidateRow.expandDetails',
-                          'Expand details'
-                        )
-                  }
-                  aria-expanded={expanded}
-                  onClick={() => onToggleExpanded(identity)}
-                >
-                  <ChevronDown
-                    className={cn('size-3.5 transition-transform', expanded && 'rotate-180')}
-                  />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {expanded
-                  ? translate(
-                      'auto.components.workspace.cleanup.candidateRow.collapseDetails',
-                      'Collapse details'
-                    )
-                  : translate(
-                      'auto.components.workspace.cleanup.candidateRow.expandDetails',
-                      'Expand details'
-                    )}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={translate(
-                  'components.workspace.cleanup.browse.openWorkspaceNamed',
-                  'Open {{value0}}',
-                  { value0: candidateAccessibleName }
+        <CandidateRowActions
+          candidate={candidate}
+          identity={identity}
+          accessibleName={candidateAccessibleName}
+          expanded={expanded}
+          hasExpandableDetails={hasExpandableDetails}
+          ignored={ignored}
+          selectable={selectable}
+          onIgnore={onIgnore}
+          onRemove={onRemove}
+          onForgetLocally={onForgetLocally}
+          onToggleExpanded={onToggleExpanded}
+          onView={onView}
+          metrics={
+            <div className="flex items-center gap-4 text-xs tabular-nums text-muted-foreground">
+              <CandidateRowMetric
+                label={translate(
+                  'components.workspace.cleanup.browse.lastActive',
+                  'Last active {{value0}}',
+                  { value0: lastActivityLabel }
                 )}
-                onClick={() => onView(candidate)}
-              >
-                <ExternalLink className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {translate('components.workspace.cleanup.browse.openWorkspace', 'Open workspace')}
-            </TooltipContent>
-          </Tooltip>
-          {!ignored ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.workspace.cleanup.WorkspaceCleanupDialog.a9957007eb',
-                    'Ignore {{value0}}',
-                    { value0: candidateAccessibleName }
+                value={lastActivityLabel}
+                className="min-w-14"
+              />
+              {showSizeColumn ? (
+                <CandidateRowMetric
+                  label={translate(
+                    'components.workspace.cleanup.browse.sizeOnDisk',
+                    'Size on disk: {{value0}}',
+                    { value0: sizeValue }
                   )}
-                  onClick={() => onIgnore(candidate)}
-                >
-                  <EyeOff className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4d0b72481c',
-                  'Ignore'
-                )}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          {selectable ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.workspace.cleanup.WorkspaceCleanupDialog.3828408538',
-                    'Remove {{value0}}',
-                    { value0: candidateAccessibleName }
-                  )}
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => onRemove(candidate)}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.9cc26c019d',
-                  'Remove'
-                )}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          {candidate.blockers.includes('ssh-disconnected') && onForgetLocally ? (
-            <WorkspaceCleanupForgetLocallyButton candidate={candidate} onForget={onForgetLocally} />
-          ) : null}
-        </div>
+                  value={sizeLabel ?? '—'}
+                  className="min-w-14"
+                />
+              ) : null}
+            </div>
+          }
+        />
       </div>
     </div>
   )
 })
+
+// Self-describing values ("2h ago", "4.8 GB") right-aligned so rows compare down the column.
+function CandidateRowMetric({
+  label,
+  value,
+  className
+}: {
+  label: string
+  value: string
+  className?: string
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={cn('truncate text-right', className)} aria-label={label}>
+          {value}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}

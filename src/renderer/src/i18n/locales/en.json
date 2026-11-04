@@ -3872,7 +3872,6 @@
             "e8b3741ff7": "Ignored",
             "a9957007eb": "Ignore {{value0}}",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "Select {{value0}}",
             "b771c92598": "Delete selected",
             "7eee951968": "Scanning workspaces",
@@ -3906,7 +3905,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Context",
             "flagsLabel": "Flags",
             "collapseDetails": "Collapse details",
@@ -20741,7 +20739,12 @@
           "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected.",
           "selectAllSafetyChecked_one": "Select {{count}} safety-checked workspace",
           "selectAllSafetyChecked_other": "Select all {{count}} safety-checked workspaces",
-          "lastActive": "Last active {{value0}}"
+          "lastActive": "Last active {{value0}}",
+          "projectNamed": "Project: {{value0}}",
+          "moreFlags": "Show {{value0}} more flags",
+          "pathLabel": "Path",
+          "copyPath": "Copy path",
+          "gitNotChecked": "Not checked"
         },
         "scan": {
           "progress": "Scanning workspaces ({{value0}}/{{value1}})",

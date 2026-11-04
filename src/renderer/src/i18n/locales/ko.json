@@ -3214,7 +3214,6 @@
             "e8b3741ff7": "무시됨",
             "a9957007eb": "{{value0}} 무시",
             "bef0adef9b": "브랜치",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "{{value0}}을(를) 선택하세요",
             "b771c92598": "선택 항목 삭제",
             "7eee951968": "워크스페이스 안전성 확인 중",
@@ -3248,7 +3247,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "커밋",
             "contextLabel": "문맥",
             "flagsLabel": "플래그",
             "collapseDetails": "세부 정보 접기",

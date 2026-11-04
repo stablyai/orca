@@ -43,3 +43,36 @@ export function WorkspaceCleanupMetadataChip({
     </Tooltip>
   )
 }
+
+/** Borderless counterpart to the chip: neutral facts read as text so pills stay reserved for status. */
+export function WorkspaceCleanupMetadataText({
+  icon: Icon,
+  label,
+  value,
+  className
+}: {
+  icon: LucideIcon
+  label: string
+  value?: string
+  className?: string
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            'inline-flex h-5 shrink-0 items-center gap-1 text-xs text-muted-foreground',
+            className
+          )}
+          aria-label={label}
+        >
+          <Icon className="size-3 shrink-0" aria-hidden="true" />
+          {value ? <span className="truncate">{value}</span> : null}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}

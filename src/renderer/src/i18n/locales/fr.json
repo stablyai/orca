@@ -3496,7 +3496,6 @@
             "e8b3741ff7": "Ignoré",
             "a9957007eb": "Ignorer {{value0}}",
             "bef0adef9b": "Branche",
-            "0b1766738a": "Dépôt",
             "bbb1ab6a6f": "Sélectionner {{value0}}",
             "b771c92598": "Supprimer la sélection",
             "7eee951968": "Analyse des espaces de travail",
@@ -3530,7 +3529,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Contexte",
             "flagsLabel": "Indicateurs",
             "collapseDetails": "Réduire les détails",
