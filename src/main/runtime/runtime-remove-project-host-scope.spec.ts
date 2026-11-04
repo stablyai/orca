@@ -102,9 +102,9 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
         () => new Promise<void>((resolve) => (finishRemoteCreate = resolve))
       )
 
-      await expect(runtime.removeProject('path:/remote/dup')).rejects.toThrow(
-        'A workspace is still being created in this project.'
-      )
+      await expect(runtime.removeProject('path:/remote/dup')).rejects.toMatchObject({
+        code: 'worktree_create_in_progress'
+      })
       expect(removeProjectForHost).not.toHaveBeenCalled()
 
       finishRemoteCreate()
