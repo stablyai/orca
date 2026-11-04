@@ -298,14 +298,13 @@ function UsageMeter(props: {
   const bar = getUsageBarState(props.card.limits, usageWindow, props.card.fetching)
   const { used, color } = usageBarFill(bar.usedPercent, bar.unavailable)
   const reset = getWindowResetLabel(usageWindow, props.now)
-  const target = used ?? 0
-  const width = useSharedValue(props.reducedMotion ? target : 0)
+  const width = useSharedValue(props.reducedMotion ? (used ?? 0) : 0)
 
   useEffect(() => {
     width.value = props.reducedMotion
-      ? target
-      : withTiming(target, { duration: 450, easing: HOME_EASE_OUT })
-  }, [props.reducedMotion, target, width])
+      ? (used ?? 0)
+      : withTiming(used ?? 0, { duration: 450, easing: HOME_EASE_OUT })
+  }, [props.reducedMotion, used, width])
 
   const fillStyle = useAnimatedStyle(() => ({ width: `${width.value}%` }))
   const value = bar.unavailable || used == null ? '—' : `${used}%`

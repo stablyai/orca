@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { AccountsSnapshot, ProviderRateLimits } from '../../components/account-usage-state'
+import type {
+  AccountProviderRateLimits,
+  AccountsSnapshot
+} from '../../components/account-usage-state'
 import { selectHomeUsageCards, selectHomeUsageSections } from './home-usage-cards'
 
 function limits(
   provider: 'claude' | 'codex',
   usedPercent: number,
-  overrides: Partial<ProviderRateLimits> = {}
-): ProviderRateLimits {
+  overrides: Partial<AccountProviderRateLimits> = {}
+): AccountProviderRateLimits {
   return {
     provider,
     session: { usedPercent, windowMinutes: 300, resetsAt: null, resetDescription: null },
