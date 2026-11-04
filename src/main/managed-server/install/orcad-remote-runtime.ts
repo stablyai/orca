@@ -44,7 +44,11 @@ export function orcadNodeSlotRuntimeCommand(host: RemoteHostPlatform, directory:
   )
 }
 
-/** Legacy host Node fallback must never hide an incomplete Node or Bun slot. */
+/** undici's WASM memory otherwise reserves 4-9 GiB, so a `ulimit -v` host then fails the next
+ * Worker's CodeRange reservation (#37538). Pinned Node only: older host Node rejects the flag. */
+const ORCAD_PINNED_NODE_FLAGS = '--disable-wasm-trap-handler --wasm-max-mem-pages=1024'
+
+/** Also sets $orcad_runtime_flags. Legacy host Node fallback must never hide an incomplete Node or Bun slot. */
 export function selectOrcadSlotRuntimeCommand(
   host: RemoteHostPlatform,
   directory: string,
@@ -57,7 +61,8 @@ export function selectOrcadSlotRuntimeCommand(
   const runtime = quotePosixShell(joinRemotePath(host, directory, orcadBunRuntimeFilename(host.os)))
   const target = quotePosixShell(joinRemotePath(host, directory, ORCAD_BUILD_TARGET_FILENAME))
   return (
-    `if [ -e ${nodeMarker} ]; then ${orcadNodeSlotRuntimeCommand(host, directory)}` +
+    `orcad_runtime_flags=; if [ -e ${nodeMarker} ]; then ${orcadNodeSlotRuntimeCommand(host, directory)}` +
+    `orcad_runtime_flags=${quotePosixShell(ORCAD_PINNED_NODE_FLAGS)}; ` +
     `elif [ -e ${target} ] || [ -e ${runtime} ]; then ` +
     `[ -x ${runtime} ] || exit 78; orcad_runtime=${runtime}; ` +
     `else orcad_runtime=${quotePosixShell(legacyNodePath)}; fi`

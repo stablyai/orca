@@ -2,8 +2,8 @@ import { EventEmitter } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Worker } from 'node:worker_threads'
 import { build } from 'esbuild'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { WorkerThreadChildProcessHost } from './worker-thread-child-process'
 import type {
   WorkerThreadChildRequest,
@@ -25,7 +25,7 @@ export async function createWorkerThreadChildProcessTestEntry() {
 }
 
 export function createWorkerThreadChildProcessTestHost(entryPath: string) {
-  const worker = new Worker(entryPath)
+  const worker = spawnWorkerThread(entryPath)
   const transport = new EventEmitter()
   const acknowledgements: Extract<WorkerThreadChildRequest, { type: 'output-consumed' }>[] = []
   let holdingOutput = true

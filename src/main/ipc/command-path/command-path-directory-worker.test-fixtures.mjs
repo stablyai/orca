@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import { registerHooks, syncBuiltinESMExports } from 'node:module'
 import path from 'node:path'
+// oxlint-disable-next-line no-restricted-imports -- test worker loading unbuilt TS through module hooks
 import { Worker, workerData } from 'node:worker_threads'
 
 // Run unbuilt production TS in Node workers, including extensionless source imports.
