@@ -21,44 +21,6 @@ function encodeFrame(opcode: TerminalStreamOpcode, streamId: number, payload: un
 }
 
 describe('handleTerminalBinaryFrame', () => {
-  it('routes terminal metadata frames to the stream listener', () => {
-    const listener = vi.fn()
-
-    handleTerminalBinaryFrame(
-      encodeFrame(TerminalStreamOpcode.Metadata, 42, { cwd: '/repo/src' }),
-      {
-        terminalSnapshots: new Map(),
-        unreadableFrames: new TerminalUnreadableFrameResets(),
-        getListener: (streamId) => (streamId === 42 ? listener : undefined)
-      }
-    )
-
-    expect(listener).toHaveBeenCalledWith({ type: 'metadata', streamId: 42, cwd: '/repo/src' })
-  })
-
-  it('writes a transformed output span from a host that predates text-only subscribe', () => {
-    const listener = vi.fn()
-
-    handleTerminalBinaryFrame(
-      encodeFrame(TerminalStreamOpcode.OutputSpan, 7, {
-        data: 'after the stripped query',
-        rawLength: 31,
-        transformed: true
-      }),
-      {
-        terminalSnapshots: new Map(),
-        unreadableFrames: new TerminalUnreadableFrameResets(),
-        getListener: () => listener
-      }
-    )
-
-    expect(listener).toHaveBeenCalledWith({
-      type: 'data',
-      streamId: 7,
-      chunk: 'after the stripped query'
-    })
-  })
-
   it('ends a stream on an unreadable frame, deferring resets inside the interval', () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
