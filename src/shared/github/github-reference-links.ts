@@ -10,7 +10,7 @@ type MarkdownNode = {
   type: string
   value?: string
   url?: string
-  title?: null
+  title?: string | null
   children?: MarkdownNode[]
 }
 
