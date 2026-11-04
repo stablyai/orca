@@ -1,10 +1,10 @@
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { resolveHostAgentRowDotState } from '../session/catalog-worktree-unread-status'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { agentDotState } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
 
@@ -44,7 +44,7 @@ export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props)
         <View style={styles.agentIcons}>
           {visibleAgents.map((agent) => (
             <View key={agent.paneKey} style={styles.agentStatus}>
-              <AgentStateDot state={agentDotState(agent, now)} />
+              <AgentStateDot state={resolveHostAgentRowDotState(agent, now)} />
               {agent.agentType ? <MobileAgentIcon agentId={agent.agentType} size={13} /> : null}
             </View>
           ))}

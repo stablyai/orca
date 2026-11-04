@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { setCachedWorktrees } from '../cache/worktree-cache'
+import {
+  resolveHostAgentRowDotState,
+  resolveHostWorktreeRowStatus
+} from './catalog-worktree-unread-status'
 import {
   clearTabCompletionTrackerForTests,
   resolveMobileSessionTabDotState,
@@ -118,5 +123,90 @@ describe('unread worktree tab completion', () => {
     seedUnreadWorktreeSessionTabs('wt-tie', [idle, focused], 600)
     expect(resolveMobileSessionTabDotState(idle, 600, { isActiveOnScreen: false })).toBe('done')
     expectOffscreen('tab-tie-focus', 600, 'unread')
+  })
+
+  it('reconciles stale catalog working rows with session done without fabricating an unread bell', () => {
+    const staleRow: RuntimeWorktreeAgentRow = {
+      paneKey: 'tab-stale:leaf-1',
+      parentPaneKey: null,
+      state: 'working',
+      agentType: 'claude',
+      prompt: '',
+      taskTitle: null,
+      displayName: null,
+      lastAssistantMessage: null,
+      toolName: null,
+      toolInput: null,
+      interrupted: false,
+      stateStartedAt: 100,
+      updatedAt: 100
+    }
+    setCatalogWorktreesForTabStatus(
+      [{ worktreeId: 'wt-stale', unread: false, agents: [staleRow] }],
+      100
+    )
+    const sessionDoneTab = {
+      ...doneTerminalTab('tab-stale', 500),
+      agentStatus: {
+        ...doneTerminalTab('tab-stale', 500).agentStatus,
+        prompt: ''
+      }
+    }
+    expect(resolveMobileSessionTabDotState(sessionDoneTab, 500, { isActiveOnScreen: false })).toBe(
+      'done'
+    )
+    expect(resolveHostAgentRowDotState(staleRow, 500)).toBe('done')
+    expect(
+      resolveHostWorktreeRowStatus(
+        { worktreeId: 'wt-stale', unread: false, agents: [staleRow] },
+        'working',
+        500
+      )
+    ).toEqual({ status: 'done', unread: false })
+  })
+
+  it('keeps host worktree and agent rows unread while a background tab bell is unacknowledged', () => {
+    const doneRow: RuntimeWorktreeAgentRow = {
+      paneKey: 'tab-bell:leaf-1',
+      parentPaneKey: null,
+      state: 'done',
+      agentType: 'claude',
+      prompt: 'fix bug',
+      taskTitle: null,
+      displayName: null,
+      lastAssistantMessage: 'Fixed',
+      toolName: null,
+      toolInput: null,
+      interrupted: false,
+      stateStartedAt: 300,
+      updatedAt: 300
+    }
+    setCatalogWorktreesForTabStatus(
+      [{ worktreeId: 'wt-bell', unread: true, agents: [doneRow] }],
+      300
+    )
+    expectOffscreen('tab-bell', 300, 'unread')
+    expect(resolveHostAgentRowDotState(doneRow, 300)).toBe('unread')
+    expect(
+      resolveHostWorktreeRowStatus(
+        { worktreeId: 'wt-bell', unread: false, agents: [doneRow] },
+        'working',
+        300
+      )
+    ).toEqual({ status: 'done', unread: true })
+
+    expect(
+      resolveMobileSessionTabDotState(doneTerminalTab('tab-bell', 300, true), 300, {
+        isActiveOnScreen: true
+      })
+    ).toBe('done')
+    expect(resolveHostAgentRowDotState(doneRow, 300)).toBe('done')
+    expect(
+      resolveHostWorktreeRowStatus(
+        { worktreeId: 'wt-bell', unread: true, agents: [doneRow] },
+        'done',
+        300
+      )
+    ).toEqual({ status: 'done', unread: false })
   })
 })

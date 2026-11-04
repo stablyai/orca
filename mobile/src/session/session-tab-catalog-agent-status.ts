@@ -1,11 +1,18 @@
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../src/shared/runtime-types'
 import {
+  clearSessionSupersededDoneForTests,
+  recordSessionSupersededDone,
   syncUnreadWorktreeForTabStatus,
   toReconciledStatus,
   type ReconciledTerminalAgentStatus
 } from './catalog-worktree-unread-status'
+import {
+  buildTabCompletionKeys,
+  isInTurnDotState,
+  resolveTrackedTabCompletionState
+} from './tab-completion-state'
 
-export { buildTabCompletionKeys, resolveTrackedTabCompletionState } from './tab-completion-state'
+export { buildTabCompletionKeys, resolveTrackedTabCompletionState }
 export { syncUnreadWorktreeForTabStatus, type ReconciledTerminalAgentStatus }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -102,6 +109,7 @@ export function clearCatalogWorktreesForTabStatusForTests(): void {
   catalogReceivedAt = 0
   catalogAgentSignature = ''
   catalogListeners.clear()
+  clearSessionSupersededDoneForTests()
 }
 
 function findCatalogAgentRow(
@@ -147,18 +155,19 @@ export function reconcileTerminalAgentStatusWithCatalog(
   if (rawObj?.restoredUnconfirmed === true) {
     return toReconciledStatus(rawObj)
   }
+  const paneKey =
+    (rawObj && typeof rawObj.paneKey === 'string' && rawObj.paneKey) ||
+    (typeof options?.parentTabId === 'string' && typeof options?.leafId === 'string'
+      ? `${options.parentTabId}:${options.leafId}`
+      : null) ||
+    (typeof options?.tabId === 'string' && options.tabId.includes('::')
+      ? options.tabId.replace('::', ':')
+      : null)
   const worktrees = options?.worktrees ?? catalogWorktrees
   const promptEmpty = !rawObj || rawObj.prompt === ''
+  let catalogRow: Record<string, unknown> | null = null
   if (promptEmpty && worktrees && worktrees.length > 0) {
-    const paneKey =
-      (rawObj && typeof rawObj.paneKey === 'string' && rawObj.paneKey) ||
-      (typeof options?.parentTabId === 'string' && typeof options?.leafId === 'string'
-        ? `${options.parentTabId}:${options.leafId}`
-        : null) ||
-      (typeof options?.tabId === 'string' && options.tabId.includes('::')
-        ? options.tabId.replace('::', ':')
-        : null)
-    const catalogRow = findCatalogAgentRow(worktrees, options?.worktreeId, paneKey)
+    catalogRow = findCatalogAgentRow(worktrees, options?.worktreeId, paneKey)
     if (catalogRow && typeof catalogRow.updatedAt === 'number') {
       const rawUpdatedAt =
         rawObj && typeof rawObj.updatedAt === 'number' ? rawObj.updatedAt : -Infinity
@@ -196,10 +205,39 @@ export function reconcileTerminalAgentStatusWithCatalog(
         (!hasCompletedTurnEvidence || catalogStartsNewerTurn) &&
         (catalogRow.updatedAt >= rawEffectiveUpdatedAt || isShellMaskedWorkingTurn)
       ) {
+        if (catalogRow.state !== 'done') {
+          recordSessionSupersededDone(paneKey, null)
+        }
         const merged = rawObj ? { ...rawObj, ...catalogRow } : catalogRow
         return toReconciledStatus(merged, options?.now ?? (catalogReceivedAt || Date.now()))
       }
     }
   }
-  return rawObj ? toReconciledStatus(rawObj) : null
+  const resolved = rawObj ? toReconciledStatus(rawObj) : null
+  if (resolved && !resolved.restoredUnconfirmed) {
+    if (resolved.state === 'done') {
+      const catalogInTurn =
+        catalogRow !== null &&
+        typeof catalogRow.state === 'string' &&
+        isInTurnDotState(
+          catalogRow.state === 'working' ||
+            catalogRow.state === 'monitoring' ||
+            catalogRow.state === 'waiting' ||
+            catalogRow.state === 'blocked'
+            ? catalogRow.state
+            : undefined
+        )
+      recordSessionSupersededDone(
+        paneKey,
+        {
+          updatedAt: Math.max(resolved.updatedAt, resolved.stateStartedAt),
+          stateStartedAt: resolved.stateStartedAt
+        },
+        catalogInTurn
+      )
+    } else {
+      recordSessionSupersededDone(paneKey, null)
+    }
+  }
+  return resolved
 }

@@ -2,16 +2,32 @@ import type { AgentDotState } from '../worktree/agent-row-display'
 
 type TabCompletionTrackerEntry = {
   sawInTurn: boolean
+  catalogSawInTurn?: boolean
   unread: boolean
   acknowledgedDoneAt?: number
 }
 
 const tabCompletionTracker = new Map<string, TabCompletionTrackerEntry>()
 const unreadWorktreeIds = new Set<string>()
+const latchedUnreadTabKeys = new Set<string>()
+const tabCompletionListeners = new Set<() => void>()
+
+export function subscribeTabCompletionState(listener: () => void): () => void {
+  tabCompletionListeners.add(listener)
+  return () => {
+    tabCompletionListeners.delete(listener)
+  }
+}
+
+export function notifyTabCompletionStateChanged(): void {
+  tabCompletionListeners.forEach((listener) => listener())
+}
 
 export function clearTabCompletionEntriesForTests(): void {
   tabCompletionTracker.clear()
   unreadWorktreeIds.clear()
+  latchedUnreadTabKeys.clear()
+  tabCompletionListeners.clear()
 }
 
 export function isInTurnDotState(state: AgentDotState | null | undefined): boolean {
@@ -19,10 +35,10 @@ export function isInTurnDotState(state: AgentDotState | null | undefined): boole
 }
 
 export function markWorktreeUnreadForTabCompletion(worktreeId: string | null | undefined): void {
-  if (!worktreeId) {
-    return
+  if (worktreeId && !unreadWorktreeIds.has(worktreeId)) {
+    unreadWorktreeIds.add(worktreeId)
+    notifyTabCompletionStateChanged()
   }
-  unreadWorktreeIds.add(worktreeId)
 }
 
 export function hasPendingWorktreeUnreadForTabCompletion(
@@ -34,26 +50,92 @@ export function hasPendingWorktreeUnreadForTabCompletion(
 export function consumeWorktreeUnreadForTabCompletion(
   worktreeId: string | null | undefined
 ): boolean {
-  if (!worktreeId) {
-    return false
+  const deleted = Boolean(worktreeId && unreadWorktreeIds.delete(worktreeId))
+  if (deleted) {
+    notifyTabCompletionStateChanged()
   }
-  return unreadWorktreeIds.delete(worktreeId)
+  return deleted
+}
+
+export function setLatchedUnreadTabKeys(keys: readonly string[]): void {
+  latchedUnreadTabKeys.clear()
+  keys.forEach((key) => latchedUnreadTabKeys.add(key))
+  notifyTabCompletionStateChanged()
+}
+
+export function clearLatchedUnreadTabKeys(): void {
+  if (latchedUnreadTabKeys.size > 0) {
+    latchedUnreadTabKeys.clear()
+    notifyTabCompletionStateChanged()
+  }
+}
+
+export function restoreLatchedUnreadTabKeys(): void {
+  if (latchedUnreadTabKeys.size === 0) {
+    return
+  }
+  const entry = getOrCreateTrackerEntry([...latchedUnreadTabKeys])
+  latchedUnreadTabKeys.clear()
+  if (entry) {
+    entry.unread = true
+  }
+  notifyTabCompletionStateChanged()
+}
+
+export function acknowledgeSupersededCatalogInTurn(
+  keys: readonly string[],
+  doneStamp?: number
+): void {
+  const entry = getOrCreateTrackerEntry(keys)
+  if (!entry) {
+    return
+  }
+  entry.catalogSawInTurn = false
+  if (!entry.unread && !entry.sawInTurn && doneStamp !== undefined && !entry.acknowledgedDoneAt) {
+    entry.acknowledgedDoneAt = doneStamp
+  }
 }
 
 export function hasUnacknowledgedTabCompletion(
   keys: readonly string[],
   rawState: AgentDotState | undefined
 ): boolean {
-  if (rawState !== 'done') {
+  return (
+    rawState === 'done' &&
+    keys.some((key) => {
+      const entry = tabCompletionTracker.get(key)
+      return Boolean(entry?.unread || entry?.sawInTurn)
+    })
+  )
+}
+
+export function hasHostUnacknowledgedTabCompletion(
+  keys: readonly string[],
+  rawState: AgentDotState | undefined
+): boolean {
+  return (
+    rawState === 'done' &&
+    keys.some((key) => {
+      const entry = tabCompletionTracker.get(key)
+      return latchedUnreadTabKeys.has(key) || Boolean(entry?.unread || entry?.sawInTurn)
+    })
+  )
+}
+
+export function isTabCompletionAcknowledged(keys: readonly string[], doneStamp?: number): boolean {
+  if (keys.some((key) => latchedUnreadTabKeys.has(key))) {
     return false
   }
-  for (const key of keys) {
+  return keys.some((key) => {
     const entry = tabCompletionTracker.get(key)
-    if (entry?.unread || entry?.sawInTurn) {
-      return true
-    }
-  }
-  return false
+    return Boolean(
+      entry &&
+      !entry.unread &&
+      !entry.sawInTurn &&
+      entry.acknowledgedDoneAt !== undefined &&
+      (doneStamp === undefined || entry.acknowledgedDoneAt >= doneStamp)
+    )
+  })
 }
 
 export function recordCatalogAgentTabState(args: {
@@ -66,32 +148,30 @@ export function recordCatalogAgentTabState(args: {
   if (!entry) {
     return
   }
+  const prevUnread = entry.unread
   const { rawState, doneStamp, forceUnreadIfUnacknowledged } = args
   if (isInTurnDotState(rawState)) {
-    entry.sawInTurn = true
+    entry.catalogSawInTurn = true
     entry.unread = false
-    return
-  }
-  if (rawState === 'done') {
-    if (entry.sawInTurn) {
-      entry.sawInTurn = false
-      entry.unread = true
-      return
-    }
-    // A passive catalog scan must not acknowledge, so a later unread signal can still mark this completion.
+  } else if (rawState === 'done') {
     if (
-      forceUnreadIfUnacknowledged &&
-      (entry.acknowledgedDoneAt === undefined ||
-        (doneStamp !== undefined && doneStamp > entry.acknowledgedDoneAt))
+      entry.catalogSawInTurn ||
+      entry.sawInTurn ||
+      (forceUnreadIfUnacknowledged &&
+        (entry.acknowledgedDoneAt === undefined ||
+          (doneStamp !== undefined && doneStamp > entry.acknowledgedDoneAt)))
     ) {
+      entry.catalogSawInTurn = false
       entry.sawInTurn = false
       entry.unread = true
     }
-    return
-  }
-  if (rawState === 'interrupted' || rawState === 'failed') {
+  } else if (rawState === 'interrupted' || rawState === 'failed') {
+    entry.catalogSawInTurn = false
     entry.sawInTurn = false
     entry.unread = false
+  }
+  if (prevUnread !== entry.unread) {
+    notifyTabCompletionStateChanged()
   }
 }
 
@@ -99,17 +179,9 @@ function getOrCreateTrackerEntry(keys: readonly string[]): TabCompletionTrackerE
   if (keys.length === 0) {
     return null
   }
-  let existing: TabCompletionTrackerEntry | undefined
-  for (const key of keys) {
-    existing = tabCompletionTracker.get(key)
-    if (existing) {
-      break
-    }
-  }
+  const existing = keys.map((key) => tabCompletionTracker.get(key)).find(Boolean)
   const entry = existing ?? { sawInTurn: false, unread: false }
-  for (const key of keys) {
-    tabCompletionTracker.set(key, entry)
-  }
+  keys.forEach((key) => tabCompletionTracker.set(key, entry))
   return entry
 }
 
@@ -143,6 +215,14 @@ export function resolveTrackedTabCompletionState(args: {
   if (!entry) {
     return rawState
   }
+  const prevUnread = entry.unread
+  const prevAck = entry.acknowledgedDoneAt
+  const finish = (result: AgentDotState | undefined): AgentDotState | undefined => {
+    if (prevUnread !== entry.unread || prevAck !== entry.acknowledgedDoneAt) {
+      notifyTabCompletionStateChanged()
+    }
+    return result
+  }
   if (
     previousCardState === 'unread' &&
     !entry.sawInTurn &&
@@ -157,9 +237,10 @@ export function resolveTrackedTabCompletionState(args: {
   if (isInTurnDotState(rawState)) {
     entry.sawInTurn = true
     entry.unread = false
-    return rawState
+    return finish(rawState)
   }
   if (rawState === 'done') {
+    entry.catalogSawInTurn = false
     const hasUnacknowledgedCompletion = entry.unread || entry.sawInTurn
     if (isActiveOnScreen === true) {
       entry.sawInTurn = false
@@ -167,35 +248,33 @@ export function resolveTrackedTabCompletionState(args: {
       if (doneStamp !== undefined) {
         entry.acknowledgedDoneAt = Math.max(entry.acknowledgedDoneAt ?? 0, doneStamp)
       }
-      return 'done'
+      return finish('done')
     }
     if (isActiveOnScreen === false) {
       if (hasUnacknowledgedCompletion) {
         entry.sawInTurn = false
         entry.unread = true
-        return 'unread'
+        return finish('unread')
       }
       if (doneStamp !== undefined && entry.acknowledgedDoneAt === undefined) {
         entry.acknowledgedDoneAt = doneStamp
       }
-      return 'done'
+      return finish('done')
     }
-    if (entry.unread) {
-      return 'unread'
-    }
-    if (entry.sawInTurn) {
+    if (entry.unread || entry.sawInTurn) {
       entry.sawInTurn = false
       entry.unread = true
-      return 'unread'
+      return finish('unread')
     }
     if (doneStamp !== undefined && entry.acknowledgedDoneAt === undefined) {
       entry.acknowledgedDoneAt = doneStamp
     }
-    return 'done'
+    return finish('done')
   }
   if (rawState === 'interrupted' || rawState === 'failed') {
+    entry.catalogSawInTurn = false
     entry.sawInTurn = false
     entry.unread = false
   }
-  return rawState
+  return finish(rawState)
 }

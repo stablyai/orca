@@ -27,10 +27,13 @@ export {
 } from './session-tab-catalog-agent-status'
 
 export {
+  clearLatchedUnreadTabKeys,
   isMobileSessionTabUnreadBeforeView,
+  latchInitialActiveTabUnread,
   resolveMobileSessionTabDotState,
   resolveRawSessionTabDotState,
   resolveTabDoneStamp,
+  restoreLatchedUnreadTabKeys,
   seedUnreadWorktreeSessionTabs
 } from './mobile-session-tab-unread'
 

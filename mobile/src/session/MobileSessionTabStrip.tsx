@@ -7,12 +7,15 @@ import { AgentStateDot } from '../components/AgentStateDot'
 import { useNow } from '../hooks/use-now'
 import type { AgentDotState } from '../worktree/agent-row-display'
 import {
+  clearLatchedUnreadTabKeys,
   getMobileTerminalTabHostAgentIdentity,
   getMobileSessionTabTitle,
   hasPendingWorktreeUnreadForTabCompletion,
   isMobileSessionTabUnreadBeforeView,
+  latchInitialActiveTabUnread,
   resolveMobileSessionTabDotState,
   resolveMobileTerminalTabAgentId,
+  restoreLatchedUnreadTabKeys,
   seedUnreadWorktreeSessionTabs,
   subscribeCatalogWorktreesForTabStatus
 } from './mobile-terminal-tab-agent'
@@ -95,6 +98,9 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     latchedUnreadTabId: null
   })
   if (visitUnreadRef.current.worktreeId !== controller.worktreeId) {
+    if (!visitUnreadRef.current.userSwitchedTab && visitUnreadRef.current.latchedUnreadTabId) {
+      restoreLatchedUnreadTabKeys()
+    }
     visitUnreadRef.current = {
       worktreeId: controller.worktreeId,
       userSwitchedTab: false,
@@ -102,6 +108,14 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
       latchedUnreadTabId: null
     }
   }
+  useEffect(
+    () => () => {
+      if (!visitUnreadRef.current.userSwitchedTab && visitUnreadRef.current.latchedUnreadTabId) {
+        restoreLatchedUnreadTabKeys()
+      }
+    },
+    []
+  )
   const now = useNow(60_000)
   const [catalogRevision, setCatalogRevision] = useState(0)
   const [visitEpoch, setVisitEpoch] = useState(0)
@@ -127,6 +141,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
         if (unreadBeforeView) {
           visit.latchedUnreadTabId = tabId
           visit.initialActiveChecked = true
+          latchInitialActiveTabUnread(tab, tabId)
         } else if (state !== undefined) {
           visit.initialActiveChecked = true
         }
@@ -138,6 +153,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
           states.set(tabId, 'unread')
         } else {
           visit.latchedUnreadTabId = null
+          clearLatchedUnreadTabKeys()
           if (state) {
             states.set(tabId, state)
           }
@@ -185,6 +201,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     (t: (typeof visibleTabs)[number], source: Parameters<typeof toggleSource>[0]) => {
       visitUnreadRef.current.userSwitchedTab = true
       visitUnreadRef.current.latchedUnreadTabId = null
+      clearLatchedUnreadTabKeys()
       setVisitEpoch((epoch) => epoch + 1)
       const at = Date.now()
       const lastTap = lastTabTapRef.current

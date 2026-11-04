@@ -1,17 +1,17 @@
 import { agentNoUpdateLabel } from '../../../src/shared/agent-status/presentation/agent-row-decay-state'
-import { memo, type ReactNode } from 'react'
+import { memo, useEffect, useState, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
+import {
+  reconcileWorktreeAgentRowWithSessionDone,
+  resolveHostAgentRowDotState,
+  subscribeTabCompletionState
+} from '../session/catalog-worktree-unread-status'
 import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import {
-  agentDisplayLabel,
-  agentDotState,
-  agentRowTimeAt,
-  formatTimeAgo
-} from '../worktree/agent-row-display'
+import { agentDisplayLabel, agentRowTimeAt, formatTimeAgo } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import type { AgentChildRowModel } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
@@ -45,33 +45,39 @@ function WorktreeAgentRowComponent({
   trailing
 }: Props) {
   useMobileColorScheme()
-  const dotState = childRow?.displayState ?? agentDotState(agent, now)
+  const [, setCompletionRev] = useState(0)
+  useEffect(() => subscribeTabCompletionState(() => setCompletionRev((rev) => rev + 1)), [])
+  const effectiveAgent = reconcileWorktreeAgentRowWithSessionDone(agent)
+  const dotState = childRow?.displayState ?? resolveHostAgentRowDotState(effectiveAgent, now)
   // Visuals render only in transcript; row keeps surrounding prose and treats visual-only reply as empty.
-  const reply = agent.lastAssistantMessage
+  const reply = effectiveAgent.lastAssistantMessage
   const label = agentDisplayLabel(
     reply
-      ? { ...agent, lastAssistantMessage: withoutNativeChatVisualDirectiveLines(reply) }
-      : agent,
+      ? { ...effectiveAgent, lastAssistantMessage: withoutNativeChatVisualDirectiveLines(reply) }
+      : effectiveAgent,
     now
   )
   const childText = childRow ? mobileAgentChildRowText(childRow, now) : null
-  const timeAt = childRow ? childRow.firstObservedAt : agentRowTimeAt(agent)
+  const timeAt = childRow ? childRow.firstObservedAt : agentRowTimeAt(effectiveAgent)
   // Like desktop, a silent row reports how long since its last update, not when its turn began.
   const ts =
     childRow && timeAt <= 0
       ? ''
       : !childRow && dotState === 'unverifiable'
-        ? agentNoUpdateLabel(agent, now)
+        ? agentNoUpdateLabel(effectiveAgent, now)
         : formatTimeAgo(timeAt, now)
 
   const content = (
     <View style={[styles.row, { paddingLeft: depth * AGENT_ROW_INDENT_PER_DEPTH }]}>
       <AgentStateDot state={dotState} />
       {/* Use desktop-style agent identity logo instead of two-letter code. */}
-      {!childRow && agent.agentType ? (
-        <MobileAgentIcon agentId={agent.agentType} size={13} />
+      {!childRow && effectiveAgent.agentType ? (
+        <MobileAgentIcon agentId={effectiveAgent.agentType} size={13} />
       ) : null}
-      <Text style={[styles.label, unvisited && styles.labelUnvisited]} numberOfLines={1}>
+      <Text
+        style={[styles.label, (unvisited || dotState === 'unread') && styles.labelUnvisited]}
+        numberOfLines={1}
+      >
         {childText ? (
           <>
             {childText.lead}

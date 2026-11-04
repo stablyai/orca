@@ -7,11 +7,16 @@ import {
   resolveTrackedTabCompletionState
 } from './session-tab-catalog-agent-status'
 import {
+  clearLatchedUnreadTabKeys,
   consumeWorktreeUnreadForTabCompletion,
   hasUnacknowledgedTabCompletion,
   isInTurnDotState,
-  recordCatalogAgentTabState
+  recordCatalogAgentTabState,
+  restoreLatchedUnreadTabKeys,
+  setLatchedUnreadTabKeys
 } from './tab-completion-state'
+
+export { clearLatchedUnreadTabKeys, restoreLatchedUnreadTabKeys }
 
 type SessionTabPaneIdentity = {
   id?: string
@@ -121,6 +126,16 @@ export function isMobileSessionTabUnreadBeforeView(
       paneKey: resolveSessionTabPaneKey(tab, tabId)
     }),
     rawState
+  )
+}
+
+export function latchInitialActiveTabUnread(tab: SessionTabStatus, tabId = tab.id): void {
+  setLatchedUnreadTabKeys(
+    buildTabCompletionKeys({
+      id: tabId,
+      terminal: tab.terminal,
+      paneKey: resolveSessionTabPaneKey(tab, tabId)
+    })
   )
 }
 
