@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { realpath } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
@@ -87,6 +88,10 @@ export class RuntimeNestedRepoImport {
         }
         const importRepoPath = await importTargetResolver.resolveLocal(repoPath)
         const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
+        // Clone and create save Git's resolved path, so a symlinked import root matches it too.
+        const resolvedImportRepoPath = await realpath(importRepoPath)
+          .then(normalizeRuntimePathForComparison)
+          .catch(() => null)
         const alreadyImportedProjectId = importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
         if (alreadyImportedProjectId) {
           results.push({
@@ -102,7 +107,9 @@ export class RuntimeNestedRepoImport {
           .find(
             (repo) =>
               getRepoDialableSshTargetId(repo) === null &&
-              normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
+              [normalizedImportRepoPath, resolvedImportRepoPath].includes(
+                normalizeRuntimePathForComparison(repo.path)
+              )
           )
         const group = groupResolver.getGroupForRepo(repoPath)
         if (existing) {
