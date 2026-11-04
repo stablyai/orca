@@ -134,14 +134,19 @@ export function shellLocalCall([method, params, options]: readonly unknown[]): u
   return [method, params, forwarded, fence]
 }
 
+// The shell's pre-send fence: it takes nothing and throws to refuse the send.
+type PreSendFence = () => void
+
+function isPreSendFence(value: unknown): value is PreSendFence {
+  return typeof value === 'function'
+}
+
 // The fence the shell passed with a forwarded request.
-export function shellFence([, , options]: readonly unknown[]): () => void {
+export function shellFence([, , options]: readonly unknown[]): PreSendFence {
   if (typeof options === 'object' && options !== null && 'beforeSend' in options) {
     const { beforeSend } = options
-    if (typeof beforeSend === 'function') {
-      return () => {
-        Reflect.apply(beforeSend, undefined, [])
-      }
+    if (isPreSendFence(beforeSend)) {
+      return beforeSend
     }
   }
   throw new Error('The shell passed no pre-send fence')
