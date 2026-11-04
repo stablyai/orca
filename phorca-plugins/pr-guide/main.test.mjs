@@ -23,6 +23,7 @@ describe('PR Guide', () => {
   it('runs CLI processes through the bundled process host', async () => {
     assert.equal(await runCli(process.execPath, ['-e', 'process.stdout.write("ok")']), 'ok')
     await assert.rejects(runCli(process.execPath, ['-e', 'process.exit(2)']), /failed/)
+    await assert.rejects(runCli(process.execPath, ['-e', 'process.stdout.write("x".repeat(2048))'], '', 1024, 5000), /output is too large/)
   })
 
   it('gates local terminal discovery and sending through host capabilities', async () => {
@@ -176,6 +177,7 @@ describe('PR Guide', () => {
     assert.equal(result.headSha, 'abc123')
     assert.equal(result.headBranch, 'feature')
     assert.equal(result.sourceFingerprint, prFingerprint({ title: 'Add guide', body: 'Explains the change', headRefOid: 'abc123', headRefName: 'feature' }))
+    assert.deepEqual(calls.find(({ args }) => args[0] === 'pr' && args[1] === 'diff').args, ['pr', 'diff', 'https://github.com/a/b/pull/2'])
     assert.match(calls[4].stdin, /diff --git a\/src\/a.ts/)
     assert.match(calls[4].stdin, /PR Guide organizer/)
     assert.match(calls[4].stdin, /Group files by purpose/)

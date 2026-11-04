@@ -72,12 +72,18 @@ export async function runCli(file, args, stdin = '', maxBytes = MAX_PATCH_BYTES,
     env.APPDATA ??= join(homedir(), 'AppData', 'Roaming')
     env.LOCALAPPDATA ??= join(homedir(), 'AppData', 'Local')
   }
-  const result = await runProcess({
-    program: file, args, input: stdin, env, timeoutMs,
-    maxOutputBytes: maxBytes, killOnOutputLimit: true, terminationBarrier: true
-  })
-  if (result.timedOut) throw new Error(`${basename(file)} timed out`)
+  const keepAlive = setTimeout(() => {}, timeoutMs + 20_000)
+  let result
+  try {
+    result = await runProcess({
+      program: file, args, input: stdin, env, timeoutMs,
+      maxOutputBytes: maxBytes, killOnOutputLimit: true, terminationBarrier: true
+    })
+  } finally {
+    clearTimeout(keepAlive)
+  }
   if (result.outputTruncated) throw new Error(`${basename(file)} output is too large`)
+  if (result.timedOut) throw new Error(`${basename(file)} timed out`)
   if (result.code !== 0) throw new Error(`${basename(file)} failed: ${result.stderr.slice(-4096) || `exit ${result.code}`}`)
   return result.stdout
 }
@@ -114,7 +120,7 @@ export async function generateGuide(prUrl, run = runCli, findClaude = resolveCla
   ) {
     throw new Error('GitHub did not return every changed file; no partial guide was created.')
   }
-  const patch = await run(gh, ['pr', 'diff', url, '--patch'])
+  const patch = await run(gh, ['pr', 'diff', url])
   if (!patch.trim()) {
     throw new Error('This PR has no diff to guide.')
   }
