@@ -5,7 +5,7 @@ import type { OrchestrationDb } from './orchestration-db'
 /** Callers own transactions so lifecycle projections and mailbox effects commit atomically together. */
 export type LifecycleEntity = 'task' | 'dispatch' | 'worker'
 
-type LifecycleWriteTransaction = {
+export type LifecycleWriteTransaction = {
   savepoint: string | null
 }
 
@@ -32,7 +32,9 @@ export function rollbackLifecycleWriteTransaction(
   db: Database.Database,
   transaction: LifecycleWriteTransaction
 ): void {
-  // SQLite ends the whole transaction itself on I/O and disk-full errors; rolling back again would replace that error.
+  // A failed statement can already have ended the transaction (SQLite aborts on disk/IO errors),
+  // and a rollback then throws "cannot rollback - no transaction is active", which replaces the
+  // failure that actually happened (#38123).
   if (!db.isTransaction) {
     return
   }
