@@ -112,7 +112,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*memory*.test.ts',
   'src/**/*allocation*.test.ts',
   'src/**/*expiry*.test.ts',
-  'src/renderer/src/lib/flatten-retained-slice.test.ts',
   'src/shared/own-retained-string.test.ts',
   'src/main/agent-hooks/server-transport-interference.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
