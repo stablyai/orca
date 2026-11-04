@@ -71,7 +71,6 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
-  const linearStatus = useAppStore((s) => s.linearStatus)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const settings = useAppStore((s) => s.settings)
@@ -90,14 +89,14 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearStatus.connected === true,
+          // Why: a Linear status from another runtime context is pending, not connected.
+          linearConnected: taskProviderConnections.linear === true,
           connected: taskProviderConnections
         },
         defaultTaskSource
       ),
     [
       defaultTaskSource,
-      linearStatus.connected,
       taskProviderConnections,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,

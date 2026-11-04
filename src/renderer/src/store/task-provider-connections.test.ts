@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
+import type { AppState } from './types'
 import { createTestStore } from './slices/store-test-helpers'
-import { selectTaskProviderConnections } from './task-provider-connections'
+import {
+  selectTaskProviderAvailability,
+  selectTaskProviderConnections
+} from './task-provider-connections'
 
 vi.mock('@/lib/local-preflight-context', () => ({
   getLocalPreflightContext: () => undefined,
@@ -21,7 +25,7 @@ function repo(id: string, executionHostId?: Repo['executionHostId']): Repo {
   }
 }
 
-function state(repos: Repo[]) {
+function state(repos: Repo[], overrides: Partial<AppState> = {}): AppState {
   const store = createTestStore()
   store.setState({
     repos,
@@ -33,7 +37,8 @@ function state(repos: Repo[]) {
     preflightStatusChecked: true,
     preflightStatusContextKey: 'local',
     preflightStatusLoading: false,
-    preflightStatusError: null
+    preflightStatusError: null,
+    ...overrides
   })
   return store.getState()
 }
@@ -54,5 +59,20 @@ describe('selectTaskProviderConnections', () => {
       github: false,
       gitlab: false
     })
+  })
+})
+
+describe('selectTaskProviderAvailability', () => {
+  it('ignores Linear and GitLab results checked in another context', () => {
+    const availability = selectTaskProviderAvailability(
+      state([repo('local-repo')], {
+        preflightStatusContextKey: 'wsl:Ubuntu',
+        linearStatus: { connected: true, viewer: null },
+        linearStatusChecked: true,
+        linearStatusContextKey: 'runtime:env-2#0'
+      })
+    )
+
+    expect(availability).toEqual({ gitlabInstalled: false, linearConnected: false, connected: {} })
   })
 })

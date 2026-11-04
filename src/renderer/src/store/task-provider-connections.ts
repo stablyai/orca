@@ -10,7 +10,10 @@ import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { TaskProviderConnections } from '../../../shared/task-providers'
+import type {
+  TaskProviderAvailability,
+  TaskProviderConnections
+} from '../../../shared/task-providers'
 
 function isSameRuntimeTarget(left: RuntimeClientTarget, right: RuntimeClientTarget): boolean {
   return left.kind === 'environment'
@@ -29,14 +32,15 @@ function reposShareRuntime(repos: readonly Repo[], target: RuntimeClientTarget):
 }
 
 // Why: a check from another runtime, project or WSL context is pending here, not a verdict.
-// Pass the task repos in view; omitted, every git repo counts since any may be selected.
-export function selectTaskProviderConnections(
+function selectTaskProviderState(
   state: AppState,
-  repos: readonly Repo[] = state.repos.filter(isGitRepoKind)
-): TaskProviderConnections {
+  repos: readonly Repo[]
+): { connections: TaskProviderConnections; preflightCurrent: boolean } {
   const providerRuntimeContextKey = getProviderRuntimeContextKey(state.settings)
+  const preflightCurrent =
+    state.preflightStatusContextKey === localPreflightContextKey(getLocalPreflightContext(state))
   const preflightSettled =
-    state.preflightStatusContextKey === localPreflightContextKey(getLocalPreflightContext(state)) &&
+    preflightCurrent &&
     state.preflightStatusChecked &&
     !state.preflightStatusLoading &&
     !state.preflightStatusError &&
@@ -44,7 +48,7 @@ export function selectTaskProviderConnections(
     reposShareRuntime(repos, getLocalPreflightTarget(state))
   const gh = state.preflightStatus?.gh
   const glab = state.preflightStatus?.glab
-  return {
+  const connections = {
     ...(preflightSettled
       ? {
           github: gh?.installed === true && gh.authenticated === true,
@@ -57,5 +61,27 @@ export function selectTaskProviderConnections(
     ...(state.jiraStatusChecked && state.jiraStatusContextKey === providerRuntimeContextKey
       ? { jira: state.jiraStatus.connected === true }
       : {})
+  }
+  return { connections, preflightCurrent }
+}
+
+// Pass the task repos in view; omitted, every git repo counts since any may be selected.
+export function selectTaskProviderConnections(
+  state: AppState,
+  repos: readonly Repo[] = state.repos.filter(isGitRepoKind)
+): TaskProviderConnections {
+  return selectTaskProviderState(state, repos).connections
+}
+
+/** Task-source restore inputs; the legacy fallbacks also honor the current context. */
+export function selectTaskProviderAvailability(state: AppState): TaskProviderAvailability {
+  const { connections, preflightCurrent } = selectTaskProviderState(
+    state,
+    state.repos.filter(isGitRepoKind)
+  )
+  return {
+    gitlabInstalled: preflightCurrent && state.preflightStatus?.glab?.installed === true,
+    linearConnected: connections.linear === true,
+    connected: connections
   }
 }

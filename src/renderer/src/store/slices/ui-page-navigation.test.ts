@@ -9,6 +9,7 @@ import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { AppState } from '../types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import { createUIStore, makePersistedUI } from './ui-slice-test-harness'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
@@ -255,6 +256,9 @@ describe('createUISlice settings navigation', () => {
         defaultTaskSource: 'linear'
       } as unknown as AppState['settings'],
       linearStatus: { connected: true } as AppState['linearStatus'],
+      linearStatusChecked: true,
+      // Why: these settings name no paired server, so Linear was checked on this app.
+      linearStatusContextKey: getProviderRuntimeContextKey(null),
       prefetchLinearIssues
     } as unknown as Partial<AppState>)
 
