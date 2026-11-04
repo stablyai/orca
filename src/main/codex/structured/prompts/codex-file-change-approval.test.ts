@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { createCodexJournalTranslator } from '../journal/codex-structured-journal-translation'
 import { codexFileChangeApprovalDetail } from './codex-file-change-approval-detail'
-import { CODEX_FILE_CHANGE_APPROVAL_METHOD } from './codex-structured-prompt-replies'
+import { CODEX_FILE_CHANGE_APPROVAL_METHOD } from './codex-prompt-registry'
 import { chatApprovalFromJournal } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 
 // Recorded Codex app-server 0.156.1 frames; only the workspace path is sanitized.
