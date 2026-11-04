@@ -75,6 +75,13 @@ it('normalizes hashed JSON assets while rejecting content and reference changes'
     )
   ).toEqual(['renderer/assets/i18n.js'])
   expect(compareJavascriptParityFiles(before, [])).toContain('renderer/assets/de.json')
+  for (const reference of ['de.json', '@asset:de.json']) {
+    const broken = entries('BBBBBBBB', '{\n"hello":"Hallo"\n}\n')
+    broken['renderer/assets/i18n.js'] = `fetch("./${reference}")`
+    expect(compareJavascriptParityFiles(before, inventory(broken))).toEqual([
+      'renderer/assets/i18n.js'
+    ])
+  }
 })
 
 it('rejects meaningful color changes and every non-color stylesheet change', () => {

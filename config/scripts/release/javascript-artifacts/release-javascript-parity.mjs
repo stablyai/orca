@@ -9,11 +9,15 @@ const NATIVE_COLOR = /color\(display-p3 ([^)]+)\)|(?<![\w-])lab\(([^)]+)\)/g
 
 function createAssetReferenceNormalizer(replacements) {
   const references = new RegExp(
-    [...replacements.keys()].map((name) => name.replace(/[.*+?^$(){}|[\]\\]/g, '\\$&')).join('|') ||
-      '(?!)',
+    [...replacements.keys(), '@']
+      .map((name) => name.replace(/[.*+?^$(){}|[\]\\]/g, '\\$&'))
+      .join('|'),
     'g'
   )
-  return (content) => content.replace(references, (name) => replacements.get(name) ?? name)
+  return (content) =>
+    content.replace(references, (name) =>
+      replacements.has(name) ? `@asset:${replacements.get(name)}` : '@@'
+    )
 }
 
 export function normalizeManifestSourcePaths(value) {
