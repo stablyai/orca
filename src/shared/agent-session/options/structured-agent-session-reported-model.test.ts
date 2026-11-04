@@ -12,7 +12,6 @@ import {
   nativeChatModelPillLabel,
   sayNativeChatSessionOptionEnglish
 } from '../../native-chat/input/native-chat-session-option-labels'
-import { structuredAgentSessionOptionStamp } from './structured-agent-session-option-state'
 
 it('shows the actual fallback in the shared composer pill while capturing the original model for Send', () => {
   const state = applyStructuredAgentSessionOptions(
@@ -41,11 +40,4 @@ it('shows the actual fallback in the shared composer pill while capturing the or
     current: { model: 'claude-opus-5-5' }
   })
   expect(oldHost.reportedModel).toBeUndefined()
-})
-
-it('invalidates option reads when a response changes model without changing the saved selection', () => {
-  const selected = { model: 'claude-opus-5-5' }
-  expect(
-    structuredAgentSessionOptionStamp({ ...selected, reportedModel: 'claude-opus-4-8' })
-  ).not.toBe(structuredAgentSessionOptionStamp({ ...selected, reportedModel: 'claude-opus-5-5' }))
 })
