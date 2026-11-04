@@ -75,7 +75,7 @@ export function useContextualTour(
   )
   const contextualToursSeenIds = useAppStore((s) => s.contextualToursSeenIds)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
-  const sessionConsumed = useAppStore((s) => isContextualTourSessionConsumed(s, id))
+  const contextualToursStartedThisSession = useAppStore((s) => s.contextualToursStartedThisSession)
   const contextualToursOnboardingVisible = useAppStore((s) => s.contextualToursOnboardingVisible)
   const contextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.contextualToursBlockingSurfaceVisible
@@ -168,8 +168,11 @@ export function useContextualTour(
       contextualToursOnboardingVisible ||
       contextualToursBlockingSurfaceVisible ||
       activeContextualTourId !== null ||
-      sessionConsumed ||
-      contextualToursSeenIds.includes(id)
+      contextualToursSeenIds.includes(id) ||
+      isContextualTourSessionConsumed(
+        { contextualToursSeenIds, contextualToursStartedThisSession },
+        id
+      )
     ) {
       return
     }
@@ -249,7 +252,7 @@ export function useContextualTour(
     contextualToursBlockingSurfaceVisible,
     activeModal,
     contextualToursAutoEligible,
-    sessionConsumed,
+    contextualToursStartedThisSession,
     contextualToursOnboardingVisible,
     contextualToursSeenIds,
     enabled,
