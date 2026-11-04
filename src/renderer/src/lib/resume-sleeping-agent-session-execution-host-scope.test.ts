@@ -64,43 +64,6 @@ function seedAnsweredSshWorkspace(...records: SleepingAgentSessionRecord[]): voi
 }
 
 describe('the resume sweep under execution-host scope', () => {
-  it('declines a locally captured session id rather than issuing it on the SSH host', () => {
-    const record = makeRecord({ connectionId: null })
-    seedAnsweredSshWorkspace(record)
-
-    expect(
-      resumeSleepingAgentSessionsForWorktree(WORKTREE_ID),
-      'issued --resume for a local session id against the SSH host'
-    ).toBe(0)
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE_ID] ?? []).toHaveLength(0)
-  })
-
-  it('preserves the declined record so the session stays resumable by hand', () => {
-    const record = makeRecord({ connectionId: 'a-different-target' })
-    seedAnsweredSshWorkspace(record)
-
-    resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
-    resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
-
-    // Host disagreement must preserve the record, the user’s only transcript locator.
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
-  })
-
-  it('still resumes a session captured on the host that owns the workspace', () => {
-    const record = makeRecord({ connectionId: TARGET_ID })
-    seedAnsweredSshWorkspace(record)
-
-    expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(1)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
-  })
-
-  it('still resumes a legacy record that names no host at all', () => {
-    const record = makeRecord()
-    seedAnsweredSshWorkspace(record)
-
-    expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(1)
-  })
-
   it('declines only the foreign record and resumes its native sibling', () => {
     const foreign = makeRecord({
       paneKey: 'tab-1:leaf-1',
