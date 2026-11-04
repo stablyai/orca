@@ -6639,6 +6639,11 @@
           "needsInput": "需要输入",
           "running": "运行中",
           "idle": "空闲"
+        },
+        "projectCollapse": {
+          "collapseAll": "折叠全部项目",
+          "expandAll": "展开全部项目",
+          "expandActive": "只展开活跃项目"
         }
       },
       "shared": {

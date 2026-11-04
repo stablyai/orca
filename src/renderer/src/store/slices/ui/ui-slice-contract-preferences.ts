@@ -90,6 +90,8 @@ export type UISlicePreferences = {
   setAgentsGroupBy: (v: ActivityGroupBy) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
+  /** Replace the collapsed sidebar groups in one write (collapse/expand all). */
+  setCollapsedGroups: (keys: Iterable<string>) => void
   worktreeCardProperties: WorktreeCardProperty[]
   _worktreeCardModeDefaulted: boolean
   setWorktreeCardMode: (mode: WorktreeCardMode) => void

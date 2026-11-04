@@ -105,6 +105,7 @@ function headerContext(): SectionHeaderRowContext {
     },
     projectActions: {
       getWorktreeVisibilityDefaults: () => undefined,
+      getSidebarRows: () => [],
       onOpenRepoSettings: vi.fn(),
       onOpenWorktreeVisibility: vi.fn(),
       onCreateGroupFromRepo: vi.fn(),

@@ -17,6 +17,7 @@ import {
   withRepoSectionDisplayLabels
 } from '../project-section-order'
 import { buildFolderWorkspaceRow } from './row-builders'
+import type { CollapsedProjectGroupSubtree } from './row-types'
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -101,10 +102,31 @@ export function appendProjectGroupSections(
     )
   }
 
+  // Why: a collapsed group emits no rows for its projects; collapse/expand-all still has to reach them.
+  const collectCollapsedSubtree = (
+    groupId: string,
+    groupKeys: readonly string[],
+    subtree: { projects: CollapsedProjectGroupSubtree['projects'][number][]; groupKeys: string[] }
+  ): void => {
+    for (const [key, group] of groupByProjectGroupId.get(groupId) ?? []) {
+      subtree.projects.push({ key, worktreeIds: group.items.map((w) => w.id), groupKeys })
+    }
+    for (const child of childGroupsByParentId.get(groupId) ?? []) {
+      const childKey = getProjectGroupHeaderKey(child.id)
+      subtree.groupKeys.push(childKey)
+      collectCollapsedSubtree(child.id, [...groupKeys, childKey], subtree)
+    }
+  }
+
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
     const key = getProjectGroupHeaderKey(projectGroup.id)
+    const isCollapsed = collapsedGroups.has(key)
+    const collapsedSubtree = isCollapsed ? { projects: [], groupKeys: [] } : undefined
+    if (collapsedSubtree) {
+      collectCollapsedSubtree(projectGroup.id, [key], collapsedSubtree)
+    }
     result.push({
       type: 'header',
       key,
@@ -112,9 +134,10 @@ export function appendProjectGroupSections(
       count: getProjectGroupSubtreeCount(projectGroup.id),
       icon: { kind: 'project' },
       projectGroup,
-      projectGroupDepth: depth
+      projectGroupDepth: depth,
+      ...(collapsedSubtree ? { collapsedSubtree } : {})
     })
-    if (!collapsedGroups.has(key)) {
+    if (!isCollapsed) {
       for (const pair of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {
         result.push(buildFolderWorkspaceRow(pair, depth + 1))
       }
