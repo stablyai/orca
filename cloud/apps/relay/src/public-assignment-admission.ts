@@ -20,6 +20,11 @@ export type AssignmentAdmissionRejection =
   | 'superseded'
   | 'reserved-unavailable'
 
+// The host re-asking inside its own interval or while its last ask is in flight: not lane overflow.
+export function isOwnRetryRejection(reason: AssignmentAdmissionRejection | undefined): boolean {
+  return reason === 'host-rate-limited' || reason === 'host-in-flight'
+}
+
 const MAX_TRACKED_HOSTS = 4_096
 
 type LeaseKind = 'placement' | 'reserved' | 'drain-return'
