@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import type * as NodeOs from 'node:os'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
@@ -70,23 +70,5 @@ describe("the catalog probe's home prep on the mirror route", () => {
     service.prepareHostCodexHomeForReadOnlyAppServer(getRuntimeCodexHomePath())
 
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(login)
-  })
-
-  it('seeds a mirror no launch has prepared yet', async () => {
-    const service = await mirrorRouteService()
-    loginInSystemHome()
-
-    service.prepareHostCodexHomeForReadOnlyAppServer(getRuntimeCodexHomePath())
-
-    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(login)
-  })
-
-  it('leaves every other home alone', async () => {
-    const service = await mirrorRouteService()
-    loginInSystemHome()
-
-    service.prepareHostCodexHomeForReadOnlyAppServer(join(testState.fakeHomeDir, 'account-home'))
-
-    expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
   })
 })

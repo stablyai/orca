@@ -1,5 +1,3 @@
-// Build a fresh epoch: import-scoped legacy identities cannot safely share structured sequence space.
-
 import {
   adoptedTranscriptSourceObserver,
   validateAdoptedOpenCodeSource,
@@ -32,6 +30,15 @@ import {
   type JournalPayloadLimits
 } from './journal-payload-bounds'
 import type { AgentSessionJournal } from './journal-store'
+// Hydrating a journal from a bridge-era transcript.
+//
+// Ordinary messages reuse the existing per-agent transcript decoders; Pi also
+// projects its saved branch and summaries. The decoders return a render model
+// with no identity, so the import wraps them: the wrapper
+// reads an identity anchor off the SAME raw line, then delegates the content.
+//
+// Import replaces provider presentation at a context boundary. Canonical input stays in the
+// ordered log; later structured history replaces only this reconstructed presentation.
 
 export const LEGACY_IMPORT_BLOCK_LIMITS: JournalPayloadLimits = { inlineHeadBytes: 16 * 1024 }
 

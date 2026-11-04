@@ -4,7 +4,10 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
-import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
+import {
+  bindStructuredAgentSessionInputWork,
+  hostStructuredAgentSessionCurrentWork
+} from './structured-agent-session-host-current-work'
 import { StructuredAgentSessionQueuedMessageDrain } from './structured-agent-session-queued-messages'
 import {
   deleteQueuedStructuredAgentMessage,
@@ -83,6 +86,7 @@ export function wireStructuredAgentSessionQueuedMessages(
     drain,
     refresh,
     onOpened: (sessionId: string) => {
+      bindStructuredAgentSessionInputWork(context().deps.store, sessionId, sessions.get(sessionId))
       const journal = sessions.get(sessionId)?.journal
       if (journal) {
         // Installed before anything reads the next card, so every reader applies the one mail rule.

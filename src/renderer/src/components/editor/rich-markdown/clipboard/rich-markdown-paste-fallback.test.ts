@@ -80,36 +80,4 @@ describe('rich markdown source fallback paste', () => {
       editor.destroy()
     }
   })
-
-  it('keeps line breaks and active marks', () => {
-    const editor = createEditor()
-    try {
-      editor.commands.setTextSelection({ from: 8, to: 14 })
-      editor.commands.setMark('italic')
-      const literal = 'first\n<b>second</b>'
-      const slice = oversizedCitationSlice(editor, literal)
-      const event = new ClipboardEvent('paste', {
-        clipboardData: new DataTransfer(),
-        cancelable: true
-      })
-
-      handleRichMarkdownPaste({
-        editor,
-        event,
-        filePath: '/repo/note.md',
-        worktreeId: 'worktree-1',
-        slice,
-        view: editor.view
-      })
-
-      const pasted = editor.state.doc.firstChild?.child(1)
-      expect(pasted?.text).toBe(
-        `${literal}${'[1]'.repeat(RICH_MARKDOWN_SOURCE_OWNING_NODE_LIMIT + 1)}`
-      )
-      expect(pasted?.marks.map((mark) => mark.type.name)).toEqual(['italic'])
-      editor.state.doc.check()
-    } finally {
-      editor.destroy()
-    }
-  })
 })

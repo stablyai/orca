@@ -5,10 +5,10 @@ import { i18n } from '@/i18n/i18n'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { getWorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import { gitlabMrCheckCases } from '../../../../../../shared/source-control/checks/gitlab/gitlab-mr-checks.test-fixture'
-import { buildParentPrChecksProjection } from '../../../right-sidebar/parent-pr-checks-rows'
-import { FolderWorkspacePrChecksRow } from '../../../right-sidebar/FolderWorkspacePrChecksRow'
-import { presentGitLabMRMergeState } from '../../../right-sidebar/gitlab-mr-merge-state'
-import { getActiveChecksStatus } from '../../../right-sidebar/active-checks-status'
+import { buildParentPrChecksProjection } from '../../../right-sidebar/hosted-review/folder-checks/parent-pr-checks-rows'
+import { FolderWorkspacePrChecksRow } from '../../../right-sidebar/hosted-review/folder-checks/FolderWorkspacePrChecksRow'
+import { presentGitLabMRMergeState } from '../../../right-sidebar/hosted-review/provider-actions/gitlab-mr-merge-state'
+import { getActiveChecksStatus } from '../../../right-sidebar/checks-panel/active-checks-status'
 import {
   ReviewChecksBadge,
   ReviewChecksIndicator

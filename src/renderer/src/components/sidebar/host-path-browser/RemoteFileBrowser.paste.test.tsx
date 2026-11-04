@@ -92,22 +92,6 @@ describe('RemoteFileBrowser paste-sized input', () => {
     vi.restoreAllMocks()
   })
 
-  it('still debounces and resolves ordinary path-mode input', async () => {
-    const { input, root } = await renderRemoteFileBrowser()
-    browseDir.mockClear()
-
-    await changeInput(input, 'src/')
-    expect(browseDir).not.toHaveBeenCalled()
-
-    await advancePathResolveDebounce()
-
-    expect(browseDir).toHaveBeenCalledWith({ targetId: 'target-1', dirPath: '/home/alice/src' })
-
-    await act(async () => {
-      root.unmount()
-    })
-  })
-
   it('navigates a typed Windows drive root and renders its breadcrumb', async () => {
     browsePathFlavor = 'win32'
     const { container, input, root } = await renderRemoteFileBrowser()

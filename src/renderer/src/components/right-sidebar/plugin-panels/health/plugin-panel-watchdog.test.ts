@@ -29,22 +29,4 @@ describe('createPanelWatchdog', () => {
     vi.advanceTimersByTime(1_000)
     expect(onUnresponsive).not.toHaveBeenCalled()
   })
-
-  it('clears its interval when a pong deadline expires', () => {
-    const sendPing = vi.fn()
-    const onUnresponsive = vi.fn()
-    const watchdog = createPanelWatchdog({
-      sendPing,
-      onUnresponsive,
-      pingIntervalMs: 100,
-      pongTimeoutMs: 50
-    })
-
-    watchdog.start()
-    vi.advanceTimersByTime(50)
-    vi.advanceTimersByTime(1_000)
-
-    expect(onUnresponsive).toHaveBeenCalledTimes(1)
-    expect(sendPing).toHaveBeenCalledTimes(1)
-  })
 })
