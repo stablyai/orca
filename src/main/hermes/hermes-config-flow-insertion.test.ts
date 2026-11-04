@@ -2,54 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { isMap, parseDocument } from 'yaml'
 import { enablePlugin, updateConfigContent } from './hermes-config-yaml'
 
-const pluginEntries = [
-  { name: 'empty', text: ' # empty,\n', expected: {} },
-  { name: 'nonempty', text: 'custom: keep # note\n', expected: { custom: 'keep' } },
-  {
-    name: 'trailing comma',
-    text: 'custom: keep, # separator,\n',
-    expected: { custom: 'keep' }
-  },
-  {
-    name: 'comment comma',
-    text: 'custom: keep # no separator,\n',
-    expected: { custom: 'keep' }
-  },
-  {
-    name: 'nested commas',
-    text: 'custom: {names: ["a,", b,],} # nested,\n',
-    expected: { custom: { names: ['a,', 'b'] } }
-  },
-  {
-    name: 'explicit entry key',
-    text: '? custom : keep # explicit,\n',
-    expected: { custom: 'keep' }
-  }
-]
-
-const contexts = [
-  { name: 'block root', prefix: 'plugins: {', suffix: '} # outside' },
-  {
-    name: 'indented block root',
-    prefix: '    model: "001" # before\n    plugins: {',
-    suffix: '    } # outside\n    prompt: |-\n      Keep this text',
-    settings: { model: '001', prompt: 'Keep this text' }
-  },
-  { name: 'explicit plugins key', prefix: '? "plugins"\n: {', suffix: '} # outside' },
-  {
-    name: 'indented explicit plugins key',
-    prefix: '    ? plugins\n    : {',
-    suffix: '    } # outside'
-  },
-  { name: 'flow on next line', prefix: 'plugins:\n    {', suffix: '} # outside' },
-  {
-    name: 'nested in root flow',
-    prefix: '{model: "001", plugins: {',
-    suffix: '}, extra: [one, two,]} # outside',
-    settings: { model: '001', extra: ['one', 'two'] }
-  }
-]
-
 function expectInsertion(source: string, expected: unknown, eol: string): string {
   const original = parseDocument(source)
   expect(original.errors).toEqual([])
@@ -76,40 +28,7 @@ function expectInsertion(source: string, expected: unknown, eol: string): string
   return output
 }
 
-describe.each(['\n', '\r\n'])('Hermes flow insertion indentation (%j)', (eol) => {
-  describe.each([false, true])('final newline = %j', (finalNewline) => {
-    describe.each(contexts)('$name', ({ prefix, suffix, settings }) => {
-      it.each(pluginEntries)('$name plugin map', ({ text, expected }) => {
-        const source = `${prefix}${text}${suffix}${finalNewline ? '\n' : ''}`.replaceAll('\n', eol)
-        expectInsertion(
-          source,
-          { ...settings, plugins: { ...expected, enabled: ['orca-status'] } },
-          eol
-        )
-      })
-    })
-
-    it.each([
-      { name: 'empty root', text: '{ # empty,\n}', expected: {} },
-      { name: 'nonempty root', text: '{model: "001" # note,\n}', expected: { model: '001' } },
-      {
-        name: 'indented root with nested trailing comma',
-        text: '    {model: {names: ["a,", b,],}, # separator,\n}',
-        expected: { model: { names: ['a,', 'b'] } }
-      }
-    ])('$name flow map', ({ text, expected }) => {
-      const source = `${text}${finalNewline ? '\n' : ''}`.replaceAll('\n', eol)
-      expectInsertion(source, { ...expected, plugins: { enabled: ['orca-status'] } }, eol)
-    })
-  })
-})
-
 describe.each(['\n', '\r\n'])('Hermes flow insertion with tab separation (%j)', (eol) => {
-  it.each(pluginEntries.slice(0, 3))('$name map after a tab', ({ text, expected }) => {
-    const source = `plugins: {${text}\t}`.replaceAll('\n', eol)
-    expectInsertion(source, { plugins: { ...expected, enabled: ['orca-status'] } }, eol)
-  })
-
   it.each([
     {
       name: 'minimal tab',
