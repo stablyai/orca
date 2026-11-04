@@ -99,24 +99,24 @@ export function applyAutomationLaunchSetupPatch<
   }
   if (patch?.sources) {
     const sources = patch.sources
-    if (sources.arguments) {
-      setup = patchAutomationArguments(agent, setup, sources.arguments)
-    }
+    setup = retireAutomationChoiceSources(agent, setup, sources.retiredChoices ?? [])
     if (sources.legacyArguments !== undefined) {
       setup = editAutomationLegacyArguments(agent, setup, sources.legacyArguments)
     }
-    if (sources.extraAgentArgs !== undefined) {
-      setup = {
-        ...setup,
-        extraAgentArgs: hasExtraAgentArgs(sources.extraAgentArgs)
-          ? sources.extraAgentArgs
-          : undefined
-      }
-    }
-    setup = retireAutomationChoiceSources(agent, setup, sources.retiredChoices ?? [])
   }
   if (patch?.choices) {
     setup = patchAutomationChoices(agent, setup, patch.choices)
+  }
+  if (patch?.sources?.arguments) {
+    setup = patchAutomationArguments(agent, setup, patch.sources.arguments)
+  }
+  if (patch?.sources?.extraAgentArgs !== undefined) {
+    setup = {
+      ...setup,
+      extraAgentArgs: hasExtraAgentArgs(patch.sources.extraAgentArgs)
+        ? patch.sources.extraAgentArgs
+        : undefined
+    }
   }
   return {
     ...rest,

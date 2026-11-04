@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ComponentProps } from 'react'
 import { useAppStore } from '@/store'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { useAgentPickerDraftScope } from '@/components/agent/AgentLaunchSetupButton'
@@ -13,19 +13,15 @@ import {
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
-import {
-  automationLaunchChoices,
-  automationLegacyArguments
-} from '../../../../shared/automation-launch-setup-source'
+import { automationLegacyArguments } from '../../../../shared/automation-launch-setup-source'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { draftExtraAgentArgsNeedFreshSession } from './automation-draft-model'
-import { mergeExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import type { NewTabAgentMenuModel } from '@/components/tab-bar/new-tab-agent-menu-model'
-import { automationChatSupport } from './automation-launch-surface'
+import { useAutomationAgentPickerEntries } from './use-automation-agent-picker-entries'
 import { AutomationExtraAgentArgsField } from './AutomationExtraAgentArgsField'
 import { AutomationSurfaceField } from './AutomationSurfaceField'
 import type { AutomationDraft } from './AutomationEditorDialog'
@@ -139,45 +135,22 @@ export function AutomationAgentLaunchPicker({
     modern && menuOpen,
     catalogAgent ?? draft.agentId
   )
-  const entries = observed.map((entry): AgentPickerEntry => {
-    const chat =
-      automationChatSupport(state, { ...draft, agentId: entry.agent }, workspace) === true
-    const merged =
-      surface === 'terminal' && draft.extraAgentArgs && entry.agent === draft.agentId
-        ? mergeExtraAgentArgs({
-            agent: entry.agent,
-            defaultArgs: entry.arguments,
-            extraAgentArgs: draft.extraAgentArgs,
-            shell: 'posix'
-          })
-        : undefined
-    return {
-      ...entry,
-      label: visibleAgents.find((agent) => agent.id === entry.agent)?.label ?? entry.label,
-      surfaces: chat ? ['chat', 'terminal'] : ['terminal'],
-      defaultSurface: entry.agent === draft.agentId ? surface : entry.defaultSurface,
-      ...(merged?.ok ? { arguments: merged.agentArgs } : {})
-    }
-  })
+  const { entries, draftForEntry } = useAutomationAgentPickerEntries(
+    observed,
+    state,
+    draft,
+    workspace,
+    visibleAgents,
+    surface
+  )
   const scope = useAgentPickerDraftScope(JSON.stringify([workspace, authority, draft.agentId]))
-  const draftForEntry = (entry: AgentPickerEntry): AgentPickerDraft => {
-    const own = entry.agent === draft.agentId ? draft : undefined
-    const preferences = own?.launchPreferences
-    return {
-      agent: entry.agent,
-      surface: own ? surface : entry.defaultSurface,
-      choices: own ? automationLaunchChoices(own) : {},
-      ...(own?.agentArgs !== undefined
-        ? { arguments: own.agentArgs, argumentsOwner: entry.ownerKey }
-        : {}),
-      delegated: [
-        ...(preferences?.model === null ? ['model'] : []),
-        ...Object.entries(preferences?.options ?? {}).flatMap(([key, value]) =>
-          value === null ? [key] : []
-        )
-      ]
-    }
-  }
+  const onPick = useCallback<ComponentProps<typeof AgentLaunchPicker>['onPick']>(
+    (agentId, accepted, _entry, pickedSurface) =>
+      onDraftChange((current) =>
+        pickAutomationLaunch(current, agentId, accepted, pickedSurface, modern, surface)
+      ),
+    [onDraftChange, modern, surface]
+  )
   return (
     <>
       <AgentLaunchPicker
@@ -192,11 +165,7 @@ export function AutomationAgentLaunchPicker({
         draftForEntry={draftForEntry}
         onOpenChange={setMenuOpen}
         onCatalogOpen={setCatalogAgent}
-        onPick={(agentId, accepted, _entry, pickedSurface) =>
-          onDraftChange((current) =>
-            pickAutomationLaunch(current, agentId, accepted, pickedSurface, modern, surface)
-          )
-        }
+        onPick={onPick}
       />
       {!modern ? (
         <AutomationSurfaceField

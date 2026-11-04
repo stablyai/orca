@@ -51,7 +51,7 @@ vi.mock('../agent/use-agent-launch-picker-inventory', () => ({
       ownerKey: `automation-${row.agent}`,
       surfaces: ['terminal'],
       defaultSurface: 'terminal',
-      terminal: { model: 'gpt-5.4' },
+      terminal: { model: 'gpt-5.4', permissionMode: 'ask' },
       structured: {},
       arguments: '--base',
       catalog: {
@@ -316,6 +316,86 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     )
     expect(saved.launchPreferences?.model).toBe('sonnet')
     expect(saved.extraAgentArgs).toBe('--add-dir docs --add-dir fixtures')
+  })
+
+  it.each([true, false])(
+    'keeps supplemental source order through Configure (choice first: %s)',
+    (choiceFirst) => {
+      const changed = vi.fn()
+      const initial: AutomationDraft = {
+        ...DRAFT,
+        agentId: 'claude',
+        extraAgentArgs: '--add-dir docs',
+        launchPreferences: { model: 'sonnet' }
+      }
+      renderSidebar(changed, initial)
+      const choose = () => {
+        openPicker()
+        fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+        fireEvent.click(screen.getByRole('option', { name: 'Model B' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
+      }
+      const type = () =>
+        fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
+          target: { value: '--model sonnet --add-dir fixtures' }
+        })
+      if (choiceFirst) {
+        choose()
+        type()
+      } else {
+        type()
+        choose()
+      }
+      const expected = choiceFirst ? '--model sonnet --add-dir fixtures' : '--add-dir fixtures'
+      expect(screen.getByLabelText('Extra agent arguments')).toHaveProperty('value', expected)
+      const next = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
+      const saved = applyAutomationLaunchSetupPatch(
+        { agentId: 'claude', ...automationDraftLaunchSetup(next, 'terminal', null) },
+        initial
+      )
+      expect(saved.extraAgentArgs).toBe(expected)
+      expect(saved.launchPreferences).toEqual(next.launchPreferences)
+      expect(saved.launchPreferences?.model).toBe('gpt-5.5')
+    }
+  )
+
+  it('keeps a re-entered legacy model through a permission-only Configure acceptance', () => {
+    const capabilities = vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+    const changed = vi.fn()
+    const initial: AutomationDraft = {
+      ...DRAFT,
+      agentId: 'claude',
+      extraAgentArgs: '--add-dir docs',
+      launchPreferences: { model: 'sonnet' }
+    }
+    const form = renderSidebar(changed, initial, {
+      kind: 'runtime',
+      environmentId: 'old',
+      pairingRevision: 1
+    })
+    for (const value of ['--add-dir docs', '--model opus --add-dir docs']) {
+      fireEvent.change(screen.getByLabelText('Extra agent arguments'), { target: { value } })
+    }
+    capabilities.mockReturnValue(AUTOMATION_RUNTIME_CAPABILITIES)
+    form.refresh()
+    openPicker()
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Claude permissions' }), {
+      key: 'ArrowDown'
+    })
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Full access/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
+    expect(screen.getByLabelText('Extra agent arguments')).toHaveProperty(
+      'value',
+      '--model opus --add-dir docs'
+    )
+    const next = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
+    const patch = automationDraftLaunchSetup(next, 'terminal', null)
+    expect(patch.launchSetupPatch?.sources?.arguments).toBeUndefined()
+    const saved = applyAutomationLaunchSetupPatch({ agentId: 'claude', ...patch }, initial)
+    expect(saved.extraAgentArgs).toBe('--model opus --add-dir docs')
+    expect(saved.launchPreferences).toEqual({ permissionMode: 'full-access' })
+    expect(saved.agentArgs).toBeUndefined()
   })
 
   it('keeps supplementary text through the native same-agent row and Save', () => {

@@ -66,7 +66,7 @@ function writeChoice(patch: AgentChoicePatch, key: string, value: string | null 
   }
 }
 
-/** Retirement removes dedicated ownership while retaining the authored raw source. */
+/** Retirement cuts superseded source carriers; authored replacements are installed afterward. */
 export function retireAutomationChoiceSources(
   agent: TuiAgent,
   setup: AutomationLaunchSetup,
@@ -79,7 +79,8 @@ export function retireAutomationChoiceSources(
   for (const key of keys) {
     writeChoice(patch, key, key === 'permissionMode' ? 'default' : null)
   }
-  const preferences = patchAutomationChoices(agent, setup, patch).launchPreferences!
+  const retired = patchAutomationChoices(agent, setup, patch)
+  const preferences = retired.launchPreferences!
   const next: AutomationLaunchPreferences = { ...preferences, options: { ...preferences.options } }
   for (const key of keys) {
     if (key === 'model') {
@@ -93,7 +94,7 @@ export function retireAutomationChoiceSources(
   if (!Object.keys(next.options ?? {}).length) {
     delete next.options
   }
-  return { ...setup, launchPreferences: next }
+  return { ...retired, launchPreferences: next }
 }
 
 export function foldAutomationSourceEdit(
@@ -130,7 +131,10 @@ export function foldAutomationSourceEdit(
           : `options.${occurrence.key}`
       )
     }
-    setup = retireAutomationChoiceSources(agent, setup, [...touched])
+    setup = {
+      ...setup,
+      launchPreferences: retireAutomationChoiceSources(agent, setup, [...touched]).launchPreferences
+    }
   } else if (edit.kind === 'choices') {
     setup = patchAutomationChoices(agent, current, edit.value)
     if (edit.value.model !== undefined) {
@@ -152,9 +156,16 @@ export function foldAutomationSourceEdit(
       !hasExtraAgentArgs(edit.value) ||
       parseExtraAgentArgs({ agent, extraAgentArgs: edit.value }).ok
     ) {
+      const priorRaw = automationArgumentChoices(agent, current.agentArgs ?? '').recognized
       setup = patchAutomationLegacyArguments(agent, current, edit.value)
+      const nextRaw = automationArgumentChoices(agent, setup.agentArgs ?? '').recognized
+      for (const { key } of priorRaw) {
+        if (['model', 'effort'].includes(key) && !nextRaw.some((entry) => entry.key === key)) {
+          touched.add(key === 'model' ? key : `options.${key}`)
+        }
+      }
+      sources.extraAgentArgs = setup.extraAgentArgs ?? ''
       if (sources.arguments) {
-        sources.extraAgentArgs = setup.extraAgentArgs ?? ''
         delete sources.legacyArguments
       }
     }

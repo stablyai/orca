@@ -1,7 +1,15 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { shallow } from 'zustand/shallow'
 import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode
+} from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import AgentSettingsDialog, { restoreAgentSettingsInvoker } from './AgentSettingsDialog'
@@ -99,6 +107,27 @@ export const AgentLaunchPicker = memo(
       selected ?? agent ?? undefined
     )
     const entries = suppliedEntries ?? observedEntries
+    const ownsCatalog = suppliedEntries !== undefined
+    const selectAgent = useCallback(
+      (next: AgentPickerEntry['agent']) => {
+        setSelected(next)
+        if (ownsCatalog) {
+          onCatalogOpen?.(next)
+        }
+      },
+      [ownsCatalog, onCatalogOpen]
+    )
+    const runLaunch = useCallback<ComponentProps<typeof AgentLaunchPickerMenu>['runLaunch']>(
+      (row, draft, entry, surface) =>
+        onPick(
+          row.agent,
+          draft,
+          entry,
+          // Re-selecting an agent preserves the form's surface; a new chat row chooses Chat.
+          surface ?? (!draft && row.agent !== agent && row.kind === 'chat' ? 'chat' : undefined)
+        ),
+      [onPick, agent]
+    )
     const catalogAgent = open && suppliedEntries ? (agent ?? undefined) : undefined
     useEffect(() => {
       if (catalogAgent) {
@@ -176,22 +205,8 @@ export const AgentLaunchPicker = memo(
                 mode="select"
                 disabled={disabled}
                 setupDisabled={setupDisabled}
-                onSelectAgent={(agent) => {
-                  setSelected(agent)
-                  if (suppliedEntries) {
-                    onCatalogOpen?.(agent)
-                  }
-                }}
-                runLaunch={(row, draft, entry, surface) =>
-                  onPick(
-                    row.agent,
-                    draft,
-                    entry,
-                    // Re-selecting an agent preserves the form's surface; a new chat row chooses Chat.
-                    surface ??
-                      (!draft && row.agent !== agent && row.kind === 'chat' ? 'chat' : undefined)
-                  )
-                }
+                onSelectAgent={selectAgent}
+                runLaunch={runLaunch}
               />
             ) : (
               <DropdownMenuItem disabled>
