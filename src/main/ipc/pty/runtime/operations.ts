@@ -137,6 +137,7 @@ export async function attachPtyFromRuntimeController(
   }
   try {
     const sequenceBeforeProviderAttach = deps.runtime?.getPtyOutputSequence?.(ptyId) ?? 0
+    const sizeBeforeAttach = ptySizes.get(ptyId)
     const attachResult = await provider.attach(ptyId)
     if (attachResult?.providerSequence) {
       deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
@@ -146,7 +147,7 @@ export async function attachPtyFromRuntimeController(
       )
     }
     if (attachResult) {
-      seedAttachedRuntimeTerminal(deps.runtime, attachResult)
+      seedAttachedRuntimeTerminal(deps.runtime, attachResult, sizeBeforeAttach)
     }
     deps.syncPtyBackgroundedDelivery?.(ptyId, 'main-attach')
     return true
