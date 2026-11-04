@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
 import { SHELL_PREFIXES } from './pr-shell-contract-prefixes.mjs'
-import { XTERM_PREFIXES } from './pr-xterm-patch-prefixes.mjs'
+import { XTERM_PREFIXES } from './workflow/source-routing/pr-xterm-patch-prefixes.mjs'
 import {
   isCloudTestRunnerInput,
   isWindowsProcessProbePath,
@@ -60,6 +60,7 @@ const GLOBAL_FORCE_PREFIXES = [
   '.github/actions/restore-pnpm-verification/',
   '.github/actions/prepare-native-runtime/',
   'config/scripts/pr-code-change-scope',
+  'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs',
   'config/scripts/pr-package-test-paths'
 ]
 

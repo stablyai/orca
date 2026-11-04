@@ -23,8 +23,11 @@ describe('per-job path classification', () => {
     expect([classified.should_run, classified.mobile_web_app]).toEqual([false, true])
   })
 
-  it('runs workflow-self-change and lockfile diffs as force-all', () => {
-    const result = classifyPrJobs(['.github/workflows/pr.yml'])
+  it.each([
+    '.github/workflows/pr.yml',
+    'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs'
+  ])('runs workflow and routing owner diffs as force-all: %s', (file) => {
+    const result = classifyPrJobs([file])
     expect(result.should_run).toBe(true)
     for (const job of PR_CHECK_JOBS) {
       expect(result[job], job).toBe(true)
