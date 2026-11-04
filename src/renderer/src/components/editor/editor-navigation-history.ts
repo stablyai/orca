@@ -1,17 +1,14 @@
-import type { IPosition } from 'monaco-editor'
-import type { OpenFile } from '@/store/slices/editor'
+import { LINE_JUMP_THRESHOLD, MAX_HISTORY_ENTRIES, DIRECTION } from './editor-navigation.consts'
+import type {
+  Location,
+  HistoryState,
+  Direction,
+  CanVisitLocation,
+  History,
+  HistoryStateRef
+} from './editor-navigation.types'
 
-export type EditorNavigationLocation = {
-  file: OpenFile
-  ownerKey: string
-  tabId?: string
-  viewStateId?: string
-  position: IPosition
-  scrollTop: number
-  scrollLeft: number
-}
-
-function sameEditor(a: EditorNavigationLocation, b: EditorNavigationLocation): boolean {
+function sameEditor(a: Location, b: Location): boolean {
   return (
     a.file.id === b.file.id &&
     a.file.worktreeId === b.file.worktreeId &&
@@ -21,55 +18,76 @@ function sameEditor(a: EditorNavigationLocation, b: EditorNavigationLocation): b
   )
 }
 
-export class EditorNavigationHistory {
-  private entries: EditorNavigationLocation[] = []
-  private index = -1
+function coalescesLocation(current: Location, location: Location, explicitJump: boolean): boolean {
+  return (
+    sameEditor(current, location) &&
+    ((current.position.lineNumber === location.position.lineNumber &&
+      current.position.column === location.position.column) ||
+      (!explicitJump &&
+        Math.abs(current.position.lineNumber - location.position.lineNumber) < LINE_JUMP_THRESHOLD))
+  )
+}
 
-  record(location: EditorNavigationLocation, explicitJump = false): void {
-    const current = this.entries[this.index]
-    if (current && sameEditor(current, location)) {
-      const samePosition =
-        current.position.lineNumber === location.position.lineNumber &&
-        current.position.column === location.position.column
-      if (
-        samePosition ||
-        (!explicitJump && Math.abs(current.position.lineNumber - location.position.lineNumber) < 10)
-      ) {
-        this.entries[this.index] = location
-        return
-      }
-    }
-    this.entries.splice(this.index + 1)
-    this.entries.push(location)
-    if (this.entries.length > 100) {
-      this.entries.shift()
-    }
-    this.index = this.entries.length - 1
+function replaceCurrent(state: HistoryState, location: Location): HistoryState {
+  return {
+    ...state,
+    entries: state.entries.map((entry, index) => (index === state.index ? location : entry))
+  }
+}
+
+function recordLocation(
+  state: HistoryState,
+  location: Location,
+  explicitJump: boolean
+): HistoryState {
+  const current = state.entries[state.index]
+  if (current && coalescesLocation(current, location, explicitJump)) {
+    return replaceCurrent(state, location)
   }
 
-  update(location: EditorNavigationLocation): void {
-    const current = this.entries[this.index]
-    if (current && sameEditor(current, location)) {
-      this.entries[this.index] = location
-    }
-  }
+  const entries = [...state.entries.slice(0, state.index + 1), location].slice(-MAX_HISTORY_ENTRIES)
 
-  step(
-    direction: 'back' | 'forward',
-    canVisit: (location: EditorNavigationLocation) => boolean = () => true
-  ): EditorNavigationLocation | null {
-    const offset = direction === 'back' ? -1 : 1
-    for (
-      let index = this.index + offset;
-      index >= 0 && index < this.entries.length;
-      index += offset
-    ) {
-      const location = this.entries[index]
-      if (canVisit(location)) {
-        this.index = index
-        return location
+  return { entries, index: entries.length - 1 }
+}
+
+function updateLocation(state: HistoryState, location: Location): HistoryState {
+  const current = state.entries[state.index]
+
+  return current && sameEditor(current, location) ? replaceCurrent(state, location) : state
+}
+
+function nextLocationIndex(
+  state: HistoryState,
+  direction: Direction,
+  canVisit: CanVisitLocation
+): number {
+  return direction === DIRECTION.BACK
+    ? state.entries.findLastIndex((location, index) => index < state.index && canVisit(location))
+    : state.entries.findIndex((location, index) => index > state.index && canVisit(location))
+}
+
+export function createEditorNavigationHistory(): History {
+  const state: HistoryStateRef = { current: { entries: [], index: -1 } }
+
+  return {
+    record: (location: Location, explicitJump = false): void => {
+      state.current = recordLocation(state.current, location, explicitJump)
+    },
+    update: (location: Location): void => {
+      state.current = updateLocation(state.current, location)
+    },
+    replaceCurrent: (location: Location): void => {
+      state.current = replaceCurrent(state.current, location)
+    },
+    step: (direction: Direction, canVisit: CanVisitLocation = () => true): Location | null => {
+      const index = nextLocationIndex(state.current, direction, canVisit)
+      if (index < 0) {
+        return null
       }
+
+      state.current = { ...state.current, index }
+
+      return state.current.entries[index]
     }
-    return null
   }
 }

@@ -6,7 +6,7 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { getActiveWorktreeContext } from './helpers/markdown-editor-fixture'
 
 async function goToLine(page: Page, line: string): Promise<void> {
-  await page.getByRole('textbox', { name: 'Editor content', exact: true }).focus()
+  await expect(page.getByRole('textbox', { name: 'Editor content', exact: true })).toBeFocused()
   await page.keyboard.press('Control+g')
   const input = page.locator('.quick-input-widget input:visible')
   await input.fill(`:${line}`)
