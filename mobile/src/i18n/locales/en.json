@@ -1269,7 +1269,10 @@
       "directionPad": "DIRECTION PAD",
       "showDirectionPad": "Show D-pad",
       "showDirectionPadDescription": "Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.",
-      "showShortcut": "Show {{label}} shortcut"
+      "showShortcut": "Show {{label}} shortcut",
+      "gestures": "GESTURES",
+      "quadTapAltM": "4-tap for Alt+M",
+      "quadTapAltMDescription": "Tap the terminal four times to send Alt+M (mode switch in CLI agents) without opening the keyboard."
     },
     "voiceModelList": {
       "modelSize": "{{size}} MB",

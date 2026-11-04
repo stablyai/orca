@@ -182,6 +182,32 @@ export function TerminalShortcutSettings({
 
   return (
     <>
+      <SettingsSection title={t('components.terminalShortcutSettings.gestures', 'GESTURES')}>
+        <ListRow
+          key="quadTapAltM"
+          title={t('components.terminalShortcutSettings.quadTapAltM', '4-tap for Alt+M')}
+          subtitle={t(
+            'components.terminalShortcutSettings.quadTapAltMDescription',
+            'Tap the terminal four times to send Alt+M (mode switch in CLI agents) without opening the keyboard.'
+          )}
+          accessory={
+            <MobileSwitch
+              accessibilityLabel={t(
+                'components.terminalShortcutSettings.quadTapAltM',
+                '4-tap for Alt+M'
+              )}
+              value={shortcutLayout.quadTapAltMEnabled !== false}
+              onValueChange={(enabled) =>
+                setShortcutLayout((current) => {
+                  const next = { ...current, quadTapAltMEnabled: enabled }
+                  persistLayout(next)
+                  return next
+                })
+              }
+            />
+          }
+        />
+      </SettingsSection>
       {hasPad ? (
         <SettingsSection
           title={t('components.terminalShortcutSettings.directionPad', 'DIRECTION PAD')}

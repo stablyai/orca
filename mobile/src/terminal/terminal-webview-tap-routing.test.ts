@@ -372,4 +372,90 @@ describe('terminal WebView tap routing', () => {
 
     expect(posted.slice(beforeStoppingTouch).find((m) => m.type === 'terminal-tap')).toBeUndefined()
   })
+
+  it('posts terminal-quad-tap and selection haptic on four fast taps without a fourth click', async () => {
+    let now = 2_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const { posted } = boot('interactive prompt', undefined, 'drag')
+    await settle()
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'write', data: '\u001b[?1006l' })
+      })
+    )
+
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+    now += 150
+    fireTouch('touchstart', [{ x: 26, y: tapY + 4 }])
+    fireTouch('touchend', [])
+    now += 150
+    fireTouch('touchstart', [{ x: 22, y: tapY + 2 }])
+    fireTouch('touchend', [])
+    now += 150
+    fireTouch('touchstart', [{ x: 24, y: tapY + 1 }])
+    fireTouch('touchend', [])
+
+    expect(posted.filter((m) => m.type === 'terminal-input' && m.click === true)).toHaveLength(3)
+    expect(posted.filter((m) => m.type === 'terminal-tap')).toHaveLength(3)
+    expect(posted.filter((m) => m.type === 'terminal-quad-tap')).toHaveLength(1)
+    expect(posted).toContainEqual({ type: 'haptic', kind: 'selection' })
+
+    // A fifth tap starts a fresh streak rather than firing another quad-tap.
+    now += 120
+    fireTouch('touchstart', [{ x: 22, y: tapY + 2 }])
+    fireTouch('touchend', [])
+    expect(posted.filter((m) => m.type === 'terminal-quad-tap')).toHaveLength(1)
+    expect(posted.filter((m) => m.type === 'terminal-tap')).toHaveLength(4)
+  })
+
+  it('does not post terminal-quad-tap when taps are too slow, too far apart, or disabled', async () => {
+    let now = 5_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const { posted } = boot('plain prompt')
+    await settle()
+
+    // Too slow (> 400ms gap before 4th tap)
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+    now += 150
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+    now += 150
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+    now += 450
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+    expect(posted.find((m) => m.type === 'terminal-quad-tap')).toBeUndefined()
+
+    // Too far apart (> 45px)
+    now += 1_000
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+    now += 120
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+    now += 120
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+    now += 120
+    fireTouch('touchstart', [{ x: 80, y: tapY }])
+    fireTouch('touchend', [])
+    expect(posted.find((m) => m.type === 'terminal-quad-tap')).toBeUndefined()
+
+    // Disabled via set-quad-tap-alt-m
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'set-quad-tap-alt-m', enabled: false })
+      })
+    )
+    now += 1_000
+    for (let i = 0; i < 4; i += 1) {
+      fireTouch('touchstart', [{ x: 20, y: tapY }])
+      fireTouch('touchend', [])
+      now += 100
+    }
+    expect(posted.find((m) => m.type === 'terminal-quad-tap')).toBeUndefined()
+  })
 })

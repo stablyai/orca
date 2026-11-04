@@ -70,7 +70,7 @@ export function armLongPress(scope: TerminalDocumentScope, touch: Touch) {
       scope.sel.activeHandle = 'end'
       scope.touchDispatch.mode = 'select-drag'
       scope.touchDispatch.touchId = scope.longPressOrigin.identifier
-      scope.tapCandidate = null
+      disqualifyTapGesture(scope)
     }
   }, LONG_PRESS_MS)
 }
@@ -82,6 +82,11 @@ export function touchSlopExceeded(scope: TerminalDocumentScope, t: Touch) {
   const dx = Math.abs(t.clientX - scope.longPressOrigin.x)
   const dy = Math.abs(t.clientY - scope.longPressOrigin.y)
   return dx + dy > LONG_PRESS_SLOP
+}
+
+export function disqualifyTapGesture(scope: TerminalDocumentScope) {
+  scope.tapCandidate = null
+  scope.tapStreak = null
 }
 
 // Suppress surface handlers while document dispatch owns a selection-handle drag.
@@ -118,6 +123,7 @@ function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {
     }
     scope.touchDispatch.mode = 'pinch'
     scope.touchDispatch.touchIds = [touches[0].identifier, touches[1].identifier]
+    scope.tapStreak = null
     clearLongPress(scope)
     return
   }
@@ -127,11 +133,13 @@ function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {
     scope.sel!.activeHandle = handleName
     scope.touchDispatch.mode = 'select-drag'
     scope.touchDispatch.touchId = t.identifier
+    scope.tapStreak = null
     e.preventDefault()
     return
   }
 
   if (inOverlay) {
+    scope.tapStreak = null
     return
   }
 
@@ -140,6 +148,7 @@ function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {
     cancelSelect(scope)
     scope.touchDispatch.mode = 'surface'
     scope.touchDispatch.touchId = t.identifier
+    scope.tapStreak = null
     return
   }
 
@@ -178,11 +187,11 @@ function onDocumentTouchMove(scope: TerminalDocumentScope, e: TouchEvent) {
         const dx = Math.abs(mt.clientX - scope.tapCandidate.x)
         const dy = Math.abs(mt.clientY - scope.tapCandidate.y)
         if (dx + dy > TAP_SLOP) {
-          scope.tapCandidate = null
+          disqualifyTapGesture(scope)
         }
       }
     } else if (touches.length !== 1) {
-      scope.tapCandidate = null
+      disqualifyTapGesture(scope)
     }
   }
 }
@@ -222,6 +231,8 @@ function onDocumentTouchEnd(scope: TerminalDocumentScope, e: TouchEvent) {
       !queuedNormalBufferScrollReachesRow(scope)
     ) {
       notifyTerminalSurfaceTap(scope, scope.tapCandidate.x, scope.tapCandidate.y, true)
+    } else if (touches.length === 0) {
+      scope.tapStreak = null
     }
     clearLongPress(scope)
     scope.tapCandidate = null
@@ -237,7 +248,7 @@ function onDocumentTouchCancel(scope: TerminalDocumentScope, e: TouchEvent) {
     return
   }
   clearLongPress(scope)
-  scope.tapCandidate = null
+  disqualifyTapGesture(scope)
   stopEdgeScroll(scope)
   if (scope.touchDispatch.mode === 'select-drag') {
     if (scope.sel) {
