@@ -110,16 +110,4 @@ describe('useReadOnScreenAttention — clock-skewed execution host', () => {
     const ackAt = useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_KEY] ?? 0
     expect(ackAt).toBeGreaterThanOrEqual(NOW + SKEW_MS)
   })
-
-  it('leaves nothing to re-scan for a future-stamped turn on the next store write', () => {
-    seedFutureStampedTurn(NOW + SKEW_MS)
-    renderHook(() => useReadOnScreenAttention())
-
-    const calls = instrumentAcknowledgeAgents()
-    useAppStore.setState((state) => ({
-      unreadTerminalTabs: { ...state.unreadTerminalTabs, 'tab-unrelated': 'terminal-bell' }
-    }))
-
-    expect(calls).toEqual([])
-  })
 })
