@@ -10,6 +10,8 @@ import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import { agentChildRowName } from '@/components/agent-child-row-text'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useNow } from '@/hooks/use-now'
 import {
   backgroundTasksHeaderText,
@@ -67,6 +69,17 @@ function kindIconTone(kind: AgentSessionBackgroundTask['kind'], dimmed: boolean)
   return dimmed ? `${tone}/40` : tone
 }
 
+/** A shell running another agent's CLI shows that agent, so a dispatched worker does not read as a plain command. */
+function BackgroundTaskRowIcon({ row }: { row: AgentChildRowModel }): React.JSX.Element {
+  if (row.kind === 'command' && (isTuiAgent(row.agentType) || row.agentType === 'dsb')) {
+    return <AgentIcon agent={row.agentType} size={14} className="shrink-0" />
+  }
+  const Icon = KIND_ICONS[row.kind]
+  return (
+    <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
+  )
+}
+
 function BackgroundTaskRow(props: {
   row: AgentChildRowModel
   now: number
@@ -77,14 +90,13 @@ function BackgroundTaskRow(props: {
 }): React.JSX.Element {
   const t = useTranslate()
   const { row, now } = props
-  const Icon = KIND_ICONS[row.kind]
   const meta = backgroundTaskRowMeta(row, now)
   const stopId = backgroundTaskRowStopId(row, props.supportsTaskStop)
   // Only an agent's activity streams into the conversation, filed under the provider's id.
   const shownId = row.kind === 'agent' && props.onShowAgent ? row.providerId : undefined
   const content = (
     <>
-      <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
+      <BackgroundTaskRowIcon row={row} />
       {/* Every attention state states its reason on the row; `unverifiable` is never dropped. */}
       <AgentChildRowContent
         row={row}

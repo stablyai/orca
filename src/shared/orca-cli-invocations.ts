@@ -37,7 +37,7 @@ export function runsOrcaOrchestrationWait(command: unknown): boolean {
 }
 
 /** Splits a command line at `&&`, `||`, `;`, `|` and newlines outside quotes. */
-function splitUnquotedSegments(commandLine: string): string[] {
+export function splitUnquotedSegments(commandLine: string): string[] {
   const segments: string[] = []
   let current = ''
   let quote: '"' | "'" | null = null
