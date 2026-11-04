@@ -17098,18 +17098,8 @@
                 "removeWorktree": "retirer le worktree",
                 "trashWorktree": "mettre le worktree à la corbeille",
                 "addQuickCommand": "ajouter une commande rapide",
-                "newQuickCommand": "nouvelle commande rapide",
-                "splitChatRight": "diviser le chat à droite",
-                "newChatRight": "nouveau chat à droite",
-                "chatPaneRight": "volet de discussion à droite",
-                "splitChatDown": "diviser la discussion",
-                "newChatBelow": "nouveau chat en bas",
-                "chatPaneBelow": "volet de discussion ci-dessous"
-              },
-              "splitChatRight": "Diviser le chat à droite",
-              "splitChatRightDescription": "Ouvrez un nouveau chat dans un volet divisé à droite.",
-              "splitChatDown": "Diviser la discussion",
-              "splitChatDownDescription": "Ouvrez un nouveau chat dans un volet divisé ci-dessous."
+                "newQuickCommand": "nouvelle commande rapide"
+              }
             }
           },
           "palette": {

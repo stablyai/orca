@@ -40,7 +40,10 @@ export function NativeChatPaneHeader({
   const actions = useStructuredChatPaneActions(tabId, worktreeId, groupId)
   const documentDark = useDocumentDarkTheme()
   const light = colorScheme ? colorScheme === 'light' : !documentDark
-  const split = translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right')
+  const split = translate(
+    'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
+    'Split Terminal Right'
+  )
   const splitShortcutCombos = useShortcutKeyComboDetails('terminal.splitRight')
   const handOffLabel = translate(
     'components.agentSessionContinuation.handOffToAnotherAgent',

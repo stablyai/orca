@@ -327,8 +327,8 @@ describe('a structured chat tab', () => {
     expect(markup).not.toContain('Resume in New CLI')
     expect(markup).toContain('Continue with Terminal Agent')
     for (const [label, command] of [
-      ['Split Chat Right', paneActions.onSplitRight],
-      ['Split Chat Down', paneActions.onSplitDown]
+      ['Split Terminal Right', paneActions.onSplitRight],
+      ['Split Terminal Down', paneActions.onSplitDown]
     ] as const) {
       const item = items.list.find((entry) => childrenText(entry.children).startsWith(label))
       expect(item).toBeDefined()
@@ -350,7 +350,7 @@ describe('a structured chat tab', () => {
       'Fork Agent Session…',
       'Copy Context',
       'Continue with Terminal Agent',
-      'Split Chat Right',
+      'Split Terminal Right',
       'Copy Orca Session ID',
       'Close Pane'
     ]
@@ -456,7 +456,7 @@ describe('a structured chat tab', () => {
 
   it.each([null, ''])('keeps the session-ID fallback without a known owner: %s', (owner) => {
     const markup = renderToStaticMarkup(<StructuredChatTab owner={owner} />)
-    expect(markup).not.toContain('Split Chat')
+    expect(markup).not.toContain('Split Terminal')
     expect(markup).toContain('Copy Orca Session ID')
   })
 

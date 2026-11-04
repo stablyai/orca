@@ -17647,18 +17647,8 @@
                 "removeWorktree": "убрать рабочее дерево",
                 "trashWorktree": "удалить рабочее дерево",
                 "addQuickCommand": "добавить быструю команду",
-                "newQuickCommand": "новая быстрая команда",
-                "splitChatRight": "разделить чат вправо",
-                "newChatRight": "новый чат справа",
-                "chatPaneRight": "панель чата справа",
-                "splitChatDown": "разделить чат вниз",
-                "newChatBelow": "новый чат снизу",
-                "chatPaneBelow": "панель чата снизу"
-              },
-              "splitChatRight": "Разделить чат вправо",
-              "splitChatRightDescription": "Открыть новый чат в отдельной панели справа.",
-              "splitChatDown": "Разделить чат вниз",
-              "splitChatDownDescription": "Открыть новый чат в отдельной панели снизу."
+                "newQuickCommand": "новая быстрая команда"
+              }
             }
           },
           "palette": {

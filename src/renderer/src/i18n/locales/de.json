@@ -17141,18 +17141,8 @@
                 "removeWorktree": "Worktree entfernen",
                 "trashWorktree": "Worktree in den Papierkorb verschieben",
                 "addQuickCommand": "Schnellbefehl hinzufügen",
-                "newQuickCommand": "Neuen Schnellbefehl erstellen",
-                "splitChatRight": "Chat nach rechts teilen",
-                "newChatRight": "Neuen Chat rechts öffnen",
-                "chatPaneRight": "Chat-Bereich rechts",
-                "splitChatDown": "Chat nach unten teilen",
-                "newChatBelow": "Neuen Chat darunter öffnen",
-                "chatPaneBelow": "Chat-Bereich darunter"
-              },
-              "splitChatRight": "Chat nach rechts teilen",
-              "splitChatRightDescription": "Einen neuen Chat in einem geteilten Bereich auf der rechten Seite öffnen.",
-              "splitChatDown": "Chat nach unten teilen",
-              "splitChatDownDescription": "Einen neuen Chat in einem geteilten Bereich darunter öffnen."
+                "newQuickCommand": "Neuen Schnellbefehl erstellen"
+              }
             }
           },
           "palette": {

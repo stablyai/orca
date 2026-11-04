@@ -16476,18 +16476,8 @@
                 "removeWorktree": "ワークツリーを削除する",
                 "trashWorktree": "ワークツリーをゴミ箱へ移動",
                 "addQuickCommand": "クイックコマンドを追加",
-                "newQuickCommand": "新規クイックコマンド",
-                "splitChatRight": "チャットを右に分割",
-                "newChatRight": "右に新しいチャット",
-                "chatPaneRight": "チャットペイン右",
-                "splitChatDown": "チャットを分割する",
-                "newChatBelow": "下に新しいチャット",
-                "chatPaneBelow": "下のチャットペイン"
-              },
-              "splitChatRight": "右の分割チャット",
-              "splitChatRightDescription": "右側の分割ペインで新しいチャットを開きます。",
-              "splitChatDown": "チャットを下に分割",
-              "splitChatDownDescription": "下の分割ペインで新しいチャットを開きます。"
+                "newQuickCommand": "新規クイックコマンド"
+              }
             }
           },
           "palette": {

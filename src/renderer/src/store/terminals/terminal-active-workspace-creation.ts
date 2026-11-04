@@ -1,3 +1,4 @@
+import type { TabSplitTarget } from '../slices/tabs'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -12,62 +13,92 @@ export function createActiveWorkspaceTerminalActions(
 ): Pick<TerminalSlice, 'openNewTerminalTabInActiveWorkspace'> {
   return {
     openNewTerminalTabInActiveWorkspace: async (groupId) => {
-      const state = get()
-      const worktreeId = state.activeWorktreeId
-      if (!worktreeId) {
-        return
+      const worktreeId = get().activeWorktreeId
+      if (worktreeId) {
+        await openNewTerminalTabInWorkspace(get, worktreeId, groupId)
       }
-      const workspaceScope = parseWorkspaceKey(worktreeId)
-      const worktreeRoute =
-        worktreeId === FLOATING_TERMINAL_WORKTREE_ID || workspaceScope?.type === 'folder'
-          ? null
-          : resolveWorktreeOperationRouteResult(state, worktreeId)
-      if (worktreeRoute && worktreeRoute.kind !== 'resolved') {
-        return
-      }
-      const runtimeEnvironmentId = worktreeRoute
-        ? worktreeRoute.route.runtimeEnvironmentId
-        : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-      if (runtimeEnvironmentId) {
-        const { createWebRuntimeSessionTerminal } =
-          await import('@/runtime/web-runtime-terminal-creation')
-        await createWebRuntimeSessionTerminal(
-          {
-            worktreeId,
-            environmentId: runtimeEnvironmentId,
-            targetGroupId: groupId,
-            activate: true
-          },
-          { userAct: true }
-        )
-        return
-      }
-      if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
-        return
-      }
-      const terminal = get().createTab(worktreeId, groupId)
-      get().setActiveTab(terminal.id)
-      get().setActiveTabType('terminal', worktreeId)
-      const latest = get()
-      const currentTerminals = latest.tabsByWorktree[worktreeId] ?? []
-      const currentEditors = latest.openFiles.filter((file) => file.worktreeId === worktreeId)
-      const currentBrowsers = latest.browserTabsByWorktree[worktreeId] ?? []
-      const stored = latest.tabBarOrderByWorktree[worktreeId]
-      const validIds = new Set([
-        ...currentTerminals.map((tab) => tab.id),
-        ...currentEditors.map((file) => file.id),
-        ...currentBrowsers.map((tab) => tab.id)
-      ])
-      const base = (stored ?? []).filter((id) => validIds.has(id))
-      const inBase = new Set(base)
-      for (const id of validIds) {
-        if (!inBase.has(id)) {
-          base.push(id)
-        }
-      }
-      // Why: Cmd+J shares the titlebar-button creation path, so append the new terminal after mixed editor/browser tabs, not first.
-      get().setTabBarOrder(worktreeId, [...base.filter((id) => id !== terminal.id), terminal.id])
-      focusTerminalTabSurface(terminal.id)
     }
   }
+}
+
+export async function openNewTerminalTabInWorkspace(
+  get: TerminalStoreGet,
+  worktreeId: string,
+  groupId?: string,
+  split?: TabSplitTarget
+): Promise<void> {
+  const state = get()
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  const worktreeRoute =
+    worktreeId === FLOATING_TERMINAL_WORKTREE_ID || workspaceScope?.type === 'folder'
+      ? null
+      : resolveWorktreeOperationRouteResult(state, worktreeId)
+  if (worktreeRoute && worktreeRoute.kind !== 'resolved') {
+    return
+  }
+  const runtimeEnvironmentId =
+    worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+      ? null
+      : worktreeRoute
+        ? worktreeRoute.route.runtimeEnvironmentId
+        : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+  if (runtimeEnvironmentId) {
+    const splitGroupId = split
+      ? state.createEmptySplitGroup(worktreeId, split.sourceGroupId, split.splitDirection)
+      : null
+    if (split && !splitGroupId) {
+      return
+    }
+    const closeEmptySplit = (): void => {
+      if (splitGroupId) {
+        get().closeEmptyGroup(worktreeId, splitGroupId)
+      }
+    }
+    try {
+      const { createWebRuntimeSessionTerminal } =
+        await import('@/runtime/web-runtime-terminal-creation')
+      const outcome = await createWebRuntimeSessionTerminal(
+        {
+          worktreeId,
+          environmentId: runtimeEnvironmentId,
+          targetGroupId: splitGroupId ?? groupId,
+          activate: true
+        },
+        { userAct: true }
+      )
+      if (outcome.status !== 'created') {
+        closeEmptySplit()
+      }
+    } catch (error) {
+      closeEmptySplit()
+      throw error
+    }
+    return
+  }
+  if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+    return
+  }
+  const terminal = get().createTab(worktreeId, groupId, undefined, split ? { split } : undefined)
+  get().setActiveTab(terminal.id)
+  get().setActiveTabType('terminal', worktreeId)
+  const latest = get()
+  const currentTerminals = latest.tabsByWorktree[worktreeId] ?? []
+  const currentEditors = latest.openFiles.filter((file) => file.worktreeId === worktreeId)
+  const currentBrowsers = latest.browserTabsByWorktree[worktreeId] ?? []
+  const stored = latest.tabBarOrderByWorktree[worktreeId]
+  const validIds = new Set([
+    ...currentTerminals.map((tab) => tab.id),
+    ...currentEditors.map((file) => file.id),
+    ...currentBrowsers.map((tab) => tab.id)
+  ])
+  const base = (stored ?? []).filter((id) => validIds.has(id))
+  const inBase = new Set(base)
+  for (const id of validIds) {
+    if (!inBase.has(id)) {
+      base.push(id)
+    }
+  }
+  // Why: Cmd+J shares the titlebar-button creation path, so append the new terminal after mixed editor/browser tabs, not first.
+  get().setTabBarOrder(worktreeId, [...base.filter((id) => id !== terminal.id), terminal.id])
+  focusTerminalTabSurface(terminal.id)
 }

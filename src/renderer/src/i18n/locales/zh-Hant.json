@@ -16913,18 +16913,8 @@
                 "removeWorktree": "刪除工作樹",
                 "trashWorktree": "將工作樹移至垃圾桶",
                 "addQuickCommand": "新增快速命令",
-                "newQuickCommand": "新的快速命令",
-                "splitChatRight": "向右分割聊天",
-                "newChatRight": "在右側新增聊天",
-                "chatPaneRight": "聊天窗格右側",
-                "splitChatDown": "向下分割聊天",
-                "newChatBelow": "在下方新增聊天",
-                "chatPaneBelow": "下面的聊天窗格"
-              },
-              "splitChatRight": "向右分割聊天",
-              "splitChatRightDescription": "在右側的分割窗格中開啟新聊天。",
-              "splitChatDown": "向下分割聊天",
-              "splitChatDownDescription": "在下方的分割窗格中開啟新聊天。"
+                "newQuickCommand": "新的快速命令"
+              }
             }
           },
           "palette": {

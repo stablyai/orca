@@ -18270,18 +18270,8 @@
                 "removeWorktree": "remover worktree",
                 "trashWorktree": "descartar worktree",
                 "addQuickCommand": "adicionar comando rápido",
-                "newQuickCommand": "novo comando rápido",
-                "splitChatRight": "dividir chat à direita",
-                "newChatRight": "novo chat à direita",
-                "chatPaneRight": "painel de chat à direita",
-                "splitChatDown": "dividir chat para baixo",
-                "newChatBelow": "novo chat abaixo",
-                "chatPaneBelow": "painel de chat abaixo"
-              },
-              "splitChatRight": "Dividir Chat à Direita",
-              "splitChatRightDescription": "Abra um novo chat em um painel dividido à direita.",
-              "splitChatDown": "Dividir Chat para Baixo",
-              "splitChatDownDescription": "Abra um novo chat em um painel dividido abaixo."
+                "newQuickCommand": "novo comando rápido"
+              }
             }
           },
           "palette": {

@@ -61,7 +61,7 @@ it('offers chat actions without a duplicate close button and targets Resume at t
   const source = renderHeader()
   expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
     'Continue with Terminal Agent',
-    'Split Chat Right',
+    'Split Terminal Right',
     'Chat settings'
   ])
   const folder = useAppStore.getState().folderWorkspaces[0]
@@ -106,17 +106,17 @@ it('changes the saved chat width from the standalone chat toolbar', async () => 
 })
 
 async function splitTooltipText(): Promise<string | null> {
-  const trigger = screen.getByRole('button', { name: 'Split Chat Right' })
+  const trigger = screen.getByRole('button', { name: 'Split Terminal Right' })
   fireEvent.pointerMove(trigger, { pointerType: 'mouse' })
   return (await screen.findByRole('tooltip')).textContent
 }
 
-it('shows the effective split-right shortcut in the Split Chat Right tooltip', async () => {
+it('shows the effective split-right shortcut in the Split Terminal Right tooltip', async () => {
   useAppStore.setState({ keybindings: { 'terminal.splitRight': ['Mod+Alt+K'] } })
   renderHeader()
   const shortcut = navigator.userAgent.includes('Mac') ? '⌘⌥K' : 'Ctrl+Alt+K'
-  expect(await splitTooltipText()).toBe(`Split Chat Right: ${shortcut}`)
-  expect(screen.getByRole('button', { name: 'Split Chat Right' })).toBeTruthy()
+  expect(await splitTooltipText()).toBe(`Split Terminal Right: ${shortcut}`)
+  expect(screen.getByRole('button', { name: 'Split Terminal Right' })).toBeTruthy()
 })
 
 it.each([
@@ -128,14 +128,14 @@ it.each([
   try {
     useAppStore.setState({ keybindings: { 'terminal.splitRight': ['Mod+D', 'Mod+K'] } })
     renderHeader()
-    expect(await splitTooltipText()).toBe(`Split Chat Right: ${shortcuts}`)
+    expect(await splitTooltipText()).toBe(`Split Terminal Right: ${shortcuts}`)
   } finally {
     userAgentSpy.mockRestore()
   }
 })
 
-it('omits the shortcut from the Split Chat Right tooltip when split-right is unbound', async () => {
+it('omits the shortcut from the Split Terminal Right tooltip when split-right is unbound', async () => {
   useAppStore.setState({ keybindings: { 'terminal.splitRight': [] } })
   renderHeader()
-  expect(await splitTooltipText()).toBe('Split Chat Right')
+  expect(await splitTooltipText()).toBe('Split Terminal Right')
 })

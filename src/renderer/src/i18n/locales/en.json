@@ -17452,20 +17452,10 @@
                 "trashWorktree": "trash worktree",
                 "addQuickCommand": "add quick command",
                 "newQuickCommand": "new quick command",
-                "splitChatRight": "split chat right",
-                "newChatRight": "new chat right",
-                "chatPaneRight": "chat pane right",
-                "splitChatDown": "split chat down",
-                "newChatBelow": "new chat below",
-                "chatPaneBelow": "chat pane below",
                 "browserRight": "browser right",
                 "splitBrowser": "split browser",
                 "browserSplit": "browser split"
               },
-              "splitChatRight": "Split Chat Right",
-              "splitChatRightDescription": "Open a new chat in a split pane to the right.",
-              "splitChatDown": "Split Chat Down",
-              "splitChatDownDescription": "Open a new chat in a split pane below.",
               "newBrowserTabSplitRight": "New Browser Tab in Right Split",
               "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right."
             }

@@ -17127,18 +17127,8 @@
                 "removeWorktree": "worktree kaldır",
                 "trashWorktree": "worktree'yi çöpe at",
                 "addQuickCommand": "hızlı komut ekle",
-                "newQuickCommand": "yeni hızlı komut",
-                "splitChatRight": "sohbeti sağa böl",
-                "newChatRight": "sağda yeni sohbet",
-                "chatPaneRight": "sohbet paneli sağda",
-                "splitChatDown": "sohbeti aşağı böl",
-                "newChatBelow": "altta yeni sohbet",
-                "chatPaneBelow": "sohbet paneli altta"
-              },
-              "splitChatRight": "Sohbeti Sağa Böl",
-              "splitChatRightDescription": "Sağda ayrı bir bölmede yeni bir sohbet açın.",
-              "splitChatDown": "Sohbeti Aşağı Böl",
-              "splitChatDownDescription": "Altta ayrı bir bölmede yeni bir sohbet açın."
+                "newQuickCommand": "yeni hızlı komut"
+              }
             }
           },
           "palette": {
