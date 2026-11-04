@@ -35,6 +35,13 @@ const frame = (row: Record<string, unknown>) => ({
 const synthetic = rows[3]!
 const task = rows[0]!
 const message = (row: Record<string, unknown>) => asRecord(row.message)!
+const contentParts = (row: Record<string, unknown>) => {
+  const content = message(row).content
+  if (!Array.isArray(content)) {
+    throw new Error('recorded content parts missing')
+  }
+  return content
+}
 
 it('imports recorded repair results without inventing outside work or duplicate failed turns', async () => {
   const c = await chat()
@@ -347,10 +354,7 @@ describe('internal content keeps live settlement and semantic siblings', () => {
       ...synthetic,
       message: {
         ...message(synthetic),
-        content: [
-          ...(message(synthetic).content as unknown[]),
-          ...(message(call).content as unknown[])
-        ]
+        content: [...contentParts(synthetic), ...contentParts(call)]
       }
     })
     const result = rows[2]!
@@ -358,10 +362,7 @@ describe('internal content keeps live settlement and semantic siblings', () => {
       ...task,
       message: {
         ...message(task),
-        content: [
-          { type: 'text', text: String(message(task).content) },
-          ...(message(result).content as unknown[])
-        ]
+        content: [{ type: 'text', text: String(message(task).content) }, ...contentParts(result)]
       }
     })
     live({ type: 'system', subtype: 'session_state_changed', state: 'idle' })
@@ -372,8 +373,8 @@ describe('internal content keeps live settlement and semantic siblings', () => {
   })
 })
 
-it.each(['real-model', 'missing-usage', 'nonzero-usage', 'error'] as const)(
-  'retains %s assistant content with the same text',
+it.each(['real-model', 'missing-usage', 'nonzero-usage', 'error', 'empty-error'] as const)(
+  'retains %s assistant semantics',
   async (kind) => {
     const c = await chat()
     await c.live()
@@ -382,8 +383,10 @@ it.each(['real-model', 'missing-usage', 'nonzero-usage', 'error'] as const)(
       ...synthetic,
       parentUuid: 'a1',
       ...(kind === 'error' ? { isApiErrorMessage: true } : {}),
+      ...(kind === 'empty-error' ? { error: 'authentication_failed' } : {}),
       message: {
         ...nested,
+        ...(kind === 'empty-error' ? { content: [] } : {}),
         ...(kind === 'real-model' ? { model: 'claude-opus-5-5' } : {}),
         ...(kind === 'missing-usage' ? { usage: undefined } : {}),
         ...(kind === 'nonzero-usage'
