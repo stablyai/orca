@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 
-const ASSET_PATH = /^(?:renderer|web)\/assets\/(.+)-[\w-]{8}\.(js|css|svg)$/
+const ASSET_PATH = /^(?:renderer|web)\/assets\/(.+)-[\w-]{8}\.(js|css|svg|json)$/
 const TEXT_FILE = /\.(?:js|css|html|json|svg)$/
 const NATIVE_COLOR = /color\(display-p3 ([^)]+)\)|(?<![\w-])lab\(([^)]+)\)/g
 

@@ -52,6 +52,31 @@ it('allows one decimal unit of native P3 rounding and its asset reference hashes
   expect(compareJavascriptParityFiles(before, after)).toEqual([])
 })
 
+it('normalizes hashed JSON assets while rejecting content and reference changes', () => {
+  const entries = (hash, content, reference = hash) => ({
+    [`renderer/assets/de-${hash}.json`]: content,
+    'renderer/assets/i18n.js': `fetch("./de-${reference}.json")`,
+    'renderer/.vite/manifest.json': JSON.stringify({ locale: { file: `assets/de-${hash}.json` } }),
+    'renderer/.orca-web-client-files.json': JSON.stringify([`assets/de-${hash}.json`])
+  })
+  const before = inventory(entries('AAAAAAAA', '{\r\n"hello":"Hallo"\r\n}\r\n'))
+  const after = inventory(entries('BBBBBBBB', '{\n"hello":"Hallo"\n}\n'))
+  expect(compareJavascriptParityFiles(before, after)).toEqual([])
+  expect(
+    compareJavascriptParityFiles(
+      before,
+      inventory(entries('BBBBBBBB', '{\n"hello":"Geändert"\n}\n'))
+    )
+  ).toEqual(['renderer/assets/de.json'])
+  expect(
+    compareJavascriptParityFiles(
+      before,
+      inventory(entries('BBBBBBBB', '{\n"hello":"Hallo"\n}\n', 'CCCCCCCC'))
+    )
+  ).toEqual(['renderer/assets/i18n.js'])
+  expect(compareJavascriptParityFiles(before, [])).toContain('renderer/assets/de.json')
+})
+
 it('rejects meaningful color changes and every non-color stylesheet change', () => {
   expect(
     equivalentStylesheets(
