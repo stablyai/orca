@@ -147,7 +147,11 @@ describe('browser tab create with a split pane', () => {
     })
 
     const options = mocks.createBrowserTab.mock.calls[0]?.[2]
-    expect(options).toMatchObject({ targetGroupId: 'g-browser', activate: false })
+    expect(options).toMatchObject({
+      targetGroupId: 'g-browser',
+      activate: false,
+      showInGroup: true
+    })
     expect(options).not.toHaveProperty('split')
   })
 

@@ -114,6 +114,8 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
                   browserPaneGroupId ??
                   (data.activate ? undefined : activeBrowserUnifiedTab?.groupId)
               }),
+          // A split open asked to see the page beside the caller: show it there, keeping focus.
+          ...(browserPaneGroupId ? { showInGroup: true } : {}),
           sessionProfileId: data.sessionProfileId,
           sessionPartition: data.sessionPartition,
           // This runtime asks for desktop-rendered pages, including managed-SSH workspaces; explicit null prevents streaming another host’s page.
