@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { SectionList, SectionListData } from 'react-native'
 
-type WithId = { worktreeId: string; isActive?: boolean }
+type WithId = { row: { worktreeId: string; isActive?: boolean } }
 
 // Scroll only when the active workspace changes; revealing the same workspace after search/unfold must not yank the list. Retry unmeasured variable-height rows.
 export function useActiveWorktreeScroll<T extends WithId, S>(
@@ -19,9 +19,9 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
 
   const activeWorktreeId = useMemo(() => {
     for (const section of sections) {
-      const match = section.data.find((w) => w.isActive)
+      const match = section.data.find((item) => item.row.isActive)
       if (match) {
-        return match.worktreeId
+        return match.row.worktreeId
       }
     }
     return null
@@ -34,7 +34,9 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
   const scrollToWorktree = useCallback(
     (worktreeId: string): boolean => {
       for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
-        const itemIndex = sections[sectionIndex].data.findIndex((w) => w.worktreeId === worktreeId)
+        const itemIndex = sections[sectionIndex].data.findIndex(
+          (item) => item.row.worktreeId === worktreeId
+        )
         if (itemIndex !== -1) {
           sectionListRef.current?.scrollToLocation({
             sectionIndex,

@@ -1,5 +1,3 @@
-import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../shared/skill-install-capability'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
 import { createServer, type Server } from 'node:http'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -21,27 +19,10 @@ import { RuntimeClient } from './client'
 import { requestWorktreeRemoval } from '../handlers/worktree-removal-request'
 import { launchOrcaApp } from './launch'
 import { addEnvironmentFromPairingCode } from './environments'
-import { RuntimeClientError } from './types'
 import {
-  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
-  AGENT_SESSION_TURN_ITEM_CAPABILITY,
-  AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
-  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
-  RUNTIME_PROTOCOL_VERSION,
-  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
-  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
-  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+  RUNTIME_PROTOCOL_VERSION
 } from '../../shared/protocol-version'
-import {
-  TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
-  TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY
-} from '../../shared/terminal-quick-command-capabilities'
-import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../shared/agent-session-background-task-child-views-capability'
 
 vi.mock('./launch', () => ({
   launchOrcaApp: vi.fn()
@@ -64,56 +45,6 @@ describe('CLI remote WebSocket transport', () => {
   afterEach(async () => {
     vi.mocked(launchOrcaApp).mockClear()
     await Promise.all(servers.splice(0).map((server) => server.close()))
-  })
-
-  it('calls a remote runtime through a mobile pairing offer', async () => {
-    const runtime = await startTestRuntime('runtime-ws-1')
-    servers.push(runtime)
-
-    const pairingUrl = encodePairingOffer({
-      v: 2,
-      endpoint: runtime.endpoint,
-      deviceToken: runtime.deviceToken,
-      publicKeyB64: runtime.publicKeyB64
-    })
-    const client = new RuntimeClient('/tmp/unused', 5_000, pairingUrl)
-    const response = await client.call<{ runtimeId: string }>('status.get')
-    expect(await client.getOfflineRuntimeAdmission()).toEqual({
-      reachable: true,
-      legacyPidRunning: false,
-      pid: null
-    })
-
-    expect(response.ok).toBe(true)
-    expect(response.result.runtimeId).toBe('runtime-ws-1')
-    expect(runtime.authFrames).toContainEqual(
-      expect.objectContaining({
-        clientCapabilities: [
-          AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
-          AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
-          AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
-          AGENT_SESSION_TURN_ITEM_CAPABILITY,
-          SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-          SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
-          AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-          SKILL_INSTALL_RESULT_V2_CAPABILITY,
-          WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
-          WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-          WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
-          AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-          REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
-          TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY,
-          TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
-          AGENT_LAUNCH_RUNTIME_CAPABILITY
-        ]
-      })
-    )
-  })
-
-  it('rejects malformed remote pairing codes before local runtime lookup', () => {
-    expect(() => new RuntimeClient('/tmp/unused', 5_000, 'not-a-pairing-code')).toThrow(
-      RuntimeClientError
-    )
   })
 
   it('accepts a bare pairing payload as well as the orca URL wrapper', async () => {

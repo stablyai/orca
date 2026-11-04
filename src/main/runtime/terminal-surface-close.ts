@@ -1,3 +1,4 @@
+import type { LayoutCommandRunOptions } from './runtime-layout-apply'
 import type { RuntimeSessionTabCloseReason } from '../../shared/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import {
@@ -298,4 +299,10 @@ export function terminalCloseActionCurrent(beforeAction?: () => void): boolean {
   } catch {
     return false
   }
+}
+
+export type TerminalCloseRunOptions = Pick<LayoutCommandRunOptions, 'admit'> | (() => void)
+
+export function terminalCloseRunOptions(run?: TerminalCloseRunOptions) {
+  return typeof run === 'function' ? { beforeWrite: () => terminalCloseActionCurrent(run) } : run
 }

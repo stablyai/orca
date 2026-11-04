@@ -1,6 +1,6 @@
 import type { AutomationRun, AutomationRunOutputSnapshot } from '../../shared/automations-types'
 import type { AutomationRunFailureCodeFields } from '../../shared/automation-run-failure-copy'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 export type AutomationRunCompletionObservation = {
   status: 'completed' | 'dispatch_failed'

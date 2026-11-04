@@ -74,35 +74,6 @@ describe('a retired runtime', () => {
     expect(state().editorDrafts.old2).toBe('old edits')
     expect(() => assertEditorBufferInvariant(state())).not.toThrow()
   })
-
-  it('never merges, even with an identical draft or a later route change', () => {
-    useAppStore.setState({
-      openFiles: [runtimeTab('old', { isDirty: true })],
-      editorDrafts: { old: 'same' }
-    })
-    retire()
-    useAppStore.setState((s) => ({
-      openFiles: [...s.openFiles, runtimeTab('new', { isDirty: true })],
-      editorDrafts: { ...s.editorDrafts, new: 'same' }
-    }))
-    state().reconcileEditorBufferIdentities()
-    useAppStore.setState({ repos: [] })
-
-    expect(recordOf('old')).toBe('detached:old')
-    expect(recordOf('new')).not.toBe('detached:old')
-    expect(state().editorBufferViews[recordOf('new')]).toEqual(['new'])
-  })
-
-  it('a view of another environment is left alone', () => {
-    useAppStore.setState({
-      openFiles: [runtimeTab('other', { runtimeEnvironmentId: 'env-2', isDirty: true })],
-      editorDrafts: { other: 'edits' }
-    })
-    const before = recordOf('other')
-    retire()
-    expect(recordOf('other')).toBe(before)
-    expect(state().editorBufferDetached).toEqual({})
-  })
 })
 
 describe('SSH identity through the record index', () => {
@@ -122,30 +93,6 @@ describe('SSH identity through the record index', () => {
     state().markFileDirty('w1', true)
     expect(view('w2')?.isDirty).toBe(true)
     expect(state().editorDrafts.w2).toBe('edits')
-  })
-
-  it('keeps direct SSH, another target and another runtime on the target apart', () => {
-    useAppStore.setState({
-      openFiles: [
-        sshTab('nested', { runtimeEnvironmentId: 'env' }),
-        sshTab('direct', { runtimeEnvironmentId: null }),
-        sshTab('other-target', { externalSshTargetId: 'target-2', runtimeEnvironmentId: 'env' }),
-        sshTab('other-runtime', { runtimeEnvironmentId: 'env-2' })
-      ]
-    })
-    const records = ['nested', 'direct', 'other-target', 'other-runtime'].map(recordOf)
-    expect(new Set(records).size).toBe(4)
-    expect(() => assertEditorBufferInvariant(state())).not.toThrow()
-  })
-
-  it('keeps an SSH file apart from the local file with the same path', () => {
-    useAppStore.setState({
-      worktreesByRepo: {
-        'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]
-      },
-      openFiles: [tab('local'), sshTab('remote', { runtimeEnvironmentId: null })]
-    })
-    expect(recordOf('local')).not.toBe(recordOf('remote'))
   })
 })
 

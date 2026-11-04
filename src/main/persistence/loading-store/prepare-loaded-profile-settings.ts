@@ -12,14 +12,14 @@ import {
 } from '../../../shared/mobile-pairing-custom-address'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
 import { normalizeProjectGroups } from '../../../shared/project-groups'
-import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
-import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-defaults'
+import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import { hasUnsupportedTuiAgentArgs } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
 import { migratePortugueseUiLanguageOnLoad } from '../../../shared/portuguese-ui-language-migration'
 import { migrateAgentYoloDefaults } from '../applying-settings/terminal-settings-migrations'
-import { hasTypedAgentPermission } from '../../../shared/tui-agent-permission-choice'
-import { migrateAgentPermissionChoice } from '../../../shared/tui-agent-permission-lift'
+import { hasTypedAgentPermission } from '../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import { migrateAgentPermissionChoice } from '../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import {
   normalizeLoadedOnboardingState,
   normalizeNotificationSettings,
@@ -158,6 +158,7 @@ export function prepareLoadedProfileSettings(
   const migratedAgentPermission = migrateAgentPermissionChoice(
     {
       ...migratedAgentYoloDefaults,
+      agentLaunchChoices: parsed.settings?.agentLaunchChoices,
       agentPermissionDefault: parsed.settings?.agentPermissionDefault,
       agentPermissionOverrides: parsed.settings?.agentPermissionOverrides
     },
@@ -166,6 +167,9 @@ export function prepareLoadedProfileSettings(
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
     !hasTypedAgentPermission(parsed.settings) ||
+    parsed.settings?.agentLaunchChoices === undefined ||
+    JSON.stringify(parsed.settings.agentLaunchChoices) !==
+      JSON.stringify(migratedAgentPermission.agentLaunchChoices) ||
     parsed.settings?.agentDefaultArgs?.devin !==
       migratedAgentYoloDefaults.agentDefaultArgs?.devin ||
     hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||

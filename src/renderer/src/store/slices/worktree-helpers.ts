@@ -1,3 +1,4 @@
+import { findFirstIndexedWorktree } from '@/lib/worktree-runtime-owner-index'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type {
@@ -6,7 +7,7 @@ import type {
 } from './worktrees/create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type {
   WorktreeBaseStatusEvent,
@@ -197,6 +198,8 @@ export type WorktreeSlice = {
       provisioningLog?: string
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
       worktreeId?: string
+      heldChatMessage?: string
+      chatInputHandedOff?: boolean
     }
   ) => void
   /** Drop pending/active creation; VM cleanup applies to cancellation/dismissal, never successful handoff. */
@@ -305,12 +308,5 @@ export function findWorktreeById(
   worktreesByRepo: Record<string, Worktree[]>,
   worktreeId: string
 ): Worktree | undefined {
-  for (const worktrees of Object.values(worktreesByRepo)) {
-    const match = worktrees.find((worktree) => worktree.id === worktreeId)
-    if (match) {
-      return match
-    }
-  }
-
-  return undefined
+  return findFirstIndexedWorktree(worktreesByRepo, worktreeId)
 }

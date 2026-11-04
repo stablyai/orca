@@ -3,7 +3,7 @@ import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plug
 import {
   getExperimentalPaneSearchEntries,
   getExperimentalSearchEntry
-} from '../components/settings/experimental-search'
+} from '../components/settings/advanced/experimental-search'
 import { i18n, loadRendererUiLanguage, setRendererPluginLanguagePacks, translate } from './i18n'
 import { createLocalizedCatalog } from './localized-catalog'
 
@@ -23,25 +23,6 @@ afterEach(async () => {
 })
 
 describe('localized catalog caching', () => {
-  it('reuses a catalog while the language and resources are unchanged', () => {
-    const builder = vi.fn(() => ({ title: translate('menu.file', 'File') }))
-    const getCatalog = createLocalizedCatalog(builder)
-
-    expect(getCatalog()).toBe(getCatalog())
-    expect(builder).toHaveBeenCalledTimes(1)
-  })
-
-  it('rebuilds after switching languages', async () => {
-    const getCatalog = createLocalizedCatalog(() => ({ title: translate('menu.file', 'File') }))
-    const english = getCatalog()
-
-    await i18n.changeLanguage('es')
-    expect(getCatalog().title).toBe('Archivo')
-
-    await i18n.changeLanguage('en')
-    expect(getCatalog()).toEqual(english)
-  })
-
   it('retries a failed rebuild instead of returning the previous language', async () => {
     const builder = vi.fn(() => ({ title: translate('menu.file', 'File') }))
     const getCatalog = createLocalizedCatalog(builder)

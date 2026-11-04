@@ -220,7 +220,8 @@ describe('applyWindowLayoutCommand', () => {
 
     expect(applyLayoutCommand).toHaveBeenCalledWith(
       { ...move, windowDetach: { ptyId: 'pty-1', startupCwd: '/wt/app' } },
-      ['ssh:t', 'local']
+      ['ssh:t', 'local'],
+      undefined
     )
     expect(onPaneMoved).toHaveBeenCalledWith({
       worktreeId: 'wt-1',

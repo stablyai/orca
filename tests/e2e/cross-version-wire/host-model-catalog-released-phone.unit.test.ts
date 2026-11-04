@@ -1,7 +1,7 @@
 import '../../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { execFileSync } from 'node:child_process'
 import { stripTypeScriptTypes } from 'node:module'
-import { expect, it, vi } from 'vitest'
+import { beforeAll, expect, it, vi } from 'vitest'
 import {
   call,
   hostStub,
@@ -16,12 +16,18 @@ import {
 } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import { createClaudeModelCatalogProbe } from '../../../src/main/claude/claude-model-catalog-probe'
 
-import { REPO_ROOT } from './release-checkout'
+import { prepareReleaseCheckoutSnapshot, REPO_ROOT } from './release-checkout'
+import { LOCAL_RELEASE_GIT_ENV } from './release-checkout-process'
+
+beforeAll(async () => {
+  await prepareReleaseCheckoutSnapshot('v1.4.229')
+}, 180_000)
 
 // Local acceptance rig: execute the pinned source, with only React's effect scheduler and transport replaced.
 function released(path: string, names: string[], dependencies: Record<string, unknown> = {}) {
   const source = execFileSync('git', ['show', `v1.4.229:${path}`], {
     cwd: REPO_ROOT,
+    env: { ...process.env, ...LOCAL_RELEASE_GIT_ENV },
     encoding: 'utf8'
   })
     .replace(
@@ -123,6 +129,12 @@ it.each(['success', 'budget'] as const)(
     })
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
+        readModelCatalog: async (params: Parameters<typeof service.read>[0]) => {
+          if (!params.savedOnly) {
+            void service.demand(params)
+          }
+          return service.read(params)
+        },
         deps: {
           modelCatalog: service,
           store: { getRecord: () => undefined, getConversation: () => undefined },

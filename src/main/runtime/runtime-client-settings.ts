@@ -1,5 +1,5 @@
-import { publishedLegacyChatPermissionMode } from '../../shared/agent-chat-permission-mode'
-import { getClaudeAgentViewService } from '../claude/agent-view-service'
+import { publishedLegacyChatPermissionMode } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../shared/agent-skill-sharing-gate'
@@ -9,7 +9,7 @@ import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
 } from '../../shared/terminal-quick-commands'
-import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import { haveSameDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai'
 import { normalizeSourceControlGroupOrder } from '../../shared/source-control-group-order'
 import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../shared/source-control-ai-actions'
@@ -17,6 +17,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
+import { nativeChatQueueFollowUps } from '../../shared/native-chat/input/native-chat-follow-up-behavior'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
@@ -28,9 +29,9 @@ import {
   projectAgentLaunchSettings,
   type AgentLaunchSettings,
   type AgentLaunchSettingsMutation
-} from '../../shared/agent-launch-settings'
-import { legacyLaunchTextUpdates } from '../../shared/agent-launch-permission-updates'
-import { composeAgentLaunchProfile } from '../../shared/tui-agent-launch-defaults'
+} from '../../shared/agent-launch/choices/agent-launch-settings'
+import { legacyLaunchTextUpdates } from '../../shared/agent-launch/choices/agent-launch-permission-updates'
+import { composeAgentLaunchProfile } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { agentLaunchSettingsRollbackUpdates } from './agent-launch-settings-rollback'
 import type {
   RuntimeClientSettings,
@@ -88,10 +89,6 @@ export class RuntimeClientSettingsController {
         : null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
-      experimentalNativeChat: settings.experimentalNativeChat === true,
-      // Older clients use this key to fall back to terminal-backed chat. Keep their default terminal.
-      openAgentTabsInChatByDefault: false,
-      experimentalStructuredNativeChat: settings.experimentalNativeChat === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
@@ -110,10 +107,12 @@ export class RuntimeClientSettingsController {
       ...(this.sharingServices?.skills() === false
         ? {}
         : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),
+      nativeChatAutoContinueAfterUsageLimit:
+        settings.nativeChatAutoContinueAfterUsageLimit === true,
       machineName: settings.machineName ?? '',
       nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
-      // Phone sends queue mid-turn only while this is on; absence from older hosts means on.
-      nativeChatQueueFollowUps: settings.nativeChatQueueFollowUps !== false,
+      // Mirror the host preference; delivery still depends on queue capability.
+      nativeChatQueueFollowUps: nativeChatQueueFollowUps(settings),
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
@@ -131,18 +130,16 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
+    const { agentDefaultArgs, agentDefaultEnv, ...otherUpdates } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
-        ...updates,
+        ...otherUpdates,
         // An older client writes Arguments as it reads them, flag included.
-        ...(updates.agentDefaultArgs !== undefined || updates.agentDefaultEnv !== undefined
+        ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(
               beforeSettings,
-              {
-                agentDefaultArgs: updates.agentDefaultArgs,
-                agentDefaultEnv: updates.agentDefaultEnv
-              },
+              { agentDefaultArgs, agentDefaultEnv },
               process.platform
             )
           : {}),

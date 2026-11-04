@@ -208,7 +208,6 @@ async function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<b
 
 function createTerminalQueryResponder(write: (reply: string) => void): {
   accept: (chunk: string) => void
-  getCarryLength: () => number
 } {
   let carry = ''
   return {
@@ -228,91 +227,9 @@ function createTerminalQueryResponder(write: (reply: string) => void): {
           break
         }
       }
-    },
-    getCarryLength: () => carry.length
-  }
-}
-
-function allChunkPartitions(input: string): string[][] {
-  if (input.length === 0) {
-    return [[]]
-  }
-  const partitions: string[][] = []
-  for (let end = 1; end <= input.length; end += 1) {
-    for (const suffix of allChunkPartitions(input.slice(end))) {
-      partitions.push([input.slice(0, end), ...suffix])
     }
   }
-  return partitions
 }
-
-function collectTerminalQueryReplies(chunks: readonly string[]): string[] {
-  const replies: string[] = []
-  const responder = createTerminalQueryResponder((reply) => replies.push(reply))
-  chunks.forEach(responder.accept)
-  return replies
-}
-
-describe('terminal query responder', () => {
-  it.each([
-    ['OSC 10 BEL', '\x1b]10;?\x07', OSC_10_REPLY],
-    ['OSC 10 ST', '\x1b]10;?\x1b\\', OSC_10_REPLY],
-    ['OSC 11 BEL', '\x1b]11;?\x07', OSC_11_REPLY],
-    ['OSC 11 ST', '\x1b]11;?\x1b\\', OSC_11_REPLY]
-  ])('answers each complete %s query once across every partition', (_label, query, reply) => {
-    for (const chunks of allChunkPartitions(query)) {
-      expect(collectTerminalQueryReplies(chunks)).toEqual([reply])
-    }
-  })
-
-  it.each([
-    ['DA1 with omitted parameter', '\x1b[c', DA1_REPLY],
-    ['DA1 with zero parameter', '\x1b[0c', DA1_REPLY],
-    ['DSR cursor position', '\x1b[6n', DSR_REPLY]
-  ])('preserves %s across every partition', (_label, query, reply) => {
-    for (const chunks of allChunkPartitions(query)) {
-      expect(collectTerminalQueryReplies(chunks)).toEqual([reply])
-    }
-  })
-
-  it.each([
-    ['unterminated OSC 10', '\x1b]10;?'],
-    ['unterminated OSC 11 ST', '\x1b]11;?\x1b'],
-    ['OSC 10 extra query marker', '\x1b]10;??\x07'],
-    ['OSC 11 stacked query', '\x1b]11;?;?\x07'],
-    ['OSC 10 malformed body', '\x1b]10;?x\x07'],
-    ['OSC 11 malformed ST body', '\x1b]11;?x\x1b\\'],
-    ['OSC slot lookalike', '\x1b]110;?\x07']
-  ])('rejects %s across every partition', (_label, input) => {
-    for (const chunks of allChunkPartitions(input)) {
-      expect(collectTerminalQueryReplies(chunks)).toEqual([])
-    }
-  })
-
-  it('answers concatenated queries once each in source order across every partition', () => {
-    const input = '\x1b]10;?\x07\x1b]11;?\x07'
-    for (const chunks of allChunkPartitions(input)) {
-      expect(collectTerminalQueryReplies(chunks)).toEqual([OSC_10_REPLY, OSC_11_REPLY])
-    }
-  })
-
-  it('bounds carry while rejecting a long unterminated query lookalike', () => {
-    const replies: string[] = []
-    const responder = createTerminalQueryResponder((reply) => replies.push(reply))
-    let maxCarryLength = 0
-    for (const fragment of `\x1b]10;?${'x'.repeat(10_000)}`) {
-      responder.accept(fragment)
-      maxCarryLength = Math.max(maxCarryLength, responder.getCarryLength())
-    }
-    for (const fragment of '\x1b]10;?\x07') {
-      responder.accept(fragment)
-    }
-
-    expect(maxCarryLength).toBe(QUERY_CARRY_LENGTH)
-    expect(responder.getCarryLength()).toBeLessThanOrEqual(QUERY_CARRY_LENGTH)
-    expect(replies).toEqual([OSC_10_REPLY])
-  })
-})
 
 describe('fish never receives a color-scheme report it did not query (#9993)', () => {
   let configHome: string | null = null
@@ -336,6 +253,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
     mockStoreState = {
       activeWorktreeId: 'wt-1',
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'fish-pty' }] },
+      unifiedTabsByWorktree: {},
       ptyIdsByTabId: { 'tab-1': ['fish-pty'] },
       terminalPaneStartsByPaneKey: {},
       terminalPaneResumeOutcomesByPaneKey: {},

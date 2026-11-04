@@ -1,3 +1,4 @@
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMocks = vi.hoisted(() => {
@@ -13,19 +14,30 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listWorktreesStrictMock
+  }
+})
+
 vi.mock('electron', () => electronMocks)
+vi.mock('./repo-worktree-admin-fingerprint', () => ({
+  readRepoWorktreeAdminFingerprint: vi.fn(async () => null)
+}))
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
-vi.mock('../git/worktree', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict: listWorktreesStrictMock
-}))
 
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { OrcaRuntimeService } from './orca-runtime'
+import { projectRepoWorktreeRows, scanRepoWorktreeRows } from './repo-worktree-row-resolution'
+import type { Repo } from '../../shared/repo-types'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import * as removalTable from '../workspaces/removal/worktree-removal-table'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
@@ -136,6 +148,218 @@ async function advancePastRepoScanBudget<T>(pending: Promise<T>): Promise<T> {
   await vi.advanceTimersByTimeAsync(6_000)
   return pending
 }
+
+class ScanCacheRuntime extends OrcaRuntimeService {
+  protected override listRepoWorktreesForResolutionUncached =
+    vi.fn<(repo: Repo) => Promise<RuntimeWorktreeScanResult>>()
+
+  readonly scanGit = this.listRepoWorktreesForResolutionUncached
+
+  async scanRows(
+    repo: Repo,
+    runtimes: ReadonlyMap<string, ProjectExecutionRuntimeResolution> = new Map()
+  ) {
+    const deps = this.repoWorktreeRowDeps()
+    const scan = await scanRepoWorktreeRows(deps, repo, runtimes)
+    return {
+      ...scan,
+      rows: projectRepoWorktreeRows(deps, repo, scan, deps.store.getAllWorktreeMeta())
+    }
+  }
+}
+
+function cachedScanFixture(connectionId: string | null = SSH_CONNECTION_ID) {
+  const hostId = connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+  const store = makeStore({
+    connectionId: connectionId ?? undefined,
+    metaById: { [WORKTREE_ID]: makeMeta({ hostId, displayNameIsPinned: false }) }
+  })
+  const runtime = new ScanCacheRuntime(partialRuntimeStore(store))
+  const repo = store.getRepos()[0]!
+  const successfulScan: RuntimeWorktreeScanResult = {
+    ok: true,
+    worktrees: [
+      {
+        path: WORKTREE_PATH,
+        head: 'abc',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+  }
+  return { runtime, repo, store, successfulScan }
+}
+
+describe('successful scan cache on timeout', () => {
+  it.each([SSH_CONNECTION_ID, null])(
+    'keeps automatic names and Git metadata from the last successful scan on %s',
+    async (connectionId) => {
+      vi.useFakeTimers()
+      try {
+        const { runtime, repo, successfulScan } = cachedScanFixture(connectionId)
+        runtime.scanGit.mockResolvedValueOnce(successfulScan).mockImplementation(neverSettles)
+        await runtime.scanRows(repo)
+        await vi.advanceTimersByTimeAsync(31_000)
+
+        const result = await advancePastRepoScanBudget(runtime.scanRows(repo))
+
+        expect(result.ok).toBe(false)
+        expect(result.rows).toEqual([
+          expect.objectContaining({
+            displayName: 'feature',
+            branch: 'refs/heads/feature',
+            head: 'abc',
+            hostId: connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+          })
+        ])
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it.each(['empty', 'failed', 'rejected'] as const)(
+    'keeps completed %s scan semantics after a warm scan',
+    async (verdict) => {
+      vi.useFakeTimers()
+      try {
+        const { runtime, repo, successfulScan } = cachedScanFixture()
+        runtime.scanGit.mockResolvedValueOnce(successfulScan)
+        await runtime.scanRows(repo)
+        await vi.advanceTimersByTimeAsync(31_000)
+        if (verdict === 'rejected') {
+          runtime.scanGit.mockRejectedValueOnce(new Error('offline'))
+        } else {
+          runtime.scanGit.mockResolvedValueOnce({ ok: verdict === 'empty', worktrees: [] })
+        }
+
+        const result = await runtime.scanRows(repo)
+
+        expect(result.ok).toBe(verdict === 'empty')
+        expect(result.rows).toEqual([])
+        if (verdict === 'empty') {
+          await vi.advanceTimersByTimeAsync(31_000)
+          runtime.scanGit.mockImplementation(neverSettles)
+          expect((await advancePastRepoScanBudget(runtime.scanRows(repo))).rows).toEqual([])
+        }
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it.each(['generation', 'host', 'runtime'] as const)(
+    'does not reuse a successful scan from another %s',
+    async (owner) => {
+      vi.useFakeTimers()
+      try {
+        const { runtime, repo, successfulScan } = cachedScanFixture(
+          owner === 'runtime' ? null : SSH_CONNECTION_ID
+        )
+        // An explicit runtime snapshot can predate a settings change while Git is running.
+        const runtimes = new Map<string, ProjectExecutionRuntimeResolution>(
+          owner === 'runtime'
+            ? [
+                [
+                  repo.id,
+                  {
+                    status: 'resolved',
+                    runtime: {
+                      kind: 'local-host',
+                      hostPlatform: 'darwin',
+                      projectId: 'old',
+                      reason: 'non-windows',
+                      cacheKey: 'old-runtime'
+                    }
+                  }
+                ]
+              ]
+            : []
+        )
+        runtime.scanGit.mockResolvedValueOnce(successfulScan).mockImplementation(neverSettles)
+        await runtime.scanRows(repo, runtimes)
+        await vi.advanceTimersByTimeAsync(31_000)
+        if (owner === 'generation') {
+          runtime.invalidateWorktreeScanCacheForRepo(repo.id)
+        }
+        const current =
+          owner === 'host'
+            ? {
+                ...repo,
+                connectionId: 'another-host',
+                executionHostId: toSshExecutionHostId('another-host')
+              }
+            : repo
+
+        const result = await advancePastRepoScanBudget(runtime.scanRows(current))
+
+        expect(result.ok).toBe(false)
+        expect(result.rows).toHaveLength(owner === 'host' ? 0 : 1)
+        expect(result.rows.every((row) => row.branch === '' && row.head === '')).toBe(true)
+        if (owner !== 'host') {
+          expect(result.rows[0]?.displayName).toBe('app')
+        }
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it('does not reuse failed cached local rows on timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, repo, successfulScan } = cachedScanFixture(null)
+      runtime.scanGit
+        .mockResolvedValueOnce({ ...successfulScan, ok: false })
+        .mockImplementation(neverSettles)
+      await runtime.scanRows(repo)
+      await vi.advanceTimersByTimeAsync(31_000)
+
+      const result = await advancePastRepoScanBudget(runtime.scanRows(repo))
+
+      expect(result.rows[0]).toMatchObject({ branch: '', head: '', displayName: 'app' })
+      expect(result.ok).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a failed-removal checkout while the successful Git result awaits its listing overlay', async () => {
+    vi.useFakeTimers()
+    const checkoutExists = vi
+      .spyOn(removalTable, 'worktreeCheckoutExists')
+      .mockImplementation(neverSettles)
+    removalTable.failedWorktreeRemovals.set(WORKTREE_ID, {
+      worktreeId: WORKTREE_ID,
+      repoId: REPO_ID,
+      repoPath: REPO_PATH,
+      worktreePath: WORKTREE_PATH,
+      branch: 'feature',
+      head: 'abc',
+      deleteBranch: false,
+      force: false,
+      requestedAt: 1,
+      failure: { message: 'checkout cleanup failed', failedAt: 2 }
+    })
+    try {
+      const { runtime, repo } = cachedScanFixture(null)
+      runtime.scanGit.mockResolvedValue({ ok: true, worktrees: [] })
+
+      const result = await advancePastRepoScanBudget(runtime.scanRows(repo))
+
+      expect(checkoutExists).toHaveBeenCalledWith(WORKTREE_PATH)
+      expect(result.ok).toBe(false)
+      expect(result.rows).toEqual([
+        expect.objectContaining({ id: WORKTREE_ID, branch: '', head: '' })
+      ])
+    } finally {
+      removalTable.failedWorktreeRemovals.delete(WORKTREE_ID)
+      checkoutExists.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+})
 
 describe('worktree.ps on a degraded repo scan', () => {
   beforeEach(() => {
@@ -352,10 +576,16 @@ describe('worktree.ps on a degraded repo scan', () => {
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
     ])
     const store = makeStore()
-    const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
+    const getWorktreeMetaForHost = vi.fn((id: string, hostId: string) =>
+      hostId === 'local' ? store.getWorktreeMeta(id) : undefined
+    )
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({ ...store, getWorktreeMetaForHost })
+    )
 
     await runtime.getWorktreePs(10_000)
 
+    expect(getWorktreeMetaForHost).toHaveBeenCalledWith(MAIN_WORKTREE_ID, 'local')
     expect(store.getAllWorktreeMeta).toHaveBeenCalledTimes(1)
   })
 

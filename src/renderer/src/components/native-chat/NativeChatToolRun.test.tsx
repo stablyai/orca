@@ -4,9 +4,9 @@ import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { NativeChatBlock } from '../../../../shared/native-chat-types'
-import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
+import { projectStructuredItemToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
@@ -104,8 +104,12 @@ describe('NativeChatToolRun', () => {
     )
     openToolRunMembers()
 
-    expect(screen.getByText('after').closest('div')).toHaveClass('bg-[var(--diff-added-ground)]')
-    expect(screen.getByText('before').closest('div')).toHaveClass('bg-[var(--diff-removed-ground)]')
+    expect(screen.getByText('after').closest('div')).toHaveClass(
+      'bg-[var(--diff-added-background)]'
+    )
+    expect(screen.getByText('before').closest('div')).toHaveClass(
+      'bg-[var(--diff-removed-background)]'
+    )
     expect(container).not.toHaveTextContent('"changes"')
     expect(container.querySelector('pre')).toBeNull()
   })

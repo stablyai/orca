@@ -1,6 +1,9 @@
 import type { AutomationRun } from '../../shared/automations-types'
-import { isAgentLaunchResult, type AgentLaunchResult } from '../../shared/agent-launch-intent'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import {
+  isAgentLaunchResult,
+  type AgentLaunchResult
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
+import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import { rpcCallerOperationKey } from '../runtime/rpc/rpc-caller-identity'
 import { AUTOMATION_AGENT_CALLER, automationRunOperationId } from './automation-run-operation'
 

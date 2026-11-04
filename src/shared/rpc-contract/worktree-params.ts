@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
 import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automation-workspace-provenance'
-import { isTuiAgent } from '../tui-agent-config'
-import type { TuiAgent } from '../tui-agent'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -86,6 +86,8 @@ export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams
 export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber,
   afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
+  // Opt-in: the caller holds afterSnapshotId's rows and can rebuild a catalog from rowsFromBase; older hosts ignore it.
+  acceptRowDelta: z.literal(true).optional(),
   supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional(),
   // Opt-in: wait lookups read screens and probe PTYs, too costly for pollers; older hosts omit agentWait.
   includeAgentWait: z.literal(true).optional()

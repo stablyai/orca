@@ -1,12 +1,12 @@
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 

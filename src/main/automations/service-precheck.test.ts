@@ -17,7 +17,7 @@ import {
   createStore as createFreshStore,
   testState
 } from '../persistence/persistence-test-harness'
-import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
+import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -55,7 +55,8 @@ async function createStore() {
   }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store, initDataPath } = await import('../persistence')
+  const { Store } = await import('../persistence/loading-store/store')
+  const { initDataPath } = await import('../persistence/loading-store/user-data-path')
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }

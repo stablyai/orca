@@ -9,7 +9,7 @@ import {
   runtimeStub,
   setAgentLaunchRecordStore
 } from '../runtime/rpc/methods/agent-launch.test-fixture'
-import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import * as transcripts from '../native-chat/transcript-watch'
 import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
@@ -31,10 +31,15 @@ vi.mock('electron', () => ({
     decryptString: (bytes: Buffer) => bytes.toString()
   }
 }))
-vi.mock('../git/worktree', () => ({
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', () => ({
   listWorktrees: vi.fn(async () => [
     { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
   ]),
+  listWorktreesStrict: vi.fn(async () => [
+    { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
+  ])
+}))
+vi.mock('../git/worktrees/catalog/worktree-listing', () => ({
   listWorktreesStrict: vi.fn(async () => [
     { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
   ])

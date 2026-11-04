@@ -61,7 +61,7 @@ const editAttachTo: QueuedEditAttachTarget = {
 }
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
+import type { QueuedMessageCard } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 
@@ -106,7 +106,8 @@ function controller(
     steer: vi.fn(async () => {}),
     remove: vi.fn(async () => {}),
     edit: vi.fn(async () => {}),
-    steerNewest: vi.fn(() => false)
+    steerHead: vi.fn(() => false),
+    isWorking: true
   }
 }
 

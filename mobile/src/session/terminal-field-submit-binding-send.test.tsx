@@ -19,9 +19,6 @@ vi.mock('react-native', () => ({
   Keyboard: { dismiss: vi.fn(), addListener: () => ({ remove: vi.fn() }) }
 }))
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerMediumImpact: vi.fn() }))
-vi.mock('../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
 vi.mock('../terminal/mobile-terminal-operations', () => ({
   terminalInputSend: {
     request: async (_client: unknown, params: Record<string, unknown>) => {
@@ -62,6 +59,8 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
   const noop = (): void => {}
   const scope = {
     sendTerminalUserInput: terminalInputSend.request,
+    sendTerminalOrderedInput: terminalInputSend.request,
+    terminalRefs: { current: new Map() },
     client: session.client,
     activeHandle: session.activeHandle,
     activeSessionTab: null,

@@ -1,6 +1,6 @@
-import type { TerminalLaunchResult } from './agent-session-resume'
-import type * as AgentSessionResume from './agent-session-resume'
-import type { StartupCommandDelivery } from './codex-startup-delivery'
+import type { TerminalLaunchResult } from './agent-session/lifecycle/agent-session-resume'
+import type * as AgentSessionResume from './agent-session/lifecycle/agent-session-resume'
+import type { StartupCommandDelivery } from './agent-launch/startup/codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
 import type { PtyLivenessVerdict } from './pty-liveness-verdict'
@@ -9,7 +9,8 @@ import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
-import type { TerminalAgent, TuiAgent } from './terminal-agent'
+import type { TerminalAgent } from './terminal-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 export type {
   RuntimeTerminalSend,
   RuntimeTerminalPromptStage,

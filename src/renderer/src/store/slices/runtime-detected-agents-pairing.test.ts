@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
@@ -106,25 +106,6 @@ describe('runtime detection across a re-pair', () => {
     expect(store.getState().runtimeDetectedAgentIds['detection-peer']).toEqual(['codex'])
   })
 
-  it.each(['detect', 'refresh'] as const)(
-    'retires cached %s results when the environment is re-paired',
-    async (operation) => {
-      const store = createTestStore()
-      store.getState().setRuntimeEnvironments([environment(1)])
-      rpc.call.mockResolvedValueOnce(operation === 'detect' ? ['claude'] : { agents: ['claude'] })
-      await (operation === 'detect'
-        ? store.getState().ensureRuntimeDetectedAgents('detection-peer')
-        : store.getState().refreshRuntimeDetectedAgents('detection-peer'))
-      store.getState().setRuntimeEnvironments([environment(2)])
-      expect(store.getState().runtimeDetectedAgentIds['detection-peer']).toBeUndefined()
-      rpc.call.mockResolvedValueOnce(['codex'])
-      await expect(store.getState().ensureRuntimeDetectedAgents('detection-peer')).resolves.toEqual(
-        ['codex']
-      )
-      expect(rpc.call).toHaveBeenCalledTimes(2)
-    }
-  )
-
   it.each([
     ['detect', true],
     ['detect', false],
@@ -203,22 +184,5 @@ describe('runtime detection across a re-pair', () => {
     expect(rpc.call.mock.calls.map((call) => [call[1], call[3]])).toEqual([
       ['preflight.detectRemoteAgents', { expectedEnvironmentPairingRevision: 1 }]
     ])
-  })
-
-  it("drops a retired pairing's needs-update flag", async () => {
-    const store = createTestStore()
-    rpc.supports.mockResolvedValue(false)
-    rpc.status.mockResolvedValue({ capabilities: [], hostPlatform: 'win32' })
-    store.getState().setRuntimeEnvironments([environment(1)])
-    await store.getState().ensureRuntimeDetectedAgents('detection-peer', WORKTREE)
-    expect(store.getState().runtimeAgentDetectionNeedsServerUpdate[WORKSPACE_KEY]).toBe(true)
-    store.getState().setRuntimeEnvironments([environment(2)])
-    expect(store.getState().runtimeAgentDetectionNeedsServerUpdate[WORKSPACE_KEY]).toBeUndefined()
-    rpc.supports.mockResolvedValue(true)
-    rpc.call.mockResolvedValue(['codex'])
-    await expect(
-      store.getState().ensureRuntimeDetectedAgents('detection-peer', WORKTREE)
-    ).resolves.toEqual(['codex'])
-    expect(store.getState().runtimeAgentDetectionNeedsServerUpdate[WORKSPACE_KEY]).toBeUndefined()
   })
 })

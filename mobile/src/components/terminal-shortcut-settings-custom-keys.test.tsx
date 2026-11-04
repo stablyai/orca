@@ -73,10 +73,10 @@ vi.mock('react-native', () => ({
   View: hosts.View,
   Text: hosts.Text,
   Pressable: hosts.Pressable,
-  Switch: hosts.View,
   StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
   Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios }
 }))
+vi.mock('./MobileSwitch', () => ({ MobileSwitch: hosts.View }))
 vi.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void) => useEffect(effect, [effect])
 }))
@@ -85,7 +85,7 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: hosts.View,
   X: hosts.View
 }))
-vi.mock('./BottomDrawer', () => ({ BottomDrawer: hosts.View }))
+vi.mock('./bottom-drawer/BottomDrawer', () => ({ BottomDrawer: hosts.View }))
 const lists = vi.hoisted(() => {
   const held: {
     custom: { items: CustomKey[]; onReorder: (ids: string[]) => void } | null

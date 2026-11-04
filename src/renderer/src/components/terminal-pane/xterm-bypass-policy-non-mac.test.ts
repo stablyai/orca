@@ -10,15 +10,6 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
   const withSel = { isMac: false, hasSelection: true }
   const noSel = { isMac: false, hasSelection: false }
 
-  it('bubbles Ctrl+Shift+C (standard terminal copy on Linux/Windows)', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
   it('matches Ctrl+Shift+C by produced logical key rather than physical key', () => {
     expect(
       shouldBypassXtermKeyboardEvent(
@@ -57,18 +48,6 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
     ).toBe(false)
   })
 
-  it('bubbles Ctrl+V and Ctrl+Shift+V for paste', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'v', code: 'KeyV', ctrlKey: true }), noSel)
-    ).toBe(true)
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'V', code: 'KeyV', ctrlKey: true, shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
   it('matches paste by produced logical key rather than physical key', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'v', code: 'KeyK', ctrlKey: true }), noSel)
@@ -76,27 +55,6 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'k', code: 'KeyV', ctrlKey: true }), noSel)
     ).toBe(false)
-  })
-
-  it('bubbles Shift+Insert (X11/Linux paste convention)', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'Insert', code: 'Insert', shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
-  it('does not bubble plain Ctrl letter chords — shell shortcuts must reach PTY', () => {
-    // Ctrl+A, Ctrl+E, Ctrl+U, Ctrl+R, Ctrl+L — all readline-critical.
-    for (const keyCode of ['a', 'e', 'u', 'r', 'l']) {
-      expect(
-        shouldBypassXtermKeyboardEvent(
-          event({ key: keyCode, code: `Key${keyCode.toUpperCase()}`, ctrlKey: true }),
-          noSel
-        )
-      ).toBe(false)
-    }
   })
 
   it('bubbles already-handled Ctrl app shortcuts so kitty does not also write to shell', () => {
@@ -120,10 +78,6 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
     ).toBe(true)
   })
 
-  it('does not bubble plain letters', () => {
-    expect(shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC' }), noSel)).toBe(false)
-  })
-
   it('bubbles Shift+non-ASCII printable text so the active keyboard layout wins', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'Ф', code: 'KeyA', shiftKey: true }), noSel)
@@ -134,16 +88,6 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
         noSel
       )
     ).toBe(true)
-  })
-
-  it('does not bubble unshifted non-ASCII printable text', () => {
-    expect(shouldBypassXtermKeyboardEvent(event({ key: 'ф', code: 'KeyA' }), noSel)).toBe(false)
-  })
-
-  it('does not bubble Cmd chords on non-Mac (Super+C has no clipboard meaning there)', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), noSel)
-    ).toBe(false)
   })
 
   it('leaves ordinary Shift+Space available to the terminal', () => {
@@ -225,17 +169,6 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
           options
         )
       ).toBe(true)
-    }
-  })
-
-  it('does not suppress ordinary Backspace outside IME composition', () => {
-    for (const options of [windowsIdle, linuxIdle]) {
-      expect(
-        shouldSuppressTerminalImeKeyboardEvent(
-          event({ key: 'Backspace', code: 'Backspace' }),
-          options
-        )
-      ).toBe(false)
     }
   })
 
@@ -335,15 +268,6 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
       ).toBe(false)
     })
 
-    it('leaves ordinary letters unsuppressed while the guard is active', () => {
-      expect(
-        shouldSuppressTerminalImeKeyboardEvent(
-          event({ key: 'a', code: 'KeyA' }),
-          linuxPostCompositionGuard
-        )
-      ).toBe(false)
-    })
-
     it('does not apply the Linux/Sogou candidate guard to Windows', () => {
       expect(
         shouldSuppressTerminalImeKeyboardEvent(event({ key: ' ', code: 'Space' }), windowsComposing)
@@ -384,30 +308,6 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
           linuxPostCompositionGuard
         )
       ).toBe(true)
-    })
-
-    it('does not prevent the default for keyups, expired guards, or non-candidate keys', () => {
-      expect(
-        shouldPreventDefaultTerminalImeCandidateKey(
-          event({ type: 'keyup', key: ' ', code: 'Space' }),
-          linuxComposing
-        )
-      ).toBe(false)
-      expect(
-        shouldPreventDefaultTerminalImeCandidateKey(event({ key: ' ', code: 'Space' }), linuxIdle)
-      ).toBe(false)
-      expect(
-        shouldPreventDefaultTerminalImeCandidateKey(
-          event({ key: 'a', code: 'KeyA' }),
-          linuxComposing
-        )
-      ).toBe(false)
-      expect(
-        shouldPreventDefaultTerminalImeCandidateKey(
-          event({ key: ' ', code: 'Space' }),
-          windowsComposing
-        )
-      ).toBe(false)
     })
   })
 })

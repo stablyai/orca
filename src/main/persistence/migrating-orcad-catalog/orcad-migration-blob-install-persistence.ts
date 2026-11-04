@@ -3,7 +3,7 @@ import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orc
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { getDaemonHistoryDir } from '../../daemon/daemon-launch-paths'
-import { getHistoryRoot } from '../../terminal-history-paths'
+import { getHistoryRoot } from '../../pty/history/terminal-history-paths'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import {
   findOrcadMigrationImportReceipt,

@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react'
 import type { LucideProps } from 'lucide-react'
-import type { SettingsSearchEntry } from '@/components/settings/settings-search'
+import type { SettingsSearchEntry } from '@/components/settings/search/settings-search'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
@@ -56,7 +56,10 @@ const SETTINGS_NAV_TARGETS = [
 const SETTINGS_NAV_INTENTS = [
   'add-quick-command',
   'add-remote-orca-server',
-  'add-ssh-host'
+  'add-ssh-host',
+  'native-accounts',
+  // Closes Settings when the target pane is already showing.
+  'toggle'
 ] as const
 
 const SETTINGS_NAV_TARGET_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_TARGETS)

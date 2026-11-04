@@ -28,8 +28,8 @@ afterEach(() => {
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NATIVE_CHAT_BOTTOM_THRESHOLD_PX } from './native-chat-autoscroll'
 import { NATIVE_CHAT_ROW_GAP_PX } from './native-chat-row-height-estimate'

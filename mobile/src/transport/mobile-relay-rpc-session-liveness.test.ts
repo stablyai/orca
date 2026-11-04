@@ -137,16 +137,21 @@ describe('mobile relay RPC session liveness', () => {
     session.close()
   })
 
-  it('disconnects after two fair foreground misses', async () => {
+  it('disconnects after two fair foreground misses despite ongoing stream traffic', async () => {
     const onLog = vi.fn<ConnectionLogSink>()
     const session = await authenticateSession(onLog)
 
     session.notifyForeground('focus')
     expect(sentRequests().map(({ method }) => method)).toEqual(['status.get'])
-    await vi.advanceTimersByTimeAsync(4_000)
+    await vi.advanceTimersByTimeAsync(3_999)
+    fakes.linkOptions!.onBinary(new Uint8Array([1, 2, 3]))
+    fakes.linkOptions!.onText('{"id":"browser-stream","ok":true,"result":{"frame":"data"}}')
+    await vi.advanceTimersByTimeAsync(1)
     expect(session.getState()).toBe('connected')
     expect(fakes.sendText).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(4_000)
+    await vi.advanceTimersByTimeAsync(3_999)
+    fakes.linkOptions!.onBinary(new Uint8Array([1, 2, 3]))
+    await vi.advanceTimersByTimeAsync(1)
 
     expect(session.getState()).toBe('disconnected')
     expect(fakes.close).toHaveBeenCalledOnce()
@@ -335,17 +340,29 @@ describe('mobile relay RPC session liveness', () => {
     logical.close()
   })
 
-  it('keeps a relay that answers the background-return probe', async () => {
+  it.each([{ runtimeId: 'host' }, { runtimeId: 'old-host', worktrees: [], sessions: [] }])(
+    'keeps a relay that answers the background-return probe with %j',
+    async (result) => {
+      const session = await authenticateSession()
+
+      session.notifyForeground('app-resume')
+      const probe = sentRequests()[0]!
+      fakes.linkOptions!.onText(JSON.stringify({ id: probe.id, ok: true, result }))
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(session.getState()).toBe('connected')
+      session.close()
+    }
+  )
+
+  it('does not let a superseded probe reply settle its replacement', async () => {
     const session = await authenticateSession()
-
-    session.notifyForeground('app-resume')
-    const probe = sentRequests()[0]!
-    fakes.linkOptions!.onText(
-      JSON.stringify({ id: probe.id, ok: true, result: {}, _meta: { runtimeId: 'r1' } })
-    )
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(session.getState()).toBe('connected')
-    session.close()
+    session.notifyForeground('focus')
+    const first = sentRequests()[0]!
+    await vi.advanceTimersByTimeAsync(4_000)
+    await vi.advanceTimersByTimeAsync(3_000)
+    fakes.linkOptions!.onText(JSON.stringify({ id: first.id, ok: true, result: {} }))
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(session.getState()).toBe('disconnected')
   })
 })

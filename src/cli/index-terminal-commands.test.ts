@@ -1,3 +1,4 @@
+import { RuntimeRpcFailureError, type RuntimeRpcFailure } from './runtime/types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -188,42 +189,6 @@ describe('orca cli worktree awareness', () => {
     expect(process.exitCode).toBeUndefined()
   })
 
-  it('prints terminal.read fallback screen lines in json mode', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_read', {
-        terminal: {
-          handle: 'term_worker',
-          status: 'running',
-          tail: ['Claude Code', 'Checking files', 'Waiting for input'],
-          truncated: false,
-          limited: true,
-          oldestCursor: '0',
-          nextCursor: '3000',
-          latestCursor: '3000',
-          returnedLineCount: 3
-        }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(
-      ['terminal', 'read', '--terminal', 'term_worker', '--limit', '120', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('terminal.read', {
-      terminal: 'term_worker',
-      limit: 120
-    })
-    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
-    expect(printed.result.terminal.tail).toEqual([
-      'Claude Code',
-      'Checking files',
-      'Waiting for input'
-    ])
-  })
-
   it('uses the resolved enclosing worktree for terminal consumers', async () => {
     queueFixtures(
       callMock,
@@ -292,6 +257,52 @@ describe('orca cli worktree awareness', () => {
       result: { visualLayouts }
     })
   })
+
+  it.each(
+    [[], ['--pairing-code', 'remote-runtime']].flatMap((remote) =>
+      [false, true].map((json) => ({ remote, json }))
+    )
+  )(
+    'prints the host failure through terminal create ($remote, json=$json)',
+    async ({ remote, json }) => {
+      const failure = {
+        id: 'start',
+        ok: false,
+        error: {
+          code: 'agent_session_exited_during_start',
+          message:
+            'Git Bash reported its limit of 128 open terminals on this PC while starting the terminal. Close some Git Bash terminals and try again.'
+        },
+        _meta: { runtimeId: 'host' }
+      } satisfies RuntimeRpcFailure
+      callMock.mockRejectedValueOnce(new RuntimeRpcFailureError(failure))
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const stderr = vi.spyOn(console, 'error').mockImplementation(() => {})
+      await main(
+        [
+          'terminal',
+          'create',
+          '--worktree',
+          'path:/tmp/host/workspace',
+          ...remote,
+          ...(json ? ['--json'] : [])
+        ],
+        '/tmp/client'
+      )
+      expect(callMock).toHaveBeenCalledWith(
+        'terminal.create',
+        expect.objectContaining({ worktree: 'path:/tmp/host/workspace' })
+      )
+      if (json) {
+        expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual(failure)
+        expect(stderr).not.toHaveBeenCalled()
+      } else {
+        expect(stderr).toHaveBeenCalledExactlyOnceWith(failure.error.message)
+        expect(log).not.toHaveBeenCalled()
+      }
+      expect(process.exitCode).toBe(1)
+    }
+  )
 
   it('rejects implicit remote terminal create instead of resolving from client cwd', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

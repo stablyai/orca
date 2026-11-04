@@ -18,7 +18,7 @@ vi.mock('../../../shared/runtime-environment-store', () => ({
   resolveEnvironment: resolveEnvironmentMock
 }))
 
-vi.mock('../../browser/browser-route-partition-storage-runtime', () => ({
+vi.mock('../../browser/routing/partitions/browser-route-partition-storage-runtime', () => ({
   clearBrowserRoutePartitionStorageForEnvironment: clearStorageMock
 }))
 
@@ -51,7 +51,8 @@ describe('runtime environment removal storage clearing', () => {
       store: {
         getSettings: () => ({}),
         removeWorkspaceSessionHost: vi.fn(),
-        setRemoteLayoutSnapshot: vi.fn()
+        setRemoteLayoutSnapshot: vi.fn(),
+        setHostRepoCatalogSnapshot: vi.fn()
       } as never,
       getUserDataPath: () => '/tmp/orca-user-data',
       invalidateTransport: () => teardown
@@ -76,7 +77,8 @@ describe('runtime environment removal storage clearing', () => {
       store: {
         getSettings: () => ({}),
         removeWorkspaceSessionHost: vi.fn(),
-        setRemoteLayoutSnapshot: vi.fn()
+        setRemoteLayoutSnapshot: vi.fn(),
+        setHostRepoCatalogSnapshot: vi.fn()
       } as never,
       getUserDataPath: () => '/tmp/orca-user-data',
       invalidateTransport: () => Promise.resolve()

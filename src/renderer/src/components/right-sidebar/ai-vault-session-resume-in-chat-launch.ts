@@ -20,13 +20,13 @@ import {
   beginStructuredAgentSessionProvisionalLaunch,
   structuredLaunchOwner
 } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import { admitStructuredLaunchOnHost } from '@/lib/structured-agent-session-host-admission'
+import { admitStructuredLaunchOnHost } from '@/lib/agent-session/launch/structured-agent-session-host-admission'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
-import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
+import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 

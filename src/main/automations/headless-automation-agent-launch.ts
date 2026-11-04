@@ -1,6 +1,8 @@
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { launchOrdinaryTerminalAgent } from './ordinary-automation-agent-launch'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
-import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { launchAgentOnHost } from '../runtime/rpc/methods/agent-launch'
 import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
@@ -11,16 +13,20 @@ import {
   type HeadlessAutomationDispatchLaunch
 } from './headless-dispatch'
 import {
+  runOwnHandle,
   publishedLaunchTarget,
   enrichAutomationRunTarget,
   automationRunAcceptedTarget
 } from './automation-agent-run-result'
-export { publishedLaunchTarget } from './automation-agent-run-result'
+export { publishedLaunchTarget, runOwnHandle } from './automation-agent-run-result'
 import { automationRunOperationId, AUTOMATION_AGENT_CALLER } from './automation-run-operation'
 import { createAutomationDispatchToken } from './dispatch-tokens'
-import { mergeExtraAgentArgs, hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
-import { resolveTuiAgentLaunchArgs } from '../../shared/tui-agent-launch-defaults'
-import { agentLaunchQuotingShell } from '../../shared/agent-launch-runtime'
+import {
+  mergeExtraAgentArgs,
+  hasExtraAgentArgs
+} from '../../shared/agent-launch/startup/automation-extra-agent-args'
+import { resolveTuiAgentLaunchArgs } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { agentLaunchQuotingShell } from '../../shared/agent-launch/startup/agent-launch-runtime'
 import {
   resolveAgentLaunchRuntime,
   newWorktreeLaunchScope
@@ -28,7 +34,7 @@ import {
 import { rpcCallerOperationKey } from '../runtime/rpc/rpc-caller-identity'
 import type { AgentPromptExpectedBinding } from '../runtime/runtime-terminal-contracts'
 import type { AutomationRunWatchReservation } from './run-completion-watcher'
-import { tuiAgentDisplayName } from '../../shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export type HeadlessAutomationAgentLaunch = HeadlessAutomationDispatchLaunch & {
   terminalHandle: string | null
@@ -67,6 +73,21 @@ async function launchAutomationAgent(
   request: AutomationAgentLaunchRequest
 ): Promise<HeadlessAutomationAgentLaunch> {
   const { automation, run, target } = request
+  const selectedTarget =
+    automation.workspaceMode === 'existing'
+      ? await runtime.resolveManagedTerminalWorkspaceTarget(
+          `id:${automation.workspaceId}`,
+          parseWorkspaceKey(automation.workspaceId ?? '')?.type === 'folder'
+            ? undefined
+            : getRepoExecutionHostId(target.repo),
+          false
+        )
+      : undefined
+  const selectedWorkspace = selectedTarget?.managedWorktree
+  if (automation.workspaceMode === 'existing' && !selectedWorkspace) {
+    throw new Error('The target workspace is no longer available.')
+  }
+  const physicalHostId = selectedWorkspace?.hostId ?? getRepoExecutionHostId(target.repo)
   const surface = 'terminal' as const
   const context = { runtime, caller: AUTOMATION_AGENT_CALLER }
   let published: HeadlessAutomationAgentLaunch | undefined
@@ -125,6 +146,11 @@ async function launchAutomationAgent(
       automationId: automation.id,
       agentId: automation.agentId,
       worktreeId: automation.workspaceId,
+      target: {
+        hostId: getRepoExecutionHostId(target.repo),
+        repoId: target.repo.id,
+        path: target.repo.path
+      },
       currentRunId: run.id,
       runs: request.runs.filter((entry) => entry.sessionKind === 'terminal'),
       agentStatusForPane: (paneKey) =>
@@ -132,7 +158,17 @@ async function launchAutomationAgent(
           .getAgentStatusRowsForPane(paneKey)
           .filter((row) => !row.providerSessionOnly)
           .toSorted((a, b) => b.receivedAt - a.receivedAt)[0],
-      liveSession: (previous) => runOwnHandle(runtime, previous)
+      liveSession: (previous) => {
+        const handle = runOwnHandle(runtime, previous)
+        const liveWorktreeId = handle ? runtime.getTerminalWorktreeIdForHandle(handle) : null
+        const liveHostId = handle
+          ? runtime.getPtyExecutionHostMetadata(runtime.getTerminalPtyIdForHandle(handle))
+              .executionHostId
+          : undefined
+        return handle && liveWorktreeId === automation.workspaceId && liveHostId === physicalHostId
+          ? handle
+          : null
+      }
     })
     if (reused) {
       published = publishedLaunchTarget(runtime, {
@@ -258,19 +294,4 @@ async function launchAutomationAgent(
     }
     return automationRunAcceptedTarget(runtime, run, published, error, automation.agentId)
   }
-}
-
-/** A pane may have been reused by a later process. */
-export function runOwnHandle(
-  runtime: Pick<OrcaRuntimeService, 'getTerminalHandleForPaneKey' | 'getTerminalPtyIdForHandle'>,
-  run: AutomationRun
-): string | null {
-  const handle = run.terminalPaneKey
-    ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
-    : null
-  return handle &&
-    run.terminalPtyId &&
-    runtime.getTerminalPtyIdForHandle(handle) === run.terminalPtyId
-    ? handle
-    : null
 }

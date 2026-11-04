@@ -1,3 +1,4 @@
+import type { TerminalLaunchInputAttemptOwner } from './terminal-launch-input-attempt'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport-types'
@@ -7,18 +8,18 @@ import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewp
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type {
   SavedResumeStartupSource,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
-import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export type PtyPaneStartup = {
   command: string
@@ -62,6 +63,7 @@ export type PtyConnectionDeps = {
   cwd?: string
   /** Delays a fresh split's spawn without delaying its renderer pane. */
   cwdPromise?: Promise<string>
+  launchInputAttempt?: TerminalLaunchInputAttemptOwner
   placement?: TerminalPanePlacement
   /** Input handed off from a predecessor mount of the same deferred split. */
   preconnectInput?: readonly PtyPreconnectInputEntry[]

@@ -7,7 +7,7 @@ import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 import { WSL_MOVE_RENDERER_REWRITE_STORE_IDS } from '../../../shared/wsl-move/wsl-move-renderer-rewrite-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import type { Store } from '../../persistence'
+import type { Store } from '../loading-store/store'
 import { closeTestStores, createStore, testState, writeDataFile } from '../persistence-test-harness'
 import { wslMoveCutoverFixture } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { wslMoverProfile } from '../__fixtures__/wsl-mover/wsl-mover-profiles'
@@ -45,17 +45,19 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false },
   BrowserWindow: { getAllWindows: () => [] }
 }))
-vi.mock('../../browser/browser-partition-cookie-copy', () => ({
+vi.mock('../../browser/cookies/browser-partition-cookie-copy', () => ({
   copyBrowserPartitionCookies: vi.fn(),
   flushBrowserPartitionCookies: vi.fn()
 }))
-vi.mock('../../browser/browser-session-registry', () => ({ browserSessionRegistry: {} }))
-vi.mock('../../browser/browser-session-startup', () => ({ browserSessionsInitialized: vi.fn() }))
-vi.mock('../../browser/browser-route-partition-binding-runtime', () => ({
+vi.mock('../../browser/sessions/browser-session-registry', () => ({ browserSessionRegistry: {} }))
+vi.mock('../../browser/sessions/browser-session-startup', () => ({
+  browserSessionsInitialized: vi.fn()
+}))
+vi.mock('../../browser/routing/partitions/browser-route-partition-binding-runtime', () => ({
   activeBrowserRoutePartitionOrcaProfileId: vi.fn(),
   currentBrowserRoutePartitionBindingStore: vi.fn()
 }))
-vi.mock('../../browser/browser-route-partition-storage-dependencies', () => ({
+vi.mock('../../browser/routing/partitions/browser-route-partition-storage-dependencies', () => ({
   releaseEvictedBrowserRoutePartitionStorage: vi.fn()
 }))
 

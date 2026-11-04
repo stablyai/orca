@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
@@ -13,8 +14,9 @@ import {
 import type * as RouteInput from '@/lib/agent-launch-route-input'
 import type * as ChatProgram from '@/lib/host-chat-program'
 import type * as MenuRows from '@/lib/new-tab-agent-menu-rows'
+import type * as AgentPickerRowsModule from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import type * as ZustandShallow from 'zustand/react/shallow'
-import type * as HostAgentSettingsTransport from '@/components/settings/agent-launch-settings-transport'
+import type * as HostAgentSettingsTransport from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import {
@@ -27,10 +29,12 @@ import {
 } from '@/runtime/local-runtime-capabilities'
 import {
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
-  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 const mocks = vi.hoisted(() => ({
   support: vi.fn(),
   subscribe: vi.fn(),
@@ -64,15 +68,24 @@ vi.mock('zustand/react/shallow', async (importOriginal) => {
       })
   }
 })
+vi.mock(
+  '../../../../shared/agent-launch/picker/agent-launch-picker-rows',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof AgentPickerRowsModule>()
+    return {
+      ...actual,
+      buildNewTabAgentMenuRows: (...args: Parameters<typeof actual.buildNewTabAgentMenuRows>) => {
+        const rows = actual.buildNewTabAgentMenuRows(...args)
+        mocks.metadata += rows.length
+        return rows
+      }
+    }
+  }
+)
 vi.mock('@/lib/new-tab-agent-menu-rows', async (importOriginal) => {
   const actual = await importOriginal<typeof MenuRows>()
   return {
     ...actual,
-    buildNewTabAgentMenuRows: (...args: Parameters<typeof actual.buildNewTabAgentMenuRows>) => {
-      const rows = actual.buildNewTabAgentMenuRows(...args)
-      mocks.metadata += rows.length
-      return rows
-    },
     hostChatAnswer: (input: Parameters<typeof actual.hostChatAnswer>[0]) => {
       mocks.answers.push(input)
       if (mocks.realRoutes) {
@@ -87,12 +100,15 @@ vi.mock('@/lib/new-tab-agent-menu-rows', async (importOriginal) => {
     }
   }
 })
-vi.mock('@/components/settings/agent-launch-settings-transport', async (importOriginal) => {
-  const actual = await importOriginal<typeof HostAgentSettingsTransport>()
-  return { ...actual, readHostAgentLaunchSettings: vi.fn().mockResolvedValue(null) }
-})
+vi.mock(
+  '@/runtime/agent-launch-settings/agent-launch-settings-transport',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof HostAgentSettingsTransport>()
+    return { ...actual, readHostAgentLaunchSettings: vi.fn().mockResolvedValue(null) }
+  }
+)
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: mocks.subscribe }))
-vi.mock('@/lib/structured-agent-session-host-admission', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-host-admission', () => ({
   askHostCreateSupport: mocks.support
 }))
 // Like the real hook: a closed menu acquires nothing, and the stored inventory stays.
@@ -103,6 +119,15 @@ vi.mock('@/runtime/host-structured-agents', () => ({
   readHostStructuredAgents: mocks.catalog,
   readHostStructuredAgentsForRuntime: mocks.catalog,
   hostStructuredAgentsReadFailed: mocks.failed,
+  hostStructuredAgentsCatalogUnlearned: (
+    host: string,
+    runtimeId: string | null | undefined,
+    capabilities: readonly string[] | undefined
+  ) =>
+    runtimeId !== undefined &&
+    capabilities?.includes(CATALOG) === true &&
+    !mocks.catalog(host, runtimeId) &&
+    !mocks.failed(host, runtimeId),
   loadHostStructuredAgents: mocks.load,
   relearnHostStructuredAgents: mocks.load,
   hostStructuredAgentsVersion: () => 0,
@@ -177,7 +202,7 @@ beforeEach(() => {
     activeWorktreeId: 'one',
     settings: {
       ...getDefaultSettings('/home/me'),
-      experimentalNativeChat: true,
+      nativeChatProviders: { claude: true, codex: true },
       disabledTuiAgents: []
     },
     localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
@@ -305,8 +330,7 @@ it('shares real answer preparation at N and 10N across candidates, owners and se
             activeWorkspaceExecutionHostId: 'local',
             settings: {
               ...getDefaultSettings('/home/me'),
-              experimentalNativeChat: true,
-              nativeChatProviders: { opencode: false, pi: false, omp: false },
+              nativeChatProviders: { claude: true, codex: true },
               disabledTuiAgents: []
             }
           })
@@ -355,11 +379,7 @@ it('shares real answer preparation at N and 10N across candidates, owners and se
             expect(measured.routes).toBeLessThanOrEqual(
               measured.selectors + 1 + Number(Boolean(launchCwd))
             )
-            if (launchCwd) {
-              expect(measured.records).toBeGreaterThanOrEqual(count)
-            } else {
-              expect(measured.records).toBe(0)
-            }
+            expect(measured.records).toBe(0)
             expect(measured.records).toBeLessThanOrEqual(count * (measured.routes + 8))
             expect(measured.answers).toBe(
               4 +
@@ -476,6 +496,30 @@ it('shows an older host from client facts and never asks it per agent', () => {
   })
   expect(mocks.subscribe).not.toHaveBeenCalled()
   expect(mocks.support).not.toHaveBeenCalled()
+})
+
+it('updates the real menu when the global default changes and retains opposite overrides', async () => {
+  useAppStore.setState((state) => ({
+    settings: { ...state.settings!, agentDefaultSurface: 'terminal', nativeChatProviders: {} }
+  }))
+  const hook = renderHook(() => useNewTabAgentMenuRows('one', true, { kind: 'local' }))
+  const row = () =>
+    hook.result.current.state === 'settled'
+      ? hook.result.current.rows.find((item) => item.agent === 'claude')
+      : undefined
+  expect(row()?.kind).toBe('cli')
+  await act(async () => {
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, agentDefaultSurface: 'chat' }
+    }))
+  })
+  expect(row()?.kind).toBe('chat')
+  await act(async () => {
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, nativeChatProviders: { claude: false } }
+    }))
+  })
+  expect(row()?.kind).toBe('cli')
 })
 
 it('offers a chat on the CLI row of an agent set to open as a CLI', () => {
@@ -649,4 +693,49 @@ it('preserves per-agent published answers and direct route inputs across context
       }
     }
   }
+})
+
+it('keeps explicit Chat separate from provider defaults and pending/CLI support', () => {
+  const input = {
+    agent: 'codex' as const,
+    inventoryReady: true,
+    answer: 'yes' as const,
+    chatPending: false,
+    plain: false
+  }
+  const settings = { agentDefaultSurface: 'chat' as const, nativeChatProviders: { codex: false } }
+  expect(resolveAgentMenuSelection({ ...input, settings, surface: 'chat' }).choice?.route).toBe(
+    'structured-native-chat'
+  )
+  expect(resolveAgentMenuSelection({ ...input, settings, surface: 'terminal' }).choice?.route).toBe(
+    'terminal-tui'
+  )
+  const off = resolveAgentMenuSelection({
+    ...input,
+    settings: { agentDefaultSurface: 'terminal' }
+  })
+  expect(off).toMatchObject({
+    ready: true,
+    choice: { route: 'terminal-tui' }
+  })
+  expect(resolveAgentMenuSelection({ ...input, settings: null, surface: 'chat' }).ready).toBe(false)
+  expect(resolveAgentMenuSelection({ ...input, settings: null, surface: 'terminal' }).ready).toBe(
+    true
+  )
+  expect(
+    resolveAgentMenuSelection({
+      ...input,
+      settings: { agentDefaultSurface: 'terminal' },
+      cliMissing: true
+    }).ready
+  ).toBe(false)
+  expect(
+    resolveAgentMenuSelection({
+      ...input,
+      settings,
+      surface: 'chat',
+      answer: 'not-on-host',
+      cliMissing: true
+    }).ready
+  ).toBe(false)
 })

@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
 import { isAutomationRunHistory } from '../../shared/automation-run-retention'

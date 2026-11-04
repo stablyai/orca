@@ -11,7 +11,7 @@ import {
   terminateProviderProcessTree,
   type ProviderProcessTeardownVerdict
 } from './provider-process-teardown'
-import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { providerSpawnAbsence, type ProviderSpawnAbsence } from './provider-executable-missing'
 import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
 import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'

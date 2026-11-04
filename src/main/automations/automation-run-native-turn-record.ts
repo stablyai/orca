@@ -1,8 +1,8 @@
 import { nativeChatLineDecoderForAgent } from '../native-chat/transcript-tail-reader'
 import { nativeChatTurnLifecycleDecoderForAgent } from '../native-chat/transcript-turn-lifecycle'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TranscriptRecordObservation } from '../native-chat/transcript-watch-contract'
 
 export function createAutomationRunNativeTurnDecoder(agent: TuiAgent) {

@@ -1,5 +1,8 @@
-import { claudeBackgroundArgs } from './claude-background-run-isolation'
-import type { TuiAgent } from './tui-agent'
+import {
+  claudeBackgroundArgs,
+  claudeTextGenerationToolArgs
+} from './claude-background-run-isolation'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type {
   CommitMessageAgentSpec,
   CommitMessageModel,
@@ -31,18 +34,19 @@ export function buildPrimaryCommitMessageAgentSpecs({
   return {
     claude: {
       id: 'claude',
+      modelFlag: [{ aliases: ['--model'] }],
+      effortFlag: [{ aliases: ['--effort'] }],
       label: 'Claude',
       binary: 'claude',
       // Claude -p accepts large prompts on stdin when no positional prompt is supplied.
       promptDelivery: 'stdin',
-      buildArgs: ({ model, thinkingLevel, strictMcp, userArgs }) => [
+      buildArgs: ({ model, thinkingLevel, strictMcp, legacyToolPolicy, userArgs }) => [
         '-p',
         '--output-format',
         'text',
         '--model',
         model,
-        '--permission-mode',
-        'plan',
+        ...claudeTextGenerationToolArgs({ strictMcp, legacyToolPolicy }),
         ...(thinkingLevel ? ['--effort', thinkingLevel] : []),
         ...claudeBackgroundArgs(strictMcp, userArgs)
       ],
@@ -78,6 +82,11 @@ export function buildPrimaryCommitMessageAgentSpecs({
     },
     codex: {
       id: 'codex',
+      modelFlag: [
+        { aliases: ['--model', '-m'] },
+        { aliases: ['-c', '--config'], configKey: 'model' }
+      ],
+      effortFlag: [{ aliases: ['-c', '--config'], configKey: 'model_reasoning_effort' }],
       label: 'Codex',
       binary: 'codex',
       // codex exec reads stdin without prompt argv, avoiding Windows/SSH/POSIX size limits for staged diffs.
@@ -151,6 +160,8 @@ export function buildPrimaryCommitMessageAgentSpecs({
     },
     opencode: {
       id: 'opencode',
+      modelFlag: [{ aliases: ['--model', '-m'] }],
+      effortFlag: [{ aliases: ['--variant'] }],
       label: 'OpenCode',
       binary: 'opencode',
       // OpenCode stdin avoids cross-platform argv limits for large staged diffs.
@@ -179,6 +190,8 @@ export function buildPrimaryCommitMessageAgentSpecs({
     },
     opencode2: {
       id: 'opencode2',
+      modelFlag: [{ aliases: ['--model', '-m'] }],
+      effortFlag: [{ aliases: ['--model', '-m'], modelVariant: true }],
       label: 'OpenCode 2',
       binary: 'opencode2',
       promptDelivery: 'stdin',
@@ -207,6 +220,8 @@ export function buildPrimaryCommitMessageAgentSpecs({
     },
     pi: {
       id: 'pi',
+      modelFlag: [{ aliases: ['--model'] }],
+      effortFlag: [{ aliases: ['--thinking'] }],
       label: 'Pi',
       binary: 'pi',
       promptDelivery: 'stdin',

@@ -29,8 +29,11 @@ async function measureReconciliation(
   const replacementSamples: number[] = []
   const measure = (next: string): number => {
     const model = monaco.editor.createModel(initial, 'plaintext')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: content sync calls only the editor methods stubbed here.
     const editorInstance = {
       getModel: () => model,
+      saveViewState: () => null,
+      restoreViewState: () => {},
       pushUndoStop: () => true
     } as unknown as monaco.editor.IStandaloneCodeEditor
     const startedAt = performance.now()

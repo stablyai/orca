@@ -3,24 +3,24 @@
 import {
   AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-launch-runtime-capability'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type {
   AgentLaunchPlacement,
   AgentLaunchPrompt,
   AgentLaunchResult
-} from '../../../src/shared/agent-launch-intent'
-import { isStructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
-import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../src/shared/agent-launch-tab-closed'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-intent'
+import { isStructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../src/shared/agent-launch/contracts/agent-launch-tab-closed'
 import { makePaneKey } from '../../../src/shared/stable-pane-id'
-import { createStructuredAgentSessionId } from '../../../src/shared/structured-agent-session-create'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { createStructuredAgentSessionId } from '../../../src/shared/agent-session/structured-agent-session-create'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import { agentLaunchReplayRun } from '../tasks/mobile-workspace-create-operations'
 import { agentLaunchExistingParams, readAgentLaunchSupport } from '../tasks/agent-launch-request'
 import {
   classifyAgentLaunchReplayRefusal,
   isAgentLaunchReservationTakenRefusal
-} from '../../../src/shared/agent-launch-replay-refusal'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-replay-refusal'
 import { sendReplayingAmbiguousDelivery } from '../tasks/replay-on-ambiguous-delivery'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { randomV4Uuid } from '../platform/random-v4-uuid'

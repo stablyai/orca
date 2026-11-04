@@ -73,21 +73,6 @@ describe('orchestration recovery command identity', () => {
   })
 
   it.each([
-    [
-      'gate-create',
-      'orchestration.gateCreate',
-      ['orchestration', 'gate-create', '--task', 'task_1', '--question', 'ship?']
-    ],
-    [
-      'worker-retain',
-      'orchestration.workerRetain',
-      ['orchestration', 'worker-retain', '--dispatch', 'dispatch_1', '--json']
-    ]
-  ] as const)('preserves exact raw argv for %s recovery', (_name, method, args) => {
-    expect(buildOrchestrationRecoveryCommand(method, {}, 'orca', args)).toEqual(['orca', ...args])
-  })
-
-  it.each([
     ['split', ['orchestration', 'send', '--pairing-code', 'secret', '--subject', 'status']],
     ['equals', ['orchestration', 'send', '--pairing-code=secret', '--subject', 'status']],
     [
@@ -112,7 +97,7 @@ describe('orchestration recovery command identity', () => {
     ).toEqual(['orca-ide', 'orchestration', 'worker-stop', '--dispatch', 'dispatch_1'])
   })
 
-  it('reconstructs worker-retain when raw argv is unavailable', () => {
+  it('reconstructs worker-keep-open when raw argv is unavailable', () => {
     expect(
       buildOrchestrationRecoveryCommand('orchestration.workerRetain', {
         dispatch: 'dispatch_1'
@@ -120,7 +105,7 @@ describe('orchestration recovery command identity', () => {
     ).toEqual([
       resolveOrchestrationCliExecutable(),
       'orchestration',
-      'worker-retain',
+      'worker-keep-open',
       '--dispatch',
       'dispatch_1'
     ])

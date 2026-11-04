@@ -22,11 +22,14 @@ import type {
 } from '../../shared/project-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
 import type { WslMovedProject } from '../../shared/wsl-move/wsl-moved-project'
+import type { HostRepoCatalogSnapshot } from '../../shared/host-repo-catalog-snapshot'
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
   /** Local projects a WSL host now owns: read-only, listed only for their existing chats. */
   listWslMoved: () => Promise<WslMovedProject[]>
+  /** Saved WSL host project lists by environment id; desktop-only, never contacts a host. */
+  listHostCatalogSnapshots: () => Promise<Record<string, HostRepoCatalogSnapshot>>
   add: (args: {
     path: string
     kind?: 'git' | 'folder'
@@ -49,6 +52,7 @@ export type RepositoryApi = {
         | 'repoIcon'
         | 'upstream'
         | 'hookSettings'
+        | 'editorFormatter'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'

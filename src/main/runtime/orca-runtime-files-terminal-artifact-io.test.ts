@@ -22,7 +22,7 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/access/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>
@@ -364,6 +364,33 @@ describe('RuntimeFileCommands', () => {
         isBinary: true,
         isImage: true,
         mimeType: 'image/png'
+      })
+    })
+
+    it.each([
+      ['woff', 'font/woff'],
+      ['woff2', 'font/woff2'],
+      ['ttf', 'font/ttf'],
+      ['otf', 'font/otf']
+    ])('reads granted %s font bytes for document previews', async (extension, mimeType) => {
+      const content = 'font\0binary\0bytes'
+      const artifactPath = await tempFile(`report.${extension}`, content)
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+
+      await expect(
+        commands.readTerminalArtifactPreview(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).resolves.toMatchObject({
+        content: Buffer.from(content).toString('base64'),
+        isBinary: true,
+        isImage: false,
+        mimeType
       })
     })
 

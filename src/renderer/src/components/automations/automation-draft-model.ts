@@ -4,7 +4,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   hasExtraAgentArgs,
   parseExtraAgentArgs
-} from '../../../../shared/automation-extra-agent-args'
+} from '../../../../shared/agent-launch/startup/automation-extra-agent-args'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { extraAgentArgsErrorText } from './automation-extra-agent-args-error-copy'
 

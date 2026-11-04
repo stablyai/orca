@@ -17,7 +17,7 @@ import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { getHistorySessionDirName } from '../../daemon/history-paths'
 import { isTerminalCheckpointFile } from '../../daemon/terminal-history-checkpoint-reader'
 import type { SessionMeta } from '../../daemon/terminal-history-metadata'
-import { syncDirectoryDurablySync } from '../../durable-file-write'
+import { syncDirectoryDurablySync } from '../../filesystem/durable-file-write'
 import {
   getOrcadMigrationReceivedBlobPath,
   listOrcadMigrationReceivedBlobNames

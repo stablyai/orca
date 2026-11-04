@@ -5,7 +5,7 @@ import {
   type AutomationRendererChannel
 } from './automation-dispatch-request'
 export type { AutomationRendererChannel } from './automation-dispatch-request'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   isFinalAutomationRunStatus,
   type Automation,
@@ -28,7 +28,7 @@ import {
   AutomationRunCompletionWatcher,
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {

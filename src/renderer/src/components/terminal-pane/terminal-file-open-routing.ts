@@ -71,7 +71,7 @@ type TerminalFileOpenDeps = {
   onOpenFailure?: (failure: FileOpenFailure) => void
   /** The tab that owns the link; editor opens place themselves relative to its group. */
   sourceTabId?: string | null
-  /** "Open in this group": pins the source tab's group at activation, or refuses. */
+  /** "Open in new tab": pins the source tab's group at activation, or refuses. */
   openInSourceGroup?: boolean
   /** Opt-in menu request; the legacy flag remains editor-only. */
   openInSourceGroupSurface?: 'internal' | 'browser'
@@ -236,7 +236,8 @@ export function openDetectedFilePath(
     }
 
     // Route local HTML to Orca browser, including system-browser opens OS could not launch.
-    if (isHtmlFilePath(mappedFilePath) && hostGrant === null) {
+    // Why: a read-only grant comes from a host that re-grants only to the printing terminal, so preview reads would fail.
+    if (isHtmlFilePath(mappedFilePath) && !hostGrant?.readOnly) {
       if (deps.openInSourceGroup) {
         refuseExplicitNonEditorRoute()
         return
@@ -280,6 +281,9 @@ export function openDetectedFilePath(
     } else if (
       hostGrant === null &&
       !isFloatingWorkspaceId(worktreeId) &&
+      // Why: a local file opens in the workspace it was clicked in, even if another holds it open;
+      // owner-scoped tab ids keep both tabs, and the editor reads local absolute paths directly.
+      targetExecutionHostId !== LOCAL_EXECUTION_HOST_ID &&
       store.openFiles.some(
         (openFile) => openFile.filePath === mappedFilePath && openFile.worktreeId !== worktreeId
       )

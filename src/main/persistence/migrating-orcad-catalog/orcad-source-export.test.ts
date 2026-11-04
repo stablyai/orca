@@ -17,7 +17,7 @@ import {
   getProfileTerminalScrollbackSnapshotRoot,
   readTerminalScrollbackStoredBytesSync,
   writeTerminalScrollbackSnapshotSync
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',

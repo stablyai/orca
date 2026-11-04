@@ -3,12 +3,12 @@ import {
   providerDiagnostic,
   type ProviderDiagnostic,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
-} from '../../shared/agent-session-failure-words'
-import type { AgentJournalAnsweredTurnIdentity } from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalAnsweredTurnIdentity } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { CodexTurnEnd } from './codex-structured-dispatch-echo'
 import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
 import type { CodexSession } from './codex-structured-session-state'
@@ -19,7 +19,7 @@ import {
   readCodexTurnId,
   readCodexTurnStatus
 } from './codex-structured-thread-facts'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import { codexAuthenticationFailure } from './codex-authentication-failure'
 
 export function codexDispatchRejection(

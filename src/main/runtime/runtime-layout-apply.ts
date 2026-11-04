@@ -108,7 +108,8 @@ export async function applyWindowLayoutCommand(
             : {})
         }
       },
-      holders
+      holders,
+      run
     )
     if (reply.ok && reply.result.tabId) {
       const move = {

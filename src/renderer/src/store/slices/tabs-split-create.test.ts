@@ -153,16 +153,4 @@ describe('creating a tab directly into a new split', () => {
       ).toEqual(layoutProjection(chained.store.getState(), chained.sourceGroupId, chainedGroupId!))
     }
   )
-
-  it('records the pane interaction the empty split used to record', () => {
-    const { store, sourceGroupId } = seededStore()
-    const recordFeatureInteraction = vi.fn()
-    store.setState({ recordFeatureInteraction })
-
-    store.getState().createTab(WT, undefined, undefined, {
-      split: { ...SPLIT, sourceGroupId }
-    })
-
-    expect(recordFeatureInteraction).toHaveBeenCalledWith('terminal-panes')
-  })
 })

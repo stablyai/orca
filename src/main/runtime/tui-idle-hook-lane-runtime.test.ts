@@ -10,7 +10,7 @@ import { createHookListenerState } from '../../shared/agent-hook-listener/listen
 import { normalizeHermesEvent } from '../../shared/agent-hook-listener/providers/hermes-events'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from './orca-runtime'
 
 vi.mock('electron', () => ({

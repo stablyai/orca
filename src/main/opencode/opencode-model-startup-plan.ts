@@ -1,20 +1,23 @@
-import type { AgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import type { AgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   type AgentStartupPlan
-} from '../../shared/tui-agent-startup'
+} from '../../shared/agent-launch/startup/tui-agent-startup'
 import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
 import { buildSleepingAgentLaunchConfig } from '../../shared/sleeping-agent-launch-config'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 import { resolveOpenCodeLaunchModelConfig } from './opencode-launch-model-config'
 import {
   isVerifiedOpenCodeConfigModelVersion,
   isVerifiedOpenCodeLegacyModelVersion
 } from './opencode-model-version-policy'
-import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import {
+  getTuiAgentLaunchCommand,
+  TUI_AGENT_CONFIG
+} from '../../shared/agent-launch/catalog/tui-agent-config'
 import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
 import { probeOpenCodeLaunchCapabilities } from './opencode-launch-capabilities'
@@ -23,7 +26,7 @@ import {
   OPENCODE_MODEL_CONFIG_REFUSAL,
   OPENCODE_MODEL_TRANSPORT_REFUSAL,
   OPENCODE_MODEL_VERSION_REFUSAL
-} from '../../shared/agent-launch-model-preferences'
+} from '../../shared/agent-launch/choices/agent-launch-model-preferences'
 
 type StartupScope = {
   inputs: AgentStartupPlanInputs

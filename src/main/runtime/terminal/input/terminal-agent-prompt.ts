@@ -21,7 +21,7 @@ import {
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs,
   resolveAgentPromptSubmitDelayForAgent
-} from '../../../../shared/agent-prompt-injection'
+} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache

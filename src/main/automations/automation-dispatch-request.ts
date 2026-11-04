@@ -12,7 +12,7 @@ import type {
   AutomationRun,
   AutomationPrecheckResult
 } from '../../shared/automations-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRunWriter } from './automation-run-writer'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import type { HeadlessAutomationDispatchContext } from './headless-dispatch-runner'

@@ -9,7 +9,7 @@ import {
 } from './agent-status-capacity-eviction'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
 import type { AgentStatusLiveEntryBuild } from './agent-status-live-entry-builder'
-import { agentProviderSessionsEqual } from '../../../../../shared/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { liveResumeRecordChange } from '../../../../../shared/agent-resume-record-from-status'
 
 export type AgentStatusLiveUpdateReduction = {

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { ConfirmationDialogContext } from './confirmation-dialog-context'
 import { UntitledFileRenameDialog } from './editor/UntitledFileRenameDialog'
-import { QuickCommandsPane } from './settings/QuickCommandsPane'
+import { QuickCommandsPane } from './settings/quick-commands/QuickCommandsPane'
 import { useWorkspaceKanbanColumnResize } from './sidebar/use-workspace-kanban-column-resize'
 import { useAddRepoCloneFlow } from './sidebar/useAddRepoCloneFlow'
 

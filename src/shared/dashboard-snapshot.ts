@@ -2,7 +2,7 @@ import type { agentVerdictDisplayMark } from './agent-main-agent-verdict'
 import type { AgentType, AgentWorkingMode } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 /** Main renderer owns live state and relays structured-clone-safe snapshots through main to the presentation-only pop-out; no functions/class instances. */
 

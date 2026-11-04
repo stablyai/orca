@@ -53,13 +53,6 @@ export const OPERATION_MUTATIONS = {
             return response
           }),`
   },
-  // Decodes the reply envelope instead of the accepted snapshot, so the Home card publishes nothing
-  // where a host answered.
-  'home-accounts-envelope': {
-    file: 'mobile-home-host-requests.ts',
-    before: 'const snapshot = decodeAccountsSnapshot(accounts.value)',
-    after: 'const snapshot = decodeAccountsSnapshot(reply)'
-  },
   // Offset-zero chunk writes preserve length; digest and decoded-byte observations must detect corruption.
   'mobile-web-bundle-chunk-placement': {
     file: 'mobile-web-bundle-fetch.ts',
@@ -109,12 +102,6 @@ export const OPERATION_MUTATIONS = {
       '(settingsResult.value as NewWorktreeRuntimeSettings & { visibleTaskProviders?: unknown })',
     after:
       '(settingsRes.value.result as NewWorktreeRuntimeSettings & { visibleTaskProviders?: unknown })'
-  },
-  // Treats any successful linear.status reply as a connected Linear account.
-  'home-providers-linear': {
-    file: 'mobile-home-host-requests.ts',
-    before: 'linearConnected: linear?.connected === true',
-    after: 'linearConnected: linear !== null'
   },
   // Read the wrong host-platform field so rows display an unreported platform.
   'repo-metadata-platform': {

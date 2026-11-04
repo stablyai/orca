@@ -1,5 +1,8 @@
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
-import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import type {
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../../shared/native-chat/native-chat-types'
 import type { IncrementalTranscriptState } from './transcript-incremental-reader'
 
 export function createTranscriptWatchSnapshotReader(

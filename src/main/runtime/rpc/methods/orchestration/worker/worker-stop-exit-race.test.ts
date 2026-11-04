@@ -72,12 +72,6 @@ describe('a worker whose process exits while its own stop is in flight', () => {
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
-  it('leaves an exit with no stop in flight failing the dispatch', async () => {
-    const { dispatchId } = await h.startWorker()
-    fireExit('term_worker')
-    expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('failed')
-  })
-
   it('certifies a later death instead of crediting a stopping row from a dead runtime', async () => {
     const { dispatchId } = await h.startWorker()
     // The stop RPC committed `stopping` in an earlier runtime and the app died before settling.

@@ -1,7 +1,7 @@
 import {
   AGENT_LAUNCH_TAB_CLOSED_CODE,
   AgentLaunchTabClosedError
-} from '../../../../shared/agent-launch-tab-closed'
+} from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 import type { RpcContext } from '../core'
 import { readsAgentLaunchTabClosed, type AgentLaunchRefusal } from './agent-launch-replay'
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
@@ -68,4 +68,13 @@ export async function settleLaunchWhoseTabWasClosed(
   }
   await settleQuietly(admission.fail(AGENT_LAUNCH_TAB_CLOSED_CODE))
   throw new AgentLaunchExecutionError(new AgentLaunchTabClosedError(), AGENT_LAUNCH_TAB_CLOSED_CODE)
+}
+
+export function rethrowAgentLaunchCause(error: unknown, context: RpcContext): never {
+  if (error instanceof AgentLaunchExecutionError) {
+    throw error.cause instanceof AgentLaunchTabClosedError
+      ? agentLaunchTabClosedAnswer(context)
+      : error.cause
+  }
+  throw error
 }

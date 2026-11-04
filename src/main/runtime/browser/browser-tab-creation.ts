@@ -6,9 +6,9 @@ import {
   publishCreatedBrowserSessionTab,
   resolveBrowserTabCreateFocus
 } from '../browser-tab-create-publication'
-import { browserSessionRegistry } from '../../browser/browser-session-registry'
+import { browserSessionRegistry } from '../../browser/sessions/browser-session-registry'
 import { BrowserError } from '../../browser/browser-error'
-import { waitForTabRegistration } from '../../ipc/browser-tab-registration-wait'
+import { waitForTabRegistration } from '../../ipc/browser/browser-tab-registration-wait'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import { createBrowserClientPage, openBrowserUrlOnClient } from './browser-client-page-opening'
@@ -49,7 +49,11 @@ export class RuntimeBrowserTabCreation {
       split?: BrowserTabSplitDirection
       splitFromTabId?: string
     },
-    caller?: { pairedDeviceId?: string; clientKind?: 'mobile' | 'runtime' }
+    caller?: {
+      pairedDeviceId?: string
+      clientKind?: 'mobile' | 'runtime'
+      opensPageLink?: boolean
+    }
   ): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
     const focus = resolveBrowserTabCreateFocus({
@@ -118,6 +122,7 @@ export class RuntimeBrowserTabCreation {
         worktreeId,
         focus,
         ...(caller?.pairedDeviceId ? { clientNavigationId: caller.pairedDeviceId } : {}),
+        ...(caller?.opensPageLink ? { opensPageLink: true } : {}),
         targetGroupId: params.targetGroupId
       })
       return { browserPageId: created.browserPageId }

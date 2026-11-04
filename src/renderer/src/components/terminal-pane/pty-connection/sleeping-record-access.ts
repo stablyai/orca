@@ -8,10 +8,10 @@ import { neutralTerminalTitle } from '../../../../../shared/terminal-pane-title-
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-process-recognition'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   beginAgentStartupDeliveryAttempt,
   releaseAgentStartupDeliveryAttempt
@@ -38,12 +38,16 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
   }
   session.clearSleepingRecordProviderDuplicates = (
     state: ReturnType<typeof useAppStore.getState>,
-    consumed: { paneKey: string; record: SleepingAgentSessionRecord }
+    consumed: { paneKey: string; record: SleepingAgentSessionRecord },
+    keepPaneKey?: string
   ): void => {
-    state.clearSleepingAgentSession(consumed.paneKey)
+    if (consumed.paneKey !== keepPaneKey) {
+      state.clearSleepingAgentSession(consumed.paneKey)
+    }
     for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
       if (
         paneKey !== consumed.paneKey &&
+        paneKey !== keepPaneKey &&
         record.worktreeId === consumed.record.worktreeId &&
         record.agent === consumed.record.agent &&
         agentProviderSessionsEqual(

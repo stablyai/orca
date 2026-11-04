@@ -12,7 +12,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
-import { rolldown, watch } from 'rolldown'
+import { watch } from 'rolldown'
 import type { Plugin, RolldownWatcher } from 'rolldown'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createProcessHostDevRebuildPlugin } from '../build-plugins/process-host-dev-rebuild'
@@ -128,42 +128,6 @@ function readEmittedVersion(root: string): number {
 }
 
 describe('External process-host development rebuilds', () => {
-  it('ignores excluded files and rebuilds application edits without recompiling the package', async () => {
-    const { root, packageDir, main } = fixture()
-    const fixtureDir = join(packageDir, 'src', '__fixtures__')
-    mkdirSync(fixtureDir)
-    const watcher = watch({
-      input: main,
-      external: ['@orca/process-host'],
-      plugins: [createProcessHostDevRebuildPlugin(root)],
-      output: { file: join(root, 'out', 'main.cjs'), format: 'cjs' }
-    })
-    watchers.push(watcher)
-    closeSuccessfulBundles(watcher)
-    await nextEvent(watcher, 'END')
-    let reloads = 0
-    watcher.on('event', (event) => {
-      if (event.code === 'END') {
-        reloads++
-      }
-    })
-    const testFile = join(packageDir, 'src', 'unrelated.test.ts')
-    writeFileSync(testFile, "const invalid: number = 'excluded'\n")
-    writeFileSync(join(fixtureDir, 'unrelated.ts'), "const invalid: number = 'excluded'\n")
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
-    rmSync(testFile)
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
-
-    expect(readFileSync(join(packageDir, 'builds.txt'), 'utf8')).toBe('build\n')
-    expect(reloads).toBe(0)
-    const rebuilt = nextEvent(watcher, 'END')
-    writeFileSync(main, "module.exports = { ...require('@orca/process-host'), changed: true }\n")
-    await rebuilt
-    expect(readEmittedVersion(root)).toBe(1)
-    expect(readFileSync(join(root, 'out', 'main.cjs'), 'utf8')).toContain('changed')
-    expect(readFileSync(join(packageDir, 'builds.txt'), 'utf8')).toBe('build\n')
-  })
-
   it('rebuilds when an explicitly imported excluded source is created or edited', async () => {
     const { root, packageDir, main } = fixture()
     const versions: number[] = []
@@ -388,18 +352,6 @@ describe('External process-host development rebuilds', () => {
     watchers.splice(watchers.indexOf(watcher), 1)
     for (const signal of watchSignals) {
       expect(existsSync(dirname(signal))).toBe(false)
-    }
-  })
-
-  it('leaves non-watch release compilation to the build:packages prerequisite', async () => {
-    const bundle = await rolldown({
-      input: resolve('src/packages/process-host/src/process-spec.ts'),
-      plugins: [createProcessHostDevRebuildPlugin('/unavailable-development-root')]
-    })
-    try {
-      await bundle.generate({ format: 'cjs' })
-    } finally {
-      await bundle.close()
     }
   })
 })

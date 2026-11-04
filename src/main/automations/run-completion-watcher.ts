@@ -19,7 +19,7 @@ import {
   type AutomationDispatchResult,
   type AutomationRun
 } from '../../shared/automations-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { RetainedRunReconciler } from './retained-run-reconciliation'
 import { isAutomationRunHistory } from '../../shared/automation-run-retention'
 

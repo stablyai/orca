@@ -1,3 +1,9 @@
+import { projectAgentLaunchInputViews } from './agent-launch/choices/agent-launch-profile'
+import { reconcileAgentChoiceArgsDetailed } from './agent-launch/choices/agent-choice-reconciliation'
+import type {
+  AgentDedicatedChoices,
+  AgentLaunchInputViews
+} from './agent-launch/choices/agent-launch-choices'
 import {
   sourceControlActionRecipeEntry,
   type SelectedSourceControlActionRecipe
@@ -8,83 +14,28 @@ import {
   lowerActionArgumentChoices
 } from './source-control-action-argument-choices'
 import { actionModelSelectionChoices } from './source-control-action-model-selection'
-import { normalizeAgentModelOptionChoices } from './agent-launch-choices'
+import { normalizeAgentModelOptionChoices } from './agent-launch/choices/agent-launch-choices'
 import type { ExecutionHostId } from './execution-host'
 import {
-  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchRawArgs,
   type AgentLaunchProfileSettings
-} from './tui-agent-launch-defaults'
-import {
-  findCatalogModel,
-  getAgentSessionOptionLaunchCatalog,
-  getAgentSessionOptionCatalog,
-  type CatalogOption
-} from './agent-session-option-catalog'
+} from './agent-launch/choices/tui-agent-launch-defaults'
+import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import {
   renderSourceControlActionCommandTemplate,
   type SourceControlActionRecipe
 } from './source-control-ai-actions'
-import { isTuiAgent } from './tui-agent-config'
-import type { TuiAgent } from './tui-agent'
-import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
-import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from './native-chat/input/native-chat-session-option-defaults'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
-import {
-  agentPermissionHasTerminalChoice,
-  agentPermissionChoices,
-  type AgentPermissionChoice
-} from './tui-agent-permission-choice'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-launch/permissions/agent-chat-permission-mode'
+import { agentPermissionChoices } from './agent-launch/permissions/tui-agent-permission-choice'
 
-/** Agents whose model an action can pick: the ones whose session catalog lists models. */
-export function sourceControlActionAgentPicksModel(
-  agent: string | null | undefined
-): agent is TuiAgent {
-  return (
-    isTuiAgent(agent) && Boolean(getAgentSessionOptionLaunchCatalog(agent)?.modelApply.launchArgs)
-  )
-}
-
-/** The one route a saved choice reaches, for the hint under its control; null reaches both. */
-export type SourceControlActionChoiceRoute = 'chats' | 'terminals' | null
-
-export function sourceControlActionPermissionModeRoute(
-  agent: TuiAgent,
-  mode: AgentPermissionChoice
-): SourceControlActionChoiceRoute {
-  return agentPermissionHasTerminalChoice(agent, mode) ? null : 'chats'
-}
-
-function optionReachesChats(agent: TuiAgent, option: CatalogOption): boolean {
-  return (
-    !option.apply.composedIntoModel &&
-    (isAgentSessionHandleProvider(agent)
-      ? STRUCTURED_LAUNCH_SEED_OPTION_IDS.some((id) => id === option.id)
-      : option.id === 'effort')
-  )
-}
-
-type SourceControlActionOption = { option: CatalogOption; route: SourceControlActionChoiceRoute }
-
-/** The picked model's options that a chat seeds or a terminal flag carries. */
-export function sourceControlActionOptions(
-  agent: TuiAgent,
-  modelId: string
-): SourceControlActionOption[] {
-  const catalog = getAgentSessionOptionCatalog(agent)
-  const model = findCatalogModel(catalog ?? { models: [], modelApply: {} }, modelId)
-  const options = model?.options ?? catalog?.unknownModelOptions ?? []
-  return options.flatMap((option): SourceControlActionOption[] => {
-    const chats = optionReachesChats(agent, option)
-    const terminals = Boolean(option.apply.launchArgs || option.apply.composedIntoModel)
-    if (
-      (!chats && !terminals) ||
-      (option.kind.type === 'select' && option.kind.choices.length === 0)
-    ) {
-      return []
-    }
-    return [{ option, route: !terminals ? 'chats' : !chats ? 'terminals' : null }]
-  })
-}
+export {
+  sourceControlActionAgentPicksModel,
+  sourceControlActionPermissionModeRoute,
+  sourceControlActionOptions,
+  type SourceControlActionChoiceRoute
+} from './source-control-action-options'
 
 /** The selected action group's typed inputs; the host composes them with actual raw Args. */
 export function sourceControlActionLaunchOptions(
@@ -100,10 +51,14 @@ export function sourceControlActionLaunchOptions(
   agent: TuiAgent
 ): {
   sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
   sessionOptionsYieldToAgentArgs?: true
 } {
-  const sessionOptions = resolveSourceControlActionSessionOptions(recipe, agent)
-  return sessionOptions ? { sessionOptions } : {}
+  const { agentArgs: _args, ...views } = selectedActionInputViews(
+    sourceControlActionRecipeEntry(recipe),
+    agent
+  )
+  return views
 }
 
 /** The resolved agent alone can receive its bound action choice. */
@@ -117,7 +72,10 @@ export function resolveSourceControlActionSessionOptions(
   return selectedActionSessionOptions(sourceControlActionRecipeEntry(recipe), agent)
 }
 
-function selectedActionSessionOptions(recipe: SelectedSourceControlActionRecipe, agent: TuiAgent) {
+function selectedActionSessionOptions(
+  recipe: SelectedSourceControlActionRecipe,
+  agent: TuiAgent
+): Readonly<Record<string, string>> | undefined {
   const { model, permission } = recipe.resolvedChoiceSources
   const literal = actionLiteralProjection(recipe, agent).choices
   const choices = actionModelSelectionChoices(model, agent)
@@ -133,13 +91,71 @@ function selectedActionSessionOptions(recipe: SelectedSourceControlActionRecipe,
   return Object.keys(sessionOptions).length ? sessionOptions : undefined
 }
 
-/** Saved replays request only a saved terminal; a saved chat follows the settings route, which can
- *  still fall back to a terminal where the host no longer runs chats. */
+function selectedActionInputViews(
+  recipe: SelectedSourceControlActionRecipe,
+  agent: TuiAgent,
+  settings?: AgentLaunchProfileSettings | null,
+  withSettings = false
+): AgentLaunchInputViews {
+  const selected = selectedActionSessionOptions(recipe, agent)
+  const { model, permissionMode, ...options } = selected ?? {}
+  const permission = agentPermissionChoices(agent).find((value) => value === permissionMode)
+  const choices: AgentDedicatedChoices & { options: Record<string, string> } = {
+    ...(model ? { model } : {}),
+    options,
+    ...(permission ? { permissionMode: permission } : {})
+  }
+  const catalog = getAgentSessionOptionLaunchCatalog(agent)
+  const keys = [
+    'model',
+    'permissionMode',
+    ...(catalog?.unknownModelOptions ?? []).map((option) => option.id),
+    ...(catalog?.models.flatMap((entry) => entry.options.map((option) => option.id)) ?? [])
+  ]
+  const source = selectedActionExecutionArgs(recipe, agent)
+  const result = reconcileAgentChoiceArgsDetailed({
+    agent,
+    userArgs: source ?? '',
+    choices,
+    mode: 'load',
+    keys: new Set(
+      keys.filter((key) => {
+        const binding =
+          key === 'model'
+            ? recipe.resolvedChoiceSources.model?.model
+            : recipe.resolvedChoiceSources.model?.options?.[key]
+        const explicit =
+          key === 'model'
+            ? choices.model
+            : key === 'permissionMode'
+              ? choices.permissionMode
+              : choices.options[key]
+        return (
+          (!isTuiAgent(recipe.agentId) || recipe.agentId === agent) &&
+          explicit === undefined &&
+          !(binding?.agentId === agent && binding.value === null)
+        )
+      })
+    )
+  })
+  return projectAgentLaunchInputViews(agent, choices, result, {
+    agentArgs: withSettings ? selectedActionAgentArgs(recipe, agent, settings) : source
+  })
+}
+
+/** Saved Terminal is strict; saved Chat uses supported routing with Terminal fallback. */
 export function resolveSourceControlActionRequestedSurface(
   recipe: Pick<SourceControlActionRecipe, 'agentId' | 'surface'>,
   agent: TuiAgent
 ): 'terminal' | undefined {
   return recipe.surface === 'terminal' && recipe.agentId === agent ? 'terminal' : undefined
+}
+
+export function resolveSourceControlActionPreferredSurface(
+  recipe: Pick<SourceControlActionRecipe, 'agentId' | 'surface'>,
+  agent: TuiAgent
+): 'chat' | undefined {
+  return recipe.agentId === agent && recipe.surface === 'chat' ? 'chat' : undefined
 }
 
 type ActionLaunchProjectionInput = ({ basePrompt: string } | { renderedPrompt: string }) & {
@@ -171,7 +187,8 @@ export function projectSelectedSourceControlActionLaunch(
   input: ActionLaunchProjectionInput,
   liveChoice?: ActionLaunchLiveChoice
 ) {
-  const sessionOptions = selectedActionSessionOptions(recipe, agent)
+  const views = selectedActionInputViews(recipe, agent, input.settings, 'settings' in input)
+  const { agentArgs, ...optionViews } = views
   return {
     commandInput: ('renderedPrompt' in input
       ? input.renderedPrompt
@@ -179,13 +196,13 @@ export function projectSelectedSourceControlActionLaunch(
           basePrompt: input.basePrompt
         })
     ).trim(),
-    agentArgs: ('settings' in input
-      ? selectedActionAgentArgs(recipe, agent, input.settings)
-      : selectedActionExecutionArgs(recipe, agent)
-    )?.trim(),
-    ...(sessionOptions ? { sessionOptions } : {}),
+    ...optionViews,
+    ...('agentArgs' in views ? { agentArgs: agentArgs?.trim() } : {}),
     requestedSurface:
       liveChoice?.requestedSurface ?? resolveSourceControlActionRequestedSurface(recipe, agent),
+    preferredSurface: liveChoice?.requestedSurface
+      ? undefined
+      : resolveSourceControlActionPreferredSurface(recipe, agent),
     selectedExecutionHostId: liveChoice?.executionHostId
   }
 }
@@ -212,7 +229,7 @@ function selectedActionAgentArgs(
   if (agentArgs === undefined || (permission?.agentId === agent && permission.permissionMode)) {
     return agentArgs
   }
-  return resolveTuiAgentLaunchArgs(agent, {
+  return resolveTuiAgentLaunchRawArgs(agent, {
     ...settings,
     agentDefaultArgs: { ...settings?.agentDefaultArgs, [agent]: agentArgs }
   })
@@ -277,14 +294,21 @@ export function sourceControlActionSelectedPreferences(
   recipe: SourceControlActionRecipe,
   agent: TuiAgent
 ) {
-  return selectedSourceControlActionPreferences(sourceControlActionRecipeEntry(recipe), agent)
+  const views = selectedActionInputViews(sourceControlActionRecipeEntry(recipe), agent)
+  return actionPreferencesFromOptions(views.chatSessionOptions ?? views.sessionOptions, agent)
 }
 
 export function selectedSourceControlActionPreferences(
   recipe: SelectedSourceControlActionRecipe,
   agent: TuiAgent
 ) {
-  const options = selectedActionSessionOptions(recipe, agent)
+  return actionPreferencesFromOptions(selectedActionSessionOptions(recipe, agent), agent)
+}
+
+function actionPreferencesFromOptions(
+  options: Readonly<Record<string, string>> | undefined,
+  agent: TuiAgent
+) {
   if (!options) {
     return undefined
   }

@@ -7,7 +7,7 @@ import {
   type Dispatch,
   type SetStateAction
 } from 'react'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { appendReturnedDraftText } from '../../../../../src/shared/returned-draft-text'
 import {
   findLandedImagePreviewEchoes,
@@ -70,7 +70,11 @@ export function useMobileNativeChatDrafts(args: {
   readSeededLaunchDraft: () => string | null
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
-  restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  restoreRejectedDraft: (
+    origin: MobileNativeChatSendOrigin,
+    text: string,
+    options?: { preserveConversationCommands?: boolean }
+  ) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
@@ -171,11 +175,18 @@ export function useMobileNativeChatDrafts(args: {
     clearMobileNativeChatDraftForSend(origin.draftDestination, origin.draftEditGeneration, text)
   }, [])
 
-  const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    setMobileNativeChatDraftText(origin.draftDestination, (current) =>
-      appendReturnedDraftText(current, text)
-    )
-  }, [])
+  const restoreRejectedDraft = useCallback(
+    (
+      origin: MobileNativeChatSendOrigin,
+      text: string,
+      options?: { preserveConversationCommands?: boolean }
+    ) => {
+      setMobileNativeChatDraftText(origin.draftDestination, (current) =>
+        appendReturnedDraftText(current, text, options)
+      )
+    },
+    []
+  )
 
   const acceptSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => {

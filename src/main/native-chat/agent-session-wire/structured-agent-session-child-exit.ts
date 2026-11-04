@@ -4,9 +4,9 @@
 import {
   agentSessionFailureFact,
   type SubmissionRejectionFact
-} from '../../../shared/agent-session-failure'
-import { PROVIDER_EXIT_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import { PROVIDER_EXIT_ROW_PREFIX } from '../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 import type {
@@ -68,7 +68,7 @@ export type StructuredAgentSessionChildExitContext<
   /** Re-derive current work and wake queue without requiring a row; restate rebaselines moved fences. */
   generationEnded: StructuredAgentSessionGenerationEnded
   wakeDelivery?: (sessionId: string) => void
-  startupAttempts?: Pick<StructuredAgentSessionStartupAttempts, 'childEnded'>
+  startupAttempts?: Pick<StructuredAgentSessionStartupAttempts, 'childEnded' | 'ownsOpen'>
   /** Retain exits between background-start spawn and publication. */
   startFlights?: Pick<StructuredAgentSessionStartFlights, 'deferExit' | 'ownsChild'>
   abortBound?: (sessionId: string) => void
@@ -148,9 +148,10 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   // Use the first death observation when settling the running turn.
   const observation = child.exitObservation?.()
   const observedAt = observation?.observedAt ?? exit.observedAt ?? context.now()
-  // Host phase classifies startup failure even if adapters omit the flag.
+  // Host phase classifies startup failure even if adapters omit the flag. A starting child's
+  // exit cancels nothing: the start's owner gives its outcome from the adapter's answer.
   const exitedDuringStartup = child.phase === 'starting'
-  if (child.phase === 'starting' || !expected) {
+  if (!exitedDuringStartup && !expected) {
     context.abortBound?.(sessionId)
   }
   // Personal Stop cancels startup; host Stop fails it; preserve the close initiator.
@@ -187,7 +188,10 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   })
   context.generationEnded(sessionId)
   const endChild = (): void => {
-    context.startupAttempts?.childEnded(sessionId, child)
+    context.startupAttempts?.childEnded(sessionId, child, {
+      byOrca: expected || !!close,
+      ...(close?.failure ? { failure: close.failure, reason: close.reason ?? exit.reason } : {})
+    })
     if (session.child === child) {
       session.child = null
     }
@@ -258,7 +262,9 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
         ? {
             exitedDuringStartup: {
               generation: child.generation,
-              flightOwned: context.startFlights?.ownsChild(sessionId, child)
+              owned:
+                context.startFlights?.ownsChild(sessionId, child) ||
+                context.startupAttempts?.ownsOpen(sessionId, child)
             }
           }
         : {}),

@@ -1,5 +1,8 @@
 import type { Automation } from './automations-types'
-import { hasExtraAgentArgs, parseExtraAgentArgs } from './automation-extra-agent-args'
+import {
+  hasExtraAgentArgs,
+  parseExtraAgentArgs
+} from './agent-launch/startup/automation-extra-agent-args'
 
 /** Stored form of an extras input: the text unchanged, or `undefined` when it holds no extras. */
 export function storedExtraAgentArgs(value: unknown): string | undefined {

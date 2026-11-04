@@ -1,7 +1,8 @@
-import type {
-  AgentLaunchPublishedSurface,
-  AgentLaunchSurfaceExecution
-} from '../agent-launch/agent-launch-execution'
+import type { AgentLaunchResult as AgentLaunchPublishedSurface } from '../../shared/agent-launch/contracts/agent-launch-intent'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import type { AgentLaunchSurfaceExecution } from '../agent-launch/agent-launch-execution'
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
@@ -26,6 +27,20 @@ export async function launchOrdinaryTerminalAgent(
   }
 ): Promise<HeadlessAutomationAgentLaunch> {
   const { automation, run, target } = request
+  const selectedTarget =
+    automation.workspaceMode === 'existing'
+      ? await runtime.resolveManagedTerminalWorkspaceTarget(
+          `id:${requireWorkspaceId(automation)}`,
+          parseWorkspaceKey(automation.workspaceId ?? '')?.type === 'folder'
+            ? undefined
+            : getRepoExecutionHostId(target.repo),
+          false
+        )
+      : undefined
+  const selectedWorkspace = selectedTarget?.managedWorktree
+  if (automation.workspaceMode === 'existing' && !selectedWorkspace) {
+    throw new Error('The target workspace is no longer available.')
+  }
   const agent = automation.agentId
   const text = automation.prompt?.trim()
   let workspace: { id: string; displayName: string | null } | undefined
@@ -52,7 +67,11 @@ export async function launchOrdinaryTerminalAgent(
           run,
           repo: target.repo
         })
+        let startupTerminalCreation: RuntimeTerminalCreate | undefined
         const created = await runtime.createManagedWorktree({
+          onStartupTerminalCreated: (terminal) => {
+            startupTerminalCreation = terminal
+          },
           ...create,
           startupAgent,
           ...(startupPrompt ? { startupPrompt } : {})
@@ -71,6 +90,7 @@ export async function launchOrdinaryTerminalAgent(
         return {
           worktreeId: created.worktree.id,
           startupTerminalHandle: startup.handle,
+          startupTerminalCreation,
           ...(startup.paneKey ? { startupTerminalPaneKey: startup.paneKey } : {}),
           // Creation stages long prompts while keeping them on the launch command.
           ...(startupPrompt ? { promptRodeLaunchCommand: true } : {})
@@ -82,26 +102,38 @@ export async function launchOrdinaryTerminalAgent(
         throw new Error(TERMINAL_ONLY_MESSAGE)
       },
       createTerminalAgent: async ({ worktreeId, startupPrompt }) => {
-        const launched = await runtime.launchAgentTerminal(`id:${worktreeId}`, {
-          agent,
-          prompt: startupPrompt ?? '',
-          title: run.title,
-          suppressStartupUpdatePrompt: true,
-          ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
-          // Run now is the user's act and may start a stopped WSL distro; a scheduled run never does.
-          ...(run.trigger === 'scheduled' ? {} : { wslUserAct: true as const })
-        })
+        const resolved = selectedWorkspace
+        if (!resolved) {
+          throw new Error('The target workspace is no longer available.')
+        }
+        const launched = await runtime.launchAgentTerminal(
+          `id:${worktreeId}`,
+          {
+            agent,
+            prompt: startupPrompt ?? '',
+            title: run.title,
+            suppressStartupUpdatePrompt: true,
+            ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
+            // Run now is the user's act and may start a stopped WSL distro; a scheduled run never does.
+            ...(run.trigger === 'scheduled' ? {} : { wslUserAct: true as const })
+          },
+          {
+            worktree: resolved,
+            repo: target.repo,
+            folderWorkspace: selectedTarget?.scope.folderWorkspace ?? undefined
+          }
+        )
         terminal = launched
-        const shown = await runtime.showManagedWorktree(`id:${launched.worktreeId}`)
-        workspace = { id: launched.worktreeId, displayName: shown.displayName ?? null }
+        workspace = { id: launched.worktreeId, displayName: resolved.displayName ?? null }
         return {
           handle: launched.handle,
+          terminalCreation: launched,
           ...(launched.paneKey ? { paneKey: launched.paneKey } : {}),
           ...(startupPrompt ? { promptRodeLaunchCommand: true } : {})
         }
       },
-      deliverTerminalPrompt: ({ handle, prompt }) =>
-        runtime.deliverStartupFollowup(handle, { agent, prompt: prompt.text })
+      deliverTerminalPrompt: ({ handle, prompt, terminalCreation }) =>
+        runtime.deliverStartupFollowup(handle, { agent, prompt: prompt.text }, { terminalCreation })
     }
   }
   await launchUntilPublished(execution)

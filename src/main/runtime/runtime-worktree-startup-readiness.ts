@@ -1,3 +1,4 @@
+import type { TerminalReadinessCreation } from './launched-agent-composer-readiness'
 import { isShellProcess } from '../../shared/agent-detection'
 import { isExpectedAgentProcess } from '../../shared/agent-process-recognition'
 import {
@@ -5,8 +6,8 @@ import {
   resolvePasteReadySignal
 } from '../../shared/draft-paste-ready-scanner'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import type { TuiAgent } from '../../shared/tui-agent'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
   WorktreeStartupDraftPaste,
@@ -50,18 +51,21 @@ export function pasteWorktreeStartupDraftWhenReady(
     .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
 }
 
+export type StartupFollowupPromptOptions = {
+  onSubmitWritten?: () => void
+  assertCurrent?: () => void
+  signal?: AbortSignal
+  agentLaunch?: boolean
+  terminalCreation?: TerminalReadinessCreation
+}
+
 /** A post-start agent's first prompt: its process in front can still drop typed text (#10336). */
 export async function deliverStartupFollowupPrompt(
   runtime: TerminalPromptRuntime,
   host: WorktreeStartupReadinessHost,
   handle: string,
   { agent, prompt }: WorktreeStartupFollowup,
-  options: {
-    signal?: AbortSignal
-    agentLaunch?: boolean
-    onSubmitWritten?: () => void
-    assertCurrent?: () => void
-  } = {}
+  options: StartupFollowupPromptOptions = {}
 ): Promise<boolean> {
   const { signal } = options
   try {
@@ -88,6 +92,7 @@ export async function deliverStartupFollowupPrompt(
       handle,
       agent,
       freshLaunch: true,
+      terminalCreation: options.terminalCreation,
       text: prompt,
       onSubmitWritten: options.onSubmitWritten,
       assertCurrent: options.assertCurrent,

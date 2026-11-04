@@ -1,5 +1,5 @@
 import { selectFreshExplicitAgentStatus } from '../../runtime-hook-agent-row-selection'
-import { OrcaRuntimeWithControllerKnowsPtyIsLive } from './terminal-input-dispatch'
+import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
 import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-types'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../../runtime-terminal-agent-status-query'
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
@@ -14,7 +14,7 @@ import type {
 import { readAgentPromptWaitText } from '../../agent-prompt-submission-verification'
 import type { AgentStatus } from '../../../../shared/agent-detection'
 
-export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithControllerKnowsPtyIsLive {
+export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithPluginHookedTerminalInput {
   protected abstract getPaneKeyForTerminalHandle(handle: string): string | null
 
   protected async serializeAgentPromptSubmission<T>(
@@ -127,20 +127,13 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     current.lastAgentStatus = restoredStatus
     if (restoredStatus === 'idle') {
       this.resolvePtyTuiIdleWaiters(current, ptyId)
+      // Restored idle from a name-only title still needs settlement evidence before delivery.
+      this.deliverPendingMessagesForPty(ptyId)
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       // A stale-working clear retains native status rather than neutral status.
-      if (leaf.lastAgentStatus !== null && !current.titleDisplayClear) {
-        continue
-      }
-      // Live-agent evidence disproved the neutral title's exit signal; align delivery state with the tracker.
-      leaf.lastAgentStatus = restoredStatus
-      if (restoredStatus === 'idle') {
-        this.resolveTuiIdleWaiters(leaf)
-        // Restored idle from a name-only title still needs settlement evidence before delivery.
-        if (this.checkDeliverySettledAndArmRecheck(leaf)) {
-          this.deliverPendingMessagesForLeaf(leaf)
-        }
+      if (leaf.lastAgentStatus === null || current.titleDisplayClear) {
+        leaf.lastAgentStatus = restoredStatus
       }
     }
   }

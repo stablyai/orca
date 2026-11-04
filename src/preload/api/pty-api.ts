@@ -10,8 +10,8 @@ import type {
   TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
   TerminalLeafMoveRequest,
@@ -32,9 +32,9 @@ import type {
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
-import type { AgentPaneLaunchRequest } from '../../shared/agent-pane-launch-request'
+import type { AgentPaneLaunchRequest } from '../../shared/agent-launch/contracts/agent-pane-launch-request'
 import type { PtyManagementApi } from './pty-management-api'
 import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
 import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'

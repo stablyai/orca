@@ -1,12 +1,12 @@
 import {
   lowerActionArgumentChoices,
   demoteActionArgumentChoices
-} from '../../../../../../shared/source-control-action-argument-choices'
+} from '../../../../../../shared/source-control-action-argument-document'
 import {
   sourceControlActionSelectedPreferences,
   sourceControlActionExecutionArgs
 } from '../../../../../../shared/source-control-action-launch-preferences'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { readActionModelSelection } from '../../../../../../shared/source-control-action-model-selection'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,

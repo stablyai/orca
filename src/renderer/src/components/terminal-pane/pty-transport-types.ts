@@ -9,17 +9,17 @@ import type {
   TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery
-} from '../../../../shared/agent-session-host-authority'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+} from '../../../../shared/agent-session/agent-session-host-authority'
+import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
@@ -28,7 +28,7 @@ import type {
   RemoteRuntimeSnapshotRequestOptions
 } from '../../runtime/remote-runtime-terminal-multiplexer-types'
 import type { AcceptedInputOptions, PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
-import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export type PtyBufferSnapshot = {
   data: string
@@ -236,6 +236,11 @@ export type PtyTransport = {
   getRecoveryState?: () => PtyTransportRecoveryState
   /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
   retryRecovery?: () => boolean
+  /**
+   * The host the pane met stopped is running again: reopen a pane whose connect or attach was
+   * refused and left it idle (no retry armed), the way it opened. False when there is none to reopen.
+   */
+  reopenAfterHostReturned?: () => boolean
   /** True while the transport has a retry armed or parked; pane-level remounts must defer to it. */
   ownsRecovery?: () => boolean
   /** Typed input the host has not applied yet, which a remount would discard. */
@@ -272,6 +277,8 @@ export type PtyTransport = {
 }
 
 export type IpcPtyTransportOptions = {
+  /** Renderer-local observation before admission; never controls dispatch. */
+  onDrivingInputAttempt?: (ptyId: string | null) => void
   cwd?: string
   /** Retain bounded user input until the pane's first PTY connection binds. */
   bufferInputUntilConnect?: boolean

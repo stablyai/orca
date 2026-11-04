@@ -1,3 +1,4 @@
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type {
   CommandOf,
   LayoutApplyOutcome,
@@ -79,6 +80,7 @@ export class LayoutCommandPersistence {
     command: LayoutCommand,
     hostIds: readonly string[] = [],
     run: {
+      admit?: (partitions?: readonly WorkspaceSessionState[]) => boolean
       live?: LayoutLiveContext
       beforeWrite?: () => boolean
       stopBeforeWrite?: (ptyIds: readonly string[]) => boolean
@@ -101,6 +103,12 @@ export class LayoutCommandPersistence {
     const guardedCommit = (): DurableProfileStateMutation<LayoutApplyOutcome> => {
       if (run.beforeWrite?.() === false) {
         return { value: { ok: false, code: 'pane_not_found' }, persist: false }
+      }
+      if (
+        run.admit &&
+        !run.admit(resolved.map((hostId) => context.sessions.getWorkspaceSession(hostId)))
+      ) {
+        return { value: { ok: false, code: 'tab_not_found' }, persist: false }
       }
       return commit()
     }

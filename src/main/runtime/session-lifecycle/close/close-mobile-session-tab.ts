@@ -2,27 +2,43 @@ import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
 import {
   adjudicateAbsentMobileSessionTabClose,
-  resolveMobileSessionLifecycleCloseContext,
-  type MobileSessionLifecycleCloseHost
+  resolveMobileSessionLifecycleCloseContext
 } from '../../mobile-session-lifecycle-close-adjudication'
-import type {
-  MobileSessionTabCloseOutcome,
-  MobileSessionTabCloseOptions
-} from '../../mobile-session-tab-close-outcome'
 import {
   committedMobileSessionTabClose,
   delegatedMobileSessionTabClose,
-  refusedMobileSessionTabClose
+  refusedMobileSessionTabClose,
+  type MobileSessionTabCloseOutcome,
+  type MobileSessionTabCloseOptions
 } from '../../mobile-session-tab-close-outcome'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import type { RuntimeEdgeCommandSurface } from '../../runtime-edge-command-controller'
-import { SESSION_TAB_NOT_FOUND_ERROR } from '../../../../shared/session-tab-close'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
-import { structuredAgentSessionTabCloseCause } from '../../agent-session/structured-agent-session-tab-close-cause'
 import { retireHeadlessMobileSessionEditorTab } from '../../mobile-session-editor-projection'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { closeMobileStructuredSessionPresentation } from '../../session-tabs/structured-session-tab-presentation'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
 
 export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithCloseMobileRowInMainLayout {
+  abstract retireStructuredAgentSessionTabFromSnapshot(
+    sessionId: string,
+    expectedTabId?: string,
+    expectedWorktreeId?: string
+  ): boolean
+
+  abstract currentLocalStructuredSessionPresentation(
+    ...args: Parameters<ChatPresentation['currentLocalStructuredSessionPresentation']>
+  ): ReturnType<ChatPresentation['currentLocalStructuredSessionPresentation']>
+
+  abstract captureStructuredAgentSessionPresentation(
+    ...args: Parameters<ChatPresentation['captureStructuredAgentSessionPresentation']>
+  ): ReturnType<ChatPresentation['captureStructuredAgentSessionPresentation']>
+
+  abstract removeCapturedStructuredSessionSavedTabs(
+    ...args: Parameters<ChatPresentation['removeCapturedStructuredSessionSavedTabs']>
+  ): ReturnType<ChatPresentation['removeCapturedStructuredSessionSavedTabs']>
+
   declare browserTabClose: RuntimeEdgeCommandSurface['browserTabClose']
 
   async closeMobileSessionTab(
@@ -105,13 +121,9 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         })
       }
     }
-    let closedSelectionTabIds = [tab.id]
+    let closedTabIds = [tab.id]
     const finishCommittedClose = (): MobileSessionTabCloseOutcome =>
-      committedMobileSessionTabClose(
-        this.clientSessionTabSelections,
-        worktreeId,
-        closedSelectionTabIds
-      )
+      committedMobileSessionTabClose(this.clientSessionTabSelections, worktreeId, closedTabIds)
     if (tab.type === 'terminal') {
       // Wire parent::leaf names a pane; parent names its tab.
       const resolution = this.resolveTerminalCloseTarget(
@@ -122,7 +134,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       )
       const closingWholeParent = resolution === 'tab' || resolution === 'last-pane'
       if (closingWholeParent) {
-        closedSelectionTabIds = snapshot.tabs.flatMap((candidate) =>
+        closedTabIds = snapshot.tabs.flatMap((candidate) =>
           candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
             ? [candidate.id, candidate.parentTabId]
             : []
@@ -277,21 +289,18 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         await this.notifier.closeSessionTab(tab.id, worktreeId)
       }
     } else if (tab.type === 'agent-session') {
-      if (this.notifier?.closeSessionTab) {
-        try {
-          // The window maps reopened chats to tab ids not derivable from session ids.
-          await this.notifier.closeSessionTab(tab.id, worktreeId)
-        } catch (error) {
-          // The renderer already having removed the tab is an idempotent close, not a veto.
-          if (!(error instanceof Error && error.message === SESSION_TAB_NOT_FOUND_ERROR)) {
-            throw error
-          }
-        }
-      }
-      await this.closeStructuredAgentSessionTab(
+      const committed = await closeMobileStructuredSessionPresentation({
         tab,
-        structuredAgentSessionTabCloseCause(options.reason)
-      )
+        worktreeId,
+        reason: options.reason,
+        local: () => this.workspaceSessions.tryGetHostId(worktreeId) === LOCAL_EXECUTION_HOST_ID,
+        rows: () => this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs,
+        notifier: this.notifier,
+        runtime: this
+      })
+      if (!committed) {
+        return delegatedMobileSessionTabClose()
+      }
     } else if (!this.notifier?.closeSessionTab) {
       // Headless editors retire through the host-owned session.
       if (!retireHeadlessMobileSessionEditorTab(this, worktreeId, tab, options.force)) {
@@ -301,16 +310,5 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       await this.notifier.closeSessionTab(tab.id, worktreeId)
     }
     return finishCommittedClose()
-  }
-
-  protected getMobileSessionLifecycleCloseHost(): MobileSessionLifecycleCloseHost {
-    return {
-      tabs: this.tabs,
-      leaves: this.leaves,
-      ptysById: this.ptysById,
-      findPtyForMobileTerminalTab: (worktreeId, tab) =>
-        this.findPtyForMobileTerminalTab(worktreeId, tab),
-      republishSnapshot: (worktreeId) => this.republishMobileSessionTabsSnapshot(worktreeId)
-    }
   }
 }

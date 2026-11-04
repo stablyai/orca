@@ -1,6 +1,6 @@
 import type { AgentType } from './agent-status-types'
 import type { TerminalAgent } from './terminal-agent'
-import { isTuiAgent } from './tui-agent-config'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
 
 const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   claude: true,

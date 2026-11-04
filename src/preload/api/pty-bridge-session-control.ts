@@ -7,7 +7,7 @@ import type { ResourceViewAdmission } from '../../shared/resource-view-admission
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
   TerminalLeafMoveRequest,
@@ -18,8 +18,8 @@ import type {
   TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
-import type { TuiAgent } from '../../shared/tui-agent'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
 import type {
   PtyRendererDeliveryHealthReply,
@@ -30,7 +30,7 @@ import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagn
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { PreloadApi } from '../api-types'
 import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
-import type { AgentPaneLaunchRequest } from '../../shared/agent-pane-launch-request'
+import type { AgentPaneLaunchRequest } from '../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export const ptySessionControlApi = {
   spawn: (opts: {

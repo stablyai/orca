@@ -2,9 +2,9 @@ import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-
 import { runtimeStatusEntry } from '@/runtime/server-layout-frames.test-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
-import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import {
   launchSourceControlRecoveryAgentWithDefault,
   getDefaultSourceControlRecoveryLaunchCopy
@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { useSourceControlAi } from './use-ai'
 import type { SourceControlAiControllerParams } from './controller-types'
 import { deferred } from '../../source-control-hook-test-harness'
@@ -98,6 +98,57 @@ describe('AI operation recovery composer', () => {
     useAppStore.setState(initialState, true)
   })
 
+  it('claims recovery success only after the terminal and task handoff settle', async () => {
+    vi.mocked(toast.success).mockClear()
+    const completed = Promise.withResolvers<{
+      outcome: { status: 'created' }
+      delivered: boolean
+      failureNotified: boolean
+    }>()
+    const delivery = Promise.withResolvers<{ delivered: boolean; failureNotified: boolean }>()
+    launchAgent.mockReturnValue({
+      surface: { kind: 'host-published' },
+      terminalCompletion: completed.promise,
+      promptDeliveryResult: delivery.promise
+    })
+    useAppStore.setState({
+      settings: { ...getDefaultSettings(path.resolve('tmp')), defaultTuiAgent: 'codex' }
+    })
+    const run = () =>
+      launchSourceControlRecoveryAgentWithDefault({
+        activeWorktreeId: 'wt-1',
+        activeGroupId: null,
+        activeSourceControlLaunchPlatform: 'linux',
+        sourceRepoConnectionId: null,
+        actionId: 'fixCommitFailure',
+        basePrompt: 'fix this commit',
+        getLaunchActionRecipe: () => sourceControlActionRecipeEntry({ agentId: null }),
+        getStoreState: useAppStore.getState,
+        copy: getDefaultSourceControlRecoveryLaunchCopy('commit')
+      })
+    const starting = run()
+    await waitFor(() => expect(launchAgent).toHaveBeenCalledOnce())
+    expect(toast.success).not.toHaveBeenCalled()
+    completed.resolve({ outcome: { status: 'created' }, delivered: false, failureNotified: false })
+    await act(async () => {})
+    expect(toast.success).not.toHaveBeenCalled()
+    delivery.resolve({ delivered: true, failureNotified: false })
+    await expect(starting).resolves.toBe(true)
+    expect(toast.success).toHaveBeenCalledOnce()
+    vi.mocked(toast.success).mockClear()
+    launchAgent.mockReturnValue({
+      surface: { kind: 'host-published' },
+      terminalCompletion: Promise.resolve({
+        outcome: { status: 'failed', message: '' },
+        delivered: false,
+        failureNotified: true
+      })
+    })
+    await expect(run()).resolves.toBe(false)
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
   it.each<GitConflictOperation>(['merge', 'rebase', 'cherry-pick'])(
     'opens for a paused %s with no unmerged paths',
     async (conflictOperation) => {
@@ -147,7 +198,7 @@ describe('AI operation recovery composer', () => {
   )
   it('opens while an unrelated workspace fetch is pending', async () => {
     const { result } = renderHook(() => useSourceControlAi(controllerParams()))
-    useAppStore.getState().beginRemoteOperation('fetch')
+    useAppStore.getState().beginRemoteOperation('fetch', 'wt-2')
     await act(() => result.current.handleResolveConflictsWithAI())
     expect(result.current.resolveConflictsComposerOpen).toBe(true)
     expect(mutationInFlight).toHaveBeenCalledWith({

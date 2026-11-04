@@ -1,5 +1,11 @@
 import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
-import { isProseUrlTerminator, PROSE_HTTP_URL_SOURCE } from './prose-url-boundary'
+import {
+  IPV6_HTTP_HOST_SOURCE,
+  isProseUrlTerminator,
+  PROSE_HTTP_URL_SOURCE
+} from './prose-url-boundary'
+
+const IPV6_HTTP_AUTHORITY = new RegExp(String.raw`^https?:\/\/${IPV6_HTTP_HOST_SOURCE}`, 'iu')
 
 type ParsedTerminalHttpLink = {
   url: string
@@ -82,8 +88,14 @@ function trimHttpUrlTrailingPunctuation(
   startIndex: number,
   rawEndIndex: number
 ): number {
+  const minEndIndex =
+    startIndex +
+    (IPV6_HTTP_AUTHORITY.exec(lineText.slice(startIndex, rawEndIndex))?.[0].length ?? 0)
   let endIndex = rawEndIndex
-  while (endIndex > startIndex && isHttpUrlTrailingPunctuation(lineText.charCodeAt(endIndex - 1))) {
+  while (
+    endIndex > minEndIndex &&
+    isHttpUrlTrailingPunctuation(lineText.charCodeAt(endIndex - 1))
+  ) {
     endIndex -= 1
   }
   return endIndex

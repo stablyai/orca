@@ -13,7 +13,7 @@ vi.mock('../cache/repo-cache', () => ({ setCachedRepos: () => {} }))
 
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree, WorktreeHostContextView } from '../worktree/workspace-list-types'
 import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
 import { useHostRepoMetadata } from './use-host-repo-metadata'
 import { useHostScreenState } from './use-host-screen-state'
@@ -35,6 +35,13 @@ function unmountRenderers(): void {
 
 function reply(result: unknown): RpcResponse {
   return { id: 'reply', ok: true, result, _meta: { runtimeId: 'runtime' } }
+}
+
+// A display row with the host context the list draws beside it.
+type LabelledRow = Worktree & WorktreeHostContextView
+
+function labelled(display: ReturnType<typeof useHostDisplayWorktrees>): LabelledRow[] {
+  return display.worktrees.map((row) => ({ ...row, ...display.hostContextOf(row) }))
 }
 
 function row(worktreeId: string, repoId: string): Worktree {
@@ -59,7 +66,7 @@ async function displayedRows(args: {
   rows: Worktree[]
   sshTarget: Record<string, unknown>
   thenRepos?: { id: string; displayName: string; connectionId?: string }[]
-}): Promise<Worktree[]> {
+}): Promise<LabelledRow[]> {
   let repos = args.repos
   const client = new FakeSession('connected')
   client.sendRequest.mockImplementation(async (method: string) => {
@@ -74,7 +81,7 @@ async function displayedRows(args: {
         return reply({})
     }
   })
-  const seen: { rows: Worktree[]; refresh?: (options: { force: boolean }) => Promise<void> } = {
+  const seen: { rows: LabelledRow[]; refresh?: (options: { force: boolean }) => Promise<void> } = {
     rows: []
   }
   let setWorktrees: ((rows: Worktree[]) => void) | undefined
@@ -83,10 +90,8 @@ async function displayedRows(args: {
     state.clientRef.current = client
     setWorktrees = state.setWorktrees
     seen.refresh = useHostRepoMetadata({ client, connState: 'connected', hostId: 'host-1', state })
-    seen.rows = useHostDisplayWorktrees(
-      'connected',
-      state,
-      useResolvedHostPlatform(state, 'host-1')
+    seen.rows = labelled(
+      useHostDisplayWorktrees('connected', state, useResolvedHostPlatform(state, 'host-1'))
     )
     return null
   }
@@ -150,6 +155,80 @@ describe('SSH host health on the host list rows', () => {
     })
     expect(rows[0].hostContextLabel).toBeUndefined()
     expect(rows[0].hostContextHealthLabel).toBeUndefined()
+  })
+
+  it('keeps the repos an unchanged reply names and still refreshes host health', async () => {
+    const client = new FakeSession('connected')
+    let sshConnected = true
+    const repoParams: unknown[] = []
+    client.sendRequest.mockImplementation(async (method: string, params?: unknown) => {
+      switch (method) {
+        case 'repo.list':
+          repoParams.push(params)
+          return repoParams.length === 1
+            ? reply({
+                repos: [{ id: 'repo-ssh', displayName: 'api', connectionId: 'devbox' }],
+                snapshotId: 'repos-1'
+              })
+            : reply({ unchanged: true, snapshotId: 'repos-1' })
+        case 'ssh.listTargetSummaries':
+          return reply({
+            targets: [
+              {
+                id: 'devbox',
+                label: 'devbox',
+                connected: sshConnected,
+                connectionStatus: sshConnected ? 'connected' : 'disconnected'
+              }
+            ]
+          })
+        default:
+          return reply({ platform: 'darwin' })
+      }
+    })
+    const seen: {
+      rows: LabelledRow[]
+      repoCount: number
+      clearRepos?: () => void
+      refresh?: (options: { force: boolean }) => Promise<void>
+    } = { rows: [], repoCount: 0 }
+    let setWorktrees: ((rows: Worktree[]) => void) | undefined
+    function Probe(): null {
+      const state = useHostScreenState('host-1')
+      state.clientRef.current = client
+      setWorktrees = state.setWorktrees
+      seen.repoCount = state.desktopRepos.length
+      seen.clearRepos = () => state.setDesktopRepos([])
+      seen.refresh = useHostRepoMetadata({
+        client,
+        connState: 'connected',
+        hostId: 'host-1',
+        state
+      })
+      seen.rows = labelled(
+        useHostDisplayWorktrees('connected', state, useResolvedHostPlatform(state, 'host-1'))
+      )
+      return null
+    }
+    await act(async () => {
+      create(createElement(Probe))
+    })
+    await act(async () => {
+      setWorktrees?.([row('a', 'repo-ssh')])
+      await seen.refresh?.({ force: true })
+    })
+    sshConnected = false
+    // As a host switch away and back does: the shown repos clear while the client keeps its token.
+    act(() => seen.clearRepos?.())
+    await act(async () => {
+      await seen.refresh?.({ force: true })
+    })
+    expect(seen.repoCount).toBe(1)
+
+    expect(repoParams).toEqual([{ afterSnapshotId: null }, { afterSnapshotId: 'repos-1' }])
+    expect(seen.rows.map((r) => [r.hostContextLabel, r.hostContextHealthLabel])).toEqual([
+      ['devbox', 'Disconnected']
+    ])
   })
 })
 

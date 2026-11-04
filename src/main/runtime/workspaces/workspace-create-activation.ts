@@ -1,3 +1,6 @@
+import type { OrcaRuntimeService } from '../orca-runtime'
+import type { TerminalCreateOptions } from '../runtime-terminal-contracts'
+import type { RuntimeManagedWorktreeCreateArgs } from '../runtime-managed-worktree-create-types'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
@@ -41,4 +44,27 @@ export function createdWorkspaceActivationCallbacks(
       providesInitialSurface
     )
   return { folder, local }
+}
+
+// A create someone asked for starts its terminals as theirs; an automation's stay background.
+export function wslUserAct(args: { wslUserAct?: true }): { wslUserAct?: true } {
+  return args.wslUserAct ? { wslUserAct: true } : {}
+}
+
+export function workspaceCreateTerminalFactory(
+  runtime: Pick<OrcaRuntimeService, 'createTerminal'>,
+  args: RuntimeManagedWorktreeCreateArgs,
+  worktree?: Parameters<OrcaRuntimeService['createTerminal']>[2]
+) {
+  return (selector: string, options: TerminalCreateOptions) =>
+    runtime.createTerminal(
+      selector,
+      {
+        ...options,
+        ...wslUserAct(args),
+        signal: args.signal,
+        onPtySpawnDispatched: args.beforeTerminalSpawn
+      },
+      worktree
+    )
 }

@@ -5,8 +5,8 @@
  * automation runs and live orchestration dispatches from their own stores. This only reads.
  */
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
-import { getAgentResumeArgv } from '../../../shared/agent-resume-argv'
-import { isResumableTuiAgent } from '../../../shared/agent-session-resume'
+import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-resume-argv'
+import { isResumableTuiAgent } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AutomationRun } from '../../../shared/automations-types'
 import { isAutomationRunHistory } from '../../../shared/automation-run-retention'
 import { probePtyRunningWorkWithInspection } from '../../../shared/pty-running-work-probe'

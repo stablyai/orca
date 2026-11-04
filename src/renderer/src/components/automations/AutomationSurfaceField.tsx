@@ -1,6 +1,6 @@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { translate } from '@/i18n/i18n'
-import { isNativeChatDefaultFor } from '../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Field, AUTOMATION_EDITOR_SECTION_LABEL_CLASS } from './automation-page-parts'
 import { automationDraftSurface } from './automation-launch-surface'
@@ -20,7 +20,7 @@ export function AutomationSurfaceField({
   if (supported === false && draft.surface !== 'chat') {
     return <div className="h-14" aria-hidden />
   }
-  const defaultSurface = isNativeChatDefaultFor(settings, draft.agentId) ? 'chat' : 'terminal'
+  const defaultSurface = nativeChatPreferenceFor(settings, draft.agentId) ? 'chat' : 'terminal'
   const surfaces =
     defaultSurface === 'chat' ? (['terminal', 'chat'] as const) : (['chat', 'terminal'] as const)
   return (

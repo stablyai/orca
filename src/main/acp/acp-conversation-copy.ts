@@ -1,14 +1,14 @@
-import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
+import { normalizeAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { OpenCodeCopyServerRouteError } from '../../shared/opencode-launch-command'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../shared/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { AiVaultConversationCopy } from '../../shared/ai-vault-resume-preparation'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
+import { resolveOmpSessionsDir } from '../ai-vault/scanners/omp/omp-session-root'
 import { AcpRpcError } from './acp-errors'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import type { AcpStructuredConnection } from './acp-structured-connection'

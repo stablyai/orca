@@ -1,3 +1,5 @@
+import type { AgentSenderPublication } from '../../../../../shared/agent-sender-associations'
+import type { AgentSenderPublications } from '@/runtime/agent-sender-associations'
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata,
@@ -28,12 +30,14 @@ import type {
   ResumableTuiAgent,
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentPaneConversationIdentity } from '../agent-pane-conversation'
 import type { AgentStatusStateUpdate } from './agent-status-runtime'
 import type { ProgramStatusFacet } from '../../../../../shared/program-status/facet'
 
 export type AgentStatusSlice = {
+  agentSenderPublicationsByHost: AgentSenderPublications
+  setAgentSenderPublication: (host: string, publication: AgentSenderPublication | undefined) => void
   /** Explicit agent status entries keyed by `${tabId}:${leafId}`; real-time only, not persisted. */
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   /** Host-reported conversation identity only; transient and independent of agent occupancy. */
@@ -161,8 +165,11 @@ export type AgentStatusSlice = {
   /** Capture resumable agent sessions across every worktree for crash recovery or quit; mode sets live/quit precedence. */
   captureAllSleepingAgentSessions: (mode: AllAgentSessionCaptureMode) => void
   clearSleepingAgentSession: (paneKey: string) => void
-  /** Keeps a resume handle for a pane whose restore the host deferred; never replaces a record. */
-  rememberSleepingAgentSession: (record: SleepingAgentSessionRecord) => void
+  /** Keeps a pane resume handle; replaces only the exact captured record, preserving newer work. */
+  rememberSleepingAgentSession: (
+    record: SleepingAgentSessionRecord,
+    replaces?: SleepingAgentSessionRecord
+  ) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void

@@ -12,7 +12,7 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RunSourceControlAgentActionStartArgs } from './runSourceControlAgentActionStart'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
@@ -100,6 +100,7 @@ function SourceControlAgentActionEditor(
     deliveryPlan,
     canStart,
     isStarting,
+    isCreateAccepted,
     onAgentPick,
     onAgentArgsChange,
     onCommandTemplateChange,
@@ -143,6 +144,7 @@ function SourceControlAgentActionEditor(
           deliveryPlan={deliveryPlan}
           canStart={canStart}
           isStarting={isStarting}
+          isCreateAccepted={isCreateAccepted}
           startLabel={startLabel}
           onAgentPick={onAgentPick}
           onAgentArgsChange={onAgentArgsChange}

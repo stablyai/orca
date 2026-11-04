@@ -1,3 +1,4 @@
+import { readTerminalStartFailure } from '../../shared/terminal-start-failure'
 import type { Socket } from 'node:net'
 import { NOTIFY_PREFIX, type DaemonRequest } from './types'
 import { encodeNdjson } from './ndjson'
@@ -20,7 +21,10 @@ export async function answerDaemonControlRequest(
         encodeNdjson({
           id: request.id,
           ok: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
+          ...(readTerminalStartFailure(error)
+            ? { terminalStartFailure: readTerminalStartFailure(error) }
+            : {})
         })
       )
     }

@@ -11,7 +11,7 @@ import {
   CodexAppServerUnsupportedError,
   type CodexAppServerInvocation,
   type CodexAppServerRpc
-} from './codex-app-server-session'
+} from './app-server/codex-app-server-session'
 
 const HOME = '/codex-accounts/account-1/home'
 
