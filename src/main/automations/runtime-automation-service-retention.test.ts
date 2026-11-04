@@ -57,7 +57,9 @@ function build(headless: boolean) {
     setAutomationService: vi.fn(),
     notifyAutomationsChanged: vi.fn(),
     getTerminalHandleForPaneKey: vi.fn((paneKey: string) => `handle:${paneKey}`),
-    getTerminalPtyIdForHandle: vi.fn((handle: string) => `pty-${handle.split('tab-')[1]?.[0]}`),
+    getTerminalPtyIdForHandle: vi.fn(
+      (handle: string): string | null => `pty-${handle.split('tab-')[1]?.[0]}`
+    ),
     getTerminalProcessIncarnation: vi.fn(() => 'incarnation'),
     readObservedAgentStatusPaneIdentityFn: vi.fn((key: string) => ({
       kind: 'observed',

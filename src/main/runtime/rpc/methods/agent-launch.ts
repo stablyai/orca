@@ -112,7 +112,8 @@ function runLegacyAgentLaunch(
   const execute = async () =>
     runAgentLaunch(
       await resolveUnlaunchedIntent(params, context.runtime, null, {
-        callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
+        callerRendersStructured: callerRendersLaunchedChat(context, params.agent),
+        unprovableHost: context.agentLaunchPolicy?.unprovableHost
       }),
       context,
       {
@@ -198,7 +199,8 @@ async function executeAdmittedAgentLaunch(
   let resolved: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>
   try {
     resolved = await resolveUnlaunchedIntent(params, context.runtime, view.early, {
-      callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
+      callerRendersStructured: callerRendersLaunchedChat(context, params.agent),
+      unprovableHost: context.agentLaunchPolicy?.unprovableHost
     })
   } catch (error) {
     await settleQuietly(admission.fail(agentLaunchFailureCode(error), error))

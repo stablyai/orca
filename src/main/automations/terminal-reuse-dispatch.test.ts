@@ -475,7 +475,16 @@ it.each([
   120_000
 )
 
-it.each(['zero', 'partial', 'unknown', 'accepted', 'abort'] as const)(
+it.each([
+  'zero',
+  'partial',
+  'unknown',
+  'accepted',
+  'abort',
+  'permission',
+  'stale-before-paste',
+  'stale-before-enter'
+] as const)(
   'settles the real reuse operation and dispatch without duplicating %s effects',
   async (effect) => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-reuse-effects-'))
@@ -494,6 +503,7 @@ it.each(['zero', 'partial', 'unknown', 'accepted', 'abort'] as const)(
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: Date.now()
     })
+    let replaceBinding = () => {}
     let shellReturn: (() => void) | undefined
     let foreground: 'agent' | 'shell' = effect === 'zero' ? 'shell' : 'agent'
     const controller = new AbortController()
@@ -502,6 +512,9 @@ it.each(['zero', 'partial', 'unknown', 'accepted', 'abort'] as const)(
         if (data.includes('check once') && effect === 'partial') {
           foreground = 'shell'
           shellReturn?.()
+        }
+        if (data.includes('check once') && effect === 'stale-before-enter') {
+          replaceBinding()
         }
         if (data === '\r' && effect === 'accepted') {
           controller.abort()
@@ -515,7 +528,15 @@ it.each(['zero', 'partial', 'unknown', 'accepted', 'abort'] as const)(
         return true
       }
     )
-    vi.spyOn(rig.runtime, 'readLaunchedAgentForeground').mockImplementation(async () => foreground)
+    vi.spyOn(rig.runtime, 'readLaunchedAgentForeground').mockImplementation(async () => {
+      if (effect === 'abort') {
+        controller.abort()
+      }
+      if (effect === 'stale-before-paste') {
+        replaceBinding()
+      }
+      return foreground
+    })
     vi.spyOn(rig.runtime, 'subscribeToTerminalData').mockImplementation((_pty, callback) => {
       shellReturn = () => callback('\x1b]133;A\x07')
       return () => {
@@ -547,13 +568,16 @@ it.each(['zero', 'partial', 'unknown', 'accepted', 'abort'] as const)(
     external.getTerminalHandleForPaneKey.mockImplementation((key) =>
       key === pane ? rig.handle : null
     )
-    external.isTerminalRunningAgent.mockImplementation(async () => {
-      if (effect === 'abort') {
-        controller.abort()
-      }
-      return true
-    })
     const binding = rig.runtime.getTerminalPromptRequestBinding(rig.handle)
+    replaceBinding = () => {
+      const [tabId, leafId] = pane.split(':')
+      rig.runtime.registerPty(
+        binding.ptyId,
+        rig.runtime.getTerminalWorktreeIdForHandle(rig.handle)!,
+        null,
+        { tabId, leafId, incarnationId: 'replacement-incarnation' }
+      )
+    }
     const runtime = Object.assign(new OrcaRuntimeService(store), external, {
       resolveManagedTerminalWorkspaceTarget:
         OrcaRuntimeService.prototype.resolveManagedTerminalWorkspaceTarget,
@@ -594,21 +618,45 @@ it.each(['zero', 'partial', 'unknown', 'accepted', 'abort'] as const)(
       }
     })
     try {
-      const run = await service.runNow(automation.id)
+      if (effect === 'permission') {
+        rig.runtime.onPtyData('pty-prompt', '\x1b]0;Claude waiting for permission\x07', Date.now())
+      }
+      const pending = service.runNow(automation.id)
+      if (effect === 'permission') {
+        await vi.waitFor(() => {
+          const current = store
+            .listAutomationRuns(automation.id)
+            .find((entry) => entry.id !== previous.id)
+          expect(current).toBeDefined()
+          expect(readAutomationRunReceipt(records, current!)).toMatchObject({
+            kind: 'terminal',
+            accepted: false
+          })
+        })
+        expect(rig.writes).toEqual([])
+        expect(external.createTerminal).not.toHaveBeenCalled()
+        rig.runtime.onPtyData('pty-prompt', '\x1b]0;Claude working\x07', Date.now())
+      }
+      const run = await pending
       expect(external.createTerminal).toHaveBeenCalledTimes(effect === 'zero' ? 1 : 0)
       expect(rig.writes.filter((data) => data.includes('check once'))).toHaveLength(
-        effect === 'zero' || effect === 'abort' ? 0 : 1
+        effect === 'zero' || effect === 'abort' || effect === 'stale-before-paste' ? 0 : 1
       )
       expect(run.status).toBe(
-        effect === 'zero' || effect === 'accepted' ? 'dispatched' : 'dispatch_failed'
+        effect === 'zero' || effect === 'accepted' || effect === 'permission'
+          ? 'dispatched'
+          : 'dispatch_failed'
       )
+      if (effect === 'stale-before-enter' || effect === 'stale-before-paste') {
+        expect(rig.writes.filter((data) => data === '\r')).toHaveLength(0)
+      }
       const receipt = readAutomationRunReceipt(records, run)
       if (effect === 'abort') {
         expect(receipt?.accepted ?? false).toBe(false)
       } else {
         expect(receipt).toMatchObject({
           kind: 'terminal',
-          accepted: effect === 'zero' || effect === 'accepted'
+          accepted: effect === 'zero' || effect === 'accepted' || effect === 'permission'
         })
       }
       if (effect === 'zero') {

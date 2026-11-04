@@ -4,33 +4,40 @@ import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
-import { createAgentPromptSubmissionRuntime } from '../runtime/agent-prompt-submission-runtime-test-fixture'
+import {
+  closeTestStores,
+  createStore,
+  testState
+} from '../../src/main/persistence/persistence-test-harness'
+import { createAgentPromptSubmissionRuntime } from '../../src/main/runtime/agent-prompt-submission-runtime-test-fixture'
 import {
   runtimeStub,
   setAgentLaunchRecordStore
-} from '../runtime/rpc/methods/agent-launch.test-fixture'
-import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { createRuntimeAutomationService } from './runtime-automation-service'
+} from '../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
+import { closeTestJournalHostDatabases } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
+import { createRuntimeAutomationService } from '../../src/main/automations/runtime-automation-service'
 import {
   attachingRendererViewPtys,
   visibleRendererPtys
-} from '../ipc/pty/delivery/visibility-state'
-import { getAutomationRunOperations } from '../persistence/loading-store/automation-persistence'
-import { AUTOMATION_AGENT_CALLER, automationRunOperationId } from './automation-run-operation'
-import { rpcCallerOperationKey } from '../runtime/rpc/rpc-caller-identity'
-import { createAutomationTerminalOwnership } from '../../renderer/src/lib/automation-terminal-ownership'
-import { parsePaneKey } from '../../shared/stable-pane-id'
-import { useAppStore } from '../../renderer/src/store'
-import { singlePaneLayoutSnapshot } from '../../renderer/src/store/slices/terminal-helpers'
+} from '../../src/main/ipc/pty/delivery/visibility-state'
+import { getAutomationRunOperations } from '../../src/main/persistence/loading-store/automation-persistence'
+import {
+  AUTOMATION_AGENT_CALLER,
+  automationRunOperationId
+} from '../../src/main/automations/automation-run-operation'
+import { rpcCallerOperationKey } from '../../src/main/runtime/rpc/rpc-caller-identity'
+import { createAutomationTerminalOwnership } from '../../src/renderer/src/lib/automation-terminal-ownership'
+import { parsePaneKey } from '../../src/shared/stable-pane-id'
+import { useAppStore } from '../../src/renderer/src/store'
+import { singlePaneLayoutSnapshot } from '../../src/renderer/src/store/slices/terminal-helpers'
 import { createStore as createRendererStore } from 'zustand/vanilla'
-import { isAgentLaunchResult } from '../../shared/agent-launch/contracts/agent-launch-intent'
-import { readAutomationRunReceipt } from './automation-run-receipt'
-import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
-import { normalizeCodexEvent } from '../../shared/agent-hook-listener/providers/codex-events'
-import { RUN_TERMINAL_GRACE_MS } from './headless-run-terminal-retention'
+import { isAgentLaunchResult } from '../../src/shared/agent-launch/contracts/agent-launch-intent'
+import { readAutomationRunReceipt } from '../../src/main/automations/automation-run-receipt'
+import { createHookListenerState } from '../../src/shared/agent-hook-listener/listener-state'
+import { normalizeCodexEvent } from '../../src/shared/agent-hook-listener/providers/codex-events'
+import { RUN_TERMINAL_GRACE_MS } from '../../src/main/automations/headless-run-terminal-retention'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -40,7 +47,7 @@ vi.mock('electron', () => ({
     decryptString: (bytes: Buffer) => bytes.toString()
   }
 }))
-vi.mock('../git/worktrees/catalog/worktree-scan-cache', () => ({
+vi.mock('../../src/main/git/worktrees/catalog/worktree-scan-cache', () => ({
   listWorktrees: vi.fn(async () => [
     { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
   ]),
@@ -48,7 +55,7 @@ vi.mock('../git/worktrees/catalog/worktree-scan-cache', () => ({
     { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
   ])
 }))
-vi.mock('../git/worktrees/catalog/worktree-listing', () => ({
+vi.mock('../../src/main/git/worktrees/catalog/worktree-listing', () => ({
   listWorktreesStrict: vi.fn(async () => [
     { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
   ])
@@ -712,7 +719,15 @@ it('bounds provenance and history work under actual timer/drain at N and 10N wit
           if (typeof key === 'string' && /^\d+$/.test(key)) {
             visits += 1
           }
-          return Reflect.get(target, key, receiver)
+          let owner: object | null = target
+          while (owner) {
+            const descriptor = Object.getOwnPropertyDescriptor(owner, key)
+            if (descriptor) {
+              return descriptor.get ? descriptor.get.call(receiver) : descriptor.value
+            }
+            owner = Object.getPrototypeOf(owner)
+          }
+          return undefined
         }
       })
     let current = observe(source.automationRuns!)
@@ -754,6 +769,10 @@ it('bounds provenance and history work under actual timer/drain at N and 10N wit
   const [n, tenN] = measurements
   expect(n.reads).toBeGreaterThan(0)
   expect(n.visits).toBeGreaterThan(0)
+  expect(n.snapshots).toBeGreaterThan(0)
+  expect(tenN.reads).toBeGreaterThan(0)
+  expect(tenN.visits).toBeGreaterThan(0)
+  expect(tenN.snapshots).toBeGreaterThan(0)
   expect(tenN.reads).toBeLessThanOrEqual(n.reads * 11)
   expect(tenN.visits).toBeLessThanOrEqual(n.visits * 11)
   expect(tenN.snapshots).toBeLessThanOrEqual(n.snapshots * 11)
