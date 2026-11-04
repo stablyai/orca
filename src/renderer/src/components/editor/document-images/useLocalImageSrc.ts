@@ -6,9 +6,7 @@ import type { LocalFileAccess } from '../../../../../shared/local-file-access'
 import {
   blobUrlCache,
   cacheLocalImageBlob,
-  cleanupLocalImageCacheKeyVersion,
   getLocalImageCacheGeneration,
-  getLocalImageCacheKeyVersion,
   inFlightBlobUrlLoads,
   unpinLocalImageCache,
   subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated
@@ -66,7 +64,7 @@ type LocalImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'connectionId'> &
 }
 
 /** The cache identity of a local image, or null when it is external or has no owner yet. */
-export function getLocalImageSrcCacheKey(
+function getLocalImageSrcCacheKey(
   rawSrc: string | undefined,
   filePath: string,
   connectionId?: string | null,
@@ -213,11 +211,7 @@ export function loadLocalImageAbsolutePath(
   const browserFile = readBrowserAttachmentFile(absolutePath)
   if (browserFile) {
     const url = URL.createObjectURL(browserFile)
-    return Promise.resolve(
-      cacheLocalImageBlob(cacheKey, url, browserFile.size, getLocalImageCacheKeyVersion(cacheKey))
-        ? url
-        : null
-    )
+    return Promise.resolve(cacheLocalImageBlob(cacheKey, url, browserFile.size) ? url : null)
   }
 
   const inFlight = inFlightBlobUrlLoads.get(cacheKey)
@@ -226,7 +220,6 @@ export function loadLocalImageAbsolutePath(
   }
 
   const readGeneration = getLocalImageCacheGeneration()
-  const readLeaseVersion = getLocalImageCacheKeyVersion(cacheKey)
   const loadPromise = readLocalImagePreview(absolutePath, connectionId, runtimeContext, access)
     .then((result) => {
       if (
@@ -241,14 +234,13 @@ export function loadLocalImageAbsolutePath(
         URL.revokeObjectURL(url)
         return null
       }
-      return cacheLocalImageBlob(cacheKey, url, byteLength, readLeaseVersion) ? url : null
+      return cacheLocalImageBlob(cacheKey, url, byteLength) ? url : null
     })
     .catch(() => null)
     .finally(() => {
       if (inFlightBlobUrlLoads.get(cacheKey) === loadPromise) {
         inFlightBlobUrlLoads.delete(cacheKey)
       }
-      cleanupLocalImageCacheKeyVersion(cacheKey)
     })
   inFlightBlobUrlLoads.set(cacheKey, loadPromise)
   return loadPromise
@@ -268,5 +260,3 @@ export function acquireLocalImageSrcLease(
   pinLocalImageCache(key)
   return () => unpinLocalImageCache(key)
 }
-
-/** Evict the image cached under a `getLocalImageSrcCacheKey` key unless a preview pins it. */

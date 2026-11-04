@@ -641,7 +641,6 @@
 1 test-timeout-needs-reason:src/main/daemon/slow-daemon-session-verification.test.ts
 1 test-timeout-needs-reason:src/main/daemon/terminal-history-large-checkpoint-cold-restore.test.ts
 1 test-timeout-needs-reason:src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts
-1 test-timeout-needs-reason:src/main/git/worktrees/creation/worktree-preparation-cancel-latency.bench.test.ts
 1 test-timeout-needs-reason:src/main/git/worktrees/removal/worktree-removal-real-git.test.ts
 1 test-timeout-needs-reason:src/main/hermes/hook-service.test.ts
 1 test-timeout-needs-reason:src/main/ipc/preflight-runnable-local-cli.test.ts
@@ -1075,7 +1074,7 @@
 2 test-no-wall-clock:src/renderer/src/components/dashboard/useLiveDashboardSnapshot.test.ts
 2 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatStructuredSessionStatus.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/native-chat/use-native-chat-interactive-send.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.single-reference-details.test.tsx
+1 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.single-reference-details.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-antigravity-segment.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts
