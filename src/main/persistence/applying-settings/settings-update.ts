@@ -10,23 +10,23 @@ import {
 } from '../../../shared/native-chat/native-chat-providers'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
 import { sanitizeAgentLaunchProfileUpdates } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
-import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal-quick-command-prompt-limit'
-import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
+import { normalizeTerminalQuickCommands } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
+import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
+import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../shared/plugins/capabilities/plugin-owned-settings'
 import { legacyMatchTerminalSidebarWrite } from '../../../shared/plugin-theme-settings'
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
-import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
-import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal-scrollback-policy'
-import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-minimum-contrast-settings'
+import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal/appearance/terminal-cursor-style-settings'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal/replay/terminal-scrollback-policy'
+import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-themes/terminal-minimum-contrast-settings'
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
-import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
+import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
-import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
+import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeMachineName } from '../../../shared/machine-name'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
@@ -34,11 +34,9 @@ import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
 } from '../../../shared/mobile-pairing-custom-address'
-import {
-  mergeLegacyCommitMessageAiIntoSourceControlAi,
-  normalizeSourceControlAiSettings,
-  projectSourceControlAiToLegacyCommitMessageAi
-} from '../../../shared/source-control-ai'
+import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-reconciliation'
+import { normalizeSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
+import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'
 import type { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 import { normalizeNotificationSettings } from './onboarding-normalization'
 import { retireLegacyInstructionsForClearedTextActionRecipes } from './source-control-settings'

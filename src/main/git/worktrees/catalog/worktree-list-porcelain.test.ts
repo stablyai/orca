@@ -17,7 +17,7 @@ const {
   resolveGitDirMock: vi.fn()
 }))
 
-vi.mock('../../../../shared/git-worktree-admin', () => ({
+vi.mock('../../../../shared/git/worktrees/git-worktree-admin', () => ({
   annotateWorktreeLocksFromAdmin: async (_repoPath: string, rows: unknown[]) => rows
 }))
 

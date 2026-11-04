@@ -1,5 +1,5 @@
 import { applyClaudeAgentViewEnv } from './claude-agent-view'
-import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
 import {
   detectExplicitPiAgentKindFromCommand,

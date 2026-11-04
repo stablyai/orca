@@ -23,9 +23,9 @@ import {
   SESSION_TABS_RUNTIME_CAPABILITIES
 } from './session-tabs-runtime-capabilities'
 import { SKILL_RUNTIME_CAPABILITIES } from './skill-install-capability'
-import { SOURCE_CONTROL_RUNTIME_CAPABILITIES } from './source-control-runtime-capabilities'
+import { SOURCE_CONTROL_RUNTIME_CAPABILITIES } from './source-control/runtime/source-control-runtime-capabilities'
 import { TASK_SOURCE_RUNTIME_CAPABILITIES } from './task-source-runtime-capabilities'
-import { TERMINAL_RUNTIME_CAPABILITIES } from './terminal-runtime-capabilities'
+import { TERMINAL_RUNTIME_CAPABILITIES } from './terminal/runtime-policy/terminal-runtime-capabilities'
 import { WORKSPACE_PORTS_RUNTIME_CAPABILITIES } from './workspace-ports-runtime-capabilities'
 import {
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
@@ -51,13 +51,13 @@ export * from './host-runtime-capabilities'
 
 export * from './mobile-runtime-capabilities'
 export * from './preflight-runtime-capabilities'
-export * from './source-control-runtime-capabilities'
+
 export * from './task-source-runtime-capabilities'
-export * from './terminal-runtime-capabilities'
+
 export * from './workspace-ports-runtime-capabilities'
 export * from './worktree-runtime-capabilities'
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
-export { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from './terminal-quick-command-capabilities'
+
 export {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE,

@@ -7,7 +7,7 @@ vi.mock('../../command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: mocks.gitExecFileAsync
 }))
 
-import { GitAdmissionScheduler } from '../../../../shared/git-admission-scheduler'
+import { GitAdmissionScheduler } from '../../../../shared/git/admission/git-admission-scheduler'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
 
 import { measureRetargetDivergence } from './worktree-base-divergence'

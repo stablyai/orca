@@ -7,7 +7,7 @@ import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION,
   RELEASE_SYNCHRONIZED_OUTPUT
-} from '../../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   buildMainModelSnapshotReplayWrites,
   hasPositiveTerminalDimensions,

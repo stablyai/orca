@@ -18,7 +18,7 @@ import {
   normalizeTerminalTitle
 } from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-authority'
-import { advancePartialEscapeTail } from '../../../../shared/terminal-partial-escape-tail'
+import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal

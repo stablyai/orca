@@ -1,6 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import '../../../../shared/protocol-version'
+import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
 import {
   LEAF_1,

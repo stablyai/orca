@@ -1,4 +1,4 @@
-import { summarizeProviderChecks } from '../../../../src/shared/provider-check-summary'
+import { summarizeProviderChecks } from '../../../../src/shared/source-control/checks/provider-check-summary'
 import { describe, expect, it } from 'vitest'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import { presentPrMerge } from './pr-actions-state'

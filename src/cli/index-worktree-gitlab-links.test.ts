@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { deriveGitRemoteIdentity } from '../shared/git-remote-identity'
+import { deriveGitRemoteIdentity } from '../shared/git/remotes/git-remote-identity'
 import type { Repo } from '../shared/repo-types'
 
 const {

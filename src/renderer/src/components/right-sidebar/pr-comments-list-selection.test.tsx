@@ -66,7 +66,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
   }
 })
 import type { PRComment } from '../../../../shared/github/comment-types'
-import type { PRCommentGroup } from '../../../../shared/pr-comment-groups'
+import type { PRCommentGroup } from '../../../../shared/source-control/review-comments/pr-comment-groups'
 import {
   MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS,
   clearPRCommentsListSelectionsForTests,

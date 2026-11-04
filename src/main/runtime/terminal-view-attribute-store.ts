@@ -8,11 +8,11 @@ import {
   terminalViewColorQueryReplyColors,
   type TerminalViewAttributes,
   type TerminalViewRgb
-} from '../../shared/terminal-view-attributes'
+} from '../../shared/terminal/protocol/queries/terminal-view-attributes'
 import {
   cssColorToOscRgb,
   type TerminalOscColorQueryReplyColors
-} from '../../shared/terminal-osc-color-reply'
+} from '../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   colorQueryReplyColorsEqual,
   normalizeColorQueryReplyColors

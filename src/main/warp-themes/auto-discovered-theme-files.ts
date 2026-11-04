@@ -1,6 +1,6 @@
 import { realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
-import type { WarpThemeImportSkippedFile } from '../../shared/terminal-custom-themes'
+import type { WarpThemeImportSkippedFile } from '../../shared/terminal-themes/terminal-custom-themes'
 import { getWarpThemeDirectories, warpThemeSourceLabelForDirectory } from './discovery'
 import type { PreviewOperationBudget } from './preview-operation-budget'
 import { filesFromDirectory, type ThemeSourceSelection } from './theme-source-selection'

@@ -58,7 +58,7 @@ vi.mock('./useEditorConflictNavigation', () => ({
 import { EditorContent } from './EditorContent'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import { MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES } from './markdown-rich-size-limit'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
 const hugeDoc = 'a'.repeat(MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES + 1)

@@ -160,6 +160,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
   isArchived: OptionalBoolean,
   isUnread: OptionalBoolean,
+  // Explicit whole-workspace read intent; older hosts strip this field.
+  acknowledgeAttention: z.boolean().optional(),
   isPinned: OptionalBoolean,
   sortOrder: OptionalFiniteNumber,
   manualOrder: OptionalFiniteNumber,

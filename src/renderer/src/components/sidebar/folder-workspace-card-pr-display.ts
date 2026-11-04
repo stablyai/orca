@@ -1,4 +1,4 @@
-import { getProviderChecksOutcome } from '../../../../shared/provider-check-summary'
+import { getProviderChecksOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'

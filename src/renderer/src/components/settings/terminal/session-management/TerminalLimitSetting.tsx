@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   terminalLimitInputMaximum,
   type TerminalLimitStatus
-} from '../../../../../../shared/terminal-limit-policy'
+} from '../../../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import { Input } from '../../../ui/input'
 import { Button } from '../../../ui/button'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'

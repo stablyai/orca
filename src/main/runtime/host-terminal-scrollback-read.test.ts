@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { TerminalTab } from '../../shared/terminal-tab-types'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../shared/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../shared/terminal/replay/terminal-scrollback-limits'
 import {
   readHostTerminalScrollback,
   type HostTerminalScrollbackReadDeps

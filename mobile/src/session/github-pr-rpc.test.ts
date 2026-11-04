@@ -14,7 +14,7 @@ import {
   fetchPRForBranch,
   fetchWorkItemDetails
 } from './github-pr-rpc'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../src/shared/source-control-runtime-capabilities'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 import {
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
   GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY

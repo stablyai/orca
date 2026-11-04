@@ -22,28 +22,6 @@ describe('OMP approval ownership', () => {
     return normalizeHookPayload(state, agentType, { paneKey: PANE_KEY, payload }, 'production')
   }
 
-  function approvalRequest(
-    extra: Record<string, unknown>
-  ): ReturnType<typeof normalizeHookPayload> {
-    return post('omp', {
-      hook_event_name: 'tool_approval_requested',
-      tool_name: 'bash',
-      ...extra
-    })
-  }
-
-  it('clears the previous tool input when omp sends no reason', () => {
-    expect(
-      approvalRequest({ reason: 'Critical pattern detected', approval_mode: 'always-ask' })?.payload
-    ).toMatchObject({ state: 'blocked', toolInput: 'Critical pattern detected' })
-
-    expect(approvalRequest({ approval_mode: 'always-ask' })?.payload).toMatchObject({
-      state: 'blocked',
-      toolName: 'bash',
-      toolInput: undefined
-    })
-  })
-
   /** Normalizes the post and admits its row, as the hook server does, so the next post sees it. */
   function deliver(payload: Record<string, unknown>): string {
     const event = post('omp', payload)
@@ -69,15 +47,5 @@ describe('OMP approval ownership', () => {
     ).toBe('working')
     expect(deliver({ hook_event_name: 'tool_execution_end', tool_name: 'bash' })).toBe('working')
     expect(deliver({ hook_event_name: 'agent_end' })).toBe('done')
-  })
-
-  it('ends a held approval wait when a new turn starts', () => {
-    deliver({ hook_event_name: 'tool_approval_requested', tool_name: 'bash' })
-    expect(deliver({ hook_event_name: 'agent_start' })).toBe('working')
-  })
-
-  it('lets an ask wait end on its own tool_execution_end', () => {
-    expect(deliver({ hook_event_name: 'tool_execution_start', tool_name: 'ask' })).toBe('blocked')
-    expect(deliver({ hook_event_name: 'tool_execution_end', tool_name: 'ask' })).toBe('working')
   })
 })

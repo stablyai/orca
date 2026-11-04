@@ -1,4 +1,4 @@
-import type { GitStagingArea } from './git-status-types'
+import type { GitStagingArea } from './git/status/git-status-types'
 
 export type WorkspaceSpaceChange = { path: string; area: GitStagingArea }
 

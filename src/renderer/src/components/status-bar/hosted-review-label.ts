@@ -1,6 +1,6 @@
 import type { ProviderCheckSummary } from '../../../../shared/github/pull-request-types'
-import { getProviderChecksOutcome } from '../../../../shared/provider-check-summary'
-import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import { getProviderChecksOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
+import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
