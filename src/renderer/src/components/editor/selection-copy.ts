@@ -39,7 +39,10 @@ export function formatSelectionReference({
 
 /** A fence longer than any backtick run in the text, so the text can't close it. */
 export function fencedCode(text: string, language = ''): string {
-  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))
+  let longest = 0
+  for (const run of text.matchAll(/`+/g)) {
+    longest = Math.max(longest, run[0].length)
+  }
   const fence = '`'.repeat(Math.max(3, longest + 1))
   return `${fence}${language}\n${text.replace(/\n$/, '')}\n${fence}`
 }

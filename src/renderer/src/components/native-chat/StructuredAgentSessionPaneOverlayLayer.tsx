@@ -81,7 +81,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     )
     const focusGroup = useAppStore((state) => state.focusGroup)
     const focusOwningGroup = useCallback(
-      (groupId: string) => focusGroup(worktreeId, groupId),
+      (groupId: string, recordFocus?: boolean) => focusGroup(worktreeId, groupId, { recordFocus }),
       [focusGroup, worktreeId]
     )
     const groupActiveTabById = useMemo(

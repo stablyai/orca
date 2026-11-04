@@ -108,18 +108,25 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     contextMenuOrder: 5,
     run: () => {
       const model = editorInstance.getModel()
-      const selection = editorInstance.getSelection()
-      if (!worktreeId || !model || !selection || selection.isEmpty()) {
+      // Every cursor's range, in document order, so a multi-cursor or column selection keeps them all.
+      const selections = (editorInstance.getSelections() ?? [])
+        .filter((selection) => !selection.isEmpty())
+        .sort((a, b) => a.startLineNumber - b.startLineNumber || a.startColumn - b.startColumn)
+      if (!worktreeId || !model || selections.length === 0) {
         return
       }
       addSelectionToWorkspaceChatOrExplain(
         worktreeId,
-        formatSelectionReference({
-          relativePath: propsRef.current.relativePath,
-          language: propsRef.current.language,
-          selection,
-          selectedText: model.getValueInRange(selection)
-        })
+        selections
+          .map((selection) =>
+            formatSelectionReference({
+              relativePath: propsRef.current.relativePath,
+              language: propsRef.current.language,
+              selection,
+              selectedText: model.getValueInRange(selection)
+            })
+          )
+          .join('\n\n')
       )
     }
   })

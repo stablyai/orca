@@ -7,26 +7,29 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
-import { activateWorkspaceTabPaletteResult } from '@/lib/workspace-tab-palette-activation'
-import { appendNativeChatDraftCache } from './native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
+import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
+import {
+  appendToNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from './native-chat-composer-draft-store'
 import { formatNativeChatQuote } from './native-chat-quote-selection'
 
 type WorkspaceChatState = Pick<AppState, 'unifiedTabsByWorktree' | 'terminalLayoutsByTabId'>
 
-type WorkspaceChatTarget = { tab: Tab; scopeKey: string }
+/** `chatLeafId` is set for a chat over a terminal, whose split can hold shells beside the chat. */
+type WorkspaceChatTarget = { tab: Tab; scopeKey: string; chatLeafId?: string }
 
-function chatDraftScopeKey(state: WorkspaceChatState, tab: Tab): string | null {
+function chatTarget(state: WorkspaceChatState, tab: Tab): WorkspaceChatTarget | null {
   if (isStructuredTab(tab)) {
-    return structuredAgentSessionDraftScopeKey(tab.entityId)
+    return { tab, scopeKey: structuredAgentSessionDraftScopeKey(tab.entityId) }
   }
   if (tab.contentType !== 'terminal' || tab.viewMode !== 'chat') {
     return null
   }
-  // The chat leaf, not the active one: a shell split beside the chat can hold focus.
-  const leafId = state.terminalLayoutsByTabId[tab.entityId]?.chatLeafId
-  return leafId && isTerminalLeafId(leafId) && !tab.entityId.includes(':')
-    ? makePaneKey(tab.entityId, leafId)
+  const chatLeafId = state.terminalLayoutsByTabId[tab.entityId]?.chatLeafId
+  return chatLeafId && isTerminalLeafId(chatLeafId) && !tab.entityId.includes(':')
+    ? { tab, scopeKey: makePaneKey(tab.entityId, chatLeafId), chatLeafId }
     : null
 }
 
@@ -36,9 +39,9 @@ export function findWorkspaceChatTarget(
 ): WorkspaceChatTarget | null {
   let best: WorkspaceChatTarget | null = null
   for (const tab of state.unifiedTabsByWorktree[worktreeId] ?? []) {
-    const scopeKey = chatDraftScopeKey(state, tab)
-    if (scopeKey && (!best || (tab.lastFocusedAt ?? 0) > (best.tab.lastFocusedAt ?? 0))) {
-      best = { tab, scopeKey }
+    const candidate = chatTarget(state, tab)
+    if (candidate && (!best || (tab.lastFocusedAt ?? 0) > (best.tab.lastFocusedAt ?? 0))) {
+      best = candidate
     }
   }
   return best
@@ -57,18 +60,22 @@ export function addSelectionToWorkspaceChatOrExplain(worktreeId: string, referen
     )
     return
   }
-  appendNativeChatDraftCache(target.scopeKey, formatNativeChatQuote(reference))
-  const { tab } = target
-  if (tab.contentType === 'agent-session') {
+  // Independent like a typed addition: adding the same lines twice adds them twice.
+  appendToNativeChatComposerDraft(
+    target.scopeKey,
+    { text: formatNativeChatQuote(reference) },
+    undefined,
+    undefined,
+    true
+  )
+  const { tab, chatLeafId } = target
+  if (!chatLeafId) {
     activateStructuredAgentSessionTab({ worktreeId, tabId: tab.id })
     return
   }
-  activateWorkspaceTabPaletteResult({
-    worktreeId,
-    groupId: tab.groupId,
-    tabId: tab.id,
-    entityId: tab.entityId,
-    contentType: 'terminal',
-    ...(tab.executionHostId ? { executionHostId: tab.executionHostId } : {})
-  })
+  state.focusGroup(worktreeId, tab.groupId)
+  state.activateTab(tab.id, { worktreeId })
+  // Activating the chat leaf, not the tab, is what hands focus to the chat's composer.
+  activateTabAndFocusPane(tab.entityId, chatLeafId)
+  activateTerminalTabOnOwner(worktreeId, tab.entityId, chatLeafId)
 }

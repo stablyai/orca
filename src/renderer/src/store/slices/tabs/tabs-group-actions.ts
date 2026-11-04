@@ -1,6 +1,7 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { TabSplitTarget, TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-surface'
+import { tabsWithUseRecorded } from './tab-use-recency'
 import type { TabGroup } from '../../../../../shared/tab-types'
 import {
   buildSplitNode,
@@ -130,8 +131,12 @@ export function createTabsGroupActions(
       return groupId
     },
 
-    focusGroup: (worktreeId, groupId) =>
+    focusGroup: (worktreeId, groupId, opts) =>
       set((state) => {
+        const usedTabs = opts?.recordFocus ? tabsWithUseRecorded(state, worktreeId, groupId) : null
+        if (usedTabs) {
+          state = { ...state, unifiedTabsByWorktree: usedTabs }
+        }
         const groupAlreadyFocused = state.activeGroupIdByWorktree[worktreeId] === groupId
         const nextActiveGroupIdByWorktree = groupAlreadyFocused
           ? state.activeGroupIdByWorktree
@@ -140,11 +145,13 @@ export function createTabsGroupActions(
               [worktreeId]: groupId
             }
         // Only surface tabs of the active workspace; focusing an unseen group must not consume its bell.
+        const used = usedTabs ? { unifiedTabsByWorktree: usedTabs } : {}
         if (state.activeWorktreeId !== worktreeId) {
           if (groupAlreadyFocused) {
             return state
           }
           return {
+            ...used,
             activeGroupIdByWorktree: nextActiveGroupIdByWorktree
           }
         }
@@ -163,6 +170,7 @@ export function createTabsGroupActions(
           return state
         }
         return {
+          ...used,
           ...(groupAlreadyFocused ? {} : { activeGroupIdByWorktree: nextActiveGroupIdByWorktree }),
           ...activeSurfacePatch
         }

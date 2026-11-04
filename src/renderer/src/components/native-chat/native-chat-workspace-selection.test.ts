@@ -51,7 +51,8 @@ describe('findWorkspaceChatTarget', () => {
   it('targets the chat used last, skipping tabs without a composer', () => {
     expect(target([structured, terminalChat, plainTerminal, editor])).toEqual({
       tab: terminalChat,
-      scopeKey: `term-chat:${CHAT_LEAF}`
+      scopeKey: `term-chat:${CHAT_LEAF}`,
+      chatLeafId: CHAT_LEAF
     })
     expect(target([{ ...structured, lastFocusedAt: 30 }, terminalChat, plainTerminal])).toEqual({
       tab: { ...structured, lastFocusedAt: 30 },

@@ -23,6 +23,7 @@ export default function MarkdownPreview({
   filePath,
   sourceFileId = null,
   sourceWorktreeId = null,
+  sourceRelativePath = null,
   sourceRuntimeEnvironmentId = undefined,
   scrollCacheKey,
   initialAnchor = null,
@@ -87,8 +88,9 @@ export default function MarkdownPreview({
     onOpenDocument
   })
 
-  const chatWorktreeId = foundation.sourceWorktree?.id ?? null
-  const chatRelativePath = foundation.sourceRelativePath
+  // The open file's own workspace and path, so folder workspaces get the action too.
+  const chatWorktreeId = sourceWorktreeId
+  const chatRelativePath = sourceRelativePath
 
   return (
     <>

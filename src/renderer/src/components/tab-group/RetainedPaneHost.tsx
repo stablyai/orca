@@ -26,7 +26,8 @@ type RetainedPaneHostProps = {
   fitTerminal?: boolean
   /** Unfocused side of a split: overlays sit outside the group's DOM, so they take its dim here. */
   dimmed?: boolean
-  onFocusOwningGroup?: (groupId: string) => void
+  /** `recordFocus` is true for a pointer press, which is the user working in the pane. */
+  onFocusOwningGroup?: (groupId: string, recordFocus?: boolean) => void
   children: React.ReactNode
   'data-terminal-overlay-tab-id'?: string
   'data-structured-agent-session-overlay-tab-id'?: string
@@ -134,11 +135,14 @@ export function RetainedPaneHost({
             },
     [anchorName, isVisible, measuredFallbackRect, measureWhileHidden, visibleOpacity]
   )
-  const focusGroup = useCallback(() => {
-    if (groupId !== undefined && onFocusOwningGroup) {
-      onFocusOwningGroup(groupId)
-    }
-  }, [groupId, onFocusOwningGroup])
+  const focusGroup = useCallback(
+    (recordFocus: boolean) => {
+      if (groupId !== undefined && onFocusOwningGroup) {
+        onFocusOwningGroup(groupId, recordFocus)
+      }
+    },
+    [groupId, onFocusOwningGroup]
+  )
 
   return (
     <div
@@ -150,8 +154,9 @@ export function RetainedPaneHost({
       {...identity}
       inert={!isVisible}
       aria-hidden={!isVisible}
-      onPointerDown={focusGroup}
-      onFocusCapture={focusGroup}
+      onPointerDown={() => focusGroup(true)}
+      // Focus can arrive from a restore after a close or dialog, which is not the user's use.
+      onFocusCapture={() => focusGroup(false)}
     >
       {awaitsFirstFallbackRect ? null : children}
     </div>
