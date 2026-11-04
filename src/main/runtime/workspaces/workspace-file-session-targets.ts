@@ -1,3 +1,4 @@
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../session-tabs/mobile-session-publication-preservation'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../session-tabs/session-tabs-change-publication'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
@@ -16,7 +17,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import {
@@ -26,9 +27,12 @@ import {
   type MarkdownTabDiskHost
 } from '../markdown-tab-disk-documents'
 import { createMarkdownTabDiskHost } from '../markdown-tab-disk-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends RuntimeHeadlessTabGroups {
+  protected abstract isRendererOwnedMobileBrowserTab(
+    ...args: Parameters<BrowserOwnership['isRendererOwnedMobileBrowserTab']>
+  ): ReturnType<BrowserOwnership['isRendererOwnedMobileBrowserTab']>
   protected abstract getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo>
   protected abstract resolveMobileMarkdownWorktreeId(
     ...args: Parameters<
@@ -157,7 +161,7 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
         const liveTab = tab.browserPageId
           ? liveBrowserTabsByPageId.get(tab.browserPageId)
           : undefined
-        if (!liveTab) {
+        if (!liveTab && !this.isRendererOwnedMobileBrowserTab(snapshot, tab)) {
           continue
         }
         ids.add(tab.id)

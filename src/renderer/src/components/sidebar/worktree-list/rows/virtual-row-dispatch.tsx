@@ -5,17 +5,19 @@ import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../../../shared/worktree/types'
-import { getWorkspaceStatus } from '../../workspace-status'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   getVirtualRowTransform,
   getWorktreeVirtualRowTransform,
   shouldUseHeaderTopSpacing
 } from '../viewport/virtual-rows'
 import type { RenderRow } from '../listing/render-row'
-import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
-import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
-import type { useHostHeaderDrag } from '../../host-header-drag'
+import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
+import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
+import type { useHostHeaderDrag } from '../drag/host-header-drag'
 import { HostSectionHeader } from './HostSectionHeader'
 import { renderFolderWorkspaceVirtualRow, type FolderWorkspaceRowContext } from './folder-row'
 import {
@@ -110,8 +112,9 @@ function renderLineageGroupVirtualRow(
 ): React.JSX.Element {
   const [parent, ...children] = row.rows
   const childIsActive = children.some((child) => child.worktree.id === ctx.activeWorktreeId)
-  const parentPreviewOffset = parent
-    ? (ctx.worktreeDragState.previewOffsetsByWorktreeId.get(parent.worktree.id) ?? 0)
+  const parentKey = parent ? getWorktreeHostIdentity(parent.worktree) : null
+  const parentPreviewOffset = parentKey
+    ? (ctx.worktreeDragState.previewOffsetsByWorktreeId.get(parentKey) ?? 0)
     : 0
   return (
     <div
@@ -124,7 +127,9 @@ function renderLineageGroupVirtualRow(
       ref={ctx.measureVirtualRowElement}
       className={cn(
         'absolute left-0 right-0 top-0',
-        parent?.worktree.id === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
+        parentKey !== null &&
+          parentKey === ctx.worktreeDragState.draggingWorktreeId &&
+          'pointer-events-none',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
@@ -218,8 +223,8 @@ export function renderWorktreeVirtualRow(
     ctx.groupBy === 'workspace-status'
       ? getWorkspaceStatus(row.worktree, ctx.workspaceStatuses)
       : null
-  const itemPreviewOffset =
-    ctx.worktreeDragState.previewOffsetsByWorktreeId.get(row.worktree.id) ?? 0
+  const itemKey = getWorktreeHostIdentity(row.worktree)
+  const itemPreviewOffset = ctx.worktreeDragState.previewOffsetsByWorktreeId.get(itemKey) ?? 0
 
   return (
     <div
@@ -234,7 +239,7 @@ export function renderWorktreeVirtualRow(
       data-workspace-status={itemWorkspaceStatus ?? undefined}
       className={cn(
         'absolute left-0 right-0 top-0',
-        row.worktree.id === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
+        itemKey === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}

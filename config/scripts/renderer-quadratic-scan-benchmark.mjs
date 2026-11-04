@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Benchmark four projection workloads. Scenarios 1/3/4 compare current production with local baselines after checking equivalence.
-// Scenario 2 models both loops because its React hook cannot load without a renderer; it does not time production.
+// Benchmark three production workloads against local baselines after checking equivalence.
 import { spawnSync } from 'node:child_process'
 import { transformSync } from 'esbuild'
 import { performance } from 'node:perf_hooks'
@@ -69,8 +68,6 @@ function envInt(name, fallback) {
 
 const KEYSTROKES = envInt('ORCA_QUADRATIC_BENCH_KEYSTROKES', 12)
 const WORKTREES = envInt('ORCA_QUADRATIC_BENCH_WORKTREES', 300)
-const TABS = envInt('ORCA_QUADRATIC_BENCH_TABS', 60)
-const OPEN_FILES = envInt('ORCA_QUADRATIC_BENCH_OPEN_FILES', 120)
 const CHANGED_FILES = envInt('ORCA_QUADRATIC_BENCH_CHANGED_FILES', 5000)
 const SIDEBAR_ROWS = envInt('ORCA_QUADRATIC_BENCH_SIDEBAR_ROWS', 600)
 const SIDEBAR_REPOS = envInt('ORCA_QUADRATIC_BENCH_SIDEBAR_REPOS', 80)
@@ -109,7 +106,7 @@ function compare({ label, scale, drives, before, after }) {
 }
 
 const { buildWorkspaceBoardPaletteDocuments, matchWorkspaceBoardWorktrees } = await importRenderer(
-  'components/sidebar/workspace-kanban-search.ts'
+  'components/sidebar/workspace-board/search/workspace-kanban-search.ts'
 )
 
 const repoMap = new Map([
@@ -139,63 +136,13 @@ compare({
   after: () => matchAll(buildWorkspaceBoardPaletteDocuments({ worktrees: boardWorktrees, repoMap }))
 })
 
-const groupTabs = Array.from({ length: TABS }, (_, index) => ({
-  id: `tab-${index}`,
-  entityId: `entity-${index}`,
-  contentType: index % 3 === 0 ? 'editor' : 'terminal'
-}))
-const openFiles = Array.from({ length: OPEN_FILES }, (_, index) => ({
-  id: `entity-${index}`,
-  path: `/tmp/file-${index}.ts`
-}))
-const tabOrder = groupTabs.map((tab) => tab.id)
-// Production memoizes each index on its own source list, so a unified-tab write reuses it.
-const openFileById = new Map(openFiles.map((item) => [item.id, item]))
-const groupTabById = new Map(groupTabs.map((item) => [item.id, item]))
-
-function tabProjections(findOpenFile, findGroupTab) {
-  const editorItems = groupTabs
-    .filter((item) => item.contentType === 'editor')
-    .map((item) => {
-      const file = findOpenFile(item.entityId)
-      return file ? { ...file, tabId: item.id } : null
-    })
-    .filter((file) => file !== null)
-  const order = tabOrder.map((itemId) => {
-    const item = findGroupTab(itemId)
-    return item && (item.contentType === 'terminal' || item.contentType === 'browser')
-      ? item.entityId
-      : itemId
-  })
-  return [editorItems, order]
-}
-
-compare({
-  label: 'tab-group projections (per unified-tab write)',
-  scale: `${TABS} tabs x ${OPEN_FILES} open files`,
-  drives: 'modelled',
-  before: repeat(200, () =>
-    tabProjections(
-      (id) => openFiles.find((candidate) => candidate.id === id),
-      (id) => groupTabs.find((candidate) => candidate.id === id)
-    )
-  ),
-  after: repeat(200, () =>
-    tabProjections(
-      (id) => openFileById.get(id),
-      (id) => groupTabById.get(id)
-    )
-  )
-})
-
-const { buildSourceControlTree } = await importRenderer(
-  'components/right-sidebar/source-control-tree.ts'
+const importShared = (relativePath) =>
+  import(pathToFileURL(path.join(ROOT, 'src/shared', relativePath)).href)
+const { buildSourceControlTree } = await importShared(
+  'source-control/listing/source-control-tree.ts'
 )
-const { normalizeRelativePath } = await importRenderer('lib/path.ts')
-const { splitPathSegments } = await importRenderer('components/right-sidebar/path-tree.ts')
-const { compareFileNames } = await import(
-  pathToFileURL(path.join(ROOT, 'src/shared/file-name-sort.ts')).href
-)
+const { normalizeRelativePath, splitPathSegments } = await importShared('cross-platform-path.ts')
+const { compareFileNames } = await importShared('file-name-sort.ts')
 
 const changedEntries = Array.from({ length: CHANGED_FILES }, (_, index) => ({
   path: `src/area-${index % 20}/module-${index % 60}/nested/deep/part-${index % 7}/file-${index}.ts`
@@ -267,7 +214,7 @@ compare({
 })
 
 const { getRepoHeaderSectionEndByRepoId } = await importRenderer(
-  'components/sidebar/worktree-header-section-boundaries.ts'
+  'components/sidebar/worktree-list/viewport/worktree-header-section-boundaries.ts'
 )
 const { estimateRenderRowSize } = await importRenderer(
   'components/sidebar/worktree-list/viewport/virtual-rows.ts'

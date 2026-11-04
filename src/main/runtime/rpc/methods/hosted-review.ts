@@ -1,5 +1,5 @@
 import { defineMethod } from '../core'
-import { supportsHostedReviewCreation } from '../../../../shared/hosted-review-creation-providers'
+import { supportsHostedReviewCreation } from '../../../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { UNSUPPORTED_HOSTED_REVIEW_PROVIDER } from '../../../source-control/hosted-review-creation'
 import {
   HostedReviewCreate,
@@ -22,6 +22,8 @@ export const HOSTED_REVIEW_METHODS = [
         currentHeadOid: params.currentHeadOid ?? null,
         ...(params.active === true ? { active: true } : {}),
         ...(params.force === true ? { force: true } : {}),
+        ...(params.userRefresh === true ? { userRefresh: true } : {}),
+        ...(params.reportReadOutcome === true ? { reportReadOutcome: true } : {}),
         linkedGitHubPR: params.linkedGitHubPR ?? null,
         ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
         linkedGitLabMR: params.linkedGitLabMR ?? null,
@@ -52,7 +54,8 @@ export const HOSTED_REVIEW_METHODS = [
         linkedGitLabMR: params.linkedGitLabMR ?? null,
         linkedBitbucketPR: params.linkedBitbucketPR ?? null,
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
-        linkedGiteaPR: params.linkedGiteaPR ?? null
+        linkedGiteaPR: params.linkedGiteaPR ?? null,
+        wakeWslDistro: params.wakeWslDistro
       })
     }
   }),

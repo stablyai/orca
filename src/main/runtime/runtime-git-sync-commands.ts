@@ -1,7 +1,11 @@
-import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
-import type { GitUpstreamStatus } from '../../shared/git-status-types'
+import type {
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult
+} from '../../shared/git/remotes/git-fork-sync'
+import type { GitUpstreamStatus } from '../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { materializeWorktreePushTargetRemote } from '../ipc/worktree-remote'
+import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
 import type { LocalGitProvider } from '../providers/local-git-provider'
 import {
   localGitOptionsForTarget,
@@ -51,6 +55,8 @@ export class RuntimeGitSyncCommands {
     pushTarget?: GitPushTarget
   ): Promise<GitUpstreamStatus> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    // A poll no user asked for: never start a stopped WSL distro (E9).
+    await assertRuntimeReadWslDistroRunning(target, localGitOptionsForTarget(target).wslDistro)
     return requireRuntimeGitProvider(target).getUpstreamStatus(target.worktree.path, pushTarget)
   }
 
@@ -124,5 +130,12 @@ export class RuntimeGitSyncCommands {
     }
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     return requireRuntimeGitProvider(target).commit(target.worktree.path, message)
+  }
+
+  async completeRuntimeGitMerge(
+    worktreeSelector: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    return requireRuntimeGitProvider(target).completeMerge(target.worktree.path)
   }
 }

@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS federated_dispatches (
   remote_terminal_handle  TEXT,
   to_home_imported_sequence INTEGER NOT NULL DEFAULT 0,
   to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0,
+  home_auto_release_at    TEXT,
+  home_auto_release_state TEXT,
   created_at              TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -179,7 +181,11 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   dispatched_at       TEXT,
   completed_at        TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-  last_heartbeat_at   TEXT
+  last_heartbeat_at   TEXT,
+  -- The settled Dispatch whose worker this one continues (a follow-up sent to it).
+  follow_up_of_dispatch_id TEXT,
+  -- Set when the worker reported with coordinator mail unread; cleared once that mail continues it.
+  follow_up_mail_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);

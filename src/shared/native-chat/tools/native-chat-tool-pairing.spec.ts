@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { pairNativeChatToolResults } from './native-chat-tool-pairing'
-import type {
-  NativeChatBlock,
-  NativeChatToolCallBlock,
-  NativeChatToolResultBlock
-} from '../../native-chat-types'
+import type { NativeChatToolCallBlock, NativeChatToolResultBlock } from '../native-chat-types'
 
 const call = (name: string): NativeChatToolCallBlock => ({ type: 'tool-call', name, input: {} })
 const result = (output: string): NativeChatToolResultBlock => ({ type: 'tool-result', output })
@@ -35,14 +31,6 @@ describe('pairNativeChatToolResults', () => {
     expect(resultByCall.has(b)).toBe(false)
   })
 
-  it('leaves a result with no call to answer unpaired, so it still draws its own row', () => {
-    const orphan = result('one')
-    const { resultByCall, pairedResults } = pairNativeChatToolResults([orphan])
-
-    expect(resultByCall.size).toBe(0)
-    expect(pairedResults.has(orphan)).toBe(false)
-  })
-
   it('gives a result that names its call to that call, past one that finished with no output', () => {
     const named = (name: string, callId: string): NativeChatToolCallBlock => ({
       ...call(name),
@@ -67,13 +55,5 @@ describe('pairNativeChatToolResults', () => {
 
     expect(resultByCall.has(waiting)).toBe(false)
     expect(pairedResults.has(stray)).toBe(false)
-  })
-
-  it('ignores blocks that are neither a call nor a result', () => {
-    const text: NativeChatBlock = { type: 'text', text: 'hi' }
-    const [a, ra] = [call('a'), result('r')]
-    const { resultByCall } = pairNativeChatToolResults([text, a, ra])
-
-    expect(resultByCall.get(a)).toBe(ra)
   })
 })

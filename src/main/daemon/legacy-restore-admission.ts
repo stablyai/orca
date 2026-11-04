@@ -1,6 +1,8 @@
-import type { SpawnRequestFacts } from '../../shared/host-spawn-admission'
-import { TERMINAL_SPAWN_REFUSED_MESSAGE } from '../../shared/host-spawn-admission'
-import { TERMINAL_HOST_CAP_HINT } from '../../shared/terminal-spawn-error-copy'
+import {
+  type SpawnRequestFacts,
+  TERMINAL_SPAWN_REFUSED_MESSAGE
+} from '../../shared/host-spawn-admission'
+import { TERMINAL_HOST_CAP_HINT } from '../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 import type { LegacyRestoreDetails, LegacyRestoreRecords } from './legacy-restore-records'
 import type { TerminalSpawnLease } from './terminal-spawn-gate'
 

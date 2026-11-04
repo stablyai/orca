@@ -2,7 +2,7 @@ import type {
   RuntimeHeadlessTerminal,
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { splitFreebuffScreenUpdates } from '../../../../shared/freebuff-screen-status'
 import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './terminal-buffer-operations'
 import { observeFreebuffTerminalStatus } from '../../freebuff-terminal-status'
@@ -12,14 +12,13 @@ import {
 } from '../../codex-notice-terminal-status'
 import { TrustDialogStatusObserver } from '../../trust-dialog-status-observer'
 import type { LaunchedAgentForeground } from '../../launched-agent-foreground'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   detectAgentStatusFromTitle,
   normalizeTerminalTitle
-} from '../../../../shared/agent-detection'
+} from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-authority'
-import { advancePartialEscapeTail } from '../../../../shared/terminal-partial-escape-tail'
+import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
@@ -92,9 +91,9 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       }
       try {
         // Retain normal-buffer scrollback while a TUI is in alt-screen so pre-TUI history remains restorable (#6106).
-        // Desktop depth (this emulator's retention): a hidden-output reveal repaints the pane from this model.
+        // This emulator's retention: a hidden-output reveal repaints the pane from this model.
         const rendered = await controller.serializeBuffer!(ptyId, {
-          scrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT
+          scrollbackRows: this.headlessTerminalScrollbackRows
         })
         if (
           this.headlessTerminals.get(ptyId) !== state ||

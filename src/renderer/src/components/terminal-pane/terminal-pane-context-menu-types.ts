@@ -1,6 +1,6 @@
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { PtyTransport } from './pty-transport-types'

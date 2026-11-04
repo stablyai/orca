@@ -1,9 +1,9 @@
 import { useCallback } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitBranchCompare } from '@/runtime/runtime-git-diff-client'
-import type { HostedReviewCreationEligibility } from '../../../../../../shared/hosted-review'
-import { refreshGitStatusForWorktreeStrict } from '../../git-status-refresh'
+import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { refreshGitStatusForWorktreeStrict } from '../sync/git-status-refresh'
 import type { CreatePrIntentRunToken } from './create-pr-intent-flow'
 import { buildCreatePrIntentUnavailableEligibility } from './hosted-review-creation-eligibility-snapshot'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
@@ -88,7 +88,9 @@ export function useSourceControlCreatePrIntentProbes({
       }
       let result: HostedReviewCreationEligibility
       try {
+        // The user's Create PR: it may start the repo's stopped WSL distro (E9).
         result = await getHostedReviewCreationEligibility({
+          wakeWslDistro: true,
           repoPath: activeRepo.path,
           repoId: activeRepo.id,
           worktreePath: token.worktreePath,

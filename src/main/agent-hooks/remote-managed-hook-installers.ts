@@ -2,10 +2,13 @@ import { codebuddyHookService } from '../codebuddy/hook-service'
 import { qwenCodeHookService } from '../qwen-code/hook-service'
 import { qoderCnHookService, qoderHookService } from '../qoder/hook-service'
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallStatus,
+  AgentHookTarget
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
 import { claudeHookService } from '../claude/hook-service'
-import { codexHookService } from '../codex/hook-service'
+import { codexHookService } from '../codex/hooks/installation/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'

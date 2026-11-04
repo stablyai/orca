@@ -1,17 +1,24 @@
 import type { StoreApi } from 'zustand'
 import type { AppState } from '../types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { filterEnabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
+import type { LocalAgentRefreshOptions } from './local-detected-agent-store-state'
+import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 
 export type LocalAgentInventoryLifecycle = {
   detectPromises: Map<string, Promise<TuiAgent[]>>
   refreshPromises: Map<string, Promise<TuiAgent[]>>
+  /** Refreshes sent as a user act; a background one may be refused for a stopped WSL distro. */
+  wakeRefreshes: WeakSet<Promise<TuiAgent[]>>
+  wakeDetects: WeakSet<Promise<TuiAgent[]>>
+  /** Contexts whose last probe the E9 gate refused (distro not running), not a real failure. */
+  refusedContextKeys: Set<string>
   keptThroughFailure: WeakSet<TuiAgent[]>
   failedDetectContextKeys: Set<string>
   detectedContextKey: string | null
@@ -25,10 +32,14 @@ export function refreshLocalAgentInventory(
   get: StoreApi<AppState>['getState'],
   lifecycle: LocalAgentInventoryLifecycle,
   worktreeId?: string | null,
-  includeDisabled = false
+  includeDisabled = false,
+  options: LocalAgentRefreshOptions = {},
+  nativeHost = false
 ): Promise<TuiAgent[]> {
-  const isolatedInventory = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-  const context = getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
+  const isolatedInventory = nativeHost || worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+  const context = nativeHost
+    ? undefined
+    : getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
   const contextKey = localAgentInventoryContextKey(context, includeDisabled)
   const publishedContextKey = localAgentInventoryContextKey(context)
   const refreshContextKeys = new Set([contextKey, publishedContextKey])
@@ -56,7 +67,8 @@ export function refreshLocalAgentInventory(
     }
   }
   const inflight = lifecycle.refreshPromises.get(contextKey)
-  if (inflight) {
+  // A refresh click must reach main as a wake, not ride a background refresh it would refuse.
+  if (inflight && (!options.wakeWslDistro || lifecycle.wakeRefreshes.has(inflight))) {
     exposeInflightToLegacy()
     return inflight
   }
@@ -89,8 +101,9 @@ export function refreshLocalAgentInventory(
       [publishedContextKey]: true
     }
   }))
+  const refreshArgs = includeDisabled ? context : { ...context, enabledOnly: true }
   const pending = window.api.preflight
-    .refreshAgents(includeDisabled ? context : { ...context, enabledOnly: true })
+    .refreshAgents(options.wakeWslDistro ? { ...refreshArgs, wakeWslDistro: true } : refreshArgs)
     .then((result) => {
       const typed = result.agents.filter(isTuiAgent)
       const published = includeDisabled
@@ -101,6 +114,7 @@ export function refreshLocalAgentInventory(
         lifecycle.refreshPromises.get(contextKey) === pending
       ) {
         lifecycle.failedDetectContextKeys.delete(contextKey)
+        lifecycle.refusedContextKeys.delete(contextKey)
         lifecycle.failedDetectContextKeys.delete(publishedContextKey)
         const exposeToLegacy =
           lifecycle.legacyRefreshContextKey !== null &&
@@ -131,12 +145,13 @@ export function refreshLocalAgentInventory(
       }
       return typed
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       const fallback = get().localDetectedAgentIdsByContext[contextKey] ?? []
       if (
         requestGeneration === lifecycle.localDetectionGeneration &&
         lifecycle.refreshPromises.get(contextKey) === pending
       ) {
+        markLocalAgentRefusal(lifecycle, contextKey, error)
         lifecycle.keptThroughFailure.add(fallback)
         const publishedFallback = get().localDetectedAgentIdsByContext[publishedContextKey] ?? []
         lifecycle.keptThroughFailure.add(publishedFallback)
@@ -186,6 +201,23 @@ export function refreshLocalAgentInventory(
       }
     })
   }
+  if (options.wakeWslDistro) {
+    lifecycle.wakeRefreshes.add(pending)
+    lifecycle.wakeRefreshes.add(publishedPending)
+  }
   lifecycle.refreshPromises.set(contextKey, pending)
   return pending
+}
+
+/** Records whether a context's failed probe was an E9 refusal, which a picker opening may retry. */
+export function markLocalAgentRefusal(
+  lifecycle: Pick<LocalAgentInventoryLifecycle, 'refusedContextKeys'>,
+  contextKey: string,
+  error: unknown
+): void {
+  if (isWslDistroNotRunningRefusal(error)) {
+    lifecycle.refusedContextKeys.add(contextKey)
+  } else {
+    lifecycle.refusedContextKeys.delete(contextKey)
+  }
 }

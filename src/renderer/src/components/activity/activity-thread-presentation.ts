@@ -1,11 +1,11 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
-} from '../../../../shared/agent-main-agent-verdict'
+} from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import {
   getActivityThreadTaskTitle,
   getActivityThreadWorkspaceTitle,
@@ -13,27 +13,31 @@ import {
 } from '@/lib/activity-thread-display'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
-import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { isHistoricalActivityState } from './activity-event-state'
 import type {
   ActivityEvent,
   ActivityLiveAgentState,
   AgentPaneThread
 } from './activity-thread-types'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
 
-const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
+const ABSOLUTE_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit'
-})
+}
 
 export function formatAbsoluteDate(timestamp: number): string {
-  return absoluteDateFormatter.format(new Date(timestamp))
+  return uiDateTimeFormat(ABSOLUTE_DATE_OPTIONS).format(new Date(timestamp))
 }
 
 export function formatRelativeTime(timestamp: number, now = Date.now()): string {

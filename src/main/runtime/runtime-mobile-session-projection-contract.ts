@@ -1,6 +1,8 @@
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   BrowserTabInfo,
+  RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot,
@@ -16,7 +18,12 @@ export type RuntimeMobileSessionProjectionHost = {
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
   leaves: ReadonlyMap<string, RuntimeLeafRecord>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
+  getPtyAvailability(ptyId: string): boolean | null
   getLiveBrowserTabs(worktreeId: string): Map<string, BrowserTabInfo>
+  isRendererOwnedMobileBrowserTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionBrowserTab
+  ): boolean
   getProviderSessionRows(paneKey: string): AgentStatusIpcPayload[] | undefined
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
   getStatusSnapshot(): AgentStatusIpcPayload[]

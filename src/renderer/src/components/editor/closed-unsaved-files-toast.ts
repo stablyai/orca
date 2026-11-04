@@ -10,17 +10,15 @@ import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
 import { translate } from '@/i18n/i18n'
 
 function closedUnsavedFilesToastTitle(count: number, workspace: string): string {
-  return count === 1
-    ? translate(
-        'components.workspace.delete.unsavedEdits.closedToast_one',
-        'Closed {{count}} file with unsaved edits from {{workspace}}',
-        { count, workspace }
-      )
-    : translate(
-        'components.workspace.delete.unsavedEdits.closedToast_other',
-        'Closed {{count}} files with unsaved edits from {{workspace}}',
-        { count, workspace }
-      )
+  return translate(
+    'components.workspace.delete.unsavedEdits.closedToast',
+    'Closed {{count}} files with unsaved edits from {{workspace}}',
+    {
+      count,
+      workspace,
+      defaultValue_one: 'Closed {{count}} file with unsaved edits from {{workspace}}'
+    }
+  )
 }
 
 /** Recovery creates new files only in the active workspace, never at the removed paths. */

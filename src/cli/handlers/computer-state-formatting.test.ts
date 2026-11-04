@@ -58,19 +58,6 @@ describe('orca computer get-app-state formatting', () => {
     rmSync(screenshotDirectory, { recursive: true, force: true })
   })
 
-  it('formats get-app-state without printing screenshot bytes in pretty mode', async () => {
-    queueFixtures(callMock, okFixture('req_state', sampleSnapshot()))
-
-    await main(['computer', 'get-app-state', '--session', 'manual', '--app', 'Finder'], '/tmp/repo')
-
-    const output = vi.mocked(console.log).mock.calls[0][0]
-    expect(output).toContain('Finder (pid 100, com.apple.finder)')
-    expect(output).toContain('App=com.apple.finder')
-    expect(output).toContain('Coordinates: window')
-    expect(output).toContain('Truncated: no')
-    expect(output).not.toContain('cG5nLWJ5dGVz')
-  })
-
   it('omits screenshot bytes from JSON output and writes a screenshot path', async () => {
     queueFixtures(callMock, okFixture('req_state', sampleSnapshot()))
 
@@ -91,6 +78,66 @@ describe('orca computer get-app-state formatting', () => {
       join(screenshotDirectory, 'req_state-screenshot.png')
     )
     expect(readFileSync(parsed.result.screenshot.path)).toEqual(Buffer.from('png-bytes'))
+  })
+
+  it('filters get-app-state to matching elements and their ancestors with --query', async () => {
+    const result = sampleSnapshot()
+    queueFixtures(
+      callMock,
+      okFixture('req_state', {
+        ...result,
+        snapshot: {
+          ...result.snapshot,
+          treeText: [
+            'App=com.apple.finder (pid 100)',
+            'Window: "Finder", App: Finder.',
+            '',
+            '0 standard window Finder',
+            '\t1 toolbar',
+            '\t\t2 button Back',
+            '\t\t3 text field (settable) Search',
+            '\t4 split group',
+            '\t\t5 outline Sidebar',
+            '\t\t\t6 row, Text: Downloads',
+            '\t\t\t7 row, Text: Documents',
+            '',
+            'No UI element is currently focused.'
+          ].join('\n')
+        }
+      })
+    )
+
+    await main(
+      [
+        'computer',
+        'get-app-state',
+        '--session',
+        'manual',
+        '--app',
+        'Finder',
+        '--query',
+        'DOWNLOADS',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    const parsed = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
+    expect(parsed.result.snapshot.treeText).toBe(
+      [
+        'App=com.apple.finder (pid 100)',
+        'Window: "Finder", App: Finder.',
+        '',
+        '1 of 8 elements match "DOWNLOADS"; showing them with their ancestors.',
+        '0 standard window Finder',
+        '\t4 split group',
+        '\t\t5 outline Sidebar',
+        '\t\t\t6 row, Text: Downloads',
+        '',
+        'No UI element is currently focused.'
+      ].join('\n')
+    )
+    expect(callMock.mock.lastCall?.[1]).not.toHaveProperty('query')
   })
 })
 

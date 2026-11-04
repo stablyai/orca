@@ -4,59 +4,10 @@
   "family": "session.terminal-inventory",
   "namedDeltas": [],
   "values": {
-    "34f7b35ae07c": {
+    "475f23d61c0e": {
       "name": "terminal.list#1",
       "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false}}"
-    },
-    "66f849b2483e": {
-      "name": "prune-live-input",
-      "ordinal": 3,
-      "value": ["terminal-1", "terminal-2"]
-    },
-    "6948ec0dbe98": {
-      "name": "terminal.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "includeVisualLayouts": false,
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "terminals": [
-              {
-                "handle": "terminal-1",
-                "title": "one"
-              },
-              {
-                "handle": "terminal-2",
-                "title": "two"
-              }
-            ]
-          }
-        }
-      }
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false,\"includePreview\":false}}"
     },
     "727166f3bc25": {
       "known": [
@@ -98,10 +49,50 @@
       "settledAt": 0,
       "value": true
     },
-    "8d0d6d7c8b3b": {
-      "name": "default-live-input",
-      "ordinal": 4,
-      "value": ["terminal-1", "terminal-2"]
+    "ee68ebc5fb96": {
+      "name": "terminal.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "includePreview": false,
+            "includeVisualLayouts": false,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "terminals": [
+              {
+                "handle": "terminal-1",
+                "title": "one"
+              },
+              {
+                "handle": "terminal-2",
+                "title": "two"
+              }
+            ]
+          }
+        }
+      }
     }
   },
   "recording": {
@@ -110,13 +101,13 @@
       {
         "id": "listed",
         "observation": {
-          "sender": ["6948ec0dbe98"],
-          "payloads": ["34f7b35ae07c"],
+          "sender": ["ee68ebc5fb96"],
+          "payloads": ["475f23d61c0e"],
           "settlements": {
             "fetch": "84e5ca07cb7a"
           },
           "state": "727166f3bc25",
-          "effects": ["66f849b2483e", "8d0d6d7c8b3b"]
+          "effects": []
         }
       }
     ]

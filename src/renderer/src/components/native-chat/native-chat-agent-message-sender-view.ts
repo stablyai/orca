@@ -1,0 +1,164 @@
+import { useCallback, useMemo } from 'react'
+import {
+  useAgentMessageSenderSource,
+  useAgentMessageSenderSources,
+  useLeasedSenderSelector
+} from './native-chat-agent-message-sender-source'
+import type { AppState } from '@/store/types'
+import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import {
+  agentMessageSenderCandidateLocation,
+  agentMessageSenderOpens,
+  resolveAgentMessageSenderTarget
+} from './native-chat-agent-message-sender-target'
+import { agentMessageSavedKind } from '../../../../shared/agent-session/agent-message-presentation'
+
+/** The card's sender, rebuilt only from the fields resolution reads, and where it runs now. */
+function useSenderLocation(
+  sender: AgentMessageSender | undefined,
+  chatWorktreeId: string | null,
+  target: RuntimeClientTarget | undefined,
+  dispatchId: string | undefined
+) {
+  const address = sender?.party.address
+  const sessionId = sender?.party.orcaSessionId
+  const handle = sender?.party.terminalHandle
+  const savedAgent = agentMessageSavedKind(sender)
+  const targetKind = target?.kind
+  const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
+  const stableTarget = useMemo<RuntimeClientTarget | undefined>(
+    () =>
+      targetKind === 'local'
+        ? { kind: 'local' }
+        : environmentId !== undefined
+          ? { kind: 'environment', environmentId }
+          : undefined,
+    [targetKind, environmentId]
+  )
+  const identity = useMemo<AgentMessageSender | undefined>(
+    () =>
+      address
+        ? {
+            party: { address, orcaSessionId: sessionId ?? null, terminalHandle: handle ?? null },
+            name: null,
+            ...(savedAgent ? { agent: savedAgent } : {})
+          }
+        : undefined,
+    [address, sessionId, handle, savedAgent]
+  )
+  const resolve = useCallback(
+    (state: AppState) =>
+      identity
+        ? resolveAgentMessageSenderTarget(state, identity, chatWorktreeId, stableTarget, dispatchId)
+        : undefined,
+    [identity, chatWorktreeId, stableTarget, dispatchId]
+  )
+  const locate = useCallback(
+    (state: AppState) => {
+      const resolved = resolve(state)
+      if (resolved?.kind === 'legacy') {
+        return resolved.location
+      }
+      const located = resolved?.kind === 'located' ? resolved.location : undefined
+      // A located chat's own tab names its agent for cards saved before the agent kind was.
+      return located && { ...located, agentType: located.tab?.agentSessionAgent }
+    },
+    [resolve]
+  )
+  // The kind check reads the candidate's row before it can veto it, so the card leases that row's
+  // source in every answer: a replaced card reuses it as a located one does.
+  const leaseLocate = useCallback(
+    (state: AppState) =>
+      identity
+        ? agentMessageSenderCandidateLocation(
+            state,
+            identity,
+            chatWorktreeId,
+            stableTarget,
+            dispatchId
+          )
+        : undefined,
+    [identity, chatWorktreeId, stableTarget, dispatchId]
+  )
+  return { identity, savedAgent, resolve, locate, leaseLocate }
+}
+
+export function useAgentMessageSenderView(
+  sender: AgentMessageSender | undefined,
+  chatWorktreeId: string | null,
+  target?: RuntimeClientTarget,
+  dispatchId?: string
+) {
+  const { savedAgent, locate, leaseLocate } = useSenderLocation(
+    sender,
+    chatWorktreeId,
+    target,
+    dispatchId
+  )
+  return useAgentMessageSenderSource(locate, savedAgent, leaseLocate)
+}
+
+/** Whether the card's sender name is a link. Its kind check reads the located row, so it holds
+ *  the same lease the avatar does: a name drawn without an avatar rebuilds no rows per write. */
+export function useAgentMessageSenderOpens(
+  sender: AgentMessageSender,
+  chatWorktreeId: string | null,
+  target?: RuntimeClientTarget,
+  dispatchId?: string
+): boolean {
+  const { identity, resolve, leaseLocate } = useSenderLocation(
+    sender,
+    chatWorktreeId,
+    target,
+    dispatchId
+  )
+  const opens = useCallback(
+    (state: AppState) => {
+      const resolved = resolve(state)
+      return Boolean(resolved && identity && agentMessageSenderOpens(resolved, identity))
+    },
+    [resolve, identity]
+  )
+  return useLeasedSenderSelector(leaseLocate, opens)
+}
+
+export type AgentMessageSenderInput = {
+  sender: AgentMessageSender | undefined
+  worktreeId: string | null
+}
+
+/** List form of the card avatar's view: one subscription for every sender in `inputs`. */
+export function useAgentMessageSenderViews(
+  inputs: readonly AgentMessageSenderInput[],
+  target?: RuntimeClientTarget
+) {
+  const targetKind = target?.kind
+  const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
+  const lookups = useMemo(() => {
+    const stable: RuntimeClientTarget | undefined =
+      targetKind === 'local'
+        ? { kind: 'local' }
+        : environmentId !== undefined
+          ? { kind: 'environment', environmentId }
+          : undefined
+    return inputs.map(({ sender, worktreeId }) => ({
+      locate: (state: AppState) => {
+        const resolved = sender
+          ? resolveAgentMessageSenderTarget(state, sender, worktreeId, stable, undefined)
+          : undefined
+        if (resolved?.kind === 'legacy') {
+          return resolved.location
+        }
+        const located = resolved?.kind === 'located' ? resolved.location : undefined
+        return located && { ...located, agentType: located.tab?.agentSessionAgent }
+      },
+      leaseLocate: (state: AppState) =>
+        sender
+          ? agentMessageSenderCandidateLocation(state, sender, worktreeId, stable, undefined)
+          : undefined,
+      savedAgent: agentMessageSavedKind(sender)
+    }))
+  }, [inputs, targetKind, environmentId])
+  return useAgentMessageSenderSources(lookups)
+}

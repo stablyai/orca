@@ -26,9 +26,11 @@ function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boole
 
 export function hostedReviewOptionArgs(
   candidate: PRBranchLookupCandidate,
-  reason: GitHubPRRefreshReason = 'visible'
+  reason: GitHubPRRefreshReason = 'visible',
+  requestOptions: { userRefresh?: boolean } = {}
 ): [] | [GitHubPRBranchLookupOptions] {
-  const options: GitHubPRBranchLookupOptions = {}
+  const options: GitHubPRBranchLookupOptions =
+    requestOptions.userRefresh === true ? { userRefresh: true } : {}
   options.localGitExecOptions = {
     ...(candidate.localGitOptions?.wslDistro
       ? { wslDistro: candidate.localGitOptions.wslDistro }

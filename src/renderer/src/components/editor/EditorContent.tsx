@@ -1,20 +1,21 @@
 import { useAppStore } from '@/store'
+import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
-import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
+import { CheckRunDetailsPanel } from './check-details/panel/CheckRunDetailsPanel'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
-import { MarkdownPreviewSizeGate } from './MarkdownPreviewSizeGate'
+import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
 import type { FileContent } from './editor-panel-content-types'
 import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
 import { translate } from '@/i18n/i18n'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
-import { useMarkdownDocuments } from './useMarkdownDocuments'
-import type { MarkdownRenderState } from './markdown-render-mode'
+import { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
+import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
 
 // Retry is a user act: it may start a stopped WSL distro.
 const USER_RETRY = { wakeWslDistro: true }
@@ -50,8 +51,10 @@ export function EditorContent({
   resolvedLanguage,
   isMarkdown,
   isMermaid,
+  isSvg = false,
   isCsv,
   isNotebook,
+  customEditor = null,
   mdViewMode,
   inlineMarkdownRenderState,
   isChangesMode,
@@ -78,8 +81,10 @@ export function EditorContent({
   resolvedLanguage: string
   isMarkdown: boolean
   isMermaid: boolean
+  isSvg?: boolean
   isCsv: boolean
   isNotebook: boolean
+  customEditor?: ActivePluginCustomEditor | null
   mdViewMode: MarkdownViewMode
   inlineMarkdownRenderState: MarkdownRenderState | null
   isChangesMode: boolean
@@ -98,7 +103,7 @@ export function EditorContent({
 }): React.JSX.Element {
   const editorViewStateKey =
     viewStateScopeId === activeFile.id
-      ? activeFile.filePath
+      ? activeFile.id
       : `${activeFile.filePath}::${viewStateScopeId}`
   const diffViewStateKey =
     viewStateScopeId === activeFile.id ? activeFile.id : `${activeFile.id}::${viewStateScopeId}`
@@ -109,7 +114,7 @@ export function EditorContent({
   // Why: only the single-pane edit path gets PDF scroll memory — diff and conflict review mount several viewers on one path.
   const pdfViewStateKey =
     viewStateScopeId === activeFile.id
-      ? `${activeFile.filePath}:pdf`
+      ? `${activeFile.id}:pdf`
       : `${activeFile.filePath}::${viewStateScopeId}:pdf`
   // Scope durable PDF zoom by owner: identical paths can belong to different worktrees or remote hosts.
   const pdfPreferenceKey = buildPdfScalePreferenceKey(activeFile)
@@ -201,7 +206,9 @@ export function EditorContent({
         <EditorFileLoadErrorView
           message={fileContent.loadError}
           code={fileContent.loadErrorCode}
+          worktreeId={activeFile.worktreeId}
           onRetry={() => reloadContent(activeFile, USER_RETRY)}
+          onHostStarted={() => reloadContent(activeFile)}
         />
       )
     }
@@ -255,8 +262,10 @@ export function EditorContent({
         monacoLanguage={monacoLanguage}
         isMarkdown={isMarkdown}
         isMermaid={isMermaid}
+        isSvg={isSvg}
         isCsv={isCsv}
         isNotebook={isNotebook}
+        customEditor={customEditor}
         mdViewMode={mdViewMode}
         inlineMarkdownRenderState={inlineMarkdownRenderState}
         isChangesMode={isChangesMode}

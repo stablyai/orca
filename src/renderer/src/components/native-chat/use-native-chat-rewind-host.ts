@@ -3,7 +3,7 @@ import type { ConfirmationDialogContextValue } from '@/components/confirmation-d
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useStructuredAgentSessionRewindBlockedReason } from './StructuredAgentSessionStatusBridge'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
-import type { AgentSessionRewindReason } from '../../../../shared/agent-session-rewind'
+import type { AgentSessionRewindReason } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
 
 export type NativeChatRewindSurface = {
   disabledReason: string | null

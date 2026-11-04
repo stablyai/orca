@@ -5,9 +5,15 @@ import type {
 } from './run-completion-watcher'
 import type { AutomationRun, AutomationRunOutputSnapshot } from '../../shared/automations-types'
 import {
-  hasHeldRunTurnDone,
+  AUTOMATION_RUN_FAILURE_COPY,
+  automationRunFailure,
+  type AutomationRunFailure
+} from '../../shared/automation-run-failure-copy'
+import {
+  judgeHeldRunTurn,
   judgeIdleRun,
-  type AutomationRunAgentEvidence
+  type AutomationRunAgentEvidence,
+  type IdleRunVerdict
 } from './automation-run-agent-evidence'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
@@ -54,12 +60,18 @@ async function judgeIdleTail(
   runStartedAt: number
 ): Promise<AutomationRunCompletionObservation | null> {
   const verdict = judgeIdleRun(evidence, run, tail, runStartedAt, Date.now())
-  if (verdict.kind === 'wait') {
-    return null
+  return verdict.kind === 'wait' ? null : observationOf(verdict, tail)
+}
+
+function observationOf(
+  verdict: Exclude<IdleRunVerdict, { kind: 'wait' }>,
+  tail: readonly string[]
+): AutomationRunCompletionObservation {
+  if (verdict.kind === 'completed') {
+    return { status: 'completed', outputSnapshot: snapshotOf(tail), error: null }
   }
-  return verdict.kind === 'completed'
-    ? { status: 'completed', outputSnapshot: snapshotOf(tail), error: null }
-    : { status: 'dispatch_failed', outputSnapshot: snapshotOf(tail), error: verdict.error }
+  const { kind: _kind, ...failure } = verdict
+  return { status: 'dispatch_failed', outputSnapshot: snapshotOf(tail), ...failure }
 }
 
 /** Rejudge unchanged idle output: an idle shell may never emit another idle edge. */
@@ -144,13 +156,12 @@ async function waitForAgentStart(
   return false
 }
 
-export const AGENT_HOOKS_REVIEW_BLOCKED_ERROR =
-  'The agent is waiting for someone to review new or changed hooks ("Hooks need review"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.'
+export const AGENT_HOOKS_REVIEW_BLOCKED_ERROR = AUTOMATION_RUN_FAILURE_COPY.hooksReviewBlocked
 
-function describeBlockedAgent(blockedReason: string): string {
+function describeBlockedAgent(blockedReason: string): AutomationRunFailure {
   return blockedReason === 'agent-hooks-review-prompt'
-    ? AGENT_HOOKS_REVIEW_BLOCKED_ERROR
-    : `Automation agent is blocked: ${blockedReason}.`
+    ? automationRunFailure('hooksReviewBlocked')
+    : { error: `Automation agent is blocked: ${blockedReason}.` }
 }
 
 async function readTerminalSnapshot(
@@ -179,21 +190,21 @@ async function buildObservation(
   return {
     status: 'dispatch_failed',
     outputSnapshot,
-    error: wait.blockedReason
+    ...(wait.blockedReason
       ? describeBlockedAgent(wait.blockedReason)
-      : 'Automation agent did not report completion.'
+      : automationRunFailure('agentNoCompletion'))
   }
 }
 
 async function buildUnobservedObservation(
   runtime: AutomationRunTerminalHost,
   handle: string,
-  error: string
+  failure: AutomationRunFailure
 ): Promise<AutomationRunCompletionObservation> {
   return {
     status: 'dispatch_failed',
     outputSnapshot: await readTerminalSnapshot(runtime, handle),
-    error
+    ...failure
   }
 }
 
@@ -221,7 +232,7 @@ export function createRuntimeAutomationRunTerminalObserver(
           return await buildUnobservedObservation(
             runtime,
             handle,
-            'Automation agent never started after the prompt was submitted.'
+            automationRunFailure('agentNeverStarted')
           )
         }
       }
@@ -252,28 +263,24 @@ export function createRuntimeAutomationRunTerminalObserver(
           if (signal.aborted || !isTerminalWaitTimeout(error)) {
             throw error
           }
-          if (
-            judged &&
-            hasHeldRunTurnDone(
-              judged.evidence,
-              judged.run,
-              runStartedAt,
-              Date.now(),
-              HELD_DONE_SETTLE_MS
-            )
-          ) {
-            return {
-              status: 'completed',
-              outputSnapshot: snapshotOf(await readTail(runtime, handle)),
-              error: null
-            }
+          const held = judged
+            ? judgeHeldRunTurn(
+                judged.evidence,
+                judged.run,
+                runStartedAt,
+                Date.now(),
+                HELD_DONE_SETTLE_MS
+              )
+            : null
+          if (held) {
+            return observationOf(held, await readTail(runtime, handle))
           }
         }
       }
       return await buildUnobservedObservation(
         runtime,
         handle,
-        'Orca stopped watching this run after 6h without a completion signal.'
+        automationRunFailure('watchTimedOut')
       )
     }
   }

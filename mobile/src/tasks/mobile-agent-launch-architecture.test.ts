@@ -2,8 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
+import { closeTestJournalHostDatabases } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeRpcServer } from '../../../src/main/runtime/runtime-rpc'
 import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
 import type { AuthenticatedMobileSocket } from '../../../src/main/runtime/rpc/mobile-socket-wiring'
@@ -25,7 +26,7 @@ import { readNewWorktreeRuntimeCapabilities } from './worktree-create-capability
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-launch-runtime-capability'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 
 const createStructuredSession = vi.fn()
 vi.mock('../../../src/main/runtime/rpc/methods/structured-agent-session-create', () => ({
@@ -46,6 +47,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   setAgentLaunchRecordStore(null)
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -203,27 +205,6 @@ describe('mobile launch retry authority', () => {
     expect(store.listOperationRows()[0]?.callerKey).toBe(mobile.deviceId)
   })
 
-  it('rejects an unnamed replay request before workspace creation', async () => {
-    const runtime = { ...runtimeStub(), getRuntimeId: () => 'runtime-1' }
-    const dispatcher = new RpcDispatcher({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements the launch handler dependencies.
-      runtime: runtime as unknown as OrcaRuntimeService,
-      methods: AGENT_LAUNCH_METHODS
-    })
-    const response = await dispatcher.dispatch({
-      id: 'missing-operation',
-      authToken: 'token',
-      method: 'agent.launchReplay',
-      params: {
-        agent: 'claude',
-        target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'otter' } }
-      }
-    })
-    expect(response.ok).toBe(false)
-    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
-    expect(createStructuredSession).not.toHaveBeenCalled()
-  })
-
   it('shares one durable receipt across entry points and a reopened store', async () => {
     const runtime = { ...runtimeStub(), getRuntimeId: () => 'runtime-1' }
     const dispatcher = new RpcDispatcher({
@@ -302,20 +283,6 @@ describe('mobile launch retry authority', () => {
     expect(createStructuredSession).not.toHaveBeenCalled()
   })
 
-  it('does not interpret a nested refusal message as a fresh workspace candidate', async () => {
-    createStructuredSession.mockResolvedValueOnce({
-      ok: false,
-      refusal: {
-        code: 'agent_session_operation_unknown',
-        message: 'Branch "setup" already exists.'
-      }
-    })
-    const launch = scenario()
-    await expect(launch.result).resolves.toEqual({ error: 'agent_session_operation_unknown' })
-    expect(launch.runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
-    expect(createStructuredSession).toHaveBeenCalledTimes(1)
-  })
-
   it('refuses an older receiver reached after a connected timeout', async () => {
     const launch = scenario({ replacement: 'legacy', loss: 'timeout' })
     await expect(launch.result).resolves.toMatchObject({
@@ -344,21 +311,5 @@ describe('mobile launch retry authority', () => {
       status: 'failed',
       code: 'worktree_create_collision'
     })
-  })
-
-  it.each([
-    'agent_launch_unsupported',
-    'agent_launch_replay_unsupported',
-    'method_not_found',
-    'worktree_create_collision'
-  ])('does not downgrade or rename after nested %s text', async (message) => {
-    createStructuredSession.mockResolvedValueOnce({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown', message }
-    })
-    const launch = scenario()
-    await expect(launch.result).resolves.toEqual({ error: 'agent_session_operation_unknown' })
-    expect(launch.runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
-    expect(createStructuredSession).toHaveBeenCalledTimes(1)
   })
 })

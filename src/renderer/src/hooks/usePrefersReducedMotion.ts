@@ -1,12 +1,9 @@
-import { useEffect, useState } from 'react'
+import { readMediaQuery, useMediaQuery } from './use-media-query'
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
 export function readPrefersReducedMotion(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return false
-  }
-  return window.matchMedia(REDUCED_MOTION_QUERY).matches
+  return readMediaQuery(REDUCED_MOTION_QUERY)
 }
 
 // Why: a scripted scroll's explicit `behavior` is not affected by CSS or the OS setting.
@@ -15,19 +12,5 @@ export function motionSafeScrollBehavior(behavior: ScrollBehavior = 'smooth'): S
 }
 
 export function usePrefersReducedMotion(): boolean {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(readPrefersReducedMotion)
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return
-    }
-    const media = window.matchMedia(REDUCED_MOTION_QUERY)
-    const onChange = (event: MediaQueryListEvent): void => {
-      setPrefersReducedMotion(event.matches)
-    }
-    media.addEventListener('change', onChange)
-    return () => media.removeEventListener('change', onChange)
-  }, [])
-
-  return prefersReducedMotion
+  return useMediaQuery(REDUCED_MOTION_QUERY)
 }

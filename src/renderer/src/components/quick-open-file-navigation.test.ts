@@ -34,7 +34,7 @@ vi.mock('@/runtime/runtime-file-routing', () => ({
   isRemoteRuntimeFileOperation: (context: { connectionId?: string }) =>
     Boolean(context.connectionId)
 }))
-vi.mock('./right-sidebar/file-explorer-operation-owner', () => ({
+vi.mock('./right-sidebar/file-explorer/navigation/file-explorer-operation-owner', () => ({
   getFileExplorerOperationOwner: () => ({}),
   captureFileExplorerOperationGuard: () => ({
     route: mocks.route.current,

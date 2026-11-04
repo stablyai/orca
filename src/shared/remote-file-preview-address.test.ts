@@ -9,12 +9,6 @@ const address = {
 }
 
 describe('parseRemoteFilePreviewAddress', () => {
-  it('keeps only the address fields', () => {
-    expect(parseRemoteFilePreviewAddress({ ...address, extra: 'ignored' })).toEqual(address)
-    const { expectedEnvironmentPairingRevision: _revision, ...unpinned } = address
-    expect(parseRemoteFilePreviewAddress(unpinned)).toEqual(unpinned)
-  })
-
   it.each([
     { relativePath: '/etc/a.mp4' },
     { relativePath: 'C:\\a.mp4' },

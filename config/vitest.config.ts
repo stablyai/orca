@@ -18,17 +18,11 @@ const nodeRuntimeInclude = process.versions.bun
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
-const paletteMeasurementFile =
-  'src/renderer/src/lib/palette-match/palette-match-performance.test.ts'
-const measurementFiles = [measurementFile, paletteMeasurementFile]
-const phoneContractModules = [
-  'mobile/src/session/native-chat/mobile-native-chat-stream-frame.ts',
-  'mobile/src/session/mobile-native-chat-render-data.ts'
-].map((file) => normalizePath(resolve(file)))
-const phoneContractPattern = new RegExp(
-  `^(?:${phoneContractModules.map((file) => file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?:\\?.*)?$`
-)
+const measurementFiles = [measurementFile]
+const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const transforms = {
+  // Auto-discovery climbs past the repo for files no in-repo tsconfig owns, into an enclosing checkout.
+  tsconfig: resolve(import.meta.dirname, 'tsconfig.vitest-transform.json'),
   oxc: { exclude: [/\.js$/, phoneContractPattern] },
   plugins: [
     {
@@ -37,7 +31,7 @@ const transforms = {
       enforce: 'pre',
       async transform(source, id) {
         const filename = normalizePath(id.split('?')[0])
-        if (!phoneContractModules.includes(filename)) {
+        if (!phoneContractPattern.test(filename)) {
           return null
         }
         const result = await transformWithOxc(source, filename, { tsconfig: false })
@@ -86,7 +80,7 @@ const testOptions = {
   environment: 'node',
   clearMocks: false,
   ...(balancedShards ? { silent: 'passed-only' as const } : {}),
-  // Persistent transforms are CI-keyed (ci-unit-module-cache.mjs); local runs stay cold.
+  // Keyed by ci-unit-module-cache.mjs in CI and vitest-local-module-cache.mjs locally.
   fsModuleCache: Boolean(moduleCachePath),
   ...(moduleCachePath ? { fsModuleCachePath: moduleCachePath } : {}),
   env: { ORCA_VITEST_RUNTIME: 'node' },
@@ -126,7 +120,6 @@ const bunProject = {
     sequence: { groupOrder: 1 }
   }
 }
-const paletteRuntimeProject = process.versions.bun ? bunProject : nodeProject
 const projects = [
   ...(process.versions.bun ? [bunProject] : []),
   nodeProject,
@@ -140,18 +133,6 @@ const projects = [
       exclude: testOptions.exclude,
       maxWorkers: 1,
       sequence: { groupOrder: 2 }
-    }
-  },
-  // Preserve the palette test's runtime and budgets while keeping other suites off its CPU.
-  {
-    ...paletteRuntimeProject,
-    test: {
-      ...paletteRuntimeProject.test,
-      name: 'palette-measurement',
-      include: [paletteMeasurementFile],
-      exclude: testOptions.exclude,
-      maxWorkers: 1,
-      sequence: { groupOrder: 3 }
     }
   }
 ]

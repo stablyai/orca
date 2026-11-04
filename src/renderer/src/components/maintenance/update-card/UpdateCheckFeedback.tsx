@@ -1,6 +1,7 @@
 import { AlertCircle, Check, Loader2, X } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function UpdateCheckFeedback({
   icon,
@@ -26,7 +27,7 @@ export function UpdateCheckFeedback({
           <button
             type="button"
             className="text-xs text-muted-foreground underline hover:text-foreground mt-0.5"
-            onClick={() => void window.api.shell.openUrl(action.url)}
+            onClick={(event) => openAppHttpLink(action.url, { event })}
           >
             {action.label}
           </button>

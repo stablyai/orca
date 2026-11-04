@@ -1,7 +1,7 @@
 // Fit long strings to one common length; preserve identifiers because readers key and answer by them.
 // Mark clipped heads with truncated and other strings with an ellipsis.
 
-import type { AgentJournalBoundedPayload } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalBoundedPayload } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const ELLIPSIS = '…'
 const ELLIPSIS_BYTES = Buffer.byteLength(ELLIPSIS, 'utf8')

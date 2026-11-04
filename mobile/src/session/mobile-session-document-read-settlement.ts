@@ -148,6 +148,12 @@ function readyFileDocsMatch(current: ReadyFileDocState, next: FileDocState): boo
       )
     case 'html':
       return next.kind === 'html' && current.content === next.content
+    case 'svg':
+      return (
+        next.kind === 'svg' &&
+        current.content === next.content &&
+        current.truncated === next.truncated
+      )
     case 'image':
       return next.kind === 'image' && current.dataUri === next.dataUri
     case 'media':

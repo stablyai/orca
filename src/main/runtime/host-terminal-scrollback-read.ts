@@ -1,6 +1,6 @@
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { SessionReadTerminalScrollbackResult } from '../../shared/rpc-contract/session-terminal-scrollback-params'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../shared/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../shared/terminal/replay/terminal-scrollback-limits'
 
 export type HostTerminalScrollbackReadDeps = {
   /** Resolves the caller's worktree selector the way every workspace method does; throws when unknown. */

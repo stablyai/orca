@@ -1,6 +1,6 @@
-import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
-import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser-client-automation-protocol'
-import { browserNetworkExecutionHostKey } from '../browser/browser-network-execution-route'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser/client-hosting/browser-network-execution-host'
+import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { browserNetworkExecutionHostKey } from '../browser/network/execution-routes/browser-network-execution-route'
 import type { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import type { RuntimeBrowserClientPlacement } from '../../shared/runtime-browser-placement'
 

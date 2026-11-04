@@ -5,8 +5,8 @@ import { createRestartResumeProgress } from './structured-agent-session-restart-
 import {
   AgentSessionRefusalError,
   agentSessionRefusalFromReference
-} from '../../../shared/agent-session-wire-refusals'
-import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import {
   createNewerOrcaChats,
   createStructuredAgentSessionRestartCandidateReaders
@@ -94,7 +94,6 @@ export function createStructuredAgentSessionRestartResume(
     getRecord: deps.store.getConversation,
     retryable: (marker) => derive([marker], 'may-be-held').candidates.length === 1,
     savedByNewerOrca: newerOrca.has,
-    reveal: (markers) => revealMarkers(markers),
     logger: deps.logger,
     now: surfaces.now,
     enqueue: enqueueRecoveryOperation
@@ -117,7 +116,6 @@ export function createStructuredAgentSessionRestartResume(
     audience?: StructuredAgentSessionRestartAudience
   ): Promise<StructuredAgentSessionResumeCandidate[]> => {
     const markers = await readMarkers()
-    await revealMarkers(markers)
     // Inspection alone must not withdraw the offer.
     const { candidates, superseded } = derive(markers, 'may-be-held')
     retireSuperseded(superseded)

@@ -1,8 +1,8 @@
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   cursorChatMetaRefusals,
   withCursorChatMetaScan
-} from '../ai-vault/session-scanner-cursor-chat-meta'
+} from '../ai-vault/scanners/cursor/session-scanner-cursor-chat-meta'
 import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
 import {
   mergeDegradedRoots,
@@ -119,7 +119,7 @@ export async function runSessionSearchPass(
       recordSessionScanIssue(issues, {
         agent: 'cursor',
         path: refusal.chatsRoot,
-        message: refusal.message
+        ...refusal.text
       })
     }
     // Discovery suppresses readdir failures; check empty roots explicitly to expose those failures.

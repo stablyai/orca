@@ -12,8 +12,8 @@ import {
   buildAiVaultForkStartupForWorktree
 } from '@/lib/ai-vault-session-fork-startup'
 import { launchAiVaultSessionAndReveal } from '@/lib/launch-ai-vault-session-and-reveal'
-import { notifyAiVaultSessionPreparationFailure } from '../right-sidebar/ai-vault-session-launch-feedback'
-import { describeAiVaultCliForkFailure } from '../right-sidebar/ai-vault-session-cli-fork'
+import { notifyAiVaultSessionPreparationFailure } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-launch-feedback'
+import { describeAiVaultCliForkFailure } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-cli-fork'
 import {
   captureWebSessionIntentOwner,
   matchesWebSessionIntentOwner
@@ -22,11 +22,12 @@ import {
   onRuntimeEnvironmentsRetired,
   onRuntimeEnvironmentRevisionsChanged
 } from '@/runtime/runtime-environment-revision'
-import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   resolveNativeChatCliForkIdentity,
   type NativeChatCliForkIdentity
 } from './tab-session-history-switch'
+import { translate } from '@/i18n/i18n'
 
 const pending = new Map<string, AbortController>()
 const listeners = new Set<() => void>()
@@ -129,7 +130,12 @@ export async function runNativeChatCliFork(args: {
       ? buildAiVaultCopiedSessionStartupForWorktree(startupArgs, prepared.sourceAgent ?? args.agent)
       : buildAiVaultForkStartupForWorktree(startupArgs)
     if (!startup) {
-      throw new Error('This session cannot be opened in the CLI.')
+      throw new Error(
+        translate(
+          'auto.components.tab.bar.nativeChatCliFork.cannotOpenInCli',
+          'This session cannot be opened in the CLI.'
+        )
+      )
     }
     // The destination takes over synchronously; closing the source afterward must not cancel it.
     if (!isCurrent()) {

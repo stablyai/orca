@@ -76,12 +76,16 @@ jobs:
             /config/.bun-version
             /config/scripts/check-readme-local-links.mjs
             /config/scripts/pr-code-change-scope.mjs
+            /config/scripts/pr-shell-contract-prefixes.mjs
             /.oxfmtrc.json
             /config/scripts/pr-package-test-paths.mjs
             /config/scripts/pr-layout-oracle-route.mjs
             /config/scripts/pr-e2e-source-routing.mjs
             /config/scripts/pr-browser-e2e-source-routes.mjs
             /config/scripts/pr-editor-preview-e2e-source-routes.mjs
+            /config/scripts/pr-feature-area-e2e-source-routes.mjs
+            /config/scripts/pr-plugin-e2e-source-routes.mjs
+            /config/scripts/pr-wsl-e2e-source-routes.mjs
             /config/scripts/ci-e2e-job-selection.mjs
             /config/scripts/pr-ready-check-reuse.mjs
           sparse-checkout-cone-mode: false
@@ -171,10 +175,9 @@ jobs:
     name: static analysis and typecheck
     needs: [code_paths]
     if: needs.code_paths.outputs.static_analysis == 'true' || needs.code_paths.outputs.typecheck == 'true'
-    # Leave headroom for typechecking and overlapping checks.
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    # Free hosted ARM: no job on the gate's critical path waits for preflight.
+    runs-on: ubuntu-24.04-arm
     outputs:
-      shards: ${{ steps.unit-plan.outputs.shards }}
       managed_hook_node18: ${{ steps.managed_hook_node18.outcome }}
 
     steps:
@@ -224,22 +227,6 @@ jobs:
           bun-version-file: config/.bun-version
           no-cache: true
 
-      # Plan first: its ~10s single-threaded import-graph walk overlaps lint instead of trailing the job.
-      - name: Plan unit selection
-        if: '!cancelled()'
-        id: unit-plan
-        background: true
-        env:
-          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.typecheck == 'true' }}
-          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
-          ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
-          ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
-          # Five shards use fewer runner minutes; the repository variable can request 2 to 10.
-          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}
-        run: |
-          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node config/scripts/ci-unit-plan.mjs
-
       # Run gate scripts directly to avoid repeated package-manager startup.
       - name: Check process-host imports
         if: '!cancelled()'
@@ -287,6 +274,19 @@ jobs:
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           node node_modules/oxlint/bin/oxlint --config config/oxlint-js-plugins.json --format github src config tests mobile native .github
 
+      # Its single JS-plugin thread ran alone for ~12s as a foreground tail; overlapping it fills idle cores.
+      - name: Reject low-evidence patterns
+        if: '!cancelled()'
+        id: anti-slop
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node config/scripts/sync-anti-slop-plugin.mjs
+          bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings
+
       - name: Enforce ast-grep rules
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: |
@@ -298,13 +298,10 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node node_modules/oxfmt/bin/oxfmt --check .
 
-      - name: Reject low-evidence patterns
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: |
-          node config/scripts/sync-anti-slop-plugin.mjs
-          bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings
-
       - wait: root-lint
+
+      # The type-aware pass needs most of the runner memory.
+      - wait: anti-slop
 
       - name: Enforce focused code-quality plugins
         if: '!cancelled()'
@@ -384,6 +381,19 @@ jobs:
             bun config/scripts/verify-localization-extraction.mjs
           fi
 
+      # Runs every config/scripts/check-*-ratchet(s).mjs, so a new ratchet needs no step here.
+      # Starts with the compiler: as a foreground step it made the serial chain outlast typecheck.
+      - name: Enforce ratchets
+        if: '!cancelled()'
+        id: ratchets
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node config/scripts/run-ratchets.mjs
+
       - name: Check Zustand selector fan-out budget
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/zustand-selector-fanout-benchmark.mjs --check
@@ -391,6 +401,10 @@ jobs:
       - name: Check reliability gate manifest
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/check-reliability-gates.mjs
+
+      - name: Check compiled CSS :has() restyle scope
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/check-has-restyle-scope.mjs
 
       - name: Enforce dead design-system classes
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -419,11 +433,6 @@ jobs:
           fi
           node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
             config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts
-
-      # Runs every config/scripts/check-*-ratchet(s).mjs, so a new ratchet needs no step here.
-      - name: Enforce ratchets
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/run-ratchets.mjs
 
       - name: Check Node runtime pin
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -503,6 +512,14 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: bun config/scripts/audit-localization-coverage.mjs --check
 
+      - name: Verify mobile localization
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: bun config/scripts/verify-mobile-localization.mjs
+
+      - name: Verify mobile localization coverage
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: bun run verify:mobile-localization-coverage
+
       - wait: [localization-catalogs, localization-extraction]
 
       # Keep project declarations in .ts: skipLibCheck silently widened unresolved .d.ts names to any, hiding #1186 IPC breakage. See .github/CONTRIBUTING.md#type-declarations-prefer-ts-over-dts.
@@ -535,16 +552,9 @@ jobs:
 
       - wait: js-plugin-lint
 
-      - wait: unit-plan
-
       - wait: test-file-runners
 
-      - uses: actions/upload-artifact@v7
-        if: needs.code_paths.outputs.typecheck == 'true'
-        with:
-          name: unit-selection-attempt-${{ github.run_attempt }}
-          path: ci-shards/unit-selection.json
-          retention-days: 14
+      - wait: ratchets
 
       - name: Test Mobile CI tools and runtime routing
         if: needs.code_paths.outputs.mobile_ci_tools == 'true'
@@ -557,7 +567,6 @@ jobs:
           config/scripts/mobile-release-check-scope.test.mjs
           config/scripts/mobile-test-change-scope.test.mjs
           config/scripts/pr-ready-check-reuse.test.mjs
-          config/scripts/ci-dependency-download-cache.test.mjs
           config/scripts/win32-test-lane-registration.test.mjs
           config/scripts/vitest-node-runtime-boundary.test.ts
           config/scripts/vitest-sqlite-runtime-boundary.test.ts
@@ -582,8 +591,17 @@ jobs:
       needs.code_paths.result == 'success' &&
       needs.code_paths.outputs.git_compatibility == 'true' &&
       needs.preflight.result == 'success'
-    # Three parallel lanes (two through Docker) exceed real-Git test timeouts on 4-vCPU hosted runners.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # One free hosted runner per lane: three lanes sharing one 4-vCPU runner pushed real-Git tests past their timeouts.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - git: '2.25.5'
+          - git: '2.38.1'
+            image: alpine/git:edge-2.38.1
+          - git: '2.49.1'
+            image: alpine/git:v2.49.1
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -594,50 +612,24 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
 
       - uses: ./.github/actions/prepare-git-compatibility
+        if: '!matrix.image'
 
-      - name: Verify Git binary compatibility matrix
+      - name: Verify Git ${{ matrix.git }} compatibility
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_GIT_COMPAT_VERSION: ${{ matrix.git }}
+          ORCA_GIT_COMPAT_IMAGE: ${{ matrix.image }}
         run: |
-          specs=(
-            "alpine/git:edge-2.38.1|2.38.1"
-            "alpine/git:v2.49.1|2.49.1"
-          )
-          # Pull before tests so a sibling’s timed lane cannot be stalled by the first image download.
-          for spec in "${specs[@]}"; do
-            docker pull --quiet "${spec%%|*}"
-          done
-
-          pids=()
-          (
-            ORCA_GIT_COMPAT_BINARY="$HOME/.cache/orca-git-compat/git-2.25.5/git" \
-              GIT_EXEC_PATH="$HOME/.cache/orca-git-compat/git-2.25.5" \
-              ORCA_GIT_COMPAT_VERSION="2.25.5" \
-              pnpm exec vitest run --config config/vitest.config.ts \
-              src/shared/git-binary-compatibility.test.ts \
-              src/main/git/worktree-safety-real-git.test.ts \
-              src/main/git/worktree-rebase-update-refs-real-git.test.ts
-          ) &
-          pids+=("$!")
-
-          for spec in "${specs[@]}"; do
-            (
-              image="${spec%%|*}"
-              version="${spec#*|}"
-              ORCA_GIT_COMPAT_IMAGE="$image" ORCA_GIT_COMPAT_VERSION="$version" \
-                pnpm exec vitest run --config config/vitest.config.ts \
-                src/shared/git-binary-compatibility.test.ts \
-                src/main/git/worktree-safety-real-git.test.ts \
-                src/main/git/worktree-rebase-update-refs-real-git.test.ts
-            ) &
-            pids+=("$!")
-          done
-
-          status=0
-          for pid in "${pids[@]}"; do
-            wait "$pid" || status=1
-          done
-          exit "$status"
+          if [ -n "$ORCA_GIT_COMPAT_IMAGE" ]; then
+            # Pull outside the timed tests.
+            docker pull --quiet "$ORCA_GIT_COMPAT_IMAGE"
+          else
+            unset ORCA_GIT_COMPAT_IMAGE
+            export ORCA_GIT_COMPAT_BINARY="$HOME/.cache/orca-git-compat/git-$ORCA_GIT_COMPAT_VERSION/git"
+            export GIT_EXEC_PATH="$HOME/.cache/orca-git-compat/git-$ORCA_GIT_COMPAT_VERSION"
+          fi
+          pnpm exec vitest run --config config/vitest.config.ts \
+            src/shared/git/compatibility/git-binary-compatibility.test.ts
 
   # Run pinned real Codex: thread/read must repair an unindexed rollout’s threads row; stub-only units cannot detect upstream removal of this behavior.
   codex_index_heal_contract:
@@ -678,7 +670,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/codex/codex-index-heal-binary-contract.test.ts
+            src/main/codex/history/index/codex-index-heal-binary-contract.test.ts
 
       - name: Install pinned no-daemon Codex CLI
         run: |
@@ -694,7 +686,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_NO_DAEMON_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/pty/codex-no-daemon-binary-contract.test.ts
+            src/main/pty/shell-startup/codex-no-daemon-binary-contract.test.ts
 
       # Test pins plus latest because Codex’s managed-home approval hash can change before users encounter review prompts.
       - name: Verify Codex hook file-entry contract (pinned)
@@ -706,7 +698,7 @@ jobs:
             ORCA_CODEX_HOOK_CONTRACT_BINARY="$RUNNER_TEMP/${install%%:*}/node_modules/.bin/codex" \
               ORCA_CODEX_HOOK_CONTRACT_VERSION="${install#*:}" \
               pnpm exec vitest run --config config/vitest.config.ts \
-              src/main/codex/codex-hook-file-entry-binary-contract.test.ts
+              src/main/codex/hooks/definitions/codex-hook-file-entry-binary-contract.test.ts
           done
 
       - name: Install latest Codex CLI
@@ -721,7 +713,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_HOOK_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-latest/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/codex/codex-hook-file-entry-binary-contract.test.ts
+            src/main/codex/hooks/definitions/codex-hook-file-entry-binary-contract.test.ts
 
       # Why the no-daemon install: it is the newest pinned Codex, and its project
       # lookup decides whether a worktree launch stops at the trust prompt.
@@ -733,7 +725,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_TRUST_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/agent-trust-presets.test.ts
+            src/main/agent-launch/trust/agent-trust-presets.test.ts
 
   xterm_patch_sync:
     name: xterm patch sync
@@ -856,51 +848,64 @@ jobs:
             src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             src/main/daemon/shell-ready.test.ts \
             src/main/daemon/node-pty-fd-leak.test.ts \
-            src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
-            src/main/providers/__tests__/shell-ready-framework-example.test.ts \
-            src/main/pty/codex-shell-launch-preflight.test.ts \
-            src/main/pty/codex-shell-no-daemon.test.ts \
-            src/main/pty/omp-shell-wrapper-alias-safety.test.ts \
-            src/main/pty/omp-shell-wrapper.node-pty.test.ts \
-            src/main/fish-xdg-data-dirs-handoff.test.ts \
-            src/main/shell-startup-feature-channel.test.ts \
-            src/main/zsh-deferred-startup-line-init.live-shell.test.ts \
-            src/main/terminal-history-fish-session.node-pty.test.ts \
-            src/main/zsh-scoped-histfile.live-shell.test.ts \
-            src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
+            src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts \
+            src/main/pty/shell-startup/codex-shell-launch-preflight.test.ts \
+            src/main/pty/shell-startup/codex-shell-no-daemon.test.ts \
+            src/main/pty/shell-startup/omp-shell-wrapper-alias-safety.test.ts \
+            src/main/pty/shell-startup/omp-shell-wrapper.node-pty.test.ts \
+            src/main/pty/shell-startup/fish-xdg-data-dirs-handoff.test.ts \
+            src/main/pty/shell-startup/shell-startup-feature-channel.test.ts \
+            src/main/pty/shell-startup/zsh-deferred-startup-line-init.live-shell.test.ts \
+            src/main/pty/history/terminal-history-fish-session.node-pty.test.ts \
+            src/main/pty/shell-startup/zsh-scoped-histfile.live-shell.test.ts \
+            src/main/pty/shell-startup/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
             src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
-            src/shared/pty-reply-echo-shapes.node-pty.test.ts \
+            src/shared/fish-wsl-cwd-report.node-pty.test.ts \
+            src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
+            src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts \
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
-  # Preflight saves the Node cache and publishes the plan before tests fan out.
+  # Shards wait only for the plan, not preflight, which moves them about two minutes earlier.
+  unit_plan:
+    needs: [code_paths]
+    if: needs.code_paths.outputs.test == 'true'
+    uses: ./.github/workflows/unit-plan.yml
+    with:
+      selection_mode: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+      # Only selected drafts apply a plan before tests; everything else defers shadow analysis.
+      defer_shadow: ${{ !(vars.ORCA_UNIT_SELECTION_MODE == 'selected' && github.event.pull_request.draft == true) }}
+
   test:
-    needs: [code_paths, preflight]
-    # Cancellation and failed prerequisites stop the expensive matrix.
+    needs: [code_paths, unit_plan]
     if: >-
       !cancelled() &&
       needs.code_paths.result == 'success' &&
       needs.code_paths.outputs.test == 'true' &&
-      needs.preflight.result == 'success'
+      needs.unit_plan.result == 'success'
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24"]'
-      runner: blacksmith-8vcpu-ubuntu-2404
+      # Free hosted ARM: 12 shards measured 361s median cold vs ~390s for 5 warm Blacksmith 8-vCPU shards.
+      runner: ubuntu-24.04-arm
       phase_diagnostics: true
       # Restore main's transform cache; the `ci:cold-unit-cache` label or ORCA_UNIT_MODULE_CACHE=off forces cold.
       module_cache: ${{ (vars.ORCA_UNIT_MODULE_CACHE == 'off' || contains(github.event.pull_request.labels.*.name, 'ci:cold-unit-cache')) && 'off' || 'warm' }}
-      shards: ${{ needs.preflight.outputs.shards }}
+      shards: ${{ needs.unit_plan.outputs.shards }}
+      download_selection_plan: ${{ needs.unit_plan.outputs.selection_planned == 'true' }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
       run_relay_integration: ${{ needs.code_paths.outputs.relay_integration != 'false' || needs.code_paths.outputs.orcad_browser == 'true' }}
       browser_contract: ${{ needs.code_paths.outputs.orcad_browser == 'true' }}
 
   # Keep advisory evidence sibling to tests and outside verify.needs; reusable-workflow dependency otherwise added ~36s after last shard.
   unit_selection_evidence:
-    needs: [test]
+    needs: [unit_plan, test]
     if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'failure') }}
     uses: ./.github/workflows/unit-selection-evidence.yml
+    with:
+      rebuild_plan: ${{ needs.unit_plan.outputs.selection_planned != 'true' }}
 
   # Isolate two browser/mobile files to avoid every unit shard paying for their installs; test the same shipped bundle plus render/census.
   mobile_web_app:
@@ -982,7 +987,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Use blob:none for merge-base history because blobs are ~89% of pack; fetch rare historical contents on demand.
+          # Requested historical snapshots acquire their blobs before timed extraction.
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
@@ -1033,7 +1038,7 @@ jobs:
 
   package:
     name: package
-    needs: [code_paths, preflight]
+    needs: [code_paths]
     if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-24.04
     # Let the serial Docker gates reach their own deadlines and report cleanup failures.
@@ -1102,21 +1107,20 @@ jobs:
         run: >-
           xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
-          src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
-          src/main/browser/browser-route-webrtc-egress.electron.test.ts
+          src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts
           src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts
-          src/main/browser/popup-origin-chrome.electron.test.ts
-          src/main/browser/browser-link-materialization.electron.test.ts
-          src/main/browser/browser-popup-compatibility.electron.test.ts
-          src/main/browser/browser-popup-adapter-compatibility.electron.test.ts
-          src/main/browser/browser-popup-native-compatibility.electron.test.ts
-          src/main/browser/browser-popup-background-compatibility.electron.test.ts
-          src/main/browser/extensions/browser-extension-api.electron.test.ts
-          src/main/browser/extensions/browser-extension-persistence.electron.test.ts
-          src/main/browser/extensions/browser-extension-lifecycle.electron.test.ts
-          src/main/browser/extensions/browser-extension-toolbar.electron.test.ts
-          src/main/browser/extensions/browser-extension-native-messaging.electron.test.ts
+          src/main/browser/guest-lifecycle/popups/popup-origin-chrome.electron.test.ts
+          src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts
+          src/main/browser/guest-lifecycle/popups/browser-popup-compatibility.electron.test.ts
+          src/main/browser/guest-lifecycle/popups/browser-popup-adapter-compatibility.electron.test.ts
+          src/main/browser/guest-lifecycle/popups/browser-popup-native-compatibility.electron.test.ts
+          src/main/browser/guest-lifecycle/popups/browser-popup-background-compatibility.electron.test.ts
+          src/main/browser/extensions/api-runtime/browser-extension-api.electron.test.ts
+          src/main/browser/extensions/profile-storage/browser-extension-persistence.electron.test.ts
+          src/main/browser/extensions/profile-sessions/browser-extension-lifecycle.electron.test.ts
+          src/main/browser/extensions/actions/browser-extension-toolbar.electron.test.ts
+          src/main/browser/extensions/native-messaging/browser-extension-native-messaging.electron.test.ts
 
       - name: Restore native components
         id: linux-native-restore
@@ -1272,7 +1276,7 @@ jobs:
 
   package_windows:
     name: package (windows)
-    needs: [code_paths, preflight]
+    needs: [code_paths]
     if: needs.code_paths.outputs.package_windows == 'true'
     runs-on: windows-2022
     timeout-minutes: 30
@@ -1364,6 +1368,10 @@ jobs:
       - name: Build the Windows CLI launcher
         run: node config/scripts/build-windows-cli-launcher.mjs
 
+      # Install Electron once: otherwise each Electron test's require('electron') extracts it into one dist concurrently (EBUSY, 0xC0000005).
+      - name: Install the Electron binary
+        run: node config/scripts/install-electron-package-binary.mjs
+
       # Files come from WINDOWS_BOUNDARY_TESTS, the same list that decides whether this job runs.
       - name: Test Windows-specific boundaries
         env:
@@ -1436,12 +1444,11 @@ jobs:
   # Gate the green layout oracles separately from main’s red broader E2E suite: changed-spec window plus both orcad serve hosts.
   layout_oracle:
     name: layout oracle
-    needs: [code_paths, preflight]
+    needs: [code_paths]
     if: >-
       !cancelled() &&
       needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.layout_oracle == 'true' &&
-      needs.preflight.result == 'success'
+      needs.code_paths.outputs.layout_oracle == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/e2e.yml
@@ -1454,7 +1461,6 @@ jobs:
       run_changed_e2e: true
       needs_build: true
       artifact_suffix: -layout-oracle
-      fast_runners: true
 
   # Keep native IME advisory while PR reliability is established (nightly 20/20, 2026-08-09..29, p50 3m25s); do not hide red via continue-on-error. To gate, add verify.needs, TERMINAL_IME_NATIVE env and separate success-or-skipped validation.
   terminal_ime_native:

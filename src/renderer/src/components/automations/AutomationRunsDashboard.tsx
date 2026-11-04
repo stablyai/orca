@@ -257,16 +257,15 @@ export function AutomationRunsDashboard({
             <div className="mb-3 flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
               <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
               <span>
-                {visibleFailures.length === 1
-                  ? translate(
-                      'auto.components.automations.AutomationRunsDashboard.historyUnavailableOne',
-                      'Run history is unavailable for 1 automation. Counts include available history only.'
-                    )
-                  : translate(
-                      'auto.components.automations.AutomationRunsDashboard.historyUnavailableMany',
-                      'Run history is unavailable for {{count}} automations. Counts include available history only.',
-                      { count: visibleFailures.length }
-                    )}
+                {translate(
+                  'auto.components.automations.AutomationRunsDashboard.historyUnavailable',
+                  'Run history is unavailable for {{count}} automations. Counts include available history only.',
+                  {
+                    count: visibleFailures.length,
+                    defaultValue_one:
+                      'Run history is unavailable for {{count}} automation. Counts include available history only.'
+                  }
+                )}
               </span>
             </div>
           ) : null}

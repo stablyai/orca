@@ -1,3 +1,5 @@
+import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import type { AppState } from '../types'
 import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { Repo } from '../../../../shared/repo-types'
@@ -40,6 +42,8 @@ export type GitHubWorkItemsListArgs = {
   query?: string
   page?: number
   noCache?: true
+  /** Local IPC only: a remote host gates its own reads. */
+  wakeWslDistro?: boolean
 }
 
 export function settingsForGitHubRepoOwner(
@@ -78,6 +82,18 @@ function settingsForGitHubTaskSource(
   )
 }
 
+/** A source names its host even when two registered copies share an id and path. */
+export function findGitHubWorkItemRepo(
+  state: Partial<Pick<AppState, 'repos'>>,
+  repoId: string,
+  repoPath: string,
+  source?: TaskSourceContext | null
+): Repo | undefined {
+  return source?.provider === 'github'
+    ? getGitHubRepoLookupIndex(state.repos).findOnHost(source.hostId, repoId, repoPath)
+    : findRepoForGitHubOwner(state, repoId, repoPath)
+}
+
 export function getWorkItemsCacheKeyForOwner(
   state: Partial<Pick<AppState, 'repos' | 'settings'>>,
   repoId: string,
@@ -87,7 +103,13 @@ export function getWorkItemsCacheKeyForOwner(
 ): string {
   const repo = findRepoForGitHubOwner(state, repoId, repoPath ?? '')
   // Why canonical: an SSH row may carry only connectionId, and an unstamped row is local, not focus.
-  return workItemsCacheKey(repoId, limit, query, repo ? getRepoExecutionHostId(repo) : undefined)
+  return workItemsCacheKey(
+    repoId,
+    limit,
+    query,
+    repo ? getRepoExecutionHostId(repo) : undefined,
+    repo && githubTaskBinding(repo)
+  )
 }
 
 export function getGitHubWorkItemSourceHostId(
@@ -197,12 +219,13 @@ export function listGitHubWorkItemsForRepo(
   args: GitHubWorkItemsListArgs
 ): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> {
   if (context.target.kind === 'environment') {
+    const { wakeWslDistro: _wake, ...remoteArgs } = args
     return callRuntimeRpc<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>(
       { kind: 'environment', environmentId: context.target.environmentId },
       'github.listWorkItems',
       {
         repo: context.target.runtimeRepoId,
-        ...args
+        ...remoteArgs
       },
       { timeoutMs: 30_000 }
     )
@@ -216,15 +239,16 @@ export function listGitHubWorkItemsForRepo(
 
 export function countGitHubWorkItemsForRepo(
   context: GitHubWorkItemRequestContext,
-  args: { query?: string }
+  args: { query?: string; wakeWslDistro?: boolean }
 ): Promise<number> {
   if (context.target.kind === 'environment') {
+    const { wakeWslDistro: _wake, ...remoteArgs } = args
     return callRuntimeRpc<number>(
       { kind: 'environment', environmentId: context.target.environmentId },
       'github.countWorkItems',
       {
         repo: context.target.runtimeRepoId,
-        ...args
+        ...remoteArgs
       },
       { timeoutMs: 30_000 }
     )

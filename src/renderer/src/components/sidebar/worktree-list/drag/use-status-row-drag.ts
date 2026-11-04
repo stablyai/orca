@@ -4,8 +4,12 @@ import type { WorkspaceStatus } from '../../../../../../shared/worktree/types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
-import { hasWorkspaceDragData, readWorkspaceDragDataIds } from '../../workspace-status'
-import { useWorkspaceStatusDocumentDrop } from '../../use-workspace-status-drop'
+import '../../workspace-status/presentation/workspace-status'
+import {
+  hasWorkspaceDragData,
+  readWorkspaceDragDataIds
+} from '../../workspace-status/presentation/workspace-status-drag-data'
+import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import type { WorktreeDragSession } from './use-session'
 import type { WorktreeDragRuntime } from './use-runtime'
@@ -93,7 +97,7 @@ export function useWorkspaceStatusRowDrag(args: {
         ? ctx.computeWorktreeStatusDrop({
             pointerY: event.clientY,
             status,
-            draggedIds: dragSession.reorderDraggedIds
+            draggedKeys: dragSession.reorderDraggedKeys
           })
         : null
       setDragOverStatus(null)

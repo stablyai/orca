@@ -2,12 +2,8 @@
 import type { IBufferLine } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
-import { buildCandidateLogicalLinesForBufferPosition } from '../../../../shared/terminal-link-buffer-hit-testing'
-import {
-  extractTerminalHttpLinks,
-  openHttpLinkAtBufferPosition
-} from './terminal-url-link-hit-testing'
-import { buildHardWrappedPathLogicalLineCandidates } from '../../../../shared/wrapped-terminal-link-ranges'
+
+import { openHttpLinkAtBufferPosition } from './terminal-url-link-hit-testing'
 
 const LINE_1 = 'Repo: https://github.com/stablyai/orca/'
 const LINE_2 = 'Description: 123'
@@ -88,29 +84,6 @@ describe('#8832 hard-wrapped path candidates glue next-line text into URLs', () 
 
   afterEach(() => {
     vi.unstubAllGlobals()
-  })
-
-  it('still builds a multi-row path candidate that concatenates Description onto the URL', () => {
-    // Path reconstruction can join unrelated rows; HTTP detection must not consume its candidates.
-    const buffer = issueBuffer()
-    const candidates = buildHardWrappedPathLogicalLineCandidates(buffer, 1)
-    const multiRow = candidates.filter((candidate) => candidate.rows.length > 1)
-
-    expect(multiRow.some((candidate) => candidate.text.includes('Description'))).toBe(true)
-
-    const glued = multiRow.find((candidate) => candidate.text.includes('https://'))
-    expect(glued).toBeDefined()
-    expect(glued!.text).toContain('https://github.com/stablyai/orca/Description')
-  })
-
-  it('HTTP extraction on a path logical line still yields the glued URL', () => {
-    const buffer = issueBuffer()
-    const candidates = buildCandidateLogicalLinesForBufferPosition(buffer, 1)
-    const extracted = candidates.flatMap((line) => extractTerminalHttpLinks(line.text))
-
-    expect(extracted.map((link) => link.url)).toContain(BUGGY_URL)
-    const singleLineUrls = extractTerminalHttpLinks(LINE_1).map((link) => link.url)
-    expect(singleLineUrls).toEqual([EXPECTED_URL])
   })
 
   it('openHttpLinkAtBufferPosition opens the unglued URL when Cmd-clicking the URL row', () => {

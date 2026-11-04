@@ -3,16 +3,16 @@ import {
   getWorkspaceKanbanSidebarDropTarget,
   isWorkspaceKanbanSidebarDropPointInBoard,
   resolveWorkspaceKanbanSidebarFullLaneDropIndex
-} from '../../workspace-kanban-sidebar-drop'
-import { resolveWorkspaceKanbanCardDropCommitTarget } from '../../workspace-kanban-card-pointer-drag-dom'
-import { getFullDropIndexForWorktreeDragUnit } from '../../worktree-drag-units'
-import { resolveWorktreeSidebarStatusDropCommitTarget } from '../../worktree-sidebar-drop-preview'
+} from '../../workspace-board/drag/workspace-kanban-sidebar-drop'
+import { resolveWorkspaceKanbanCardDropCommitTarget } from '../../workspace-board/drag/workspace-kanban-card-pointer-drag-dom'
+import { getFullDropIndexForWorktreeDragUnit } from './worktree-drag-units'
+import { resolveWorktreeSidebarStatusDropCommitTarget } from './worktree-sidebar-drop-preview'
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
 import type {
   WorktreeDropCommitContext,
   WorktreeStatusDropAtIndexArgs
 } from './drop-commit-context'
-import type { WorktreeSidebarStatusDropTarget } from '../../worktree-sidebar-drop-preview'
+import type { WorktreeSidebarStatusDropTarget } from './worktree-sidebar-drop-preview'
 import { NO_WORKTREE_SIDEBAR_DROP_TARGET, type WorktreePointerDrag } from './row-state'
 
 type PointerDropCommitArgs = {
@@ -104,7 +104,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         ? ctx.computeWorktreeStatusDrop({
             pointerY: event.clientY,
             status: preferredStatusTarget.status,
-            draggedIds: drag.reorderDraggedIds
+            draggedKeys: drag.reorderDraggedKeys
           })
         : null
       commitStatusOrPinDrop(args, preferredStatusTarget, statusDrop?.dropIndex ?? null)
@@ -116,7 +116,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
       ctx.onReorderWorktrees({
         groups: ctx.worktreeDragGroups,
         sourceGroupKey: drag.sourceGroupKey,
-        draggedIds: drag.reorderDraggedIds,
+        draggedKeys: drag.reorderDraggedKeys,
         dropIndex: getFullDropIndexForWorktreeDragUnit({
           groups: ctx.worktreeDragUnitGroups,
           sourceGroupKey: drag.sourceGroupKey,
@@ -132,7 +132,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         ? ctx.computeWorktreeStatusDrop({
             pointerY: event.clientY,
             status: preferredStatusTarget.status,
-            draggedIds: drag.reorderDraggedIds
+            draggedKeys: drag.reorderDraggedKeys
           })
         : null
       const { target, preview: statusDrop } = resolveWorktreeSidebarStatusDropCommitTarget({

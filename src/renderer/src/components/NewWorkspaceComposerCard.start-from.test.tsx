@@ -39,7 +39,7 @@ vi.mock('@/components/agent/AgentCombobox', () => ({
   default: () => <button type="button">Agent picker</button>
 }))
 
-vi.mock('@/components/sidebar/AddRemoteHostDialog', () => ({
+vi.mock('@/components/sidebar/host-admission/ssh/AddRemoteHostDialog', () => ({
   AddRemoteHostDialog: () => null
 }))
 
@@ -163,6 +163,17 @@ describe('NewWorkspaceComposerCard start from', () => {
   afterEach(() => {
     container?.remove()
     container = null
+  })
+
+  it('offers opening a known workspace for the reused branch', () => {
+    const openWorkspace = vi.fn()
+    container = renderCard({
+      canReuseSelectedBranch: true,
+      reuseSelectedBranch: true,
+      onOpenSelectedBranchWorkspace: openWorkspace
+    })
+    clickButton(container, 'Open existing workspace')
+    expect(openWorkspace).toHaveBeenCalledOnce()
   })
 
   it('offers a base ref while a Jira issue names the workspace', () => {

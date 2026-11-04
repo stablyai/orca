@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
 import { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
-import { HOST_SIDEBAR_MIN_WIDTH } from '../layout/responsive-layout-metrics'
 
 const PINS_PREFIX = 'orca:pins:'
 // Push-service consent is independent of legacy socket notifications.
@@ -93,86 +92,29 @@ export async function saveTerminalTextScale(scale: number): Promise<void> {
   await persistMirrored(TEXT_SCALE_KEY, value)
 }
 
-const AUTOCOMPLETE_KEY = 'orca:terminalAutocompleteEnabled'
-
-// Default autocorrect off so keyboards cannot alter commands, flags or paths; phone-style typing is opt-in.
-export async function loadTerminalAutocompleteEnabled(): Promise<boolean> {
-  try {
-    const raw = await AsyncStorage.getItem(AUTOCOMPLETE_KEY)
-    return raw === 'true'
-  } catch {
-    return false
-  }
-}
-
-export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise<void> {
-  const value = String(enabled)
-  await persistMirrored(AUTOCOMPLETE_KEY, value)
-}
-
-const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
-
-export type DisabledTerminalLiveInputHandlesPreference = {
-  readonly handles: Set<string>
-  readonly loaded: boolean
-}
-
-function terminalLiveInputDisabledKey(hostId: string, worktreeId: string): string {
-  return `${TERMINAL_LIVE_INPUT_DISABLED_PREFIX}${encodeURIComponent(hostId)}:${encodeURIComponent(
-    worktreeId
-  )}`
-}
-
-export async function readDisabledTerminalLiveInputHandlesPreference(
-  hostId: string,
-  worktreeId: string
-): Promise<DisabledTerminalLiveInputHandlesPreference> {
-  try {
-    const raw = await AsyncStorage.getItem(terminalLiveInputDisabledKey(hostId, worktreeId))
-    if (!raw) {
-      return { handles: new Set(), loaded: true }
-    }
-    return { handles: new Set(stringArray(JSON.parse(raw))), loaded: true }
-  } catch {
-    return { handles: new Set(), loaded: false }
-  }
-}
-
-export async function loadDisabledTerminalLiveInputHandles(
-  hostId: string,
-  worktreeId: string
-): Promise<Set<string>> {
-  const preference = await readDisabledTerminalLiveInputHandlesPreference(hostId, worktreeId)
-  return preference.handles
-}
-
-export async function saveDisabledTerminalLiveInputHandles(
-  hostId: string,
-  worktreeId: string,
-  handles: ReadonlySet<string>
-): Promise<void> {
-  const key = terminalLiveInputDisabledKey(hostId, worktreeId)
-  const value = JSON.stringify([...handles])
-  await persistMirrored(key, value)
-}
-
 const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'
 
 // Caller also caps this tablet/foldable sidebar against the window to preserve detail space.
-export { HOST_SIDEBAR_MIN_WIDTH }
+export const HOST_SIDEBAR_MIN_WIDTH = 280
 export const HOST_SIDEBAR_MAX_WIDTH = 560
+export const HOST_SIDEBAR_DEFAULT_WIDTH = 340
 
 export function clampHostSidebarWidth(width: number): number {
+  if (!Number.isFinite(width)) {
+    return HOST_SIDEBAR_DEFAULT_WIDTH
+  }
   return Math.min(HOST_SIDEBAR_MAX_WIDTH, Math.max(HOST_SIDEBAR_MIN_WIDTH, Math.round(width)))
 }
 
-// Null until the user drags the sidebar; the layout then sizes it from the window.
-export async function loadHostSidebarWidth(): Promise<number | null> {
+export async function loadHostSidebarWidth(): Promise<number> {
   try {
-    const width = Number((await AsyncStorage.getItem(SIDEBAR_WIDTH_KEY)) ?? Number.NaN)
-    return Number.isFinite(width) ? clampHostSidebarWidth(width) : null
+    const raw = await AsyncStorage.getItem(SIDEBAR_WIDTH_KEY)
+    if (raw === null) {
+      return HOST_SIDEBAR_DEFAULT_WIDTH
+    }
+    return clampHostSidebarWidth(Number(raw))
   } catch {
-    return null
+    return HOST_SIDEBAR_DEFAULT_WIDTH
   }
 }
 
@@ -264,4 +206,24 @@ export async function savePinnedIds(hostId: string, ids: Set<string>): Promise<v
   const key = PINS_PREFIX + hostId
   const value = JSON.stringify([...ids])
   await persistMirrored(key, value)
+}
+
+export type TerminalSplitLayout = 'auto' | 'side-by-side' | 'stacked'
+const TERMINAL_SPLIT_LAYOUT_KEY = 'orca:terminalSplitLayout'
+let terminalSplitLayoutWrite: Promise<void> = Promise.resolve()
+
+export async function loadTerminalSplitLayout(): Promise<TerminalSplitLayout> {
+  await terminalSplitLayoutWrite
+  const raw = await AsyncStorage.getItem(TERMINAL_SPLIT_LAYOUT_KEY)
+  return raw === 'side-by-side' || raw === 'stacked' ? raw : 'auto'
+}
+
+export function saveTerminalSplitLayout(layout: TerminalSplitLayout): Promise<void> {
+  const write = terminalSplitLayoutWrite.then(() =>
+    persistMirrored(TERMINAL_SPLIT_LAYOUT_KEY, layout)
+  )
+  terminalSplitLayoutWrite = write.catch((error: unknown) => {
+    console.warn('Terminal split layout could not be saved', error)
+  })
+  return write
 }

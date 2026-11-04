@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
-import { runtimeHostContactForEntry } from '../../../shared/runtime-host-contact'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import { runtimeHostContactForEntry } from '../../../shared/remote-runtime/host-status/runtime-host-contact'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 
 export type UseDetectedAgentsResult = {
@@ -179,9 +179,10 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return state.refreshRemoteDetectedAgents(targetId)
     }
+    // Only the refresh control calls this: a user act that may start a stopped WSL distro.
     return includeDisabled
-      ? state.refreshAllDetectedAgents(localWorktreeId)
-      : state.refreshDetectedAgents(localWorktreeId)
+      ? state.refreshAllDetectedAgents(localWorktreeId, { wakeWslDistro: true })
+      : state.refreshDetectedAgents(localWorktreeId, { wakeWslDistro: true })
   }, [includeDisabled, isUnknown, localWorktreeId, runtimeWorktreeId, targetKind, targetId])
 
   useEffect(() => {

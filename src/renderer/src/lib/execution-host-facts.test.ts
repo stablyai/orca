@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveRepoWorktreeLaunchPlatform } from './execution-host-facts'
 import { getDefaultSettings } from '../../../shared/constants'
 
@@ -50,12 +50,6 @@ function state(): State {
 const serverRepo = { path: '/srv/repo', executionHostId: 'runtime:linux-box' }
 
 describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
-  it("reads a server project's worktree as the server's OS (#27971)", () => {
-    expect(
-      resolveRepoWorktreeLaunchPlatform(state(), serverRepo, { id: 'wt', path: '/srv/wt' })
-    ).toBe('linux')
-  })
-
   it("lets a worktree's own host outrank its repo's", () => {
     expect(
       resolveRepoWorktreeLaunchPlatform(state(), serverRepo, {

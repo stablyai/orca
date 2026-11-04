@@ -1,4 +1,4 @@
-import { CLAUDE_HOOK_PARENT_CAPTURE } from './hook-process-capture'
+import { HOOK_PARENT_CAPTURE } from './hook-process-capture'
 import {
   POSIX_HOOK_STDIN_DRAIN_COMMAND,
   WINDOWS_GIT_BASH_HOOK_ENVIRONMENT_GUARD,
@@ -27,7 +27,7 @@ function buildPosixBranch(
   const homeGuard = options.requireHome ? '[ -n "${HOME-}" ] && ' : ''
   const parentCapture =
     scriptBaseName === 'claude-hook' || scriptBaseName === 'openclaude-hook'
-      ? CLAUDE_HOOK_PARENT_CAPTURE
+      ? HOOK_PARENT_CAPTURE
       : ''
   return `if ${homeGuard}[ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then ${parentCapture}/bin/sh ${posixScript}; else ${missingScriptFallback}; fi`
 }

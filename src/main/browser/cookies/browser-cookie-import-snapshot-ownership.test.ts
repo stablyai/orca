@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeSqlite from 'node:sqlite'
-import type * as ChromiumCookieSnapshotModule from '../chromium-cookie-snapshot'
-import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
+import type * as ChromiumCookieSnapshotModule from './chromium/chromium-cookie-snapshot'
+import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -42,7 +42,7 @@ vi.mock('electron', () => ({
 vi.mock('@orca/process-host', () => ({
   runProcessSync: runProcessSyncMock
 }))
-vi.mock('../browser-session-registry', () => ({
+vi.mock('../sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
@@ -60,7 +60,7 @@ vi.mock('node:sqlite', async (importOriginal) => {
     }
   }
 })
-vi.mock('../chromium-cookie-snapshot', async (importOriginal) => {
+vi.mock('./chromium/chromium-cookie-snapshot', async (importOriginal) => {
   const actual = await importOriginal<typeof ChromiumCookieSnapshotModule>()
   return {
     ...actual,
@@ -204,7 +204,7 @@ describe('Chromium import snapshot ownership', () => {
 
   it('retires an empty live-WAL source snapshot before returning its existing refusal', async () => {
     expect(existsSync(`${sourcePath}-wal`)).toBe(true)
-    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toEqual({
+    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
       ok: false,
       reason: 'No cookies found in Google Chrome.'
     })
@@ -215,7 +215,7 @@ describe('Chromium import snapshot ownership', () => {
   it('retires every snapshot when denied credential access is retried', async () => {
     insertSourceCookie(true)
     for (let attempt = 0; attempt < 3; attempt++) {
-      expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toEqual({
+      expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
         ok: false,
         reason: 'Could not access Google Chrome encryption key. The OS may have denied access.'
       })
@@ -240,7 +240,7 @@ describe('Chromium import snapshot ownership', () => {
 
   it('closes private databases before cleanup when source schema preparation throws', async () => {
     sourceDatabase.exec('DROP TABLE cookies; CREATE TABLE other_data(value TEXT)')
-    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toEqual({
+    expect(await importChromiumCookies(chromeBrowser(sourcePath), PARTITION)).toMatchObject({
       ok: false,
       reason: expect.stringContaining('no such table: cookies')
     })

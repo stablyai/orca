@@ -18,6 +18,7 @@ import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
 import { isGitObjectId, isUsableRestStackMetadata } from './rest-stack-metadata-validation'
 import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { readPullRequestSidebarQuery } from './pull-request-sidebar-query'
 export async function getRestPRByNumber(
   ownerRepo: GitHubApiRepository,
   number: number,
@@ -56,9 +57,27 @@ export async function getPRByNumber(
   number: number,
   ghOptions: ReturnType<typeof ghRepoExecOptions>,
   executionScope: string,
-  knownPullRequestData?: PullRequestLookupData | null
+  knownPullRequestData?: PullRequestLookupData | null,
+  options: { includeStackSummary?: boolean } = {}
 ): Promise<PullRequestLookupData | null> {
   try {
+    const sidebarData =
+      options.includeStackSummary && knownPullRequestData === undefined
+        ? await readPullRequestSidebarQuery(ownerRepo, number, ghOptions)
+        : undefined
+    if (sidebarData === null) {
+      return null
+    }
+    if (sidebarData) {
+      const { stack, ...prData } = sidebarData
+      const hydrated = await hydratePullRequestLookupData(
+        ownerRepo,
+        prData,
+        ghOptions,
+        executionScope
+      )
+      return { ...hydrated, ...(stack ? { stack } : {}) }
+    }
     noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
     const { stdout } = await ghExecFileAsync(
       [
@@ -78,6 +97,7 @@ export async function getPRByNumber(
       {
         ...knownPullRequestData,
         ...exactData,
+        checksUnavailable: false,
         ...(knownPullRequestData?.stack ? { stack: knownPullRequestData.stack } : {})
       },
       ghOptions,
@@ -124,7 +144,9 @@ export async function lookupPRByNumber(args: {
         candidate,
         args.number,
         args.ghOptions,
-        args.executionScope
+        args.executionScope,
+        undefined,
+        { includeStackSummary: true }
       )
       if (!linkedData || (args.policy && !(await args.policy.accepts(linkedData, candidate)))) {
         continue
@@ -148,8 +170,12 @@ export async function lookupPRByNumber(args: {
       ['pr', 'view', String(args.number), '--json', PR_LOOKUP_JSON_FIELDS],
       args.ghOptions
     )
+    const parsedData: PullRequestLookupData = JSON.parse(stdout)
     const lookup = {
-      data: normalizePullRequestLookupData(JSON.parse(stdout) as PullRequestLookupData),
+      data: normalizePullRequestLookupData({
+        ...parsedData,
+        checksUnavailable: false
+      }),
       dataRepo: null
     }
     return !args.policy || (await args.policy.accepts(lookup.data, null))

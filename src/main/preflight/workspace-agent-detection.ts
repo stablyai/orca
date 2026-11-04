@@ -1,6 +1,6 @@
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight-params'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
 import { captureHostShellEnvironment } from '../runtime/structured-agent-shell-environment'
@@ -13,14 +13,14 @@ import {
 import {
   findFolderWorkspaceCandidateRepos,
   resolveFolderWorkspaceHost
-} from '../../shared/folder-workspace-execution-host'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+} from '../../shared/folder-workspaces/folder-workspace-execution-host'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import {
   resolveLocalWorkspaceRuntime,
   type ProjectRuntimeResolutionStore
-} from '../local-project-runtime-resolution'
+} from '../workspaces/execution-host/local-project-runtime-resolution'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
@@ -33,6 +33,7 @@ import {
   type RefreshAgentsResult
 } from './agent-detection'
 import type { InstalledAgentDetectionOptions } from './installed-agent-detection'
+import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
 
 export type AgentDetectionHost =
   | { kind: 'local'; context?: PreflightRuntimeContext }
@@ -140,6 +141,14 @@ export async function detectAgentsOnHost(
     throw new SshHostNotServedError(host.connectionId)
   }
   return detectInstalledAgentsWithShellPathHydration(host.context, options)
+}
+
+/** Background detection in a WSL runtime refuses a stopped distro (E9); a user act for it passes. */
+export async function assertAgentDetectionHostRunning(host: AgentDetectionHost): Promise<void> {
+  const wslTarget = host.kind === 'local' ? getPreflightWslTarget(host.context) : null
+  if (wslTarget) {
+    await assertWslDistroRunningForExec(wslTarget.distro)
+  }
 }
 
 const agentRefreshListeners = new Set<() => void>()

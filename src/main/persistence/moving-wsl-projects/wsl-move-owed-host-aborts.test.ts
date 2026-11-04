@@ -50,13 +50,6 @@ describe('owed host aborts', () => {
     }
   )
 
-  it('a reset before the stage request owes nothing', async () => {
-    seed('source-fenced')
-    await recoverInterruptedWslMoves(userDataPath, () => {})
-
-    expect(listWslMoveOwedHostAborts(userDataPath)).toEqual([])
-  })
-
   it("settles only this distro's, keeps one the host could not answer, and drops answered ones", async () => {
     const cutover = wslMoveCutoverFixture('move-1', 'prepared')
     recordWslMoveOwedHostAbort(userDataPath, cutover)

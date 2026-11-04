@@ -1,9 +1,12 @@
+import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import type { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+import { useMobileNativeChatSessionLane } from './native-chat/use-mobile-native-chat-session-lane'
 import type { RpcClient } from '../transport/rpc-client'
 import { createElement } from 'react'
-import { act } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
-import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
-import { queuedMessageWithEdit } from '../../../src/shared/queued-message-edit'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { agentSessionSendBodyFingerprint } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
+import '../../../src/shared/queued-message-edit'
 import type { RpcResponse } from '../transport/types'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import {
@@ -11,23 +14,37 @@ import {
   readMobileNativeChatDraftInputs,
   updateMobileNativeChatDraftInputs
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
-import { setMobileNativeChatDraftText } from './native-chat/composer/mobile-native-chat-draft-store'
 import {
+  closeMobileNativeChatTabDraft,
+  setMobileNativeChatDraftText,
+  useMobileNativeChatDraft,
+  resetMobileNativeChatDraftStoreForTests
+} from './native-chat/composer/mobile-native-chat-draft-store'
+import {
+  CAPABLE,
   SESSION_ID,
   batchEvent,
   fieldsOf,
   mutationOk,
   ok,
-  queuedDraft
+  queuedDraft,
+  snapshotEvent
 } from './use-mobile-structured-agent-session-queued.test-fixture'
 import {
   editHoldReply,
   mobileQueuedEditHarness,
   withText,
-  readOrHoldReply
+  readOrHoldReply,
+  registerQueuedCanonicalInputTest
 } from './mobile-queued-edit-hook.test-fixture'
+import { insertDictationText } from '../dictation/mobile-dictation-text-insertion'
+
+// What the composer hands the editor for words said into a field that was never focused.
+const spoken = (text: string) => (draft: string) => insertDictationText(draft, text, null).text
 
 describe('mobile in-place queued Edit', () => {
+  const rig = mobileQueuedEditHarness()
+  registerQueuedCanonicalInputTest(rig)
   const {
     state,
     Harness,
@@ -39,91 +56,7 @@ describe('mobile in-place queued Edit', () => {
     notice,
     resolved,
     requestedFingerprint
-  } = mobileQueuedEditHarness()
-  it('waits for the capability probe before offering the legacy fallback', async () => {
-    await mount(queuedDraft({ messageId: 'draft-1' }), null)
-    expect(state.hook!.queued.edit).toBeUndefined()
-    expect(
-      sendRequest.mock.calls.some(
-        ([method]) =>
-          method === 'agentSession.queuedMessageDelete' ||
-          method === 'agentSession.queuedMessageEditHold'
-      )
-    ).toBe(false)
-    await act(async () => state.renderer?.update(createElement(Harness, { editSupport: false })))
-    expect(state.hook!.queued.edit).toEqual(expect.any(Function))
-  })
-
-  it.each([
-    [false, false],
-    [true, false],
-    [false, true],
-    [true, true]
-  ])(
-    'sends own optional keys only for host image=%s skill=%s capabilities',
-    async (imagesSupport, skillsSupport) => {
-      const message = queuedDraft({
-        messageId: 'matrix',
-        body: {
-          kind: 'message',
-          role: 'user',
-          blocks: [
-            { type: 'text', text: '$review original' },
-            {
-              type: 'image-ref',
-              path: '/host/original.png',
-              alt: 'original'
-            }
-          ],
-          skills: [{ name: 'review', path: '/host/old/SKILL.md' }]
-        }
-      })
-      await mount(message)
-      act(() => state.hook!.queued.editor!.cancel())
-      await act(async () =>
-        state.renderer!.update(createElement(Harness, { imagesSupport, skillsSupport }))
-      )
-      await act(async () => {
-        await state.hook!.queued.edit!('matrix')
-      })
-      act(() => state.hook!.queued.editor!.change('$review changed'))
-      await act(async () => {
-        expect(await state.hook!.queued.editor!.save()).toBe(true)
-      })
-      const request = fieldsOf(
-        sendRequest.mock.calls.find(
-          ([method]) => method === 'agentSession.queuedMessageUpdate'
-        )?.[1]
-      )
-      expect(Object.hasOwn(request, 'images')).toBe(imagesSupport)
-      expect(Object.hasOwn(request, 'skills')).toBe(skillsSupport)
-      if (imagesSupport) {
-        expect(request.images).toEqual([message.body.blocks[1]])
-      }
-      if (skillsSupport) {
-        expect(request.skills).toEqual(message.body.skills)
-      }
-      // The old-host path leaves image blocks on the host while changing only text.
-      const edited = queuedMessageWithEdit(message.body, {
-        text: String(request.text),
-        ...(imagesSupport
-          ? {
-              images: [
-                {
-                  type: 'image-ref' as const,
-                  path: '/host/original.png',
-                  alt: 'original'
-                }
-              ]
-            }
-          : {}),
-        ...(skillsSupport ? { skills: message.body.skills } : {})
-      })
-      expect(edited.ok && edited.body.blocks.filter((block) => block.type === 'image-ref')).toEqual(
-        [message.body.blocks[1]]
-      )
-    }
-  )
+  } = rig
 
   it.each([false, true])(
     'clean departure redirects captured dictation and Cancel=%s retires it',
@@ -147,10 +80,37 @@ describe('mobile in-place queued Edit', () => {
         )
       }
       act(() => setMobileNativeChatDraftText('original-bottom', 'bottom'))
-      act(() => expect(insert('later')).toBe(!cancel))
+      act(() => expect(insert(spoken('later'))).toBe(!cancel))
       expect(state.bottomText).toBe(cancel ? 'bottom' : 'bottom later')
     }
   )
+
+  it('does not revive a closed tab when its dirty queued editor hands back late', async () => {
+    const message = queuedDraft({ messageId: 'closed-origin' })
+    await mount(message)
+    act(() => state.hook!.queued.editor!.cancel())
+    await act(async () =>
+      state.renderer!.update(createElement(Harness, { composerScopeKey: 'original-bottom' }))
+    )
+    await act(async () => {
+      await state.hook!.queued.edit!(message.messageId)
+    })
+    const origin = mobileNativeChatDraftDestination('original-bottom')
+    act(() => {
+      state.hook!.queued.editor!.change('late dirty edit')
+      closeMobileNativeChatTabDraft('original-bottom')
+    })
+    await act(async () =>
+      state.renderer!.update(
+        createElement(Harness, { sessionId: 'elsewhere', composerScopeKey: 'elsewhere' })
+      )
+    )
+    expect(origin.active).toBe(false)
+    expect(state.bottomText).toBe('')
+    expect(append).not.toHaveBeenCalled()
+    expect(notice).not.toHaveBeenCalled()
+    expect(readMobileNativeChatDraftInputs('original-bottom').images).toEqual([])
+  })
 
   it('holds and renews a card while typing, sends only its edited text, and cancels in place', async () => {
     const message = queuedDraft({
@@ -304,7 +264,7 @@ describe('mobile in-place queued Edit', () => {
         saving = state.hook!.queued.editor!.save()
       })
       act(() => {
-        expect(insert('speech')).toBe(true)
+        expect(insert(spoken('speech'))).toBe(true)
       })
       await act(async () => {
         reply!(mutationOk({ status, messageId: message.messageId }))
@@ -314,7 +274,7 @@ describe('mobile in-place queued Edit', () => {
         expect(state.bottomText).toBe('')
         expect(state.hook!.queued.editor!.text).toBe('submitted speech')
         act(() => {
-          expect(insert('later')).toBe(true)
+          expect(insert(spoken('later'))).toBe(true)
         })
         expect(state.bottomText).toBe('')
         expect(state.hook!.queued.editor!.text).toBe('submitted speech later')
@@ -589,4 +549,155 @@ describe('mobile in-place queued Edit', () => {
     await act(async () => answerHold?.(editHoldReply({ action: 'acquire' })))
     expect(append).not.toHaveBeenCalled()
   })
+})
+
+vi.mock('./use-mobile-native-chat-session', () => ({ useMobileNativeChatSession: () => ({}) }))
+
+describe('mobile queued Edit captured origin', () => {
+  let renderer: ReactTestRenderer | undefined
+  let hook: ReturnType<typeof useMobileStructuredAgentSession> | undefined
+  let listener: ((data: unknown) => void) | undefined
+  const append = vi.fn(() => true)
+  const appendRef: { current: (text: string) => boolean } = { current: append }
+  let originDraft = ''
+  let nextDraft = ''
+  const error = vi.fn()
+  const resolved = vi.fn()
+  const sendRequest = vi.fn<RpcClient['sendRequest']>()
+  const client: RpcClient = {
+    sendRequest,
+    subscribe: (_method, _params, onData) => {
+      listener = onData
+      return () => {}
+    },
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
+  function Harness({
+    sessionId = SESSION_ID,
+    editSupport = true,
+    enabled = true,
+    connected = true,
+    transport = client
+  }: {
+    sessionId?: string
+    editSupport?: boolean | null
+    enabled?: boolean
+    connected?: boolean
+    transport?: RpcClient | null
+  }): null {
+    hook = useMobileNativeChatSessionLane({
+      client: transport,
+      pairedHostClient: transport,
+      structured: true,
+      hostId: 'host-a',
+      resolution: {
+        agent: 'codex',
+        sessionId,
+        transcriptPath: null,
+        agentConfirmed: true,
+        sessionLive: true
+      },
+      sourceIdentity: 'host-a',
+      enabled,
+      connState: connected ? 'connected' : 'disconnected',
+      hostSupport:
+        editSupport === null
+          ? null
+          : {
+              ...CAPABLE,
+              queuedMessages: false,
+              queuedMessageEdit: editSupport
+            },
+      appendComposerTextRef: appendRef,
+      onSendError: error,
+      onActionResolved: resolved
+    }).structuredSession
+    originDraft = useMobileNativeChatDraft('origin')
+    nextDraft = useMobileNativeChatDraft('next')
+    return null
+  }
+  async function mount(message: AgentSessionQueuedMessage, editSupport: boolean | null = true) {
+    vi.clearAllMocks()
+    resetMobileNativeChatDraftStoreForTests()
+    sendRequest.mockImplementation(async (method, params) =>
+      method === 'agentSession.queuedMessageUpdate'
+        ? mutationOk({
+            status: 'updated',
+            messageId: message.messageId,
+            fingerprint: agentSessionSendBodyFingerprint(
+              SESSION_ID,
+              withText(message.body, 'typing at origin')
+            )
+          })
+        : readOrHoldReply(method, params)
+    )
+    await act(async () => {
+      renderer = create(createElement(Harness, { editSupport }))
+    })
+    act(() => listener?.(snapshotEvent({ queuedMessages: [message], runningTurn: true })))
+    if (editSupport !== null) {
+      await act(async () => {
+        expect(await hook!.queued.edit!(message.messageId)).toBe(true)
+      })
+    }
+  }
+  afterEach(async () => {
+    await act(async () => renderer?.unmount())
+    vi.useRealTimers()
+    appendRef.current = append
+  })
+
+  it.each(['navigate', 'accepted-save', 'failed-save'] as const)(
+    'keeps dirty input with the captured origin through %s',
+    async (mode) => {
+      const message = queuedDraft({ messageId: 'origin-edit' })
+      appendRef.current = (text) => {
+        setMobileNativeChatDraftText('origin', (old) => `${old}${text}`)
+        return true
+      }
+      await mount(message)
+      act(() => hook!.queued.editor!.change('typing at origin'))
+      const answer = Promise.withResolvers<RpcResponse>()
+      let saving: Promise<boolean> | undefined
+      if (mode !== 'navigate') {
+        sendRequest.mockImplementationOnce(() => answer.promise)
+        act(() => {
+          saving = hook!.queued.editor!.save()
+        })
+      }
+      appendRef.current = (text) => {
+        setMobileNativeChatDraftText('next', (old) => `${old}${text}`)
+        return true
+      }
+      await act(async () => renderer?.update(createElement(Harness, { sessionId: 'next-session' })))
+      if (saving) {
+        await act(async () => {
+          answer.resolve(
+            mode === 'accepted-save'
+              ? mutationOk({
+                  status: 'updated',
+                  messageId: message.messageId,
+                  fingerprint: agentSessionSendBodyFingerprint(
+                    SESSION_ID,
+                    withText(message.body, 'typing at origin')
+                  )
+                })
+              : mutationOk({ status: 'gone' })
+          )
+          await saving
+        })
+      }
+      expect(originDraft).toBe(mode === 'accepted-save' ? '' : 'typing at origin')
+      expect(nextDraft).toBe('')
+      await act(async () => renderer?.unmount())
+      renderer = undefined
+      setMobileNativeChatDraftText('origin', '')
+    }
+  )
 })

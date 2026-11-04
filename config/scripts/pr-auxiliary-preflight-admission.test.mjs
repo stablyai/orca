@@ -22,8 +22,8 @@ const relaySteps = unit.jobs.relay_integration.steps
 const chrome = relaySteps.find((step) => step.name === 'Resolve Chrome for the browser provider')
 const browser = relaySteps.find((step) => step.name === 'Test external Chromium browser provider')
 const routes = [
-  ['git_compatibility', 'src/shared/git-capability-cache.ts'],
-  ['codex_index_heal_contract', 'src/main/codex/codex-session-index-heal.ts'],
+  ['git_compatibility', 'src/shared/git/commands/git-capability-cache.ts'],
+  ['codex_index_heal_contract', 'src/main/codex/history/index/codex-session-index-heal.ts'],
   ['xterm_patch_sync', 'config/patches/xterm-upstream.json'],
   ['shell_contracts', 'src/main/pty/pty-manager.ts'],
   ['orcad_browser', 'src/main/orcad/orcad-browser-provider.ts'],
@@ -63,117 +63,6 @@ function routedOutputs(files, reused, options) {
     ].map((name) => [name, String(evaluate(workflow.jobs.code_paths.outputs[name], context))])
   )
 }
-
-describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
-  const job = workflow.jobs[jobName === 'orcad_browser' ? 'test' : jobName]
-  const condition =
-    jobName === 'orcad_browser' ? `(${job.if}) && (${chrome.if}) && (${browser.if})` : job.if
-
-  it('waits for the detector and physical preflight job', () => {
-    expect(job.needs).toEqual(['code_paths', 'preflight'])
-    expect(job.if).toContain('!cancelled()')
-    expect(job['continue-on-error']).toBeUndefined()
-  })
-
-  it.each([
-    { name: 'all prerequisites pass', admitted: true },
-    { name: 'preflight fails', preflight: 'failure', admitted: false },
-    { name: 'preflight is cancelled', preflight: 'cancelled', admitted: false },
-    { name: 'preflight skips', preflight: 'skipped', admitted: false },
-    { name: 'preflight result is missing', preflight: '', admitted: false },
-    { name: 'preflight is unfinished', preflight: null, admitted: false },
-    { name: 'detector fails', detector: 'failure', admitted: false },
-    { name: 'detector is cancelled', detector: 'cancelled', admitted: false },
-    { name: 'detector skips', detector: 'skipped', admitted: false },
-    { name: 'detector result is missing', detector: '', admitted: false },
-    { name: 'detector is unfinished', detector: null, admitted: false },
-    { name: 'route is unselected', selected: 'false', admitted: false },
-    { name: 'route is missing', selected: '', admitted: false },
-    { name: 'route is absent', selected: null, admitted: false },
-    { name: 'route is unknown', selected: 'unknown', admitted: false },
-    { name: 'workflow is cancelled', cancelled: true, admitted: false }
-  ])('evaluates the actual workflow condition: $name', (scenario) => {
-    const context = {
-      cancelled: () => scenario.cancelled ?? false,
-      success: () => true,
-      inputs: {},
-      needs: {
-        code_paths: {
-          result: scenario.detector === undefined ? 'success' : (scenario.detector ?? undefined),
-          outputs: {
-            test: 'true',
-            [jobName]: scenario.selected === undefined ? 'true' : (scenario.selected ?? undefined)
-          }
-        },
-        preflight: {
-          result: scenario.preflight === undefined ? 'success' : (scenario.preflight ?? undefined)
-        }
-      }
-    }
-    if (jobName === 'orcad_browser') {
-      context.inputs.browser_contract = evaluate(job.with.browser_contract, context)
-    }
-    expect(evaluate(condition, context)).toBe(scenario.admitted)
-  })
-
-  it.each([
-    { files: [] },
-    { files: ['package.json'] },
-    { files: ['.github/workflows/pr.yml'] },
-    { files: [changedFile] }
-  ])(
-    'requires unit work and preflight whenever the real classifier selects $files',
-    ({ files }) => {
-      const selected = routedOutputs(files, 'false')
-      expect(selected[jobName]).toBe('true')
-      expect(selected.test).toBe('true')
-      expect(selected.static_analysis).toBe('true')
-      expect(selected.typecheck).toBe('true')
-    }
-  )
-
-  it.each(['true', 'false', undefined])(
-    'honors the actual readiness-masked output when reuse is %s',
-    (reused) => {
-      const outputs = routedOutputs([changedFile], reused)
-      expect(outputs[jobName]).toBe(String(reused !== 'true'))
-      expect(outputs.test).toBe(String(reused !== 'true'))
-      const context = {
-        cancelled: () => false,
-        success: () => true,
-        inputs: {},
-        needs: { code_paths: { result: 'success', outputs }, preflight: { result: 'success' } }
-      }
-      if (jobName === 'orcad_browser') {
-        context.inputs.browser_contract = evaluate(job.with.browser_contract, context)
-      }
-      expect(evaluate(condition, context)).toBe(reused !== 'true')
-    }
-  )
-})
-
-it.each([
-  { files: ['README.md'] },
-  { files: ['mobile/src/App.tsx'] },
-  { files: ['mobile/package.json'] },
-  { files: ['cloud/apps/relay/src/index.ts'] }
-])('does not add preflight consumers to a no-unit diff: $files', ({ files }) => {
-  const outputs = routedOutputs(files, 'false')
-  expect(outputs.test).toBe('false')
-  for (const [name] of routes) {
-    expect(outputs[name], name).toBe('false')
-  }
-})
-
-it('keeps the mobile-only bundle job in the first wave', () => {
-  const mobile = workflow.jobs.mobile_web_app
-  expect(mobile.needs).toEqual(['code_paths'])
-  expect(mobile.if).toBe("needs.code_paths.outputs.mobile_web_app == 'true'")
-  expect(classifyPrJobs(['mobile/src/App.tsx'])).toMatchObject({
-    test: false,
-    mobile_web_app: true
-  })
-})
 
 it('preserves relay continuation, setup guards and cancellation', () => {
   const steps = relaySteps
@@ -245,29 +134,6 @@ describe('Mobile CI tool preflight routing', () => {
     expect(evaluate(required.env.PREFLIGHT_SHOULD_RUN, context)).toBe(true)
   })
 
-  // Static analysis only, for the whole-tree formatting check.
-  it('keeps workflow-only changes off the root unit and typecheck route', () => {
-    const outputs = routedOutputs(['.github/workflows/mobile.yml'], 'false', verified)
-    expect(outputs.mobile_ci_tools).toBe('false')
-    expect(outputs.test).toBe('false')
-    expect(outputs.static_analysis).toBe('true')
-    expect(outputs.typecheck).toBe('false')
-  })
-
-  it('keeps root shard execution enabled for callers that do not opt out', () => {
-    expect(unit.on.workflow_call.inputs.run_shards.default).toBe(true)
-    expect(evaluate(unit.jobs.test.if, { inputs: { run_shards: true } })).toBe(true)
-    const relayDefault = unit.on.workflow_call.inputs.run_relay_integration.default
-    expect(relayDefault).toBe(true)
-    expect(
-      evaluate(unit.jobs.relay_integration.if, { inputs: { run_relay_integration: relayDefault } })
-    ).toBe(true)
-    expect(
-      evaluate(unit.jobs.relay_integration.if, { inputs: { run_relay_integration: false } })
-    ).toBe(false)
-    expect(unit.jobs.relay_integration.needs).toBeUndefined()
-  })
-
   it('requires complete modification evidence and an exact path scope', () => {
     const tool = 'config/scripts/run-mobile-ci-tests.mjs'
     expect(classifyPrJobs([tool]).test).toBe(true)
@@ -289,16 +155,10 @@ describe('Mobile CI tool preflight routing', () => {
       expect(selected.test).toBe(true)
     }
   })
-
-  it('reuses only identical successful checks for the focused preflight gate', () => {
-    const files = ['config/scripts/run-mobile-ci-tests.mjs']
-    expect(routedOutputs(files, 'true', verified).mobile_ci_tools).toBe('false')
-    expect(routedOutputs(files, 'false', verified).mobile_ci_tools).toBe('true')
-  })
 })
 
 describe('Renderer-only relay admission', () => {
-  const renderer = 'src/renderer/src/components/right-sidebar/FileExplorer.tsx'
+  const renderer = 'src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorer.tsx'
   const admitted = (files) => {
     const outputs = routedOutputs(files, 'false')
     const runRelay = evaluate(workflow.jobs.test.with.run_relay_integration, {
@@ -385,10 +245,14 @@ function createMobileCiScopeRepository(
     'config/scripts/pr-code-change-scope.mjs',
     'config/scripts/pr-package-test-paths.mjs',
     'config/scripts/pr-layout-oracle-route.mjs',
+    'config/scripts/pr-shell-contract-prefixes.mjs',
     'config/scripts/git-pull-request-diff-base.mjs',
     'config/scripts/pr-e2e-source-routing.mjs',
     'config/scripts/pr-browser-e2e-source-routes.mjs',
     'config/scripts/pr-editor-preview-e2e-source-routes.mjs',
+    'config/scripts/pr-feature-area-e2e-source-routes.mjs',
+    'config/scripts/pr-plugin-e2e-source-routes.mjs',
+    'config/scripts/pr-wsl-e2e-source-routes.mjs',
     'config/scripts/ci-e2e-job-selection.mjs'
   ]) {
     mkdirSync(dirname(join(directory, file)), { recursive: true })

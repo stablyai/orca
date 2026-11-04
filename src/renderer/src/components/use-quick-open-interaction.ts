@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getFileExplorerOperationOwnerFromState } from './right-sidebar/file-explorer-operation-owner'
+import { getFileExplorerOperationOwnerFromState } from './right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,

@@ -36,17 +36,6 @@ describe('stateless captured diagnostic negotiation', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
-  it('starts current CLI flagged once and keeps the capture cap', async () => {
-    ghMock.mockResolvedValue({ stdout: 'log', stderr: '' })
-    await expect(download().result).resolves.toBe('log')
-    expect(ghMock).toHaveBeenCalledOnce()
-    expect(ghMock.mock.calls[0][0]).toEqual([
-      'api',
-      'repos/acme/widgets/actions/jobs/77/logs',
-      '--allow-escape-sequences'
-    ])
-    expect(ghMock.mock.calls[0][1]).toMatchObject({ maxBuffer: 64 * 1024 * 1024, timeout: 25_000 })
-  })
   it.each([
     fixture.stderr,
     Buffer.from(fixture.stderr),

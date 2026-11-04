@@ -4,17 +4,11 @@ export function formatTerminalSessionCount(count: number | null): string {
   if (count === null) {
     return translate('resourceManager.countUnavailable', 'terminal count unavailable')
   }
-  return count === 1
-    ? translate(
-        'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount_one',
-        '{{count}} terminal session',
-        { count }
-      )
-    : translate(
-        'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount_other',
-        '{{count}} terminal sessions',
-        { count }
-      )
+  return translate(
+    'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount',
+    '{{count}} terminal sessions',
+    { count, defaultValue_one: '{{count}} terminal session' }
+  )
 }
 
 function spaceScanReadyLabel(): string {

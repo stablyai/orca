@@ -76,11 +76,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Pairs with attestAgentHookCompatibilityAuthority.'
   },
   {
-    wiring: 'ctor:getPairedDeviceName',
-    missingOn: 'orcad',
-    reason: 'Unwired gap (follow-up): client-hosted browser rows show no paired-device name.'
-  },
-  {
     wiring: 'ctor:orchestrationEnvironmentTransport',
     missingOn: 'orcad',
     reason: 'Cross-environment orchestration dials paired environments from the desktop only.'
@@ -98,6 +93,12 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
       'Sleep reaches paired servers and suspends VMs from the desktop only; orcad refuses those parts.'
   },
   {
+    wiring: 'ctor:headlessTerminalScrollbackRows',
+    missingOn: 'electron',
+    reason:
+      "Desktop reveals hidden panes from its model at desktop depth; renderer-less orcad needs only the daemon's live window."
+  },
+  {
     wiring: 'rpc-option:exposeNetworkByDefault',
     missingOn: 'orcad',
     reason: 'orcad pins its bind host instead, so exposure never widens itself.'
@@ -111,11 +112,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     wiring: 'rpc.setOnUnpairedDeviceAuthFailure',
     missingOn: 'orcad',
     reason: 'It notifies a desktop window.'
-  },
-  {
-    wiring: 'rpc-option:pinnedBindHost',
-    missingOn: 'electron',
-    reason: 'The desktop binds loopback until a device pairs (STA-2370).'
   },
   {
     wiring: 'host:setMainHttpClient',
@@ -185,6 +181,7 @@ const ROOT_SOURCES: Record<Root, readonly string[]> = {
 const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
   electron: [
     'src/main/startup/main-process-preflight.ts',
+    'src/main/startup/agent-hooks-uninstall-preflight.ts',
     'src/main/host/electron-browser-commands.ts'
   ],
   orcad: [

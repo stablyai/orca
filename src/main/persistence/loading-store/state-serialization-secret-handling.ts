@@ -5,17 +5,17 @@ import {
 import type { ProfileStateDomainReplacement } from './profile-state-authority'
 import { randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { collectFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
+import { collectFolderWorkspaceDiffComments } from '../../workspaces/catalog/folder-workspace-diff-comments'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot,
   type ProtectedSecretRetentionUpdate
-} from '../../protected-secret-persistence'
+} from '../../credentials/protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
 import { LEGACY_OPENCODE_GO_API_KEY_SLOT } from './legacy-opencode-go-api-key-migration'
 import { omitDefaultWorktreeMetaFieldsInMap } from '../../../shared/worktree/meta-persisted-defaults'
 import { projectWorktreeMetaByIdentityOntoLocators } from './worktree-meta-alias-projection'
-import { withoutRedundantPartitionGlobals } from '../../../shared/workspace-session-host-field-ownership'
+import { withoutRedundantPartitionGlobals } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 
 import {
   applySecretSentinelSubstitutions,
@@ -25,7 +25,7 @@ import type { StoreRuntimeState } from './store-runtime-state'
 
 type StateSerializationSecretHandlingOperationsRuntime = Pick<
   StoreRuntimeState,
-  'protectedSecrets' | 'state'
+  'protectedSecrets' | 'state' | 'originalExperimentalNativeChat'
 >
 
 export class StateSerializationSecretHandlingOperations {
@@ -109,6 +109,7 @@ export class StateSerializationSecretHandlingOperations {
           break
         case 'sshRemotePtyLeases':
         case 'remoteLayoutSnapshots':
+        case 'hostRepoCatalogSnapshots':
         case 'legacyPaneKeyAliasEntries':
         case 'migrationUnsupportedPtyEntries':
           stateToSave[domain] = this.runtime.state[domain]
@@ -240,6 +241,7 @@ export class StateSerializationSecretHandlingOperations {
   private buildSettingsToSave(encrypt: (slot: string, plaintext: string) => string) {
     return {
       ...stripRetiredGlobalSettings(this.runtime.state.settings),
+      ...this.runtime.originalExperimentalNativeChat,
       opencodeSessionCookie: encrypt(
         PROTECTED_SECRET_SLOT.opencodeSessionCookie,
         this.runtime.state.settings.opencodeSessionCookie

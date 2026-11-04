@@ -2,15 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { createGitBashConsoleCapacityDetector } from './git-bash-console-capacity'
 
 describe('Git Bash console capacity detection', () => {
-  it('recognizes the MSYS fatal message across PTY chunks', () => {
-    const detector = createGitBashConsoleCapacityDetector()
-
-    detector.observe('console device allocation failure - too many consoles ')
-    detector.observe('in use, max consoles is 128')
-
-    expect(detector.detected()).toBe(true)
-  })
-
   it('detects the marker at every chunk boundary, in any case', () => {
     const noisyPrefix = 'x'.repeat(200)
     const stream = `${noisyPrefix}Console device allocation failure - TOO MANY CONSOLES In Use, Max Consoles Is 128\r\n`
@@ -34,10 +25,19 @@ describe('Git Bash console capacity detection', () => {
     expect(detector.detected()).toBe(true)
   })
 
-  it('ignores unrelated shell failures', () => {
-    const detector = createGitBashConsoleCapacityDetector()
-    detector.observe('bash: command not found')
-
-    expect(detector.detected()).toBe(false)
+  it('bounds the initial prefix before scanning large reads, in UTF-16 code units', () => {
+    const marker = 'too many consoles in use, max consoles is 128'
+    for (const prefix of [
+      'x'.repeat(4096 - marker.length),
+      `${'😀'.repeat((4096 - marker.length - 1) / 2)}x`
+    ]) {
+      const atEdge = createGitBashConsoleCapacityDetector(4096)
+      atEdge.observe(prefix + marker)
+      expect(atEdge.detected()).toBe(true)
+      const outside = createGitBashConsoleCapacityDetector(4096)
+      outside.observe(`x${prefix}${marker}${'x'.repeat(100_000)}`)
+      outside.observe(marker)
+      expect(outside.detected()).toBe(false)
+    }
   })
 })

@@ -9,6 +9,9 @@ import { MANAGED_SSH_E2E_SPEC_PREFIX } from './ci-e2e-job-selection.mjs'
 import { LAYOUT_ORACLE_E2E_SPECS } from './pr-layout-oracle-route.mjs'
 import { PR_BROWSER_E2E_SOURCE_ROUTES } from './pr-browser-e2e-source-routes.mjs'
 import { PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES } from './pr-editor-preview-e2e-source-routes.mjs'
+import { PR_FEATURE_AREA_E2E_SOURCE_ROUTES } from './pr-feature-area-e2e-source-routes.mjs'
+import { PR_PLUGIN_E2E_SOURCE_ROUTES } from './pr-plugin-e2e-source-routes.mjs'
+import { PR_WSL_E2E_SOURCE_ROUTES } from './pr-wsl-e2e-source-routes.mjs'
 
 const isProductSource = (file) => !/\.test\.tsx?$/.test(file) && !isUnitTestSupportSource(file)
 
@@ -37,6 +40,9 @@ const ENABLED_AUTOMATION_MOVE =
 export const PR_E2E_SOURCE_ROUTES = [
   ...PR_BROWSER_E2E_SOURCE_ROUTES,
   ...PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES,
+  ...PR_FEATURE_AREA_E2E_SOURCE_ROUTES,
+  ...PR_PLUGIN_E2E_SOURCE_ROUTES,
+  ...PR_WSL_E2E_SOURCE_ROUTES,
   {
     id: 'ssh.orcad-editor-ownership',
     specs: ['tests/e2e/ssh-orcad-editor-ownership.spec.ts'],
@@ -51,7 +57,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-markdown-conversion.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/renderer\/src\/components\/editor\/(?:useMarkdownDocuments|restored-editor-workspace-runtime-owner|migrate-restored-editor-file-owner)\.ts$/.test(
+      /^src\/renderer\/src\/components\/editor\/(?:markdown\/documents\/useMarkdownDocuments|restored-editor-workspace-runtime-owner|migrate-restored-editor-file-owner)\.ts$/.test(
         file
       )
   },
@@ -60,7 +66,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-markdown-link-refresh.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/renderer\/src\/components\/editor\/(?:rich-markdown-doc-link|useRichMarkdownProgrammaticSync)\.ts$/.test(
+      /^src\/renderer\/src\/components\/editor\/rich-markdown\/(?:doc-links\/rich-markdown-doc-link|instance\/useRichMarkdownProgrammaticSync)\.ts$/.test(
         file
       )
   },
@@ -69,7 +75,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-markdown-live-documents.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/renderer\/src\/components\/editor\/(?:useMarkdownDocuments|use-markdown-document-watch-refresh|markdown-document-list-request)\.ts$/.test(
+      /^src\/renderer\/src\/components\/editor\/markdown\/documents\/(?:useMarkdownDocuments|use-markdown-document-watch-refresh|markdown-document-list-request)\.ts$/.test(
         file
       )
   },
@@ -78,7 +84,8 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      (file === 'src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts' ||
+      (file ===
+        'src/renderer/src/components/right-sidebar/file-explorer/watching/useFileExplorerWatch.ts' ||
         file === 'src/renderer/src/hooks/worktree-file-change-event.ts')
   },
   {
@@ -95,12 +102,16 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-explorer-selected-host.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      (file === 'src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts' ||
-        file === 'src/renderer/src/components/right-sidebar/file-explorer-operation-owner.ts' ||
-        file === 'src/renderer/src/components/right-sidebar/FileExplorer.tsx' ||
+      (file ===
+        'src/renderer/src/components/right-sidebar/file-explorer/watching/useFileExplorerWatch.ts' ||
+        file ===
+          'src/renderer/src/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner.ts' ||
+        file === 'src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorer.tsx' ||
         file === 'src/renderer/src/hooks/editor-external-watch-targets.ts' ||
-        file === 'src/renderer/src/components/right-sidebar/useFileExplorerTree.ts' ||
-        file === 'src/renderer/src/components/right-sidebar/use-file-explorer-tree-load-effects.ts')
+        file ===
+          'src/renderer/src/components/right-sidebar/file-explorer/tree/useFileExplorerTree.ts' ||
+        file ===
+          'src/renderer/src/components/right-sidebar/file-explorer/tree/use-file-explorer-tree-load-effects.ts')
   },
   {
     // A paired client refuses project setup on its server's SSH host with a clear reason (#33124).
@@ -138,7 +149,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/file-explorer-copy-file-windows.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/window\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer-row-file-transfer)\.ts$/.test(
+      /^src\/(?:main\/window\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer\/panel\/file-explorer-row-file-transfer)\.ts$/.test(
         file
       )
   },
@@ -184,7 +195,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
-        /^src\/(?:main\/(?:ssh\/orcad-(?:update-plan|runtime-maintenance|installed-activation|remote-deploy)|managed-server\/lifecycle\/orcad-(?:managed-update-|managed-auto-update|runtime-status))|renderer\/src\/components\/settings\/(?:managed-server-|use-managed-server-lifecycle))/.test(
+        /^src\/(?:main\/(?:ssh\/orcad-(?:update-plan|runtime-maintenance|installed-activation|remote-deploy)|managed-server\/lifecycle\/orcad-(?:managed-update-|managed-auto-update|runtime-status|managed-version-gc)|managed-server\/install\/(?:orcad-remote-gc|remote-install-gc)|wsl\/orcad\/wsl-orcad-deploy\.ts)|renderer\/src\/components\/settings\/(?:managed-server-|use-managed-server-lifecycle))/.test(
           file
         ))
   },
@@ -206,15 +217,6 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
-    id: 'ssh.orcad-browser-capabilities',
-    specs: ['tests/e2e/ssh-orcad-browser-capabilities.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/main\/(?:runtime\/(?:runtime-browser-commands-factory|orca-runtime-get-status|browser\/browser-client-page-opening)|host\/electron-browser-commands|orcad\/orcad-browser-)/.test(
-        file
-      )
-  },
-  {
     id: 'browser.orcad-service-status',
     specs: ['tests/e2e/ssh-orcad-browser-service-status.spec.ts'],
     matches: (file) =>
@@ -228,7 +230,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-browser-routing.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/browser\/local-ssh-browser|main\/ipc\/browser\.ts$|renderer\/src\/(?:lib\/(?:ssh-workspace-browser-route-eligibility|worktree-host-connection-phase)|components\/browser-pane\/use-ssh-workspace-browser-route|store\/repos\/converted-ssh-browser-pages|store\/slices\/browser\/browser-tab-actions|hooks\/ipc-events\/ssh-managed-server-state-effects))/.test(
+      /^src\/(?:main\/browser\/routing\/local-host-partitions\/local-ssh-browser|main\/ipc\/browser\.ts$|renderer\/src\/(?:lib\/(?:ssh-workspace-browser-route-eligibility|worktree-host-connection-phase)|components\/browser-pane\/use-ssh-workspace-browser-route|store\/repos\/converted-ssh-browser-pages|store\/slices\/browser\/browser-tab-actions|hooks\/ipc-events\/ssh-managed-server-state-effects))/.test(
         file
       )
   },
@@ -257,7 +259,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       MANAGED_SSH_HARNESS.test(file) ||
       /^tests\/e2e\/helpers\/browser-split-(?:guest-probes|page-server)\.ts$/.test(file) ||
       (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:lib\/(?:file-preview|workspace-file-drag|worktree-runtime-owner|connection-context)\.ts|components\/(?:right-sidebar\/FileExplorer(?:Row|VirtualRows)\.tsx|browser-pane\/(?:navigate\/use-browser-page-navigation-downloads\.ts|host-guest\/attach-browser-page-webview\.ts)))$/.test(
+        /^src\/renderer\/src\/(?:lib\/(?:file-preview|workspace-file-drag|worktree-runtime-owner|connection-context)\.ts|components\/(?:right-sidebar\/file-explorer\/panel\/FileExplorer(?:Row|VirtualRows)\.tsx|browser-pane\/(?:navigate\/use-browser-page-navigation-downloads\.ts|host-guest\/attach-browser-page-webview\.ts)))$/.test(
           file
         ))
   },
@@ -267,7 +269,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:lib\/(?:local-path-open-guard|external-editor-open-capability|worktree-runtime-owner)\.ts|components\/(?:sidebar\/(?:WorktreeOpenInMenu|WorktreeContextMenuView)\.tsx|right-sidebar\/(?:FileExplorer(?:Toolbar)?\.tsx|source-control\/listing\/entry-context-menu\.tsx)))$/.test(
+        /^src\/renderer\/src\/(?:lib\/(?:local-path-open-guard|external-editor-open-capability|worktree-runtime-owner)\.ts|components\/(?:sidebar\/workspace-actions\/(?:open\/WorktreeOpenInMenu|context-menu\/WorktreeContextMenuView)\.tsx|right-sidebar\/(?:file-explorer\/panel\/FileExplorer(?:Toolbar)?\.tsx|source-control\/listing\/entry-context-menu\.tsx)))$/.test(
           file
         ))
   },
@@ -288,7 +290,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
-        /^src\/(?:main\/runtime\/(?:workspaces\/(?:workspace-sleep-|remote-workspace-terminal-sleep)|terminal\/stop\/worktree-terminal-sleep)|renderer\/src\/components\/sidebar\/(?:sleep-|workspace-sleep-))/.test(
+        /^src\/(?:main\/runtime\/(?:workspaces\/(?:workspace-sleep-|remote-workspace-terminal-sleep)|terminal\/stop\/worktree-terminal-sleep)|renderer\/src\/components\/sidebar\/workspace-actions\/sleep\/(?:sleep-|workspace-sleep-))/.test(
           file
         ))
   },
@@ -371,7 +373,6 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: [
       'tests/e2e/ssh-orcad-paired-phone-projects.spec.ts',
       'tests/e2e/ssh-orcad-pairing-repair.spec.ts',
-      'tests/e2e/ssh-orcad-retained-upgrade-state.spec.ts',
       'tests/e2e/ssh-orcad-shared-home-machines.spec.ts',
       'tests/e2e/ssh-orcad-shared-login-migration.spec.ts',
       'tests/e2e/ssh-orcad-terminal-network-outage.spec.ts',
@@ -379,7 +380,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     ],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/(?:ssh|orcad|managed-server)\/|main\/ipc\/(?:ssh|runtime-environment|orcad-)|cli\/runtime\/(?:launch-)?serve|shared\/(?:remote-runtime|orcad-|protocol-version\.ts$|runtime-capability)|renderer\/src\/store\/repos\/(?:repo-removal|runtime-project-terminal-stop)|renderer\/src\/components\/sidebar\/(?:sleep-|SleepTwin|WorkspaceSleep|use-worktree-sleep|ssh-host-remove|host-rename-remove|HostRemove)|renderer\/src\/components\/terminal-pane\/(?:TerminalRemoteRuntimeReconnectBanner|use-managed-pairing-refused|TerminalPaneRuntimePortals))/.test(
+      /^src\/(?:main\/(?:ssh|orcad|managed-server)\/|main\/ipc\/(?:ssh|runtime-environment|orcad-)|cli\/runtime\/(?:launch-)?serve|shared\/(?:remote-runtime|orcad-|protocol-version\.ts$|runtime-capability)|renderer\/src\/store\/repos\/(?:repo-removal|runtime-project-terminal-stop)|renderer\/src\/components\/sidebar\/(?:workspace-actions\/sleep\/(?:sleep-|SleepTwin|WorkspaceSleep|use-worktree-sleep)|ssh-host-remove|host-rename-remove|HostRemove)|renderer\/src\/components\/terminal-pane\/(?:TerminalRemoteRuntimeReconnectBanner|use-managed-pairing-refused|TerminalPaneRuntimePortals))/.test(
         file
       )
   },
@@ -390,35 +391,9 @@ export const PR_E2E_SOURCE_ROUTES = [
       file === 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts' ||
       /^tests\/e2e\/helpers\/docker-ssh-host-(?:image|target)\.ts$/.test(file) ||
       (isProductSource(file) &&
-        /^src\/main\/(?:browser\/(?:ssh-browser-network-execution-route|browser-network-deferred-socket|browser-network-execution-route|system-ssh-socks-client-socket)|ssh\/system-transport\/system-ssh-dynamic-forward-process)\.ts$/.test(
+        /^src\/main\/(?:browser\/network\/(?:execution-routes\/(?:ssh-browser-network-execution-route|browser-network-deferred-socket|browser-network-execution-route)|tunnels\/system-ssh-socks-client-socket)|ssh\/system-transport\/system-ssh-dynamic-forward-process)\.ts$/.test(
           file
         ))
-  },
-  {
-    id: 'wsl-host.fake-connector',
-    specs: ['tests/e2e/wsl-host-fake-transport.spec.ts', 'tests/e2e/wsl-host-chat.spec.ts'],
-    matches: (file) => file === 'src/main/wsl/wsl-host-e2e-fake-connector.ts'
-  },
-  {
-    // Remove runs through the fake transport spec; its peer check asks the server who else uses it.
-    id: 'wsl-host.remove',
-    specs: ['tests/e2e/wsl-host-fake-transport.spec.ts'],
-    matches: (file) =>
-      /^src\/main\/wsl\/(?:wsl-host-server-stop|wsl-host-peer-desktops|wsl-host-removal)\.ts$/.test(
-        file
-      )
-  },
-  {
-    id: 'terminal.windows-wsl-launch-and-paste',
-    specs: [
-      'tests/e2e/golden-tab-bar-agent-launch.spec.ts',
-      'tests/e2e/terminal-windows-shell-paste-ownership.spec.ts'
-    ],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^(?:config\/scripts\/(?:verify-wsl-e2e-participation|verify-playwright-participation)\.mjs$|src\/main\/(?:wsl[/-]|pty\/.*wsl|providers\/wsl)|src\/shared\/(?:wsl-|windows-terminal-shell|shell-argument-quoting)|src\/renderer\/src\/.*(?:terminal-paste|pty-paste)|tests\/e2e\/(?:golden-tab-bar-agent-launch\.spec|terminal-windows-shell-paste-ownership\.spec|terminal-inline-images-windows\.spec|helpers\/(?:wsl-golden-stub-agent|golden-stub-agent))|\.github\/(?:actions\/setup-wsl-test-runtime\/|workflows\/windows-wsl-e2e\.yml))/.test(
-        file
-      )
   },
   {
     id: 'terminal-input.ime-and-synthetic-forwarding',

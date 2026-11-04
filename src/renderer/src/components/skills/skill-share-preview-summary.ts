@@ -12,15 +12,17 @@ export function byteLabel(bytes: number): string {
 }
 
 function scriptCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.share.scriptOne', '{{count}} script', { count })
-    : translate('auto.components.skills.share.scriptOther', '{{count}} scripts', { count })
+  return translate('auto.components.skills.share.script', '{{count}} scripts', {
+    count,
+    defaultValue_one: '{{count}} script'
+  })
 }
 
 function executableCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.share.executableOne', '{{count}} executable', { count })
-    : translate('auto.components.skills.share.executableOther', '{{count}} executables', { count })
+  return translate('auto.components.skills.share.executable', '{{count}} executables', {
+    count,
+    defaultValue_one: '{{count}} executable'
+  })
 }
 
 export type SkillShareRiskSummary = { risky: boolean; label: string }

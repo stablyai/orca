@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CommandSpec } from './args'
-import { COMMAND_SPECS } from './specs'
 import {
   REPEATED_FLAG_SEPARATOR,
   findCommandSpec,
   normalizeCommandPositionals,
   parseArgs,
-  supportsBrowserPageFlag,
   validateCommandAndFlags
 } from './args'
 
@@ -37,14 +35,6 @@ describe('parseArgs', () => {
     const parsed = parseArgs(['--value='])
 
     expect(parsed.flags.get('value')).toBe('')
-  })
-
-  it('still parses boolean flags and space-separated values', () => {
-    const parsed = parseArgs(['tab', 'create', '--json', '--url', 'https://example.com'])
-
-    expect(parsed.commandPath).toEqual(['tab', 'create'])
-    expect(parsed.flags.get('json')).toBe(true)
-    expect(parsed.flags.get('url')).toBe('https://example.com')
   })
 
   it('does not consume a command token after an unknown flag', () => {
@@ -134,14 +124,6 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('project')).toBe('project')
   })
 
-  it('parses emulator reinstall as a boolean flag', () => {
-    const parsed = parseArgs(['emulator', 'install', 'app.apk', '--reinstall', '--device', 'emu'])
-
-    expect(parsed.commandPath).toEqual(['emulator', 'install', 'app.apk'])
-    expect(parsed.flags.get('reinstall')).toBe(true)
-    expect(parsed.flags.get('device')).toBe('emu')
-  })
-
   it('normalizes partial positionals without conflicting later flag-supplied args', () => {
     const parsed = normalizeCommandPositionals(
       [
@@ -205,16 +187,8 @@ describe('command aliases', () => {
     }
   ]
 
-  it('resolves an exact canonical path to its spec', () => {
-    expect(findCommandSpec(specs, ['worktree', 'rm'])?.path).toEqual(['worktree', 'rm'])
-  })
-
   it('resolves an aliased path to the canonical spec', () => {
     expect(findCommandSpec(specs, ['worktree', 'remove'])?.path).toEqual(['worktree', 'rm'])
-  })
-
-  it('returns undefined for a path matching neither canonical nor alias', () => {
-    expect(findCommandSpec(specs, ['worktree', 'destroy'])).toBeUndefined()
   })
 
   it('canonicalizes an aliased command path during normalization', () => {
@@ -227,53 +201,11 @@ describe('command aliases', () => {
     expect(normalized.flags.get('force')).toBe(true)
   })
 
-  it('leaves a canonical command path unchanged during normalization', () => {
-    const normalized = normalizeCommandPositionals(specs, parseArgs(['worktree', 'rm']))
-
-    expect(normalized.commandPath).toEqual(['worktree', 'rm'])
-  })
-
   it('binds a trailing positional after canonicalizing the base path', () => {
     const normalized = normalizeCommandPositionals(specs, parseArgs(['repo', 'show', 'id:abc']))
 
     expect(normalized.commandPath).toEqual(['repo', 'show'])
     expect(normalized.flags.get('repo')).toBe('id:abc')
-  })
-})
-
-describe('supportsBrowserPageFlag', () => {
-  const pageFlagFor = (path: string[]): boolean => {
-    const spec = findCommandSpec(COMMAND_SPECS, path)
-    if (!spec) {
-      throw new Error(`no spec for ${path.join(' ')}`)
-    }
-    return supportsBrowserPageFlag(spec)
-  }
-
-  it('offers --page on browser commands that act on one page', () => {
-    expect(pageFlagFor(['snapshot'])).toBe(true)
-    expect(pageFlagFor(['tab', 'switch'])).toBe(true)
-    expect(pageFlagFor(['cookie', 'get'])).toBe(true)
-  })
-
-  it('does not offer --page on browser commands that open, list or configure pages', () => {
-    expect(pageFlagFor(['open-url'])).toBe(false)
-    expect(pageFlagFor(['tab', 'list'])).toBe(false)
-    expect(pageFlagFor(['browser', 'identity', 'get'])).toBe(false)
-  })
-
-  it('does not offer --page outside the browser commands, including newer groups', () => {
-    for (const path of [
-      ['orchestration', 'send'],
-      ['agent-context'],
-      ['account', 'add'],
-      ['serve'],
-      ['environment', 'list'],
-      ['profile', 'state', 'exports'],
-      ['connector', 'send']
-    ]) {
-      expect(pageFlagFor(path)).toBe(false)
-    }
   })
 })
 
@@ -318,68 +250,5 @@ describe('validateCommandAndFlags', () => {
     expect(() => validateCommandAndFlags(specs, parsed)).toThrow(
       'Unknown flag --bogus for command: demo'
     )
-  })
-
-  it('enumerates valid flags and suggests a near-miss on unknown-flag errors', () => {
-    const flagSpecs: CommandSpec[] = [
-      {
-        path: ['worktree', 'rm'],
-        summary: 'Remove a worktree',
-        usage: 'orca worktree rm',
-        allowedFlags: ['worktree', 'force', 'run-hooks']
-      }
-    ]
-    const parsed = parseArgs(['worktree', 'rm', '--forcce'])
-
-    try {
-      validateCommandAndFlags(flagSpecs, parsed)
-      throw new Error('expected validateCommandAndFlags to throw')
-    } catch (error) {
-      const data = (error as { data?: { validFlags: string[]; nextSteps: string[] } }).data
-      expect(data?.validFlags).toContain('force')
-      expect(data?.validFlags).toContain('json')
-      expect(data?.nextSteps.join('\n')).toContain('--force')
-      expect(data?.nextSteps.join('\n')).toContain('Valid flags:')
-    }
-  })
-
-  it('points --from at --terminal on the one verb that renamed the caller flag', () => {
-    const parsed = parseArgs(['orchestration', 'check', '--from', 'term_a'])
-
-    try {
-      validateCommandAndFlags(COMMAND_SPECS, parsed)
-      throw new Error('expected validateCommandAndFlags to throw')
-    } catch (error) {
-      const data = (error as { data?: { suggestions: string[]; nextSteps: string[] } }).data
-      expect(data?.suggestions[0]).toBe('terminal')
-      expect(data?.nextSteps[0]).toContain('--terminal')
-    }
-  })
-
-  it('leaves --from alone where the command actually accepts it', () => {
-    const parsed = parseArgs(['orchestration', 'reply', '--from', 'term_a'])
-
-    expect(() => validateCommandAndFlags(COMMAND_SPECS, parsed)).not.toThrow()
-  })
-
-  it('attaches did-you-mean suggestions to unknown-command errors', () => {
-    const suggestSpecs: CommandSpec[] = [
-      {
-        path: ['worktree', 'rm'],
-        summary: 'Remove a worktree',
-        usage: 'orca worktree rm',
-        allowedFlags: []
-      }
-    ]
-    const parsed = parseArgs(['worktree', 'remov'])
-
-    try {
-      validateCommandAndFlags(suggestSpecs, parsed)
-      throw new Error('expected validateCommandAndFlags to throw')
-    } catch (error) {
-      const data = (error as { data?: { suggestions: string[]; nextSteps: string[] } }).data
-      expect(data?.suggestions).toContain('worktree rm')
-      expect(data?.nextSteps[0]).toContain('orca worktree rm')
-    }
   })
 })

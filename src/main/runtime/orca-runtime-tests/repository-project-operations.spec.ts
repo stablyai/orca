@@ -1,12 +1,13 @@
+import * as gitSpawn from '../../git/command-runner/git-spawn'
 import { describe, expect, it, vi } from 'vitest'
 import { realpath } from 'node:fs/promises'
+import * as folderPathStatus from '../../project-groups/folder-workspace-path-status'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   EventEmitter,
   OrcaRuntimeService,
   execFileSync,
   getRepoUpstreamMock,
-  gitRunner,
   join,
   mkdir,
   mkdirSync,
@@ -19,6 +20,11 @@ import {
   writeFile
 } from '../orca-runtime-test-mocks.spec'
 import { store } from '../orca-runtime-test-fixtures.spec'
+
+// Clone and create register resolved paths (macOS tmpdir is a /var symlink).
+async function mkdtempReal(prefix: string): Promise<string> {
+  return realpath(await mkdtemp(prefix))
+}
 
 describe('OrcaRuntimeService', () => {
   it('deduplicates runtime repo paths with Windows/UNC comparison semantics', async () => {
@@ -43,6 +49,10 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(uncStore as never)
 
+    vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+      path: '//server/share/repo',
+      exists: true
+    })
     const repo = await runtime.addRepo('//server/share/repo', 'folder')
 
     expect(repo).toMatchObject({ id: 'repo-unc', path: '//Server/Share/Repo' })
@@ -50,7 +60,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('browses runtime server directories before projects are added', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-browse-'))
+    const tempRoot = await mkdtempReal(join(tmpdir(), 'orca-runtime-browse-'))
     try {
       await mkdir(join(tempRoot, 'zeta'))
       await mkdir(join(tempRoot, 'alpha'))
@@ -97,6 +107,10 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(colorStore as never)
 
+    vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+      path: '/tmp/runtime-add-default',
+      exists: true
+    })
     const repo = await runtime.addRepo('/tmp/runtime-add-default', 'folder')
 
     expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
@@ -115,6 +129,10 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
+    vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+      path: '/tmp/runtime-add-root-prep',
+      exists: true
+    })
     const repo = await runtime.addRepo('/tmp/runtime-add-root-prep', 'folder')
 
     expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(runtimeStore, repo)
@@ -122,7 +140,9 @@ describe('OrcaRuntimeService', () => {
 
   it('sets up an existing folder on a fresh runtime after importing the repo project', async () => {
     // The runtime stores the resolved path; macOS tmpdir sits behind the /private symlink.
-    const tempRoot = await realpath(await mkdtemp(join(tmpdir(), 'orca-runtime-project-setup-')))
+    const tempRoot = await realpath(
+      await mkdtempReal(join(tmpdir(), 'orca-runtime-project-setup-'))
+    )
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {
@@ -201,7 +221,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('sets up a project whose identity exists only on the requesting host', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-cross-host-project-'))
+    const tempRoot = await mkdtempReal(join(tmpdir(), 'orca-runtime-cross-host-project-'))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValueOnce(null)
     const runtimeStore = {
@@ -253,7 +273,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('rolls back a new runtime repo when project alignment fails', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-rollback-'))
+    const tempRoot = await mkdtempReal(join(tmpdir(), 'orca-runtime-project-rollback-'))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValueOnce(null)
     const runtimeStore = {
@@ -341,7 +361,7 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps existing-folder imports split by runtime host on the same normalized path', async () => {
     // The runtime stores the resolved path; macOS tmpdir sits behind the /private symlink.
-    const tempRoot = await realpath(await mkdtemp(join(tmpdir(), 'orca-runtime-project-host-')))
+    const tempRoot = await realpath(await mkdtempReal(join(tmpdir(), 'orca-runtime-project-host-')))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {
@@ -438,6 +458,10 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
+    vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+      path: '/tmp/runtime-shared',
+      exists: true
+    })
     const repo = await runtime.addRepo('/tmp/runtime-shared', 'folder')
 
     expect(repo).toMatchObject({
@@ -479,6 +503,10 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
+    vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+      path: '/workspace',
+      exists: true
+    })
     const repo = await runtime.addRepo('/workspace', 'folder', 'runtime:env-1')
 
     expect(repos).toHaveLength(2)
@@ -519,6 +547,10 @@ describe('OrcaRuntimeService', () => {
       }
       const runtime = new OrcaRuntimeService(runtimeStore as never)
 
+      vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+        path: '/workspace',
+        exists: true
+      })
       const repo = await runtime.addRepo('/workspace', 'folder', importHostId)
 
       expect(repos).toHaveLength(1)
@@ -528,9 +560,9 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps project clone setup on the cloned host-qualified repo', async () => {
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-project-clone-'))
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-project-clone-'))
     const clonePath = join(destination, 'orca')
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {
@@ -591,12 +623,12 @@ describe('OrcaRuntimeService', () => {
 
   it('never sets an SSH-hosted project up on the local machine', async () => {
     // Use valid writable paths so earlier I/O failures cannot hide an unsafe local clone or probe.
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-ssh-guard-'))
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-ssh-guard-'))
     const existingFolder = join(destination, 'orca')
     mkdirSync(existingFolder, { recursive: true })
     execFileSync('git', ['init'], { cwd: existingFolder, stdio: 'ignore' })
     const spawnSpy = vi
-      .spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+      .spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
       .mockImplementation(() => {
         // If the guard regresses, record the attempted clone without reaching the network.
         const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }

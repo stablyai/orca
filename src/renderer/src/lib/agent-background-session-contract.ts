@@ -1,14 +1,20 @@
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
+
+export type ResolvedAgentBackgroundTarget = { worktree: Worktree; repo: Repo }
 
 export type LaunchAgentBackgroundSessionArgs = {
   agent: TuiAgent
   worktreeId: string
+  resolvedTarget?: ResolvedAgentBackgroundTarget
   prompt?: string
   /** An automation's saved extras, merged over this host's default Arguments. */
+  agentArgs?: string | null
+  sessionOptions?: Readonly<Record<string, string>>
   extraAgentArgs?: string
   launchSource?: LaunchSource
   title?: string
@@ -21,7 +27,6 @@ export type LaunchAgentBackgroundSessionResult = {
   tabId: string
   paneKey: string
   ptyId: string
-  startupPlan: AgentStartupPlan
   terminalOwnership: AutomationTerminalOwnership | null
   /** Ends a remote runtime's exit wait and data stream; a no-op for local/SSH PTYs. */
   releaseRuntimeObservers: () => void

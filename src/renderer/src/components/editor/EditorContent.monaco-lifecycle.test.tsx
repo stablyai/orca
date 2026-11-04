@@ -2,10 +2,12 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
+import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 
 const lifecycle = vi.hoisted(() => ({
   events: [] as string[],
   diffModelKeys: [] as string[],
+  viewStateKeys: new Array<string>(),
   models: new Map<string, { content: string; undo: string[] }>(),
   notebookProps: [] as {
     fileId: string
@@ -70,7 +72,9 @@ vi.mock('@/lib/lazy-with-retry', async () => {
         readOnly?: boolean
         liveTail?: boolean
         viewStateId?: string
+        viewStateKey: string
       }) {
+        lifecycle.viewStateKeys.push(props.viewStateKey)
         /* oxlint-disable react-hooks/exhaustive-deps -- Mount-only by design: a prop-effect would hide a missing outer React remount. */
         React.useEffect(() => {
           lifecycle.events.push(`mount:${props.filePath}`)
@@ -96,8 +100,11 @@ vi.mock('@/lib/lazy-with-retry', async () => {
           }
           // Use the real mount reconciler to observe key ordering with retained-model behavior intact.
           syncContentOnMount(
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: content sync calls only the editor methods stubbed here.
             {
               getModel: () => model,
+              saveViewState: () => null,
+              restoreViewState: () => {},
               pushUndoStop: () => {
                 retained.undo.push('unexpected undo stop')
                 return true
@@ -215,6 +222,7 @@ afterEach(() => {
   cleanup()
   lifecycle.events.length = 0
   lifecycle.diffModelKeys.length = 0
+  lifecycle.viewStateKeys.length = 0
   lifecycle.models.clear()
   lifecycle.mountedProps.length = 0
   lifecycle.notebookProps.length = 0
@@ -222,6 +230,28 @@ afterEach(() => {
 })
 
 describe('EditorContent Monaco lifecycle boundary', () => {
+  it('keeps default-pane view state separate for the same path on different runtime hosts', () => {
+    const filePath = '/repo/main.ts'
+    const worktreeId = 'repo::/repo'
+    const first = file(filePath, {
+      id: buildOwnedEditorFileId(filePath, worktreeId, 'host-a'),
+      runtimeEnvironmentId: 'host-a'
+    })
+    const second = file(filePath, {
+      id: buildOwnedEditorFileId(filePath, worktreeId, 'host-b'),
+      runtimeEnvironmentId: 'host-b'
+    })
+    const view = render(
+      <EditorContent {...props(first, 'first host')} viewStateScopeId={first.id} />
+    )
+    const firstKey = lifecycle.viewStateKeys.at(-1)
+    expect(firstKey).toBeTypeOf('string')
+
+    view.rerender(<EditorContent {...props(second, 'second host')} viewStateScopeId={second.id} />)
+
+    expect(lifecycle.viewStateKeys.at(-1)).not.toBe(firstKey)
+  })
+
   it('unmounts the prior path before reconciling a stale retained target model', () => {
     const first = file('/repo/first.ts')
     const second = file('/repo/second.ts')

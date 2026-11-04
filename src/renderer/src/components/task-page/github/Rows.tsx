@@ -1,3 +1,4 @@
+import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
@@ -23,11 +24,10 @@ import { cn } from '@/lib/utils'
 import {
   GITHUB_TASK_STICKY_ID_CELL_CLASS,
   GITHUB_TASK_STICKY_TITLE_CELL_CLASS,
-  getTaskPageRepoSourceContext,
   formatRelativeTime
 } from '../task-page-source-context'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { GHAssigneesCell } from './AssigneesCell'
@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Button } from '@/components/ui/button'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageGitHubRows({
   model
 }: {
@@ -264,7 +265,7 @@ export function TaskPageGitHubRows({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {new Date(item.updatedAt).toLocaleString()}
+                  {new Date(item.updatedAt).toLocaleString(getIntlLocale())}
                 </TooltipContent>
               </Tooltip>
 
@@ -325,7 +326,7 @@ export function TaskPageGitHubRows({
                           {translate('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+                      <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
                         <ExternalLink className="size-4" />
                         {translate('auto.components.TaskPage.c1d1600362', 'Open in browser')}
                       </DropdownMenuItem>
@@ -386,7 +387,7 @@ export function TaskPageGitHubRows({
                           {translate('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+                      <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
                         <ExternalLink className="size-4" />
                         {translate('auto.components.TaskPage.c1d1600362', 'Open in browser')}
                       </DropdownMenuItem>

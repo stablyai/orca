@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
-import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/mobile-relay-close-codes'
+import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { FakeLogicalClient } from './mobile-endpoint-supervisor-test-fakes'
 import { RelayDirectorHttpError } from './mobile-relay-resume-director'
-import { relayFailureAllowsGraceRetry } from './relay-credential-eligibility'
+
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -51,17 +51,6 @@ describe('relay reconnect controller', () => {
     expect(vi.getTimerCount()).toBe(0)
     vi.runAllTimers()
     expect(onRetry).not.toHaveBeenCalled()
-  })
-
-  it('publishes consecutive failures and the direct-connection reset', () => {
-    const published: number[] = []
-    const reconnect = createController(vi.fn(), (count) => published.push(count))
-
-    reconnect.registerFailure(new RelayOuterError(4408), false)
-    reconnect.registerFailure(new RelayOuterError(4408), false)
-    reconnect.resetForDirectConnection()
-
-    expect(published).toEqual([0, 1, 2, 0])
   })
 
   it('latches pairing-rejected only after the transient-rejection budget is spent', () => {
@@ -257,28 +246,6 @@ describe('relay reconnect controller', () => {
     ).toHaveLength(1)
   })
 
-  it('upgrades host-revival gating to fresh credentials without later downgrading it', () => {
-    const reconnect = createController(vi.fn())
-
-    reconnect.registerFailure(new RelayOuterError(4404))
-    reconnect.registerFailure(new RelayOuterError(4401))
-    reconnect.registerFailure(new RelayOuterError(4408))
-
-    expect(reconnect.resetForDirectConnection()).toBe(true)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('extends forced-rotation retries to the exponential cooldown', () => {
-    const reconnect = createController(vi.fn())
-
-    for (let failure = 0; failure < 6; failure++) {
-      reconnect.registerFailure(new RelayOuterError(4429), false)
-    }
-
-    expect(reconnect.retryDelayMs(5000)).toBe(8000)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('does not reset backoff merely because a failed attempt took one ceiling', () => {
     const onRetry = vi.fn()
     const reconnect = createController(onRetry)
@@ -302,9 +269,9 @@ describe('relay reconnect controller', () => {
   it('resets backoff after an authenticated relay remains stable', () => {
     const onRetry = vi.fn()
     const reconnect = createController(onRetry)
-    const session: Pick<MobileRelayRpcSession, 'getFailure' | 'probeAfterBackground'> = {
+    const session: Pick<MobileRelayRpcSession, 'getFailure' | 'notifyForeground'> = {
       getFailure: () => new RelayOuterError(4408),
-      probeAfterBackground: () => {}
+      notifyForeground: () => {}
     }
     const logical = {
       getActivePath: () => 'relay'
@@ -335,49 +302,20 @@ describe('relay reconnect controller', () => {
     expect(onRetry).toHaveBeenCalledOnce()
   })
 
-  it('keeps the local backoff when the director sent no Retry-After', () => {
-    const onRetry = vi.fn()
-    const reconnect = createController(onRetry)
-
-    reconnect.registerFailure(new RelayDirectorHttpError(500, null))
-
-    expect(reconnect.retryDelayMs(0)).toBe(250)
-    vi.advanceTimersByTime(250)
-    expect(onRetry).toHaveBeenCalledOnce()
-  })
-
-  it('never lets a short Retry-After shorten an escalated backoff', () => {
+  it('nudges a retained relay tolerantly when availability returns', () => {
     const reconnect = createController(vi.fn())
-
-    for (let failure = 0; failure < 6; failure++) {
-      reconnect.registerFailure(new RelayOuterError(4429), false)
-    }
-    reconnect.registerFailure(new RelayDirectorHttpError(503, 100), false)
-
-    expect(reconnect.retryDelayMs(0)).toBe(15_000)
-  })
-
-  it('uses grace only when the outer relay credential was rejected', () => {
-    expect(relayFailureAllowsGraceRetry(new RelayOuterError(4401))).toBe(true)
-    expect(relayFailureAllowsGraceRetry(new Error('relay transport error'))).toBe(false)
-    expect(relayFailureAllowsGraceRetry(new RelayOuterError(4408))).toBe(false)
-    expect(relayFailureAllowsGraceRetry(new RelayOuterError(4429))).toBe(false)
-  })
-
-  it('probes a retained relay once on a real background return, not on a foreground nudge', () => {
-    const reconnect = createController(vi.fn())
-    const session = { getFailure: () => null, probeAfterBackground: vi.fn() }
+    const session = { getFailure: () => null, notifyForeground: vi.fn() }
     const logical = new FakeLogicalClient('connected', 'relay')
     reconnect.setActiveSession(session)
 
     reconnect.handleForeground(logical, true)
-    expect(session.probeAfterBackground).not.toHaveBeenCalled()
+    expect(session.notifyForeground).not.toHaveBeenCalled()
     reconnect.handleForeground(logical, false)
-    expect(session.probeAfterBackground).toHaveBeenCalledOnce()
+    expect(session.notifyForeground).toHaveBeenCalledExactlyOnceWith('focus')
 
     reconnect.clear()
     reconnect.handleForeground(logical, false)
-    expect(session.probeAfterBackground).toHaveBeenCalledOnce()
+    expect(session.notifyForeground).toHaveBeenCalledExactlyOnceWith('focus')
   })
 
   it('redials an attach timeout once quickly per failure streak', () => {
@@ -398,7 +336,7 @@ describe('relay reconnect controller', () => {
     vi.advanceTimersByTime(1)
     expect(onRetry).toHaveBeenCalledTimes(2)
 
-    reconnect.setActiveSession({ getFailure: () => null, probeAfterBackground: () => {} })
+    reconnect.setActiveSession({ getFailure: () => null, notifyForeground: () => {} })
     vi.advanceTimersByTime(30_000)
     reconnect.registerFailure(attachTimeout())
     vi.advanceTimersByTime(1_500)

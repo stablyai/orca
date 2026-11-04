@@ -3,18 +3,18 @@ import {
   filterProjectGroupsForVisibleHosts
 } from '../../../shared/sidebar-list/host-filtering'
 import { getRenderableFolderWorkspaces } from '../../../shared/sidebar-list/folder-workspace-lanes'
-import { worktreeMatchesVisibleHost } from '@/components/sidebar/visible-worktree-host-scope'
+import { worktreeMatchesVisibleHost } from '@/components/sidebar/worktree-list/listing/visible-worktree-host-scope'
 import {
   filterFolderWorkspacesFromOtherDevices,
   isWorkspaceOwnedBySomeoneElse
 } from '../../../shared/workspace-creator-visibility'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { hasLiveTabMarker } from '@/store/slices/workspace-attention/workspace-live-markers'

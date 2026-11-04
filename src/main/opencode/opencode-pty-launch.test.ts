@@ -10,12 +10,12 @@ import {
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,
   OPENCODE_STARTUP_PROMPT_BODY_ENV,
   OPENCODE_STARTUP_PROMPT_SHELL_ENV
-} from '../../shared/opencode-startup-prompt'
+} from '../../shared/agent-launch/startup/opencode-startup-prompt'
 import {
   buildLocalPtySpawnEnvironment,
   enforceLocalPtySpawnEnvironmentOverrides
-} from '../providers/local-pty-spawn-environment'
-import type { LocalPtyLaunchPlan } from '../providers/local-pty-launch-plan'
+} from '../providers/local-pty/local-pty-spawn-environment'
+import type { LocalPtyLaunchPlan } from '../providers/local-pty/local-pty-launch-plan'
 
 const plan: LocalPtyLaunchPlan = {
   startupAgentRecognition: null,

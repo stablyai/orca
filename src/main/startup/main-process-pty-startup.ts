@@ -13,17 +13,18 @@ import {
   hasAnyRecordedLegacyWslCodexPane,
   hasRecordedManagedHostCodexPane,
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
-  reconcileCodexPaneAccountsWithLivePtys,
-  type CodexPaneHomeRoute
-} from '../codex/codex-pane-account-registry'
-import { reconcileRetainedCodexHookHomes } from '../codex/retained-codex-hook-state'
-import { codexHookService } from '../codex/hook-service'
+  reconcileCodexPaneAccountsWithLivePtys
+} from '../codex/configuration/homes/codex-pane-account-registry'
+import type { CodexPaneHomeRoute } from '../codex/configuration/homes/codex-pane-account-registry-types'
+import { reconcileRetainedCodexHookHomes } from '../codex/hooks/installation/retained-codex-hook-state'
+import { codexHookService } from '../codex/hooks/installation/hook-service'
 import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
-} from '../agent-hooks/managed-agent-hook-controls'
+} from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { agentHookServer } from '../agent-hooks/server'
 import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
+import { installLocalHookRootEvidence } from '../agent-hooks/local-hook-root-evidence'
 import {
   indexPersistedPaneKeyPtyIds,
   resolveAgentWorkspaceExecutionHostId,
@@ -34,17 +35,24 @@ import { logStartupMilestone } from './startup-diagnostics'
 import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path-startup'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import { mainProcessState as state } from './main-process-state'
+import { shortPluginBranchName } from '../../shared/plugins/events/plugin-events'
+import { notifyWorkspaceCreatedPluginHook } from '../plugins/hooks/workspace-create-plugin-hook'
 
 export function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
+  const identity = { workspaceId: event.worktreeId, kind: 'worktree', path: event.path }
+  const folder = parseWorkspaceKey(event.worktreeId)?.type === 'folder'
+  if (event.kind === 'created') {
+    notifyWorkspaceCreatedPluginHook({ ...event, folder })
+  }
   // Public worktree events retain their Git-only scope.
-  if (parseWorkspaceKey(event.worktreeId)?.type === 'folder') {
+  if (folder) {
     return
   }
   state.pluginService?.emitEvent(
-    event.kind === 'created' ? 'worktree.created' : 'worktree.removed',
+    event.kind === 'created' ? 'workspace.created' : 'workspace.removed',
     event.kind === 'created'
-      ? { worktreeId: event.worktreeId, path: event.path, branch: event.branch }
-      : { worktreeId: event.worktreeId, path: event.path }
+      ? { ...identity, branch: shortPluginBranchName(event.branch) }
+      : identity
   )
 }
 
@@ -118,11 +126,9 @@ async function sweepRestoredStatusesAgainstLocalPtys(): Promise<void> {
 }
 
 export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
+  // One inventory read serves hook acquisition and tmux status.
   agentHookServer.setTmuxManagedPtyResolver(
-    createLocalTmuxManagedPtyResolver({
-      getPtyId: getPtyIdForPaneKey,
-      listProcesses: async () => (await getDaemonProvider()?.listProcesses()) ?? []
-    })
+    createLocalTmuxManagedPtyResolver(installLocalHookRootEvidence(agentHookServer))
   )
   logStartupMilestone('first-window-startup-services-start')
   const startupServices = startFirstWindowStartupServices({

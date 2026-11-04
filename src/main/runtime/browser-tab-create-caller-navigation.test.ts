@@ -5,7 +5,7 @@ import {
   type RuntimeNavigationTarget
 } from '../../shared/runtime-navigation'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { setRuntimeBrowserCommandsFactory } from './runtime-browser-commands-factory'
 
@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn(), handle: vi.fn(), removeHandler: vi.fn() },
   webContents: { fromId: vi.fn() }
 }))
-vi.mock('../browser/browser-session-registry', () => ({
+vi.mock('../browser/sessions/browser-session-registry', () => ({
   browserSessionRegistry: browserSessionRegistryMock
 }))
 
@@ -98,6 +98,7 @@ function createPairedRuntime() {
   internals.resolveGitWorktreeSelector = async () => ({ id: WT })
   internals.offscreenBrowserBackend = {
     closeTab: vi.fn(),
+    ownsTab: () => true,
     createTab: vi.fn(async (options: { browserPageId?: string }) => ({
       browserPageId: options.browserPageId ?? 'page-new'
     }))

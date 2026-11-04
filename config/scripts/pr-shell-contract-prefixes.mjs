@@ -1,0 +1,24 @@
+// Files whose edits run the real-shell contracts job (shell_contracts in pr.yml).
+export const SHELL_PREFIXES = [
+  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec',
+  'src/main/daemon/shell-ready',
+  'src/main/daemon/daemon-bash-shell-ready',
+  'src/main/daemon/daemon-shell-ready-wrapper',
+  'src/main/daemon/node-pty-fd-leak',
+  'src/main/providers/local-pty/local-pty-shell-ready',
+  'src/main/pty/',
+  'src/main/runtime/structured-session-cli-login-shell',
+  'src/main/runtime/structured-session-login-shell-test-harness',
+  'src/main/runtime/structured-session-child-env',
+  'src/renderer/src/components/terminal-pane/fish-color-scheme',
+  'src/shared/fish-',
+  'src/shared/terminal/pty/ingress/pty-reply-echo-shapes',
+  'src/shared/startup-shell-portability',
+  'src/shared/posix-command-path-lookup',
+  'src/main/wsl/filesystem/wsl-shell-cwd-report',
+  'src/main/wsl/filesystem/wsl-sh-cwd-report',
+  'src/shared/wsl-login-shell-command',
+  'config/patches/node-pty@',
+  'config/scripts/ensure-native-runtime',
+  'config/scripts/node-pty-job-ownership'
+]

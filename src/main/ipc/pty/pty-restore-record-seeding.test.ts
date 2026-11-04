@@ -10,17 +10,17 @@ import {
 } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeResolvedWorktreeCache } from '../../runtime/runtime-resolved-worktree-cache'
 import type { ResolvedWorktree } from '../../runtime/runtime-worktree-path-identity'
-import { getWorktreeScanMutationRevision } from '../../local-worktree-scan-generation'
+import { getWorktreeScanMutationRevision } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { registerPtyHandlers } from './register-handlers'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import { getPtyIdForPaneKey } from './pane/key-state'
 import { setLocalPtyProvider } from './provider/registry'
-import { buildFreshShellViewportBlankingSequence } from '../../../shared/terminal-fresh-shell-viewport'
+import { buildFreshShellViewportBlankingSequence } from '../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -40,8 +40,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
@@ -59,10 +61,10 @@ vi.mock('../../memory/pty-registry', () =>
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../../codex/codex-pane-account-registry', () =>
+vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
@@ -297,7 +299,7 @@ describe('registerPtyHandlers', () => {
     })
     await handlers.get('pty:clearPendingPaneSerializer')!(null, { paneKey, gen })
   })
-  it('seeds restore records from a cold-restore payload including its checkpoint title', async () => {
+  it("seeds restore history from a cold-restore payload but not the dead process's title", async () => {
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({
         id: 'pty-cold-restore-records',
@@ -335,8 +337,7 @@ describe('registerPtyHandlers', () => {
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
     expect(runtime.seedTerminalRestoreTail).toHaveBeenCalledWith('pty-cold-restore-records', {
-      text: 'cold restored history\r\n',
-      lastTitle: 'checkpoint-title'
+      text: 'cold restored history\r\n'
     })
   })
   it('seeds restore records for a runtime-controller created terminal (headless reattach)', async () => {

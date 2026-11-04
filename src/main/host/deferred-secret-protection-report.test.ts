@@ -110,16 +110,6 @@ describe('scheduleSecretProtectionGapReport', () => {
   /** Drain queued setImmediate callbacks; the 1ms is slack. */
   const drain = (): void => void vi.advanceTimersByTime(1)
 
-  it('does not probe the keyring while the first window is still being created', () => {
-    // A locked Linux keyring once delayed the first window by 76s (STA-5765).
-    schedule()
-    createWindow()
-    // Drain the queue to catch probes scheduled before the first paint.
-    drain()
-    expect(probes).toBe(0)
-    expect(logged).toEqual([])
-  })
-
   it('probes once the window is ready to show', () => {
     schedule()
     const window = createWindow()

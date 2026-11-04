@@ -10,7 +10,9 @@ vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../shared/shell-argument-quoting', () => ({ quotePosixShell: (s: string) => `'${s}'` }))
+vi.mock('../../shared/shell/launch/shell-argument-quoting', () => ({
+  quotePosixShell: (s: string) => `'${s}'`
+}))
 vi.mock('../managed-server/install/remote-install-lock', () => ({
   acquireInstallLock: vi.fn().mockResolvedValue(undefined),
   isRelayInstallLockStale: vi.fn().mockResolvedValue(false),
@@ -311,7 +313,8 @@ describe('deployOrcad', () => {
       scriptHost(script)
       expect(await deployOrcad(options())).toMatchObject({
         outcome: 'installed-not-activated',
-        code: 'orcad_candidate_preflight_failed'
+        code: 'orcad_candidate_preflight_failed',
+        startCheckFailed: true
       })
       expect(script.log).toEqual(['preflight'])
       expect(
@@ -376,6 +379,28 @@ describe('deployOrcad', () => {
       )
     }
   )
+
+  it('skips only the pre-upload record and fence reads a WSL connect already made', async () => {
+    const reads = async (preRead?: OrcadDeployOptions['preRead']) => {
+      vi.clearAllMocks()
+      scriptHost({ activationRecord: '', readiness: { [NEW_VERSION]: readyLine({}) }, log: [] })
+      await deployOrcad(options(preRead ? { preRead } : {}))
+      const commands = mockExec.mock.calls.map(([, command]) => String(command))
+      const count = (needle: string) => commands.filter((c) => c.includes(needle)).length
+      return {
+        record: count("[ ! -e '/home/u/.orca-remote/orcad-active.json'"),
+        fence: count('LOCKED')
+      }
+    }
+    const plain = await reads()
+    const record = emptyOrcadActivationRecord()
+    expect(await reads({ record, fenceOpen: true })).toEqual({
+      record: plain.record - 1,
+      fence: plain.fence - 1
+    })
+    // A fence the connect saw held is probed again.
+    expect((await reads({ record, fenceOpen: false })).fence).toBe(plain.fence)
+  })
 
   it('does not run chmod on a Windows remote', async () => {
     scriptHost({ activationRecord: '', readiness: {}, log: [] })
@@ -668,8 +693,11 @@ describe('deployOrcad', () => {
     )
     expect(result).toMatchObject({
       outcome: 'installed-not-activated',
-      code: 'orcad_update_terminals_running'
+      code: 'orcad_update_terminals_running',
+      freshlyInstalled: true
     })
+    // A deferral keeps its staged build for the later update.
+    expect(result).not.toHaveProperty('startCheckFailed')
     // Uploading bytes must not mutate a refused incumbent.
     expect(vi.mocked(uploadRemoteInstallDirectory)).toHaveBeenCalled()
     expect(script.log).toEqual([])
@@ -707,7 +735,7 @@ describe('deployOrcad', () => {
     }
     scriptHost(script)
     const result = await deployOrcad(options())
-    expect(result).toMatchObject({ outcome: 'installed-not-activated' })
+    expect(result).toMatchObject({ startCheckFailed: true, freshlyInstalled: true })
     expect(script.log).toEqual([
       'preflight',
       `stop:${OLD_VERSION}`,

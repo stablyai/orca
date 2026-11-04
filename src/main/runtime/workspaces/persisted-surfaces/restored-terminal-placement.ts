@@ -1,10 +1,9 @@
 // Main restores unshown live terminals and reconnect facts at startup/window load, including headless hosts.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getSshConnectionManager } from '../../../ssh/targets/ssh-target-registry'
 import {
   recordPtySurface,
@@ -27,7 +26,7 @@ import {
   panesBoundToAnotherWorkspace,
   panesBoundToGoneLocalTerminals
 } from '../../terminal/recovery/foreign-pane-bindings'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { type ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { followExportedPaneKeys } from '../../terminal/identity/exported-pane-key-follow'
 
@@ -162,7 +161,13 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
         const pane = parsePaneKey(paneKey)
         if (pty && pane) {
           // This claim has no graph standing; a later window graph wins.
-          recordPtySurface(pty, pane.tabId, paneKey, SURFACE_CLAIM_WITHOUT_STANDING)
+          recordPtySurface(
+            this.terminalIdentity,
+            pty,
+            pane.tabId,
+            paneKey,
+            SURFACE_CLAIM_WITHOUT_STANDING
+          )
           followExportedPaneKeys(this.ptysById.values(), (record) => this.paneOfPty(record).paneKey)
         }
       }

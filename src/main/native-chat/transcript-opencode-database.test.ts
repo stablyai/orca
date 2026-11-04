@@ -24,24 +24,30 @@ const mocks = vi.hoisted(() => ({
     ): Promise<OpenCodeTranscriptSignal | null> => null
   )
 }))
-vi.mock('../ai-vault/cached-session-list', () => ({ getAiVaultWslHomeDirs: mocks.homes }))
+vi.mock('../ai-vault/cached-session-list', () => ({ getAiVaultWslScanHomeDirs: mocks.homes }))
 vi.mock('./wsl-transcript-fs-access', () => ({ wslGatedAccess: mocks.access }))
 vi.mock('../opencode-usage/opencode-database-discovery', () => ({
   listOpenCodeDatabases: mocks.native,
   listOpenCodeDatabasesInDirectory: mocks.directory,
   compareOpenCodeClaimPriority: (a: string, b: string) => a.localeCompare(b)
 }))
-vi.mock('../ai-vault/opencode-wsl-runtime-preparation', () => ({
+vi.mock('../ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation', () => ({
   prepareOpenCodeWslReaders: mocks.prepare
 }))
-vi.mock('../ai-vault/session-scanner-opencode-wsl-client', () => ({
-  configureOpenCodeWslReaders: mocks.configure,
-  openCodeWslPath: mocks.wslPath
-}))
-vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', () => ({
-  readOpenCodeTranscriptSignalViaWorker: mocks.readSignal,
-  readOpenCodeTranscriptPageViaWorker: vi.fn()
-}))
+vi.mock(
+  '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-wsl-client',
+  () => ({
+    configureOpenCodeWslReaders: mocks.configure,
+    openCodeWslPath: mocks.wslPath
+  })
+)
+vi.mock(
+  '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  () => ({
+    readOpenCodeTranscriptSignalViaWorker: mocks.readSignal,
+    readOpenCodeTranscriptPageViaWorker: vi.fn()
+  })
+)
 import {
   resolveOpenCodeTranscriptDbPath,
   openCodeTranscriptDefaultDeps

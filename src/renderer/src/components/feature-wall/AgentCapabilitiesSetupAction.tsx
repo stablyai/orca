@@ -2,11 +2,11 @@ import {
   useBundledSkillInstallAction,
   type BundledSkillInstallActionState
 } from '@/hooks/use-bundled-skill-install-action'
-import { bundledSkillSetupActionLabel } from '../settings/bundled-skill-setup-copy'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { bundledSkillSetupActionLabel } from '../skills/setup/bundled-skill-setup-copy'
+import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
 import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
-import { buildSkillCommandForRuntime } from '../settings/CliSkillRuntimeSetup'
+import { buildSkillCommandForRuntime } from '../../lib/skill-runtime-command'
 import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Download, Globe2, Loader2, MonitorCog, Workflow } from 'lucide-react'
@@ -20,7 +20,7 @@ import {
   useBundledSkillInstall,
   type BundledSkillInstall
 } from '@/hooks/use-bundled-skill-install'
-import { BundledSkillInstallStatus } from '../settings/BundledSkillInstallStatus'
+import { BundledSkillInstallStatus } from '../skills/setup/BundledSkillInstallStatus'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
   hasSelectedOnboardingFeatureSetup,
@@ -38,15 +38,28 @@ import {
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
 import { translate } from '@/i18n/i18n'
+import { capabilitiesSetupBusyLabel, capabilityToggleLabel } from './agent-capability-setup-copy'
 import { track } from '@/lib/telemetry'
 
-export function AgentCapabilitiesSetupAction(props: {
+type AgentCapabilitiesSetupActionProps = {
   onOrchestrationSkillInstalledChange: (installed: boolean) => void
   onBrowserUseSkillInstalledChange: (installed: boolean) => void
-}): React.JSX.Element {
+}
+
+export function AgentCapabilitiesSetupAction(
+  props: AgentCapabilitiesSetupActionProps
+): React.JSX.Element {
+  const runtime = useOnboardingSkillRuntime()
+  return <AgentCapabilitiesSetupForRuntime key={runtime.setupKey} {...props} runtime={runtime} />
+}
+
+function AgentCapabilitiesSetupForRuntime(
+  props: AgentCapabilitiesSetupActionProps & {
+    runtime: ReturnType<typeof useOnboardingSkillRuntime>
+  }
+): React.JSX.Element {
   const { onBrowserUseSkillInstalledChange, onOrchestrationSkillInstalledChange } = props
-  const capabilitySetupStatus = useAgentCapabilitySetupStatus()
-  const { readiness } = capabilitySetupStatus
+  const { readiness, installStatus } = useAgentCapabilitySetupStatus()
   const featureSetupDefaultsAppliedRef = useRef(false)
   const featureSetupChangedByUserRef = useRef(false)
   const [featureSetup, setFeatureSetup] = useState<OnboardingFeatureSetupSelection>(
@@ -54,19 +67,20 @@ export function AgentCapabilitiesSetupAction(props: {
   )
   const [setupBusyLabel, setSetupBusyLabel] = useState<string | null>(null)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const activeRuntime = useActiveProjectSkillRuntime()
+  const activeRuntime = props.runtime
   const [wslSetup, setWslSetup] = useState<{
     command: string
     runtime: OnboardingFeatureSetupRuntimeContext
     selection: OnboardingFeatureSetupSelection
   } | null>(null)
   const legacyWsl = activeRuntime.agentRuntime?.runtime === 'wsl'
-  const skillInstall = useBundledSkillInstall()
+  const skillInstall = useBundledSkillInstall({ target: activeRuntime.bundledSkillTarget })
   const installSkills = skillInstall.install
   const installAction = useBundledSkillInstallAction(
     onboardingFeatureSetupSkillNames(featureSetup),
     {
       enabled: !legacyWsl && hasSelectedOnboardingFeatureSetup(featureSetup),
+      target: activeRuntime.bundledSkillTarget,
       refreshKey: skillInstall.state.kind
     }
   )
@@ -94,7 +108,7 @@ export function AgentCapabilitiesSetupAction(props: {
     if (setupBusyLabel !== null) {
       return
     }
-    setSetupBusyLabel('Setting up capabilities...')
+    setSetupBusyLabel(capabilitiesSetupBusyLabel())
     try {
       const result = await runOnboardingFeatureSetup(featureSetup)
       if (featureSetup.browserUse) {
@@ -187,7 +201,7 @@ export function AgentCapabilitiesSetupAction(props: {
           setupBusyLabel={setupBusyLabel}
           onStartFeatureSetup={() => void handleStartFeatureSetup()}
           allReady={isAgentCapabilityReadinessComplete(readiness)}
-          installStatus={capabilitySetupStatus.installStatus}
+          installStatus={installStatus}
         />
       )}
     </div>
@@ -353,7 +367,7 @@ function AgentCapabilitySetupChecklist(props: {
               type="button"
               role="checkbox"
               aria-checked={selected}
-              aria-label={`${selected ? 'Disable' : 'Enable'} ${row.title}`}
+              aria-label={capabilityToggleLabel(selected, row.title)}
               className={cn(
                 'flex min-h-24 flex-col rounded-lg border px-4 py-3.5 text-left transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',

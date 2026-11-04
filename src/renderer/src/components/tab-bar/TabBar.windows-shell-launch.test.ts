@@ -24,12 +24,13 @@ import {
 } from './tab-bar-windows-shell-launch-test-harness'
 
 vi.mock('react', async () => await stubHeadlessReact())
+vi.mock('@/store/plugin-new-files', () => ({ usePluginNewFiles: () => [] }))
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
 vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 vi.mock('@dnd-kit/sortable', () => stubSortableContext())
 vi.mock('./tab-strip-drag-scroll', () => stubTabStripDragScroll())
 vi.mock('../../store', () => ({ useAppStore: useAppStoreExport }))
-vi.mock('../right-sidebar/status-display', () => stubStatusDisplay())
+vi.mock('../../lib/git-path-decoration', () => stubStatusDisplay())
 vi.mock('../tab-group/tab-insertion', () => stubTabInsertion())
 vi.mock('@/components/editor/editor-labels', () => stubEditorLabels())
 vi.mock('./SortableTab', () => stubSortableTab())
@@ -55,6 +56,9 @@ describe('TabBar PowerShell launch wiring', () => {
 
   it('passes pwsh.exe when the PowerShell menu item uses the PowerShell 7+ implementation', async () => {
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(false),
@@ -128,6 +132,9 @@ describe('TabBar PowerShell launch wiring', () => {
       ]
     }
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(true),
@@ -196,6 +203,9 @@ describe('TabBar PowerShell launch wiring', () => {
       ]
     }
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(true),
@@ -244,6 +254,9 @@ describe('TabBar PowerShell launch wiring', () => {
 
   it('shows the Git Bash terminal row when shared Windows capabilities find bash.exe', async () => {
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(false),

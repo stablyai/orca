@@ -1,14 +1,14 @@
+import type { FileOpenFailure } from './terminal-file-open-failure'
 import {
   readTerminalPathExistence,
   type TerminalPathExistsCache
 } from './terminal-path-exists-cache'
 import type { IBufferLine } from '@xterm/xterm'
-import { findTerminalFileLinksAtBufferPosition } from '../../../../shared/terminal-link-buffer-hit-testing'
-import { terminalLogicalLinkHasOscLink } from '../../../../shared/terminal-osc-link-cells'
+import { findTerminalFileLinksAtBufferPosition } from '../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
+import { terminalLogicalLinkHasOscLink } from '../../../../shared/terminal/links/terminal-osc-link-cells'
 import {
   getTerminalFileContext,
   openDetectedFilePath,
-  type FileOpenFailure,
   type TerminalFileContext
 } from './terminal-file-open-routing'
 import { reserveDetectedFilePathOpenTurn } from './terminal-file-open-turn'

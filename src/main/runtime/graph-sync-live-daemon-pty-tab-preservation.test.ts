@@ -3,7 +3,7 @@ import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
  * User close must release those bindings; these cases cover connected/exited, never unverifiable PTYs. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
@@ -267,6 +267,21 @@ describe('graph sync must not prune a tab whose daemon PTY is live', () => {
     await h.createCliTerminal(WT_CLI)
     h.markPtyExited(CLI_PTY)
 
+    h.syncRendererGraph([WT_OTHER])
+    vi.advanceTimersByTime(300)
+
+    expect(h.hasSnapshot(WT_CLI)).toBe(false)
+  })
+
+  it('control: prunes an omitted worktree terminal once its PTY exits on a later sync', async () => {
+    const h = createHarness()
+    h.syncRendererGraph([WT_CLI])
+    await h.createCliTerminal(WT_CLI)
+    h.syncRendererGraph([WT_OTHER])
+    vi.advanceTimersByTime(300)
+    expect(h.hasSnapshot(WT_CLI)).toBe(true)
+
+    h.markPtyExited(CLI_PTY)
     h.syncRendererGraph([WT_OTHER])
     vi.advanceTimersByTime(300)
 

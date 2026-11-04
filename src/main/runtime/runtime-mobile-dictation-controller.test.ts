@@ -11,18 +11,27 @@ import type { RuntimeStore } from './runtime-store-contract'
 type Sink = (event: { type: string; text?: string }) => void
 
 let sink: Sink = () => {}
-const stopDictation = vi.fn(async () => {})
+// A finish transcribes what was said; tests that never settle it model a slow transcription.
+let transcription: Promise<void> = Promise.resolve()
+const stopDictation = vi.fn(async (_owner: string, options?: { discard?: boolean }) => {
+  if (!options?.discard) {
+    await transcription
+  }
+})
+const feedAudio = vi.fn()
 
 beforeEach(() => {
   vi.useFakeTimers()
   stopDictation.mockClear()
+  transcription = Promise.resolve()
+  feedAudio.mockClear()
   const factories = {
     createModelManager: () => ({ getModelState: async () => ({ status: 'ready' }) }),
     createSttService: () => ({
       startDictation: async (_modelId: string, next: Sink) => {
         sink = next
       },
-      feedAudio: () => {},
+      feedAudio,
       stopDictation
     })
   }
@@ -67,10 +76,42 @@ describe('mobile dictation across a phone reconnect', () => {
 
   it('releases the speech model when the phone goes quiet for the grace', async () => {
     const controller = await startPhoneDictation()
+    transcription = new Promise(() => {})
 
     await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_RECONNECT_GRACE_MS)
 
     expect(stopDictation).toHaveBeenCalledOnce()
     expect(() => controller.feed(chunk)).toThrow('dictation_stream_not_started')
+  })
+
+  it('feeds resent audio once and in the order it was spoken', async () => {
+    const controller = await startPhoneDictation()
+    const spoken = (seq: number) => ({
+      ...chunk,
+      seq,
+      audioBase64: Buffer.from(Int16Array.of(seq).buffer).toString('base64')
+    })
+
+    // 1 is resent after 2 overtook it; 0 and 1 arrive twice; 3 never comes.
+    for (const seq of [0, 2, 0, 1, 1, 4]) {
+      controller.feed(spoken(seq))
+    }
+    await controller.finish({ dictationId: 'd-1', clientId: 'phone-a' })
+
+    const fed = feedAudio.mock.calls.map(([samples]) => Math.round(samples[0] * 32768))
+    expect(fed).toEqual([0, 1, 2, 4])
+  })
+})
+
+describe('mobile dictation cancel', () => {
+  it('lets the phone start again right after it cancels', async () => {
+    const controller = await startPhoneDictation()
+    transcription = new Promise(() => {})
+
+    await controller.cancel({ dictationId: 'd-1', clientId: 'phone-a' })
+
+    await expect(
+      controller.start({ dictationId: 'd-2', modelId: 'test-model', clientId: 'phone-a' })
+    ).resolves.toEqual({ dictationId: 'd-2', modelId: 'test-model', dedupesResentChunks: true })
   })
 })

@@ -22,16 +22,11 @@ export function JiraLinkedWorkspaceAction({
   onOpenWorkspace: (workspace: Worktree) => void
   onStartWorkspace: (issue: JiraIssue) => void
 }): React.JSX.Element {
-  const label =
-    workspaces.length === 1
-      ? translate('jira.workspace.linkedCount_one', '{{count}} workspace linked to {{key}}', {
-          count: workspaces.length,
-          key: issue.key
-        })
-      : translate('jira.workspace.linkedCount_other', '{{count}} workspaces linked to {{key}}', {
-          count: workspaces.length,
-          key: issue.key
-        })
+  const label = translate('jira.workspace.linkedCount', '{{count}} workspaces linked to {{key}}', {
+    count: workspaces.length,
+    key: issue.key,
+    defaultValue_one: '{{count}} workspace linked to {{key}}'
+  })
   const trigger = (
     <Button
       variant="ghost"

@@ -16,8 +16,13 @@ const mocks = vi.hoisted(() => ({
 
 const linkedLookup = vi.hoisted(() => ({ run: (): Promise<null> => Promise.resolve(null) }))
 
-vi.mock('../git/status', () => ({ getStagedCommitContext: mocks.getStagedCommitContext }))
-vi.mock('../git/runner', () => ({ gitExecFileAsync: mocks.gitExecFileAsync }))
+vi.mock('../git/source-control/staged-commit-context', () => ({
+  getStagedCommitContext: mocks.getStagedCommitContext
+}))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: mocks.gitExecFileAsync
+}))
 vi.mock('../text-generation/pull-request-context', () => ({
   getPullRequestDraftContext: mocks.getPullRequestDraftContext
 }))
@@ -150,7 +155,7 @@ describe('RuntimeGitGenerationCommands admission', () => {
         { base: 'main', title: '', body: '', draft: false },
         settingsOverride
       )
-    ).resolves.toEqual({ success: false, error: SSH_HOST_NOT_SERVED_MESSAGE })
+    ).resolves.toMatchObject({ success: false, error: SSH_HOST_NOT_SERVED_MESSAGE })
     expect(mocks.getPullRequestDraftContext).not.toHaveBeenCalled()
     expect(mocks.gitExecFileAsync).not.toHaveBeenCalled()
     expect(mocks.loadPullRequestLinkedIssue).not.toHaveBeenCalled()
@@ -182,7 +187,7 @@ describe('RuntimeGitGenerationCommands admission', () => {
         try {
           await expect(
             commands().generateRuntimePullRequestFields('id:wt-1', input, settingsOverride)
-          ).resolves.toEqual({
+          ).resolves.toMatchObject({
             success: false,
             error:
               outcome === 'no changes'

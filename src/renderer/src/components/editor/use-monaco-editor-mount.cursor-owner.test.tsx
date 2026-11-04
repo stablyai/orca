@@ -18,10 +18,10 @@ const storeRef = vi.hoisted((): { current?: StoreApi<AppState> } => ({}))
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => storeRef.current?.getState() }
 }))
-vi.mock('./monaco-markdown-doc-link-decorations', () => ({
+vi.mock('./markdown-source-tools/monaco/monaco-markdown-doc-link-decorations', () => ({
   createMarkdownDocLinkDecorationController: vi.fn()
 }))
-vi.mock('./monaco-markdown-doc-completions', () => ({
+vi.mock('./markdown-source-tools/monaco/monaco-markdown-doc-completions', () => ({
   ensureMarkdownDocCompletionProvider: vi.fn()
 }))
 vi.mock('./monaco-e2e-probe', () => ({ installMonacoE2EProbe: () => vi.fn() }))
@@ -70,8 +70,7 @@ function mountParams(
       contentRef: { current: '' },
       lastSyncedContentRef: { current: '' },
       contentSyncModeRef: { current: 'undoable' },
-      isApplyingProgrammaticContentRef: { current: false },
-      isApplyingLargePasteRef: { current: false }
+      isApplyingProgrammaticContentRef: { current: false }
     },
     decorations: {
       markdownDocLinkDecorationsRef: { current: null },
@@ -220,6 +219,7 @@ it('keeps cursor and gutter copy on the current file owner after migration', asy
         point: { x: 0, y: 0 },
         line,
         selection: snapshot,
+        fileId: result.fileId,
         filePath,
         relativePath: 'file.ts'
       })

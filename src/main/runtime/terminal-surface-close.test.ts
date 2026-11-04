@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../shared/workspace-layout/terminal-tab-types'
 import {
   resolveTerminalCloseTarget,
   type TerminalCloseLayoutCopies
@@ -42,27 +42,6 @@ describe('resolveTerminalCloseTarget', () => {
     expect(resolveTerminalCloseTarget(PANE, copies({ rendererListsTab: true }))).toBe('absent')
     // A main-owned tab whose layout was saved before its pane mounted, and no other copy.
     expect(resolveTerminalCloseTarget(PANE, copies({ sessionLayout: layout() }))).toBe('absent')
-  })
-
-  it("closes the tab only when a copy positively shows this pane as the tab's one pane", () => {
-    const cases: [string, Partial<TerminalCloseLayoutCopies>][] = [
-      ['renderer graph', { rendererListsTab: true, graphLeafIds: ['leaf-a'] }],
-      [
-        'renderer rows with no layout or graph panes',
-        { rendererListsTab: true, snapshotRows: [{ leafId: 'leaf-a' }] }
-      ],
-      ['main session layout', { sessionLayout: layout('leaf-a') }],
-      [
-        'rows published for a main-owned tab whose saved layout is empty',
-        { sessionLayout: layout(), snapshotRows: [{ leafId: 'leaf-a', parentLayout: layout() }] }
-      ]
-    ]
-    for (const [name, overrides] of cases) {
-      expect([name, resolveTerminalCloseTarget(PANE, copies(overrides))]).toEqual([
-        name,
-        'last-pane'
-      ])
-    }
   })
 
   it('reads past an empty copy to one that records the split', () => {

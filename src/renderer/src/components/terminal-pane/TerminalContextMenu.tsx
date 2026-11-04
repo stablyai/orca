@@ -26,7 +26,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   formatOptionalPrimaryShortcutLabel,
@@ -111,7 +111,7 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-60"
+        className="min-w-60"
         sideOffset={0}
         align="start"
         onCloseAutoFocus={(e) => {

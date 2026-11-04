@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import { worktreeActivate } from '../host-screen/host-screen-operations'
 import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
@@ -36,11 +37,12 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     pendingBrowserFocusPageIdRef,
     pendingTerminalActivationAttemptRef,
     initialSessionAutoCreateRef,
-    bufferedTerminalDraftState,
     clearPendingLiveInputCommit,
     clearDelayedActionTimers,
     showToast,
     clearTerminalCache,
+    setSplitTerminalHandles,
+    terminalPaneViewportsRef,
     fetchTerminals,
     ensureSessionTabs
   } = scope
@@ -50,6 +52,8 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     sessionTabActionSheetKeyboardHideSubRef.current?.remove()
     sessionTabActionSheetKeyboardHideSubRef.current = null
     clearTerminalCache()
+    setSplitTerminalHandles(null)
+    terminalPaneViewportsRef.current.clear()
     activeHandleRef.current = null
     activeSessionTabTypeRef.current = null
     pendingSelectionRef.current = null
@@ -60,7 +64,6 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     terminalDiagnosticsRef.current.resetRoute()
     appliedSnapshotMarkerRef.current = { epoch: null, version: -1 }
     closedTabTombstonesRef.current.clear()
-    bufferedTerminalDraftState.resetDrafts()
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
         clearTimeout(queued.timer)
@@ -80,17 +83,16 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     return () => {
       sessionTabActionSheetRequestSeqRef.current += 1
       sessionTabActionSheetKeyboardHideSubRef.current?.remove()
-      bufferedTerminalDraftState.clearPendingRestorations()
       clearPendingLiveInputCommit()
       clearDelayedActionTimers()
     }
   }, [
     clearDelayedActionTimers,
     clearPendingLiveInputCommit,
-    bufferedTerminalDraftState.clearPendingRestorations,
     clearTerminalCache,
+    setSplitTerminalHandles,
+    terminalPaneViewportsRef,
     hostId,
-    bufferedTerminalDraftState.resetDrafts,
     worktreeId
   ])
 
@@ -123,7 +125,13 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
           activation?.accepted === true &&
           headlessActivationNeedsHostRenderer(activation.value)
         ) {
-          showToast('Open Orca on the host to wake sleeping agents.', 3000)
+          showToast(
+            translate(
+              'session.useStartup.wakeAgents',
+              'Open Orca on the host to wake sleeping agents.'
+            ),
+            3000
+          )
         }
       }
       if (client && created !== '1' && !isFloatingWorkspaceRoute) {

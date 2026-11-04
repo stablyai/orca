@@ -1,15 +1,16 @@
 /// <reference types="chrome" />
 import { z } from 'zod'
-import { resolveBrowserExtensionRequestedUrl } from '../../../../shared/browser-extension-url'
+import { resolveBrowserExtensionRequestedUrl } from '../../../../shared/browser/extensions/browser-extension-url'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   activateBrowserExtensionTab,
   closeBrowserExtensionTab,
+  createBrowserExtensionTabResolver,
   describeBrowserExtensionTab,
   listBrowserExtensionTabs,
   mergeNativeTab,
@@ -18,12 +19,12 @@ import {
   resolveBrowserExtensionTab,
   resolveCallerWindowId,
   type BrowserExtensionTabEntry
-} from '../browser-extension-tab-model'
+} from '../tabs-and-windows/browser-extension-tab-model'
 import {
   matchesDiscardedTabNativeQuery,
   matchesOrcaTabQuery,
   type OrcaTabQuery
-} from '../browser-extension-tab-query'
+} from '../tabs-and-windows/browser-extension-tab-query'
 import {
   activateBrowserExtensionDiscardedTab,
   closeBrowserExtensionDiscardedTab,
@@ -31,13 +32,13 @@ import {
   findBrowserExtensionDiscardedTab,
   listBrowserExtensionDiscardedTabs,
   type BrowserExtensionDiscardedTabEntry
-} from '../browser-extension-discarded-tab-model'
+} from '../tabs-and-windows/browser-extension-discarded-tab-model'
 import { captureVisibleTabMethod } from './tabs-capture'
 import { tabsPageMethods } from './tabs-page-methods'
 import {
   getLastFocusedBrowserExtensionWindowId,
   listBrowserExtensionWindows
-} from '../browser-extension-window-model'
+} from '../tabs-and-windows/browser-extension-window-model'
 
 const tabIdSchema = z.number().int().nonnegative()
 const nativeTabSchema = z.record(z.string(), z.unknown())
@@ -130,10 +131,10 @@ function queryTabs(
   const discarded = listBrowserExtensionDiscardedTabs(caller.session)
     .map((entry) => describeBrowserExtensionDiscardedTab(caller.extension, entry))
     .filter((tab) => matchesDiscardedTabNativeQuery(tab, query))
+  const resolveTab = createBrowserExtensionTabResolver()
   return nativeTabs
     .flatMap((nativeTab) => {
-      const entry =
-        typeof nativeTab.id === 'number' ? resolveBrowserExtensionTab(nativeTab.id) : null
+      const entry = typeof nativeTab.id === 'number' ? resolveTab(nativeTab.id) : null
       return entry && entry.contents.session === caller.session
         ? [mergeCallerTab(caller, nativeTab, entry)]
         : []

@@ -1,7 +1,8 @@
 // Derive owed work each tick, independent of viewers; retire quiet children and cached folds,
 // preserving durable conversations for the next send.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../../../shared/native-chat/native-chat-idle-stop'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -11,7 +12,7 @@ import {
 } from './structured-agent-session-host-current-work'
 
 export const STRUCTURED_AGENT_SESSION_IDLE_SWEEP_INTERVAL_MS = 5 * 60_000
-export const STRUCTURED_AGENT_SESSION_IDLE_MS = 30 * 60_000
+export const STRUCTURED_AGENT_SESSION_IDLE_MS = DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES * 60_000
 
 export type StructuredAgentSessionIdleSweepDeps = {
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession> & {
@@ -34,7 +35,8 @@ export type StructuredAgentSessionIdleSweepDeps = {
   closeConversation: (sessionId: string) => Promise<boolean>
   logger: StructuredAgentSessionLogger
   intervalMs?: number
-  idleMs?: number
+  /** Read every tick so a settings change applies without a restart; null never stops a chat. */
+  idleMs?: () => number | null
 }
 
 export type StructuredAgentSessionChildWorkReads = {
@@ -91,10 +93,11 @@ export class StructuredAgentSessionIdleSweep {
     }
     this.running = true
     try {
+      const agentIdleMs = this.deps.idleMs ? this.deps.idleMs() : STRUCTURED_AGENT_SESSION_IDLE_MS
       await Promise.allSettled(
         [...this.deps.sessions.keys()].map((sessionId) =>
           this.deps
-            .serialize(sessionId, () => this.tickUnderSerialize(sessionId))
+            .serialize(sessionId, () => this.tickUnderSerialize(sessionId, agentIdleMs))
             .catch((error: unknown) =>
               this.deps.logger.warn('an idle sweep step failed', {
                 scope: 'idle-sweep',
@@ -110,7 +113,7 @@ export class StructuredAgentSessionIdleSweep {
   }
 
   /** Recheck under serialization to include queued acceptance. */
-  private async tickUnderSerialize(sessionId: string): Promise<void> {
+  private async tickUnderSerialize(sessionId: string, agentIdleMs: number | null): Promise<void> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.deps.isDisposed()) {
       return
@@ -120,8 +123,13 @@ export class StructuredAgentSessionIdleSweep {
       this.deps.sessions.touch(sessionId)
       return
     }
+    // Never only keeps agents running; a handle with no agent still retires on the default window.
+    const idleMs = agentIdleMs ?? (session.child ? null : STRUCTURED_AGENT_SESSION_IDLE_MS)
+    if (idleMs === null) {
+      return
+    }
     const lastActivityAt = this.deps.sessions.lastActivityAt(sessionId) ?? this.deps.now()
-    if (this.deps.now() - lastActivityAt < (this.deps.idleMs ?? STRUCTURED_AGENT_SESSION_IDLE_MS)) {
+    if (this.deps.now() - lastActivityAt < idleMs) {
       return
     }
     if (session.child) {
@@ -137,7 +145,7 @@ export class StructuredAgentSessionIdleSweep {
   private queuedOrDelivering(sessionId: string, session: StructuredAgentSessionHostSession) {
     return (
       this.deps.deliveryActive(sessionId) ||
-      session.journal.submissions().some(isQueuedAgentJournalSubmission)
+      session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission)
     )
   }
 

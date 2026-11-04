@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n, setRendererPluginLanguagePacks, translate } from './i18n'
-import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { DEFAULT_LOCALE } from './supported-languages'
 
 const PACK_ID = 'plugin:smwbev.russian/ru-RU' as const
@@ -17,7 +17,8 @@ async function activatePack(
       resourceLanguage: PACK_RESOURCE,
       pluginKey: 'smwbev.russian',
       locale,
-      catalog
+      catalog,
+      coverage: 100
     }
   ])
   await i18n.changeLanguage(PACK_RESOURCE)
@@ -43,11 +44,9 @@ describe('plugin pack plurals', () => {
     expect(forms([1, 2, 5, 21])).toEqual(['one', 'other', 'other', 'one'])
   })
 
-  it('resolves literal _one/_other call sites through the pack locale plural rules', async () => {
+  it('resolves native plural calls through the pack locale plural rules', async () => {
     const label = (count: number): string =>
-      count === 1
-        ? translate('files_one', '{{count}} file', { count })
-        : translate('files_other', '{{count}} files', { count })
+      translate('files', '{{count}} files', { count, defaultValue_one: '{{count}} file' })
     await activatePack('ru-RU')
     expect([1, 2, 5, 21].map(label)).toEqual(['one', 'few', 'many', 'one'])
   })

@@ -101,6 +101,8 @@ export type GitLabApi = {
       iid: number
       type: 'issue' | 'mr'
       includeReviewDetails?: boolean
+      /** A checks-panel poll: refused rather than booting a stopped WSL distro. */
+      background?: boolean
     }
   ) => Promise<GitLabWorkItemDetails | null>
   closeMR: (

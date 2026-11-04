@@ -12,6 +12,8 @@ export type SshStoreMock = {
   updateTarget: Mock
   removeTarget: Mock
   importFromSshConfig: Mock
+  currentSshRouteSnapshot: Mock
+  refreshSshRouteSnapshot: Mock
   lastRepoReadoptions: { oldTargetId: string; newTargetId: string; repoIds: string[] }[]
 }
 

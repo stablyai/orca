@@ -18,6 +18,7 @@ vi.mock('node:os', async (original) => ({
   homedir: () => state.home
 }))
 vi.mock('electron', () => ({ app: { getPath: () => state.home } }))
+import { parseClaudeCliVersionOutput } from '../claude/claude-hook-event-versions'
 import { ClaudeHookService } from '../claude/hook-service'
 import { describeClaudeProfile } from './claude-profile-paths'
 import { provisionClaudeAccountProfile } from './claude-profile-setup'
@@ -81,6 +82,16 @@ describe('Claude account profile setup', () => {
     })
     expect(realpathSync(join(home, 'projects'))).toBe(realpathSync(join(f.defaultHome, 'projects')))
     expect(existsSync(join(home, '.credentials.json'))).toBe(false)
+    const unknown = parseClaudeCliVersionOutput('11.17.0') ?? undefined
+    const refreshed = await provisionClaudeAccountProfile({
+      dataRoot: f.dataRoot,
+      profile: describeClaudeProfile(f.dataRoot, 'a', local),
+      userHome: state.home,
+      installHooks: (target) => f.service.install({ ...target, claudeVersion: unknown }),
+      platform: 'linux'
+    })
+    expect(refreshed.warnings).toEqual([])
+    expect(JSON.parse(readFileSync(join(home, 'settings.json'), 'utf8'))).toEqual(settings)
     expect((await f.setup()).warnings).toEqual([])
   })
   itLinks('shares plugins Claude wrote into the folder before its first setup', async () => {
@@ -164,24 +175,6 @@ describe('Claude account profile setup', () => {
     expect((await f.setup()).outcome).toBe('refused')
     expect(existsSync(join(f.defaultHome, 'inner', 'a'))).toBe(false)
   })
-  it('refuses a WSL profile on the Windows host side', async () => {
-    fixture()
-    const report = await provisionClaudeAccountProfile({
-      dataRoot: '/home/u/.local/share/orca',
-      profile: describeClaudeProfile('/home/u/.local/share/orca', 'a', {
-        runtime: 'wsl',
-        distro: 'Ubuntu',
-        executionHostId: 'local'
-      }),
-      userHome: state.home,
-      installHooks: null,
-      platform: 'win32'
-    })
-    expect(report.outcome).toBe('refused')
-    expect(report.warnings).toEqual([
-      expect.objectContaining({ surface: 'profile', code: 'invalid-profile' })
-    ])
-  })
   itLinks('reports skipped and failed hook installs without failing the rest', async () => {
     const f = fixture()
     const skipped = await provisionClaudeAccountProfile({
@@ -192,7 +185,10 @@ describe('Claude account profile setup', () => {
       platform: 'linux'
     })
     expect(skipped.surfaces.hooks).toBe('absent')
-    writeFileSync(join(f.defaultHome, 'settings.json'), '{bad')
+    const settings = join(f.dataRoot, 'claude-profiles/a/home/settings.json')
+    writeFileSync(join(f.root, 'bad.json'), '{bad')
+    rmSync(settings, { force: true })
+    symlinkSync(join(f.root, 'bad.json'), settings)
     const failed = await f.setup()
     expect(failed.surfaces.hooks).toBe('failed')
     expect(failed.surfaces.projects).toBe('unchanged')

@@ -7,7 +7,7 @@ import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION,
   RELEASE_SYNCHRONIZED_OUTPUT
-} from '../../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   buildMainModelSnapshotReplayWrites,
   hasPositiveTerminalDimensions,
@@ -129,7 +129,10 @@ export function createReattachPayloadHandlers(
       if (modelSnapshot) {
         // Scan/reset needs composed snapshot bytes; actual writes use alt-screen choreography to preserve scrollback.
         const modelData = `${modelSnapshot.scrollbackAnsi ?? ''}${modelSnapshot.data}`
-        session.rememberReattachPayloadAgentSignal(modelData, { fullScreenReplay: true })
+        session.rememberReattachPayloadAgentSignal(modelData, {
+          fullScreenReplay: true,
+          imageTitle: modelSnapshot.lastTitle
+        })
         const modelCols = modelSnapshot.cols
         const modelRows = modelSnapshot.rows
         if (
@@ -164,7 +167,8 @@ export function createReattachPayloadHandlers(
             modelData,
             Boolean(ctx.connectResult?.coldRestore),
             modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen,
-            modelSnapshot.terminalOwner
+            modelSnapshot.terminalOwner,
+            modelSnapshot.lastTitle
           )
         )
         if (modelSnapshot.pendingEscapeTailAnsi) {
@@ -281,7 +285,7 @@ export function createReattachPayloadHandlers(
         session.showSessionRestoredBanner()
       }
       if (didPrepareResume) {
-        session.clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
+        session.keepResumeRecordAfterColdRestoreSpawn(preparedStartup)
       }
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.
       session.writeInputModeGround(POST_REPLAY_MODE_RESET)

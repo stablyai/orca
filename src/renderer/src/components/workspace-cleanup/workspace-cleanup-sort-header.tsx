@@ -9,11 +9,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import { WORKSPACE_CLEANUP_SORT_FIELD_VALUES } from '../../../../shared/workspace-cleanup-facet-rankings'
+import { WORKSPACE_CLEANUP_SORT_FIELD_VALUES } from '../../../../shared/workspace-cleanup/workspace-cleanup-facet-rankings'
 import type {
   WorkspaceCleanupSortField,
   WorkspaceCleanupSortState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 import { getWorkspaceCleanupSortFieldLabel } from './workspace-cleanup-facet-labels'
 
 export function WorkspaceCleanupSortHeader({
@@ -31,17 +31,11 @@ export function WorkspaceCleanupSortHeader({
 }): React.JSX.Element {
   const allSelected = selectableCount > 0 && selectedCount >= selectableCount
   const someSelected = selectableCount > 0 && selectedCount > 0 && !allSelected
-  const selectAllLabel =
-    selectableCount === 1
-      ? translate(
-          'components.workspace.cleanup.browse.selectAllCountOne',
-          'Select 1 safety-checked workspace'
-        )
-      : translate(
-          'components.workspace.cleanup.browse.selectAllCount',
-          'Select all {{value0}} safety-checked workspaces',
-          { value0: selectableCount }
-        )
+  const selectAllLabel = translate(
+    'components.workspace.cleanup.browse.selectAllSafetyChecked',
+    'Select all {{count}} safety-checked workspaces',
+    { count: selectableCount, defaultValue_one: 'Select {{count}} safety-checked workspace' }
+  )
   return (
     <div className="flex items-center gap-1 border-b border-border bg-muted/25 px-3 py-1.5">
       <button

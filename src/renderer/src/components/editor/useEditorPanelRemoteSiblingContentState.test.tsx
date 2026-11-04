@@ -41,11 +41,18 @@ vi.mock('@/lib/connection-context', () => ({
 
 vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
 
+// Why: these hosts predate saving granted files, so a sibling file still moves to its workspace.
+vi.mock(import('@/runtime/runtime-rpc-client'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => false)
+}))
+
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
 }))
 
-vi.mock('./migrate-restored-editor-file-owner', () => ({
+vi.mock(import('./migrate-restored-editor-file-owner'), async (importOriginal) => ({
+  ...(await importOriginal()),
   migrateRestoredEditorFileOwner: mocks.migrateRestoredEditorFileOwner
 }))
 
@@ -79,7 +86,7 @@ vi.mock('@/store', () => ({
   )
 }))
 
-vi.mock('./useEditorPanelExternalContentEvents', () => ({
+vi.mock('./external-changes/useEditorPanelExternalContentEvents', () => ({
   useEditorPanelExternalContentEvents: vi.fn(),
   usePruneClosedEditorContent: vi.fn()
 }))
@@ -191,6 +198,28 @@ describe('remote sibling editor content routing', () => {
       )
     )
     expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
+  })
+
+  it('reads a local file another workspace contains in place instead of moving its tab', async () => {
+    const activeFile = createOpenFile({
+      id: '/work/repo-b/docs/readme.md',
+      filePath: '/work/repo-b/docs/readme.md',
+      relativePath: '/work/repo-b/docs/readme.md',
+      worktreeId: 'repo-a::/work/repo-a',
+      runtimeEnvironmentId: null
+    })
+    mocks.findWorkspaceFileRoute.mockReturnValue({
+      worktreeId: 'repo-b::/work/repo-b',
+      relativePath: 'docs/readme.md',
+      executionHostId: 'local'
+    })
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: '# readme', isBinary: false })
+
+    await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
+
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# readme'))
+    // Why: moving the active tab to its owner switched the user's workspace.
+    expect(mocks.migrateRestoredEditorFileOwner).not.toHaveBeenCalled()
   })
 
   it('reports a sibling-owner collision instead of remaining in loading state', async () => {

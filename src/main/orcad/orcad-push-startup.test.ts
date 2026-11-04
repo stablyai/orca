@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
+import type { RuntimeConstructionDependencies } from '../runtime/construction/runtime-construction-dependencies'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { DeviceRegistry } from '../runtime/device-registry'
 import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
@@ -10,6 +11,11 @@ import { PushUnregisterOutbox } from '../runtime/push/push-unregister-outbox'
 import { createPushHostKeypair } from '../runtime/push/push-host-challenge-fixtures'
 import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
 import { profileStateAccessPaths } from '../persistence/profile-state/profile-state-access-owner'
+
+const pairingReader = vi.hoisted(() => {
+  const reader: { current?: RuntimeConstructionDependencies['getPairedDeviceName'] } = {}
+  return reader
+})
 
 const state = vi.hoisted(() => ({
   root: '',
@@ -29,12 +35,16 @@ const state = vi.hoisted(() => ({
   refreshOpenCodePlugins: vi.fn(),
   adoptLoginShellAgentHomes: vi.fn(async () => {})
 }))
+const codexStart = vi.hoisted(() => {
+  const value: { settledAtPublish: boolean | null } = { settledAtPublish: null }
+  return value
+})
 const profile = vi.hoisted(() => {
   const value: { settings: Partial<GlobalSettings> } = { settings: {} }
   return value
 })
 // Reconciliation writes user-global agent configs; isolate it from the real home.
-vi.mock('../codex/codex-hook-reconcile', async (importOriginal) => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   startCodexHooks: state.startCodexHooks
 }))
@@ -49,7 +59,7 @@ vi.mock('../agent-hooks/local-agent-cli-presence', async (importOriginal) => ({
 vi.mock('../agent-hooks/agent-home-login-shell', () => ({
   adoptLoginShellAgentHomes: state.adoptLoginShellAgentHomes
 }))
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
 vi.mock('../opencode/opencode-status-plugin-startup-refresh', () => ({
@@ -127,11 +137,25 @@ vi.mock('../orca-profiles/profile-index-store', () => ({
 vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile() {} }))
 vi.mock('../server/serve-readiness', () => ({
   ServeReadinessPublisher: class {
-    async publish() {}
+    async publish() {
+      const startAfter: Promise<void> | undefined =
+        state.startCodexHooks.mock.calls[0]?.[0]?.startAfter
+      if (startAfter) {
+        let settled = false
+        void startAfter.then(() => {
+          settled = true
+        })
+        await new Promise((resolve) => setImmediate(resolve))
+        codexStart.settledAtPublish = settled
+      }
+    }
   }
 }))
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
+    constructor(_store: unknown, _stats: unknown, deps: RuntimeConstructionDependencies) {
+      pairingReader.current = deps.getPairedDeviceName
+    }
     readonly sidebarFacts = null
     readonly agentTransitions = { seedRestoredRows() {} }
     attachAgentStatusStore() {
@@ -152,6 +176,7 @@ vi.mock('../runtime/orca-runtime', () => ({
       return null
     }
     syncWindowGraph() {}
+    setAgentSenderPeerKey() {}
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]
     ) {
@@ -209,21 +234,43 @@ afterEach(() => {
   rmSync(state.root, { recursive: true, force: true })
   state.profileStartupErrors.length = 0
   profile.settings = {}
+  codexStart.settledAtPublish = null
   vi.clearAllMocks()
 })
 
 it('refuses recovery overlap before initializing the browser provider or runtime', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-recovery-'))
   const maintenance = acquireProfileStateMaintenance(state.root)
-  const { startOrcad, parseArgs } = await import('./orcad-entry')
-  const commandArguments = await import('./orcad-command-arguments')
+  const { startOrcad } = await import('./orcad-entry')
   try {
-    expect(parseArgs).toBe(commandArguments.parseArgs)
     await expect(startOrcad({ noPairing: true, json: true })).rejects.toThrow()
     expect(state.browserProvider).not.toHaveBeenCalled()
     expect(state.rpcStarted).toBe(false)
   } finally {
     maintenance.release()
+  }
+})
+
+it('reads live pairing names from the standalone RPC registry', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-names-'))
+  state.controller = new RuntimeMobileNotificationController()
+  state.registry = new DeviceRegistry(state.root)
+  const { startOrcad } = await import('./orcad-entry')
+  const host = await startOrcad({ noPairing: true, json: true })
+  try {
+    const desktop = state.registry.addDevice('Work Mac', 'runtime')
+    const [phone] = state.registry.upsertDelegatedMobileDevices(desktop, [
+      { phoneKey: 'phone-1', name: 'My iPhone' }
+    ])
+    expect(pairingReader.current?.(desktop.deviceId)).toBe('Work Mac')
+    expect(pairingReader.current?.(phone!.deviceId)).toBe('My iPhone')
+    state.registry.upsertDelegatedMobileDevices(desktop, [
+      { phoneKey: 'phone-1', name: 'Renamed iPhone' }
+    ])
+    expect(pairingReader.current?.(phone!.deviceId)).toBe('Renamed iPhone')
+    expect(pairingReader.current?.('unpaired')).toBeNull()
+  } finally {
+    await host.stop()
   }
 })
 
@@ -346,6 +393,20 @@ it('disconnects a daemon still spawning only after it settles, when the hook ser
   acquireProfileStateMaintenance(state.root).release()
 })
 
+it('disconnects the daemon when startup throws between its spawn and the stores', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-early-throw-'))
+  const observability = await import('./orcad-observability')
+  vi.spyOn(observability, 'installOrcadObservability').mockImplementationOnce(() => {
+    throw new Error('observability init failed')
+  })
+  const { startOrcad } = await import('./orcad-entry')
+
+  await expect(startOrcad()).rejects.toThrow('observability init failed')
+
+  expect(state.startDaemon).toHaveBeenCalledOnce()
+  expect(state.stopDaemon).toHaveBeenCalledOnce()
+})
+
 it('installs agent status hooks on the host when it starts', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-hooks-'))
   const { startOrcad } = await import('./orcad-entry')
@@ -353,6 +414,9 @@ it('installs agent status hooks on the host when it starts', async () => {
   try {
     expect(state.startCodexHooks).toHaveBeenCalledOnce()
     expect(state.startCodexHooks.mock.calls[0]![0].resolveLaunchHome()).toBeNull()
+    // Codex's PATH scan waits for readiness to publish, then runs.
+    expect(codexStart.settledAtPublish).toBe(false)
+    await state.startCodexHooks.mock.calls[0]![0].startAfter
     await vi.waitFor(() =>
       expect(state.installManagedAgentHooks).toHaveBeenCalledWith(
         profile.settings,

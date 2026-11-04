@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { ModelManager } from '../speech/model-manager'
 import type { SttService } from '../speech/stt-service'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
@@ -98,7 +98,7 @@ vi.mock('node:worker_threads', async () => {
         if (message.type === 'init' && environment.readyOnInit) {
           queueMicrotask(() => this.emit('message', { type: 'ready' }))
         }
-        if (message.type === 'stop' && this.emitStoppedOnStop) {
+        if ((message.type === 'stop' && this.emitStoppedOnStop) || message.type === 'discard') {
           queueMicrotask(() => this.emit('message', { type: 'stopped' }))
         }
       }

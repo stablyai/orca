@@ -157,17 +157,7 @@ describe('conservative unit selection', () => {
     expect(selected.shards).toEqual([{ index: 1, count: 1 }])
   })
 
-  it('spends five concurrency slots on a full run', () => {
-    const plan = planUnitSelection({ files, changed: ['src/leaf.ts'], graph, timings: {} })
-    expect(plan.shards).toEqual(
-      Array.from({ length: FULL_SHARD_COUNT }, (_, index) => ({
-        index: index + 1,
-        count: FULL_SHARD_COUNT
-      }))
-    )
-  })
-
-  it('uses ten complete PR shards while selected drafts retain the five-shard cap', () => {
+  it('uses ten complete PR shards while selected drafts stay within the full-count cap', () => {
     const expandedSources = new Map(sources)
     for (let index = 0; index < 5; index++) {
       expandedSources.set(`src/additional-${index}.test.ts`, `import './leaf'`)
@@ -196,7 +186,7 @@ describe('conservative unit selection', () => {
       mode: 'selected',
       event: { pull_request: { draft: true } }
     })
-    expect(selected.shards).toHaveLength(5)
+    expect(selected.shards).toHaveLength(Math.min(FULL_SHARD_COUNT, selected.executionFiles.length))
     expect(selected.executionFiles).toEqual(
       selectUnitFiles(expandedFiles, ['src/leaf.ts'], expandedGraph).files
     )

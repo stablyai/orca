@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { projectRemovalTargets } from '../../removal-unsaved-files'
+import { projectRemovalTargets } from '../../workspace-actions/deletion/removal-unsaved-files'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
@@ -19,7 +19,12 @@ import {
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
-  | { type: 'rename'; groupId: string; currentName: string; hostId?: ExecutionHostId }
+  | {
+      type: 'rename'
+      groupId: string
+      currentName: string
+      hostId?: ExecutionHostId
+    }
 
 export type ProjectGroupDeleteDialogState = {
   groupId: string
@@ -56,18 +61,16 @@ function reportProjectGroupDeleteFailures(result: {
         'Some projects could not be removed from Orca'
       ),
       {
-        description:
-          requestedCount === 1
-            ? translate(
-                'auto.components.sidebar.WorktreeList.groupProjectsRemainedSingular',
-                '{{remaining}} of {{count}} contained project remained after deleting the group.',
-                { remaining: result.failedProjectRemovals.length, count: requestedCount }
-              )
-            : translate(
-                'auto.components.sidebar.WorktreeList.groupProjectsRemainedPlural',
-                '{{remaining}} of {{count}} contained projects remained after deleting the group.',
-                { remaining: result.failedProjectRemovals.length, count: requestedCount }
-              )
+        description: translate(
+          'auto.components.sidebar.WorktreeList.groupProjectsRemained',
+          '{{remaining}} of {{count}} contained projects remained after deleting the group.',
+          {
+            remaining: result.failedProjectRemovals.length,
+            count: requestedCount,
+            defaultValue_one:
+              '{{remaining}} of {{count}} contained project remained after deleting the group.'
+          }
+        )
       }
     )
   }

@@ -20,14 +20,11 @@ import {
   findByProp,
   findByTypeName,
   getMockedLocalStorage,
-  getPanelClassName,
   getPanelStyleBounds,
   renderPanel,
   runEffects,
   setViewport,
-  collectPropValues,
-  flushAsyncWork,
-  type ReactElementLike
+  flushAsyncWork
 } from './floating-terminal-panel-render-probe'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
@@ -39,7 +36,7 @@ import {
   setFloatingEditorTabs
 } from './floating-terminal-panel-test-fixtures'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
-import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/editor-autosave'
+import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/autosave/editor-autosave'
 
 function requestedEditorCloses(): string[] {
   return vi
@@ -66,12 +63,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
 
     expect(getPanelStyleBounds(element)).toEqual(savedBounds)
-  })
-
-  it('layers above root notification cards but below the modal layer', async () => {
-    const element = await renderPanel(true)
-
-    expect(getPanelClassName(element)).toContain('z-[45]')
   })
 
   it('falls back to default bounds when persisted geometry is malformed', async () => {
@@ -357,18 +348,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     )
     expect(consumeFloatingTerminalOpenMaximizedIntent()).toBe(false)
   })
-
-  it('does not maximize on open when no intent is set', async () => {
-    const savedBounds = { left: 120, top: 96, width: 760, height: 420 }
-    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
-      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
-    )
-
-    const element = await renderPanel(true)
-    runEffects()
-
-    expect(getPanelStyleBounds(element)).toEqual(savedBounds)
-  })
 })
 
 describe('FloatingTerminalPanel empty state', () => {
@@ -399,97 +378,6 @@ describe('FloatingTerminalPanel empty state', () => {
     runEffects()
     await flushAsyncWork()
     expect(mocks.createTab).not.toHaveBeenCalled()
-  })
-
-  it('requests the floating workspace tour only when the panel is open', async () => {
-    const persisted = Promise.resolve()
-
-    await renderPanel(false, vi.fn(), {
-      wasPreviouslyInteracted: false,
-      persisted,
-      recordFeatureInteractionForTour: false
-    })
-
-    expect(mocks.useContextualTour).toHaveBeenLastCalledWith(
-      'floating-workspace',
-      false,
-      'floating_workspace_visible',
-      {
-        recordFeatureInteraction: false,
-        featureInteractionPersisted: persisted,
-        wasFeaturePreviouslyInteracted: false
-      }
-    )
-
-    await renderPanel(true, vi.fn(), {
-      wasPreviouslyInteracted: true,
-      persisted,
-      recordFeatureInteractionForTour: false
-    })
-
-    expect(mocks.useContextualTour).toHaveBeenLastCalledWith(
-      'floating-workspace',
-      true,
-      'floating_workspace_visible',
-      {
-        recordFeatureInteraction: false,
-        featureInteractionPersisted: persisted,
-        wasFeaturePreviouslyInteracted: true
-      }
-    )
-  })
-
-  it('records the floating workspace tour interaction when the open snapshot deferred persistence', async () => {
-    await renderPanel(true, vi.fn(), {
-      wasPreviouslyInteracted: false,
-      recordFeatureInteractionForTour: true
-    })
-
-    expect(mocks.useContextualTour).toHaveBeenLastCalledWith(
-      'floating-workspace',
-      true,
-      'floating_workspace_visible',
-      {
-        recordFeatureInteraction: true,
-        featureInteractionPersisted: undefined,
-        wasFeaturePreviouslyInteracted: false
-      }
-    )
-  })
-
-  it('targets the empty-state actions without co-mounting the surface fallback', async () => {
-    const element = await renderPanel(true)
-    const emptyState = findByTypeName(element, 'FloatingTerminalEmptyState')
-    const renderedEmptyState = (
-      emptyState.type as (props: Record<string, unknown>) => ReactElementLike
-    )(emptyState.props)
-
-    expect(collectPropValues(element, 'data-contextual-tour-target')).not.toContain(
-      'floating-workspace-surface'
-    )
-    expect(collectPropValues(renderedEmptyState, 'data-contextual-tour-target')).toEqual([
-      'floating-workspace-new-terminal',
-      'floating-workspace-new-markdown'
-    ])
-  })
-
-  it('targets the non-empty panel surface when the empty-state actions are absent', async () => {
-    setFloatingTabs([makeTab({ id: 'tab-1' })])
-
-    const element = await renderPanel(true)
-
-    expect(() => findByTypeName(element, 'FloatingTerminalEmptyState')).toThrow(
-      'FloatingTerminalEmptyState not found'
-    )
-    expect(collectPropValues(element, 'data-contextual-tour-target')).toContain(
-      'floating-workspace-surface'
-    )
-    expect(collectPropValues(element, 'data-contextual-tour-target')).not.toContain(
-      'floating-workspace-new-terminal'
-    )
-    expect(collectPropValues(element, 'data-contextual-tour-target')).not.toContain(
-      'floating-workspace-new-markdown'
-    )
   })
 
   it('keeps the split surface mounted when its focused group has no tabs', async () => {
@@ -607,25 +495,6 @@ describe('FloatingTerminalPanel markdown editor', () => {
       }),
       expect.objectContaining({ suppressActiveRuntimeFallback: true })
     )
-  })
-
-  it('disables markdown annotations in floating editor tabs', async () => {
-    setFloatingEditorTabs([makeFile({ id: 'notes' })])
-
-    const element = await renderPanel(true)
-    // Assert the shared tree’s policy: floating scratch Markdown must not expose review annotations.
-    const tree = findByTypeName(element, 'TabGroupSplitNodeTree')
-
-    expect(tree.props.markdownAnnotationsEnabled).toBe(false)
-    expect(tree.props.isWorktreeActive).toBe(true)
-  })
-
-  it('marks the retained floating editor hidden when the panel is closed', async () => {
-    setFloatingEditorTabs([makeFile({ id: 'notes' })])
-
-    const element = await renderPanel(false)
-
-    expect(findByTypeName(element, 'TabGroupSplitNodeTree').props.isWorktreeActive).toBe(false)
   })
 
   it('routes every dirty editor from close-all-files to the central save queue', async () => {

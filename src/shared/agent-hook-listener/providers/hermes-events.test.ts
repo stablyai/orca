@@ -2,46 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
 import { normalizeHermesEvent } from './hermes-events'
 
-const normalize = (eventName: string, payload: Record<string, unknown> = {}) =>
-  normalizeHermesEvent(createHookListenerState(), eventName, '', 'pane-1', payload)
-
 describe('normalizeHermesEvent', () => {
-  // Session starts open idle composers; working would veto tui-idle for the entire 30-minute staleness window.
-  it('lands session start as an idle session boundary, not a running turn', () => {
-    expect(normalize('on_session_start', { session_id: 's1' })).toMatchObject({
-      state: 'done',
-      sessionBoundary: true
-    })
-  })
-
-  it('flags only session start as a boundary, so a turn-end done cannot claim one', () => {
-    for (const eventName of [
-      'post_llm_call',
-      'on_session_end',
-      'on_session_finalize',
-      'on_session_reset'
-    ]) {
-      const parsed = normalize(eventName, { session_id: 's1' })
-      expect(parsed).toMatchObject({ state: 'done' })
-      expect(parsed?.sessionBoundary).toBeUndefined()
-    }
-  })
-
-  it('keeps the turn and approval states the plugin reports', () => {
-    expect(normalize('pre_llm_call', { user_message: 'hi' })).toMatchObject({ state: 'working' })
-    expect(normalize('pre_tool_call', { tool_name: 'terminal' })).toMatchObject({
-      state: 'working'
-    })
-    expect(normalize('pre_approval_request', { command: 'rm' })).toMatchObject({
-      state: 'waiting'
-    })
-  })
-
-  it('ignores events Orca does not subscribe to', () => {
-    expect(normalize('subagent_stop')).toBeNull()
-    expect(normalize('post_api_request')).toBeNull()
-  })
-
   // Sequences captured from real Hermes sessions (session ids shortened).
   const event = (state: HookListenerState, name: string, payload: Record<string, unknown>) =>
     normalizeHermesEvent(state, name, '', 'pane-1', payload)

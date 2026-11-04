@@ -4,8 +4,8 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
-import type { Store } from '../persistence'
-import { resolveLocalFileRequestPath } from '../ipc/local-file-access-resolution'
+import type { Store } from '../persistence/loading-store/store'
+import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
 import { readLocalFileContent } from '../ipc/filesystem/filesystem-file-content-inspection'
 import { isInsideNativeChatPasteFolder, restoreNativeChatPastes } from './native-chat-paste-files'
 

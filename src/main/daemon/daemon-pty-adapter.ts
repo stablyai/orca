@@ -2,13 +2,13 @@ import {
   isPtyFencedTerminationOutcome,
   type PtyFencedTerminationRequest,
   type PtyFencedTerminationOutcome
-} from '../../shared/pty-fenced-termination'
+} from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import { FENCED_TERMINATION_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import type { DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { logWslPaneDiagnostic } from './daemon-wsl-diagnostic-log'
 import { classifyWslBridgeExit, WSL_DISTRO_LOSS_EXIT_CODE } from './daemon-wsl-bridge-exit'
-import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
+import { isProvenProcessExit } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
@@ -194,7 +194,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         // Kept per incarnation: the report can land before its own spawn reply.
         this.inputClosedIncarnations.record(event.sessionId, event.payload.incarnationId)
       } else if (event.event === 'exit') {
-        const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
+        const currentIncarnationId = this.ptyInventory.currentIncarnation(event.sessionId)
         const pendingOperations = new Set([
           ...(this.pendingSpawnOperationsBySessionId.get(event.sessionId) ?? []),
           ...this.pendingClaimSpawnOperations
@@ -205,11 +205,11 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             continue
           }
           const exits = operation.exitsBySessionId.get(event.sessionId) ?? []
-          exits.push(
-            event.payload.incarnationId
-              ? { code: event.payload.code, incarnationId: event.payload.incarnationId }
-              : { code: event.payload.code }
-          )
+          exits.push({
+            code: event.payload.code,
+            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}),
+            ...(event.payload.cause ? { cause: event.payload.cause } : {})
+          })
           operation.exitsBySessionId.set(event.sessionId, exits)
         }
         const wslDistro = this.wslDistrosBySessionId.get(event.sessionId)

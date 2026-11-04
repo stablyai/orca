@@ -1,11 +1,15 @@
 import { existsSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { Worker } from 'node:worker_threads'
-import { currentWorkerEntryLayout } from '../worker-thread-entry-path'
+import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
 import type { CursorDesktopProfileReadResult } from './cursor-profile-result'
 import { ForeignSqliteReaderClient } from './foreign-sqlite-reader-client'
 import { resolveForeignSqliteReaderEntryPath } from './foreign-sqlite-reader-entry-path'
 import type { BinderSessionRow, OpenCodeSessionCursor } from './opencode-binder-sessions-result'
+import type {
+  OpenCodePromptFailureQuery,
+  OpenCodePromptFailureResult
+} from './opencode-prompt-failure-result'
 
 function defaultWorkerFactory(): Worker {
   const workerPath = resolveForeignSqliteReaderEntryPath(currentWorkerEntryLayout(__dirname))
@@ -24,6 +28,12 @@ function getSharedClient(): ForeignSqliteReaderClient {
 
 export function readCursorDesktopProfile(dbPath: string): Promise<CursorDesktopProfileReadResult> {
   return getSharedClient().readCursorProfile(dbPath)
+}
+
+export function readOpenCodePromptFailure(
+  query: OpenCodePromptFailureQuery
+): Promise<OpenCodePromptFailureResult> {
+  return getSharedClient().readOpenCodePromptFailure(query)
 }
 
 /** Return oldest-first rows after cursor; unreadable or unavailable readers answer []. */
