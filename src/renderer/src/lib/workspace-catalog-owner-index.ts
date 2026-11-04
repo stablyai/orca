@@ -22,10 +22,10 @@ export function buildCatalogOwnerIndex<
 ): ReadonlyMap<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }> {
   const next = new Map<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }>()
   for (const [position, record] of records.entries()) {
-    if (firstDisplayPositions && !firstDisplayPositions.has(record.id)) {
-      firstDisplayPositions.set(record.id, position)
-    }
     const id = record.id
+    if (firstDisplayPositions && !firstDisplayPositions.has(id)) {
+      firstDisplayPositions.set(id, position)
+    }
     const hostId = getCatalogOwnerHostId(record)
     const current = next.get(id)
     if (!current) {

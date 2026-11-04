@@ -25,6 +25,7 @@ import { useSettingsPageEffects } from './page/use-settings-page-effects'
 import type { SettingsRenderContext } from './page/settings-render-context'
 import type { SettingsStoreModel } from './page/use-settings-store-model'
 import type { SettingsInteractionController } from './page/use-settings-interaction-controller'
+import { useSettingsHostNavigation } from './host-scope/use-settings-host-navigation'
 
 vi.mock('./repository/RepositoryPane', () => ({
   RepositoryPane: () => <output>Project pane</output>
@@ -83,6 +84,7 @@ it.each(['host', 'folder'] as const)(
         sectionId: 'repo-same',
         hostId
       } as const)
+      const { consumeSettingsNavigation } = useSettingsHostNavigation(target)
       const partialModel: Partial<SettingsStoreModel> = {
         ...state,
         settings,
@@ -90,6 +92,7 @@ it.each(['host', 'folder'] as const)(
         repoIdToHostSelection,
         repoIdToRepresentative,
         settingsNavigationTarget: target,
+        consumeSettingsNavigation,
         activeSectionId: 'general',
         clearSettingsTarget: noop,
         fetchSettings: fetch,
@@ -124,6 +127,7 @@ it.each(['host', 'folder'] as const)(
       const partialContext: {
         [K in keyof SettingsRenderContext]?: Partial<SettingsRenderContext[K]>
       } = {
+        interactions,
         model: {
           ...model,
           settings,

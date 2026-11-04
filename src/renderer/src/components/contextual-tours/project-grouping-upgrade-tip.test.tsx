@@ -16,6 +16,7 @@ import type { SettingsInteractionController } from '../settings/page/use-setting
 import type { SettingsNavigationModel } from '../settings/navigation/use-settings-navigation-model'
 import type { SettingsTerminalModel } from '../settings/page/use-settings-terminal-model'
 import { useProjectGroupingUpgradeTip } from './use-project-grouping-upgrade-tip'
+import { useSettingsHostNavigation } from '../settings/host-scope/use-settings-host-navigation'
 import { getLocalizedContextualTourStepCopy } from './contextual-tour-step-copy'
 
 const audience = {
@@ -149,6 +150,7 @@ function SettingsDestination() {
       settingsSearchQuery: state.settingsSearchQuery
     }))
   )
+  const { consumeSettingsNavigation } = useSettingsHostNavigation(state.settingsNavigationTarget)
   const [activeSectionId, setActiveSectionId] = useState('appearance')
   const [mountedSectionIds, setMountedSectionIds] = useState(new Set<string>())
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
@@ -174,6 +176,7 @@ function SettingsDestination() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: uses real store navigation/clear actions with all local page/scroll fields supplied.
   const model = {
     ...state,
+    consumeSettingsNavigation,
     activeSectionId,
     setActiveSectionId,
     mountedSectionIds,

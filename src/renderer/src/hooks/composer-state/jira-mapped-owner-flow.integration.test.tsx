@@ -167,6 +167,16 @@ function renderMappedComposer(configured = true) {
   })
 }
 
+function selectProject(result: ReturnType<typeof renderMappedComposer>['result'], repoId: string) {
+  const option = result.current.target.runtimeTargetSelection.projectOptions.find(
+    (option) => option.kind === 'project' && option.checkout?.repoId === repoId
+  )
+  if (!option) {
+    throw new Error(`Expected a project option for ${repoId}`)
+  }
+  act(() => result.current.source.projectTargetActions.handleProjectChange(option.id))
+}
+
 beforeEach(() => {
   vi.resetAllMocks()
   clearRuntimeCompatibilityCacheForTests()
@@ -275,9 +285,9 @@ describe('mapped Jira owner A to SSH execution owner B', () => {
     act(() =>
       result.current.source.issueSourceActions.handleSmartJiraIssueSelect(row.issue, boundSource)
     )
-    act(() => result.current.source.projectTargetActions.handleProjectChange('repo:local-repo'))
+    selectProject(result, localRepo.id)
     expect(result.current.target.runtimeTargetSelection.selectedRepo).toBe(localRepo)
-    act(() => result.current.source.projectTargetActions.handleProjectChange('repo:ssh-repo'))
+    selectProject(result, executionRepo.id)
     expect(result.current.target.runtimeTargetSelection.selectedRepo?.connectionId).toBe(
       'execution-b'
     )
@@ -336,9 +346,9 @@ describe('mapped Jira owner A to SSH execution owner B', () => {
     seedRepos([localRepo, { ...executionRepo, defaultJiraProject: alpha }])
     const { result } = renderMappedComposer()
     expect(result.current.lookup.jiraProject).toEqual(alpha)
-    act(() => result.current.source.projectTargetActions.handleProjectChange('repo:local-repo'))
+    selectProject(result, localRepo.id)
     expect(result.current.lookup.jiraProject).toBeNull()
-    act(() => result.current.source.projectTargetActions.handleProjectChange('repo:ssh-repo'))
+    selectProject(result, executionRepo.id)
     expect(result.current.lookup.jiraProject).toEqual(alpha)
     act(() => useAppStore.setState({ sshTargetLabels: new Map() }))
     expect(result.current.target.runtimeTargetSelection.selectedWorkspaceTarget.status).toBe(

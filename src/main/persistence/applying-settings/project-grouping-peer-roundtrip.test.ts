@@ -55,7 +55,7 @@ vi.mock('electron', () => ({
   webContents: { getAllWebContents: () => [] }
 }))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../claude/agent-view-service', () => ({
+vi.mock('../../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
 beforeEach(() => {

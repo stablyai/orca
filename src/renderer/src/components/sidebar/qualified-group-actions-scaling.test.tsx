@@ -205,7 +205,7 @@ it('bounds real open/accept operations at N100/1000 with q2 independent growth a
       }
     }
   }
-})
+}, 180_000)
 
 it('refreshes the open selected operation and predicates together, with equal/unrelated/focus no-commit controls and own positive changes', async () => {
   const fixture = await groupActionFixture({

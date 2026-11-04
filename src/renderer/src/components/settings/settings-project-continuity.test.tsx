@@ -22,6 +22,7 @@ import {
 import { buildSettingsViewModel, useSettingsNavigationActions } from './page/settings-view-model'
 import { renderSettingsPage } from './page/settings-page-renderer'
 import { LOCAL_SETTINGS_HOST_SCOPE } from './host-scope/settings-host-scope'
+import { useSettingsHostNavigation } from './host-scope/use-settings-host-navigation'
 import type { SettingsStoreModel } from './page/use-settings-store-model'
 import { useSettingsInteractionController } from './page/use-settings-interaction-controller'
 import type { SettingsRenderContext } from './page/settings-render-context'
@@ -149,6 +150,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
       }))
     )
     const grouping = useAppStore(getProjectGroupingModelFromState)
+    const hostNavigation = useSettingsHostNavigation(state.settingsNavigationTarget)
     const entries = useMemo(
       () => buildSettingsProjectList(state.repos, grouping),
       [state.repos, grouping]
@@ -162,6 +164,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all fields read by continuity/actions/renderer are supplied.
     const raw = {
       ...state,
+      ...hostNavigation,
       settingsProjectList: entries,
       activeSectionId,
       setActiveSectionId,

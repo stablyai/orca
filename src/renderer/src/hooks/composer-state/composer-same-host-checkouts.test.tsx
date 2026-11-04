@@ -3,6 +3,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired-name-registry'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
@@ -69,7 +70,7 @@ function renderComposerFor(repo: Repo) {
   const repos = [mainClone, reviewClone]
   const projection = projectHostSetupProjectionFromRepos(repos)
   useAppStore.setState({
-    settings: null,
+    settings: createGlobalSettingsFixture({ projectGroupingMode: 'folder' }),
     repos,
     projects: [...projection.projects],
     projectHostSetups: [...projection.setups],
@@ -110,7 +111,7 @@ function checkoutOptionId(
   return option.id
 }
 
-describe('same-host checkouts of one remote', () => {
+describe('folder grouping for same-host checkouts of one remote', () => {
   it('opens on the checkout it was started from and lists both checkouts', () => {
     const { result } = renderComposerFor(reviewClone)
     const selection = result.current.runtimeTargetSelection

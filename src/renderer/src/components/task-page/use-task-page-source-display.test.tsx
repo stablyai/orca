@@ -9,6 +9,7 @@ import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../../../shared/github/wor
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import { getTaskPageRepoCacheRows } from './task-page-cache-selectors'
@@ -96,10 +97,15 @@ vi.mock('./task-page-cache-selectors', async (importOriginal) => {
 
 installSourceDisplayTestLifecycle()
 
-function mount(repos: Repo[], query = Q1) {
+function mount(
+  repos: Repo[],
+  query = Q1,
+  projectGroupingMode: 'repository' | 'host' = 'repository'
+) {
   useAppStore.setState({
     repos,
     settings: createGlobalSettingsFixture({
+      projectGroupingMode,
       defaultRepoSelection: [...new Set(repos.map((r) => r.id))]
     }),
     taskPageData: { taskSource: 'github' }
@@ -211,7 +217,7 @@ describe('Tasks source display', () => {
   })
 
   it('keeps each host copy and selected row on its own history', async () => {
-    mount([repo, sshTwin])
+    mount([repo, sshTwin], Q1, 'host')
     await fetchList(repo, Q1, sources(fork))
     applyQuery(Q2)
     expect(view.githubSourceDisplayState.map((state) => state.sources?.issues ?? null)).toEqual([
@@ -223,7 +229,8 @@ describe('Tasks source display', () => {
     expect(setIssueSourcePreference).toHaveBeenCalledWith('repo', '/repo', 'origin', 'local')
 
     // A row that leaves the selection forgets its history.
-    act(() => view.setRepoSelection(new Set()))
+    act(() => view.setRepoSelection(new Set([getRepoHostIdentity(sshTwin)])))
+    expect(view.selectedRepos).toEqual([sshTwin])
     act(() => view.setRepoSelection(new Set(['repo'])))
     expect(view.githubSourceDisplayState.map((state) => state.sources?.issues ?? null)).toEqual([
       null,

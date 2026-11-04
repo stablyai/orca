@@ -260,7 +260,7 @@ export function useHostViewSettings(args: {
     [client, applyViewState, persistViewSettings, pendingChanges, refused]
   )
   const toggleWorktreeLineage = useCallback(
-    (item: Worktree) =>
+    (item: Worktree & { lineageGroupKey?: string }) =>
       toggleCollapsed(item.lineageGroupKey ?? getMobileWorkspaceLineageGroupKey(item)),
     [toggleCollapsed]
   )

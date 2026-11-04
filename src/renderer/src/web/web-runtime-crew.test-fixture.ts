@@ -120,6 +120,8 @@ export async function verifyCrewPrimary(client: WebRuntimeClient): Promise<CrewS
     ok: true,
     result: {
       runtimeId: 'rt',
+      runtimeProtocolVersion: 3,
+      minCompatibleRuntimeClientVersion: 2,
       rendererGraphEpoch: 1,
       graphStatus: 'ready',
       authoritativeWindowId: null,

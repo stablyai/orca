@@ -73,7 +73,13 @@ beforeEach(() => {
     value: {
       ui: { set: vi.fn().mockResolvedValue(undefined) },
       cli: { getInstallStatus: vi.fn().mockResolvedValue({ supported: false }) },
-      onboarding: { getChatUiLaunchTipVariant: vi.fn().mockResolvedValue('chat-ui-off') }
+      onboarding: {
+        getChatUiLaunchTipVariant: vi.fn().mockResolvedValue('chat-ui-off'),
+        getProjectGroupingUpgradeTipAudience: vi.fn().mockResolvedValue({
+          version: 1,
+          membership: 'excluded'
+        })
+      }
     }
   })
   container = document.createElement('div')

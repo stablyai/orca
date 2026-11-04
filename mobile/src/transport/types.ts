@@ -1,5 +1,4 @@
 import type { RelayHostReachability } from './relay-host-reachability'
-import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import type { RpcEnvelopeFields } from './rpc-envelope-fields'
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
@@ -40,6 +39,8 @@ export type RpcResponse = RpcSuccess | RpcFailure
 export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 
 export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay'
+
+export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
 export type ConnectionDiagnosticCode =
   | 'native-render-failed'

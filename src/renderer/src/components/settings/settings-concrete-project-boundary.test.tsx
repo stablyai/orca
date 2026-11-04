@@ -106,6 +106,7 @@ it('keeps retained server Settings available without borrowing local hooks/path/
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies every field read by renderProjectSettingsSections.
     const context = {
       model,
+      interactions: { writeSourceControlAiSettings: vi.fn(async () => {}) },
       navigation,
       terminal,
       view: { isSectionMounted: () => true }

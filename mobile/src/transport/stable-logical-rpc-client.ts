@@ -1,4 +1,4 @@
-import type { ConnectionState, RpcResponse } from './types'
+import type { ConnectionState, MobileConnectionPath, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
 import {
   forwardMigrationDialState,
@@ -11,7 +11,7 @@ import type { RelayHostReachability } from './relay-host-reachability'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { LogicalClientSuspendedError } from './logical-client-suspended-error'
 
-export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
+export type { MobileConnectionPath } from './types'
 
 export class LogicalClientCutoverError extends Error {
   constructor(cause?: unknown) {

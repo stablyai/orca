@@ -14,7 +14,7 @@ import { createGlobalSettingsFixture } from '../../../../../shared/global-settin
 import type { Repo } from '../../../../../shared/repo-types'
 
 let sourceFixture:
-  | Pick<TaskPageComposerActionsModel, 'selectedRepos' | 'perRepoSourceState'>
+  | Pick<TaskPageComposerActionsModel, 'selectedRepos' | 'githubSourceDisplayState'>
   | undefined
 
 vi.mock('../Surface', () => ({
@@ -243,7 +243,7 @@ it.each([
       badgeColor: 'gray',
       addedAt: 0
     }))
-    const perRepoSourceState = Array.from({ length: sourceCount }, (_, i) => ({
+    const githubSourceDisplayState = Array.from({ length: sourceCount }, (_, i) => ({
       repoId: `repo-${repoCount - 1}`,
       hostId: 'runtime:server' as const,
       repoPath: `/repo-${repoCount - 1}`,
@@ -256,7 +256,7 @@ it.each([
       },
       error: null
     }))
-    sourceFixture = { selectedRepos, perRepoSourceState }
+    sourceFixture = { selectedRepos, githubSourceDisplayState }
     await renderFilters()
     expect(
       screen.getAllByTitle(new RegExp(`^Selected ${repoCount - 1}: Issues from upstream/`))
@@ -295,7 +295,7 @@ it('keeps source-chip exact host/first record, missing fallback and meaningful s
   ]
   sourceFixture = {
     selectedRepos: rows,
-    perRepoSourceState: [
+    githubSourceDisplayState: [
       {
         repoId: 'same',
         hostId: 'runtime:server',

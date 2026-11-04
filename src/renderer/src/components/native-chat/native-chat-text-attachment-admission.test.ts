@@ -20,6 +20,11 @@ const host = {
   runtimeId: 'runtime35636',
   protocolVersion: 3,
   minCompatibleMobileVersion: 2,
+  rendererGraphEpoch: 0,
+  graphStatus: 'ready',
+  authoritativeWindowId: null,
+  liveTabCount: 0,
+  liveLeafCount: 0,
   capabilities: ['native-chat.text-attachment-read.v1']
 }
 type Frame = { id: string; method: string; params?: { offset: number; length: number } }
