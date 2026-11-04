@@ -18007,6 +18007,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "Der gespeicherte Ausführungshost stimmt nicht mehr mit dieser Projekteinrichtung überein."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Agent-Starteinstellungen erfordern für jeden Durchlauf eine neue Sitzung."
         }
       },
       "agent": {
