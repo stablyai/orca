@@ -6,11 +6,7 @@ import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './group-keys'
-import {
-  appendImportedLinesAfterRepoRows,
-  appendOrderedGroups,
-  type SectionAppendContext
-} from './group-sections'
+import { appendOrderedGroups, type SectionAppendContext } from './group-sections'
 
 import {
   getLaneHostWorktreeCounts,
@@ -55,7 +51,8 @@ import type {
   SidebarPRGroupReader,
   WorktreeGroupBy
 } from './row-types'
-import { orderMainWorktreeFirst, getRenderedNaturalAnchorRepoIds } from './section-order'
+import { orderMainWorktreeFirst } from './section-order'
+import { placeImportedWorktreeLines } from './imported-worktree-lines'
 import { withRepoSectionDisplayLabels } from '../project-section-order'
 import { buildOrderedGroups } from './worktree-grouping'
 import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
@@ -210,46 +207,24 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       projectIndex,
       hostLabelById
     )
-    const renderedNaturalAnchorRepoIds = getRenderedNaturalAnchorRepoIds({
-      groupBy,
-      worktrees: naturalWorktrees,
-      repoMap,
-      prGroupOf,
-      collapsedGroups,
-      workspaceStatuses,
-      projectGrouping
-    })
     emitPinnedGroup(
       pinnedSectionWorktrees,
       repoOf,
       defaultHostId,
       collapsedGroups,
-      renderedNaturalAnchorRepoIds,
-      importedWorktreesByRepo,
-      groupBy !== 'repo',
       result,
       occurrencePlan,
-      noticeHostContextLabelByRepoId,
       mixedWorktreeHostContextLabels
     )
-    const sectionContext: SectionAppendContext = {
-      result,
-      groupBy,
-      collapsedGroups,
-      workspaceStatuses,
-      repoMap,
-      repoOf,
-      defaultHostId,
-      hostLabelById,
-      projectIndex,
-      importedWorktreesByRepo,
-      newExternalWorktreesInboxByRepo,
-      pendingByRepo,
-      mixedWorktreeHostContextLabels,
-      noticeHostContextLabelByRepoId,
-      occurrencePlan,
-      importedLineRepoIds: new Set()
-    }
+    const withImportedLines = (rows: Row[]): Row[] =>
+      placeImportedWorktreeLines(rows, {
+        importedWorktreesByRepo,
+        pinnedSectionWorktrees,
+        collapsedGroups,
+        repoOf,
+        defaultHostId,
+        noticeHostContextLabelByRepoId
+      })
     if (groupBy === 'none') {
       // Folder-only accounts must still render flat rows (#15362).
       if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {
@@ -273,14 +248,12 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
         })
         if (!collapsedGroups.has(ALL_GROUP_KEY)) {
-          const firstItemIndex = result.length
           appendWorktreeRows(result, repoOf, occurrencePlan, {
             collapsedGroups,
             groupDepth: 0,
             sectionKey: ALL_GROUP_KEY,
             hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
           })
-          appendImportedLinesAfterRepoRows(sectionContext, firstItemIndex)
           for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
             compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
           )) {
@@ -288,7 +261,25 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           }
         }
       }
-      return result
+      return withImportedLines(result)
+    }
+
+    const sectionContext: SectionAppendContext = {
+      result,
+      groupBy,
+      collapsedGroups,
+      workspaceStatuses,
+      repoMap,
+      repoOf,
+      defaultHostId,
+      hostLabelById,
+      projectIndex,
+      importedWorktreesByRepo,
+      newExternalWorktreesInboxByRepo,
+      pendingByRepo,
+      mixedWorktreeHostContextLabels,
+      noticeHostContextLabelByRepoId,
+      occurrencePlan
     }
 
     if (groupBy !== 'repo' || projectGroups.length === 0) {
@@ -296,7 +287,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
         sectionContext,
         groupBy === 'repo' ? withRepoSectionDisplayLabels(orderedGroups) : orderedGroups
       )
-      return result
+      return groupBy === 'repo' ? result : withImportedLines(result)
     }
 
     appendProjectGroupSections(sectionContext, {
