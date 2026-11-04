@@ -17270,6 +17270,7 @@
           "runStatusPending": "キュー待ち",
           "runStatusDispatching": "起動中",
           "runStatusDispatched": "起動済み",
+          "runStatusSent": "送信済み",
           "runStatusCompleted": "完了",
           "runStatusSkippedPrecheck": "事前チェックによりスキップ",
           "runStatusSkippedMissed": "スキップ済み",

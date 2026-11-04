@@ -17718,6 +17718,7 @@
           "runStatusPending": "已排隊",
           "runStatusDispatching": "正在啟動",
           "runStatusDispatched": "已啟動",
+          "runStatusSent": "已傳送",
           "runStatusCompleted": "已完成",
           "runStatusSkippedPrecheck": "因預檢查而略過",
           "runStatusSkippedMissed": "已略過",

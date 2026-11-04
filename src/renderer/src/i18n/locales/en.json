@@ -18222,6 +18222,7 @@
           "runStatusPending": "Queued",
           "runStatusDispatching": "Starting",
           "runStatusDispatched": "Launched",
+          "runStatusSent": "Sent",
           "runStatusCompleted": "Done",
           "runStatusSkippedPrecheck": "Precheck skipped",
           "runStatusSkippedMissed": "Skipped",

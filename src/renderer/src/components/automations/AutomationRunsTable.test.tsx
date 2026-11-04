@@ -131,6 +131,36 @@ describe('AutomationRunsTable rows', () => {
     expect(row.textContent).toContain('Done')
   })
 
+  it('distinguishes accepted historical Chat delivery from completion and unproved delivery', () => {
+    const rendered = entries(6)
+    const historical: Pick<AutomationRun, 'status' | 'sessionKind'>[] = [
+      { status: 'dispatched', sessionKind: 'chat' },
+      { status: 'completed', sessionKind: 'chat' },
+      { status: 'pending', sessionKind: 'chat' },
+      { status: 'dispatching', sessionKind: 'chat' },
+      { status: 'dispatched', sessionKind: 'terminal' },
+      { status: 'dispatched', sessionKind: null }
+    ]
+    historical.forEach((run, index) => Object.assign(rendered[index].run, run))
+    render(
+      <AutomationRunsTable
+        entries={rendered}
+        loading={false}
+        hasMore={false}
+        onLoadMore={() => {}}
+        onOpenRun={() => {}}
+      />
+    )
+
+    const labels = ['Sent', 'Done', 'Queued', 'Starting', 'Launched', 'Launched']
+    rows().forEach((row, index) => {
+      expect(row.textContent).toContain(labels[index])
+      if (index !== 0) {
+        expect(row.textContent).not.toContain('Sent')
+      }
+    })
+  })
+
   it('names the scope when the row carries no host label', () => {
     render(
       <AutomationRunsTable

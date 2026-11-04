@@ -70,7 +70,13 @@ export function getAutomationRunStatusVariant(
   return 'dot'
 }
 
-export function getAutomationRunStatusLabel(status: AutomationRun['status']): string {
+export function getAutomationRunStatusLabel(
+  status: AutomationRun['status'],
+  sessionKind?: AutomationRun['sessionKind']
+): string {
+  if (status === 'dispatched' && sessionKind === 'chat') {
+    return translate('auto.components.automations.automationPageParts.runStatusSent', 'Sent')
+  }
   switch (status) {
     case 'pending':
       return translate('auto.components.automations.automationPageParts.runStatusPending', 'Queued')

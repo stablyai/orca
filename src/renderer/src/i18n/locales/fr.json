@@ -17923,6 +17923,7 @@
           "runStatusPending": "En file d’attente",
           "runStatusDispatching": "Démarrage",
           "runStatusDispatched": "Lancée",
+          "runStatusSent": "Envoyé",
           "runStatusCompleted": "Terminée",
           "runStatusSkippedPrecheck": "Ignorée par pré-vérification",
           "runStatusSkippedMissed": "Ignorée",

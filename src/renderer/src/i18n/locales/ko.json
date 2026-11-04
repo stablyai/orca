@@ -17270,6 +17270,7 @@
           "runStatusPending": "대기 중",
           "runStatusDispatching": "시작 중",
           "runStatusDispatched": "시작됨",
+          "runStatusSent": "전송됨",
           "runStatusCompleted": "완료",
           "runStatusSkippedPrecheck": "사전 확인으로 건너뜀",
           "runStatusSkippedMissed": "건너뜀",

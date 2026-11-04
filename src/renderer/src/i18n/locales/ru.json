@@ -18482,6 +18482,7 @@
           "runStatusPending": "В очереди",
           "runStatusDispatching": "Запускается",
           "runStatusDispatched": "Запущено",
+          "runStatusSent": "Отправлено",
           "runStatusCompleted": "Готово",
           "runStatusSkippedPrecheck": "Пропущено по предварительной проверке",
           "runStatusSkippedMissed": "Пропущено",

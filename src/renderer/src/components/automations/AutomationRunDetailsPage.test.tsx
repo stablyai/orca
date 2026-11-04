@@ -87,7 +87,12 @@ describe('AutomationRunDetailsPage', () => {
     try {
       await loadRendererUiLanguage('es')
       await i18n.changeLanguage('es')
-      const chat = { ...run, sessionKind: 'chat' as const, chatSessionId: 'pi_saved_chat' }
+      const chat: AutomationRun = {
+        ...run,
+        status: 'dispatched',
+        sessionKind: 'chat',
+        chatSessionId: 'pi_saved_chat'
+      }
       const viewState = getAutomationRunViewState({
         run: chat,
         workspaceExists: true,
@@ -114,6 +119,8 @@ describe('AutomationRunDetailsPage', () => {
           onBack={() => {}}
         />
       )
+      expect(screen.getByText('Enviado')).toBeInTheDocument()
+      expect(screen.queryByText('Done')).not.toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: 'Ver ejecución' }))
       expect(open).toHaveBeenCalledOnce()
       expect(chat.chatSessionId).toBe('pi_saved_chat')

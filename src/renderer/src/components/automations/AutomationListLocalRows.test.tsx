@@ -206,6 +206,14 @@ describe('Automation list row selection', () => {
     expect(screen.getByText('Failed 8h ago')).toBeTruthy()
   })
 
+  it('shows Sent for the historical Chat last run even when the current definition is terminal', () => {
+    renderLocalRows({
+      onSelect: vi.fn(),
+      runs: [makeRun({ status: 'dispatched', sessionKind: 'chat' })]
+    })
+    expect(screen.getByText('Sent 8h ago')).toBeTruthy()
+  })
+
   // A moved project's local copy stays as it was for undo, but the host runs it now.
   it("says a moved project's automation runs on the WSL host, not here", () => {
     useAppStore.setState({

@@ -347,6 +347,14 @@ describe('AutomationRunHistory row content', () => {
     return container.querySelectorAll<HTMLButtonElement>('button[data-automation-run-id]')
   }
 
+  it('labels accepted historical Chat as Sent without counting it completed', () => {
+    renderHistory({ runs: [makeRun({ status: 'dispatched', sessionKind: 'chat' })] })
+
+    expect(rows()[0].textContent).toContain('Sent')
+    expect(rows()[0].textContent).not.toContain('Done')
+    expect(container.textContent).toContain('1 run · 0 completed')
+  })
+
   it('reports spend and tokens a host actually measured', () => {
     renderHistory({
       runs: [

@@ -8,6 +8,7 @@ import {
   formatAutomationLastRunCell,
   getExternalAutomationLastRunSnapshot,
   getLocalAutomationLastRunSnapshot,
+  getAutomationRowLastRunSnapshot,
   getToneForAutomationRunStatus,
   indexLatestAutomationRuns
 } from './automation-list-last-run'
@@ -114,6 +115,28 @@ describe('automation-list-last-run', () => {
     expect(snapshot.tone).toBe('failed')
     expect(snapshot.at).toBe(40)
     expect(snapshot.statusLabel).toBe('Failed')
+  })
+
+  it('does not infer Chat delivery from summary or the current definition', () => {
+    const automation = makeAutomation({ surface: 'chat', reuseSession: true })
+    expect(
+      getAutomationRowLastRunSnapshot({
+        automation,
+        usageSummary: { lastRunStatus: 'dispatched', lastRunAt: 30 }
+      })
+    ).toEqual({ at: 30, tone: 'running', statusLabel: 'Launched' })
+    expect(
+      getLocalAutomationLastRunSnapshot(
+        automation,
+        makeRun({ status: 'dispatched', sessionKind: null })
+      ).statusLabel
+    ).toBe('Launched')
+    expect(
+      getLocalAutomationLastRunSnapshot(
+        automation,
+        makeRun({ status: 'dispatched', sessionKind: 'terminal' })
+      ).statusLabel
+    ).toBe('Launched')
   })
 
   it('falls back to lastRunAt when no run history exists', () => {
