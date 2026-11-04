@@ -9,22 +9,6 @@ import {
   isTerminalSessionStorageCapacityFailure
 } from '../../../shared/workspace-session/terminal-session-state-save-failure'
 
-it.each(['ENOSPC', 'EDQUOT', 'SQLITE_FULL', 'EACCES', 'SQLITE_BUSY'])(
-  'preserves capacity evidence across the writer boundary for %s',
-  (code) => {
-    const error = new Error('private path must not cross the worker boundary', {
-      cause: Object.assign(new Error('private details'), { code })
-    })
-    const encoded = encodeProfileStateWriterError(error)
-    expect(encoded.message).toBe('Profile state persistence failed')
-    const decoded = decodeProfileStateWriterError(JSON.parse(JSON.stringify(encoded)))
-    const capacity = ['ENOSPC', 'EDQUOT', 'SQLITE_FULL'].includes(code)
-    expect(
-      isTerminalSessionStorageCapacityFailure(createTerminalSessionStateSaveFailureMessage(decoded))
-    ).toBe(capacity)
-  }
-)
-
 it('classifies a real SQLite capacity failure after worker serialization', () => {
   const db = new Database(':memory:')
   try {

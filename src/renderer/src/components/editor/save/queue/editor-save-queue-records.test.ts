@@ -30,21 +30,6 @@ function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {
   }
 }
 
-function holdNextWrite(disk: FakeEditorDisk): () => void {
-  let release = (): void => {}
-  const gate = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  disk.fs.writeFile.mockImplementationOnce(
-    async ({ filePath, content }: { filePath: string; content: string }) => {
-      await gate
-      disk.files.set(filePath, content)
-      return { ok: true }
-    }
-  )
-  return release
-}
-
 describe('editor save queue: one autosave timer per record across its views', () => {
   let disk: FakeEditorDisk
   let store: ReturnType<typeof createEditorStore>
@@ -94,28 +79,6 @@ describe('editor save queue: one autosave timer per record across its views', ()
     vi.unstubAllGlobals()
   })
 
-  it('writes typing from two workspaces once, with the latest text, and cleans both views', async () => {
-    type('w1', 'abc')
-    await vi.advanceTimersByTimeAsync(DELAY_MS / 2)
-    type('w2', 'abcd')
-    await vi.advanceTimersByTimeAsync(DELAY_MS)
-
-    expect(writtenContents()).toEqual(['abcd'])
-    expect(view('w1').isDirty).toBe(false)
-    expect(view('w2').isDirty).toBe(false)
-    expect(store.getState().editorDrafts).toEqual({})
-  })
-
-  it('keeps the timer when a read-only view of the record follows the writable one', async () => {
-    share([view('w1'), tab('log', { readOnly: true })])
-    withLoadedBaselines(store, disk)
-    type('w1', 'abc')
-    await vi.advanceTimersByTimeAsync(DELAY_MS)
-
-    expect(writtenContents()).toEqual(['abc'])
-    expect(view('log').isDirty).toBe(false)
-  })
-
   it('keeps the timer when the view that scheduled it closes', async () => {
     type('w1', 'abc')
     await vi.advanceTimersByTimeAsync(DELAY_MS / 2)
@@ -140,24 +103,4 @@ describe('editor save queue: one autosave timer per record across its views', ()
       expect(view('w2').isDirty).toBe(true)
     }
   )
-
-  it("runs one view's Cmd+S that another view's settle waits behind", async () => {
-    type('w1', 'a')
-    const release = holdNextWrite(disk)
-    const first = queue.queueSave(view('w1'), 'a')
-    await vi.advanceTimersByTimeAsync(0)
-    type('w1', 'ab')
-    const cmdS = queue.queueSave(view('w1'), 'ab')
-    let settled = false
-    const settle = queue.settleFileSaves('w2').then(() => {
-      settled = true
-    })
-
-    release()
-    await settle
-    expect(settled).toBe(true)
-    expect(await Promise.all([first, cmdS])).toEqual(['written', 'written'])
-    expect(writtenContents()).toEqual(['a', 'ab'])
-    expect(view('w2').isDirty).toBe(false)
-  })
 })

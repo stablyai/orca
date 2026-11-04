@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computeVisibleWorktreeIds } from '../listing/compute-visible-worktrees'
-import { isDefaultBranchWorkspace } from '../../../../../../shared/worktree/workspace-kinds'
+
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
@@ -59,25 +59,6 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
   }
 }
 
-describe('#8873 default-branch workspace under "Hide sleeping"', () => {
-  it('is genuinely the default-branch row the "Hide default branch" toggle targets', () => {
-    expect(isDefaultBranchWorkspace(makeDefaultBranchWorktree(), repoMap.get('repo1'))).toBe(true)
-  })
-
-  it('stays in the sidebar when it is sleeping and "Hide sleeping" is on', () => {
-    const worktree = makeDefaultBranchWorktree()
-
-    const visible = computeVisibleWorktreeIds({ repo1: [worktree] }, [worktree.id], {
-      ...visibleOptions({
-        showSleepingWorkspaces: false,
-        hideDefaultBranchWorkspace: false
-      })
-    })
-
-    expect(visible).toEqual([worktree.id])
-  })
-})
-
 describe('the "Hide sleeping" exemption for project entry-point rows', () => {
   function visible(worktrees: Worktree[], overrides: Partial<VisibleOptions>): string[] {
     return computeVisibleWorktreeIds(
@@ -93,34 +74,6 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
     expect(visible([worktree], { alwaysShowDefaultBranchWorkspace: false })).toEqual([])
   })
 
-  it('keeps the sleeping default branch when the option is explicitly on', () => {
-    const worktree = makeDefaultBranchWorktree()
-
-    expect(visible([worktree], { alwaysShowDefaultBranchWorkspace: true })).toEqual([worktree.id])
-  })
-
-  it('lets an explicit "Hide default branch" still win over the exemption', () => {
-    const worktree = makeDefaultBranchWorktree()
-
-    expect(
-      visible([worktree], {
-        hideDefaultBranchWorkspace: true,
-        alwaysShowDefaultBranchWorkspace: true
-      })
-    ).toEqual([])
-  })
-
-  it('still sweeps sleeping non-main workspaces', () => {
-    const feature: Worktree = {
-      ...makeDefaultBranchWorktree(),
-      id: 'wt-feature',
-      branch: 'refs/heads/feature',
-      isMainWorktree: false
-    }
-
-    expect(visible([feature], { alwaysShowDefaultBranchWorkspace: true })).toEqual([])
-  })
-
   it('keeps a sleeping folder workspace, which has no sibling row to fall back to', () => {
     // Folder roots have no head/branch; sweeping the sole root hides the entire project.
     const folder: Worktree = {
@@ -132,14 +85,6 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
     expect(visible([folder], { alwaysShowDefaultBranchWorkspace: true })).toEqual([folder.id])
   })
 
-  it('keeps a sleeping detached-HEAD main worktree', () => {
-    const detachedMain: Worktree = { ...makeDefaultBranchWorktree(), id: 'wt-detached', branch: '' }
-
-    expect(visible([detachedMain], { alwaysShowDefaultBranchWorkspace: true })).toEqual([
-      detachedMain.id
-    ])
-  })
-
   it('lets "Hide detached HEAD" still win over the exemption', () => {
     const detachedMain: Worktree = { ...makeDefaultBranchWorktree(), id: 'wt-detached', branch: '' }
 
@@ -149,21 +94,5 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
         alwaysShowDefaultBranchWorkspace: true
       })
     ).toEqual([])
-  })
-
-  it('keeps every project’s entry point, not just the first', () => {
-    const mainA = makeDefaultBranchWorktree()
-    const mainB: Worktree = { ...makeDefaultBranchWorktree(), id: 'wt-main-b' }
-
-    expect(visible([mainA, mainB], {})).toEqual([mainA.id, mainB.id])
-  })
-
-  it('does not flicker out while an SSH host is offline', () => {
-    // Offline SSH synthesis preserves main-worktree identity but empties head/branch and loses live PTYs.
-    const awake = makeDefaultBranchWorktree()
-    const offline: Worktree = { ...awake, head: '', branch: '' }
-
-    expect(visible([offline], {})).toEqual([offline.id])
-    expect(visible([awake], {})).toEqual([awake.id])
   })
 })

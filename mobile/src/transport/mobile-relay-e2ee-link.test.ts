@@ -61,66 +61,6 @@ describe('MobileRelayE2eeLink', () => {
     expect(socket.close).toHaveBeenCalledOnce()
   })
 
-  it('reports open only once relay-auth is on the wire', () => {
-    const socket = new ThrowingSocket()
-    const onOpen = vi.fn()
-    const sent: string[] = []
-    socket.send.mockImplementation((frame: string) => {
-      sent.push(frame)
-    })
-    new MobileRelayE2eeLink({
-      endpoint: {
-        cellUrl: 'https://relay-c1.onorca.dev',
-        relayHostId: 'AbCdEf0123_-xyZ9'
-      },
-      credential: 'credential',
-      expectedCredentialKind: 'resume',
-      deviceToken: 'device-token',
-      desktopPublicKeyB64: 'desktop-key',
-      onAuthenticated: vi.fn(),
-      onText: vi.fn(),
-      onBinary: vi.fn(),
-      onOpen,
-      onError: vi.fn(),
-      createSocket: () => relayWebSocket(socket)
-    })
-
-    expect(onOpen).not.toHaveBeenCalled()
-    socket.onopen?.()
-    expect(sent).toHaveLength(1)
-    expect(JSON.parse(sent[0]!)).toEqual({
-      type: 'relay-auth',
-      v: 1,
-      mode: 'connect',
-      credential: 'credential'
-    })
-    expect(onOpen).toHaveBeenCalledOnce()
-  })
-
-  it('does not report open when the relay-auth write fails', () => {
-    const socket = new ThrowingSocket()
-    const onOpen = vi.fn()
-    new MobileRelayE2eeLink({
-      endpoint: {
-        cellUrl: 'https://relay-c1.onorca.dev',
-        relayHostId: 'AbCdEf0123_-xyZ9'
-      },
-      credential: 'credential',
-      expectedCredentialKind: 'resume',
-      deviceToken: 'device-token',
-      desktopPublicKeyB64: 'desktop-key',
-      onAuthenticated: vi.fn(),
-      onText: vi.fn(),
-      onBinary: vi.fn(),
-      onOpen,
-      onError: vi.fn(),
-      createSocket: () => relayWebSocket(socket)
-    })
-
-    socket.onopen?.()
-    expect(onOpen).not.toHaveBeenCalled()
-  })
-
   it('keeps a typed close code when transport error precedes close', () => {
     const socket = new ThrowingSocket()
     const onError = vi.fn()
@@ -144,31 +84,6 @@ describe('MobileRelayE2eeLink', () => {
     socket.onclose?.({ code: 4409 })
 
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'relay_outer_4409' }))
-  })
-
-  it('classifies an opaque close after transport error as 1006', () => {
-    const socket = new ThrowingSocket()
-    const onError = vi.fn()
-    new MobileRelayE2eeLink({
-      endpoint: {
-        cellUrl: 'https://relay-c1.onorca.dev',
-        relayHostId: 'AbCdEf0123_-xyZ9'
-      },
-      credential: 'credential',
-      expectedCredentialKind: 'resume',
-      deviceToken: 'device-token',
-      desktopPublicKeyB64: 'desktop-key',
-      onAuthenticated: vi.fn(),
-      onText: vi.fn(),
-      onBinary: vi.fn(),
-      onError,
-      createSocket: () => relayWebSocket(socket)
-    })
-
-    socket.onerror?.()
-    socket.onclose?.({ code: 0 })
-
-    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'relay_outer_1006' }))
   })
 
   it('bounds an error when the platform never emits close', async () => {

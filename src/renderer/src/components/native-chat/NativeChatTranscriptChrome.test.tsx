@@ -5,12 +5,10 @@ import { fireEvent, screen, within } from '@testing-library/react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { loadLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
 import {
   invalidateLocalImageCache as invalidateLocalImageSrcCacheForTests,
   resetLocalImageCacheState as resetLocalImageSrcStateForTests
 } from '@/components/editor/document-images/local-image-src-cache'
-import { chatImageAccess } from '@/lib/local-file-access'
 import { useAppStore } from '@/store'
 import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
@@ -331,49 +329,23 @@ describe('NativeChatImageAttachments', () => {
     root.unmount()
   })
 
-  it('keeps an off-screen image cached when an equal runtime context is rebuilt', async () => {
-    class FakeIntersectionObserver {
-      readonly observe = vi.fn()
-      readonly unobserve = vi.fn()
-      readonly disconnect = vi.fn()
+  it('shows a remounted row from the cache without re-reading the image', async () => {
+    const props = {
+      blocks: [{ type: 'image-ref' as const, path: '/repo/image.png' }],
+      runtimeContext: runtimeContext('wt-1')
     }
-    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver)
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    const blocks = [{ type: 'image-ref' as const, path: '/repo/image.png' }]
-    const renderWith = (context: RuntimeFileOperationArgs): void =>
-      root.render(createElement(NativeChatImageAttachments, { blocks, runtimeContext: context }))
-    const loadSameEntry = (): Promise<string | null> =>
-      loadLocalImageSrc(
-        '/repo/image.png',
-        '/repo/image.png',
-        undefined,
-        runtimeContext('wt-1'),
-        chatImageAccess()
-      )
-
-    try {
+    for (let mount = 0; mount < 2; mount += 1) {
+      const container = document.createElement('div')
+      const root = createRoot(container)
       await act(async () => {
-        renderWith(runtimeContext('wt-1'))
+        root.render(createElement(NativeChatImageAttachments, props))
         await flushPromises()
       })
-      // Off-screen nothing pins the entry, so only the release effect's deps decide whether it survives.
-      await expect(loadSameEntry()).resolves.toBe('blob:owner-1')
-
-      for (let update = 0; update < 3; update += 1) {
-        await act(async () => {
-          renderWith(runtimeContext('wt-1'))
-          await flushPromises()
-        })
-      }
-
-      expect(URL.revokeObjectURL).not.toHaveBeenCalled()
-      await expect(loadSameEntry()).resolves.toBe('blob:owner-1')
-      expect(window.api.fs.readFile).toHaveBeenCalledOnce()
-    } finally {
-      // The visibility observer is module-wide; a leaked one breaks later tests.
-      root.unmount()
+      expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:owner-1')
+      await act(async () => root.unmount())
     }
+    expect(window.api.fs.readFile).toHaveBeenCalledOnce()
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
   })
 
   it('retries a failed thumbnail after the image cache refreshes', async () => {

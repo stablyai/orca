@@ -12,8 +12,8 @@ import {
   buildAiVaultForkStartupForWorktree
 } from '@/lib/ai-vault-session-fork-startup'
 import { launchAiVaultSessionAndReveal } from '@/lib/launch-ai-vault-session-and-reveal'
-import { notifyAiVaultSessionPreparationFailure } from '../right-sidebar/ai-vault-session-launch-feedback'
-import { describeAiVaultCliForkFailure } from '../right-sidebar/ai-vault-session-cli-fork'
+import { notifyAiVaultSessionPreparationFailure } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-launch-feedback'
+import { describeAiVaultCliForkFailure } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-cli-fork'
 import {
   captureWebSessionIntentOwner,
   matchesWebSessionIntentOwner
