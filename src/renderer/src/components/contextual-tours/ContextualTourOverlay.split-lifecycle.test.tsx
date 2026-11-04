@@ -184,6 +184,20 @@ describe('Split a terminal pane tip lifecycle', () => {
     expect(shownTip()).toBe('Start another task in parallel')
     expect(document.activeElement).toBe(terminalInput)
     terminalInput.remove()
+
+    // Navigating inside the callout keeps focus in it once its button is replaced.
+    act(() => {
+      const back = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+        (button) => button.textContent?.includes('Back')
+      )
+      back?.focus()
+      back?.click()
+    })
+    await settle()
+    expect(shownTip()).toBe('Split a terminal pane')
+    expect(
+      container.querySelector('[data-contextual-tour-panel]')?.contains(document.activeElement)
+    ).toBe(true)
   })
 
   it('keeps the next tip owed when its target is missing right after the split', async () => {

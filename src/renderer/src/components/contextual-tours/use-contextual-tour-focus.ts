@@ -29,10 +29,18 @@ export function useContextualTourFocus({
     if (focusedStepRef.current === focusKey) {
       return
     }
+    const firstStepOfActivation = focusedStepRef.current === null
     focusedStepRef.current = focusKey
     // A tour that waits for the user to act (split a pane) shows while they type in the terminal and
     // keeps coming back until they do; taking focus would send those keystrokes to its dismiss button.
-    if (hasContextualTourActionStep(getContextualTour(activeTourId))) {
+    // Only navigation inside the callout (Back/Next, whose button the new step replaced) moves focus.
+    const focusWasInCallout =
+      document.activeElement === document.body ||
+      !!panelRef.current?.contains(document.activeElement)
+    if (
+      hasContextualTourActionStep(getContextualTour(activeTourId)) &&
+      (firstStepOfActivation || !focusWasInCallout)
+    ) {
       return
     }
 
