@@ -1,5 +1,8 @@
 import { splitPaneTitle } from './orchestration/sender-pane-title'
-import { senderDispatchLaunch } from './orchestration/sender-dispatch-launch'
+import {
+  senderDispatchLaunch,
+  senderDispatchLaunchReader
+} from './orchestration/sender-dispatch-launch'
 // Name another agent from host records when sending on its behalf or listing its worktree.ps row.
 
 import type { AgentMessageSender } from '../../shared/agent-session/agent-session-message-source'
@@ -98,12 +101,10 @@ export class RuntimeOrchestrationSenderNames {
     return this.snapshotReader()(party, reportedDispatchId)
   }
 
-  snapshotReader(): (
-    party: AgentMessageSender['party'],
-    reportedDispatchId?: string
-  ) => SenderSnapshot {
-    const sources = this.namingSources()
+  snapshotReader(): typeof this.snapshotOf {
+    const readLaunch = senderDispatchLaunchReader(this.deps.getDb)
     return (party, reportedDispatchId) => {
+      const sources = this.namingSources(readAgentSessionRecordStore(), readLaunch())
       const observation = observeOrchestrationSender(party, sources, reportedDispatchId)
       return {
         name: orchestrationSenderName(party, sources, reportedDispatchId, observation),
@@ -113,12 +114,13 @@ export class RuntimeOrchestrationSenderNames {
   }
 
   private namingSources(
-    records: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+    records: AgentSessionRecordReader | null = readAgentSessionRecordStore(),
+    dispatchLaunch?: SenderNamingSources['dispatchLaunch']
   ): SenderNamingSources {
     const terminals = new Map<string, TerminalSenderNaming | null>()
     const db = this.deps.getDb()
     return {
-      dispatchLaunch: db ? senderDispatchLaunch(db) : undefined,
+      dispatchLaunch: dispatchLaunch ?? (db ? senderDispatchLaunch(db) : undefined),
       ...this.chatSources(undefined, records),
       db: this.deps.getDb(),
       terminal: (handle) => {

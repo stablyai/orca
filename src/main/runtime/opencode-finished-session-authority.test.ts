@@ -5,6 +5,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { OrchestrationDb } from './orchestration/db'
+import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
+import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import { AgentHookServer } from '../agent-hooks/server'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
@@ -344,4 +347,81 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
       })
     ).toBeNull()
   })
+})
+
+it('withdraws a proved Dispatch through the actual command-finished scoped publication', async () => {
+  const pane = await launchOpenCodePane({
+    ptyId: 'pty-source-proof',
+    getForegroundProcess: async () => 'opencode'
+  })
+  const db = new OrchestrationDb(':memory:')
+  const runtime = pane.runtime
+  runtime.setOrchestrationDb(db)
+  let unsubscribe: (() => void) | undefined
+  try {
+    const run = db.createRun({
+      objective: 'worker proof',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null
+    })
+    const dispatch = createRootDispatch(
+      db,
+      db.createTask({ runId: run.id, spec: 'Worker asks' }).id,
+      pane.evidence.terminalHandle,
+      pane.paneKey
+    )
+    db.db
+      .prepare(
+        'UPDATE dispatch_contexts SET process_incarnation = ?, launch_token_hash = ? WHERE id = ?'
+      )
+      .run(
+        `${pane.ptyId}:incarnation-1`,
+        createHash('sha256').update(pane.launchToken).digest('hex'),
+        dispatch.id
+      )
+    db.db
+      .prepare(`INSERT INTO worker_terminal_resources (id, origin_dispatch_id, owner_dispatch_id, pane_key, terminal_handle, process_incarnation)
+      VALUES ('source-resource', ?, ?, ?, ?, ?)`)
+      .run(
+        dispatch.id,
+        dispatch.id,
+        pane.paneKey,
+        pane.evidence.terminalHandle,
+        `${pane.ptyId}:incarnation-1`
+      )
+    const initial = await runtime.listMobileSessionTabs(`path:${WORKTREE.path}`)
+    expect(initial.agentSenderAssociations?.associations).toContainEqual(
+      expect.objectContaining({ identity: `dispatch:${dispatch.id}`, dispatchActor: true })
+    )
+    const events: RuntimeMobileSessionTabsResult[] = []
+    unsubscribe = runtime.onMobileSessionTabsChanged(
+      (event) => events.push(event),
+      undefined,
+      'runtime'
+    )
+    runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
+    await vi.waitFor(() => {
+      const frame = events.find((event) => event.agentSenderAssociations)
+      expect(frame).toBeDefined()
+      expect(
+        frame?.agentSenderAssociations?.associations.some(
+          (row) => row.identity === `dispatch:${dispatch.id}`
+        )
+      ).toBe(false)
+    })
+    // Shell and terminal identity survive. A manually detected same-kind successor cannot restore the launch.
+    expect(runtime.getTerminalProcessIncarnation(pane.evidence.terminalHandle)).toBe(
+      `${pane.ptyId}:incarnation-1`
+    )
+    runtime.onPtyData(pane.ptyId, '\x1b]0;OpenCode\x07', 101)
+    const successor = await runtime.listMobileSessionTabs(`path:${WORKTREE.path}`)
+    expect(
+      successor.agentSenderAssociations?.associations.some(
+        (row) => row.identity === `dispatch:${dispatch.id}`
+      )
+    ).toBe(false)
+  } finally {
+    unsubscribe?.()
+    db.close()
+  }
 })

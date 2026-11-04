@@ -229,6 +229,16 @@ it.each([100, 1000])(
         Buffer.byteLength(JSON.stringify(response))
       )
       expect(canonicalOnly).toBe(response)
+      expect(
+        withMailDisplayReports(
+          journal,
+          enriched,
+          [response.item],
+          Buffer.byteLength(JSON.stringify(response))
+        )
+      ).toEqual(response)
+      expect(withMailDisplayReports(journal, enriched, [], 16384)).toEqual(response)
+      expect(enriched).toHaveProperty('mailDisplayReports')
       expect(response).not.toHaveProperty('mailDisplayReports')
       read.mockClear()
       await journal.queuedMessages.withdraw(['q-1'])

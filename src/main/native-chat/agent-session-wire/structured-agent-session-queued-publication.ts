@@ -1,4 +1,4 @@
-import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
+import { BOUNDED_FRAME_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
@@ -78,7 +78,7 @@ function computePublishedQueuedMessages(journal: AgentSessionJournal): {
     })
   }
   const serialized = JSON.stringify(published)
-  if (Buffer.byteLength(serialized) <= MOBILE_BRIDGE_MAX_FRAME_BYTES - 64 * 1024) {
+  if (Buffer.byteLength(serialized) <= BOUNDED_FRAME_CONTENT_BUDGET_BYTES) {
     return { list: published, serialized }
   }
   const list = published.map(({ mailDisplayReports: _optional, ...row }) => row)

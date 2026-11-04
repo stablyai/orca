@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -30,6 +31,8 @@ afterEach(() => {
 const pane = (i: number) =>
   `tab-${i}:${(i + 1).toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`
 const handle = (i: number) => `term_tab-${i}`
+const token = (i: number) => `launch-${i}`
+const hash = (i: number) => createHash('sha256').update(token(i)).digest('hex')
 
 /** A real database with `workers` independent live workers, each holding its own terminal. */
 function host(workers: number, path: string = ':memory:') {
@@ -45,8 +48,20 @@ function host(workers: number, path: string = ':memory:') {
   const hold = db.db.prepare(`INSERT INTO worker_terminal_resources
     (id, origin_dispatch_id, owner_dispatch_id, pane_key, terminal_handle, process_incarnation)
     VALUES (?, ?, ?, ?, ?, ?)`)
-  const dispatch = (i: number, spec: string) =>
-    createRootDispatch(db, db.createTask({ runId: run.id, spec }).id, handle(i), pane(i))
+  const dispatch = (i: number, spec: string) => {
+    const row = createRootDispatch(
+      db,
+      db.createTask({ runId: run.id, spec }).id,
+      handle(i),
+      pane(i)
+    )
+    db.db
+      .prepare(
+        'UPDATE dispatch_contexts SET process_incarnation = ?, launch_token_hash = ? WHERE id = ?'
+      )
+      .run(`pty-${i}:inc-1`, hash(i), row.id)
+    return row
+  }
   const ids: string[] = []
   for (let i = 0; i < workers; i++) {
     leaves.push({
@@ -59,6 +74,8 @@ function host(workers: number, path: string = ':memory:') {
     ptys.push({
       ptyId: `pty-${i}`,
       incarnationId: 'inc-1',
+      launchIncarnationId: 'inc-1',
+      launchToken: token(i),
       worktreeId: 'w'
     } as RuntimePtyWorktreeRecord)
     const id = dispatch(i, `worker ${i}`).id
@@ -162,6 +179,8 @@ it('follows each write that changes a worker, as a cold rebuild reads it', () =>
   h.ptys.push({
     ptyId: 'pty-3',
     incarnationId: 'inc-1',
+    launchIncarnationId: 'inc-1',
+    launchToken: token(3),
     worktreeId: 'w'
   } as RuntimePtyWorktreeRecord)
   step()
@@ -171,14 +190,15 @@ it('follows each write that changes a worker, as a cold rebuild reads it', () =>
   h.db.db
     .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
     .run(h.ids[0], followUp.id)
-  expect(step()).toContain(`dispatch:${h.ids[0]}@${pane(3)}`)
+  expect(step()).not.toContain(`dispatch:${h.ids[0]}@${pane(3)}`)
+  expect(step()).toContain(`dispatch:${h.ids[0]}@${pane(0)}`)
   // A terminal that moves to another pane takes its worker there.
   h.db.db
     .prepare(
       "UPDATE worker_terminal_resources SET pane_key = ?, process_incarnation = 'pty-2:inc-1' WHERE id = ?"
     )
     .run(pane(2), `res-${h.ids[1]}`)
-  expect(step()).toContain(`dispatch:${h.ids[1]}@${pane(2)}`)
+  expect(step()).not.toContain(`dispatch:${h.ids[1]}@${pane(2)}`)
   // A respawned process under the same pane no longer holds its worker.
   // (A fresh publisher sees the new process as the handle's first, so only worker rows compare.)
   h.ptys[2] = { ...h.ptys[2], incarnationId: 'inc-2' }
@@ -247,40 +267,17 @@ const livePane = (i: number): AgentSenderPane => ({
   paneKey: pane(i),
   worktreeId: 'w',
   handle: handle(i),
-  processIncarnation: `pty-${i}:inc-1`
+  processIncarnation: `pty-${i}:inc-1`,
+  launchTokenHash: hash(i)
 })
 
-/** Snapshot only the fixture's known keys; the oracle still executes the uncached production walk. */
-function oracle(db: OrchestrationDb, ids: string[]) {
-  const rows = new Map(ids.map((id) => [id, db.getDispatchContextById(id)]))
-  const resources = new Map(ids.map((id) => [id, db.getWorkerTerminalResourceByOwner(id)]))
-  const followUps = new Map(
-    [...rows.values()].flatMap((row) =>
-      row?.follow_up_of_dispatch_id ? [[row.follow_up_of_dispatch_id, row] as const] : []
-    )
-  )
-  const facts = {
-    dispatch: (id: string) => rows.get(id),
-    ownedResource: (id: string) => resources.get(id),
-    formerResource: () => undefined,
-    followUp: (id: string) => followUps.get(id)
-  }
-  return ids.flatMap((id) => {
-    const resolved = resolveWorkerLineageFacts(facts, id)
-    const row = rows.get(id)
-    return resolved?.resource && !resolved.latest.assignee_orca_session_id
-      ? [
-          { identity: `dispatch:${id}`, paneKey: resolved.resource.pane_key },
-          ...(row?.assignee_handle
-            ? [{ identity: row.assignee_handle, paneKey: resolved.resource.pane_key }]
-            : [])
-        ]
-      : []
-  })
-}
+const provedRows = (id: string, i: number) => [
+  { identity: `dispatch:${id}`, paneKey: pane(i), dispatchActor: true as const },
+  { identity: handle(i), paneKey: pane(i), dispatchActor: true as const }
+]
 
 it.each([100, 1000])(
-  'shares traversal and every retained membership for a %i-deep chain, preserving all oracle aliases',
+  'shares traversal and every retained membership for a %i-deep chain, keeping only the exact live source',
   (depth) => {
     const h = host(depth)
     const tail = h.ids[depth - 1]
@@ -307,8 +304,8 @@ it.each([100, 1000])(
     const check = () => {
       const before = work.lineageVisits
       const result = history.read(h.db, panes, work)
-      expect(sort(result.workers)).toEqual(sort(oracle(h.db, h.ids)))
-      expect(result.workers).toHaveLength(depth * 2)
+      expect(sort(result.workers)).toEqual(sort(provedRows(tail, depth - 1)))
+      expect(result.workers).toHaveLength(2)
       const size = history.graphSizeForTest()
       expect(size).toEqual({
         nodes: depth,
@@ -347,8 +344,8 @@ it.each([100, 1000])(
       .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
       .run(tail, next.id)
     const result = history.read(h.db, panes, work)
-    expect(sort(result.workers)).toEqual(sort(oracle(h.db, h.ids)))
-    expect(result.workers).toHaveLength(depth * 2)
+    expect(sort(result.workers)).toEqual(sort(provedRows(tail, depth - 1)))
+    expect(result.workers).toHaveLength(2)
     expect(history.graphSizeForTest().nodes).toBe(depth + 1)
     history.read(h.db, [], work)
     expect(history.graphSizeForTest()).toEqual({ nodes: 0, edges: 0, reverseMemberships: 0 })
@@ -439,7 +436,7 @@ it.each([100, 1000])(
     h.db.db
       .prepare("UPDATE worker_terminal_resources SET ownership_state = 'owned' WHERE id = ?")
       .run(`res-${h.ids[0]}`)
-    expect(history.read(h.db, panes, work).workers).toEqual(oracle(h.db, [h.ids[0]]))
+    expect(history.read(h.db, panes, work).workers).toEqual(provedRows(h.ids[0], 0))
   }
 )
 
@@ -453,7 +450,7 @@ it('replaces and retires former-owner dependencies when a terminal resource tran
   )
   transfer.run(h.ids[0], JSON.stringify([h.ids[0]]), `res-${h.ids[1]}`)
   const moved = h.rows(h.senders.build())
-  expect(moved).toContain(`dispatch:${h.ids[0]}@${pane(1)}`)
+  expect(moved).not.toContain(`dispatch:${h.ids[0]}@${pane(1)}`)
   expect(moved).toEqual(h.cold())
   transfer.run(h.ids[1], '[]', `res-${h.ids[1]}`)
   const retired = h.rows(h.senders.build())
@@ -498,18 +495,107 @@ it('keeps a structured self-cycle separate from another root sharing a missing r
   const history = new AgentSenderWorkerHistory()
   const work = { lineageReads: 0, paneReads: 0 }
   const read = () => history.read(h.db, [livePane(0)], work).workers
-  expect(read()).toEqual([
-    { identity: `dispatch:${a}`, paneKey: pane(0) },
-    { identity: handle(0), paneKey: pane(0) }
-  ])
+  expect(read()).toEqual(provedRows(a, 0))
   h.db.db
     .prepare('UPDATE dispatch_contexts SET assignee_orca_session_id = NULL WHERE id = ?')
     .run(c)
-  expect(read()).toContainEqual({ identity: `dispatch:${c}`, paneKey: pane(0) })
+  expect(read()).not.toContainEqual(expect.objectContaining({ identity: `dispatch:${c}` }))
   h.db.db
     .prepare('UPDATE dispatch_contexts SET assignee_orca_session_id = ? WHERE id = ?')
     .run('structured-c', c)
   expect(read().some((row) => row.identity === `dispatch:${c}` || row.identity === handle(1))).toBe(
     false
+  )
+})
+
+it('proves the addressed invocation, withdraws on token-only retirement, and never follows a successor', () => {
+  const h = host(2)
+  const source = h.ids[0]
+  const read = () =>
+    h.senders.build().associations.find((row) => row.identity === `dispatch:${source}`)
+  expect(read()).toMatchObject({ paneKey: pane(0), dispatchActor: true })
+  // A different execution taking custody cannot move the still-running source actor.
+  h.db.db.prepare('DELETE FROM worker_terminal_resources WHERE owner_dispatch_id = ?').run(source)
+  h.db.db
+    .prepare(
+      'UPDATE worker_terminal_resources SET prior_owner_dispatch_ids = ? WHERE owner_dispatch_id = ?'
+    )
+    .run(JSON.stringify([source]), h.ids[1])
+  expect(read()).toMatchObject({ paneKey: pane(0), dispatchActor: true })
+  h.ptys[0].launchToken = null
+  h.ptys[0].launchIncarnationId = null
+  expect(read()).toBeUndefined()
+  // The same shell can run a same-kind successor, but that is a different invocation.
+  h.ptys[0].launchToken = 'successor'
+  h.ptys[0].launchIncarnationId = 'inc-1'
+  expect(read()).toBeUndefined()
+  h.ptys[0].launchToken = token(0)
+  expect(read()).toMatchObject({ dispatchActor: true })
+  for (const scope of [
+    JSON.stringify({ kind: 'ssh', targetId: 'remote' }),
+    JSON.stringify({ kind: 'wsl', hostId: 'local', distro: 'Ubuntu' }),
+    'bad'
+  ]) {
+    h.db.db.prepare('UPDATE dispatch_contexts SET host_scope = ? WHERE id = ?').run(scope, source)
+    expect(read()).toBeUndefined()
+  }
+  h.db.db
+    .prepare(
+      'UPDATE dispatch_contexts SET host_scope = NULL, launch_token_hash = NULL WHERE id = ?'
+    )
+    .run(source)
+  expect(read()).toBeUndefined()
+  h.db.db
+    .prepare(
+      'UPDATE dispatch_contexts SET launch_token_hash = ?, process_incarnation = NULL WHERE id = ?'
+    )
+    .run(hash(0), source)
+  expect(read()).toBeUndefined()
+})
+
+it('does not turn failed pre-attachment custody recovery into launch proof', () => {
+  const h = host(1)
+  const runId = h.db.getDispatchContextById(h.ids[0])!.run_id
+  h.db.failDispatch(h.ids[0], 'old work')
+  h.db.db.prepare('DELETE FROM worker_terminal_resources').run()
+  const start = () =>
+    h.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 10,
+      taskRunId: runId,
+      taskSpec: 'start',
+      startOptions: { agent: 'codex' }
+    }).dispatch.id
+  const before = start()
+  h.db.recordWorkerStage({
+    dispatchId: before,
+    stage: 'terminal_created',
+    terminalHandle: handle(0)
+  })
+  h.hold.run('before', before, before, pane(0), handle(0), 'pty-0:inc-1')
+  h.db.failWorkerStart(before, 'authority_attachment', 'failed before attachment')
+  expect(h.db.getDispatchContextById(before)).toMatchObject({
+    process_incarnation: 'pty-0:inc-1',
+    launch_token_hash: null
+  })
+  expect(h.senders.build().associations.some((row) => row.identity === `dispatch:${before}`)).toBe(
+    false
+  )
+  h.db.db.prepare('DELETE FROM worker_terminal_resources').run()
+  const after = start()
+  h.db.prepareStartingWorkerAuthority({
+    dispatchId: after,
+    handle: handle(0),
+    paneKey: pane(0),
+    processIncarnation: 'pty-0:inc-1',
+    launchTokenHash: hash(0),
+    worktreeId: 'w',
+    effects: [],
+    setupState: 'not_applicable'
+  })
+  h.hold.run('after', after, after, pane(0), handle(0), 'pty-0:inc-1')
+  h.db.failWorkerStart(after, 'task_input', 'failed after attachment')
+  expect(h.senders.build().associations).toContainEqual(
+    expect.objectContaining({ identity: `dispatch:${after}`, dispatchActor: true })
   )
 })

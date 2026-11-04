@@ -3,10 +3,9 @@ import type {
   AgentSenderPublication,
   AgentSenderRevision
 } from '../../shared/agent-sender-associations'
-import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
-import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
 import {
+  readLiveAgentSenderPanes,
   readAgentSenderPrincipals,
   readAgentSenderSessions,
   type AgentSenderPane,
@@ -146,54 +145,10 @@ export class RuntimeAgentSenderAssociations {
     return this.publisher.changedScopes(worktreeIds)
   }
 
-  private livePanes(): Map<string, AgentSenderPane & { original: boolean }> {
-    const panes = new Map<string, AgentSenderPane & { original: boolean }>()
-    const ptys = new Map([...this.deps.getPtys()].map((pty) => [pty.ptyId, pty]))
-    const terminal = (
-      handle: string | null,
-      paneKey: string | null,
-      worktreeId: string | null,
-      ptyId: string | null
-    ) => {
-      if (
-        !handle ||
-        !paneKey ||
-        !worktreeId ||
-        isStructuredWorkerHandle(handle) ||
-        !parsePaneKey(paneKey)
-      ) {
-        return
-      }
-      const pty = ptyId ? ptys.get(ptyId) : undefined
-      const processIncarnation = pty?.incarnationId ? `${pty.ptyId}:${pty.incarnationId}` : null
-      panes.set(paneKey, {
-        paneKey,
-        worktreeId,
-        handle,
-        processIncarnation,
-        original: this.originalExecution(handle, processIncarnation)
-      })
-    }
-    for (const leaf of this.deps.getLeaves()) {
-      this.work.leafVisits++
-      if (leaf.ptyId) {
-        terminal(
-          this.deps.readLeafHandle(leaf),
-          this.deps.makePaneKey(leaf),
-          leaf.worktreeId,
-          leaf.ptyId
-        )
-      }
-    }
-    const readPtyHandle = this.deps.readPtyHandles()
-    for (const pty of ptys.values()) {
-      this.work.ptyVisits++
-      const paneKey = this.deps.paneOf(pty).paneKey
-      if (paneKey && !panes.has(paneKey)) {
-        terminal(readPtyHandle(pty), paneKey, pty.worktreeId, pty.ptyId)
-      }
-    }
-    return panes
+  private livePanes() {
+    return readLiveAgentSenderPanes(this.deps, this.work, (handle, incarnation) =>
+      this.originalExecution(handle, incarnation)
+    )
   }
 
   /** A handle names the execution it was issued to; restart reattach keeps both, but a respawn
@@ -235,7 +190,15 @@ export class RuntimeAgentSenderAssociations {
       peerFingerprint
     ]
     for (const p of panes.values()) {
-      terminalKey.push(p.paneKey, p.worktreeId, p.handle, p.processIncarnation, p.original)
+      terminalKey.push(
+        p.paneKey,
+        p.worktreeId,
+        p.handle,
+        p.processIncarnation,
+        p.hostScope,
+        p.launchTokenHash,
+        p.original
+      )
     }
     const records = this.deps.getSessionRecords()
     // A store says when what chats read changed; a reader without it is listed.
@@ -301,11 +264,16 @@ export class RuntimeAgentSenderAssociations {
     this.terminalKey = key
     this.failedKey = []
     const rows = new Map<string, AgentSenderAssociation>()
-    const add = (identity: string, paneKey: string) => {
+    const add = (identity: string, paneKey: string, dispatchActor?: true) => {
       const pane = panes.get(paneKey)
       // A live handle names its own pane before any worker lineage that once used it.
       if (pane && !rows.has(identity)) {
-        rows.set(identity, { identity, paneKey, worktreeId: pane.worktreeId })
+        rows.set(identity, {
+          identity,
+          paneKey,
+          worktreeId: pane.worktreeId,
+          ...(dispatchActor ? { dispatchActor } : {})
+        })
       }
     }
     for (const pane of panes.values()) {
@@ -314,7 +282,7 @@ export class RuntimeAgentSenderAssociations {
       }
     }
     for (const worker of read.workers) {
-      add(worker.identity, worker.paneKey)
+      add(worker.identity, worker.paneKey, worker.dispatchActor)
     }
     this.terminal = {
       associations: [...rows.values()],

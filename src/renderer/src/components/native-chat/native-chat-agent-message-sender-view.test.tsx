@@ -409,3 +409,41 @@ it.each(['run:coordinator', 'dispatch:past'])(
     expect(past.result.current).toEqual({ agentType: 'codex', dot: undefined, progress: undefined })
   }
 )
+
+it('shows only a proved Dispatch invocation and withdraws proof without changing unrelated sender rows', () => {
+  write(0, { agentType: 'codex' })
+  const saved = {
+    name: 'Worker',
+    agent: 'codex' as const,
+    party: { address: 'dispatch:worker', terminalHandle: 'term_0', orcaSessionId: null }
+  }
+  const publish = (proved: boolean, revision: number) =>
+    useAppStore.getState().setAgentSenderPublication('local', {
+      associations: [
+        {
+          identity: 'dispatch:worker',
+          paneKey: status(0).paneKey,
+          worktreeId: 'workspace',
+          ...(proved ? { dispatchActor: true as const } : {})
+        },
+        { identity: 'term_0', paneKey: status(0).paneKey, worktreeId: 'workspace' }
+      ],
+      principals: [],
+      attachments: [],
+      revision: { epoch: 'proof', revision }
+    })
+  publish(true, 1)
+  const inputs = [{ sender: saved, worktreeId: 'workspace' }]
+  const single = renderHook(() => useAgentMessageSenderView(saved, 'workspace', { kind: 'local' }))
+  const list = renderHook(() => useAgentMessageSenderViews(inputs, { kind: 'local' }))
+  expect(single.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
+  expect(list.result.current[0]).toMatchObject({ agentType: 'codex', dot: 'working' })
+  act(() => publish(false, 2))
+  expect(single.result.current).toMatchObject({ agentType: 'codex', dot: undefined })
+  expect(list.result.current[0]).toMatchObject({ agentType: 'codex', dot: undefined })
+  // The current terminal alias must not bypass missing source proof.
+  write(0, { state: 'waiting' })
+  expect(single.result.current.dot).toBeUndefined()
+  act(() => publish(true, 3))
+  expect(single.result.current).toMatchObject({ agentType: 'codex', dot: 'waiting' })
+})

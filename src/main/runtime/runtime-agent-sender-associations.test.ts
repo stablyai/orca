@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { mkdtempSync } from 'node:fs'
@@ -70,7 +71,13 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
     ptyId: `pty-${i}`
   }))
   const ptys = Array.from({ length: n }, (_, i) =>
-    makeTuiIdlePty({ ptyId: `pty-${i}`, incarnationId: 'inc-1', worktreeId: 'workspace' })
+    makeTuiIdlePty({
+      ptyId: `pty-${i}`,
+      incarnationId: 'inc-1',
+      launchIncarnationId: 'inc-1',
+      launchToken: `launch-${i}`,
+      worktreeId: 'workspace'
+    })
   )
   // A warm restart keeps each terminal's handle; tests replace one to model a fresh terminal.
   const handles = new Map(leaves.map((l, i) => [l.tabId, handle(i)]))
@@ -123,6 +130,11 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
     )
     db.db
       .prepare(
+        'UPDATE dispatch_contexts SET process_incarnation = ?, launch_token_hash = ? WHERE id = ?'
+      )
+      .run(`pty-${i}:inc-1`, createHash('sha256').update(`launch-${i}`).digest('hex'), dispatch.id)
+    db.db
+      .prepare(
         `INSERT INTO worker_terminal_resources (id, origin_dispatch_id, owner_dispatch_id, pane_key, terminal_handle, process_incarnation)
          VALUES (?, ?, ?, ?, ?, ?)`
       )
@@ -171,7 +183,7 @@ it('locates every sender by the handle or Dispatch its card saved after a warm r
     // Started-worker cards name the Dispatch; Message, Task and Update cards name the handle,
     // whether the sender is a hooked agent, a hooks-off agent, a plain shell or a reply.
     expect(h.located(`dispatch:${idleWorker.id}`)).toBe(pane('tab-0'))
-    expect(h.located(`dispatch:${starting.id}`)).toBe(pane('tab-1'))
+    expect(h.located(`dispatch:${starting.id}`)).toBeUndefined()
     expect(h.located(handle(0))).toBe(pane('tab-0'))
     expect(h.located(handle(2))).toBe(pane('tab-2'))
   }
@@ -207,13 +219,13 @@ it('follows a follow-up into the pane that reopened the worker; a live old handl
   h.db.db
     .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
     .run(first.id, reopened.id)
-  expect(h.located(`dispatch:${first.id}`)).toBe(pane('tab-1'))
+  expect(h.located(`dispatch:${first.id}`)).toBeUndefined()
   // Its first terminal is still open: cards from there open it, not the reopened worker.
   expect(h.located(handle(0))).toBe(pane('tab-0'))
   h.leaves.splice(0, 1)
   h.ptys.splice(0, 1)
-  expect(h.located(handle(0))).toBe(pane('tab-1'))
-  expect(h.located(`dispatch:${first.id}`)).toBe(pane('tab-1'))
+  expect(h.located(handle(0))).toBeUndefined()
+  expect(h.located(`dispatch:${first.id}`)).toBeUndefined()
 })
 
 it('rejects a worker whose terminal is released, unproven or on another process, and a settled one with none', () => {

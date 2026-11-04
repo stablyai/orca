@@ -761,3 +761,92 @@ it('uses exact saved custody for follow-up dispatch identity and refuses a later
     .run('p:2', next.id)
   expect(names().sender(`dispatch:${next.id}`).agent).toBeUndefined()
 })
+
+it('refreshes terminal observations and the current record owner within one asynchronous pass reader', () => {
+  const read = names().snapshotReader()
+  pty = { launchAgent: null, connectionId: null }
+  expect(read(terminalParty('term_plain')).agent).toBeNull()
+  pty = { foregroundAgent: 'claude', connectionId: null, launchToken: 'new' }
+  expect(read(terminalParty('term_plain')).agent).toBe('claude')
+  pty = { foregroundAgent: 'codex', connectionId: null, launchToken: 'successor' }
+  expect(read(terminalParty('term_plain')).agent).toBe('codex')
+  const prior = read(chatParty)
+  hostRef.current = {
+    deps: {
+      store: {
+        getConversation: () => ({
+          ...agentSessionConversationView(records.get(CHAT)!),
+          conversationName: 'New owner',
+          provider: 'codex'
+        }),
+        listConversations: () => []
+      }
+    }
+  }
+  expect(read(chatParty)).toEqual({ name: 'New owner', agent: 'codex' })
+  expect(prior.agent).toBe('claude')
+})
+
+it('invalidates positive and null launch knowledge and discards transaction-only facts across rollback ABA', () => {
+  const { dispatchId } = finishedWorker('Launch actor', 'term_gone')
+  const party = { address: `dispatch:${dispatchId}`, terminalHandle: null, orcaSessionId: null }
+  const read = names().snapshotReader()
+  expect(read(party).agent).toBeNull()
+  db.retainWorkerLaunchObservation(dispatchId, { requested: { agent: 'codex' }, effective: null })
+  expect(read(party).agent).toBe('codex')
+  db.db.exec('BEGIN')
+  db.db
+    .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+    .run(JSON.stringify({ agent: 'claude' }), dispatchId)
+  expect(read(party).agent).toBe('claude')
+  db.db.exec('ROLLBACK')
+  // Do not observe the lower generation before a different commit reaches the same value.
+  db.db
+    .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+    .run(JSON.stringify({ agent: 'opencode' }), dispatchId)
+  expect(read(party).agent).toBe('opencode')
+  expect(db.db.prepare('SELECT count(*) AS n FROM temp.agent_sender_tracked').get()).toEqual({
+    n: 0
+  })
+  expect(db.db.prepare('SELECT count(*) AS n FROM temp.agent_sender_dirty').get()).toEqual({ n: 0 })
+})
+
+it.each([100, 1000])(
+  'shares one exact custody cohort across %i sequential admissions and unrelated writes',
+  async (count) => {
+    const ids = Array.from(
+      { length: count },
+      (_, i) => finishedWorker(`work ${i}`, `term_gone_${i}`).dispatchId
+    )
+    db.db
+      .prepare(
+        "UPDATE dispatch_contexts SET assignee_pane_key = 'cohort:leaf', process_incarnation = 'cohort:1', status = 'completed'"
+      )
+      .run()
+    db.db
+      .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+      .run(JSON.stringify({ agent: 'codex' }), ids[0])
+    db.db
+      .prepare(`INSERT INTO worker_terminal_resources (id, origin_dispatch_id, owner_dispatch_id, pane_key, terminal_handle, process_incarnation, prior_owner_dispatch_ids)
+    VALUES ('cohort', ?, ?, 'cohort:leaf', 'term_cohort', 'cohort:1', ?)`)
+      .run(ids[0], ids[count - 1], JSON.stringify(ids.slice(0, -1)))
+    const prepare = vi.spyOn(db.db, 'prepare')
+    const worker = vi.spyOn(db, 'getWorkerDispatch')
+    const read = names().snapshotReader()
+    for (const id of ids) {
+      expect(
+        read({ address: `dispatch:${id}`, terminalHandle: null, orcaSessionId: null }).agent
+      ).toBe('codex')
+      db.insertMessage({ from: 'term_unrelated', to: 'elsewhere', subject: 'ordinary mail' })
+      await Promise.resolve()
+    }
+    expect(
+      prepare.mock.calls.filter(
+        ([sql]) =>
+          sql ===
+          'SELECT * FROM worker_terminal_resources WHERE process_incarnation = ? AND host_scope IS ?'
+      )
+    ).toHaveLength(1)
+    expect(worker.mock.calls.length).toBeLessThanOrEqual(count)
+  }
+)

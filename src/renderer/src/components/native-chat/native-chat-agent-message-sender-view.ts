@@ -26,7 +26,7 @@ function useSenderLocation(
 ) {
   sender =
     agentMessageSenderIsNamedSource(sender) ||
-    ((sender?.party.address.startsWith('run:') || sender?.party.address.startsWith('dispatch:')) &&
+    (sender?.party.address.startsWith('run:') &&
       !sender.party.orcaSessionId &&
       !sender.party.terminalHandle)
       ? undefined

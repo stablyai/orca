@@ -8,10 +8,14 @@ export function withMailDisplayReports<T extends object>(
   items: readonly { itemId: string; body: { kind: string } | AgentJournalMessageItem }[],
   maxBytes: number
 ): T {
+  const canonical = 'mailDisplayReports' in response ? { ...response } : response
+  if (canonical !== response) {
+    Reflect.deleteProperty(canonical, 'mailDisplayReports')
+  }
   const mailDisplayReports = journal.mailDisplayReports?.project(items)
   if (!mailDisplayReports) {
-    return response
+    return canonical
   }
-  const projected = { ...response, mailDisplayReports }
-  return Buffer.byteLength(JSON.stringify(projected)) <= maxBytes ? projected : response
+  const projected = { ...canonical, mailDisplayReports }
+  return Buffer.byteLength(JSON.stringify(projected)) <= maxBytes ? projected : canonical
 }
