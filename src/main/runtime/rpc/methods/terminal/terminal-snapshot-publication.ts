@@ -285,7 +285,7 @@ export async function sendMobileResizeRestream(
     return false
   }
   const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, snapshotByteBudget)
-  if (!serialized) {
+  if (!serialized || serialized.cols !== event.cols) {
     return false
   }
   if (shouldSend && !shouldSend()) {

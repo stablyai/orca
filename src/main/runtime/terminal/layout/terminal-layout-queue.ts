@@ -57,7 +57,7 @@ export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWith
     const inner = this.mobileSubscribers.get(ptyId)
     if (inner) {
       const earliest = this.pickEarliestRestoreTarget(inner)
-      if (earliest) {
+      if (earliest && earliest.previousCols >= 80) {
         return { cols: earliest.previousCols, rows: earliest.previousRows }
       }
     }
@@ -66,7 +66,7 @@ export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWith
       return { cols: renderer.cols, rows: renderer.rows }
     }
     const size = this.getTerminalSize(ptyId)
-    if (size && this.layouts.get(ptyId)?.kind !== 'phone') {
+    if (size && size.cols >= 80 && this.layouts.get(ptyId)?.kind !== 'phone') {
       return { cols: size.cols, rows: size.rows }
     }
     return { cols: 80, rows: 24 }

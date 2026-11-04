@@ -71,13 +71,13 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
     const currentSize = this.getTerminalSize(ptyId)
     const rendererSize = this.lastRendererSizes.get(ptyId)
     const clampedViewport = viewport ? clampTerminalViewport(viewport.cols, viewport.rows) : null
-    const unmeasuredCurrentSize =
-      clampedViewport &&
-      currentSize &&
-      currentSize.cols === clampedViewport.cols &&
-      currentSize.rows === clampedViewport.rows
-        ? null
-        : currentSize
+    const isPhoneSizedCurrent =
+      Boolean(heldOverride) ||
+      this.layouts.get(ptyId)?.kind === 'phone' ||
+      !currentSize ||
+      currentSize.cols < 80 ||
+      (clampedViewport !== null && currentSize.cols === clampedViewport.cols)
+    const unmeasuredCurrentSize = isPhoneSizedCurrent ? null : currentSize
     const previousCols =
       existing?.previousCols ??
       heldOverride?.previousCols ??
