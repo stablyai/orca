@@ -149,7 +149,15 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       ]),
     extensions: ['.jsonl'],
     filePredicate: (filePath) => pathSegments(filePath).includes('agent-transcripts'),
-    contentDependencyPath: cursorChatMetaPath
+    contentDependencyPath: cursorChatMetaPath,
+    // Skip non-transcript project subdirectories so large Cursor workspaces do not walk thousands of tool/canvas files.
+    directoryPredicate: (name) =>
+      name !== 'canvases' &&
+      name !== 'terminals' &&
+      name !== 'mcps' &&
+      name !== 'agent-tools' &&
+      name !== 'assets' &&
+      name !== SUBAGENT_DIR_NAME
   },
   grok: {
     rootDirs: (options, wslHomeDirs) => [
@@ -157,7 +165,9 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       ...wslHomeSessionDirs('grok', wslHomeDirs)
     ],
     extensions: ['.json'],
-    filePredicate: (filePath) => basename(filePath) === 'summary.json'
+    filePredicate: (filePath) => basename(filePath) === 'summary.json',
+    // Grok stores summary.json under <projectHash>/<sessionId>/summary.json.
+    directoryPredicate: (_name, depth) => depth < 2
   },
   devin: {
     rootDirs: (options, wslHomeDirs) => [

@@ -38,35 +38,7 @@
         }
       }
     },
-    "33d053404f10": {
-      "activeWorktreePath": {
-        "$rpc": "null"
-      },
-      "hostStatusResult": {
-        "capabilities": ["aiVault.v1"]
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "loading"
-      }
-    },
-    "44a27dbf05e2": {
-      "name": "status.get#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "595e6c3bbfed": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
-    },
-    "6c80e490239f": {
-      "name": "status.get#2",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "79fccda27236": {
+    "25675dee819b": {
       "name": "aiVault.listSessions#1",
       "ordinal": 6,
       "args": [
@@ -77,6 +49,9 @@
         {
           "name": "params",
           "value": {
+            "afterFingerprint": {
+              "$rpc": "null"
+            },
             "force": false,
             "limit": 500,
             "scopePaths": ["/repo/feature"]
@@ -109,6 +84,29 @@
         }
       }
     },
+    "33d053404f10": {
+      "activeWorktreePath": {
+        "$rpc": "null"
+      },
+      "hostStatusResult": {
+        "capabilities": ["aiVault.v1"]
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "kind": "loading"
+      }
+    },
+    "44a27dbf05e2": {
+      "name": "status.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "6c80e490239f": {
+      "name": "status.get#2",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
     "7e8b2964ad63": {
       "name": "streams-registered-at-teardown",
       "ordinal": 8,
@@ -119,6 +117,11 @@
           "payload": "agentSession.subscribeStatus#1"
         }
       ]
+    },
+    "997bc8f2e92a": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"],\"afterFingerprint\":null}}"
     },
     "acf501fa9958": {
       "name": "status.get#1",
@@ -205,8 +208,8 @@
       {
         "id": "ready",
         "observation": {
-          "sender": ["acf501fa9958", "1e294d39caf5", "79fccda27236"],
-          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "6c80e490239f", "595e6c3bbfed"],
+          "sender": ["acf501fa9958", "1e294d39caf5", "25675dee819b"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "6c80e490239f", "997bc8f2e92a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "worktrees-loaded": "eb79a9b3682a"
@@ -218,8 +221,8 @@
       {
         "id": "cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "1e294d39caf5", "79fccda27236"],
-          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "6c80e490239f", "595e6c3bbfed"],
+          "sender": ["acf501fa9958", "1e294d39caf5", "25675dee819b"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "6c80e490239f", "997bc8f2e92a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "worktrees-loaded": "eb79a9b3682a"

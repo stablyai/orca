@@ -357,4 +357,26 @@ describe('listAiVaultSessions symlinked scope', () => {
     const cached = await listAiVaultSessions({ limit: 1, scopePaths: [linkedRepo] })
     expect(cached.sessions.map((entry) => entry.id)).toEqual(['codex:newer-1', 'codex:s1'])
   })
+
+  it('retains both unscoped and scoped cache entries across alternating reads', async () => {
+    const repo = join(root, 'repo')
+    await mkdir(repo, { recursive: true })
+    scanAiVaultSessionsInService
+      .mockResolvedValueOnce(scanResult('unscoped'))
+      .mockResolvedValueOnce(scanResult('scoped'))
+
+    await expect(listAiVaultSessions({ limit: 500 })).resolves.toMatchObject({
+      scannedAt: 'unscoped'
+    })
+    await expect(listAiVaultSessions({ limit: 500, scopePaths: [repo] })).resolves.toMatchObject({
+      scannedAt: 'scoped'
+    })
+    await expect(listAiVaultSessions({ limit: 24 })).resolves.toMatchObject({
+      scannedAt: 'unscoped'
+    })
+    await expect(listAiVaultSessions({ limit: 500, scopePaths: [repo] })).resolves.toMatchObject({
+      scannedAt: 'scoped'
+    })
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
+  })
 })

@@ -1,19 +1,18 @@
 import { openMobileAgentHistoryChat } from './open-mobile-agent-history-chat'
 import { mobileStructuredSessionOpenMessage } from '../session/mobile-structured-session-open-message'
 import { prepareMobileHistoryResumeTarget } from './mobile-history-resume-target-preparation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, History, RefreshCw } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MobileSegmentedControl, type MobileSegment } from '../components/MobileSegmentedControl'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useSessionScreenHandlers } from '../session/session-screen-handlers'
-import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
@@ -25,9 +24,15 @@ import {
 import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import {
+  useMobileHistoryWorktreeEffect,
+  useMobileHistoryWorktreeState
+} from './use-agent-history-association-reload'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
-import { buildMobileAgentHistorySections } from './agent-history-sections'
+import {
+  buildMobileAgentHistorySections,
+  mobileAgentHistoryScopeSegments
+} from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
@@ -46,7 +51,6 @@ import {
 } from './AgentHistoryNotices'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
-import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export type MobileAgentSessionHistoryPanelProps = {
@@ -54,14 +58,6 @@ export type MobileAgentSessionHistoryPanelProps = {
   worktreeId: string
   name?: string
   origin?: string
-}
-
-function scopeSegments(t: Translate): MobileSegment<AiVault.AiVaultScope>[] {
-  return [
-    { value: 'workspace', label: t('agentHistory.panel.workspace', 'Workspace') },
-    { value: 'project', label: t('agentHistory.panel.project', 'Project') },
-    { value: 'all', label: t('agentHistory.panel.all', 'All') }
-  ]
 }
 
 export function MobileAgentSessionHistoryPanel(props: MobileAgentSessionHistoryPanelProps) {
@@ -86,8 +82,8 @@ function MobileAgentSessionHistoryPanelContent({
     client,
     connState
   )
-  const [worktrees, setWorktrees] = useState<Worktree[]>([])
-  const [worktreesLoaded, setWorktreesLoaded] = useState(false)
+  const worktreeState = useMobileHistoryWorktreeState(hostId, client)
+  const { worktrees, worktreesLoaded } = worktreeState
   const [query, setQuery] = useState('')
   const [searchBarHeight, setSearchBarHeight] = useState(0)
   const insets = useSafeAreaInsets()
@@ -112,39 +108,7 @@ function MobileAgentSessionHistoryPanelContent({
     onRefresh,
     retry
   } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded })
-
-  // Worktree list seeds host-local scopePaths and current-worktree badge.
-  useEffect(() => {
-    if (!client || connState !== 'connected') {
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      try {
-        const worktreeReply = await worktreeCatalogRead.request(client, { limit: 10000 })
-        if (cancelled) {
-          return
-        }
-        const catalog = worktreeCatalogRead.interpret(worktreeReply)
-        if (catalog.accepted) {
-          // Why `?? []`: the member is salvaged, so an envelope the host answers without rows leaves it
-          // absent, and `use-mobile-agent-history-state.ts:61` calls `.find` on it unguarded.
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque in the reader because three screens project them differently; this panel reads only `path` off a row to seed `scopePaths`, and `matrix-aivault.history-screen-worktree.ps-1` records every partition of its own family rendering a list rather than a crash.
-          setWorktrees((catalog.value.worktrees ?? []) as Worktree[])
-        }
-      } catch {
-        // Best-effort context: failed worktree list leaves scoped tabs scanning full history.
-      } finally {
-        // Mark loaded on failure too so scoped tabs fetch unscoped instead of spinning forever.
-        if (!cancelled) {
-          setWorktreesLoaded(true)
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [client, connState])
+  useMobileHistoryWorktreeEffect(hostId, client, connState, worktreeState)
 
   const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
@@ -332,7 +296,7 @@ function MobileAgentSessionHistoryPanelContent({
           accessory={
             screenState.kind === 'ready' ? (
               <MobileSegmentedControl
-                segments={scopeSegments(t)}
+                segments={mobileAgentHistoryScopeSegments(t)}
                 selected={scope}
                 onSelect={onSelectScope}
                 fill

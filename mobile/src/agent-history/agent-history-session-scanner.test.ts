@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import type { RpcResponse } from '../transport/types'
 import {
+  clearCachedAgentHistorySnapshots,
   MOBILE_AI_VAULT_SESSION_LIMIT,
+  readCachedAgentHistorySnapshot,
   scanMobileAgentSessions,
+  writeCachedAgentHistorySnapshot,
   type AgentHistoryCachedSnapshot
 } from './agent-history-session-scanner'
 
@@ -23,7 +26,7 @@ function fakeClient(handler: (call: Call) => RpcResponse) {
 }
 
 describe('scanMobileAgentSessions', () => {
-  it('requests sessions with limit 500 without afterFingerprint when no previous snapshot exists', async () => {
+  it('requests sessions with limit 500 and afterFingerprint null when no previous snapshot exists', async () => {
     const { client, calls } = fakeClient(() => ({
       id: '1',
       ok: true,
@@ -46,7 +49,8 @@ describe('scanMobileAgentSessions', () => {
       params: {
         limit: MOBILE_AI_VAULT_SESSION_LIMIT,
         force: false,
-        scopePaths: ['/repo']
+        scopePaths: ['/repo'],
+        afterFingerprint: null
       }
     })
     expect(result.sessions).toEqual([{ id: 's1' }])
@@ -87,7 +91,7 @@ describe('scanMobileAgentSessions', () => {
     expect(result.fingerprint).toBe('fp-1')
   })
 
-  it('omits afterFingerprint when force is true', async () => {
+  it('sends afterFingerprint null when force is true', async () => {
     const previous: AgentHistoryCachedSnapshot = {
       fingerprint: 'fp-1',
       // oxlint-disable-next-line typescript/consistent-type-assertions
@@ -113,7 +117,7 @@ describe('scanMobileAgentSessions', () => {
     })
 
     expect(calls).toHaveLength(1)
-    expect(calls[0]?.params).not.toHaveProperty('afterFingerprint')
+    expect(calls[0]?.params).toMatchObject({ afterFingerprint: null })
     expect(result.sessions).toEqual([{ id: 's2' }])
     expect(result.fingerprint).toBe('fp-2')
   })
@@ -145,8 +149,27 @@ describe('scanMobileAgentSessions', () => {
     })
 
     expect(calls).toHaveLength(2)
+    expect(calls[0]?.params).toMatchObject({ force: false, afterFingerprint: null })
+    expect(calls[1]?.params).toMatchObject({ force: true, afterFingerprint: null })
     expect(result.sessions).toEqual([{ id: 'recovered' }])
     expect(result.fingerprint).toBe('fp-recovered')
+  })
+
+  it('uses fallbackErrorMessage when the host refusal message is empty', async () => {
+    const { client } = fakeClient(() => ({
+      id: '1',
+      ok: false,
+      error: { code: 'fatal', message: '' },
+      _meta: { runtimeId: 'r1' }
+    }))
+
+    await expect(
+      scanMobileAgentSessions(client, {
+        scopePaths: ['/repo'],
+        force: false,
+        fallbackErrorMessage: 'History unavailable'
+      })
+    ).rejects.toThrow('History unavailable')
   })
 
   it('propagates rpc errors without swallowing', async () => {
@@ -159,6 +182,49 @@ describe('scanMobileAgentSessions', () => {
 
     await expect(
       scanMobileAgentSessions(client, { scopePaths: ['/repo'], force: false })
-    ).rejects.toThrow()
+    ).rejects.toThrow('Vault corrupt')
   })
 })
+
+describe('agent history snapshot cache', () => {
+  beforeEach(() => {
+    clearCachedAgentHistorySnapshots()
+  })
+
+  it('reads, writes, and clears snapshots per host and scope', () => {
+    const first = snapshot('fp-1')
+    const second = snapshot('fp-2')
+    expect(readCachedAgentHistorySnapshot('host-a', 'scope-a')).toBeUndefined()
+
+    writeCachedAgentHistorySnapshot('host-a', 'scope-a', first)
+    writeCachedAgentHistorySnapshot('host-a', 'scope-b', second)
+    expect(readCachedAgentHistorySnapshot('host-a', 'scope-a')).toBe(first)
+    expect(readCachedAgentHistorySnapshot('host-b', 'scope-a')).toBeUndefined()
+
+    clearCachedAgentHistorySnapshots()
+    expect(readCachedAgentHistorySnapshot('host-a', 'scope-a')).toBeUndefined()
+    expect(readCachedAgentHistorySnapshot('host-a', 'scope-b')).toBeUndefined()
+  })
+
+  it('evicts the least recently used snapshot past 20 entries', () => {
+    const oldest = snapshot('fp-old')
+    writeCachedAgentHistorySnapshot('host', 'scope-0', oldest)
+    for (let index = 1; index < 20; index += 1) {
+      writeCachedAgentHistorySnapshot('host', `scope-${index}`, snapshot(`fp-${index}`))
+    }
+    expect(readCachedAgentHistorySnapshot('host', 'scope-0')).toBe(oldest)
+
+    writeCachedAgentHistorySnapshot('host', 'scope-20', snapshot('fp-20'))
+    expect(readCachedAgentHistorySnapshot('host', 'scope-0')).toBe(oldest)
+    expect(readCachedAgentHistorySnapshot('host', 'scope-1')).toBeUndefined()
+    expect(readCachedAgentHistorySnapshot('host', 'scope-20')?.fingerprint).toBe('fp-20')
+  })
+})
+
+function snapshot(fingerprint: string): AgentHistoryCachedSnapshot {
+  return {
+    fingerprint,
+    sessions: [],
+    issues: []
+  }
+}

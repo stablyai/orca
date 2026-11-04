@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   deriveMobileAiVaultScopePaths,
-  mobileAiVaultScanScopePaths
+  mobileAiVaultScanScopePaths,
+  mobileAiVaultScopePathsKey,
+  resolveActiveHistoryWorktree
 } from './agent-history-scope-paths'
 
 const worktree = (worktreeId: string, path: string) => ({ worktreeId, path, repoId: 'repo-1' })
@@ -20,5 +22,24 @@ describe('mobile AI Vault scope paths', () => {
     expect(scanPaths).toHaveLength(64)
     // Active worktree is seeded first, so it survives truncation.
     expect(scanPaths[0]).toBe('/Users/ada/repo/app')
+  })
+
+  it('builds an identical key across fresh worktree arrays with the same paths', () => {
+    const first = mobileAiVaultScopePathsKey('workspace', active, [active])
+    const second = mobileAiVaultScopePathsKey('workspace', { ...active }, [{ ...active }])
+
+    expect(first).toBe('/Users/ada/repo/app')
+    expect(second).toBe(first)
+    expect(mobileAiVaultScopePathsKey('workspace', null, [])).toBe('')
+  })
+
+  it('derives the active worktree path from repoId::path before worktree.ps settles when fastFirstScreen is enabled', () => {
+    expect(resolveActiveHistoryWorktree([], 'repo-1::/Users/ada/repo/app', false)).toBeNull()
+    expect(resolveActiveHistoryWorktree([], 'opaque-id', true)).toBeNull()
+    expect(resolveActiveHistoryWorktree([], 'repo-1::/Users/ada/repo/app', true)).toMatchObject({
+      worktreeId: 'repo-1::/Users/ada/repo/app',
+      repoId: 'repo-1',
+      path: '/Users/ada/repo/app'
+    })
   })
 })

@@ -66,6 +66,9 @@ export function MobileAgentSessionHistoryList({
   return (
     <SectionList
       sections={sections}
+      initialNumToRender={8}
+      maxToRenderPerBatch={8}
+      windowSize={5}
       extraData={colorScheme}
       keyExtractor={(card) => card.id}
       stickySectionHeadersEnabled={false}
