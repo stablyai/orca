@@ -71,7 +71,7 @@ type TerminalFileOpenDeps = {
   onOpenFailure?: (failure: FileOpenFailure) => void
   /** The tab that owns the link; editor opens place themselves relative to its group. */
   sourceTabId?: string | null
-  /** "Open in this group": pins the source tab's group at activation, or refuses. */
+  /** "Open in new tab": pins the source tab's group at activation, or refuses. */
   openInSourceGroup?: boolean
   /** Opt-in menu request; the legacy flag remains editor-only. */
   openInSourceGroupSurface?: 'internal' | 'browser'
@@ -281,6 +281,9 @@ export function openDetectedFilePath(
     } else if (
       hostGrant === null &&
       !isFloatingWorkspaceId(worktreeId) &&
+      // Why: a local file opens in the workspace it was clicked in, even if another holds it open;
+      // owner-scoped tab ids keep both tabs, and the editor reads local absolute paths directly.
+      targetExecutionHostId !== LOCAL_EXECUTION_HOST_ID &&
       store.openFiles.some(
         (openFile) => openFile.filePath === mappedFilePath && openFile.worktreeId !== worktreeId
       )

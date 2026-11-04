@@ -129,6 +129,43 @@ describe('the first message owned by create', () => {
     expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
   })
 
+  it('freezes a learned configured model without promoting its effort recommendation', async () => {
+    mocks.exactSupport.mockResolvedValue(true)
+    recordHostModelCatalogSnapshot(target, 'claude', null, {
+      origin: 'probe',
+      fetchedAt: 1,
+      listingNamesConfiguredModel: true,
+      defaultHoldsInEveryWorkspace: true,
+      models: [
+        {
+          id: 'opus',
+          label: 'Opus',
+          isDefault: true,
+          defaultEffort: 'high',
+          declaredDefaultEffort: 'low',
+          efforts: [
+            { value: 'low', label: 'Low' },
+            { value: 'high', label: 'High' }
+          ]
+        }
+      ]
+    })
+    mocks.call.mockImplementation(async () => created())
+    const launch = startStructuredAgentLaunch('workspace-1', 'claude', {
+      requestId: newAgentLaunchRequestId(),
+      executionHostId: 'local',
+      prompt: 'opening text'
+    })
+    await launch.launchResult
+    expect(createParams().options).toMatchObject({ model: 'opus' })
+    expect(createParams().options).not.toHaveProperty('effort')
+    expect(createParams().firstMessage?.selection).toEqual({ model: 'opus' })
+    expect(createParams().envelope.payloadFingerprint).toBe(
+      structuredAgentSessionCreateFingerprint({ sessionId: launch.sessionId, ...createParams() })
+    )
+    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
+  })
+
   it.each([
     ['new', {}],
     ['resumed', { resumeFrom: { providerSessionId: 'provider-session-1' } }]

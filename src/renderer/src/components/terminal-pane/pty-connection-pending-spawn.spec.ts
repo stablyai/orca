@@ -7,7 +7,11 @@ import {
   createManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -55,6 +59,8 @@ export function registerPtyConnectionPendingSpawnTests(): void {
 
     it('does not retain PTY connect diagnostics unless e2e debug state is enabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
@@ -64,7 +70,11 @@ export function registerPtyConnectionPendingSpawnTests(): void {
         ptyIdsByTabId: { 'tab-1': [] }
       }
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks)
+      )
       await flushAsyncTicks()
 
       expect((globalThis as Record<string, unknown>).__ptyConnectDiag).toBeUndefined()
@@ -74,6 +84,8 @@ export function registerPtyConnectionPendingSpawnTests(): void {
 
     it('does not hold a successor behind a canceled spawn serializer declaration', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { pendingSpawnByPaneKey } = await import('./pty-connection/pty-connect-limits')
       const declaration = createDeferred<number>()
       const spawn = createDeferred<null>()
@@ -92,7 +104,7 @@ export function registerPtyConnectionPendingSpawnTests(): void {
       const binding = connectPanePty(
         createPane(1) as never,
         createManager(1) as never,
-        createDeps() as never
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks2)
       )
       await flushAsyncTicks(12)
       expect(pendingSpawnByPaneKey.size).toBe(1)
@@ -114,6 +126,8 @@ export function registerPtyConnectionPendingSpawnTests(): void {
 
     it('joins a successful pending spawn across a StrictMode remount', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pendingSpawn = createDeferred<string>()
       const firstTransport = createMockTransport()
       firstTransport.connect.mockReturnValueOnce(pendingSpawn.promise)
@@ -129,11 +143,15 @@ export function registerPtyConnectionPendingSpawnTests(): void {
       const firstBinding = connectPanePty(
         createPane(1) as never,
         createManager(1) as never,
-        createDeps() as never
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks3)
       )
       await flushAsyncTicks()
       firstBinding.dispose()
-      connectPanePty(createPane(1) as never, createManager(1) as never, remountDeps as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(remountDeps as never, agentTitleMocks3)
+      )
       await flushAsyncTicks()
 
       expect(firstTransport.connect).toHaveBeenCalledOnce()

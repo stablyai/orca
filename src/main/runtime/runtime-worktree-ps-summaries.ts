@@ -32,7 +32,8 @@ export function buildRuntimeWorktreePsSummaries(args: {
           state: cachedPR.state,
           title: cachedPR.title,
           url: cachedPR.url,
-          checksStatus: cachedPR.checksStatus
+          checksStatus: cachedPR.checksStatus,
+          ...(cachedPR.checksSummary ? { checksSummary: cachedPR.checksSummary } : {})
         }
       : meta?.linkedPR != null
         ? { number: meta.linkedPR, state: UNCACHED_LINKED_PR_STATE }

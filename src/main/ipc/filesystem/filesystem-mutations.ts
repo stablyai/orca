@@ -7,7 +7,7 @@ import {
   resolveDesktopAuthorizedPath,
   resolveLocalRenamePaths,
   resolveLocalRequestPath
-} from '../local-file-access-resolution'
+} from './access/local-file-access-resolution'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { resolveLocalDroppedPathsForAgent } from '../dropped-path-resolution'
@@ -30,7 +30,7 @@ import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import { sweepAbandonedRuntimeUploadTempPath } from '../runtime-upload-temp-sweep'
 import type { RuntimeUploadFileStreamRequest } from '../../../shared/runtime-upload-staging-contract'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
+import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 
 export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle(

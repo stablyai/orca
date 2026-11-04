@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
+import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import { profileStateJsonMatchesAcceptance } from './profile-state-documents'
 import { isRecord, parseProfileStateRoot } from './profile-state-document-validation'
 import {

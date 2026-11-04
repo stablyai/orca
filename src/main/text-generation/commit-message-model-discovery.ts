@@ -10,7 +10,7 @@ import {
   runClaudeBackgroundAttempts,
   type ClaudeBackgroundFailedExit
 } from '../../shared/claude-background-run-isolation'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
 import {

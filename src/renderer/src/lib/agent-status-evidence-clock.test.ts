@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  isFreshNonDoneAgentStatus,
-  type AgentStatusEntry
-} from '../../../shared/agent-status-types'
+  isFreshNonDoneAgentStatus
+} from '../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 
 const NOW = new Date('2026-04-09T12:00:00.000Z').getTime()

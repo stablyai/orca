@@ -9,7 +9,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -77,6 +81,8 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         binding: { syncProcessTracking: () => void; dispose: () => void }
       }> {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-id')
         const capturedDataCallback: {
           current:
@@ -95,10 +101,11 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         transportFactoryQueue.push(transport)
         const pane = createPane(1)
         const manager = createManager(1)
-        const binding = connectPanePty(pane as never, manager as never, deps as never) as {
-          syncProcessTracking: () => void
-          dispose: () => void
-        }
+        const binding = connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+        )
         await flushAsyncTicks(6)
         expect(capturedDataCallback.current).not.toBeNull()
         return { transport, pane, dataCallback: capturedDataCallback.current!, binding }

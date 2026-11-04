@@ -3,7 +3,7 @@ import {
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal-quick-commands'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 export type TerminalQuickCommandDialogAction = 'terminal-command' | 'agent-prompt'
 

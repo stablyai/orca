@@ -4,7 +4,7 @@ import type {
   GitDiffResult
 } from '../../shared/git-diff-compare-types'
 import { assertGitDiffWithinTransportBudget } from '../../shared/git-diff-transport-budget'
-import { getBranchDiff } from '../git/status'
+import { getBranchDiff } from '../git/source-control/branch-diff'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
 import {

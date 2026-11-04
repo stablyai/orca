@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 afterEach(cleanup)
@@ -83,6 +83,24 @@ it('moves one agent per Up/Down press, including after returning from its submen
   await user.keyboard('{Escape}')
   await user.keyboard('{ArrowDown}')
   await waitFor(() => expect(document.activeElement).toBe(claude))
+  expect(launched).not.toHaveBeenCalled()
+})
+
+it('hands mouse highlighting to keyboard navigation and keeps it when the pointer leaves', async () => {
+  const { launched } = show()
+  const user = userEvent.setup()
+  const codex = screen.getByRole('menuitem', { name: /^Codex/ })
+  const claude = screen.getByRole('menuitem', { name: /^Claude/ })
+  await user.hover(screen.getByText('Codex'))
+  expect(document.activeElement).toBe(codex)
+  await user.keyboard('{ArrowDown}')
+  await waitFor(() => expect(document.activeElement).toBe(claude))
+  expect(codex.hasAttribute('data-highlighted')).toBe(false)
+  await user.unhover(screen.getByText('Codex'))
+  expect(document.activeElement).toBe(claude)
+  await user.keyboard('{ArrowUp}')
+  await waitFor(() => expect(document.activeElement).toBe(codex))
+  expect(claude.hasAttribute('data-highlighted')).toBe(false)
   expect(launched).not.toHaveBeenCalled()
 })
 

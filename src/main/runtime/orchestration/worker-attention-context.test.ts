@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { mintFleetAgentStatusEvidence } from '../../../shared/orchestration-fleet-agent-status-evidence'
 import type { WorkerAttentionFacts } from './db/worker-terminal/worker-terminal-attention-query'
 import { projectWorkerAttentionContext } from './worker-attention-context'

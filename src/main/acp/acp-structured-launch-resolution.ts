@@ -26,7 +26,7 @@ import {
   copyBesidePinnedMembers,
   resolveInstalledRuntimeRelease
 } from '../node-runtime/managed-runtime-release'
-import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
+import { hasExplicitTuiLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import {

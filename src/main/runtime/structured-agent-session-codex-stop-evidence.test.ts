@@ -20,18 +20,20 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './agent-session/structured-agent-session-runtime'
-import type { DescendantSnapshot } from '../pty-descendant-termination'
-import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import type { AgentSessionStopOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
-import { agentVerdictDisplayMark } from '../../shared/agent-main-agent-verdict'
+import { agentVerdictDisplayMark } from '../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { activeProviderContext } from '../../shared/agent-session/agent-session-provider-context'
 
 const os = vi.hoisted(() => ({
   capture: vi.fn<(pid: number) => Promise<DescendantSnapshot | null>>(),
   terminate: vi.fn<() => Promise<DescendantTreeVerdict>>()
 }))
-vi.mock('../pty-descendant-termination', () => ({ captureDescendantSnapshot: os.capture }))
-vi.mock('../pty-descendant-exit-verification', () => ({
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
+  captureDescendantSnapshot: os.capture
+}))
+vi.mock('../pty/process-retirement/pty-descendant-exit-verification', () => ({
   terminateDescendantSnapshotWithVerdict: os.terminate
 }))
 vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({

@@ -1,10 +1,10 @@
 // Main-owned titles use hook status so headless tabs and the first window frame already show them.
 
-import { generatedTabTitleForStatus } from '../../../../shared/agent-generated-tab-title-rules'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
-import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
-import { isOrcaDispatchPrompt } from '../../../../shared/agent-row-primary-text'
-import type { GeneratedTitleTab } from '../../../../shared/agent-generated-tab-title-rules'
+import { generatedTabTitleForStatus } from '../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { isOrcaDispatchPrompt } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
+import type { GeneratedTitleTab } from '../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
 import type {
   GeneratedTabTitle,
   LayoutApplyReply,

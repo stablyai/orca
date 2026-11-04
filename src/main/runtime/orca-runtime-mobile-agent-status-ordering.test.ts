@@ -1,7 +1,8 @@
 // #28102: paired clients choose newer updatedAt; never move a pane's published timestamp backward across turn end.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { committingSpawn } from './bind-first-pane.test-fixture'
 import { makeRuntimeStoreWithWorkspaceSession } from './orca-runtime-test-fixtures.spec'

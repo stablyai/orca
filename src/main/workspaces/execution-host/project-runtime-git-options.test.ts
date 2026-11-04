@@ -8,7 +8,7 @@ import {
   getWorktreeMirrorDistro
 } from './project-runtime-git-options'
 import { resolveLocalProjectRuntimeForRepo } from './local-project-runtime-resolution'
-import { _resetWslCachesForTests, _setWslCachesForTests } from '../../wsl'
+import { _resetWslCachesForTests, _setWslCachesForTests } from '../../wsl/discovery/distro-catalog'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const originalPlatform = process.platform

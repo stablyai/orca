@@ -2,7 +2,7 @@ import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { PanePtyBinding } from './pty-connection/pane-pty-binding'
 import type { IDisposable } from '@xterm/xterm'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'

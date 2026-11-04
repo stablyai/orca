@@ -5,8 +5,8 @@ import {
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from '../../claude-profile-routing'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
-import type { AgentCliInstallationProblem } from '../../agent-cli-installation-problem'
-import { tuiAgentDisplayName } from '../../tui-agent-display-names'
+import type { AgentCliInstallationProblem } from '../../agent-launch/catalog/agent-cli-installation-problem'
+import { tuiAgentDisplayName } from '../../agent-launch/catalog/tui-agent-display-names'
 
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'

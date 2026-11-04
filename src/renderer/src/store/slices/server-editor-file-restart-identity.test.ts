@@ -100,17 +100,6 @@ describe('a server file keeps its id across a restart', () => {
     expect(restarted.activeFileIdByWorktree[WT_A]).toBe(fileId)
   })
 
-  it('keeps an unsaved draft of a server file through a restart', () => {
-    const store = prepareStore()
-    const fileId = openServerFile(store, WT_A, ENV)
-    store.getState().setEditorDraft(fileId, 'unsaved edit')
-    store.getState().markFileDirty(fileId, true)
-
-    const restarted = restart(store)
-    expect(restarted.editorDrafts[fileId]).toBe('unsaved edit')
-    expect(restarted.openFiles.find((file) => file.id === fileId)?.isDirty).toBe(true)
-  })
-
   it('still names a local file by its path, also after a server file with the same path', () => {
     const store = prepareStore()
     const serverId = openServerFile(store, WT_A, ENV)

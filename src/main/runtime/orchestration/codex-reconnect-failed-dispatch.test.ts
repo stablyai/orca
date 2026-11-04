@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from '../agent-transcript-pane-test-harness'
 import { OrchestrationDb } from './db'

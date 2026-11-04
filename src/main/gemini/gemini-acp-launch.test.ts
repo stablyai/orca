@@ -8,7 +8,7 @@ import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { createAcpModelCatalogProbe } from '../acp/acp-model-catalog-probe'
 import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { structuredAgentRuntimeRegistration } from '../runtime/structured-agent-runtime-registrations'
-import { agentChatPermissionModes } from '../../shared/agent-chat-permission-support'
+import { agentChatPermissionModes } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
 import { readGeminiAcpSignInLine } from './gemini-acp-dialect'
 

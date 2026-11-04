@@ -2,11 +2,13 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { JournalSubmissionRow } from './journal-row-schema'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
+import { journalInputOrder } from './journal-input-order'
 import type { QueuedMessageRow } from './queued-message-table'
-import type { JournalInputPlace } from './journal-input-order'
+import type { JournalInputPlace } from './journal-input-order-state'
 import {
   queuePauseHolding,
   journalQueueStopHolds,
+  failedQueueTurnSequence,
   type DerivedQueuePause
 } from './queued-message-pause'
 import {
@@ -73,12 +75,18 @@ export class JournalInputCardIndex {
   private floor: { epoch: string; sequence: number } | null = null
   private pauses: readonly DerivedQueuePause[] = []
   private cleared = new Set<string>()
+  // A failure holds every waiting card alike, so it gates reads instead of the cached flags.
+  private failed = false
   constructor(private readonly lineage: JournalInputLineageOwner) {}
   hasOverlay(id: string): boolean {
     return this.overlays.has(id)
   }
+  /** Whether a failed turn holds waiting input, as of the last ensure. */
+  failureHolds(): boolean {
+    return this.failed
+  }
   command(): QueuedMessageRow | undefined {
-    return this.currentCoordinates?.allPlaces().command
+    return this.failed ? undefined : this.currentCoordinates?.allPlaces().command
   }
   releaseHistory(): void {
     this.domains = undefined
@@ -90,7 +98,9 @@ export class JournalInputCardIndex {
     return (
       card.state === 'waiting' &&
       card.holdReason === null &&
-      (this.cleared.has(card.messageId) || Boolean(queuePauseHolding(this.pauses, card)))
+      (this.failed ||
+        this.cleared.has(card.messageId) ||
+        Boolean(queuePauseHolding(this.pauses, card)))
     )
   }
   admission(
@@ -121,18 +131,20 @@ export class JournalInputCardIndex {
   }
 
   queryCurrent(place: JournalInputPlace): InputPlaceQuery {
-    return queryInputContext(
-      place.context,
-      place.original,
-      (coordinate) => this.currentCoordinates!.query(coordinate.epoch, coordinate.sequence),
-      () => this.currentCoordinates!.allPlaces(),
-      mergeInputPlaces
+    return this.gate(
+      queryInputContext(
+        place.context,
+        place.original,
+        (coordinate) => this.currentCoordinates!.query(coordinate.epoch, coordinate.sequence),
+        () => this.currentCoordinates!.allPlaces(),
+        mergeInputPlaces
+      )
     )
   }
 
   query(place: JournalInputPlace): InputPlaceQuery {
     if (place.context.basis === 'observed') {
-      return this.index!.query('introduction', place.context.cut)
+      return this.gate(this.index!.query('introduction', place.context.cut))
     }
     if (!this.domains) {
       this.domains = new JournalInputDomainIndex()
@@ -143,7 +155,15 @@ export class JournalInputCardIndex {
         }
       }
     }
-    return this.domains.query(place.context, place.original)
+    return this.gate(this.domains.query(place.context, place.original))
+  }
+
+  private gate(result: InputPlaceQuery): InputPlaceQuery {
+    if (!this.failed) {
+      return result
+    }
+    const { head, handoff, position } = result
+    return { ...(head ? { head } : {}), ...(handoff ? { handoff } : {}), position }
   }
 
   ensure(state: JournalReducerState, floor?: { epoch: string; sequence: number } | null): void {
@@ -152,6 +172,11 @@ export class JournalInputCardIndex {
     }
     floor = this.floor
     const marks = state.queuePauseMarks
+    this.failed =
+      failedQueueTurnSequence(
+        journalInputOrder(state).newestTurn.failure(),
+        marks.resumedSequence
+      ) > 0
     const lifted = Math.max(state.latestAcceptedTurnSequence, marks.resumedSequence)
     const reopened = Math.max(
       marks.reopenedSequence,

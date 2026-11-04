@@ -5,13 +5,15 @@ import { join } from 'node:path'
 import type * as RetrySchedulerModule from './agent-hook-result-retry-scheduler'
 import type { AgentHookResultRetryHost } from './agent-hook-result-retry-scheduler'
 import { RelayAgentHookServer } from './agent-hook-server'
-import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
+import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
 
 const probe = vi.hoisted(() =>
   vi.fn(async (): Promise<'live' | 'unverifiable' | 'exited'> => 'unverifiable')
 )
-vi.mock('../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe
+}))
 const retryHosts = vi.hoisted(() => {
   const hosts: AgentHookResultRetryHost[] = []
   return hosts

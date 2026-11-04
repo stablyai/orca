@@ -18,7 +18,7 @@ import { prepareCodexAdoption } from './codex-adoption-preparation'
 import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import * as codexHomes from '../codex/codex-home-paths'
 import { adoptedDirectoryProbes } from './agent-session-journal/adopted-directory-probe'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 let root: string
 beforeEach(async () => {

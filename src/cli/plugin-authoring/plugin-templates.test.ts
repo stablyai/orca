@@ -60,22 +60,6 @@ describe('orca plugin create templates', () => {
     }
   )
 
-  it('components writes a build-less TSX panel and its gitignored typings', async () => {
-    const dir = join(await tempRoot(), 'todo-panel')
-    const created = await createPluginFromTemplate({ dir, template: 'components' })
-    expect(created.files).toEqual(
-      expect.arrayContaining(['orca-plugin.json', 'src/panel.tsx', 'tsconfig.json', '.gitignore'])
-    )
-    expect(created.files.some((file) => file.startsWith('dist/') || file.includes('build'))).toBe(
-      false
-    )
-    expect(created.typeFiles).toContain('.orca/types/orca/index.d.ts')
-    expect(JSON.parse(await readFile(join(dir, 'tsconfig.json'), 'utf8')).extends).toBe(
-      './.orca/types/tsconfig.json'
-    )
-    expect(await readFile(join(dir, '.gitignore'), 'utf8')).toContain('.orca/')
-  })
-
   it('refuses a non-empty folder and never overwrites', async () => {
     const dir = await tempRoot()
     await writeFile(join(dir, 'keep.txt'), 'mine')

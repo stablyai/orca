@@ -1,3 +1,4 @@
+import { githubCandidateOwner } from '@/store/github/source-collections'
 import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 export {
   getTaskPageRepoSourceContext,
@@ -11,6 +12,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repo-types'
+import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
 import {
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
@@ -125,19 +127,11 @@ export function getGitHubProjectSourceSummary(args: {
     hostAvailability: availability && !availability.reason ? [availability] : []
   })
 }
-export function getTaskPageRepoCacheInput(repo: Repo): {
-  id: string
-  path: string
-  executionHostId?: string | null
-  connectionId?: string | null
-  sourceCacheScope?: string | null
-} {
+export function getTaskPageRepoCacheInput(repo: Repo): TaskPageRepoCacheRowInput {
   const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
   return {
-    id: repo.id,
-    path: repo.path,
-    executionHostId: repo.executionHostId,
-    connectionId: repo.connectionId,
+    ...repo,
+    candidateOwner: githubCandidateOwner(repo),
     sourceCacheScope:
       sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null
   }

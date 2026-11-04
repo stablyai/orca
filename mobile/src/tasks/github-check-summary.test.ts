@@ -54,6 +54,7 @@ describe('buildGitHubCheckSummary', () => {
 
   it('rolls up GitLab jobs with unknown terminal statuses as neutral', () => {
     expect(buildGitLabCheckSummary([{ status: 'success' }, { status: 'future_status' }])).toEqual({
+      cancelled: 0,
       state: 'success',
       total: 2,
       passed: 1,
@@ -139,6 +140,7 @@ describe('mobile check classification', () => {
   }[])('$name never reads as failing', ({ statuses, expected }) => {
     expect(buildGitLabCheckSummary(statuses.map((status) => ({ status })))).toEqual({
       ...expected,
+      cancelled: 0,
       total: statuses.length
     })
   })

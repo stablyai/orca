@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   createPlan: vi.fn()
 }))
 
-vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   blockedWslDistroForPath: mocks.blocked
 }))

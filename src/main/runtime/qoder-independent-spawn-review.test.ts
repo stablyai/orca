@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import filesystem from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
 import { buildAiVaultResumeShellCommand } from '../../shared/ai-vault-resume-command'
 
 await import('./orca-runtime-test-mocks.spec')

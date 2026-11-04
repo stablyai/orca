@@ -157,7 +157,7 @@ describe('plugin PR E2E routing', () => {
       'src/renderer/src/components/plugins/review/PluginUpdateReview.test.tsx',
       'src/main/plugins/plugin-service.test.ts',
       'src/main/plugins/__mocks__/plugin-git-ssh-remote-fixture.ts',
-      'src/renderer/src/components/settings/GeneralPane.tsx',
+      'src/renderer/src/components/settings/general/GeneralPane.tsx',
       'src/main/ipc/filesystem.ts'
     ]) {
       expect(routedPluginSpecs(file), file).toEqual([])

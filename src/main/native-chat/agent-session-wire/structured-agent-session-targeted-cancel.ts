@@ -1,7 +1,7 @@
 // Targeted Stops commit a fixed target/result before effects, without a whole-agent Stop event.
 // Provider uncertainty becomes a note; retries answer the receipt without retargeting.
 
-import { agentChildWorkStopTargets } from '../../../shared/agent-child-work-stop-targets'
+import { agentChildWorkStopTargets } from '../../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'

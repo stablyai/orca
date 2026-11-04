@@ -1,6 +1,7 @@
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type {
   CheckStatus,
+  ProviderCheckSummary,
   GitHubRepositoryIdentity,
   PRInfo
 } from '../../../../shared/github/pull-request-types'
@@ -32,6 +33,7 @@ export type ParentPrChecksRowStatus =
   | 'refreshError'
   | 'unsupported'
   | 'unavailable'
+  | 'cancelled'
   | 'failing'
   | 'pending'
   | 'success'
@@ -58,7 +60,8 @@ export type ParentPrChecksRow = {
   branch: string | null
   status: ParentPrChecksRowStatus
   group: ParentPrChecksGroupKey
-  checkTone: CheckStatus
+  checkTone: CheckStatus | 'cancelled'
+  checksSummary?: ProviderCheckSummary
   title: string
   reviewNumber: number | null
   reviewLabel: string | null

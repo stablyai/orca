@@ -1,3 +1,9 @@
+// @vitest-environment happy-dom
+import { createElement } from 'react'
+import { act, render, cleanup } from '@testing-library/react'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { ReviewChecksIndicator } from '@/components/sidebar/WorktreeCardMetadataStatusBadges'
+import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { prChecksCacheSuffix } from '../github/cache-identity'
 import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
@@ -23,6 +29,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
   })
 
   afterEach(() => {
+    cleanup()
     _clearGitHubPRRefreshStartedEntriesForTest()
     vi.useRealTimers()
   })
@@ -346,4 +353,99 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       linkedReviewHintKey: 'gitlab:5'
     })
   })
+})
+
+it('updates the mounted indicator on complete same-head failure → cancellation → failure and clears absent metadata', async () => {
+  const store = createTestStore()
+  const branch = 'feature/cancellation'
+  const cacheKey = `repo-1::${branch}`
+  const hostedKey = getHostedReviewCacheKey('/repo', branch, null, 'repo-1')
+  const headSha = 'same-head'
+  const checks = Array.from({ length: 100 }, () => ({
+    name: 'old run',
+    status: 'completed' as const,
+    conclusion: 'cancelled' as const,
+    url: null
+  }))
+  const complete = [
+    ...checks,
+    {
+      name: 'real failure',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null
+    }
+  ]
+  let sequence = 0
+  function refresh(checksSummary = summarizeProviderChecks(complete)) {
+    sequence += 1
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence,
+      reason: 'visible',
+      aliases: [{ cacheKey, repoId: 'repo-1', repoPath: '/repo', branch }],
+      requestStartedAt: sequence * 100,
+      outcome: {
+        kind: 'found',
+        fetchedAt: sequence * 100 + 1,
+        pr: makePR({ checksStatus: 'failure', headSha, checksSummary })
+      }
+    })
+  }
+  function Indicator() {
+    const review = store((state) => state.hostedReviewCache[hostedKey]?.data)
+    return createElement(ReviewChecksIndicator, {
+      status: review?.status,
+      checksSummary: review?.checksSummary
+    })
+  }
+  const view = render(createElement(TooltipProvider, null, createElement(Indicator)))
+  act(() => refresh())
+  expect(view.getByLabelText('Checks: Failing').className).toContain('rose')
+  // Opening details returns only page one; its cancellation-only rows cannot erase entry 101.
+  mockApi.gh.prChecks.mockResolvedValue(checks)
+  await act(async () => {
+    await store
+      .getState()
+      .fetchPRChecks('/repo', 12, branch, headSha, undefined, { repoId: 'repo-1' })
+  })
+  expect(store.getState().prCache[cacheKey]?.data?.checksSummary?.total).toBe(101)
+  expect(view.getByLabelText('Checks: Failing').className).toContain('rose')
+  act(() => refresh(summarizeProviderChecks([...checks, checks[0]])))
+  expect(view.getByLabelText('Checks: Cancelled').className).toContain('muted')
+  act(() => refresh())
+  expect(view.getByLabelText('Checks: Failing').className).toContain('rose')
+  act(() => {
+    sequence += 1
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence,
+      reason: 'visible',
+      aliases: [{ cacheKey, repoId: 'repo-1', repoPath: '/repo', branch }],
+      requestStartedAt: sequence * 100,
+      outcome: {
+        kind: 'found',
+        fetchedAt: sequence * 100 + 1,
+        pr: makePR({ checksStatus: 'failure', headSha })
+      }
+    })
+  })
+  expect(store.getState().prCache[cacheKey]?.data?.checksSummary).toBeUndefined()
+  expect(store.getState().hostedReviewCache[hostedKey]?.data?.checksSummary).toBeUndefined()
+  expect(view.getByLabelText('Checks: Failing').className).toContain('rose')
+
+  act(() => refresh(summarizeProviderChecks(checks)))
+  expect(view.getByLabelText('Checks: Cancelled').className).toContain('muted')
+  mockApi.gh.prChecks.mockResolvedValue([
+    { name: 'new run', status: 'queued', conclusion: null, url: null }
+  ])
+  await act(async () => {
+    await store.getState().fetchPRChecks('/repo', 12, branch, headSha, undefined, {
+      repoId: 'repo-1',
+      force: true
+    })
+  })
+  expect(store.getState().prCache[cacheKey]?.data).toMatchObject({ checksStatus: 'pending' })
+  expect(store.getState().prCache[cacheKey]?.data?.checksSummary).toBeUndefined()
+  expect(store.getState().hostedReviewCache[hostedKey]?.data).toMatchObject({ status: 'pending' })
+  expect(store.getState().hostedReviewCache[hostedKey]?.data?.checksSummary).toBeUndefined()
+  expect(view.getByLabelText('Checks: Pending')).toBeDefined()
 })

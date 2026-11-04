@@ -1,6 +1,6 @@
 import type { AgentSessionDispatchOutcome } from './structured-agent-session-adapter'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 export type StructuredAgentSessionInputAdmission =
   | { kind: 'prepare' }

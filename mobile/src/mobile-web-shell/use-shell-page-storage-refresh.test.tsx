@@ -10,7 +10,9 @@ import {
   retainMirroredStorage,
   writeMirroredStorage
 } from '../storage/mirrored-storage-keys'
+import { saveTerminalLinkOpenMode } from '../storage/preferences'
 import { TERMINAL_SHORTCUT_STORAGE_KEYS } from './page-storage-keys'
+import { createFakeBridgePortPair } from './bridge/bridge-port-pair-test-harness'
 
 const store = vi.hoisted(() => ({
   values: new Map<string, string>(),
@@ -154,3 +156,97 @@ it.each(TERMINAL_SHORTCUT_STORAGE_KEYS)(
     releaseKeys()
   }
 )
+
+it('publishes the last queued browser-link save after native return hydrated the earlier value', async () => {
+  const key = 'orca:terminalLinkOpenMode'
+  focus.active = false
+  store.values.set(key, 'orca-browser')
+  const releaseKeys = retainMirroredStorage([key])
+  const refresh = () => hydrateMirroredStorage([key])
+  let page = 'orca-browser'
+  const publish = () => {
+    page = readMirroredStorage([key])[key]!
+  }
+  function Harness() {
+    useShellPageStorageRefresh(refresh, publish)
+    return null
+  }
+  let renderer!: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(createElement(Harness))
+  })
+  const first = saveTerminalLinkOpenMode('phone-browser')
+  const last = saveTerminalLinkOpenMode('orca-browser')
+  await act(async () => {
+    await Promise.resolve()
+    store.pending.shift()!()
+    await first
+    focus.active = true
+    renderer.update(createElement(Harness))
+  })
+  expect(page).toBe('phone-browser')
+  await act(async () => {
+    store.pending.shift()!()
+    await last
+  })
+  expect(store.values.get(key)).toBe('orca-browser')
+  expect(page).toBe('orca-browser')
+  act(() => renderer.unmount())
+  releaseKeys()
+})
+
+it('republishes an accepted page zoom after an older native snapshot crosses the pinch', async () => {
+  const key = 'orca:terminalTextScale'
+  store.values.set(key, '1')
+  const releaseKeys = retainMirroredStorage([key])
+  const storage = { [key]: '1' }
+  let hold = false
+  const held: string[] = []
+  const pair = createFakeBridgePortPair({
+    route: { pathname: '/h/host-a/session/wt-1' },
+    storage,
+    holdToPage: (json) => {
+      if (hold) {
+        held.push(json)
+      }
+      return hold
+    },
+    onStorageWrite: writeMirroredStorage
+  })
+  await pair.flush()
+  let displayedScale = 1
+  pair.client.onStorageUpdate(() => {
+    displayedScale = Number(pair.client.getShellSession()!.storage[key])
+  })
+  const refresh = () => hydrateMirroredStorage([key])
+  const publish = () => {
+    Object.assign(storage, readMirroredStorage([key]))
+    pair.host.publishStorage()
+  }
+  function Harness() {
+    useShellPageStorageRefresh(refresh, publish)
+    return null
+  }
+  let renderer!: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(createElement(Harness))
+    await pair.flush()
+  })
+  hold = true
+  pair.host.publishStorage()
+  displayedScale = 1.5
+  expect(pair.client.notifyStorageWrite(key, '1.5')).toBe(true)
+  await act(async () => pair.flush())
+  pair.deliverToPage(held.shift()!)
+  expect(displayedScale).toBe(1)
+  for (const frame of held) {
+    pair.deliverToPage(frame)
+  }
+  await act(async () => store.pending.shift()!())
+  expect(store.values.get(key)).toBe('1.5')
+  expect(displayedScale).toBe(1.5)
+  act(() => renderer.unmount())
+  pair.client.close()
+  pair.host.dispose()
+  releaseKeys()
+})
