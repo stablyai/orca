@@ -55,6 +55,7 @@ export type AgentPickerDraft = {
   delegated?: readonly string[]
   literalKeys?: readonly string[]
   textChanges?: readonly ('model' | 'effort')[]
+  acceptedEdits?: { choices: AgentChoicePatch; arguments?: string | null }
   /** A folded sparse edit receipt; never part of a launch or persisted recipe. */
   recipeEdits?: {
     selection: CurrentActionSelection
@@ -287,17 +288,4 @@ export function agentPickerEntriesFromRows(
   )
 }
 
-export function agentPickerHydrationQueue(
-  entries: readonly AgentPickerEntry[],
-  selected: () => TuiAgent | undefined
-): () => number | undefined {
-  const pending = new Set(entries.flatMap((entry, index) => (entry.surfaces.length ? [index] : [])))
-  return () => {
-    const preferred = entries.findIndex((entry) => entry.agent === selected())
-    const index = pending.has(preferred) ? preferred : pending.values().next().value
-    if (index !== undefined) {
-      pending.delete(index)
-    }
-    return index
-  }
-}
+export { agentPickerHydrationQueue } from './agent-launch-picker-rows'

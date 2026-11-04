@@ -191,7 +191,7 @@ function rewriteNode(value: unknown, map: (value: string) => string, skip: boole
     entries.set(
       nextKey,
       other
-        ? merged(nextKey, other, { child: nextChild, rekeyed })
+        ? mergeWslDriveUncKeyedEntries(nextKey, other, { child: nextChild, rekeyed })
         : {
             child: nextChild,
             rekeyed
@@ -204,7 +204,7 @@ function rewriteNode(value: unknown, map: (value: string) => string, skip: boole
 }
 
 /** The re-keyed entry wins a tie: it is the one the user's UNC project wrote. */
-function merged(
+export function mergeWslDriveUncKeyedEntries(
   key: string,
   a: { child: unknown; rekeyed: boolean },
   b: { child: unknown; rekeyed: boolean }

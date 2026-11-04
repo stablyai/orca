@@ -14709,6 +14709,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "O host de execução salvo não corresponde mais a esta configuração do projeto."
+        },
+        "launchSettings": {
+          "needsFreshSession": "As configurações de inicialização do agente exigem uma nova sessão a cada execução."
         }
       },
       "TaskPage": {

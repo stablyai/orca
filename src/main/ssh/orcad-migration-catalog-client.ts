@@ -24,10 +24,8 @@ import {
 } from '../../shared/orcad-migration/orcad-migration-blob-transfer'
 import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
-import {
-  ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY,
-  ORCAD_MIGRATION_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY
-} from '../../shared/orcad-runtime-capabilities'
+import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
+import { assertDestinationKeepsMigrationPayload } from './orcad-migration-destination-payload-gate'
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime/remote-runtime-client'
 import { assertOrcadMigrationRequestFits } from './orcad-migration-manifest-export'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
@@ -43,9 +41,6 @@ export const ORCAD_MIGRATION_DESTINATION_UNSUPPORTED = 'orcad_migration_destinat
 /** Refuse older destinations that would silently strip extra agent arguments. */
 export const ORCAD_MIGRATION_DESTINATION_EXTRA_AGENT_ARGS_UNSUPPORTED =
   'orcad_migration_destination_extra_agent_args_unsupported:Update Orca on this host to use extra arguments.'
-/** Refuse older destinations that would silently drop links to parents in other stores. */
-export const ORCAD_MIGRATION_DESTINATION_CROSS_STORE_LINEAGE_UNSUPPORTED =
-  'orcad_migration_destination_cross_store_lineage_unsupported:Update Orca on this host to move workspaces whose parent is on another machine.'
 /** Unsupported source kinds are refused before any staging request. */
 export const ORCAD_MIGRATION_DESTINATION_SOURCE_KIND_UNSUPPORTED =
   'orcad_migration_destination_source_kind_unsupported:Update Orca on this host to move this project to it.'
@@ -233,8 +228,6 @@ async function request(
     (manifest.payload.dormantState?.automations ?? []).some((automation) =>
       hasExtraAgentArgs(automation.extraAgentArgs)
     )
-  const carriesCrossStoreLineage =
-    imports && (manifest.payload.dormantState?.crossStoreLineage?.length ?? 0) > 0
   const response = await sendSupportedMigrationRequest(
     pairing,
     METHOD_BY_OPERATION[operation],
@@ -245,11 +238,8 @@ async function request(
     requiredOrcadMigrationSourceCapability(manifest.source),
     // Hosts without blob capability would strip expectedBlobs and commit unchecked.
     (capabilities) => {
-      if (
-        carriesCrossStoreLineage &&
-        !capabilities.includes(ORCAD_MIGRATION_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY)
-      ) {
-        throw new Error(ORCAD_MIGRATION_DESTINATION_CROSS_STORE_LINEAGE_UNSUPPORTED)
+      if (imports) {
+        assertDestinationKeepsMigrationPayload(manifest, capabilities)
       }
       const unsupported = findUnsupportedMigrationBlobKind(expectedBlobs, capabilities)
       if (unsupported) {

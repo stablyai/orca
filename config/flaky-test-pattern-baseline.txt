@@ -610,7 +610,6 @@
 1 test-timeout-needs-reason:src/main/agent-hooks/wsl-hook-relay-live.integration.test.ts
 1 test-timeout-needs-reason:src/main/agent-hooks/wsl-hook-relay-manager.test.ts
 1 test-timeout-needs-reason:src/main/ai-vault/parse-cache/session-parse-cache-large-scan.test.ts
-1 test-timeout-needs-reason:src/main/ai-vault/session-scanner-unlimited-dedup.test.ts
 1 test-timeout-needs-reason:src/main/antigravity/native-macos-credentials.real.test.ts
 1 test-timeout-needs-reason:src/main/antigravity/posix-hook-invocation.test.ts
 1 test-timeout-needs-reason:src/main/browser/agent-browser/agent-browser-bridge-raw-process.test.ts
@@ -1078,7 +1077,6 @@
 2 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-antigravity-segment.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts
-2 test-no-wall-clock:src/renderer/src/components/terminal-workspace-surface-ids.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/use-workspace-cleanup-removal.agent-stop.test.tsx
 2 test-no-wall-clock:src/renderer/src/hooks/ipc-events/agent-status-terminal-title-tab-write.test.ts
 2 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-cli-worktree-activation.test.ts
