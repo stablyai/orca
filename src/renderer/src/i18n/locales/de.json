@@ -20493,6 +20493,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Folgenachrichten einreihen",
+        "scrollToLatestOnSendTitle": "Beim Senden zur neuesten Nachricht scrollen",
+        "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
+        "scrollToLatestOnSendSearchPosition": "Position",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
@@ -20504,7 +20507,13 @@
         "queueSearchSteer": "Steuern",
         "shellEnvSearchVariables": "Umgebungsvariablen",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "Proxy"
+        "shellEnvSearchProxy": "Proxy",
+        "idleStopTitle": "Inaktive Agenten beenden nach",
+        "idleStopCopy": "Beendet den Agenten eines Chats, sobald der Chat so lange inaktiv war, um Speicher freizugeben. Der Chat bleibt erhalten, und deine nächste Nachricht startet den Agenten erneut. Wähle Nie für Agenten, die zwischen Durchgängen im Hintergrund weiterarbeiten.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "Zeitlimit",
+        "idleStopSearchKeepAlive": "aktiv halten",
+        "idleStopNever": "Nie"
       }
     },
     "agentChildRow": {

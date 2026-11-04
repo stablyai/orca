@@ -108,6 +108,8 @@ export function useNativeChatStructuredComposerSend({
         structuredTransport.onSubmitted?.()
       }
       const isCurrent = structuredTransport.capturePresentation()
+      const revealAdmitted =
+        structuredTransport.captureAdmittedReveal?.() ?? structuredTransport.onSubmitted
       if (
         mayHoldAgentReferences(submittedText) &&
         (!hostCommand ||
@@ -188,7 +190,7 @@ export function useNativeChatStructuredComposerSend({
           completeNativeChatStructuredUserAction(
             agent,
             structuredTransport,
-            revealsTranscript && (!hostCommand || isCurrent())
+            revealsTranscript && (!hostCommand || isCurrent()) ? revealAdmitted : undefined
           )
           consume()
           return true

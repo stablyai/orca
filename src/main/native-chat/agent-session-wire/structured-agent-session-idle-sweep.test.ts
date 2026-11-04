@@ -92,6 +92,23 @@ describe('the idle sweep', () => {
     await vi.waitFor(() => expect(readerSaw(reader.events).texts).toContain('carry on'))
   })
 
+  it('keeps an idle agent while idle stop is Never, and applies a new window on the next tick', async () => {
+    let idleMs: number | null = null
+    await rig.dispose()
+    rig = await createRestTestRig({
+      idleSweep: { intervalMs: 3_600_000, idleMs: () => idleMs }
+    })
+    await foundRestTestChat(rig)
+    rig.clock.now += 24 * 60 * 60_000
+
+    await sweepOnce(rig.host)
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+
+    idleMs = 60 * 60_000
+    await sweepOnce(rig.host)
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+  })
+
   it('never stops an agent a message is queued for, and hands the message over (P2-08)', async () => {
     await foundRestTestChat(rig)
     rig.adapter.closeSession.mockClear()
@@ -342,33 +359,7 @@ describe('an idle stop that fails (P2-11 a)', () => {
 })
 
 describe('the idle sweep with no child running (P2-22 ii)', () => {
-  it('closes a handle whose only leftover is a prompt nobody can answer', async () => {
-    const journal = {
-      submissions: () => [],
-      pendingSubmissions: () => [],
-      snapshot: () => ({
-        items: [
-          {
-            itemId: 'prompt',
-            revision: 1,
-            sequence: 1,
-            observedAt: 0,
-            body: {
-              kind: 'approval',
-              title: 'Run?',
-              detail: null,
-              options: [],
-              resolution: {
-                state: 'pending',
-                selectedOptionId: null,
-                resolvedBy: null,
-                resolvedAt: null
-              }
-            }
-          }
-        ]
-      })
-    }
+  function sweepWithoutChild(journal: unknown, idleMs?: () => number | null) {
     const sessions = Object.assign(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a session fixture carrying only the journal and child facts the sweep reads.
       new Map([[SESSION, { journal, child: null } as never]]),
@@ -397,10 +388,48 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
         error: (_message, fields) => {
           throw fields.error
         }
-      }
+      },
+      ...(idleMs ? { idleMs } : {})
     })
+    return { sweep, stopAgent, closeConversation }
+  }
+
+  it('closes a handle whose only leftover is a prompt nobody can answer', async () => {
+    const journal = {
+      submissions: () => [],
+      pendingSubmissions: () => [],
+      snapshot: () => ({
+        items: [
+          {
+            itemId: 'prompt',
+            revision: 1,
+            sequence: 1,
+            observedAt: 0,
+            body: {
+              kind: 'approval',
+              title: 'Run?',
+              detail: null,
+              options: [],
+              resolution: {
+                state: 'pending',
+                selectedOptionId: null,
+                resolvedBy: null,
+                resolvedAt: null
+              }
+            }
+          }
+        ]
+      })
+    }
+    const { sweep, stopAgent, closeConversation } = sweepWithoutChild(journal)
     await sweep.tick()
     expect(stopAgent).not.toHaveBeenCalled()
+    expect(closeConversation).toHaveBeenCalledWith(SESSION)
+  })
+
+  it('still retires it on the default window while idle stop is Never', async () => {
+    const { sweep, closeConversation } = sweepWithoutChild(null, () => null)
+    await sweep.tick()
     expect(closeConversation).toHaveBeenCalledWith(SESSION)
   })
 })

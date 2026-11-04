@@ -620,7 +620,6 @@
 1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-validated-partition.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/guest-lifecycle/find/browser-find-frame-traversal.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/identity/browser-session-ua-cloudflare-live.electron.test.ts
-1 test-timeout-needs-reason:src/main/browser/network/egress/browser-route-webrtc-egress.electron.test.ts
 1 test-timeout-needs-reason:src/main/claude/claude-background-run-isolation-real-cli.test.ts
 1 test-timeout-needs-reason:src/main/claude/claude-child-exit-proof-ladder.test.ts
 1 test-timeout-needs-reason:src/main/claude/claude-stop-ack-race.test.ts
@@ -1316,7 +1315,6 @@
 4 test-no-wall-clock:src/main/updater/lifecycle/serve-supervisor-install-park.test.ts
 4 test-no-wall-clock:src/renderer/src/components/cmd-j/palette-live-status.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.compact-hover.test.tsx
-4 test-no-wall-clock:src/renderer/src/components/status-bar/provider-segment-balance.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
 4 test-no-wall-clock:tests/e2e/cross-version-wire/release-checkout.unit.test.ts
 4 test-timeout-needs-reason:src/main/claude/claude-agent-sdk-exit-proof.test.ts

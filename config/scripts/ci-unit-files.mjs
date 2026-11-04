@@ -51,7 +51,6 @@ export const UNIT_EXCLUDE = [
   'src/main/browser/guest-lifecycle/popups/popup-origin-chrome.electron.test.ts',
   'src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts',
   'src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts',
-  'src/main/browser/network/egress/browser-route-webrtc-egress.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/browser-popup-compatibility.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/browser-popup-adapter-compatibility.electron.test.ts',

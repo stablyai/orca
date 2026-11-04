@@ -20477,6 +20477,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Takip mesajlarını sıraya al",
+        "scrollToLatestOnSendTitle": "Gönderirken en son mesaja kaydır",
+        "scrollToLatestOnSendCopy": "Yukarı kaydırılmışken göndermek en son mesaja atlar ve yanıtı takip eder. Konumunuzu korumak için kapatın.",
+        "scrollToLatestOnSendSearchPosition": "konum",
         "inlineVisualsTitle": "Yanıtlarda görseller",
         "inlineVisualsCopy": "Ajanın yanıtlarında grafikler, diyagramlar ve taslaklar göstermesine izin verin. Yeni başlatılan sohbetlere uygulanır.",
         "inlineVisualsToggleLabel": "Yanıtlardaki görselleri aç/kapat",
@@ -20488,7 +20491,13 @@
         "queueSearchSteer": "yönlendir",
         "shellEnvSearchVariables": "ortam değişkenleri",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "vekil sunucu"
+        "shellEnvSearchProxy": "vekil sunucu",
+        "idleStopTitle": "Boştaki ajanları şu süre sonra durdur",
+        "idleStopCopy": "Bellek boşaltmak için, sohbet bu kadar süre boşta kaldığında sohbetin ajanını sonlandırır. Sohbet kalır ve bir sonraki mesajınız ajanı yeniden başlatır. Turlar arasında arka planda çalışmaya devam eden ajanlar için Asla seçeneğini seçin.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "zaman aşımı",
+        "idleStopSearchKeepAlive": "canlı tut",
+        "idleStopNever": "Asla"
       }
     },
     "agentChildRow": {

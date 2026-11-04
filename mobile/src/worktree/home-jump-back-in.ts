@@ -1,4 +1,11 @@
-import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
+import { isAgentStatusFresh } from '../../../src/shared/agent-status/contracts/agent-status-freshness'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import {
+  applyAgentPaneActivityFlags,
+  createAgentPaneActivityFlags,
+  rankWorktreeStatus,
+  type WorktreeStatus
+} from '../../../src/shared/worktree-status-rollup'
 import type { ConnectionState } from '../transport/types'
 import type { HomeResumeCard } from './home-resume-card'
 import type {
@@ -6,6 +13,7 @@ import type {
   HomeWorktreeSummary,
   HostWorktreeInfo
 } from './home-worktree-info'
+import { buildAgentRowLineageTree } from './agent-row-lineage'
 import { getWorktreeDotStatus } from './workspace-list-ordering'
 
 const ATTENTION_ROWS_PER_HOST = 6
@@ -32,11 +40,39 @@ function byRankThenRecent(
   return a.rank - b.rank || (b.lastOutputAt ?? 0) - (a.lastOutputAt ?? 0)
 }
 
+function agentDotStatus(agent: RuntimeWorktreeAgentRow): WorktreeStatus {
+  const flags = createAgentPaneActivityFlags()
+  applyAgentPaneActivityFlags(flags, agent)
+  return rankWorktreeStatus('inactive', flags)
+}
+
+// The newest top-level agent the host counted in the dot's state names the row; a nameless one keeps the workspace title.
+function conversationBehindDot(
+  agents: readonly RuntimeWorktreeAgentRow[] | undefined,
+  dotStatus: WorktreeStatus,
+  now: number
+): Pick<HomeAttentionWorktree, 'conversationName' | 'paneKey'> {
+  let newest: RuntimeWorktreeAgentRow | undefined
+  for (const agent of buildAgentRowLineageTree(agents ?? []).rootRows) {
+    if (
+      isAgentStatusFresh(agent, now) &&
+      agentDotStatus(agent) === dotStatus &&
+      (!newest || agent.updatedAt > newest.updatedAt)
+    ) {
+      newest = agent
+    }
+  }
+  const conversationName = newest?.conversationName?.trim()
+  return newest && conversationName ? { conversationName, paneKey: newest.paneKey } : {}
+}
+
 /** The rows of one desktop's list that "Jump back in" may show, using the workspace list's dot status. */
 export function selectHomeAttentionWorktrees(
   rows: readonly HomeWorktreeSummary[]
 ): HomeAttentionWorktree[] {
-  const ranked: (HomeAttentionWorktree & { rank: number })[] = []
+  const now = Date.now()
+  const ranked: (HomeAttentionWorktree & Pick<HomeWorktreeSummary, 'agents'> & { rank: number })[] =
+    []
   for (const row of rows) {
     if (row.isArchived === true) {
       continue
@@ -54,13 +90,17 @@ export function selectHomeAttentionWorktrees(
       branch: row.branch,
       displayName: row.displayName,
       lastOutputAt: typeof row.lastOutputAt === 'number' ? row.lastOutputAt : undefined,
-      workingMode: row.workingMode
+      workingMode: row.workingMode,
+      agents: row.agents
     })
   }
   return ranked
     .sort(byRankThenRecent)
     .slice(0, ATTENTION_ROWS_PER_HOST)
-    .map(({ rank: _rank, ...worktree }) => worktree)
+    .map(({ rank: _rank, agents, ...worktree }) => ({
+      ...worktree,
+      ...conversationBehindDot(agents, worktree.dotStatus, now)
+    }))
 }
 
 export type HomeJumpBackInRow = Readonly<{
