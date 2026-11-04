@@ -51,6 +51,7 @@ describe('Antigravity AI Vault discovery', () => {
     const result = await scanAiVaultSessions({
       ...isolatedScanRoots(root),
       antigravityChatBrainDir: antigravityChatBrainDir(stateDirectory),
+      includeAntigravityIdeSessions: true,
       platform: 'darwin'
     })
 
