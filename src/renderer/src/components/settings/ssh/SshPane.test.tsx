@@ -28,7 +28,6 @@ vi.mock('@/store/index', () => {
     sshConnectionStates: mocks.connectionStates,
     recordFeatureInteraction: mocks.recordInteraction,
     setSshTargetsMetadata: vi.fn(),
-    clearRemovedSshTargetState: vi.fn(),
     recordSshRepoReadoptions: mocks.recordReadoptions,
     openSettingsTarget: mocks.openSettingsTarget,
     repos: [],
