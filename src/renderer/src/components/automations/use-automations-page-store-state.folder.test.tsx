@@ -2,7 +2,7 @@
 import { renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeFolderWorkspace } from '../sidebar/folder-workspace-composer-submit-fixtures'
+import { makeFolderWorkspace } from '../sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { makeAutomation } from './automations-page-fixtures'
 import { unscopedAutomationListRows } from './automation-list-row-identity'
 import { useAutomationsPageStoreState } from './use-automations-page-store-state'

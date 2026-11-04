@@ -1,4 +1,4 @@
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 
 export const TERMINAL_INPUT_COALESCE_MAX_CODE_UNITS = 4096
 export const PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES = 64

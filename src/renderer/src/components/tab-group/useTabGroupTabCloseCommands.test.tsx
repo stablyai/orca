@@ -21,7 +21,7 @@ vi.mock('../terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.clo
 vi.mock('../../store/slices/browser-webview-cleanup', () => ({
   destroyWorkspaceWebviews: mocks.destroyWorkspaceWebviews
 }))
-vi.mock('../editor/editor-autosave', () => ({
+vi.mock('../editor/autosave/editor-autosave', () => ({
   requestEditorFileClose: mocks.requestEditorFileClose
 }))
 

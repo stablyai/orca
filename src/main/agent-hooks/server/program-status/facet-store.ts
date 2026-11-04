@@ -2,7 +2,7 @@ import {
   programStatusFacetsEqual,
   type ProgramStatusFacet
 } from '../../../../shared/program-status/facet'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 // Bound retained facets across long sessions; evict the least recently changed first.
 const MAX_PROGRAM_STATUS_FACETS = 1024

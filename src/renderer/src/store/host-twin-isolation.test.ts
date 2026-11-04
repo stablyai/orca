@@ -43,8 +43,10 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-const { sleepWorktreesReportingFailures } = await import('@/components/sidebar/sleep-worktree-flow')
-const { fakeMainSleep } = await import('@/components/sidebar/sleep-worktree-test-main')
+const { sleepWorktreesReportingFailures } =
+  await import('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow')
+const { fakeMainSleep } =
+  await import('@/components/sidebar/workspace-actions/sleep/sleep-worktree-test-main')
 
 const ptyKill = vi.fn()
 

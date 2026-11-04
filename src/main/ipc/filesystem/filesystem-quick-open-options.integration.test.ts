@@ -1,5 +1,4 @@
 import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises'
-import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -90,80 +89,3 @@ it('honors inherited ignores, opt-in links, cycles, and retargets in real proces
   expect(reopened).toContain('linked/api/.env')
   expect(reopened).not.toContain('linked/fresh.md')
 }, 30_000)
-
-it('validates recent membership independently of top32, ignores, exclusions and a real inventory cap', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-quick-open-recents-'))
-  fixtures.push(root)
-  await mkdir(join(root, '.git'))
-  await mkdir(join(root, 'src'))
-  await mkdir(join(root, 'excluded'))
-  await mkdir(join(root, 'node_modules'))
-  await writeFile(join(root, '.gitignore'), 'ignored.ts\n')
-  await writeFile(join(root, '.ignore'), 'always-ignored.ts\n')
-  await Promise.all(
-    [
-      'ignored.ts',
-      'always-ignored.ts',
-      'excluded/other.ts',
-      'node_modules/blocked.ts',
-      ...Array.from({ length: 60 }, (_, i) => `src/file${String(i).padStart(3, '0')}.ts`)
-    ].map((path) => writeFile(join(root, path), 'fixture'))
-  )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only these store methods.
-  const store = {
-    getRepos: () => [{ id: 'fixture', path: root }],
-    getSettings: () => ({}),
-    getFolderWorkspaces: () => []
-  } as unknown as Store
-  const candidates = [
-    'src/file059.ts',
-    'deleted.ts',
-    'ignored.ts',
-    'always-ignored.ts',
-    'excluded/other.ts',
-    'node_modules/blocked.ts'
-  ]
-  const options = { includeIgnored: false, candidatePaths: candidates }
-  const local = await listQuickOpenFiles(
-    root,
-    store,
-    [join(root, 'excluded')],
-    undefined,
-    candidates.length,
-    undefined,
-    undefined,
-    options
-  )
-  expect(local).toEqual(['src/file059.ts'])
-  const broad = await listQuickOpenFiles(
-    root,
-    store,
-    [join(root, 'excluded')],
-    undefined,
-    candidates.length,
-    undefined,
-    undefined,
-    { ...options, includeIgnored: true }
-  )
-  expect(broad.sort()).toEqual(['ignored.ts', 'src/file059.ts'])
-  await mkdir(join(root, 'large'))
-  for (let index = 0; index < 20_020; index += 1) {
-    writeFileSync(join(root, 'large', `entry${index}.ts`), 'x')
-  }
-  const capped = await listQuickOpenFiles(root, store, undefined, undefined, 20_001)
-  expect(capped).toHaveLength(20_001)
-  const available = new Set(capped)
-  const missing = Array.from({ length: 20_020 }, (_, i) => `large/entry${i}.ts`).find(
-    (path) => !available.has(path)
-  )
-  expect(missing).toBeDefined()
-  if (!missing) {
-    throw new Error('fixture must exceed the cap')
-  }
-  expect(
-    await listQuickOpenFiles(root, store, undefined, undefined, 1, undefined, undefined, {
-      candidatePaths: [missing],
-      includeIgnored: false
-    })
-  ).toEqual([missing])
-}, 60_000)

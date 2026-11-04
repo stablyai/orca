@@ -1,6 +1,6 @@
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/structured-agent-session-create'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   isLocalExecutionHost,
   parseExecutionHostId,

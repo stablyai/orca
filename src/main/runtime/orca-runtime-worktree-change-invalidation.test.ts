@@ -33,7 +33,7 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
-import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { getLocalWorktreeScanGeneration } from '../workspaces/catalog/local-worktree-scan-generation'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 

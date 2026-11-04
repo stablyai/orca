@@ -1,4 +1,4 @@
-import type { AgentLaunchTabPublishRequest } from '../../../../shared/agent-launch-tab-publication'
+import type { AgentLaunchTabPublishRequest } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import { publishAgentLaunchTab } from '@/lib/agent-launch-tab-publication'
 import { applyAgentLaunchPaneVerdict } from '@/lib/agent-launch-pane-verdict-application'
 import { keepAgentLaunchTabMainWrote } from '@/lib/agent-launch-tab-main-written'

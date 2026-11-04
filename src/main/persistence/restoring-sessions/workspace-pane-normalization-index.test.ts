@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { createLazyTerminalTabLookup } from './pane-identity-migration'
 import { normalizeWorkspaceSessionPaneIdentities } from './workspace-pane-normalization'
 

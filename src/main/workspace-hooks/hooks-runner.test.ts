@@ -149,7 +149,7 @@ describe('createSetupRunnerScript', () => {
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } =
-        await import('../../shared/terminal-git-credential-guard')
+        await import('../../shared/shell/launch/terminal-git-credential-guard')
       const result = await createSetupRunnerScript(
         makeRepo(),
         'C:\\repo\\feature',

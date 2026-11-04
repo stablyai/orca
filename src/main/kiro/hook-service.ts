@@ -2,7 +2,10 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, posix as pathPosix } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 
-import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallState,
+  AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
   buildWindowsAgentHookCurlPostCommand,

@@ -12,7 +12,10 @@ import {
 import { AgentLaunchPicker } from './AgentLaunchPicker'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import * as inventoryModule from './use-agent-launch-picker-inventory'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 const entry: AgentPickerEntry = {
   agent: 'codex',
@@ -41,6 +44,63 @@ beforeEach(() => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
+})
+
+it('requests current supplied inventory after Agent Settings closes the root programmatically', () => {
+  const claude: AgentPickerEntry = {
+    ...entry,
+    agent: 'claude',
+    label: 'Claude',
+    rows: [{ agent: 'claude', kind: 'cli' }]
+  }
+  const entries = [entry, claude]
+  vi.spyOn(inventoryModule, 'useAgentLaunchPickerInventory').mockReturnValue([])
+  const onCatalogOpen = vi.fn()
+  const onOpenAgentSettings = vi.fn()
+  const model = {
+    state: 'settled' as const,
+    rows: entries.flatMap((entry) => entry.rows),
+    detection: {
+      detectedIds: entries.map((entry) => entry.agent),
+      isLoading: false,
+      isRefreshing: false,
+      detectionFailed: false,
+      needsServerUpdate: false,
+      refresh: async () => entries.map((entry) => entry.agent)
+    }
+  }
+  const show = (agent: AgentPickerEntry['agent']) =>
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <AgentLaunchPicker
+            model={model}
+            entries={entries}
+            agent={agent}
+            onPick={launch}
+            onCatalogOpen={onCatalogOpen}
+            onOpenAgentSettings={onOpenAgentSettings}
+          />
+        </TooltipProvider>
+      )
+    )
+  const open = () =>
+    fireEvent.pointerDown(getByRole(document.body, 'button', { name: 'Select agent' }), {
+      button: 0
+    })
+  show('claude')
+  open()
+  fireEvent.click(getByRole(document.body, 'button', { name: 'Configure Claude' }))
+  fireEvent.keyDown(document.querySelector('input[aria-label="Search models"]')!, {
+    key: 'ArrowLeft'
+  })
+  fireEvent.click(getByRole(document.body, 'menuitem', { name: 'Agent settings…' }))
+  expect(onOpenAgentSettings).toHaveBeenCalledTimes(1)
+  expect(onCatalogOpen.mock.calls).toEqual([['claude'], ['claude']])
+  show('codex')
+  expect(onCatalogOpen.mock.calls).toEqual([['claude'], ['claude']])
+  open()
+  expect(onCatalogOpen.mock.calls).toEqual([['claude'], ['claude'], ['codex']])
 })
 afterEach(() => {
   act(() => root.unmount())
@@ -178,3 +238,45 @@ it.each(['button', 'enter'] as const)(
     )
   }
 )
+
+it('opens from a printable key on the focused trigger and seeds the search', () => {
+  const claude: AgentPickerEntry = {
+    ...entry,
+    agent: 'claude',
+    label: 'Claude',
+    rows: [{ agent: 'claude', kind: 'cli' }]
+  }
+  const entries = [entry, claude]
+  vi.spyOn(inventoryModule, 'useAgentLaunchPickerInventory').mockReturnValue([])
+  const model = {
+    state: 'settled' as const,
+    rows: entries.flatMap((entry) => entry.rows),
+    detection: {
+      detectedIds: entries.map((entry) => entry.agent),
+      isLoading: false,
+      isRefreshing: false,
+      detectionFailed: false,
+      needsServerUpdate: false,
+      refresh: async () => entries.map((entry) => entry.agent)
+    }
+  }
+  act(() =>
+    root.render(
+      <TooltipProvider>
+        <AgentLaunchPicker model={model} entries={entries} agent="codex" onPick={launch} />
+      </TooltipProvider>
+    )
+  )
+  const trigger = getByRole(document.body, 'button', { name: 'Select agent' })
+  const search = () =>
+    document.querySelector<HTMLInputElement>('input[placeholder="Search agents and setups…"]')
+  fireEvent.keyDown(trigger, { key: 'c', metaKey: true })
+  expect(search()).toBeNull()
+  fireEvent.keyDown(trigger, { key: 'l' })
+  expect(search()?.value).toBe('l')
+  expect(getByRole(document.body, 'button', { name: 'Configure Claude' })).toBeTruthy()
+  expect(document.querySelector('[aria-label="Configure Codex"]')).toBeNull()
+  fireEvent.keyDown(getByRole(document.body, 'menu'), { key: 'Escape' })
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+  expect(search()?.value).toBe('')
+})

@@ -2,9 +2,9 @@ import {
   AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   type AiVaultAgent
-} from '../shared/ai-vault-types'
-import { AiVaultSearchFiltersSchema } from '../shared/ai-vault-search-contract'
-import type { AiVaultSearchRequest } from '../shared/ai-vault-search-types'
+} from '../shared/ai-vault/contracts/ai-vault-types'
+import { AiVaultSearchFiltersSchema } from '../shared/ai-vault/search/ai-vault-search-contract'
+import type { AiVaultSearchRequest } from '../shared/ai-vault/search/ai-vault-search-types'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,

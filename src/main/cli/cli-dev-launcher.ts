@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import { DEV_COMMAND_NAME, DEV_LAUNCHER_DIR } from './cli-install-constants'
 import { escapeWindowsBatchValue, isAbsoluteForPlatform } from './cli-install-path-format'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 
 export async function ensureDevLauncher(args: {
   platform: NodeJS.Platform

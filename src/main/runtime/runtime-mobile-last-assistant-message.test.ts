@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from './runtime-mobile-agent-status-projection'
 import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'

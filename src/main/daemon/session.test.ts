@@ -6,11 +6,11 @@ import {
   SESSION_FORCE_KILL_RETRY_MS
 } from './session-termination-controller'
 import type { SessionState, ShellReadyState } from './types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   _resetPtyOwnerHostColorsForTest,
   setPtyOwnerHostColors
-} from '../../shared/pty-owner-color-query-colors'
+} from '../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({

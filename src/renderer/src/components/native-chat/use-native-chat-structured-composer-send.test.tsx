@@ -12,7 +12,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-li
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'

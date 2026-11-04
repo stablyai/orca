@@ -4,7 +4,7 @@ import { useAppStore } from '../../store'
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 import { collectLeafIdsInOrder, EMPTY_LAYOUT } from './layout-serialization'
-import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import { selectUnifiedTerminalTabFields } from './terminal-unified-tab-lookup'
@@ -15,8 +15,8 @@ import {
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
 import type { TerminalPaneTitleController } from './use-terminal-pane-title-state'
-import { readTerminalCursorLineContext } from '../../../../shared/terminal-cursor-line-context'
-import { readTerminalComposerTypedText } from '../../../../shared/terminal-composer-draft'
+import { readTerminalCursorLineContext } from '../../../../shared/terminal/input/terminal-cursor-line-context'
+import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
   const {

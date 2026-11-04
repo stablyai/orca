@@ -4,11 +4,11 @@ import {
 } from '../../../../shared/antigravity-session-origin'
 import type React from 'react'
 import { Badge } from '@/components/ui/badge'
-import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostContextBadge'
+import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
-import type { AgentDotState } from '@/components/AgentStateDot'
+
 import { useRepoById } from '@/store/selectors'
 import { resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
@@ -16,17 +16,18 @@ import {
   isAiVaultSessionRecoverableEmpty,
   type AiVaultScope,
   type AiVaultSession
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { SessionTime } from './ai-vault-session-time'
-import { sessionModelLabel } from './ai-vault-session-display'
-import { agentLabel } from './ai-vault-session-filters'
+import { sessionModelLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-display'
+import './ai-vault-session-filters'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
   aiVaultWorktreeStatusLabel,
   shouldShowAiVaultWorktreeStatusBadge,
-  shouldShowAiVaultSessionWorktreeLine,
-  type AiVaultSessionWorktreeInfo
+  shouldShowAiVaultSessionWorktreeLine
 } from './ai-vault-session-worktree'
+import type { AiVaultSessionWorktreeInfo } from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 
 export function getSessionDetailsId(sessionId: string): string {
   return `ai-vault-session-details-${sessionId.replace(/[^A-Za-z0-9_-]/g, '-')}`

@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils'
 import type {
   MobileRelayStatus,
   MobileRelayStatusDetail
-} from '../../../../../../shared/mobile-relay-status'
-import type { MobilePairingConnectionMode } from '../../../../../../shared/mobile-pairing-connection-mode'
+} from '../../../../../../shared/remote-runtime/relay/mobile-relay-status'
+import type { MobilePairingConnectionMode } from '../../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import { MobilePairingPathOption } from './MobilePairingPathOption'
 import { MobileRelaySignInPanel } from './MobileRelaySignInPanel'
 import { relayClockSkewMessage } from '../../../mobile/relay-clock-skew-message'

@@ -7,7 +7,7 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
 import { createAgentModelCatalogService } from '../../../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { createCodexModelCatalogProbe } from '../../../codex/codex-model-catalog-probe'
+import { createCodexModelCatalogProbe } from '../../../codex/structured/catalog/codex-model-catalog-probe'
 import type { runCodexAppServerSession } from '../../../codex/app-server/codex-app-server-session'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'

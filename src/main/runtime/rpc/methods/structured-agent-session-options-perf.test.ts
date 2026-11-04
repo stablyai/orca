@@ -46,7 +46,8 @@ it.each([100, 1_000])(
       params: { provider: 'claude' },
       journal: {
         threadGoal: () => null,
-        submissions: () => [],
+        inputOrder: { hasInputs: () => false },
+        statusRead: () => ({ items: [], submissions: [] }),
         visitItems: () => {},
         wroteBeforeOpen: () => false,
         contextUsage: () => null,

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { readCrewAssignmentIds } from './crew-query'
 import type { OrchestrationDb } from '../db'
 import { currentRunCoordinatorOrcaSessionIdSql } from '../db/runs/run-coordinator-orca-session'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { potentiallyLiveRemoteAttachmentSql } from '../db/federation/remote-attachment-liveness'
 import {
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,

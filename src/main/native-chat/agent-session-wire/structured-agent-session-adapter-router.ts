@@ -1,5 +1,5 @@
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -161,6 +161,16 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsLiveProviderProcess?.(sessionId, acquisitionGeneration) ??
     false
+
+  // A start's owner outlives its route: exit acknowledgment may drop the route while the owner
+  // still reads its ending, so both calls reach the adapters by exact generation, not by route.
+  startupEnding = (sessionId: string, acquisitionGeneration: string) =>
+    this.adapters()
+      .map((adapter) => adapter.startupEnding?.(sessionId, acquisitionGeneration))
+      .find((ending) => ending !== undefined)
+
+  retireStartup = (sessionId: string, acquisitionGeneration: string): void =>
+    this.adapters().forEach((adapter) => adapter.retireStartup?.(sessionId, acquisitionGeneration))
 
   awaitStoppedRequestEnd = async (sessionId: string, stoppedAt: number) =>
     this.liveOwnerOrNull(sessionId)?.awaitStoppedRequestEnd?.(sessionId, stoppedAt)

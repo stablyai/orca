@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
 import { lookupOpenCodeSessionPane } from '../../shared/agent-hook-listener/opencode-session-registry'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { ProcessIdentityRow } from './opencode-client-sweep'
 import {
   advanceBinderCursor,

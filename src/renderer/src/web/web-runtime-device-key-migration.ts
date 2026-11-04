@@ -1,5 +1,5 @@
-import { REGISTER_DEVICE_KEY_METHOD } from '../../../shared/device-key-capability'
-import { encodeDeviceProofMessage } from '../../../shared/device-key-proof'
+import { REGISTER_DEVICE_KEY_METHOD } from '../../../shared/remote-runtime/pairing/device-key-capability'
+import { encodeDeviceProofMessage } from '../../../shared/remote-runtime/pairing/device-key-proof'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import type {

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DrivePath from '../ipc/wsl-guest-windows-drive-path'
-import type * as CommandPathResolver from '../ipc/command-path-resolver'
+import type * as CommandPathResolver from '../ipc/command-path/command-path-resolver'
 
 const { detectInstallDirs, guestMounts } = vi.hoisted(() => {
   const value: readonly string[] = []
@@ -21,7 +21,7 @@ vi.mock('../../shared/local-agent-install-dir-detection', () => ({
 vi.mock('../pty/environment/windows-environment-path', () => ({
   mergePersistedWindowsPath: vi.fn()
 }))
-vi.mock('../ipc/command-path-resolver', async (importOriginal) => {
+vi.mock('../ipc/command-path/command-path-resolver', async (importOriginal) => {
   const actual = await importOriginal<typeof CommandPathResolver>()
   return { ...actual, findCommandsOnLocalPath: vi.fn(actual.findCommandsOnLocalPath) }
 })
@@ -31,7 +31,10 @@ vi.mock('../ipc/wsl-guest-windows-drive-path', async (importOriginal) => ({
 }))
 
 import { detectAgentCommandsOnHost } from './agent-command-detection'
-import { findCommandsOnLocalPath, isCommandOnLocalPath } from '../ipc/command-path-resolver'
+import {
+  findCommandsOnLocalPath,
+  isCommandOnLocalPath
+} from '../ipc/command-path/command-path-resolver'
 
 describe('detectAgentCommandsOnHost install-dir fallback', () => {
   const originalPlatform = process.platform

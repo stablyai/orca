@@ -1,4 +1,4 @@
-import type { HostedReviewCreationBlockedReason } from '../../../../shared/hosted-review'
+import type { HostedReviewCreationBlockedReason } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type {
   GitHubPRRefreshSkippedReason,
   PRRefreshErrorType

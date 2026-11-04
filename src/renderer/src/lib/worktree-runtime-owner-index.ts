@@ -11,7 +11,7 @@ export {
   resolveQualifiedIndexedRepoOwnerForHost,
   type IndexedRepoOwnerResolution
 } from './repo-owner-index'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'

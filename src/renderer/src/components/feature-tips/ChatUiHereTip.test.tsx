@@ -218,6 +218,7 @@ describe('Chat UI is here tip', () => {
       )
       expect(useAppStore.getState().activeModal).toBe('none')
       expect(track).toHaveBeenLastCalledWith('chat_ui_feature_tip_action', {
+        launch_tip_experiment_version: 'corner-card-v2',
         variant: 'chat_ui_off',
         action: 'stay_in_terminal'
       })
@@ -233,6 +234,7 @@ describe('Chat UI is here tip', () => {
       expect(updateSettingsOrThrow).toHaveBeenCalledExactlyOnceWith({ agentDefaultSurface: 'chat' })
       expect(updateSettings).not.toHaveBeenCalled()
       expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
+        launch_tip_experiment_version: 'corner-card-v2',
         variant: 'chat_ui_off',
         action: 'use_chat_ui'
       })
@@ -280,6 +282,7 @@ describe('Chat UI is here tip', () => {
         agentDefaultSurface: 'terminal'
       })
       expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
+        launch_tip_experiment_version: 'corner-card-v2',
         variant: 'chat_ui_on',
         action: 'switch_to_terminal'
       })

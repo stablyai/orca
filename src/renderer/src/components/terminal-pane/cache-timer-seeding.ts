@@ -1,4 +1,4 @@
-import { isClaudeAgent } from '@/lib/agent-status'
+import { isClaudeAgent } from '../../../../shared/agent-status/title/agent-title-identity'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 
 export function shouldSeedCacheTimerOnInitialTitle(args: {

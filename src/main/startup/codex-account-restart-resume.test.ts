@@ -15,19 +15,23 @@ vi.mock('./main-process-state', () => ({
     store: { getSettings: () => ({}) }
   }
 }))
-vi.mock('../codex/hook-service', () => ({
+vi.mock('../codex/hooks/installation/hook-service', () => ({
   codexHookService: {
     installForLaunchPrep: vi.fn(),
     refreshRuntimeUserHooksForLaunchPrep: vi.fn()
   }
 }))
-vi.mock('../codex/codex-hook-reconcile', () => ({ reconcileCodexHooksForLaunch: vi.fn() }))
-vi.mock('../codex/codex-home-paths', () => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', () => ({
+  reconcileCodexHooksForLaunch: vi.fn()
+}))
+vi.mock('../codex/configuration/homes/codex-home-paths', () => ({
   getCodexSessionBackfillStateDirPath: () => join(homes.system, 'backfill'),
   getSystemCodexHomePath: () => homes.system,
   getOrcaManagedCodexHomePath: () => join(homes.system, 'legacy')
 }))
-vi.mock('../codex/codex-config-mirror', () => ({ ensureCodexDaemonSocketGuard: vi.fn() }))
+vi.mock('../codex/configuration/settings/codex-config-mirror', () => ({
+  ensureCodexDaemonSocketGuard: vi.fn()
+}))
 
 import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'
 

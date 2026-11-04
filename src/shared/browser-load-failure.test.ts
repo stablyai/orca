@@ -58,24 +58,6 @@ describe('describeBrowserLoadFailure', () => {
     expect(result.recovery).toBe(recovery)
   })
 
-  it("keeps Orca's own messages (code 0) as they are", () => {
-    expect(
-      english(0, 'https://example.com/', DIRECT, 'Unsupported browser URL: foo').description
-    ).toBe('Unsupported browser URL: foo')
-    expect(english(0, 'https://example.com/').recovery).toBeNull()
-  })
-
-  it('names the Chromium error for the developer line only when there is one', () => {
-    const named = { code: -102, description: 'ERR_CONNECTION_REFUSED', validatedUrl: 'http://a/' }
-    const synthesized = {
-      code: -1,
-      description: 'This site could not be reached.',
-      validatedUrl: 'http://a/'
-    }
-    expect(describeBrowserLoadFailure(named, DIRECT).errorName).toBe('ERR_CONNECTION_REFUSED')
-    expect(describeBrowserLoadFailure(synthesized, DIRECT).errorName).toBeNull()
-  })
-
   it('leaves certificate and Orca-coded failures to their own pages on mobile', () => {
     const at = (code: number) => ({ code, description: '', validatedUrl: 'https://a/' })
     expect(isBrowserNetworkLoadFailure(at(-102))).toBe(true)

@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { collectRetainedAgentsOnDisappear } from '@/components/dashboard/useRetainedAgents'
 import {
   resetAgentPaneAuthorityAliasesForTests,
   resolveAgentPaneAuthorityKey
 } from './agent-pane-authority'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 
 const WORKTREE_ID = 'repo::/repo/worktree'

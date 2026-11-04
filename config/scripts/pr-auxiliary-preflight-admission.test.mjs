@@ -22,8 +22,8 @@ const relaySteps = unit.jobs.relay_integration.steps
 const chrome = relaySteps.find((step) => step.name === 'Resolve Chrome for the browser provider')
 const browser = relaySteps.find((step) => step.name === 'Test external Chromium browser provider')
 const routes = [
-  ['git_compatibility', 'src/shared/git-capability-cache.ts'],
-  ['codex_index_heal_contract', 'src/main/codex/codex-session-index-heal.ts'],
+  ['git_compatibility', 'src/shared/git/commands/git-capability-cache.ts'],
+  ['codex_index_heal_contract', 'src/main/codex/history/index/codex-session-index-heal.ts'],
   ['xterm_patch_sync', 'config/patches/xterm-upstream.json'],
   ['shell_contracts', 'src/main/pty/pty-manager.ts'],
   ['orcad_browser', 'src/main/orcad/orcad-browser-provider.ts'],

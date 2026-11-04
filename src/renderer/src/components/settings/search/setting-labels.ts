@@ -20,6 +20,7 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalWordSeparator: 'Word Separator',
   primarySelectionMiddleClickPaste: 'Middle-click Paste from Selection',
   terminalFocusFollowsMouse: 'Focus Follows Mouse',
+  terminalScrollOnUserInput: 'Scroll to Bottom on Input',
   terminalColorOverrides: 'Color Overrides',
   terminalColorOverridesLight: 'Light Color Overrides',
   terminalThemeDark: 'Terminal Theme',

@@ -165,7 +165,12 @@ describe('onboarding feature setup runner', () => {
       deps
     )
 
-    expect(result.skillNames).toEqual(['orca-cli', 'computer-use', 'orchestration', 'orca-linear'])
+    expect(result.skillNames).toEqual([
+      'orca-cli',
+      'orca-computer-use',
+      'orchestration',
+      'orca-linear'
+    ])
     expect(result.computerUsePermissionsOpened).toBe(false)
     expect(openComputerUsePermissionSetup).not.toHaveBeenCalled()
     expect(result.warnings).toContainEqual({

@@ -1,4 +1,4 @@
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
 
 // Share refusal envelopes across runtime/CLI; retain call-site messages because older consumers may match published strings.
 

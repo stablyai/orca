@@ -1,5 +1,5 @@
 import { FileUp, FolderOpen, Loader2 } from 'lucide-react'
-import type { WarpThemeImportPreviewTheme } from '../../../../../../shared/terminal-custom-themes'
+import type { WarpThemeImportPreviewTheme } from '../../../../../../shared/terminal-themes/terminal-custom-themes'
 import { Button } from '../../../ui/button'
 import {
   Dialog,
