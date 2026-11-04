@@ -9,6 +9,7 @@ import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-cod
 import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/protocol-limits'
 import { timingSafeEqualStr } from './bytes'
 import type { Env } from './env'
+import { metric } from './metrics'
 
 type State = {
   connId: string
@@ -26,6 +27,10 @@ type GuardAttachment = { silentBytes: number; windowStart: number }
 const NO_DEADLINE = Number.MAX_SAFE_INTEGER
 
 export class SpliceRelay extends DurableObject<Env> {
+  // Spike traffic counters, in memory only (reset if the object hibernates mid-splice).
+  // [bytes to host, frames to host, bytes to phone, frames to phone]
+  private traffic = [0, 0, 0, 0]
+
   async fetch(request: Request): Promise<Response> {
     const kind = request.headers.get('x-edge-kind')
     if (kind === 'abort') this.ctx.abort('spike reset')
@@ -37,6 +42,7 @@ export class SpliceRelay extends DurableObject<Env> {
     if (kind === 'phone') {
       if ((await this.state()) !== undefined) return new Response(null, { status: 409 })
       this.ctx.acceptWebSocket(server, ['phone'])
+      metric(this.env, 'phone_open')
       server.serializeAttachment({ silentBytes: 0, windowStart: now } satisfies GuardAttachment)
       await this.save({
         connId,
@@ -207,6 +213,10 @@ export class SpliceRelay extends DurableObject<Env> {
         return
       }
     }
+    const size = typeof message === 'string' ? message.length : message.byteLength
+    const i = tag === 'phone' ? 0 : 2
+    this.traffic[i] += size
+    this.traffic[i + 1] += 1
     try {
       peer.send(message)
     } catch {
@@ -220,6 +230,8 @@ export class SpliceRelay extends DurableObject<Env> {
     const tag = this.tag(ws)
     const state = await this.state()
     if (!state || state.phase === 'closed' || tag === null) return
+    metric(this.env, 'phone_close', 1, `${tag}:${code}`)
+    metric(this.env, 'splice_bytes', this.traffic[0] + this.traffic[2], '', this.traffic)
     const reason = code === 1000 ? '' : 'peer dropped'
     for (const other of this.ctx.getWebSockets()) if (other !== ws) this.close(other, RELAY_CLOSE_CODE.PEER_DROPPED, reason)
     await this.save({ ...state, phase: 'closed', deadline: NO_DEADLINE })

@@ -1,9 +1,12 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "orca-relay-edge-spike",
+  // Top level = local `wrangler dev` only. It has no routes and workers.dev is off, so a
+  // deploy without --env publishes nothing reachable.
+  "name": "orca-relay-edge-local",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
   "durable_objects": {
     "bindings": [
       { "name": "HOST_RELAY", "class_name": "HostRelay" },
@@ -15,10 +18,35 @@
     { "tag": "v2", "new_sqlite_classes": ["SpliceRelay"] }
   ],
   "vars": {
-    // Local spike only. Real deployments read JWKS from the auth service.
     "RELAY_JWT_AUDIENCE": "orca-relay",
     "PING_INTERVAL_MS": "30000",
     "SILENCE_TIMEOUT_MS": "75000",
     "ORPHAN_GRACE_MS": "30000"
+  },
+  "env": {
+    // Cloudflare de-risk spike: workers.dev only, no custom domains or routes, test keys only.
+    // RELAY_JWKS (public test key) and SPIKE_RESUME_TOKEN_HASHES are set with `wrangler secret put`.
+    "spike": {
+      "name": "orca-relay-edge-spike",
+      "workers_dev": true,
+      "preview_urls": false,
+      "durable_objects": {
+        "bindings": [
+          { "name": "HOST_RELAY", "class_name": "HostRelay" },
+          { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" }
+        ],
+        // Per-deploy override: --durable-objects-code-update-mode "deferred 120s"
+        "code_update_strategy": { "mode": "deferred", "max_delay": 300 }
+      },
+      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_spike" }],
+      "vars": {
+        "RELAY_JWT_AUDIENCE": "orca-relay",
+        "PING_INTERVAL_MS": "45000",
+        "SILENCE_TIMEOUT_MS": "75000",
+        "ORPHAN_GRACE_MS": "30000",
+        "SPIKE_DEBUG": "1",
+        "EDGE_VERSION": "v1"
+      }
+    }
   }
 }

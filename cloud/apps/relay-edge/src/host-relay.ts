@@ -18,6 +18,7 @@ import {
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
 import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/protocol-limits'
 import { verifyRelayJwt } from './jwt'
+import { metric } from './metrics'
 import type { EdgeClaims, Env } from './env'
 import { b64, b64url, fromB64, hmacSha256, sha256B64url, timingSafeEqualStr } from './bytes'
 
@@ -71,6 +72,15 @@ export class HostRelay extends DurableObject<Env> {
     const kind = request.headers.get('x-edge-kind')
     if (kind === 'abort') {
       this.ctx.abort('spike reset')
+    }
+    if (kind === 'info') {
+      const session = await this.ctx.storage.get<Session>('session')
+      return Response.json({
+        version: this.env.EDGE_VERSION ?? 'dev',
+        generation: session?.generation ?? null,
+        controls: this.ctx.getWebSockets('control').length,
+        conns: Object.keys(await this.conns()).length
+      })
     }
     const origin = request.headers.get('x-edge-origin') ?? ''
     const now = Date.now()
@@ -131,6 +141,7 @@ export class HostRelay extends DurableObject<Env> {
     if (a.phase === 'proof') return this.onHostProof(ws, a, type, body)
     if (type === 'pong') {
       a.lastPongAt = Date.now()
+      if (typeof body.t === 'number') metric(this.env, 'pong_rtt_ms', a.lastPongAt - body.t)
       this.attach(ws, a)
       return
     }
@@ -314,6 +325,7 @@ export class HostRelay extends DurableObject<Env> {
       activeConnIds: activeConnIds.slice(0, 8),
       pendingConns: pendingConns.slice(0, 8)
     })
+    metric(this.env, 'control_active', 1, rebind ? 'rebind' : 'new')
     await this.reschedule()
   }
 
@@ -434,6 +446,7 @@ export class HostRelay extends DurableObject<Env> {
     if (!a) return
     // During webSocketClose the closing socket is still listed; clear it first so it can't count as live.
     this.attach(ws, null)
+    if (a.k === 'control' && a.phase === 'active') metric(this.env, 'control_close', 1, String(_code))
     if (a.k === 'control' && a.phase === 'active' && !this.activeControl()) {
       const session = await this.ctx.storage.get<Session>('session')
       if (session && session.generation === a.generation) {
@@ -457,6 +470,7 @@ export class HostRelay extends DurableObject<Env> {
           continue
         }
         if (now - (a.lastPingAt ?? 0) >= this.pingIntervalMs - 50) {
+          if (a.lastPingAt) metric(this.env, 'alarm_lag_ms', Math.max(0, now - (a.lastPingAt + this.pingIntervalMs)))
           this.send(ws, { type: 'ping', t: now })
           a.lastPingAt = now
           this.attach(ws, a)

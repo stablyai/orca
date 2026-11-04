@@ -47,6 +47,14 @@ export default {
       const connId = decodeURIComponent(abortSplice[1])
       return forward(env, request, '', { 'x-edge-kind': 'abort', 'x-edge-conn-id': connId }, 'splice', connId)
     }
+    if (env.SPIKE_DEBUG === '1') {
+      if (url.pathname === '/__spike/info') {
+        const cf = (request as Request & { cf?: { colo?: string; country?: string } }).cf
+        return Response.json({ colo: cf?.colo ?? 'local', country: cf?.country ?? null, version: env.EDGE_VERSION ?? 'dev', now: Date.now() })
+      }
+      const info = url.pathname.match(/^\/__spike\/host\/([A-Za-z0-9_-]{16})$/)
+      if (info) return forward(env, request, info[1], { 'x-edge-kind': 'info' })
+    }
     const isUpgrade = request.headers.get('upgrade')?.toLowerCase() === 'websocket'
 
     if (url.pathname === '/v1/host/control') {

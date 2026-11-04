@@ -16,6 +16,11 @@ export interface Env {
   // Spike-only stub: comma-separated base64url sha256 hashes of accepted phone resume tokens.
   SPIKE_RESUME_TOKEN_HASHES?: string
   SPIKE_ADMIN?: string
+  // Spike: /__spike/info and /__spike/host/<id> debug endpoints (colo, version).
+  SPIKE_DEBUG?: string
+  // Version label baked in per deploy (--var EDGE_VERSION:<tag>), reported by metrics and debug.
+  EDGE_VERSION?: string
+  METRICS?: AnalyticsEngineDataset
 }
 
 export type EdgeClaims = {
