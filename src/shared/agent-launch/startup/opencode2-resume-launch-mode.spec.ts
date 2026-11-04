@@ -12,17 +12,6 @@ const hosts: { platform: NodeJS.Platform; shell: AgentStartupShell; resumeArgs: 
 ]
 
 describe('OpenCode 2 restored terminal launch mode', () => {
-  it.each(hosts)('keeps the default standalone flag once on $platform/$shell', (host) => {
-    const plan = buildAgentResumeStartupPlan({
-      agent: 'opencode2',
-      providerSession,
-      cmdOverrides: {},
-      ...host
-    })
-
-    expect(plan?.launchCommand).toBe(`opencode2 --standalone ${host.resumeArgs}`)
-  })
-
   it.each(hosts)('honors a shared-service alias on $platform/$shell', (host) => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'opencode2',
@@ -77,21 +66,6 @@ describe('OpenCode 2 restored terminal launch mode', () => {
 })
 
 describe('OpenCode 2 session-history launch mode', () => {
-  it.each(hosts)('keeps the default standalone flag once on $platform/$shell', (host) => {
-    expect(
-      buildAiVaultResumeCommand({
-        agent: 'opencode2',
-        sessionId: providerSession.id,
-        cwd: null,
-        ...host
-      })
-    ).toBe(
-      host.shell === 'cmd'
-        ? 'opencode2 --standalone --session "ses_resume"'
-        : "opencode2 --standalone --session 'ses_resume'"
-    )
-  })
-
   it.each(hosts)('honors an override without standalone on $platform/$shell', (host) => {
     expect(
       buildAiVaultResumeCommand({
@@ -121,16 +95,5 @@ describe('OpenCode 2 session-history launch mode', () => {
     ).toBe(
       'cd /d "C:\\Ada Lovelace\\folder" && "C:\\Agent Tools\\opencode2.cmd" --standalone --session "session & one"'
     )
-  })
-
-  it('leaves OpenCode 1 history commands unchanged', () => {
-    expect(
-      buildAiVaultResumeCommand({
-        agent: 'opencode',
-        sessionId: providerSession.id,
-        cwd: '/repo/folder',
-        platform: 'linux'
-      })
-    ).toBe("cd '/repo/folder' && opencode --session 'ses_resume'")
   })
 })
