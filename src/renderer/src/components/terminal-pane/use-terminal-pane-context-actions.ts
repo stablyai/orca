@@ -1,10 +1,15 @@
 import { useCallback, useEffect } from 'react'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
+import type { TerminalLinkRoutingPreferenceRequester } from './terminal-url-link-hit-testing'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
 import { useVisibleTerminalQuickCommandHosts } from '@/hooks/use-visible-terminal-quick-command-hosts'
 
-export function useTerminalPaneContextActions(controller: TerminalPaneCloseController) {
+export function useTerminalPaneContextActions(
+  controller: TerminalPaneCloseController & {
+    requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  }
+) {
   const {
     cancelPendingRenameFrames,
     clearPaneScrollback,
@@ -12,6 +17,7 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     containerRef,
     cwd,
     forceBracketedMultilineTextPaste,
+    requestOpenLinksInAppPreference,
     handleClearPaneTitleShortcut,
     handleRequestClosePane,
     handleStartRename,
@@ -177,7 +183,8 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     onAgentSessionForkReady: setAgentSessionFork,
     onAgentSessionContinuationReady: setAgentSessionContinuation,
     forceBracketedMultilineTextPaste,
-    rightClickToPaste
+    rightClickToPaste,
+    requestOpenLinksInAppPreference
   })
   const {
     executionHostId: quickCommandExecutionHostId,
