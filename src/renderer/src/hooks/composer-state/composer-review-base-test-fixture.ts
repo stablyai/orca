@@ -156,8 +156,6 @@ export function useReviewBaseSelectionFixture(
     setRepoId,
     folderSourceRepos: selectedProjectGroupId ? [repo, replacementRepo] : [],
     hostOptions: targetInputs.hosts ?? [],
-    projectHostSetupOptions: [],
-    selectedRepoProjectId: targetInputs.projectId ?? null,
     setSelectedProjectHostSetupOverrideId: setSelectedSetupId,
     setSelectedProjectHostSetupOverrideHostId: setSelectedSetupHost
   })

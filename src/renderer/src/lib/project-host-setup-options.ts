@@ -119,7 +119,7 @@ export function buildProjectHostSetupOptions({
       ? index.groupByRepoHost.get(`${setup.hostId}\0${setup.repoId}`)?.key === group.key
       : setup.projectId === projectId
   )
-  const readyOptions = buildReadySetupOptions({
+  const readyOptions = buildReadyProjectHostSetupOptions({
     projectHostSetups: groupedSetups,
     eligibleRepos,
     hosts,
@@ -153,7 +153,7 @@ function getPendingSetupByHost(
   return setups
 }
 
-function buildReadySetupOptions({
+export function buildReadyProjectHostSetupOptions({
   projectHostSetups,
   eligibleRepos,
   hosts,

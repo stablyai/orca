@@ -8,9 +8,7 @@ type TargetChangeActionsInput = Pick<
   | 'folderSourceRepos'
   | 'hostOptions'
   | 'linkedWorkItem'
-  | 'projectHostSetupOptions'
   | 'repoId'
-  | 'selectedRepoProjectId'
   | 'setBaseBranch'
   | 'setBranchNameOverride'
   | 'setBranchNameOverridePreservesNameEdits'
@@ -43,7 +41,7 @@ import {
 } from '@/lib/linear-linked-work-item'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../../shared/new-workspace/workspace-source'
 import {
-  buildProjectHostSetupOptions,
+  buildReadyProjectHostSetupOptions,
   getProjectHostSetupSelectionKey,
   type ProjectHostSetupOption,
   type ReadyProjectHostSetupOption
@@ -60,7 +58,6 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
     hostOptions,
     linkedWorkItem,
     repoId,
-    selectedRepoProjectId,
     setBaseBranch,
     setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits,
@@ -239,9 +236,8 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
         candidate.id === setupId || getProjectHostSetupSelectionKey(candidate) === setupId
       // Revalidate ready rows and newly completed setups against the current catalog before selecting.
       const state = useAppStore.getState()
-      const target = buildProjectHostSetupOptions({
-        projectId: selectedRepoProjectId,
-        projectHostSetups: state.projectHostSetups,
+      const target = buildReadyProjectHostSetupOptions({
+        projectHostSetups: state.projectHostSetups.filter(matchesSelection),
         eligibleRepos: getComposerEligibleRepos(state.repos),
         hosts: hostOptions
       }).find(
@@ -262,7 +258,6 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
     [
       handleRepoChange,
       hostOptions,
-      selectedRepoProjectId,
       setSelectedProjectHostSetupOverrideId,
       setSelectedProjectHostSetupOverrideHostId
     ]

@@ -59,80 +59,27 @@ export function createWebHostUiWriter() {
       pendingFilter?.abort()
       pendingFilter = controller
     }
-    let superseded = false
-    try {
-      if (exact) {
-        await new Promise<void>((resolve, reject) => {
-          let release = () => {}
-          const finish = (error?: Error) => {
-            release()
-            controller?.signal.removeEventListener('abort', abort)
-            if (error) {
-              reject(error)
-            } else {
-              resolve()
-            }
-          }
-          const abort = () => {
-            superseded = true
-            finish(new Error('Project filter action superseded.'))
-          }
-          const check = () => {
-            try {
-              assertOwner()
-              const current = client.statusOwner?.read()
-              if (current?.retired) {
-                finish(new Error('The Orca connection was replaced.'))
-                return
-              }
-              if (
-                current?.verification === 'verified' &&
-                current.transport === 'ready' &&
-                current.status?.capabilities?.includes(PROJECT_REPO_FILTER_EXACT_CAPABILITY)
-              ) {
-                finish()
-              }
-            } catch (error) {
-              finish(error instanceof Error ? error : new Error(String(error)))
-            }
-          }
-          release = subscribeWebRuntimeStatus(check)
-          controller?.signal.addEventListener('abort', abort, { once: true })
-          check()
-          // The existing owner coalesces request interest; foreground/reentry and retry publish the eventual answer.
-          if (client.statusOwner?.read().verification !== 'verified') {
-            client.statusOwner?.wake()
-          }
-        })
-      }
-    } catch (error) {
-      if (!superseded) {
-        throw error
-      }
-    } finally {
-      if (pendingFilter === controller) {
-        pendingFilter = null
-      }
-    }
-    assertOwner()
-    const wireUpdates = { ...hostUpdates }
-    if (hasFilter && action !== filterAction) {
-      delete wireUpdates.filterRepoIds
-      superseded = true
-    }
-    if (Object.keys(wireUpdates).length) {
+    const splitSiblings =
+      exact &&
+      !(
+        snapshot?.verification === 'verified' &&
+        snapshot.transport === 'ready' &&
+        snapshot.status?.capabilities?.includes(PROJECT_REPO_FILTER_EXACT_CAPABILITY)
+      )
+    const dispatch = async (updates: typeof hostUpdates, exactFilter: boolean) => {
+      assertOwner()
       const response = await callEnvironmentEnvelope(
         environment.id,
         'ui.set',
         {
-          ...wireUpdates,
-          ...(exact && wireUpdates.filterRepoIds !== undefined
+          ...updates,
+          ...(exactFilter && updates.filterRepoIds !== undefined
             ? { filterRepoIdsMode: 'exact' }
             : {})
         },
         15_000,
         revision,
-        exact && wireUpdates.filterRepoIds !== undefined
+        exactFilter && updates.filterRepoIds !== undefined
           ? client.statusOwner?.read().status?.runtimeId
           : undefined
       )
@@ -141,8 +88,83 @@ export function createWebHostUiWriter() {
         throw Object.assign(new Error(response.error.message), { code: response.error.code })
       }
     }
-    if (hasFilter && (superseded || action !== filterAction)) {
-      throw new Error('Project filter action superseded.')
-    }
+    const filterRequest = (async () => {
+      let superseded = false
+      try {
+        if (exact) {
+          await new Promise<void>((resolve, reject) => {
+            let release = () => {}
+            const finish = (error?: Error) => {
+              release()
+              controller?.signal.removeEventListener('abort', abort)
+              if (error) {
+                reject(error)
+              } else {
+                resolve()
+              }
+            }
+            const abort = () => {
+              superseded = true
+              finish(new Error('Project filter action superseded.'))
+            }
+            const check = () => {
+              try {
+                assertOwner()
+                const current = client.statusOwner?.read()
+                if (current?.retired) {
+                  finish(new Error('The Orca connection was replaced.'))
+                  return
+                }
+                if (
+                  current?.verification === 'verified' &&
+                  current.transport === 'ready' &&
+                  current.status?.capabilities?.includes(PROJECT_REPO_FILTER_EXACT_CAPABILITY)
+                ) {
+                  finish()
+                }
+              } catch (error) {
+                finish(error instanceof Error ? error : new Error(String(error)))
+              }
+            }
+            release = subscribeWebRuntimeStatus(check)
+            controller?.signal.addEventListener('abort', abort, { once: true })
+            check()
+            // The existing owner coalesces request interest; foreground/reentry and retry publish the eventual answer.
+            if (client.statusOwner?.read().verification !== 'verified') {
+              client.statusOwner?.wake()
+            }
+          })
+        }
+      } catch (error) {
+        if (!superseded) {
+          throw error
+        }
+      } finally {
+        if (pendingFilter === controller) {
+          pendingFilter = null
+        }
+      }
+      assertOwner()
+      const wireUpdates = splitSiblings
+        ? { filterRepoIds: hostUpdates.filterRepoIds }
+        : { ...hostUpdates }
+      if (hasFilter && action !== filterAction) {
+        delete wireUpdates.filterRepoIds
+        superseded = true
+      }
+      if (Object.keys(wireUpdates).length) {
+        await dispatch(wireUpdates, exact)
+      }
+      if (hasFilter && (superseded || action !== filterAction)) {
+        throw new Error('Project filter action superseded.')
+      }
+    })()
+    const siblings = { ...hostUpdates }
+    delete siblings.filterRepoIds
+    // An exact filter keeps its own support obligation; writable siblings must not wait or replay with it.
+    await Promise.all([
+      filterRequest,
+      splitSiblings && Object.keys(siblings).length ? dispatch(siblings, false) : Promise.resolve()
+    ])
   }
 }

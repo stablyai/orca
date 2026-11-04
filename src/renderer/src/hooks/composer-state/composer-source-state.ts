@@ -57,9 +57,7 @@ export function useComposerSourceState(
     folderSourceRepos: target.runtimeTargetSelection.folderSourceRepos,
     hostOptions: target.composerTargetStore.hostOptions,
     linkedWorkItem: target.sourceContextState.linkedWorkItem,
-    projectHostSetupOptions: target.runtimeTargetSelection.projectHostSetupOptions,
     repoId: target.initialTargetState.repoId,
-    selectedRepoProjectId: target.runtimeTargetSelection.selectedRepoProjectId,
     setBaseBranch: target.workspaceIdentityState.setBaseBranch,
     setBranchNameOverride: target.workspaceIdentityState.setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits:

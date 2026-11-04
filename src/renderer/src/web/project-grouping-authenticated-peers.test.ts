@@ -195,6 +195,8 @@ it.each([100, 1000])(
     const device = registry.addDevice('Fixture browser', 'runtime')
     const desktop = generateKeyPair()
     let malformed = true
+    let supported = false
+    let failNextWrite = false
     const requests: { method: string; params?: unknown }[] = []
     const authLists: string[][] = []
     const wiring = new MobileSocketWiring({
@@ -206,6 +208,17 @@ it.each([100, 1000])(
       onText: (socket, message, reply) => {
         const request = JSON.parse(message)
         requests.push(request)
+        if (request.method === 'ui.set' && failNextWrite) {
+          failNextWrite = false
+          reply(
+            JSON.stringify({
+              id: request.id,
+              ok: false,
+              error: { code: 'INTERNAL_ERROR', message: 'Fixture write failed' }
+            })
+          )
+          return
+        }
         void server['handleWebSocketMessage'](
           message,
           (response) => {
@@ -213,7 +226,17 @@ it.each([100, 1000])(
             reply(
               request.method === 'status.get' && malformed && parsed.ok
                 ? JSON.stringify({ ...parsed, result: null })
-                : response
+                : request.method === 'status.get' && parsed.ok && !supported
+                  ? JSON.stringify({
+                      ...parsed,
+                      result: {
+                        ...parsed.result,
+                        capabilities: parsed.result.capabilities.filter(
+                          (capability: string) => capability !== 'ui.project-repo-filter-exact.v1'
+                        )
+                      }
+                    })
+                  : response
             )
           },
           () => {},
@@ -287,34 +310,67 @@ it.each([100, 1000])(
       store.updateUI({ filterRepoIds: ['same', Q], agentsFilterRepoIds: [Q] })
       const mutations = vi.spyOn(store, 'updateUI')
       const ui = createWebUiApi()
+      let originalSettled = false
       const superseded: Promise<unknown>[] = [
-        ui.setWithAck!({ filterRepoIds: [Q], sortBy: 'name', agentsFilterRepoIds: [] }).catch(
-          (error) => error
-        )
+        ui.setWithAck!({ filterRepoIds: [Q], sortBy: 'name', agentsFilterRepoIds: [] })
+          .catch((error) => error)
+          .finally(() => {
+            originalSettled = true
+          })
       ]
       await vi.waitFor(() =>
         expect(session.webRuntimeState.activeClient?.statusOwner?.read().verification).toBe(
           'blocked'
         )
       )
-      expect(requests.filter((request) => request.method === 'ui.set')).toEqual([])
+      expect(
+        requests.filter(
+          (request) =>
+            request.method === 'ui.set' &&
+            request.params &&
+            Object.hasOwn(request.params, 'filterRepoIds')
+        )
+      ).toEqual([])
+      malformed = false
+      visibility.dispatchEvent(new Event('visibilitychange'))
+      await vi.waitFor(() =>
+        expect(session.webRuntimeState.activeClient?.statusOwner?.read().verification).toBe(
+          'verified'
+        )
+      )
+      await vi.waitFor(() => expect(store.getUI().sortBy).toBe('name'))
+      expect(originalSettled).toBe(false)
+      expect(requests.filter((request) => request.method === 'ui.set')).toEqual([
+        expect.objectContaining({ params: { sortBy: 'name' } })
+      ])
+      await ui.setWithAck!({ sortBy: 'recent' })
+      expect(store.getUI().sortBy).toBe('recent')
+      const exactContext = {
+        projectFilter: { environmentId: 'owner', pairingRevision: 1, exact: true }
+      }
       for (let index = 0; index < count - 1; index++) {
         superseded.push(
-          ui.setWithAck!({ filterRepoIds: [Q, `offline-${index}`] }).catch((error) => error)
+          ui.setWithAck!({ filterRepoIds: [Q, `offline-${index}`] }, exactContext).catch(
+            (error) => error
+          )
         )
       }
       const selected = [Q, `offline-${count - 1}`]
-      const writing = ui.setWithAck!({ filterRepoIds: selected })
+      const writing = ui.setWithAck!({ filterRepoIds: selected, sortBy: 'recent' }, exactContext)
       await vi.waitFor(() =>
         expect(requests.filter((request) => request.method === 'ui.set')).toEqual([
-          expect.objectContaining({ params: { sortBy: 'name' } })
+          expect.objectContaining({ params: { sortBy: 'name' } }),
+          expect.objectContaining({ params: { sortBy: 'recent' } }),
+          expect.objectContaining({ params: { sortBy: 'recent' } })
         ])
       )
-      malformed = false
+      supported = true
       visibility.dispatchEvent(new Event('visibilitychange'))
       await writing
       expect(requests.filter((request) => request.method === 'ui.set')).toEqual([
         expect.objectContaining({ params: { sortBy: 'name' } }),
+        expect.objectContaining({ params: { sortBy: 'recent' } }),
+        expect.objectContaining({ params: { sortBy: 'recent' } }),
         expect.objectContaining({ params: { filterRepoIds: selected, filterRepoIdsMode: 'exact' } })
       ])
       expect(await Promise.all(superseded)).toEqual(
@@ -322,7 +378,7 @@ it.each([100, 1000])(
       )
       expect(store.getUI()).toMatchObject({
         filterRepoIds: selected,
-        sortBy: 'name',
+        sortBy: 'recent',
         agentsFilterRepoIds: [Q]
       })
       expect(JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}')).not.toHaveProperty(
@@ -333,13 +389,57 @@ it.each([100, 1000])(
       expect(
         requests.filter((request) => request.method === 'status.get').length
       ).toBeLessThanOrEqual(5)
-      expect(requests.filter((request) => request.method === 'ui.set')).toHaveLength(3)
-      expect(mutations).toHaveBeenCalledTimes(3)
+      expect(requests.filter((request) => request.method === 'ui.set')).toHaveLength(5)
+      expect(mutations).toHaveBeenCalledTimes(5)
       expect(
         requests.filter((request) => request.method === 'runtime.clientCapabilities.update')
       ).toHaveLength(0)
       expect(authLists).toHaveLength(1)
       expect(authLists[0]).not.toContain('ui.project-repo-filter-exact.v1')
+      if (count === 100) {
+        const owner = session.webRuntimeState.activeClient?.statusOwner
+        if (!owner) {
+          throw new Error('Expected live status owner')
+        }
+        supported = false
+        visibility.dispatchEvent(new Event('visibilitychange'))
+        await vi.waitFor(() =>
+          expect(owner.read().status?.capabilities).not.toContain('ui.project-repo-filter-exact.v1')
+        )
+        const beforeFailure = requests.filter((request) => request.method === 'ui.set').length
+        failNextWrite = true
+        await expect(
+          ui.setWithAck!({ filterRepoIds: [Q], sortBy: 'name' }, exactContext)
+        ).rejects.toThrow('Fixture write failed')
+        expect(
+          requests.filter((request) => request.method === 'ui.set').slice(beforeFailure)
+        ).toEqual([expect.objectContaining({ params: { sortBy: 'name' } })])
+        supported = true
+        visibility.dispatchEvent(new Event('visibilitychange'))
+        await vi.waitFor(() => expect(store.getUI().filterRepoIds).toEqual([Q]))
+        expect(
+          requests.filter((request) => request.method === 'ui.set').slice(beforeFailure)
+        ).toEqual([
+          expect.objectContaining({ params: { sortBy: 'name' } }),
+          expect.objectContaining({ params: { filterRepoIds: [Q], filterRepoIdsMode: 'exact' } })
+        ])
+        expect(store.getUI().sortBy).toBe('recent')
+        failNextWrite = true
+        await expect(ui.setWithAck!({ filterRepoIds: [] }, exactContext)).rejects.toThrow(
+          'Fixture write failed'
+        )
+        expect(store.getUI().filterRepoIds).toEqual([Q])
+        await ui.setWithAck!({ filterRepoIds: [] }, exactContext)
+        supported = false
+        visibility.dispatchEvent(new Event('visibilitychange'))
+        await vi.waitFor(() =>
+          expect(owner.read().status?.capabilities).not.toContain('ui.project-repo-filter-exact.v1')
+        )
+        const retiring = ui.setWithAck!({ filterRepoIds: [Q], sortBy: 'recent' }, exactContext)
+        const retired = expect(retiring).rejects.toThrow(/replaced|changed/)
+        session.closeActiveRuntimeClients()
+        await retired
+      }
       store.flush()
       expect(readDataFile()).toHaveProperty('ui.filterRepoIds', [])
       expect(readDataFile()).not.toHaveProperty('ui.filterRepoIdsMode')

@@ -2,7 +2,7 @@ import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { useAppStore } from '@/store'
 import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import type { TaskPageStoreBindingsModel } from './use-task-page-store-bindings'
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import {
   getTaskEligibleRepos,
   normalizeTaskRepoSelection,
@@ -47,20 +47,41 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   const eligibleRepos = useMemo(() => getTaskEligibleRepos(repos), [repos])
 
   const persistedSelection = settings?.defaultRepoSelection
+  const preferred = pageData.preselectedRepoId ?? null
+  const source = pageData.openGitHubSourceContext
+  const qualifiedSource =
+    preferred && source?.repoId === preferred ? `${source.hostId}\0${source.repoId}` : null
   const sourceIntent = useMemo<ReadonlySet<string> | null>(() => {
-    const preferred = pageData.preselectedRepoId
-    const source = pageData.openGitHubSourceContext
     if (preferred) {
-      return new Set([
-        source?.repoId === preferred ? `${source.hostId}\0${source.repoId}` : preferred
-      ])
+      return new Set([qualifiedSource ?? preferred])
     }
     return Array.isArray(persistedSelection) ? new Set(persistedSelection) : null
-  }, [pageData.preselectedRepoId, pageData.openGitHubSourceContext, persistedSelection])
-  const [selectionIntent, setRepoSelection] = useState<ReadonlySet<string> | null>(sourceIntent)
-  useEffect(() => {
-    setRepoSelection(sourceIntent)
-  }, [sourceIntent])
+  }, [preferred, qualifiedSource, persistedSelection])
+  const [selection, setSelection] = useState(() => ({
+    preferred,
+    qualifiedSource,
+    intent: sourceIntent,
+    edited: false,
+    initialized: settings != null
+  }))
+  if (
+    selection.preferred !== preferred ||
+    (qualifiedSource !== null && selection.qualifiedSource !== qualifiedSource)
+  ) {
+    setSelection({
+      preferred,
+      qualifiedSource,
+      intent: sourceIntent,
+      edited: false,
+      initialized: settings != null
+    })
+  } else if (!selection.edited && !selection.initialized && settings != null) {
+    setSelection({ ...selection, intent: sourceIntent, initialized: true })
+  }
+  const setRepoSelection = useCallback((intent: ReadonlySet<string> | null) => {
+    setSelection((current) => ({ ...current, intent, edited: true }))
+  }, [])
+  const selectionIntent = selection.intent
   const repoSelection = useMemo(
     () =>
       selectionIntent === null

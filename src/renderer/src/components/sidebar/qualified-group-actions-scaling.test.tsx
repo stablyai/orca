@@ -30,6 +30,7 @@ import { useAppStore } from '@/store'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { worktree } from './worktree-list/grouping/worktree-list-groups-test-fixtures'
 import { useProjectGroupDialogs } from './worktree-list/rows/use-project-group-dialogs'
+// The N100/1000 production-store and rendered-menu benchmark needs time for all four measured corpora.
 it('bounds real open/accept operations at N100/1000 with q2 independent growth and qN changed saved targets, charging downstream scans', async () => {
   for (const n of [100, 1000]) {
     for (const scope of ['two', 'all'] as const) {

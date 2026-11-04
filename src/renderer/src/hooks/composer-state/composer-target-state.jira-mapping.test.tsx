@@ -15,6 +15,8 @@ import * as decisions from './composer-decisions'
 import { useComposerTargetState } from './composer-target-state'
 import { useComposerExternalSync } from './composer-external-sync'
 import { useComposerSourceState } from './composer-source-state'
+import { getProjectHostSetupSelectionKey } from '@/lib/project-host-setup-options'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const originalState = useAppStore.getState()
 let originalApi: PropertyDescriptor | undefined
@@ -389,4 +391,96 @@ it('keeps a logical-group contextual host separate from an explicit pick and ref
   expect(result.current.runtimeTargetSelection.selectedRepo).toBeUndefined()
   act(() => useAppStore.setState({ repos }))
   expect(result.current.runtimeTargetSelection.selectedRepo).toBe(beta)
+})
+
+it('executes both directions of an offered aliased group on the exact current checkout', () => {
+  Object.assign(window.api, {
+    gh: {
+      repoSlug: vi.fn().mockResolvedValue(null),
+      listWorkItems: vi.fn().mockResolvedValue({ items: [] })
+    }
+  })
+  const alias: Repo = { ...currentRepo, id: 'alias', path: '/app', kind: 'git' }
+  const canonical: Repo = { ...alias, id: 'canonical', upstream: { owner: 'org', repo: 'app' } }
+  const remote: Repo = { ...canonical, id: 'remote', path: '/srv/app', connectionId: 'builder' }
+  const projection = projectHostSetupProjectionFromRepos([alias, canonical, remote])
+  useAppStore.setState({
+    settings: null,
+    repos: [alias, canonical, remote],
+    projects: projection.projects,
+    projectHostSetups: projection.setups,
+    projectGroups: [],
+    newWorkspaceDraft: null,
+    worktreesByRepo: {},
+    sparsePresetsByRepo: {},
+    workspaceHostScope: 'all',
+    sshTargetLabels: new Map([['builder', 'Builder']]),
+    detectedAgentIds: [],
+    remoteDetectedAgentIds: { builder: [] }
+  })
+  const { result } = renderHook(() => {
+    const target = useComposerTargetState(
+      {
+        persistDraft: false,
+        initialRepoId: alias.id,
+        initialTaskSourceContext: jiraSource,
+        initialLinkedWorkItem: {
+          provider: 'jira',
+          type: 'issue',
+          number: 0,
+          title: 'APP-1',
+          jiraIdentifier: 'APP-1',
+          url: 'https://jira.example.invalid/browse/APP-1'
+        }
+      },
+      decisions
+    )
+    const external = useComposerExternalSync(target)
+    return { target, source: useComposerSourceState(target, external) }
+  })
+  expect(result.current.target.sourceContextState.linkedWorkItem?.jiraIdentifier).toBe('APP-1')
+  const offered = result.current.target.runtimeTargetSelection.projectHostSetupOptions
+  const remoteRow = offered.find((row) => row.kind === 'ready' && row.repoId === remote.id)
+  expect(remoteRow).toMatchObject({ hostId: 'ssh:builder', path: '/srv/app' })
+  if (!remoteRow) {
+    throw new Error('Expected the grouped remote checkout')
+  }
+  act(() =>
+    result.current.source.targetChangeActions.handleProjectHostSetupChange(
+      getProjectHostSetupSelectionKey(remoteRow)
+    )
+  )
+  expect(result.current.target.runtimeTargetSelection.selectedRepo).toBe(remote)
+  expect(result.current.target.runtimeTargetSelection.selectedRepoExecutionHostId).toBe(
+    'ssh:builder'
+  )
+  expect(result.current.target.sourceContextState.linkedWorkItem?.jiraIdentifier).toBe('APP-1')
+  // The unidentified local registration remains the usable alias when the canonical Repo is absent.
+  act(() => useAppStore.setState({ repos: [alias, remote] }))
+  const aliasRow = result.current.target.runtimeTargetSelection.projectHostSetupOptions.find(
+    (row) => row.kind === 'ready' && row.repoId === alias.id
+  )
+  expect(aliasRow).toMatchObject({ hostId: 'local', path: '/app' })
+  if (!aliasRow) {
+    throw new Error('Expected the grouped local alias')
+  }
+  const chooseAlias = result.current.source.targetChangeActions.handleProjectHostSetupChange
+  act(() => {
+    useAppStore.setState((state) => ({
+      settings: { ...getDefaultSettings(''), ...state.settings, projectGroupingMode: 'folder' }
+    }))
+    chooseAlias(getProjectHostSetupSelectionKey(aliasRow))
+  })
+  expect(result.current.target.runtimeTargetSelection.selectedRepo).toBe(alias)
+  expect(result.current.target.sourceContextState.taskSourceContext).toEqual(jiraSource)
+  const chooseRemote = result.current.source.targetChangeActions.handleProjectHostSetupChange
+  act(() => {
+    useAppStore.setState({
+      projectHostSetups: projection.setups.map((setup) =>
+        setup.repoId === remote.id ? { ...setup, setupState: 'not-set-up' as const } : setup
+      )
+    })
+    chooseRemote(getProjectHostSetupSelectionKey(remoteRow))
+  })
+  expect(result.current.target.runtimeTargetSelection.selectedRepo).toBe(alias)
 })
