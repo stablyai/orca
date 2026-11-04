@@ -68,6 +68,17 @@ export function agentMessageHeading(
   return 'generic'
 }
 
+const sourceAddressLabels = new WeakMap<AgentMessageSender, string>()
+
+function sourceAddressLabel(sender: AgentMessageSender): string {
+  let label = sourceAddressLabels.get(sender)
+  if (label === undefined) {
+    label = agentMessageSenderName(sender.party.address) || '—'
+    sourceAddressLabels.set(sender, label)
+  }
+  return label
+}
+
 export function agentMessageSenderLabel(facts: {
   sender?: AgentMessageSender
   localChat: boolean
@@ -77,8 +88,8 @@ export function agentMessageSenderLabel(facts: {
   tabLabel?: string | null
   fallback: string
 }): string {
-  if (agentMessageSenderIsNamedSource(facts.sender)) {
-    return facts.snapshotName || agentMessageSenderName(facts.sender?.party.address) || '—'
+  if (facts.sender && agentMessageSenderIsNamedSource(facts.sender)) {
+    return facts.snapshotName || sourceAddressLabel(facts.sender)
   }
   return (
     (facts.localChat && (facts.customLabel?.trim() || facts.conversationName)) ||

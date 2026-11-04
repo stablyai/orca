@@ -74,6 +74,21 @@ export function queuedMessageCardImages(
   return images.length > 0 ? { images } : {}
 }
 
+const queuedSources = new WeakMap<
+  AgentSessionQueuedMessage['body'],
+  { input: unknown; source: AgentMessageSource | undefined }
+>()
+
+function queuedMessageCardSource(body: AgentSessionQueuedMessage['body']) {
+  const cached = queuedSources.get(body)
+  if (cached && cached.input === body.from) {
+    return cached.source
+  }
+  const source = readAgentMessageSource(body.from)
+  queuedSources.set(body, { input: body.from, source })
+  return source
+}
+
 /** Hide waiting cards after live submission hand-off to avoid catch-up duplicates; rejected hand-offs restore cards, and returned cards never hide. */
 export function projectQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
@@ -99,7 +114,7 @@ export function projectQueuedMessageCards(
               ? 'queue-paused'
               : 'turn'
     behindReturned = behindReturned || message.state === 'returned'
-    const from = readAgentMessageSource(message.body.from)
+    const from = queuedMessageCardSource(message.body)
     return {
       messageId: message.messageId,
       position: message.position,
