@@ -54,6 +54,8 @@ export type RunSourceControlAgentActionStartArgs = {
   launchPlatform?: NodeJS.Platform
   launchSource: LaunchSource
   recoveryContext?: RuntimeGitContext | null
+  /** A fresh owner-side check run at launch time, after agent and preference waits. */
+  admitLaunch?: () => Promise<boolean>
   signal?: AbortSignal
   onCreateAccepted?: () => void
   onStart?: (args: {
@@ -104,6 +106,7 @@ export async function runSourceControlAgentActionStart({
   launchPlatform,
   launchSource,
   recoveryContext,
+  admitLaunch,
   signal,
   onCreateAccepted,
   onStart,
@@ -119,6 +122,9 @@ export async function runSourceControlAgentActionStart({
     return false
   }
   if (recoveryContext && !(await admitSourceControlRecovery(recoveryContext, signal))) {
+    return false
+  }
+  if (admitLaunch && !(await admitLaunch())) {
     return false
   }
   if (signal?.aborted) {

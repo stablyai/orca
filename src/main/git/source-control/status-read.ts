@@ -21,7 +21,7 @@ import {
 } from '../worktrees/content-paths/worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from './git-read-cache-invalidation'
-import { detectConflictOperation } from './git-conflict-operation'
+import { detectConflictOperation, readRebaseOperation } from './git-conflict-operation'
 import { parseUnmergedEntry } from '../../../shared/git/status/git-status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from './effective-upstream-status-cache'
 import {
@@ -43,9 +43,15 @@ export async function getStatus(
 ): Promise<GitStatusResult> {
   // Reads preserve diff caches; mutations invalidate them and settled entries also validate input stamps.
   const cacheKey = getStatusReadKey(worktreePath, options)
-  return statusReadLeaseOwner.lease(cacheKey, options.signal, (sharedSignal) =>
+  const status = statusReadLeaseOwner.lease(cacheKey, options.signal, (sharedSignal) =>
     runGetStatus(worktreePath, { ...options, signal: sharedSignal })
   )
+  if (options.verifyRebaseOperation !== true) {
+    return status
+  }
+  // Why outside the lease: a shared status may predate this caller; its verdict must not.
+  const [result, rebase] = await Promise.all([status, readRebaseOperation(worktreePath, options)])
+  return { ...result, rebaseOperation: rebase.state }
 }
 
 // Led by the worktree's line-stats key so an outside change can detach just that checkout's reads.

@@ -62,6 +62,11 @@ export type GitWorktreeInfo = {
   isMainWorktree: boolean
   /** Local delete failed after Git deregistration; list the leftover so Delete can retry. */
   removalError?: string
+  /**
+   * Detached rows only: the owning host's rebase verdict; absent = unverified (or an older host).
+   * Review-retention evidence only, never the checked-out branch or action eligibility.
+   */
+  detachedRebase?: { active: true; branch?: string } | { active: false }
 }
 
 /** Read HEAD/branch without spawning Git to refresh background head moves without structural worktrees:changed fanout. */

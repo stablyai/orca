@@ -51,6 +51,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       includeLineStats,
       bypassEffectiveUpstreamNegativeCache,
       reuseLineStats,
+      verifyRebaseOperation,
       branchLineTotalMergeBase,
       requestToken
     }) => {
@@ -61,6 +62,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         includeLineStats,
         bypassEffectiveUpstreamNegativeCache,
         reuseLineStats,
+        ...(verifyRebaseOperation ? { verifyRebaseOperation: true } : {}),
         ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
       }
       // Why: no token = nothing to cancel (pooled); a token routes via the subscription bridge so cancelStatus can abort.

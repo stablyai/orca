@@ -1,16 +1,20 @@
 import type { Worktree } from '../../../shared/worktree/types'
-import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   composeWorktreeHostIdentity,
   hostWorktreeTarget,
   type HostScopedWorktreeKey,
   type HostWorktreeTarget
 } from '../../../shared/worktree/host-qualified-identity'
+import type { HOSTED_REVIEW_LINK_KEYS } from '../../../shared/worktree/hosted-review-links'
 import {
-  CLEARED_HOSTED_REVIEW_LINK_UPDATES,
-  HOSTED_REVIEW_LINK_KEYS,
-  canonicalHostedReviewBranchIdentity
-} from '../../../shared/worktree/hosted-review-links'
+  branchHostedReviewOwner,
+  decideHostedReviewClear,
+  detachedHostedReviewOwner,
+  hostedReviewClearUpdates,
+  isUnobservedWorktreeIdentity,
+  type HostedReviewClearUpdates,
+  type HostedReviewOwner
+} from '../../../shared/worktree/hosted-review-branch-ownership'
 import {
   getRepoHostIdentityForParts,
   type HostScopedRepoKey
@@ -27,6 +31,7 @@ type IdentityRow = Pick<
   | 'displayNameMode'
   | 'pushTarget'
 > &
+  Partial<Pick<Worktree, 'head' | 'detachedRebase' | 'linkedWorkItem'>> &
   Partial<Pick<Worktree, (typeof HOSTED_REVIEW_LINK_KEYS)[number]>>
 
 /** A row from a scan that reached a verdict, with the git run (scan-cache entry) it came from. */
@@ -38,28 +43,20 @@ type Observed = {
   branch: string
   displayName: string
   gitRun: object | null
-  /** The links as they stood when git last confirmed `branch`. */
-  links: string
+  /** The branch owning the review context, with its links as they stood when git last confirmed it. */
+  owner: HostedReviewOwner
 }
 
 export type HostedReviewLinkClear = {
   target: HostWorktreeTarget
-  updates: Pick<WorktreeMeta, (typeof HOSTED_REVIEW_LINK_KEYS)[number] | 'pushTarget'>
+  updates: HostedReviewClearUpdates
 }
 
 function keyOf(row: Pick<IdentityRow, 'id' | 'hostId'>): HostScopedWorktreeKey {
   return composeWorktreeHostIdentity(row.hostId, row.id)
 }
 
-function linksSignature(row: IdentityRow): string {
-  return JSON.stringify([...HOSTED_REVIEW_LINK_KEYS.map((key) => row[key] ?? null), row.pushTarget])
-}
-
-function hasBranchScopedLinks(row: IdentityRow): boolean {
-  return HOSTED_REVIEW_LINK_KEYS.some((key) => row[key] != null) || row.pushTarget !== undefined
-}
-
-/** On confirmed branch switches, clear old-branch links and update automatic names; detached heads retain the last name. Replaces worktree-git-identity-update.ts. */
+/** On proven branch switches, clear old-branch links and update automatic names; detached heads retain the last name and review ownership. Replaces worktree-git-identity-update.ts. */
 export class WorkspaceGitIdentity {
   private readonly observed = new Map<HostScopedWorktreeKey, Observed>()
   private readonly detachedTitles = new Map<HostScopedWorktreeKey, string>()
@@ -91,36 +88,45 @@ export class WorkspaceGitIdentity {
       } else if (before.branch !== '' && row.displayNameMode === 'automatic') {
         this.detachedTitles.set(key, before.displayName)
       }
-      const switched =
-        sameInstance &&
-        canonicalHostedReviewBranchIdentity(before.branch) !==
-          canonicalHostedReviewBranchIdentity(row.branch)
-      // A link written since git last confirmed the old branch may belong to the new one: kept.
-      const cleared = switched && hasBranchScopedLinks(row) && linksSignature(row) === before.links
-      if (cleared && row.hostId !== undefined) {
-        clears.push({
-          target: hostWorktreeTarget({ id: row.id, hostId: row.hostId }),
-          updates: CLEARED_HOSTED_REVIEW_LINK_UPDATES
-        })
+      const unobserved = isUnobservedWorktreeIdentity(row)
+      const decision =
+        sameInstance && !unobserved
+          ? decideHostedReviewClear(before.owner, row.branch, row)
+          : { selection: false, push: false }
+      const updates = hostedReviewClearUpdates(decision, row)?.updates ?? null
+      if (updates && row.hostId !== undefined) {
+        clears.push({ target: hostWorktreeTarget({ id: row.id, hostId: row.hostId }), updates })
       }
       if (row.instanceId === undefined) {
         this.observed.delete(key)
         continue
       }
-      // A cached scan repeats an old branch; only a new git run (or a switch) confirms links on it.
-      const confirmed =
-        !sameInstance || switched || (row.gitRun !== null && row.gitRun !== before.gitRun)
+      const afterClear = updates ? { ...row, ...updates } : row
+      const previousOwner = sameInstance ? before.owner : undefined
+      let owner: HostedReviewOwner
+      if (unobserved) {
+        owner = previousOwner ?? { kind: 'unknown' }
+      } else if (row.branch === '') {
+        owner = detachedHostedReviewOwner(row, previousOwner)
+      } else {
+        const branchOwner = branchHostedReviewOwner(row.branch, afterClear)
+        // A cached scan repeats an old branch; only a new git run (or a change) confirms links on it.
+        const confirmedOwner = sameInstance ? before.owner : undefined
+        const repeatsCachedScan =
+          sameInstance &&
+          updates === null &&
+          confirmedOwner?.kind === 'branch' &&
+          confirmedOwner.branch === branchOwner.branch &&
+          (row.gitRun === null || row.gitRun === before.gitRun)
+        owner = repeatsCachedScan ? confirmedOwner : branchOwner
+      }
       this.observed.set(key, {
         instanceId: row.instanceId,
         repoKey: getRepoHostIdentityForParts(row.repoId, row.hostId ?? ''),
         branch: row.branch,
         displayName: this.title(row),
         gitRun: row.gitRun,
-        links: cleared
-          ? linksSignature({ ...row, ...CLEARED_HOSTED_REVIEW_LINK_UPDATES })
-          : confirmed
-            ? linksSignature(row)
-            : (before?.links ?? linksSignature(row))
+        owner
       })
     }
     for (const [key, observed] of this.observed) {

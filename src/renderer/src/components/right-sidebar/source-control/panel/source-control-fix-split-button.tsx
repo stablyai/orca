@@ -1,5 +1,6 @@
 import { useSourceControlScope, useSourceControlScopeOwner } from './worktree-scope'
 import React, { useState } from 'react'
+import { confirmNoRebaseBeforeReviewAction } from '@/lib/review-action-rebase-check'
 import { ChevronDown, RefreshCw, SlidersHorizontal, Sparkle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -167,6 +168,12 @@ export function SourceControlFixSplitButton({
           onSaveAgentDefault={onSaveAgentDefault}
           onOpenSettings={onOpenSettings}
           onLaunched={onPromptDelivered}
+          // Review check fixes need a fresh no-rebase verdict; commit/push recovery is not gated.
+          admitLaunch={
+            actionId === 'fixChecks'
+              ? () => confirmNoRebaseBeforeReviewAction(worktreeId)
+              : undefined
+          }
         />
       ) : null}
     </>

@@ -30,6 +30,7 @@ export type GitInspectionApi = {
     includeLineStats?: boolean
     bypassEffectiveUpstreamNegativeCache?: boolean
     reuseLineStats?: boolean
+    verifyRebaseOperation?: boolean
     /** Merge-base OID to measure the branch line total against; omit to skip the work. */
     branchLineTotalMergeBase?: string
     requestToken?: string

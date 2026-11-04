@@ -7,12 +7,17 @@ import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { branchName } from '@/lib/source-control/branches/branch-name'
 import { detachedHeadAutoDerivedDisplayNames } from './detached-head-display-name'
 import {
+  decideHostedReviewClear,
+  hostedReviewClearUpdates,
+  type HostedReviewClearUpdates
+} from '../../../../../../shared/worktree/hosted-review-branch-ownership'
+import { observeDetachedHostedReviewOwner } from './detached-hosted-review-owners'
+import {
   applyHostedReviewLinkClear,
   canonicalHostedReviewBranchIdentity,
   CLEARED_HOSTED_REVIEW_LINK_UPDATES,
   getHostedReviewLinkMutationGeneration,
   getHostedReviewLinkUpdates,
-  hasBranchScopedHostedReviewContext,
   hostedReviewLinkClearTombstonesByCopy,
   hostedReviewLinksAreCleared,
   rememberHostedReviewLinkClear,
@@ -89,6 +94,11 @@ export function createUpdateWorktreeGitIdentity(
     let clearedCopy: WorktreeCopyClear | undefined
     let clearedOnTwin = false
     let clearGeneration = getHostedReviewLinkMutationGeneration(worktreeId)
+    const partialClears: {
+      copy: WorktreeCopyClear
+      isTwin: boolean
+      updates: HostedReviewClearUpdates
+    }[] = []
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     const nextHeadFor = (worktree: Worktree): string => identity.head ?? worktree.head
     const nextBranchFor = (worktree: Worktree): string =>
@@ -120,11 +130,6 @@ export function createUpdateWorktreeGitIdentity(
           return worktree
         }
         changed = true
-        const hostedReviewBranchChanged =
-          canonicalHostedReviewBranchIdentity(nextBranch) !==
-          canonicalHostedReviewBranchIdentity(worktree.branch)
-        const shouldClearHostedReviewContext =
-          hostedReviewBranchChanged && hasBranchScopedHostedReviewContext(worktree)
         // Why the copy: a same-path twin shares the id, so every guard and clear names this row.
         // Keyed by the stamp the next listing gives the row, so legacy or partial stamps still match.
         // Only missing parts are filled in; a row's own host or publishing server is never replaced.
@@ -145,6 +150,16 @@ export function createUpdateWorktreeGitIdentity(
           rowOwner: worktreeCopyOwnerKey(worktree),
           hostId: worktree.hostId
         }
+        const owner = observeDetachedHostedReviewOwner(worktreeId, copy.owner, worktree, nextBranch)
+        const clear = hostedReviewClearUpdates(
+          decideHostedReviewClear(owner, nextBranch, worktree),
+          worktree
+        )
+        const shouldClearHostedReviewContext = clear?.full === true
+        const partialClear = clear && !clear.full ? clear.updates : null
+        if (partialClear) {
+          partialClears.push({ copy, isTwin: targets.isTwin, updates: partialClear })
+        }
         if (shouldClearHostedReviewContext) {
           shouldPersistHostedReviewClear = true
           clearedBranch = nextBranch
@@ -152,7 +167,7 @@ export function createUpdateWorktreeGitIdentity(
           clearedOnTwin = targets.isTwin
           clearGeneration = getHostedReviewLinkMutationGeneration(worktreeId)
           rememberHostedReviewLinkClear(worktreeId, nextBranch, clearGeneration, nextHead, copy)
-        } else {
+        } else if (nextBranch !== '') {
           const tombstoneKey = reviewClearTombstoneKey(worktreeId, copy.owner)
           const tombstone = hostedReviewLinkClearTombstonesByCopy.get(tombstoneKey)
           if (tombstone) {
@@ -165,7 +180,8 @@ export function createUpdateWorktreeGitIdentity(
               branchIdentity: nextBranchIdentity,
               head: nextHead
             })
-            if (hostedReviewBranchChanged) {
+            // Why attached only: a detached observation never proves the cleared review moved on.
+            if (nextBranchIdentity !== tombstone.branchIdentity) {
               shouldPersistHostedReviewClear = true
               clearedBranch = nextBranch
               clearGeneration = tombstone.generation
@@ -199,7 +215,9 @@ export function createUpdateWorktreeGitIdentity(
           displayName: nextDisplayName,
           ...(shouldClearHostedReviewContext
             ? normalizeWorkspaceAttachmentUpdate(worktree, CLEARED_HOSTED_REVIEW_LINK_UPDATES)
-            : {})
+            : partialClear
+              ? normalizeWorkspaceAttachmentUpdate(worktree, partialClear)
+              : {})
         }
       })
 
@@ -212,6 +230,16 @@ export function createUpdateWorktreeGitIdentity(
         sortEpoch: s.sortEpoch + 1
       }
     })
+    for (const partial of partialClears) {
+      // Why no tombstone: the part kept is newer than the branch proof, so a guard would erase it.
+      const twinOwner = partial.isTwin ? (ownerHostId ?? undefined) : undefined
+      void persistWorktreeMeta(
+        runtimeTargetForWorktreeOwner(get(), worktreeId, twinOwner),
+        worktreeId,
+        partial.updates,
+        ownerHostId ?? partial.copy.hostId
+      ).catch((err) => console.error('Failed to persist branch-scoped review link clear:', err))
+    }
     if (!shouldPersistHostedReviewClear || clearedBranch === null) {
       return
     }

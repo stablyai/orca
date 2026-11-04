@@ -18,6 +18,7 @@ export const GitStatusParams = WorktreeSelector.extend({
   includeLineStats: z.boolean().optional(),
   bypassEffectiveUpstreamNegativeCache: z.boolean().optional(),
   reuseLineStats: z.boolean().optional(),
+  verifyRebaseOperation: z.boolean().optional(),
   // Shape is re-validated host-side before it reaches a git argv.
   branchLineTotalMergeBase: z.string().optional()
 })

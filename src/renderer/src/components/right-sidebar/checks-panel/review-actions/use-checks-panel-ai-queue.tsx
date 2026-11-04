@@ -9,6 +9,7 @@ import {
 import type { ChecksAgentComposerState } from '../panel-state-types'
 import type { ChecksPanelAiAcknowledgementState } from './use-checks-panel-ai-acknowledgement'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
+import { confirmNoRebaseBeforeReviewAction } from '@/lib/review-action-rebase-check'
 import { toast } from 'sonner'
 import { buildResolvePullRequestConflictsPrompt } from '../../../../../../shared/source-control/recovery/source-control-conflict-prompts'
 import { buildPRCommentsResolutionPrompt } from '../../../../../../shared/source-control/review-comments/pr-comments-resolution-prompt'
@@ -35,6 +36,7 @@ type ChecksPanelAiQueueInput = Pick<
     | 'activeWorktree'
     | 'activeWorktreeId'
     | 'activeWorktreePath'
+    | 'ownerCopyHostId'
     | 'claimedCommentResolutionRef'
     | 'commentResolutionAckBusyRef'
     | 'commentResolutionLaunchAcceptedRef'
@@ -95,10 +97,25 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
                 )
               )
           }
+      const reviewWorktreeId = activeWorktreeId
+      let rebaseRefused = false
       const launchContext = {
         initialSelection: selection,
         worktreeId: activeWorktreeId,
         groupId: activeWorktreeId,
+        // Review conflicts and comments work in this checkout; a rebase there must finish first.
+        ...(reviewWorktreeId
+          ? {
+              admitLaunch: async () => {
+                const admitted = await confirmNoRebaseBeforeReviewAction(
+                  reviewWorktreeId,
+                  model.ownerCopyHostId
+                )
+                rebaseRefused = !admitted
+                return admitted
+              }
+            }
+          : {}),
         connectionId: model.activeConnectionId,
         repoId: repo?.id,
         launchPlatform: model.activeSourceControlLaunchPlatform,
@@ -115,9 +132,11 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
         promptDelivery: 'submit-after-ready',
         onClose: () => {},
         onFallback: () => {
+          // A refused rebase check already said why; the composer would only repeat it.
           if (
+            !rebaseRefused &&
             checksPanelReviewStableKey(model.asyncResultKeyRef.current) ===
-            checksPanelReviewStableKey(stateRequestKey)
+              checksPanelReviewStableKey(stateRequestKey)
           ) {
             setAgentComposerState({ ...composer, launchContext })
           } else if (resolution) {

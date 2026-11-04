@@ -43,6 +43,7 @@ export const GIT_STATUS_METHODS = [
         params.includeLineStats === undefined &&
         params.bypassEffectiveUpstreamNegativeCache === undefined &&
         params.reuseLineStats === undefined &&
+        params.verifyRebaseOperation === undefined &&
         params.branchLineTotalMergeBase === undefined &&
         params.admissionTier === undefined &&
         signal === undefined
@@ -58,6 +59,7 @@ export const GIT_STATUS_METHODS = [
                 ? { bypassEffectiveUpstreamNegativeCache: true }
                 : {}),
               ...(params.reuseLineStats === true ? { reuseLineStats: true } : {}),
+              ...(params.verifyRebaseOperation === true ? { verifyRebaseOperation: true } : {}),
               ...(params.branchLineTotalMergeBase === undefined
                 ? {}
                 : { branchLineTotalMergeBase: params.branchLineTotalMergeBase }),

@@ -2250,6 +2250,17 @@
         "backgroundFailed": "Environment checks failed for a new VM workspace. Open it in the sidebar to continue.",
         "openedDegraded": "Creating the workspace on a VM whose environment checks failed.",
         "unreachable": "The environment checks could not finish: {{error}}"
+      },
+      "review": {
+        "action": {
+          "rebase": {
+            "check": {
+              "c6341f933d": "A rebase is in progress in this workspace. Continue or abort it before starting this action.",
+              "4adef3e9ff": "Could not verify that no rebase is in progress in this workspace, so the action was not started.",
+              "87b429b921": "Update this workspace's host to start this action; it cannot report whether a rebase is in progress."
+            }
+          }
+        }
       }
     },
     "hooks": {

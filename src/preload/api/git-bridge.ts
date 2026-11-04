@@ -25,6 +25,7 @@ export const gitApi = {
     includeIgnored?: boolean
     bypassEffectiveUpstreamNegativeCache?: boolean
     reuseLineStats?: boolean
+    verifyRebaseOperation?: boolean
     branchLineTotalMergeBase?: string
     requestToken?: string
     wakeWslDistro?: boolean

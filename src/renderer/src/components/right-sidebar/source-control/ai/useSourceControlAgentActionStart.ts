@@ -47,6 +47,7 @@ type UseSourceControlAgentActionStartArgs = {
   isRemote?: boolean
   launchSource: LaunchSource
   recoveryContext?: RuntimeGitContext | null
+  admitLaunch?: () => Promise<boolean>
   connectionUnavailable: boolean
   /** The dialog's one host observation; Start is gated on it having settled. */
   detectedAgents: TuiAgent[]
@@ -104,6 +105,7 @@ export function useSourceControlAgentActionStart({
   isRemote,
   launchSource,
   recoveryContext,
+  admitLaunch,
   connectionUnavailable,
   detectedAgents,
   launchChoice,
@@ -208,6 +210,7 @@ export function useSourceControlAgentActionStart({
           launchPlatform,
           launchSource,
           recoveryContext,
+          admitLaunch,
           signal: attempt.controller.signal,
           onCreateAccepted: () => {
             if (attemptRef.current === attempt) {
@@ -247,6 +250,7 @@ export function useSourceControlAgentActionStart({
       initialCwd,
       launchSource,
       recoveryContext,
+      admitLaunch,
       launchPlatform,
       onClose,
       onLaunchAborted,

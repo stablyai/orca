@@ -14,15 +14,13 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { applyDetectedWorktreeUpdates } from '../listing/detected-worktree-meta'
-import type {
-  HostedReviewLinkKey,
-  RuntimeWorktreeMetaUpdates
-} from '../listing/worktree-slice-types'
+import type { HostedReviewLinkKey } from '../listing/worktree-slice-types'
 import {
   CLEARED_HOSTED_REVIEW_LINK_UPDATES,
   HOSTED_REVIEW_LINK_KEYS,
   canonicalHostedReviewBranchIdentity
 } from '../../../../../../shared/worktree/hosted-review-links'
+import { deleteDetachedOwners, moveDetachedOwners } from './detached-hosted-review-owners'
 
 export {
   CLEARED_HOSTED_REVIEW_LINK_UPDATES,
@@ -97,6 +95,7 @@ export function pruneHostedReviewLinkMutationGenerations(worktreeIds: Iterable<s
   for (const worktreeId of worktreeIds) {
     hostedReviewLinkMutationGenerationByWorktreeId.delete(worktreeId)
     deleteCopyTombstones(hostedReviewLinkClearTombstonesByCopy, worktreeId)
+    deleteDetachedOwners(worktreeId)
     hostedReviewLinkWorktreeIdAliases.delete(worktreeId)
     for (const [oldWorktreeId, newWorktreeId] of hostedReviewLinkWorktreeIdAliases) {
       if (newWorktreeId === worktreeId) {
@@ -136,6 +135,7 @@ export function migrateHostedReviewLinkMutationGeneration(
   oldWorktreeId: string,
   newWorktreeId: string
 ): void {
+  moveDetachedOwners(oldWorktreeId, newWorktreeId)
   const hasTombstone = moveCopyTombstones(
     hostedReviewLinkClearTombstonesByCopy,
     oldWorktreeId,
@@ -175,6 +175,7 @@ export function resetHostedReviewLinkMutationGenerationForTests(): void {
   hostedReviewLinkMutationGenerationByWorktreeId.clear()
   hostedReviewLinkClearTombstonesByCopy.clear()
   hostedReviewLinkWorktreeIdAliases.clear()
+  deleteDetachedOwners()
 }
 
 export function hostedReviewLinksAreCleared(worktree: Worktree): boolean {
@@ -303,26 +304,4 @@ export function applyHostedReviewLinkClear(
         : {})
     }
   })
-}
-
-export function getHostedReviewLinkForMetaRefresh(
-  updates: Partial<WorktreeMeta>,
-  existingWorktree: Worktree | undefined,
-  key: HostedReviewLinkKey
-): number | null {
-  return Object.hasOwn(updates, key) ? (updates[key] ?? null) : (existingWorktree?.[key] ?? null)
-}
-
-export function hasExplicitPushTargetClear(updates: Partial<WorktreeMeta>): boolean {
-  return Object.hasOwn(updates, 'pushTarget') && updates.pushTarget === undefined
-}
-
-export function encodePushTargetClearForRuntimeRpc(
-  updates: Partial<WorktreeMeta>
-): RuntimeWorktreeMetaUpdates {
-  if (!hasExplicitPushTargetClear(updates)) {
-    return updates
-  }
-  // Why: remote runtime RPC is JSON-shaped and drops undefined, so null is the wire signal for clearing persisted pushTarget metadata.
-  return { ...updates, pushTarget: null }
 }

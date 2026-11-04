@@ -21,6 +21,8 @@ export async function getRuntimeGitStatus(
     includeLineStats?: boolean
     bypassEffectiveUpstreamNegativeCache?: boolean
     reuseLineStats?: boolean
+    /** Ask the owning host for a fresh `rebaseOperation` verdict read during this call. */
+    verifyRebaseOperation?: boolean
     branchLineTotalMergeBase?: string
     signal?: AbortSignal
     /** A user act that may start a stopped WSL distro; local status only. */
@@ -36,6 +38,7 @@ export async function getRuntimeGitStatus(
     ? { bypassEffectiveUpstreamNegativeCache: true }
     : {}
   const lineStatsReuseArgs = options?.reuseLineStats ? { reuseLineStats: true } : {}
+  const rebaseVerdictArgs = options?.verifyRebaseOperation ? { verifyRebaseOperation: true } : {}
   const branchLineTotalArgs = options?.branchLineTotalMergeBase
     ? { branchLineTotalMergeBase: options.branchLineTotalMergeBase }
     : {}
@@ -49,6 +52,7 @@ export async function getRuntimeGitStatus(
         ...includeLineStatsArgs,
         ...upstreamCacheBypassArgs,
         ...lineStatsReuseArgs,
+        ...rebaseVerdictArgs,
         ...branchLineTotalArgs,
         ...(options?.wakeWslDistro && !context.connectionId ? { wakeWslDistro: true } : {})
       },
@@ -65,6 +69,7 @@ export async function getRuntimeGitStatus(
       ...includeLineStatsArgs,
       ...upstreamCacheBypassArgs,
       ...lineStatsReuseArgs,
+      ...rebaseVerdictArgs,
       ...branchLineTotalArgs
     },
     {

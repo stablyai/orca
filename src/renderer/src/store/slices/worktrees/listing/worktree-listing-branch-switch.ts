@@ -1,5 +1,7 @@
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { forgetDetachedOwner } from '../metadata/detached-hosted-review-owners'
+import { worktreeCopyOwnerKey } from '../metadata/worktree-copy-review-clear'
 
 function indexUnambiguousWorktrees(
   worktrees: readonly Worktree[],
@@ -96,6 +98,10 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
       existing.branch === worktree.branch ||
       !hasBranchScopedReviewContext(existing)
     ) {
+      if (worktree.branch !== '') {
+        // Unrouted, an applied attached row still proves a reattach; the old proof must not judge it.
+        forgetDetachedOwner(worktree.id, worktreeCopyOwnerKey(worktree))
+      }
       continue
     }
     updateWorktreeGitIdentity(

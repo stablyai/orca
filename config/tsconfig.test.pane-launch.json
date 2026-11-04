@@ -9,6 +9,7 @@
     "../src/renderer/src/runtime/observed-provider-accounts.test.tsx",
     "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.observation.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
+    "../src/renderer/src/store/slices/worktrees-git-identity-rebase-retention.test.ts",
     "../src/renderer/src/env.d.ts",
     "../src/types/build-constants.d.ts",
     "../src/shared/**/*"
