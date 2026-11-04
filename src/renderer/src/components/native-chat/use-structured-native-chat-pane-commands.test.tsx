@@ -10,7 +10,7 @@ import type { AppState } from '@/store'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import type * as QuickCommandHosts from '@/hooks/use-terminal-quick-command-hosts'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { PreparedAgentSessionFork } from '../terminal-pane/terminal-agent-session-fork'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -98,6 +98,8 @@ vi.mock('@/components/ui/dropdown-menu', () => {
       return props.children
     },
     DropdownMenuLabel: Pass,
+    DropdownMenuRadioGroup: Pass,
+    DropdownMenuRadioItem: Pass,
     DropdownMenuSeparator: () => null,
     DropdownMenuShortcut: Pass,
     DropdownMenuSub: Pass,

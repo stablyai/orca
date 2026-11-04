@@ -5,7 +5,7 @@ import type * as FolderComposerSubmit from '@/components/sidebar/folder-workspac
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
+} from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import {
   LAUNCH_FOLDER_ID,
   type WindowLaunchCase

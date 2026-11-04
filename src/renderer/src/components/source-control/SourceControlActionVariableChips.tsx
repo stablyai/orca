@@ -5,8 +5,8 @@ import {
   SOURCE_CONTROL_ACTION_VARIABLE_INFO,
   SOURCE_CONTROL_ACTION_VARIABLES,
   type SourceControlActionVariable
-} from '../../../../shared/source-control-ai-action-variables'
-import type { AiActionId } from '../../../../shared/source-control-ai-actions'
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
+import type { AiActionId } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { Button } from '../ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card'
 import { translate } from '@/i18n/i18n'

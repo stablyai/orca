@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
-import { MOBILE_E2EE_LEGACY_FIXTURE } from '../../../src/shared/mobile-e2ee-legacy-fixtures'
+import { MOBILE_E2EE_LEGACY_FIXTURE } from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-legacy-fixtures'
 
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length).fill(9)

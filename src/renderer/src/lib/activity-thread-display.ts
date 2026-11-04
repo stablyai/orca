@@ -1,15 +1,15 @@
+import type { AgentStateHistoryEntry } from '../../../shared/agent-status/lifecycle/agent-state-history'
 import type {
-  AgentStateHistoryEntry,
   AgentStatusEntry,
   AgentStatusState
-} from '../../../shared/agent-status-types'
+} from '../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import {
   getAgentRowPrimaryText,
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
-} from '../../../shared/agent-row-primary-text'
+} from '../../../shared/agent-status/presentation/agent-row-primary-text'
 import { formatAgentToolPreview } from './agent-row-tool-preview'
 import { agentVerdictStatusLine } from './agent-verdict-status-line'
 

@@ -1,6 +1,6 @@
 import type { PtyProcessInfo } from '../providers/pty-provider-contract'
-import type { TmuxManagedPty } from '../../shared/tmux-agent-hook-owner'
-import type { HookPaneProcessIo } from '../../shared/hook-process-root-evidence'
+import type { TmuxManagedPty } from '../../shared/tmux-agent-hook-contract'
+import type { HookPaneProcessIo } from '../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 
 type InventoryOptions = {
   getPtyId: (paneKey: string) => string | undefined | null

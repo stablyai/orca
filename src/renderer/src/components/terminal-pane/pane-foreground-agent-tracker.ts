@@ -2,8 +2,8 @@ import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
   type RecognizedAgentProcess
-} from '../../../../shared/agent-process-recognition'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
+} from '../../../../shared/agent-status/process/agent-process-recognition'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import { createPaneForegroundProcessReader } from './pane-foreground-process-reader'

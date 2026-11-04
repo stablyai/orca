@@ -2,8 +2,8 @@
 import type * as ParcelWatcher from '@parcel/watcher'
 import { loadParcelWatcher } from './parcel-watcher-module-loader'
 import { startShallowWatcher } from './parcel-watcher-shallow-subscription'
-import { detectShallowWatchDelivery } from '../../shallow-watch-delivery-probe'
-import { startWatcherDeliveryCanary } from '../../parcel-watcher-delivery-canary'
+import { detectShallowWatchDelivery } from './shallow-watch-delivery-probe'
+import { startWatcherDeliveryCanary } from './parcel-watcher-delivery-canary'
 import {
   createWatcherProcessEventDeliveryQueue,
   isParcelWatcherRescanRequiredError,

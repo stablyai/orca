@@ -1,14 +1,18 @@
-import { pairedRuntimeBrowserClientHostsPage } from '../../browser/paired-runtime-browser-client-host-runtime'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import {
+  pairedRuntimeBrowserClientHostId,
+  pairedRuntimeBrowserClientHostsPage
+} from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { prepareRuntimeEnvironmentBrowserPlacement } from './runtime-environment-browser-placement'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { classifyRuntimeEnvironmentHost } from '../../../shared/runtime-environment-host-kind'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { classifyRuntimeEnvironmentHost } from '../../../shared/remote-runtime/host-catalog/runtime-environment-host-kind'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeEnvironmentStatus
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type {
   MobileDesktopRelayHosts,
   MobileDesktopRelayHostWatch
@@ -139,6 +143,7 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
       return {
         environmentId,
         fence: relayHostFence(environment),
+        pairingRevision: pairingRevision(environment),
         pairing: getPreferredPairingOffer(environment)
       }
     },
@@ -153,12 +158,22 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
         undefined,
         {
           preparation: PHONE_CALL_PREPARATION,
+          ...(options?.signal ? { signal: options.signal } : {}),
           ...(options?.expected?.runtimeId
             ? { expectedEnvironmentRuntimeId: options.expected.runtimeId }
             : {})
         }
       ),
     hostsBrowserPage: pairedRuntimeBrowserClientHostsPage,
+    browserHostClientId: pairedRuntimeBrowserClientHostId,
+    prepareBrowserHost: (host, enabled) =>
+      prepareRuntimeEnvironmentBrowserPlacement(userDataPath, {
+        selector: host.environmentId,
+        expectedPairingRevision: host.pairingRevision,
+        preference: 'auto',
+        requireStatus: true,
+        enabled
+      }),
     onEnvironmentRetired: (listener) => {
       retirementListeners.add(listener)
       return () => retirementListeners.delete(listener)

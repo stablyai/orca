@@ -1,4 +1,4 @@
-import type * as WorktreeListingModule from '../git/worktree-listing'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 // Headless hosts never load ipc/worktrees; runtime changes must invalidate both scan generation and cache.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
@@ -17,7 +17,7 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
-vi.mock('../git/worktree-listing', async (importOriginal) => {
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
     listWorktreesStrict: listWorktreesStrictMock
@@ -27,17 +27,13 @@ vi.mock('../git/worktree-listing', async (importOriginal) => {
 vi.mock('electron', () => electronMocks)
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
-vi.mock('../git/worktree', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict: listWorktreesStrictMock
-}))
 
 vi.mock('./repo-worktree-admin-fingerprint', () => ({
   readRepoWorktreeAdminFingerprint: vi.fn(async () => null)
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
-import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { getLocalWorktreeScanGeneration } from '../workspaces/catalog/local-worktree-scan-generation'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 

@@ -1,6 +1,10 @@
+import type * as WorktreeRemovalModule from '../../git/worktrees/removal/worktree-removal'
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
 import { readFile } from 'node:fs/promises'
-import { removeWorktree as removeNativeWorktree } from '../../git/worktree-removal'
+const { removeWorktree: removeNativeWorktree } = await vi.importActual<
+  typeof WorktreeRemovalModule
+>('../../git/worktrees/removal/worktree-removal')
 
 import {
   MOCK_GIT_WORKTREES,
@@ -13,7 +17,6 @@ import {
   forceDeleteLocalBranchMock,
   forgetLocalWatcherRemovalSnapshotMock,
   getEffectiveHooks,
-  gitRunner,
   join,
   listWorktrees,
   listWorktreesStrict,
@@ -265,7 +268,7 @@ describe('OrcaRuntimeService', () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     await mkdir(TEST_WORKTREE_PATH, { recursive: true })
     await writeFile(join(TEST_WORKTREE_PATH, 'scratch.txt'), 'delete me')
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
     })
@@ -316,7 +319,7 @@ describe('OrcaRuntimeService', () => {
       removeWorktreeMeta
     }
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
     })
@@ -370,7 +373,7 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     ]
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'branch') {
         throw new Error('branch is not fully merged')
       }

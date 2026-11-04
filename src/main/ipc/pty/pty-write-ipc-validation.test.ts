@@ -5,7 +5,7 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES
-} from '../../../shared/terminal-input'
+} from '../../../shared/terminal/input/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
 import { PtyWriteUnavailableError } from '../../providers/pty-write-unavailable-error'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-hook-relay-manager'

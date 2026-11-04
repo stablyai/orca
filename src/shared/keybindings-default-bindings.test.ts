@@ -10,7 +10,7 @@ import {
   keybindingMatchesAction
 } from './keybindings'
 import type { KeybindingActionId } from './keybindings'
-import { ALL_TUI_AGENTS } from './tui-agent-display-names'
+import { ALL_TUI_AGENTS } from './agent-launch/catalog/tui-agent-display-names'
 
 describe('keybindings', () => {
   it.each([

@@ -7,7 +7,7 @@ import type { Repo } from '../../../../../shared/repo-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
 import type { GhAccountBindingInventory } from '../../../../../shared/github/auth-types'
-import type * as RepositoryGitHubAccountModule from './identity/repository-github-account'
+import type * as RepositoryGitHubAccountModule from '../../../runtime/repository-github/repository-github-account'
 import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection'
 
 const { listAccountsMock, validateBindingMock, storeState } = vi.hoisted(() => {
@@ -27,7 +27,7 @@ vi.mock('@/store/index', () => {
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
-vi.mock('./identity/repository-github-account', async (importOriginal) => ({
+vi.mock('../../../runtime/repository-github/repository-github-account', async (importOriginal) => ({
   ...(await importOriginal<typeof RepositoryGitHubAccountModule>()),
   listRepositoryGhBindableAccounts: listAccountsMock,
   validateRepositoryGhAccountBinding: validateBindingMock

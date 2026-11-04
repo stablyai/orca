@@ -1,6 +1,6 @@
 import type { DetailComment } from './mobile-tasks-provider-detail-types'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type {
-  TuiAgent,
   TaskProvider,
   GitHubProjectSettings,
   GitHubProjectRef

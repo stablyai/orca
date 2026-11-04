@@ -12,12 +12,12 @@ import {
 } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import { agentLabel } from '../../../../shared/ai-vault-session-filters'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
   aiVaultHistoryAgents,
   type AiVaultAgent,
   type AiVaultSession
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   adoptsCliConversations,
   type CliConversationRowAgent

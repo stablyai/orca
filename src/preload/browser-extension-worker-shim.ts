@@ -4,7 +4,7 @@ import {
   BROWSER_EXTENSION_WORKER_TOKEN_FILE,
   decodeBrowserExtensionWireJson,
   encodeBrowserExtensionWireJson
-} from '../shared/browser-extension-worker-api'
+} from '../shared/browser/extensions/browser-extension-worker-api'
 import { BROWSER_EXTENSION_API_SURFACE } from './browser-extension-api-surface'
 import {
   createContentScriptSyncForward,

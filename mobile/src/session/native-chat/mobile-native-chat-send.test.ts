@@ -5,12 +5,13 @@ import { LogicalClientCutoverError } from '../../transport/stable-logical-rpc-cl
 import {
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS,
   openMobileNativeChatSendBudget,
+  readMobileNativeChatInputClear,
   clearMobileNativeChatInput,
   sendMobileNativeChatMessage,
   sendMobileNativeChatMessageWithOutcome,
   typeMobileNativeChatCommandWithOutcome
 } from './mobile-native-chat-send'
-import { buildAgentTuiClearInputForText } from '../../../../src/shared/agent-tui-input-clear'
+import { buildAgentTuiClearInputForText } from '../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 
 afterEach(() => vi.useRealTimers())
 
@@ -370,5 +371,85 @@ describe('clearMobileNativeChatInput', () => {
       })
     ).resolves.toBe(false)
     expect(client.sendRequest).not.toHaveBeenCalled()
+  })
+})
+
+describe('reading the execution-host draft before a chat clear', () => {
+  it.each([
+    { terminal: { draft: 'desktop first\ndesktop last' } },
+    { terminal: {} },
+    { terminal: { draft: 17 } }
+  ])('sizes the clear from an optional legacy draft reply: %j', async (result) => {
+    const client = clientWithResponse({ id: 'read', ok: true, result, _meta: { runtimeId: 'r' } })
+    const clear = await readMobileNativeChatInputClear({
+      client,
+      terminal: 'remote-terminal',
+      deadline: Date.now() + 15_000
+    })
+    const draft = typeof result.terminal.draft === 'string' ? result.terminal.draft : undefined
+    expect(clear).toBe(buildAgentTuiClearInputForText(draft))
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'terminal.read',
+      { terminal: 'remote-terminal', screen: true, limit: 1 },
+      { timeoutMs: 2_000, budgetSpansConnect: true }
+    )
+  })
+
+  it('refuses an oversized known seed even when the older host cannot report its draft', async () => {
+    const client = clientWithResponse({
+      id: 'read',
+      ok: true,
+      result: {},
+      _meta: { runtimeId: 'r' }
+    })
+    expect(
+      await readMobileNativeChatInputClear({
+        client,
+        terminal: 'term',
+        deadline: Date.now() + 15_000,
+        seededText: Array(16).fill('seed').join('\n')
+      })
+    ).toBeNull()
+  })
+
+  it.each(['method_not_found', 'forbidden'])(
+    'keeps older hosts sendable after %s',
+    async (code) => {
+      const client = clientWithResponse({
+        id: 'read',
+        ok: false,
+        error: { code, message: 'unsupported' },
+        _meta: { runtimeId: 'r' }
+      })
+      expect(
+        await readMobileNativeChatInputClear({
+          client,
+          terminal: 'term',
+          deadline: Date.now() + 15_000
+        })
+      ).toBe(buildAgentTuiClearInputForText(undefined))
+    }
+  )
+
+  it('spends a failed read from the same action budget as the clear and submit', async () => {
+    vi.useFakeTimers()
+    const client = clientWithResponse({})
+    vi.mocked(client.sendRequest)
+      .mockImplementationOnce(async () => {
+        vi.advanceTimersByTime(2_000)
+        throw new Error('read timeout')
+      })
+      .mockResolvedValue({
+        id: 'send',
+        ok: true,
+        result: { send: { accepted: true } },
+        _meta: { runtimeId: 'r' }
+      })
+    const deadline = openMobileNativeChatSendBudget()
+    const clearInput = await readMobileNativeChatInputClear({ client, terminal: 'term', deadline })
+    expect(
+      await clearMobileNativeChatInput({ client, terminal: 'term', deadline, clearInput })
+    ).toBe(true)
+    expect(vi.mocked(client.sendRequest).mock.calls[1]?.[2]?.timeoutMs).toBe(13_000)
   })
 })

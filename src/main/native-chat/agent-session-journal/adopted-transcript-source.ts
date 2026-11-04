@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path'
 import { sessionIdFromFileName } from '../../ai-vault/session-scanner-accumulator'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { readNodeFileWithinLimit } from '../../../shared/node-bounded-file-reader'
 import { asRecord, extractString, parseJsonObject } from '../../ai-vault/session-scanner-values'

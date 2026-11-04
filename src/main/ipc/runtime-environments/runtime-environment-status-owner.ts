@@ -5,18 +5,18 @@ import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/ele
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { OrcadManagedPairingRepairFailedError } from '../../managed-server/lifecycle/orcad-managed-pairing-repair-failure'
 import { recoverRefusedPairing } from './runtime-environment-pairing-refusal-registry'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
-import { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
+import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
   runtimeHostStatusError,
   runtimeHostStatusFailure,
   type RuntimeHostStatusResponse
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   applyRuntimeEnvironmentCapabilityVerdict,
   getAcceptedRuntimeEnvironmentCapabilityOutcome,

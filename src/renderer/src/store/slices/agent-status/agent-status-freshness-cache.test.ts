@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
-import '../../../../../shared/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   agentStatusFreshnessScanCounters,
   createFreshnessScheduler,

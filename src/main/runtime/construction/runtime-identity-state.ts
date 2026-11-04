@@ -10,9 +10,9 @@ import {
   headlessMobileSnapshotContentUnchanged,
   mobileSnapshotIdentityUnchanged
 } from '../mobile-session-snapshot-equality'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeClientSettingsController } from '../runtime-client-settings'
 import type { RuntimeAutomationController } from '../runtime-automation-controller'

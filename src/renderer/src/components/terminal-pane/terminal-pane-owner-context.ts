@@ -19,8 +19,8 @@ import {
 import {
   findLocalFolderWorkspaceRuntimeRepo,
   resolveQualifiedFolderWorkspaceResult
-} from '../../../../shared/folder-workspace-execution-host'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+} from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 export function resolveTerminalPaneOwnerContext(
   state: AppState,

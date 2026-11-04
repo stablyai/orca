@@ -1,3 +1,5 @@
+import type { LoadBookkeeping } from './native-chat-composer-draft-load'
+import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import {
   currentDraftScope,
   captureLaunchDraftDestination,
@@ -5,7 +7,7 @@ import {
   nativeChatLaunchPromptDraftOwner,
   retainLaunchDraftSource
 } from './native-chat-launch-draft-source'
-import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 export {
   nativeChatLaunchPromptDraftOwner,
   nativeChatLaunchPromptDraftScopeKey,
@@ -126,28 +128,7 @@ export function reconcileRestoredImageChecks(
 }
 export const scopeListeners = new Map<string, Set<() => void>>()
 
-/** Pre-hydration appends replay over loaded drafts; ordinary edits replace them. */
-export type DraftAppend = (draft: StoredNativeChatComposerDraft) => StoredNativeChatComposerDraft
-
-/** Atomically append in storage, then replay onto hydration if that load could not have read it. */
-export type AppendBeforeLoad = {
-  /** In-run order, compared with the order at which a load attempt read storage. */
-  readonly sequence: number
-  readonly append: DraftAppend
-  committed: boolean
-}
-
-type LoadBookkeeping = {
-  hydrated: boolean
-  /** Sequence of the last append made before the load landed. */
-  appendSequence: number
-  readonly editedBeforeLoad: Set<string>
-  readonly appendsBeforeLoad: Map<string, AppendBeforeLoad[]>
-  readonly deletionsBeforeLoad: ((
-    scopeKey: string,
-    draft: StoredNativeChatComposerDraft
-  ) => boolean)[]
-}
+export type { DraftAppend, AppendBeforeLoad } from './native-chat-composer-draft-load'
 
 export const load: LoadBookkeeping = {
   hydrated: false,
@@ -170,11 +151,25 @@ export function notifyScope(scopeKey: string): void {
 }
 
 /** Setup options are authored input: the first change retains the setup, notifying its draft listeners. */
-export function writeLaunchSetupOptions(scope: string, draft: AgentPickerDraft, slot = ''): void {
+export function writeLaunchSetupOptions(
+  scope: string,
+  draft: AgentPickerDraft,
+  slot = '',
+  retained?: AgentPickerRetainedSetup
+): void {
   const setup = retainLaunchDraftSource(scope)
   if (setup) {
     setup.options ??= new Map()
-    setup.options.set(slot, draft)
+    const record = retained ??
+      setup.options.get(slot) ?? {
+        target: undefined,
+        agent: draft.agent,
+        source: undefined,
+        draft,
+        active: false
+      }
+    record.draft = draft
+    setup.options.set(slot, record)
     notifyScope(scope)
   }
 }

@@ -7,7 +7,7 @@ import {
   type StructuredAgentSessionAdmitFreshInput,
   type StructuredAgentSessionInputAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
-import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexSession } from './codex-structured-session-state'
 import { readCodexAutoSandbox } from './codex-structured-auto-sandbox'
 import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'

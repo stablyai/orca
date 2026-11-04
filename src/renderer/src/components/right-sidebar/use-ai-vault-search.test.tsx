@@ -1,13 +1,16 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { AiVaultSearchSort } from '../../../../shared/ai-vault-types'
+import type { AiVaultSearchSort } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse
-} from '../../../../shared/ai-vault-search-types'
+} from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
-import { searchHit, searchResults } from '../../../../shared/ai-vault-search-test-fixture'
+import {
+  searchHit,
+  searchResults
+} from '../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { useAiVaultPanelSearch, useAiVaultSearch } from './use-ai-vault-search'

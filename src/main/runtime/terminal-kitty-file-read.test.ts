@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { readTerminalKittyFile, resolveKittyFilePath } from './terminal-kitty-file-read'
-import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../../shared/terminal-kitty-file'
+import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../../shared/terminal/images/terminal-kitty-file'
 import * as kittyTemporaryRoots from './terminal-kitty-temporary-roots'
 import { TerminalReadKittyFile } from '../../shared/rpc-contract/terminal-unary-params'
 

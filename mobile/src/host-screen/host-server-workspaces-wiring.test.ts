@@ -28,7 +28,11 @@ import {
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree, WorktreeHostContextView } from '../worktree/workspace-list-types'
+import {
+  NO_WORKTREE_HOST_CONTEXT,
+  type WorktreeHostContextOf
+} from '../worktree/worktree-host-context-labels'
 import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
 import { useHostScreenState } from './use-host-screen-state'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
@@ -96,8 +100,11 @@ function desktop({ hostWorktrees, carriesRpcEnvelope }: Desktop = {}): FakeSessi
   return client
 }
 
+// A display row with the host context the list draws beside it.
+type LabelledRow = Worktree & WorktreeHostContextView
+
 type Screen = {
-  rows: () => Worktree[]
+  rows: () => LabelledRow[]
   state: () => ReturnType<typeof useHostScreenState>
   poll: () => Promise<void>
   hideHosts: (ids: string[]) => void
@@ -119,10 +126,11 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
   const router = { push: (to: string) => navigations.push(to), replace: () => {} }
   const held: {
     rows: Worktree[]
+    hostContextOf: WorktreeHostContextOf
     state?: ReturnType<typeof useHostScreenState>
     fetch?: () => Promise<void>
     actions?: ReturnType<typeof useHostWorktreeActions>
-  } = { rows: [] }
+  } = { rows: [], hostContextOf: NO_WORKTREE_HOST_CONTEXT }
   function Probe(): null {
     const [, setTick] = useState(0)
     rerender = () => setTick((tick) => tick + 1)
@@ -154,11 +162,13 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
     })
     held.state = state
     held.fetch = catalog.fetchWorktrees
-    held.rows = useHostDisplayWorktrees(
+    const display = useHostDisplayWorktrees(
       'connected',
       state,
       useResolvedHostPlatform(state, 'host-1')
     )
+    held.rows = display.worktrees
+    held.hostContextOf = display.hostContextOf
     return null
   }
   await act(async () => {
@@ -173,7 +183,7 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
   }
   await poll()
   return {
-    rows: () => held.rows,
+    rows: () => held.rows.map((row) => ({ ...row, ...held.hostContextOf(row) })),
     state: () => held.state!,
     poll,
     hideHosts: (ids) =>
@@ -210,7 +220,7 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
   }
 }
 
-function listed(rows: Worktree[]): [string, string | undefined, string | undefined][] {
+function listed(rows: LabelledRow[]): [string, string | undefined, string | undefined][] {
   return rows.map((entry) => [entry.worktreeId, entry.hostId, entry.hostContextHealthLabel])
 }
 

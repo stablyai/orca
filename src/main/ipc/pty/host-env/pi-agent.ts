@@ -4,7 +4,7 @@ import {
   type PiAgentKind
 } from '../../../../shared/pi-agent-kind'
 import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup/shell-startup-env'
-import { getAgentLaunchExecutableName } from '../../../../shared/agent-command-line-intent'
+import { getAgentLaunchExecutableName } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 import {
   AGENT_HOOK_RUNTIME_ENV_KEYS,
   CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS,

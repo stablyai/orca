@@ -1,4 +1,4 @@
-// Cover Add all import versus Settings re-adoption (P5/P6/P7/P9); picker list/filter/select lives in ssh-config-host-picker.spec.ts.
+// Cover Add all import versus Settings re-adoption (P5/P6/P7/P9); picker host selection lives in ssh-config-host-picker.spec.ts.
 
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'

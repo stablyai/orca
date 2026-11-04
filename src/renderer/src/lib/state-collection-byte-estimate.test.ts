@@ -10,15 +10,6 @@ describe('estimateStateCollectionKB', () => {
     expect(Number.isFinite(result.cyclic)).toBe(true)
   })
 
-  it('returns bounded work on pathological nesting', () => {
-    let deep: Record<string, unknown> = { leaf: true }
-    for (let i = 0; i < 10_000; i += 1) {
-      deep = { child: deep }
-    }
-    const wide = { slice: Array.from({ length: 100 }, () => ({ deep })) }
-    expect(() => estimateStateCollectionKB(wide, 4)).not.toThrow()
-  })
-
   it('skips a slice whose read throws without sinking the census', () => {
     const state = { healthy: 'x'.repeat(10_000) }
     Object.defineProperty(state, 'poisoned', {

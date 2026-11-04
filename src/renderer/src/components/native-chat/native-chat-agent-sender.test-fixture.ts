@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { makeTab } from '@/store/slices/store-test-helpers'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 
 export const initialStore = useAppStore.getState()

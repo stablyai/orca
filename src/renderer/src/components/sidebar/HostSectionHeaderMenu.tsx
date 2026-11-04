@@ -28,7 +28,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { runtimePairingRepairRoute } from '../../../../shared/runtime-environments'
+import { runtimePairingRepairRoute } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
@@ -40,7 +40,7 @@ import { buildHostHeaderMenuModel } from './host-header-menu-items'
 import { selectStartableStoppedWslDistro } from '../wsl-host-stopped/use-stopped-wsl-host'
 import { HostRenameDialog } from './HostRenameDialog'
 import { HostRemoveDialog } from './HostRemoveDialog'
-import { RuntimeRepairDialog } from '../settings/RuntimeRepairDialog'
+import { RuntimeRepairDialog } from '../runtime-access/RuntimeRepairDialog'
 import { resolveHostRemoval } from './host-rename-remove'
 
 function blockedTitle(reason: 'client-too-old' | 'server-too-old'): string {

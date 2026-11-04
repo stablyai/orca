@@ -1,7 +1,7 @@
 import { FOREGROUND_COMMAND_READS } from '../../shared/foreground-command-settle'
-import { createOsc133CommandFinishedScanner } from '../../shared/terminal-osc133-command-finished'
-import { terminalSafe } from '../../shared/terminal-safe-text'
-import type { TuiAgent } from '../../shared/tui-agent'
+import { createOsc133CommandFinishedScanner } from '../../shared/terminal/output/terminal-osc133-command-finished'
+import { terminalSafe } from '../../shared/terminal/output/terminal-safe-text'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { applyTerminalLineControls } from './terminal-tail-line-controls'
 

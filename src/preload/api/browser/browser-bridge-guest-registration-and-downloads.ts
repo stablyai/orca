@@ -15,7 +15,7 @@ import type {
   BrowserPagePromptResponse,
   BrowserPagePromptResult
 } from '../../../shared/browser-page-prompt'
-import { readBrowserClientHostIdArgument } from '../../../shared/browser-client-host-id-argument'
+import { readBrowserClientHostIdArgument } from '../../../shared/browser/client-hosting/browser-client-host-id-argument'
 import { browserClientPageRendererRequests } from '../../preload-runtime-support'
 import type { PreloadApi } from '../../api-types'
 
