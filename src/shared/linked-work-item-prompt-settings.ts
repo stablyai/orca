@@ -1,7 +1,8 @@
 import type { ExecutionHostId } from './execution-host/execution-host'
-import type { GlobalSettings } from './settings/global-settings-types'
 import type { Project, ProjectHostSetup } from './project/project-types'
 import { projectMatchesRepo } from './project/project-repo-match'
+
+export type LinkedWorkItemPromptSettings = { linkedWorkItemPromptTemplate?: string }
 
 export function normalizeLinkedWorkItemPromptTemplate(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
@@ -9,7 +10,7 @@ export function normalizeLinkedWorkItemPromptTemplate(value: unknown): string | 
 
 export function getLinkedWorkItemPromptTemplate(
   state: {
-    settings?: Pick<GlobalSettings, 'linkedWorkItemPromptTemplate'> | null
+    settings?: LinkedWorkItemPromptSettings | null
     projects?: readonly Pick<Project, 'id' | 'sourceRepoIds' | 'linkedWorkItemPromptTemplate'>[]
     setups?: readonly Pick<ProjectHostSetup, 'projectId' | 'repoId' | 'hostId'>[]
   },
