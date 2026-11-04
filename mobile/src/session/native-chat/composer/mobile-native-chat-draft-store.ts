@@ -193,15 +193,14 @@ function userText(scope: string): string {
 }
 
 setMobileNativeChatDraftSource({
-  saved: (scopePrefix) => {
+  saved: () => {
     const saved = new Map<string, MobileNativeChatSavedDraft>()
     for (const [scope, draft] of drafts) {
-      const tabId = scope.slice(scopePrefix.length)
-      if (scope.startsWith(scopePrefix) && !tabId.includes('\0') && userText(scope) !== '') {
-        saved.set(tabId, {
+      if (userText(scope) !== '') {
+        saved.set(scope, {
           text: draft.text,
           skills: readMobileNativeChatDraftInputs(scope).skills,
-          ...(draft.skillOrigin ? { skillOrigin: draft.skillOrigin } : {})
+          skillOrigin: draft.skillOrigin
         })
       }
     }

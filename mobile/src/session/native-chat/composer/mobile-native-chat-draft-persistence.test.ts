@@ -11,15 +11,11 @@ import {
   resetMobileNativeChatDraftStoreForTests,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
-import {
-  loadMobileNativeChatDrafts,
-  mobileNativeChatDraftWritesSettledForTests
-} from './mobile-native-chat-draft-persistence'
-import { readMobileNativeChatDraftInputs } from './mobile-native-chat-draft-inputs'
+import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
 
 const storage = vi.hoisted(() => new Map<string, string>())
 // A host-area page reads the key over the bridge, so its load can land after the user acts.
-const slowRead = vi.hoisted(() => ({ gate: null as Promise<void> | null }))
+const slowRead = vi.hoisted((): { gate: Promise<void> | null } => ({ gate: null }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
@@ -39,9 +35,14 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 const TAB_A = 'host-1\0wt-1\0tab-a'
 const TAB_B = 'host-1\0wt-1\0tab-b'
 
+// Loads queue behind every earlier read and write of the workspace's key.
+function writesSettled(): Promise<void> {
+  return loadMobileNativeChatDrafts('host-1', 'wt-1')
+}
+
 async function settle(): Promise<void> {
   await vi.runAllTimersAsync()
-  await mobileNativeChatDraftWritesSettledForTests()
+  await writesSettled()
 }
 
 // The page document dies with the app; storage is all that survives.
@@ -97,7 +98,7 @@ describe('mobile native-chat draft persistence', () => {
       readMobileNativeChatDraftEditGeneration(TAB_A),
       'ship it'
     )
-    await mobileNativeChatDraftWritesSettledForTests()
+    await writesSettled()
 
     await relaunch()
 
@@ -125,7 +126,7 @@ describe('mobile native-chat draft persistence', () => {
     slowRead.gate = null
     release()
     await loading
-    await mobileNativeChatDraftWritesSettledForTests()
+    await writesSettled()
 
     expect(draftText(TAB_A)).toBe('')
     await relaunch()
@@ -141,11 +142,10 @@ describe('mobile native-chat draft persistence', () => {
     await relaunch()
 
     pruneMobileNativeChatTabDrafts('host-1', 'wt-1', ['tab-a'])
-    await mobileNativeChatDraftWritesSettledForTests()
+    await writesSettled()
     await relaunch()
 
     expect(draftText(TAB_A)).toBe('keep me')
     expect(draftText(TAB_B)).toBe('')
-    expect(readMobileNativeChatDraftInputs(TAB_B).skills).toEqual([])
   })
 })

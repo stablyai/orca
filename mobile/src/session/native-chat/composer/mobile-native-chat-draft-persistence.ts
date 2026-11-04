@@ -1,7 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../../../mobile-web-shell/page-storage-keys'
-import { persistMirrored } from '../../../storage/mirrored-storage-keys'
+import {
+  PAGE_STORAGE_MAX_VALUE_CHARS,
+  workspaceScopedKey
+} from '../../../mobile-web-shell/page-storage-keys'
+import { persistMirroredReadBack } from '../../../storage/mirrored-storage-keys'
 
 // Why this slot: every shell since 0.0.59 lets session pages keep it, and #37900 retired the terminal drafts it held.
 const STORAGE_PREFIX = 'orca:terminalDrafts:'
@@ -14,29 +17,31 @@ export type MobileNativeChatSavedDraft = {
 }
 
 export type MobileNativeChatDraftSource = {
-  // The workspace's saveable tab drafts, by tab id.
-  saved: (scopePrefix: string) => Map<string, MobileNativeChatSavedDraft>
+  // Every scope's saveable draft; only tab scopes are kept.
+  saved: () => Map<string, MobileNativeChatSavedDraft>
   // Puts back a saved draft unless the tab already holds user text.
   restore: (scope: string, draft: MobileNativeChatSavedDraft) => void
 }
 
 type Workspace = {
   key: string
-  scopePrefix: string
+  hostId: string
+  worktreeId: string
   // Every read and write of the key runs in order, the load first.
   chain: Promise<void>
-  loaded: boolean
   // A shell that refuses this page the key refuses it for the whole page, so the load is not retried.
-  unreadable: boolean
+  load: 'pending' | 'loaded' | 'unreadable'
   // What storage holds; undefined after a write that failed partway, so the next save cannot match it.
   written: string | null | undefined
   timer: ReturnType<typeof setTimeout> | null
+  // Retirements seen before the load lands; the load must not bring those tabs back.
   retainedTabs: ReadonlySet<string> | null
   closedTabs: Set<string>
 }
 
 const workspaces = new Map<string, Workspace>()
-let source: MobileNativeChatDraftSource | null = null
+// Set by the draft store when it loads, before anything can save or load.
+let source!: MobileNativeChatDraftSource
 
 export function setMobileNativeChatDraftSource(next: MobileNativeChatDraftSource): void {
   source = next
@@ -73,7 +78,7 @@ function parseSavedDrafts(raw: string | null): Map<string, MobileNativeChatSaved
       saved.set(tabId, {
         text: draft.text,
         skills: parseSkills(draft.skills),
-        ...(typeof draft.skillOrigin === 'string' ? { skillOrigin: draft.skillOrigin } : {})
+        skillOrigin: typeof draft.skillOrigin === 'string' ? draft.skillOrigin : undefined
       })
     }
   }
@@ -82,6 +87,13 @@ function parseSavedDrafts(raw: string | null): Map<string, MobileNativeChatSaved
 
 // Drafts that would push the value past the shell's cap stay in memory, so a refused write never leaves sent text stored.
 function serializeSavedDrafts(drafts: Map<string, MobileNativeChatSavedDraft>): string | null {
+  if (drafts.size === 0) {
+    return null
+  }
+  const whole = JSON.stringify({ chatDrafts: Object.fromEntries(drafts) })
+  if (whole.length <= PAGE_STORAGE_MAX_VALUE_CHARS) {
+    return whole
+  }
   const kept: Record<string, MobileNativeChatSavedDraft> = {}
   for (const [tabId, draft] of drafts) {
     kept[tabId] = draft
@@ -93,21 +105,21 @@ function serializeSavedDrafts(drafts: Map<string, MobileNativeChatSavedDraft>): 
 }
 
 function workspaceFor(hostId: string, worktreeId: string): Workspace {
-  const scopePrefix = `${hostId}\0${worktreeId}\0`
-  let workspace = workspaces.get(scopePrefix)
+  const key = workspaceScopedKey(STORAGE_PREFIX, hostId, worktreeId)
+  let workspace = workspaces.get(key)
   if (!workspace) {
     workspace = {
-      key: `${STORAGE_PREFIX}${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`,
-      scopePrefix,
+      key,
+      hostId,
+      worktreeId,
       chain: Promise.resolve(),
-      loaded: false,
-      unreadable: false,
+      load: 'pending',
       written: null,
       timer: null,
       retainedTabs: null,
       closedTabs: new Set()
     }
-    workspaces.set(scopePrefix, workspace)
+    workspaces.set(key, workspace)
   }
   return workspace
 }
@@ -128,39 +140,47 @@ function enqueue(workspace: Workspace, step: () => Promise<void>): Promise<void>
 }
 
 async function load(workspace: Workspace): Promise<void> {
-  if (workspace.loaded || workspace.unreadable || !source) {
+  if (workspace.load !== 'pending') {
     return
   }
   let raw: string | null
   try {
     raw = await AsyncStorage.getItem(workspace.key)
   } catch {
-    workspace.unreadable = true
+    workspace.load = 'unreadable'
     return
   }
-  workspace.loaded = true
+  workspace.load = 'loaded'
   workspace.written = raw
   for (const [tabId, draft] of parseSavedDrafts(raw)) {
     const live = workspace.retainedTabs?.has(tabId) ?? true
     if (live && !workspace.closedTabs.has(tabId)) {
-      source.restore(`${workspace.scopePrefix}${tabId}`, draft)
+      source.restore(`${workspace.hostId}\0${workspace.worktreeId}\0${tabId}`, draft)
     }
   }
+  workspace.retainedTabs = null
+  workspace.closedTabs.clear()
 }
 
 async function write(workspace: Workspace): Promise<void> {
   await load(workspace)
-  if (!workspace.loaded || !source) {
+  if (workspace.load !== 'loaded') {
     return
   }
-  const value = serializeSavedDrafts(source.saved(workspace.scopePrefix))
+  const drafts = new Map<string, MobileNativeChatSavedDraft>()
+  for (const [scope, draft] of source.saved()) {
+    const tab = tabOf(scope)
+    if (tab?.workspace === workspace) {
+      drafts.set(tab.tabId, draft)
+    }
+  }
+  const value = serializeSavedDrafts(drafts)
   if (value === workspace.written) {
     return
   }
   workspace.written = undefined
-  await persistMirrored(workspace.key, value)
   // Page stores can resolve a dropped write; recording what stuck makes the next save retry it.
-  workspace.written = await AsyncStorage.getItem(workspace.key)
+  workspace.written = await persistMirroredReadBack(workspace.key, value)
 }
 
 function flush(workspace: Workspace): void {
@@ -215,20 +235,20 @@ export function retainSavedMobileNativeChatDrafts(
   tabIds: readonly string[]
 ): void {
   const workspace = workspaceFor(hostId, worktreeId)
-  workspace.retainedTabs = new Set(tabIds)
+  if (workspace.load === 'pending') {
+    workspace.retainedTabs = new Set(tabIds)
+  }
   flush(workspace)
 }
 
 export function closeSavedMobileNativeChatDraft(scope: string): void {
   const tab = tabOf(scope)
   if (tab) {
-    tab.workspace.closedTabs.add(tab.tabId)
+    if (tab.workspace.load === 'pending') {
+      tab.workspace.closedTabs.add(tab.tabId)
+    }
     flush(tab.workspace)
   }
-}
-
-export async function mobileNativeChatDraftWritesSettledForTests(): Promise<void> {
-  await Promise.all([...workspaces.values()].map((workspace) => workspace.chain))
 }
 
 export function resetMobileNativeChatDraftPersistenceForTests(): void {
