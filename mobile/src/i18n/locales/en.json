@@ -769,6 +769,33 @@
       "pullRequest": "Pull Request",
       "workspace": "Workspace",
       "automations": "Automations"
+    },
+    "edgeArrows": {
+      "pillsShort": "Pills",
+      "pillsLabel": "Edge Pills",
+      "stripsShort": "Strips",
+      "stripsLabel": "Edge Strips",
+      "orbsShort": "Orbs",
+      "orbsLabel": "Floating Orbs",
+      "offShort": "Off",
+      "offLabel": "Off",
+      "sheetTitle": "4-side edge arrows",
+      "sheetMessage": "Choose how sticky navigation arrows appear inside terminal, agent session, and content windows.",
+      "terminalUp": "Up arrow",
+      "navigateUp": "Scroll up",
+      "terminalDown": "Down arrow",
+      "navigateDown": "Scroll down",
+      "terminalLeft": "Left arrow",
+      "previousTabOrBack": "Previous tab or back",
+      "terminalRight": "Right arrow",
+      "nextTab": "Next tab",
+      "switchStyle": "Switch edge arrow style ({{style}})",
+      "modePillsOption": "Edge Pills (glassmorphic capsules)",
+      "modeStripsOption": "Edge Strips (wide touch rails)",
+      "modeOrbsOption": "Floating Orbs (compact buttons)",
+      "modeOffOption": "Off (hide 4-side edge arrows)",
+      "showSwitcherChip": "Show quick-switcher chip",
+      "hideSwitcherChip": "Hide quick-switcher chip"
     }
   },
   "notifications": {
@@ -1269,7 +1296,11 @@
       "directionPad": "DIRECTION PAD",
       "showDirectionPad": "Show D-pad",
       "showDirectionPadDescription": "Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.",
-      "showShortcut": "Show {{label}} shortcut"
+      "showShortcut": "Show {{label}} shortcut",
+      "edgeArrowsSection": "4-SIDE EDGE ARROWS",
+      "edgeArrowsDescription": "Render sticky navigation arrows at all four inner edges of terminal, agent session, and content windows.",
+      "edgeSwitcherChip": "Show quick-switcher chip",
+      "edgeSwitcherChipDescription": "Tap the top-right pane badge to cycle Pills, Strips, and Orbs live"
     },
     "voiceModelList": {
       "modelSize": "{{size}} MB",
@@ -2038,7 +2069,8 @@
       "newTab": "New tab",
       "quickCommands": "Quick commands",
       "fileExplorer": "File explorer",
-      "sourceControl": "Source control"
+      "sourceControl": "Source control",
+      "edgeArrows": "4-side edge arrows"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",

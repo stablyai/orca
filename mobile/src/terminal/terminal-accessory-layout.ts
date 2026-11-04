@@ -5,14 +5,42 @@ import { TERMINAL_ACCESSORY_KEYS, type TerminalAccessoryKey } from './terminal-a
 
 export const TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY = 'orca:terminal-accessory-layout'
 
+export type EdgeNavigationMode = 'pills' | 'strips' | 'orbs' | 'off'
+
 export type TerminalAccessoryLayout = {
   orderedBuiltInIds: string[]
   visibleBuiltInIds: string[]
   directionPadEnabled?: boolean
+  edgeNavigationMode?: EdgeNavigationMode
+  edgeSwitcherChipHidden?: boolean
 }
 
 export type TerminalAccessoryLayoutPreference = TerminalAccessoryLayout & {
   version: 2
+}
+
+type LayoutChangeListener = (layout: TerminalAccessoryLayoutPreference) => void
+const layoutChangeListeners = new Set<LayoutChangeListener>()
+
+export function subscribeTerminalAccessoryLayoutChanges(
+  listener: LayoutChangeListener
+): () => void {
+  layoutChangeListeners.add(listener)
+  return () => {
+    layoutChangeListeners.delete(listener)
+  }
+}
+
+function optionalEdgeFields(candidate: {
+  edgeNavigationMode?: unknown
+  edgeSwitcherChipHidden?: unknown
+}): Pick<TerminalAccessoryLayout, 'edgeNavigationMode' | 'edgeSwitcherChipHidden'> {
+  const m = candidate.edgeNavigationMode
+  const mode = m === 'pills' || m === 'strips' || m === 'orbs' || m === 'off' ? m : undefined
+  return {
+    ...(mode !== undefined ? { edgeNavigationMode: mode } : {}),
+    ...(candidate.edgeSwitcherChipHidden === true ? { edgeSwitcherChipHidden: true } : {})
+  }
 }
 
 function builtInIds(): string[] {
@@ -110,9 +138,13 @@ export function normalizeTerminalAccessoryLayoutPreference(
     orderedBuiltInIds: 'orderedBuiltInIds' in value ? value.orderedBuiltInIds : undefined,
     visibleBuiltInIds: 'visibleBuiltInIds' in value ? value.visibleBuiltInIds : undefined,
     knownBuiltInIds: 'knownBuiltInIds' in value ? value.knownBuiltInIds : undefined,
-    directionPadEnabled: 'directionPadEnabled' in value ? value.directionPadEnabled : undefined
+    directionPadEnabled: 'directionPadEnabled' in value ? value.directionPadEnabled : undefined,
+    edgeNavigationMode: 'edgeNavigationMode' in value ? value.edgeNavigationMode : undefined,
+    edgeSwitcherChipHidden:
+      'edgeSwitcherChipHidden' in value ? value.edgeSwitcherChipHidden : undefined
   }
   const builtInSet = new Set(currentBuiltInIds)
+  const edgeFields = optionalEdgeFields(candidate)
 
   if (candidate.version === 2) {
     const orderedInput = stringArray(candidate.orderedBuiltInIds)
@@ -132,7 +164,8 @@ export function normalizeTerminalAccessoryLayoutPreference(
       version: 2,
       directionPadEnabled: candidate.directionPadEnabled !== false,
       orderedBuiltInIds: ordered,
-      visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
+      visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id)),
+      ...edgeFields
     }
   }
 
@@ -154,7 +187,8 @@ export function normalizeTerminalAccessoryLayoutPreference(
       version: 2,
       directionPadEnabled: candidate.directionPadEnabled !== false,
       orderedBuiltInIds: [...currentBuiltInIds],
-      visibleBuiltInIds: currentBuiltInIds.filter((id) => visibleSet.has(id))
+      visibleBuiltInIds: currentBuiltInIds.filter((id) => visibleSet.has(id)),
+      ...edgeFields
     }
   }
 
@@ -175,7 +209,8 @@ export function createTerminalAccessoryLayoutPreference(
     version: 2,
     directionPadEnabled: layout.directionPadEnabled !== false,
     orderedBuiltInIds: ordered,
-    visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
+    visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id)),
+    ...optionalEdgeFields(layout)
   }
 }
 
@@ -186,11 +221,13 @@ export function setTerminalAccessoryBuiltInVisible(
   currentBuiltInIds = builtInIds()
 ): TerminalAccessoryLayout {
   const preference = createTerminalAccessoryLayoutPreference(layout, currentBuiltInIds)
+  const edgeFields = optionalEdgeFields(preference)
   if (!new Set(currentBuiltInIds).has(id)) {
     return {
       directionPadEnabled: preference.directionPadEnabled,
       orderedBuiltInIds: preference.orderedBuiltInIds,
-      visibleBuiltInIds: preference.visibleBuiltInIds
+      visibleBuiltInIds: preference.visibleBuiltInIds,
+      ...edgeFields
     }
   }
   const visibleSet = new Set(preference.visibleBuiltInIds)
@@ -202,7 +239,10 @@ export function setTerminalAccessoryBuiltInVisible(
   return {
     directionPadEnabled: preference.directionPadEnabled,
     orderedBuiltInIds: preference.orderedBuiltInIds,
-    visibleBuiltInIds: preference.orderedBuiltInIds.filter((builtInId) => visibleSet.has(builtInId))
+    visibleBuiltInIds: preference.orderedBuiltInIds.filter((builtInId) =>
+      visibleSet.has(builtInId)
+    ),
+    ...edgeFields
   }
 }
 
@@ -218,7 +258,8 @@ export function reorderTerminalAccessoryBuiltInIds(
   return {
     directionPadEnabled: preference.directionPadEnabled,
     orderedBuiltInIds: preference.orderedBuiltInIds,
-    visibleBuiltInIds: preference.visibleBuiltInIds
+    visibleBuiltInIds: preference.visibleBuiltInIds,
+    ...optionalEdgeFields(preference)
   }
 }
 
@@ -257,5 +298,8 @@ export async function loadTerminalAccessoryLayout(
 export async function saveTerminalAccessoryLayout(layout: TerminalAccessoryLayout): Promise<void> {
   const preference = createTerminalAccessoryLayoutPreference(layout)
   const value = JSON.stringify(preference)
+  for (const listener of layoutChangeListeners) {
+    listener(preference)
+  }
   await persistMirrored(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY, value)
 }

@@ -26,6 +26,7 @@ import {
   saveTerminalAccessoryLayout,
   setTerminalAccessoryBuiltInVisible
 } from '../terminal/terminal-accessory-layout'
+import { EdgeNavigationSettingsSection } from './EdgeNavigationSettingsSection'
 import { MobileSwitch } from './MobileSwitch'
 
 // Absolutely positioned DragReorderList rows require one fixed height per section.
@@ -182,6 +183,16 @@ export function TerminalShortcutSettings({
 
   return (
     <>
+      <EdgeNavigationSettingsSection
+        shortcutLayout={shortcutLayout}
+        onChangeLayout={(updater) =>
+          setShortcutLayout((current) => {
+            const next = updater(current)
+            persistLayout(next)
+            return next
+          })
+        }
+      />
       {hasPad ? (
         <SettingsSection
           title={t('components.terminalShortcutSettings.directionPad', 'DIRECTION PAD')}
