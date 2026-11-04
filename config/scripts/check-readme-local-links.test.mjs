@@ -73,6 +73,43 @@ describe('README local link check', () => {
     expect(findBrokenReadmeLinks(makeFixture(validReadmes))).toEqual([])
   })
 
+  it('preserves spaces and parentheses in angle-bracket Markdown destinations', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': [
+        '![hero](<docs/assets/hero image.jpg> "Hero")',
+        '[image](<docs/Hero(wide).png>)',
+        '[web](<https://example.com/path with (parentheses)>)',
+        '[top](<#some heading>)',
+        '[plain text](<docs/not\na link.png>)'
+      ].join('\n'),
+      'docs/Hero(wide).png': 'png'
+    })
+
+    expect(findBrokenReadmeLinks(root)).toEqual([])
+  })
+
+  it('reports missing angle-bracket destinations in root and translated READMEs', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '![image](<docs/missing image.png>)',
+      'docs/readme/README.ja.md': '[guide](<../missing guide.md> "Guide")'
+    })
+
+    expect(findBrokenReadmeLinks(root)).toEqual([
+      {
+        readme: 'README.md',
+        target: 'docs/missing image.png',
+        resolved: 'docs/missing image.png'
+      },
+      {
+        readme: 'docs/readme/README.ja.md',
+        target: '../missing guide.md',
+        resolved: 'docs/missing guide.md'
+      }
+    ])
+  })
+
   it('checks mixed-case HTML attributes without changing their URLs', () => {
     const root = makeFixture({
       ...validReadmes,
