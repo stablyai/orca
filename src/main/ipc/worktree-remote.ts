@@ -96,7 +96,10 @@ import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
 import { CrossStoreParentRefSchema } from '../../shared/rpc-contract/cross-store-parent-params'
 import { assertParentInAnotherStore } from '../runtime/cross-store-parent-store-check'
-import { recordCreatedWorktreeLineage } from '../runtime/runtime-worktree-lineage-recording'
+import {
+  crossStoreManualLineage,
+  recordCreatedWorktreeLineage
+} from '../runtime/runtime-worktree-lineage-recording'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
@@ -246,12 +249,11 @@ export function recordWorkspaceLineageForCreatedWorktree(
   createdAt: number
 ): CreatedWorktreeLineageRecords {
   if (args.crossStoreParent) {
-    const { crossStoreLineage, warnings } = recordCreatedWorktreeLineage(store, worktree, {
-      kind: 'crossStore',
-      parent: args.crossStoreParent,
-      origin: 'manual',
-      capture: { source: 'manual-action', confidence: 'explicit' }
-    })
+    const { crossStoreLineage, warnings } = recordCreatedWorktreeLineage(
+      store,
+      worktree,
+      crossStoreManualLineage(args.crossStoreParent)
+    )
     for (const warning of warnings) {
       console.warn(`[worktree-create] ${warning.message}`)
     }

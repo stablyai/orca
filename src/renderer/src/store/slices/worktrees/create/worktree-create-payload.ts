@@ -151,8 +151,10 @@ export function buildRuntimeWorktreeCreateParams(
   return {
     repo: request.repoId,
     ...sharedCreateFields(request, attempt),
-    // Why: the host defaults a bare `parentWorkspace` to CLI provenance; app picks are manual.
-    ...(attempt.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
+    // Why: the host defaults a bare parent (same- or cross-store) to CLI provenance; app picks are manual.
+    ...(attempt.parentWorkspace || attempt.crossStoreParent
+      ? { parentWorkspaceOrigin: 'manual' }
+      : {}),
     // Switch point: a host lists the window's creation under its id only on the dark path.
     ...(ORCA_SIDEBAR_INPUTS_IS_MAIN && request.creationId
       ? { creationId: request.creationId }

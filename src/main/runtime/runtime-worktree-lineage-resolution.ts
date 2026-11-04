@@ -3,7 +3,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { WorkspaceKey } from '../../shared/workspace-scope'
 import type { WorktreeLineage, WorktreeLineageWarning } from '../../shared/worktree/lineage-types'
-import { crossStoreCliLineage } from './runtime-worktree-lineage-recording'
+import { crossStoreCreateLineage } from './runtime-worktree-lineage-recording'
 import type { CrossStoreLineageResolution } from './runtime-worktree-lineage-recording'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -109,7 +109,7 @@ export async function resolveRuntimeWorktreeCreateLineage(
   }
   if (input.noParent === true || input.crossStoreParent) {
     return input.crossStoreParent
-      ? crossStoreCliLineage(input.crossStoreParent, input.crossStoreParentInferred === true)
+      ? crossStoreCreateLineage({ ...input, crossStoreParent: input.crossStoreParent })
       : { kind: 'none', warnings: [] }
   }
   if (input.parentWorkspace) {
