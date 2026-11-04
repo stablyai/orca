@@ -474,7 +474,7 @@ describe('notice rows', () => {
     const words = agentSessionFailureWords(failure, { agentName: 'Claude', surface: 'row' })
     renderStatus({ kind: 'status', tone: 'error', ...words }, null, false, false, 'Claude')
     const french =
-      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Les messages enregistrés par Orca restent dans ce chat. Utilisez « Transférer à un autre Agent » sur ordinateur pour démarrer une nouvelle session avec ce contexte.'
+      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Vous pouvez transférer cette session d’agent vers une nouvelle session.'
     expect(screen.getByText(french)).toBeInTheDocument()
   })
   it.each([
