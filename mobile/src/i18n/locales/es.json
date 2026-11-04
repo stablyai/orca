@@ -823,7 +823,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
-      "openImage": "Abrir imagen"
+      "openImage": "Abrir imagen",
+      "wrapLines": "Ajustar líneas",
+      "disableLineWrap": "Desactivar ajuste de línea"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Cerrar panel"

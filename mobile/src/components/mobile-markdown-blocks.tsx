@@ -63,6 +63,7 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
       code={node.value}
       language={node.lang ?? undefined}
       textScale={ctx.textScale}
+      sourceLine={node.position?.start.line}
     />
   )
 }

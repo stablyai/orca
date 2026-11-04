@@ -12,10 +12,10 @@ import {
   NativeChatFileLinkExistenceContext
 } from './native-chat-file-link-existence'
 import type { NativeChatFileLinkExistence } from '../../../../shared/native-chat/native-chat-file-link-existence'
-import {
-  useNativeChatFileLinkExistsFrom,
-  useRecheckNativeChatFileLinksAfterTurn
-} from '../../../../shared/native-chat/use-native-chat-file-link-exists'
+import { createNativeChatFileLinkHooks } from '../../../../shared/native-chat/native-chat-file-link-hooks'
+
+const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksAfterTurn } =
+  createNativeChatFileLinkHooks({ useEffect, useMemo, useRef, useSyncExternalStore })
 
 const subscribeToPairings = (onChange: () => void): (() => void) =>
   onRuntimeEnvironmentRevisionsChanged(onChange)

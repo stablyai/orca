@@ -781,7 +781,9 @@
     },
     "markdownBlocks": {
       "copyCode": "复制代码",
-      "openImage": "打开图片"
+      "openImage": "打开图片",
+      "wrapLines": "自动换行",
+      "disableLineWrap": "关闭自动换行"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "关闭抽屉"
