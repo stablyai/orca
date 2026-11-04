@@ -83,7 +83,7 @@ vi.mock('@/store/selectors', () => ({
   }
 }))
 
-vi.mock('@/components/editor/editor-model-owner', () => ({
+vi.mock('@/components/editor/model-lifetime/identity/editor-model-owner', () => ({
   resolveEditorModelOwner: () => ({ environmentId: null, hostId: 'local' }),
   getEditorModelOwnerKey: () => ''
 }))

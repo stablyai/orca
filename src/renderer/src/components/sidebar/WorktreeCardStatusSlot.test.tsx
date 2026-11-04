@@ -5,7 +5,7 @@ import { i18n } from '@/i18n/i18n'
 import ko from '@/i18n/locales/ko.json'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { getWorktreeCardPrDisplay, type WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { gitlabMrCheckCases } from '../../../../shared/gitlab-mr-checks.test-fixture'
+import { gitlabMrCheckCases } from '../../../../shared/source-control/checks/gitlab/gitlab-mr-checks.test-fixture'
 import { buildParentPrChecksProjection } from '../right-sidebar/parent-pr-checks-rows'
 import { FolderWorkspacePrChecksRow } from '../right-sidebar/FolderWorkspacePrChecksRow'
 import { presentGitLabMRMergeState } from '../right-sidebar/gitlab-mr-merge-state'
@@ -17,7 +17,7 @@ import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-disp
 import { formatHostedReviewLabel } from '../status-bar/hosted-review-label'
 import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
 import { summarizeWorkspaceReviewChecks } from '../../../../shared/workspace-review-checks'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {
   referenceAttachment,
   referenceReview,

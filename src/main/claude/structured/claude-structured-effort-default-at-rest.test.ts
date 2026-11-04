@@ -22,7 +22,7 @@ import {
   structuredAgentSessionShownSnapshot
 } from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import { claudeAndCodexAgents } from '../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
-import { composeCodexSessionOptionCatalog } from '../../codex/codex-structured-model-catalog'
+import { composeCodexSessionOptionCatalog } from '../../codex/structured/catalog/codex-structured-model-catalog'
 import { listedModels } from './launch/claude-structured-model-catalog'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'

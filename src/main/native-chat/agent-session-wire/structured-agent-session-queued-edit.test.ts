@@ -1,5 +1,8 @@
 import { startQueuedEditLease } from '../../../shared/queued-message-edit-lease'
-import { acquired, fakeCodex } from '../../codex/codex-structured-session-adapter-fixture'
+import {
+  acquired,
+  fakeCodex
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'

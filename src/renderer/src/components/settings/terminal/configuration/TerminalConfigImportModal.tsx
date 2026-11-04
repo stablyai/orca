@@ -2,7 +2,7 @@ import { FileUp } from 'lucide-react'
 import type {
   TerminalConfigImportFormat,
   TerminalConfigImportPreview
-} from '../../../../../../shared/terminal-config-import-preview'
+} from '../../../../../../shared/terminal/appearance/terminal-config-import-preview'
 import { Button } from '../../../ui/button'
 import {
   Dialog,
@@ -13,7 +13,7 @@ import {
   DialogTitle
 } from '../../../ui/dialog'
 import { SETTING_LABELS } from '../../search/setting-labels'
-import { normalizeTerminalCustomThemes } from '../../../../../../shared/terminal-custom-themes'
+import { normalizeTerminalCustomThemes } from '../../../../../../shared/terminal-themes/terminal-custom-themes'
 import { translate } from '@/i18n/i18n'
 
 type TerminalConfigImportModalProps = {

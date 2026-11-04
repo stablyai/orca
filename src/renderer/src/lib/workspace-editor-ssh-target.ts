@@ -2,7 +2,7 @@ import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
 import {
   getRuntimeSshAccess,
   type PublicKnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { resolveOwner, type WorkspaceOwnerRef } from './resolve-owner'
 import type { WorktreeOperationRouteState } from './worktree-operation-route'
 

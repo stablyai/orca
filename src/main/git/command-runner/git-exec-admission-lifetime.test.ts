@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
-import type * as GitFetchHeadLockModule from '../../../shared/git-fetch-head-lock'
+import type * as GitFetchHeadLockModule from '../../../shared/git/fetch/git-fetch-head-lock'
 
 const {
   execFileMock,
@@ -30,9 +30,10 @@ vi.mock('@orca/process-host/process-tree-termination', () => ({
   forceTerminateProcessTree: forceTerminateProcessTreeMock
 }))
 // Mock only filesystem key derivation so libuv completion order cannot reorder the real FIFO lock.
-vi.mock('../../../shared/git-fetch-head-lock', async (importOriginal) => {
+vi.mock('../../../shared/git/fetch/git-fetch-head-lock', async (importOriginal) => {
   const actual = await importOriginal<typeof GitFetchHeadLockModule>()
-  const { runWithGitOperationLock } = await import('../../../shared/git-operation-lock')
+  const { runWithGitOperationLock } =
+    await import('../../../shared/git/commands/git-operation-lock')
   return {
     ...actual,
     runWithGitFetchHeadLock: <T>(
@@ -49,10 +50,10 @@ import { execFileCapture } from './exec-file-capture'
 import { isGitWorktreeMutationInFlight } from './git-worktree-mutation-state'
 import {
   acquireGitAdmission,
-  GitAdmissionScheduler,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests
 } from './git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
 
 type ExecCallback = (error: Error | null, stdout: string | Buffer, stderr: string | Buffer) => void
 

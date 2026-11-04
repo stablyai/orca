@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { EDITOR_STALE_SAVE_MESSAGE } from '@/components/editor/editor-save-disk-precondition'
+import { EDITOR_STALE_SAVE_MESSAGE } from '@/components/editor/save/queue/editor-save-disk-precondition'
 import { useFileDeletion } from './useFileDeletion'
 
 const mocks = vi.hoisted(() => ({
@@ -24,7 +24,7 @@ vi.mock('./file-explorer-operation-owner', async (importOriginal) => ({
 vi.mock('./file-explorer-deletion-editors', () => ({
   getFileExplorerDeletionEditors: () => [{ id: 'tab-1', isDirty: true }]
 }))
-vi.mock('@/components/editor/editor-autosave', () => ({
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   requestEditorFileSave: mocks.requestEditorFileSave,
   requestEditorSaveQuiesce: vi.fn(async () => undefined)
 }))

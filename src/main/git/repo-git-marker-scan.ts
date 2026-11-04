@@ -1,8 +1,8 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative } from 'node:path'
 import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
-import { resolveGitMetadataPath } from '../../shared/git-metadata-path'
-import { parseGitdirMarkerPayload } from '../../shared/gitdir-marker-payload'
+import { resolveGitMetadataPath } from '../../shared/git/metadata/git-metadata-path'
+import { parseGitdirMarkerPayload } from '../../shared/git/metadata/gitdir-marker-payload'
 
 export type GitMarkerScanResult =
   | { status: 'valid'; rootPath: string }

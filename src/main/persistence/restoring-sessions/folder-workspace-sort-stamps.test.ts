@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
+import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces/folder-workspaces'
 import { FolderWorkspacePersistenceOperations } from './folder-workspace-operations'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))

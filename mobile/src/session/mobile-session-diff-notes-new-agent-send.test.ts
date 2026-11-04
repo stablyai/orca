@@ -139,7 +139,6 @@ async function mountSessionScreen(client: RpcClient): Promise<void> {
       terminalsRef: { current: [] },
       setSessionTabs: () => {},
       sessionTabsRef,
-      defaultTerminalHandlesToLiveInput: () => {},
       setActiveHandle: () => {},
       activeSessionTabId: 'existing-tab',
       setActiveSessionTabId: () => {},

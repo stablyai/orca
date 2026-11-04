@@ -1,5 +1,5 @@
 import { createQoderSessionResumeState } from '../scanners/qoder/session-scanner-qoder-parser'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { inSessionParseFileLane } from './session-parse-file-lane'
 import { createAntigravitySessionResumeState } from '../scanners/antigravity/session-scanner-antigravity-parser'
 import { createCodexSessionResumeState } from '../scanners/codex/session-scanner-codex-parser'

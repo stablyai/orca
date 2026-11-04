@@ -1,8 +1,11 @@
-import { discoveredModel } from '../../agent-session/options/structured-agent-session-discovered-model'
+import {
+  discoveredModel,
+  structuredModelEfforts
+} from '../../agent-session/options/structured-agent-session-discovered-model'
 import { createClaudeCatalogOptions } from '../../agent-session/options/agent-session-option-catalog-claude-codex'
 import type { CatalogOption } from '../../agent-session/options/agent-session-option-catalog-types'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
-import { sourceControlActionOptions } from '../../source-control-action-options'
+import { sourceControlActionOptions } from '../../source-control/ai/recipes/source-control-action-options'
 import {
   agentPermissionChoices,
   agentPermissionHasTerminalChoice
@@ -85,7 +88,7 @@ export function agentPickerEntryOptions(
         ...option,
         kind: {
           type: 'select' as const,
-          choices: live.efforts,
+          choices: surface === 'chat' ? structuredModelEfforts(live) : live.efforts,
           defaultValue: live.defaultEffort ?? ''
         }
       }

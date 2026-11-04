@@ -9,7 +9,9 @@ import {
   endProgrammaticContentSync
 } from './monaco-programmatic-sync'
 
-vi.mock('./editor-stale-mount-guard', () => ({ mayPushTabTextIntoModel: () => true }))
+vi.mock('./model-lifetime/buffer-text/editor-stale-mount-guard', () => ({
+  mayPushTabTextIntoModel: () => true
+}))
 
 afterEach(() => {
   cleanup()

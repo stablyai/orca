@@ -4,7 +4,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus
-} from '../../../../shared/runtime-host-status'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '@/store/index'
 import {
   getRuntimeEnvironmentRevision,

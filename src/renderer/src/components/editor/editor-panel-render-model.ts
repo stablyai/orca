@@ -8,19 +8,22 @@ import {
   getEditorToggleModes,
   getEditorViewLanguage,
   getMarkdownViewModes
-} from './markdown-preview-controls'
+} from './view-mode/markdown-preview-controls'
 import { getEditorHeaderOpenFileState } from './editor-header'
-import type { EditorToggleValue } from './EditorViewToggle'
+import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 import type { FileContent } from './editor-panel-content-types'
-import { canUseChangesModeForFile } from './editor-panel-file-mode'
-import { getMarkdownRenderMode, type MarkdownRenderState } from './markdown-render-mode'
-import { getCachedMarkdownRichModeEligibility } from './markdown-rich-mode-eligibility-cache'
-import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
+import { canUseChangesModeForFile } from './view-mode/editor-panel-file-mode'
+import {
+  getMarkdownRenderMode,
+  type MarkdownRenderState
+} from './markdown/render-mode/markdown-render-mode'
+import { getCachedMarkdownRichModeEligibility } from './markdown/render-mode/markdown-rich-mode-eligibility-cache'
+import { exceedsMarkdownRichModeSizeLimit } from './markdown/render-mode/markdown-rich-size-limit'
 import {
   customEditorToggleValue,
   resolveCustomEditorToggle,
   type CustomEditorToggle
-} from './custom-editor-toggle'
+} from './view-mode/custom-editor-toggle'
 import type {
   ActivePluginCustomEditor,
   CustomEditorViewChoice

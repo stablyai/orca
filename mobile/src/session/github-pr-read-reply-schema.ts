@@ -5,7 +5,7 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../src/shared/github/work-item-types'
-import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
+import type { HostedReviewInfo } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import {
   CHECK_STATUS,
   MERGEABLE_STATE,

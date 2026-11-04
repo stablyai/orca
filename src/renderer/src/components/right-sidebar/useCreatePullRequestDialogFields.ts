@@ -3,10 +3,8 @@ import {
   prefixJiraReviewTitle
 } from '../../../../shared/jira/jira-review-title'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import {
-  DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
-  resolveSourceControlAiForOperation
-} from '../../../../shared/source-control-ai'
+import { DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import { resolveSourceControlAiForOperation } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type {
   PullRequestFieldName,
   PullRequestFieldRevisions
@@ -15,7 +13,7 @@ import {
   resolveCreateReviewDefaultBaseRef,
   stripBaseRef
 } from './create-pull-request-base-ref-normalization'
-import { resolveCreateReviewSeedText } from '../../../../shared/hosted-review-create-seed'
+import { resolveCreateReviewSeedText } from '../../../../shared/source-control/hosted-review/hosted-review-create-seed'
 import {
   createInitialPullRequestFieldRevisions,
   type GenerationSeed,

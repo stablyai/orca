@@ -6,12 +6,12 @@ import { getConnectionId } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
 import { bulkUnstageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
 import { translate } from '@/i18n/i18n'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
   getDiscardAllPaths,
   runDiscardAllForArea,
   type DiscardAllArea
-} from '../../../../../../shared/source-control-discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { discardDeletesEntryFile } from './discard-confirmation'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
 import {
@@ -19,7 +19,7 @@ import {
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
 import type { PendingDiscardConfirmation } from './discard-dialog'
-import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control/listing/source-control-section-order'
 
 export function useSourceControlDiscardConfirmation({
   activeRepoTarget,

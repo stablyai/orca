@@ -9,11 +9,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import { WORKSPACE_CLEANUP_SORT_FIELD_VALUES } from '../../../../shared/workspace-cleanup-facet-rankings'
+import { WORKSPACE_CLEANUP_SORT_FIELD_VALUES } from '../../../../shared/workspace-cleanup/workspace-cleanup-facet-rankings'
 import type {
   WorkspaceCleanupSortField,
   WorkspaceCleanupSortState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 import { getWorkspaceCleanupSortFieldLabel } from './workspace-cleanup-facet-labels'
 
 export function WorkspaceCleanupSortHeader({

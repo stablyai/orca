@@ -253,7 +253,7 @@ function removeDefaultsFor(
     // Without launch catalog removers, the allowlisted aliases are the overridden defaults.
     for (const option of EXTRA_AGENT_ARG_OPTIONS[agent] ?? []) {
       if (option.kind !== 'repeatable' && kinds.has(option.kind)) {
-        result = removeAgentArgOption(agent, result, option.aliases)
+        result = removeAgentArgOption(agent, result, option.aliases, undefined, 'required')
       }
     }
     return result

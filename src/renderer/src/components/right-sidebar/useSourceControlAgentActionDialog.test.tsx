@@ -4,20 +4,20 @@ import type * as StructuredAgentClient from '@/runtime/structured-agent-session-
 import {
   commitSourceControlActionArguments,
   editSourceControlActionArguments
-} from '../../../../shared/source-control-action-selection'
+} from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import {
   captureSourceControlActionSelection,
   resolveSourceControlActionRecipe
-} from '../../../../shared/source-control-ai-operation-policy'
-import { projectSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
+} from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
+import { projectSourceControlActionLaunch } from '../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { structuredLaunchRequestedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { liftActionPermissionArgs } from '../../../../shared/source-control-action-permission-lift'
+import { liftActionPermissionArgs } from '../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
 import type { Repo } from '../../../../shared/repo-types'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { clearHostAgentMenuSettingsForTests } from '../../runtime/agent-launch-settings/host-agent-launch-preferences-resource'
-import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
+import type { SourceControlActionRecipe } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { act, cleanup, fireEvent, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'

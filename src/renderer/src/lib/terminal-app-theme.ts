@@ -8,18 +8,16 @@ import { pluginAppThemeCssFallback } from '../../../shared/plugins/artifacts/plu
 import { MATCH_TERMINAL_APP_THEME } from '../../../shared/plugin-theme-settings'
 import {
   resolveTerminalPalette,
-  type TerminalPaletteSettings
-} from '../../../shared/terminal-theme-selection'
+  type TerminalPaletteSettings as TerminalAppThemeSettings
+} from '../../../shared/terminal-themes/terminal-theme-selection'
 import type { AppThemePaint } from './document-theme'
 import { hashThemeContent } from './plugin-monaco-theme'
 import { contrastRatio, type ColorProbe, type Rgba } from './plugin-theme-tokens'
+import { getSystemPrefersDark } from './terminal-theme'
 import {
-  getSystemPrefersDark,
   isTerminalBackgroundLight,
   resolveOpaqueTerminalBackground
-} from './terminal-theme'
-
-export type TerminalAppThemeSettings = TerminalPaletteSettings
+} from '../../../shared/terminal-themes/terminal-title-contrast'
 
 export type TerminalAppTheme = AppThemePaint & {
   id: typeof MATCH_TERMINAL_APP_THEME

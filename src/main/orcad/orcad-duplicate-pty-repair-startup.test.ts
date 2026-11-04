@@ -44,7 +44,7 @@ vi.mock('../../shared/layout-owner-switch', () => ({
 }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 // Isolate reconciliation from the developer’s real global agent configs.
-vi.mock('../codex/codex-hook-reconcile', async (importOriginal) => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   startCodexHooks: vi.fn()
 }))

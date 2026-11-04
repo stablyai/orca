@@ -3,8 +3,8 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import type { WorkspaceAttachmentMetadata } from '../../../../shared/workspace-attachment-legacy'
+import type { HostedReviewCreationEligibility } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { WorkspaceAttachmentMetadata } from '../../../../shared/workspace-attachments/workspace-attachment-legacy'
 
 const workspace: WorkspaceAttachmentMetadata = {
   linkedWorkItem: {

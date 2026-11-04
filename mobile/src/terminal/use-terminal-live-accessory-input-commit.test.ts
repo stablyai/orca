@@ -5,32 +5,15 @@ import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSelection } from './terminal-live-text-commit'
 import {
-  getTerminalLiveAccessoryInactiveInputCommitResult,
   useTerminalLiveAccessoryInputCommit,
   type TerminalLiveAccessoryInputCommitResult
 } from './use-terminal-live-accessory-input-commit'
-
-type DeferredBoolean = {
-  readonly promise: Promise<boolean>
-  readonly resolve: (value: boolean) => void
-}
-
-function createDeferredBoolean(): DeferredBoolean {
-  let resolvePromise: (value: boolean) => void = () => {
-    throw new Error('deferred promise was resolved before initialization')
-  }
-  const promise = new Promise<boolean>((resolve) => {
-    resolvePromise = resolve
-  })
-  return { promise, resolve: resolvePromise }
-}
 
 type AccessoryInputCommitHarnessOptions = {
   readonly composing?: boolean
   readonly heldText?: string
   readonly sentText?: string
   readonly pendingHandle?: string | null
-  readonly waitResult?: boolean
   readonly fieldText?: string
   readonly selection?: TerminalLiveInputSelection
 }
@@ -41,7 +24,6 @@ type AccessoryInputCommitHarness = {
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
   readonly applyLiveInputMirror: ReturnType<typeof vi.fn>
   readonly queueLiveInputControl: ReturnType<typeof vi.fn>
-  readonly waitForPendingLiveInputFlush: ReturnType<typeof vi.fn>
   readonly setLiveInputCapture: ReturnType<typeof vi.fn>
   readonly setFieldValue: (value: string) => void
   readonly unmount: () => void
@@ -53,7 +35,6 @@ function createAccessoryInputCommitHarness({
   heldText = '',
   sentText = '',
   pendingHandle = null,
-  waitResult = true,
   fieldText,
   selection
 }: AccessoryInputCommitHarnessOptions = {}): AccessoryInputCommitHarness {
@@ -78,14 +59,12 @@ function createAccessoryInputCommitHarness({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: RN-Web hands the hook the DOM input as its TextInput ref; this models its caret fields.
     current: webField as unknown as TextInput | null
   }
-  const liveInputTerminalHandles = new Set([activeHandle])
   const applyLiveInputMirror = vi.fn(
     async (_handle: string, _fieldText: string, _composing?: boolean) => true
   )
   const clearPendingLiveInputCommit = vi.fn(() => {})
   const endLiveInputSessionThenSend = vi.fn(async (_handle: string, _bytes: string) => true)
   const queueLiveInputControl = vi.fn(async (_handle: string, _bytes: string) => true)
-  const waitForPendingLiveInputFlush = vi.fn(async () => waitResult)
   const setLiveInputCapture = vi.fn((_text: string) => {})
 
   let commit: AccessoryInputCommitHarness['commit'] | null = null
@@ -102,13 +81,11 @@ function createAccessoryInputCommitHarness({
       liveInputComposingRef,
       liveInputRef,
       liveInputTextRef,
-      liveInputTerminalHandles,
       onInteraction: vi.fn(),
       pendingLiveInputHandleRef,
       queueLiveInputControl,
       sentLiveInputTextRef,
-      setLiveInputCapture,
-      waitForPendingLiveInputFlush
+      setLiveInputCapture
     })
     return null
   }
@@ -124,7 +101,6 @@ function createAccessoryInputCommitHarness({
     commit,
     applyLiveInputMirror,
     queueLiveInputControl,
-    waitForPendingLiveInputFlush,
     setLiveInputCapture,
     setFieldValue: (value: string) => {
       if (webField) {
@@ -136,35 +112,6 @@ function createAccessoryInputCommitHarness({
     }
   }
 }
-
-describe('terminal live accessory inactive input commit result', () => {
-  it('Given live input is disabled with an active flush When accessory raw fallback is requested Then waits before allowing raw send', async () => {
-    const deferredFlush = createDeferredBoolean()
-    let settled = false
-
-    const resultPromise = getTerminalLiveAccessoryInactiveInputCommitResult(
-      () => deferredFlush.promise
-    )
-    void resultPromise.then(() => {
-      settled = true
-    })
-    await Promise.resolve()
-
-    expect(settled).toBe(false)
-    deferredFlush.resolve(true)
-    await expect(resultPromise).resolves.toEqual({ kind: 'allow-raw' })
-  })
-
-  it('Given live input is disabled with a failed active flush When accessory raw fallback is requested Then suppresses raw send', async () => {
-    const waitForPendingLiveInputFlush = async (): Promise<boolean> => false
-
-    const result = await getTerminalLiveAccessoryInactiveInputCommitResult(
-      waitForPendingLiveInputFlush
-    )
-
-    expect(result).toEqual({ kind: 'suppress-raw' })
-  })
-})
 
 describe('terminal live accessory input commit hook', () => {
   it('Given accessory backspace with reported composition When committed Then keeps the edited preedit held', async () => {

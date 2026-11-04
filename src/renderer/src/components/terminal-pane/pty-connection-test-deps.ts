@@ -1,9 +1,9 @@
 import type { PtyConnectionDeps } from './pty-connection-types'
-import { vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { vi, type Mock } from 'vitest'
+
 import { leafIdForPane } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 
 export type PtyConnectionAgentTitleMocks = Required<
   Pick<PtyConnectionDeps, 'detectAgentStatusFromTitle' | 'isClaudeAgent' | 'isGeminiTerminalTitle'>

@@ -6,8 +6,11 @@ import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
-import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
+
+import {
+  type FolderWorkspacePathStatus,
+  isConfirmedStaleFolderPathStatus
+} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'

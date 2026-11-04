@@ -104,7 +104,7 @@ export function removeAgentArgOption(
   tokens: readonly string[],
   aliases: readonly string[],
   matchesValue: (value: string | undefined) => boolean = () => true,
-  takesValue = true
+  takesValue: boolean | 'required' = true
 ): string[] {
   const kept: string[] = []
   const required = agentRequiredValueOptions(agent)

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 
+vi.mock('../host/native-chat-visual-guest-theme', () => ({
+  installNativeChatVisualGuestTheme: vi.fn()
+}))
+
 const mocks = vi.hoisted(() => ({
   attachGuestPolicies: vi.fn(),
   installNavigationPolicy: vi.fn(),

@@ -9,8 +9,9 @@ import {
 } from '@/lib/sidebar-pending-layer'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
 import { readEndedCreations, subscribeEndedCreations } from '@/lib/sidebar-ended-creations'
-import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspace-execution-host'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   getLocalExecutionHostLabel,
   parseExecutionHostId,

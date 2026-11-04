@@ -9,13 +9,11 @@ import {
   runtimeEnvironmentSetupFailure,
   type CrewSubscriptionSetupResult,
   type RuntimeEnvironmentSetupFailure
-} from '../../../shared/runtime-environment-subscription-setup'
-import {
-  resolveEnvironment,
-  RuntimeEnvironmentStoreError
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { RuntimeEnvironmentStoreError } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
+import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getAcceptedRuntimeEnvironmentCapabilityOutcome } from './runtime-environment-capability-evidence'
 import { getRuntimeEnvironmentStatusSnapshot } from './runtime-environment-request-connections'
 
@@ -260,11 +258,6 @@ export function assertSettledCrewSubscriptionCurrent(
     }
   }
 }
-
-export type {
-  CrewSubscriptionSetupResult,
-  RuntimeEnvironmentSetupFailure
-} from '../../../shared/runtime-environment-subscription-setup'
 
 export function assertCrewSourceCurrent(environment: ReturnType<typeof resolveEnvironment>): void {
   const connection = getPreferredPairedRuntimeConnection(environment)

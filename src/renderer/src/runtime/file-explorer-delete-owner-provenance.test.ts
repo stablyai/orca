@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -30,7 +30,7 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirm
 }))
 vi.mock('@/hooks/useShortcutLabel', () => ({ useShortcutLabel: () => 'Delete' }))
-vi.mock('@/components/editor/editor-autosave', () => ({
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   requestEditorFileSave: vi.fn().mockResolvedValue(undefined),
   requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined)
 }))

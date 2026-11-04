@@ -14,7 +14,7 @@ it.each([
       'test'
     ])
   }
-  const mixed = classifyPrJobs([file, 'src/shared/git-capability-cache.ts'])
+  const mixed = classifyPrJobs([file, 'src/shared/git/commands/git-capability-cache.ts'])
   expect(PR_CHECK_JOBS.filter((job) => mixed[job])).toEqual([
     'static_analysis',
     'typecheck',

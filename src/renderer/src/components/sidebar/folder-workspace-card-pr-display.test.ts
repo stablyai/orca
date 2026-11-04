@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
+import { summarizeProviderChecks } from '../../../../shared/source-control/checks/provider-check-summary'
 import type { CheckStatus, PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'

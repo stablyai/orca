@@ -246,16 +246,6 @@ export function terminalSessionOptionInputs(args: {
   if (extras && !extras.ok) {
     throw new Error(extras.error)
   }
-  if (
-    extras?.ok &&
-    args.agent === 'pi' &&
-    extras.kinds.has('model') &&
-    piInlineApiKeyIsUnpinned(args.command, raw, args.shell)
-  ) {
-    throw new Error(
-      'A Pi model override needs a non-empty --provider beside an --api-key in Arguments, and no --api-key in a custom Command.'
-    )
-  }
   if (extras?.ok) {
     const merged = mergeParsedExtraAgentArgs({
       agent: args.agent,
@@ -267,6 +257,15 @@ export function terminalSessionOptionInputs(args: {
       throw new Error(merged.error)
     }
     raw = merged.agentArgs
+    if (
+      args.agent === 'pi' &&
+      extras.kinds.has('model') &&
+      piInlineApiKeyIsUnpinned(args.command, raw, args.shell)
+    ) {
+      throw new Error(
+        'A Pi model override needs a non-empty --provider beside an --api-key in Arguments, and no --api-key in a custom Command.'
+      )
+    }
   }
   const authored = args.settings?.agentLaunchChoices?.[args.agent]
   let defaultValues = {
