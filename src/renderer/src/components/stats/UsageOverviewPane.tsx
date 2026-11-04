@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Activity, CalendarDays, Coins, DatabaseZap, RefreshCw, Sparkles } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
@@ -6,7 +6,8 @@ import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { StatCard } from './StatCard'
 import { getRecentUsageDays } from './usage-overview-daily-series'
-import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
+import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
+import { useUsageOverview } from './use-usage-overview'
 import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 
@@ -29,22 +30,11 @@ function formatUpdatedAt(timestamp: number | null): string {
 }
 
 export function UsageOverviewPane(): React.JSX.Element {
+  const overview = useUsageOverview()
   const claudeScanState = useAppStore((state) => state.claudeUsageScanState)
-  const claudeSummary = useAppStore((state) => state.claudeUsageSummary)
-  const claudeDaily = useAppStore((state) => state.claudeUsageDaily)
   const codexScanState = useAppStore((state) => state.codexUsageScanState)
-  const codexSummary = useAppStore((state) => state.codexUsageSummary)
-  const codexDaily = useAppStore((state) => state.codexUsageDaily)
   const openCodeScanState = useAppStore((state) => state.openCodeUsageScanState)
-  const openCodeSummary = useAppStore((state) => state.openCodeUsageSummary)
-  const openCodeDaily = useAppStore((state) => state.openCodeUsageDaily)
   const museScanState = useAppStore((state) => state.museUsageScanState)
-  const museSummary = useAppStore((state) => state.museUsageSummary)
-  const museDaily = useAppStore((state) => state.museUsageDaily)
-  const fetchClaudeUsage = useAppStore((state) => state.fetchClaudeUsage)
-  const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
-  const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
-  const fetchMuseUsage = useAppStore((state) => state.fetchMuseUsage)
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
@@ -55,52 +45,6 @@ export function UsageOverviewPane(): React.JSX.Element {
   const enableMuseUsage = useAppStore((state) => state.enableMuseUsage)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
-  useEffect(() => {
-    void fetchClaudeUsage()
-    void fetchCodexUsage()
-    void fetchOpenCodeUsage()
-    void fetchMuseUsage()
-  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage, fetchMuseUsage])
-
-  const overview = useMemo(
-    () =>
-      buildUsageOverview({
-        claude: {
-          scanState: claudeScanState,
-          summary: claudeSummary,
-          daily: claudeDaily
-        },
-        codex: {
-          scanState: codexScanState,
-          summary: codexSummary,
-          daily: codexDaily
-        },
-        opencode: {
-          scanState: openCodeScanState,
-          summary: openCodeSummary,
-          daily: openCodeDaily
-        },
-        muse: {
-          scanState: museScanState,
-          summary: museSummary,
-          daily: museDaily
-        }
-      }),
-    [
-      claudeDaily,
-      claudeScanState,
-      claudeSummary,
-      codexDaily,
-      codexScanState,
-      codexSummary,
-      museDaily,
-      museScanState,
-      museSummary,
-      openCodeDaily,
-      openCodeScanState,
-      openCodeSummary
-    ]
-  )
   const recentDays = useMemo(
     () => getRecentUsageDays(overview.daily, RECENT_DAY_COUNT),
     [overview.daily]
