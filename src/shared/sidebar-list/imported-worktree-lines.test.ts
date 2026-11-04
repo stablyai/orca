@@ -157,7 +157,7 @@ describe('placeImportedWorktreeLines', () => {
     ])
   })
 
-  it('reads the rows a bounded number of times per row', () => {
+  it('visits each row a bounded number of times', () => {
     const readsFor = (projects: number): number => {
       const repos = Array.from(
         { length: projects },
@@ -165,15 +165,17 @@ describe('placeImportedWorktreeLines', () => {
       )
       const rows = [header('all'), ...repos.map((repo) => item(`wt-${repo.id}`, repo, 'all'))]
       let reads = 0
-      const counted = new Proxy(rows, {
-        get(target, property, receiver) {
-          if (typeof property === 'string' && /^\d+$/.test(property)) {
+      // Every visit to a row reads its type first, so counting those reads counts the visits.
+      for (const row of rows) {
+        const type = row.type
+        Object.defineProperty(row, 'type', {
+          get: () => {
             reads++
+            return type
           }
-          return Reflect.get(target, property, receiver)
-        }
-      })
-      placeImportedWorktreeLines(counted, {
+        })
+      }
+      placeImportedWorktreeLines(rows, {
         importedWorktreesByRepo: new Map(
           repos.map((repo) => [repo.id, { repo, hiddenWorktrees: hidden }])
         ),

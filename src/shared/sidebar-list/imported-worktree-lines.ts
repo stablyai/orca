@@ -53,8 +53,9 @@ export function placeImportedWorktreeLines(
     if (index > cardEnd) {
       // A lineage card is its depth-0 root plus the deeper rows right after it.
       cardEnd = index
-      while (rows[cardEnd + 1]?.type === 'item' && (rows[cardEnd + 1] as typeof row).depth > 0) {
+      for (let next = rows[cardEnd + 1]; next?.type === 'item' && next.depth > 0;) {
         cardEnd++
+        next = rows[cardEnd + 1]
       }
     }
     const repoId = row.worktree.repoId
