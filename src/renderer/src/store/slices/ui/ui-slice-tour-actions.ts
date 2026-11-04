@@ -13,6 +13,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
     contextualToursSeenIds: [],
     contextualToursAutoEligible: null,
     activeContextualTourId: null,
+    pendingContextualTourContinuation: null,
     activeContextualTourStepIndex: 0,
     activeContextualTourSource: null,
     activeContextualTourSourceDetached: false,
@@ -48,17 +49,25 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
     requestContextualTour: (id, source, wasFeaturePreviouslyInteracted, options) =>
       set((s) => {
         const tour = getContextualTour(id)
+        const continuation = s.pendingContextualTourContinuation
+        const resumeStepIndex =
+          continuation?.tourId === id
+            ? tour.steps.findIndex((step) => step.id === continuation.resumeStepId)
+            : -1
+        const resuming = resumeStepIndex >= 0
         const decision = getContextualTourRequestDecision({
           tour,
           persistedUIReady: s.persistedUIReady,
           autoEligible: options?.force === true || s.contextualToursAutoEligible === true,
           onboardingVisible: s.contextualToursOnboardingVisible,
-          seenIds: options?.force === true ? [] : s.contextualToursSeenIds,
-          sessionConsumed: options?.force === true ? false : s.contextualTourShownThisSession,
+          seenIds: options?.force === true || resuming ? [] : s.contextualToursSeenIds,
+          sessionConsumed:
+            options?.force === true || resuming ? false : s.contextualTourShownThisSession,
           activeTourId: s.activeContextualTourId,
           activeModal: s.activeModal,
           blockingSurfaceVisible: s.contextualToursBlockingSurfaceVisible,
-          targetExists: hasContextualTourTarget
+          targetExists: hasContextualTourTarget,
+          ...(resuming ? { startStepIndex: resumeStepIndex } : {})
         })
         if (decision.kind !== 'start') {
           if (s.contextualTourNavigationInteractionSnapshot[id] === undefined) {
@@ -75,6 +84,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         void _consumed
         return {
           activeContextualTourId: id,
+          pendingContextualTourContinuation: null,
           activeContextualTourStepIndex: decision.stepIndex,
           activeContextualTourSource: source,
           activeContextualTourSourceDetached: false,
@@ -161,6 +171,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         }
         return {
           activeContextualTourId: null,
+          pendingContextualTourContinuation: null,
           activeContextualTourStepIndex: 0,
           activeContextualTourSource: null,
           activeContextualTourSourceDetached: false,
@@ -185,6 +196,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         }
         return {
           activeContextualTourId: null,
+          pendingContextualTourContinuation: null,
           activeContextualTourStepIndex: 0,
           activeContextualTourSource: null,
           activeContextualTourSourceDetached: false,
@@ -202,7 +214,15 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           return s
         }
         const alreadyShown = s.contextualToursSeenIds.includes(tourId)
+        const tour = getContextualTour(tourId)
+        const step = tour.steps[s.activeContextualTourStepIndex]
+        const nextStep = tour.steps[s.activeContextualTourStepIndex + 1]
+        const continuation =
+          step?.continueAfterModal === s.activeModal && nextStep
+            ? { tourId, resumeStepId: nextStep.id }
+            : s.pendingContextualTourContinuation
         return {
+          pendingContextualTourContinuation: continuation,
           activeContextualTourId: null,
           activeContextualTourStepIndex: 0,
           activeContextualTourSource: null,

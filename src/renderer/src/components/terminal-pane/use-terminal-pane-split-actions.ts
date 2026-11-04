@@ -1,3 +1,4 @@
+import { isContextualTourStepActive } from '../../../../shared/contextual-tours'
 import { useCallback, useEffect } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
@@ -94,7 +95,7 @@ export function useTerminalPaneSplitActions({
 }
 
 function getRequestedSplitTelemetrySource(): 'contextual_tour' | 'context_menu' {
-  return useAppStore.getState().activeContextualTourId === 'workspace-agent-sessions'
+  return isContextualTourStepActive(useAppStore.getState(), 'agent-sessions-split')
     ? 'contextual_tour'
     : 'context_menu'
 }

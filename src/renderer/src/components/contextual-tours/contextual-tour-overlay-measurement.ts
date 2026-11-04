@@ -100,7 +100,7 @@ export function measureContextualTourOverlayRenderState(args: {
     activeStep
   })
 
-  if (visibleStepIndexes.length === 0 || !activeStep || !progress) {
+  if (visibleStepIndexes.length === 0 || !activeStep) {
     return { kind: 'cancel' }
   }
 
@@ -116,6 +116,10 @@ export function measureContextualTourOverlayRenderState(args: {
     if (measurementAction.kind === 'wait') {
       return { kind: 'wait' }
     }
+    return { kind: 'cancel' }
+  }
+
+  if (!progress) {
     return { kind: 'cancel' }
   }
 
