@@ -309,11 +309,42 @@ describe('browserManager', () => {
     })
     renderer.send.mockClear()
 
-    browserManager.showAgentViewportInPane(guest.id, { width: 1280, height: 900 })
-    browserManager.showAgentViewportInPane(9999, { width: 1280, height: 900 })
+    const override = { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false }
+    browserManager.showAgentViewportInPane(guest.id, override)
+    browserManager.showAgentViewportInPane(9999, override)
 
     expect(renderer.send.mock.calls).toEqual([
       ['browser:agentViewportApplied', { browserPageId: 'page-viewport', width: 1280, height: 900 }]
     ])
+
+    // The wheel pans the wider box, as it does for a user preset.
+    renderer.send.mockClear()
+    browserManager.setViewportScrollState('page-viewport', rendererWebContentsId, {
+      scrollLeft: 0,
+      scrollTop: 0,
+      maxScrollLeft: 734,
+      maxScrollTop: 0
+    })
+    const beforeMouseEvent = guestOnMock.mock.calls.findLast(
+      ([event]) => event === 'before-mouse-event'
+    )?.[1] as ((event: Electron.Event, mouse: Electron.MouseInputEvent) => void) | undefined
+    const preventDefault = vi.fn()
+    beforeMouseEvent?.(
+      { preventDefault } as unknown as Electron.Event,
+      {
+        type: 'mouseWheel',
+        x: 0,
+        y: 0,
+        modifiers: [],
+        deltaX: 40,
+        deltaY: 0
+      } as Electron.MouseWheelInputEvent
+    )
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(renderer.send).toHaveBeenCalledWith('ui:scrollBrowserPage', {
+      browserPageId: 'page-viewport',
+      deltaX: 40,
+      deltaY: 0
+    })
   })
 })

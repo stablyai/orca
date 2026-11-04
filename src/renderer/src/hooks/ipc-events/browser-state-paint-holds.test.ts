@@ -12,9 +12,9 @@ vi.mock('@/components/browser-pane/describe-page/live-browser-url-registry', () 
 vi.mock('./browser-automation-bootstrap-lease', () => ({
   acquireBrowserAutomationBootstrapLease: vi.fn()
 }))
-const setPresetSize = vi.hoisted(() => vi.fn())
+const setAgentSize = vi.hoisted(() => vi.fn())
 vi.mock('@/components/browser-pane/host-guest/browser-page-viewport', () => ({
-  setBrowserPageViewportPresetSize: setPresetSize
+  setBrowserPageAgentViewportSize: setAgentSize
 }))
 
 import { isBrowserAutomationVisible } from '@/components/browser-pane/host-guest/browser-automation-visibility'
@@ -121,6 +121,6 @@ describe('agent viewports from main', () => {
 
     onAgentViewport({ browserPageId: 'page-4', width: 1280, height: 900 })
 
-    expect(setPresetSize).toHaveBeenCalledWith('page-4', { width: 1280, height: 900 })
+    expect(setAgentSize).toHaveBeenCalledWith('page-4', { width: 1280, height: 900 })
   })
 })

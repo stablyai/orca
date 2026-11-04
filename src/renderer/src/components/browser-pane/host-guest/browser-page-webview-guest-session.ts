@@ -22,7 +22,10 @@ import {
   webviewRegistry
 } from './webview-registry'
 import { browserPageExists } from '../describe-page/browser-page-load-error'
-import { setBrowserPageViewportPresetSize } from './browser-page-viewport'
+import {
+  setBrowserPageAgentViewportSize,
+  setBrowserPageViewportPresetSize
+} from './browser-page-viewport'
 import type {
   BrowserPageRecoveryNavigationValidation,
   BrowserTabPageState
@@ -263,6 +266,7 @@ export function createBrowserPageWebviewGuestSession({
     const preset = getBrowserViewportPreset(presetId)
     // Why: reapply even null so CDP matches store state; setDeviceMetricsOverride persists across same-origin nav and would leave a stale viewport.
     // The box resets with it, dropping an agent's viewport the reset clears.
+    setBrowserPageAgentViewportSize(browserTabId, null)
     setBrowserPageViewportPresetSize(
       browserTabId,
       preset ? { width: preset.width, height: preset.height } : null

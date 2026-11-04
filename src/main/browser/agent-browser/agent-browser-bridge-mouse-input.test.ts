@@ -250,6 +250,11 @@ describe('AgentBrowserBridge', () => {
 
     await bridge.setViewport(1280, 900, 1, false, undefined, 'tab-1')
 
-    expect(showAgentViewportInPane).toHaveBeenCalledWith(100, { width: 1280, height: 900 })
+    expect(showAgentViewportInPane).toHaveBeenCalledWith(100, {
+      width: 1280,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false
+    })
   })
 })

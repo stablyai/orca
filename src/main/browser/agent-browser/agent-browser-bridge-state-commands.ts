@@ -118,7 +118,12 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
       )
       // Metrics-only resize can leave the compositor at its old size and crop remote screencasts.
       await sendGuestCdpCommand(wc, 'Emulation.setVisibleSize', { width, height }).catch(() => {})
-      this.browserManager.showAgentViewportInPane(target.webContentsId, { width, height })
+      this.browserManager.showAgentViewportInPane(target.webContentsId, {
+        width,
+        height,
+        deviceScaleFactor: scale,
+        mobile
+      })
 
       return {
         width,
