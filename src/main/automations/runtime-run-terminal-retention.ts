@@ -1,3 +1,6 @@
+import { isRendererViewShowingPty } from '../ipc/pty/delivery/visibility-state'
+import { getAutomationRunOperations } from '../persistence/loading-store/automation-persistence'
+import { readAutomationRunLaunch } from './automation-run-receipt'
 import type { AutomationService } from './service'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -7,22 +10,49 @@ import { runOwnHandle } from './headless-automation-agent-launch'
 export function bindHeadlessRunTerminalRetention(
   service: AutomationService,
   store: Store,
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  headless = true
 ): void {
-  const retainedTarget = (run: Parameters<typeof runOwnHandle>[1]) => {
-    const current = store.listAutomationRuns(run.automationId).find((entry) => entry.id === run.id)
-    return current &&
-      current.workspaceId === run.workspaceId &&
-      current.status === run.status &&
-      current.terminalPaneKey === run.terminalPaneKey &&
-      current.terminalPtyId === run.terminalPtyId
-      ? current
-      : null
-  }
+  // Store replaces this array on mutation; index each source snapshot once per sweep.
+  const listRuns = () => getAutomationRunOperations(store).state.automationRuns ?? []
   const retention = createHeadlessRunTerminalRetention({
-    listRuns: () => store.listAutomationRuns(),
+    listRuns,
+    ownsRunTerminal: headless
+      ? undefined
+      : (run, ancestors) => {
+          try {
+            const records = runtime.openedAgentSessionRecordStore()
+            const handle = runOwnHandle(runtime, run)
+            return Boolean(
+              records &&
+              ancestors.some((creator) => {
+                const operation = readAutomationRunLaunch(records, creator, 'fresh-launch')
+                const launch = operation?.launch
+                return (
+                  operation &&
+                  operation.expiresAt > Date.now() &&
+                  launch?.outcome.kind === 'terminal' &&
+                  launch.worktreeId === run.workspaceId &&
+                  (launch.outcome.paneKey
+                    ? launch.outcome.paneKey === run.terminalPaneKey
+                    : handle === launch.outcome.handle) &&
+                  (!handle ||
+                    (handle === launch.outcome.handle &&
+                      runtime.getTerminalWorktreeIdForHandle(launch.outcome.handle) ===
+                        run.workspaceId))
+                )
+              })
+            )
+          } catch {
+            return false
+          }
+        },
     terminalClientUse: (run) =>
-      run.terminalPtyId ? runtime.readTerminalClientUse(run.terminalPtyId) : 'unknown',
+      run.terminalPtyId
+        ? isRendererViewShowingPty(run.terminalPtyId)
+          ? 'used'
+          : runtime.readTerminalClientUse(run.terminalPtyId)
+        : 'unknown',
     terminalIncarnation: (run) => {
       const handle = runOwnHandle(runtime, run)
       return handle ? runtime.getTerminalProcessIncarnation(handle) : null
@@ -65,7 +95,7 @@ export function bindHeadlessRunTerminalRetention(
         : Promise.resolve(false),
     closeRunTerminal: async (run, assertSafe) => {
       const handle = runOwnHandle(runtime, run)
-      if (!handle || !retainedTarget(run)) {
+      if (!handle) {
         return false
       }
       // Preserve user-created splits in the same tab.
@@ -82,9 +112,9 @@ export function bindHeadlessRunTerminalRetention(
         : undefined
       return provenance?.origin !== 'client' && provenance?.automationRunId === run.id
     },
-    sleepRunWorkspace: async (run, assertSafe) => {
+    sleepRunWorkspace: async (run, assertSafe, assertOwned) => {
       const ptyId = run.terminalPtyId
-      if (!run.workspaceId || !ptyId || !retainedTarget(run)) {
+      if (!run.workspaceId || !ptyId) {
         return false
       }
       try {
@@ -104,19 +134,15 @@ export function bindHeadlessRunTerminalRetention(
         console.error('[automations] could not sleep a run workspace:', error)
         return false
       }
-      if (!retainedTarget(run)) {
-        return false
-      }
+      assertOwned()
       // Preserve tab and pane keys for resuming the slept agent.
       await service.markDispatchResult({ runId: run.id, status: run.status, terminalPtyId: null })
       return true
     },
     inAutomationLane: (automationId, operation) =>
       service.runInAutomationLane(automationId, operation),
-    forgetRunTerminal: async (run) => {
-      if (!retainedTarget(run)) {
-        return
-      }
+    forgetRunTerminal: async (run, assertOwned) => {
+      assertOwned()
       await service.markDispatchResult({
         runId: run.id,
         status: run.status,

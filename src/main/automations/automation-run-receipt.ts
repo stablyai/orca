@@ -28,16 +28,11 @@ export function readAutomationRunReceipt(
   store: Pick<AgentSessionRecordStore, 'getOperationRow' | 'getConversation'>,
   run: Pick<AutomationRun, 'id' | 'createdAt'>
 ): AutomationRunReceipt | null {
-  const callerKey = rpcCallerOperationKey(AUTOMATION_AGENT_CALLER)
   for (const purpose of ['fresh-launch', 'reuse-send'] as const) {
-    const row = store.getOperationRow(callerKey, automationRunOperationId(run, purpose))
-    if (!row) {
+    const launch = readAutomationRunLaunch(store, run, purpose)?.launch
+    if (!launch) {
       continue
     }
-    if (row.outcome.status !== 'succeeded' || !isAgentLaunchResult(row.outcome.launch)) {
-      continue
-    }
-    const launch = row.outcome.launch
     if (launch.outcome.kind === 'structured') {
       return {
         kind: 'chat',
@@ -57,7 +52,7 @@ export function readAutomationRunReceipt(
     return null
   }
   const messageId = automationRunOperationId(run, 'reuse-send')
-  const send = store.getOperationRow(callerKey, messageId)
+  const send = store.getOperationRow(rpcCallerOperationKey(AUTOMATION_AGENT_CALLER), messageId)
   if (send?.outcome.status !== 'succeeded') {
     return null
   }
@@ -70,5 +65,20 @@ export function readAutomationRunReceipt(
         messageId,
         accepted: true
       }
+    : null
+}
+
+/** Provisional publication also proves creation; prompt acceptance is a separate fact. */
+export function readAutomationRunLaunch(
+  store: Pick<AgentSessionRecordStore, 'getOperationRow'>,
+  run: Pick<AutomationRun, 'id' | 'createdAt'>,
+  purpose: 'fresh-launch' | 'reuse-send'
+): { launch: AgentLaunchResult; expiresAt: number } | null {
+  const row = store.getOperationRow(
+    rpcCallerOperationKey(AUTOMATION_AGENT_CALLER),
+    automationRunOperationId(run, purpose)
+  )
+  return row?.outcome.status === 'succeeded' && isAgentLaunchResult(row.outcome.launch)
+    ? { launch: row.outcome.launch, expiresAt: row.expiresAt }
     : null
 }

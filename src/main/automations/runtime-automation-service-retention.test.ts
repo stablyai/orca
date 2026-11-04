@@ -4,6 +4,12 @@ import { RUN_TERMINAL_GRACE_MS } from './headless-run-terminal-retention'
 import { TerminalRunFactsRegister } from '../runtime/terminal-run-facts'
 import { readRunTerminalClientUse } from '../runtime/run-terminal-client-use'
 
+vi.mock('../persistence/loading-store/automation-persistence', () => ({
+  getAutomationRunOperations: (store: { listAutomationRuns: () => AutomationRun[] }) => ({
+    state: { automationRuns: store.listAutomationRuns() }
+  })
+}))
+
 vi.mock('./service', () => ({
   AutomationService: class {
     start = vi.fn()
@@ -47,6 +53,7 @@ function build(headless: boolean) {
   }
   facts.recordInput('pty-1', 'driving', 'human\r')
   const runtime = {
+    openedAgentSessionRecordStore: vi.fn(() => null),
     setAutomationService: vi.fn(),
     notifyAutomationsChanged: vi.fn(),
     getTerminalHandleForPaneKey: vi.fn((paneKey: string) => `handle:${paneKey}`),
@@ -160,12 +167,16 @@ describe('headless automation service run terminal retention', () => {
     )
   })
 
-  it('leaves run terminals to the renderer on the desktop', async () => {
+  it('never acquires ordinary renderer resources on the desktop, including stale references', async () => {
     vi.useFakeTimers()
     const { runtime, service } = build(false)
     service.start()
     await vi.advanceTimersByTimeAsync(RUN_TERMINAL_GRACE_MS * 2)
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
+    runtime.getTerminalPtyIdForHandle.mockReturnValue(null)
+    await expect(service.releaseFinishedRunTerminals!()).resolves.toBe(0)
+    expect(service.markDispatchResult).not.toHaveBeenCalled()
+    service.stop()
   })
 
   it('sleeps a completed run in its own workspace, dropping only its PTY id', async () => {

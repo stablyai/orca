@@ -187,9 +187,7 @@ export function createRuntimeAutomationService(input: {
     }
   })
   runtime.setAutomationService(service)
-  if (input.headless) {
-    bindHeadlessRunTerminalRetention(service, store, runtime)
-  }
+  bindHeadlessRunTerminalRetention(service, store, runtime, input.headless)
   return service
 }
 
