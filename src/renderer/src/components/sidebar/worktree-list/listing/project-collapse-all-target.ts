@@ -16,7 +16,9 @@ function getProjectHeaderCollapseKeys(
   )
   const rows = computeRenderedSidebarRows(
     { ...state, collapsedGroups: new Set(collapsedGroups) },
-    visibleWorktrees
+    visibleWorktrees,
+    // Empty projects give their group header a chevron, so they must count here too.
+    { includeEmptyProjects: true }
   )
   const keys = new Set<string>()
   for (const row of rows) {

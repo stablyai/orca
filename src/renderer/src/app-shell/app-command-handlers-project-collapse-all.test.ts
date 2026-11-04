@@ -33,6 +33,18 @@ const otherWorktree: Worktree = {
   repoId: otherRepo.id,
   path: '/tmp/other-feature'
 }
+const emptyGroup: ProjectGroup = {
+  id: 'g1',
+  name: 'Group',
+  parentPath: null,
+  parentGroupId: null,
+  createdFrom: 'manual',
+  tabOrder: 0,
+  isCollapsed: false,
+  color: null,
+  createdAt: 0,
+  updatedAt: 0
+}
 const uiSet = vi.fn().mockResolvedValue(undefined)
 
 function seed(overrides: Partial<AppState> = {}): void {
@@ -162,21 +174,9 @@ describe('collapse / expand all projects app command', () => {
   })
 
   it('expands a visible collapsed project group whose projects sit under a collapsed host', () => {
-    const group: ProjectGroup = {
-      id: 'g1',
-      name: 'Group',
-      parentPath: null,
-      parentGroupId: null,
-      createdFrom: 'manual',
-      tabOrder: 0,
-      isCollapsed: false,
-      color: null,
-      createdAt: 0,
-      updatedAt: 0
-    }
     seed({
-      repos: [repo, { ...otherRepo, connectionId: 'box', projectGroupId: group.id }],
-      projectGroups: [group],
+      repos: [repo, { ...otherRepo, connectionId: 'box', projectGroupId: emptyGroup.id }],
+      projectGroups: [emptyGroup],
       sshTargetLabels: new Map([['box', 'Box']]),
       visibleWorkspaceHostIds: ['local', 'ssh:box'],
       collapsedGroups: new Set(['host:ssh:box', 'project-group:g1', 'project:repo:repo-1'])
@@ -186,6 +186,18 @@ describe('collapse / expand all projects app command', () => {
     expect(runToggle(shortcutInput())).toBe(true)
     expect(useAppStore.getState().collapsedGroups).toEqual(new Set(['host:ssh:box']))
     expect(renderedWorktreeIds()).toEqual([worktree.id])
+  })
+
+  it('collapses a project group whose only project has no workspaces', () => {
+    seed({
+      repos: [repo, { ...otherRepo, projectGroupId: emptyGroup.id }],
+      worktreesByRepo: { [repo.id]: [worktree], [otherRepo.id]: [] },
+      projectGroups: [emptyGroup]
+    })
+
+    expect(runToggle(shortcutInput())).toBe(true)
+    expect(useAppStore.getState().collapsedGroups.has('project-group:g1')).toBe(true)
+    expect(renderedWorktreeIds()).toEqual([])
   })
 
   it('lets the chord through when the sidebar is not grouped by project', () => {
