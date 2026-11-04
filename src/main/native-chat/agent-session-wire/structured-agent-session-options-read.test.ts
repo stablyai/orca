@@ -14,9 +14,9 @@ import {
   structuredAgentSessionSendSelection
 } from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { startCodexTurn } from '../../codex/codex-structured-turn-start'
-import { readLiveCodexSessionOptions } from '../../codex/codex-structured-session-options'
-import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
+import { startCodexTurn } from '../../codex/structured/turns/codex-structured-turn-start'
+import { readLiveCodexSessionOptions } from '../../codex/structured/catalog/codex-structured-session-options'
+import { optionSession } from '../../codex/structured/catalog/codex-structured-option-session.test-fixture'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { structuredAgentSessionDrawnValues } from '../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 
