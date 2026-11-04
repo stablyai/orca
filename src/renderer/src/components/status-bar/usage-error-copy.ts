@@ -3,8 +3,6 @@ import { translate } from '@/i18n/i18n'
 import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
 import { describeOwnerNotSetUp, getOwnerNotSetUpLabel } from './owner-not-set-up-copy'
 
-export { getProviderDisplayName }
-
 function isUsageRateLimitError(p: ProviderRateLimits): boolean {
   const failureKind = p.usageMetadata?.failureKind
   // Structured failure kinds outrank wording that may only name the unread rate limits.

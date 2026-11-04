@@ -7,14 +7,11 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 import {
+  getProviderDisplayName,
   getUsageWindowSections,
   type UsageWindowSection
 } from '../../../../shared/usage-provider-windows'
-import {
-  getProviderDisplayName,
-  getProviderUsageErrorMessage,
-  getProviderUsageStatusLabel
-} from './usage-error-copy'
+import { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
 import {
   clampUsedPercent,
   getDisplayedUsagePercentage,
@@ -33,11 +30,7 @@ export {
 
 export { clampUsedPercent }
 
-export {
-  getProviderDisplayName,
-  getProviderUsageErrorMessage,
-  getProviderUsageStatusLabel
-} from './usage-error-copy'
+export { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
 
 export function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts
