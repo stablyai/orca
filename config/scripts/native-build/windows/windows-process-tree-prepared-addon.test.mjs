@@ -156,10 +156,10 @@ it('reuses the Windows E2E process-tree addon between standalone and template bu
   const commands = build.run.trim().split('\n')
   const standalone = commands.indexOf('pnpm build:orcad')
   const processTree = commands.indexOf(
-    'node config/scripts/native-build/windows/build-windows-process-tree-addon.mjs --arch=x64 --reuse-prepared-runtime'
+    'node "$(if [ -f config/scripts/native-build/windows/build-windows-process-tree-addon.mjs ]; then printf %s config/scripts/native-build/windows/build-windows-process-tree-addon.mjs; else printf %s config/scripts/build-windows-process-tree-addon.mjs; fi)" --arch=x64 --reuse-prepared-runtime'
   )
   const template = commands.indexOf(
-    'node config/scripts/orcad-distribution/template/build-orcad-template.mjs --targets win32-x64'
+    'node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets win32-x64'
   )
   expect(standalone).toBeGreaterThanOrEqual(0)
   expect(processTree).toBeGreaterThan(standalone)

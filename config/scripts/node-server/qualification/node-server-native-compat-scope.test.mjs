@@ -370,10 +370,12 @@ it('configures server glibc 2.28 slots and the glibc 2.17 compatibility lane', (
   const run = compat.steps.map((step) => step.run ?? '').join('\n')
   expect(run).toMatch(/quay\.io\/pypa\/manylinux2014_x86_64@sha256:[0-9a-f]{64} /)
   expect(run).toContain('--slot=linux-x64-glibc217 --print-runtime')
-  expect(run).toContain('build-orcad-prebuilds.mjs --slot=linux-x64-glibc217\n')
+  expect(run).toContain(
+    'node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --slot=linux-x64-glibc217\n'
+  )
   expect(run).toContain('--require-slots linux-x64-glibc217')
   expect(run).toContain(
-    'env -u LD_LIBRARY_PATH node config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217 --smoke'
+    'env -u LD_LIBRARY_PATH node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --slot=linux-x64-glibc217 --smoke'
   )
 })
 
