@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { createStore } from '../../src/main/persistence/persistence-test-harness'
 import type { setRuntimeDesktopSurface as SetRuntimeDesktopSurface } from '../../src/main/runtime/runtime-desktop-surface'
@@ -97,11 +98,13 @@ export async function loadRetirementRenderer(
     })
     setRuntimeDesktopSurface({
       showNotification: () => false,
-      findWindowById: () =>
-        ({
+      findWindowById: () => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime lookup/attachment uses only isDestroyed and webContents' isDestroyed/setBackgroundThrottling here.
+        return {
           isDestroyed: () => false,
           webContents: { isDestroyed: () => false, setBackgroundThrottling: () => {} }
-        }) as never,
+        } as BrowserWindow
+      },
       onIpc: () => {},
       removeIpcListener: () => {}
     })
@@ -158,7 +161,7 @@ export async function loadRetirementRenderer(
         if (originalWindow) {
           Object.defineProperty(globalThis, 'window', originalWindow)
         } else {
-          delete (globalThis as { window?: unknown }).window
+          Reflect.deleteProperty(globalThis, 'window')
         }
       }
     }

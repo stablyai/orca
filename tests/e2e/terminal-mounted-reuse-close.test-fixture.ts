@@ -49,7 +49,7 @@ export async function setupMountedReuseClose() {
   const kill = vi.spyOn(controller, 'kill')
   const exit = vi.spyOn(runtime, 'onPtyExit')
   const originalProvider = localProvider
-  const provider = Object.create(originalProvider) as typeof localProvider
+  const provider: typeof localProvider = Object.create(originalProvider)
   provider.spawn = async (options) => {
     const process = options.sessionId ? processes.get(options.sessionId) : undefined
     if (!process) {

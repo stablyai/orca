@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
-import type { ipcMain } from 'electron'
+import type { BrowserWindow, ipcMain } from 'electron'
 import { testState } from '../../persistence/persistence-test-harness'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -59,14 +59,16 @@ export async function installAcknowledgedCloseRelay(
       queueMicrotask(() => requestConsumer?.(request))
     }
   })
-  const win = { isDestroyed: () => false, webContents }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The close relay uses only isDestroyed and this EventEmitter webContents' send/lifecycle methods.
+  const win = { isDestroyed: () => false, webContents } as BrowserWindow
   registerSessionHandlers(store, runtime)
   const invoke = async (channel: string, ...args: unknown[]) => {
     const handler = closeIpc.handlers.get(channel)
     if (!handler) {
       throw new Error('session handler missing')
     }
-    return handler({ sender: webContents } as never, ...args)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Session handlers use only sender identity; this is the relay's exact webContents.
+    return handler({ sender: webContents } as Parameters<InvokeHandler>[0], ...args)
   }
   Object.assign(window.api, {
     session: {
@@ -94,8 +96,13 @@ export async function installAcknowledgedCloseRelay(
       queueMicrotask(() => {
         const listeners = closeIpc.listeners.get('ui:terminalTabCloseResponse') ?? []
         for (const listener of listeners) {
-          listener({ sender: {} } as never, { ...response, error: 'wrong-sender' })
-          listener({ sender: webContents } as never, {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The response consumer compares only sender identity; this unrelated object exercises refusal.
+          listener({ sender: {} } as Parameters<IpcListener>[0], {
+            ...response,
+            error: 'wrong-sender'
+          })
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The response consumer reads only sender identity before checking this mismatched request ID.
+          listener({ sender: webContents } as Parameters<IpcListener>[0], {
             ...response,
             requestId: 'other-request',
             error: 'wrong-request'
@@ -103,7 +110,8 @@ export async function installAcknowledgedCloseRelay(
         }
         onAck()
         for (const listener of listeners) {
-          listener({ sender: webContents } as never, response)
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The response consumer reads only sender identity; the selected window owns these webContents.
+          listener({ sender: webContents } as Parameters<IpcListener>[0], response)
         }
       })
     }
@@ -111,7 +119,7 @@ export async function installAcknowledgedCloseRelay(
   registerMobileAndTerminalCloseIpcBridge(unsubs, () => {})
   setRuntimeDesktopSurface({
     showNotification: () => false,
-    findWindowById: () => win as never,
+    findWindowById: () => win,
     onIpc: () => {},
     removeIpcListener: () => {}
   })
@@ -121,7 +129,7 @@ export async function installAcknowledgedCloseRelay(
     closeTerminalTab: (
       tabId: string,
       options: Parameters<typeof requestTerminalTabCloseFromRenderer>[2]
-    ) => requestTerminalTabCloseFromRenderer(win as never, tabId, options),
+    ) => requestTerminalTabCloseFromRenderer(win, tabId, options),
     dispose: () => {
       for (const unsubscribe of unsubs) {
         unsubscribe()

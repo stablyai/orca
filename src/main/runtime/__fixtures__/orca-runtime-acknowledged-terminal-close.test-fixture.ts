@@ -157,9 +157,18 @@ export async function createAcknowledgedCloseHarness(lifetimeLoss: 'after-owner'
   graph.syncFixtureGraph()
   graph.syncFixtureTabWithoutLeaf()
   runtime.setNotifier({
+    worktreesChanged: () => {},
+    reposChanged: () => {},
+    activateWorktree: () => {},
+    createTerminal: () => {},
+    splitTerminal: () => {},
+    renameTerminal: () => {},
+    focusTerminal: () => {},
+    terminalFitOverrideChanged: () => {},
+    terminalDriverChanged: () => {},
     closeTerminal: () => {},
     closeTerminalTab: (tabId, options) => relay.closeTerminalTab(tabId, options)
-  } as never)
+  })
   const [terminal] = (await runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
   return {
     runtime,
@@ -178,13 +187,13 @@ export async function createAcknowledgedCloseHarness(lifetimeLoss: 'after-owner'
       if (originalGetter) {
         Object.defineProperty(store, 'getWorkspaceSession', originalGetter)
       } else {
-        delete (store as { getWorkspaceSession?: unknown }).getWorkspaceSession
+        Reflect.deleteProperty(store, 'getWorkspaceSession')
       }
       useAppStore.setState(originalRenderer, true)
       if (originalWindow) {
         Object.defineProperty(globalThis, 'window', originalWindow)
       } else {
-        delete (globalThis as { window?: unknown }).window
+        Reflect.deleteProperty(globalThis, 'window')
       }
       setRuntimeDesktopSurface(originalDesktop)
       closeIpc.handlers.clear()

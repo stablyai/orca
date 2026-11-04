@@ -134,9 +134,9 @@ export async function setupRetirementRuntime(options: { naturalPublication?: boo
     confirmShellForeground: async (id) => shell.has(id),
     supportsForegroundObservation: () => true,
     inspectProcess: async (id) => ({
-      verdict: 'unverifiable',
-      reason: 'test-transport',
-      ptyId: id,
+      foregroundProcess: shell.has(id) ? 'zsh' : 'codex',
+      hasChildProcesses: false,
+      childProcessEvidence: 'unverifiable',
       foregroundObservation: {
         ptyId: id,
         ptyIncarnationId: processes.get(id)!.incarnationId,
