@@ -12,8 +12,8 @@ export function createCombinedDiffLoadScheduler({
   getRenderedIndices,
   isSectionExpanded = () => true,
   schedule = (callback) => queueMicrotask(callback),
-  // Section completion mounts Monaco; serialize by default to avoid stacking large-diff render work.
-  maxConcurrent = 1
+  // Matches the per-repo git admission budget (ROUTE_CAP 2 + 1 headroom); more only queues in main.
+  maxConcurrent = 3
 }: {
   loadSection: (index: number) => Promise<void>
   getRenderedIndices?: () => ReadonlySet<number>
