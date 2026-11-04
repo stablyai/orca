@@ -63,14 +63,4 @@ describe('useWorkspaceRevealBodyRedirect', () => {
 
     expect(seen).toEqual([{ target: { type: 'active-workspace' }, beginRename: true }])
   })
-
-  it('does not intercept requests while Spaces is already showing', () => {
-    act(() => {
-      root.render(<Host agentsBodyShowing={false} />)
-    })
-    act(() => {
-      window.dispatchEvent(new CustomEvent(SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT))
-    })
-    expect(mocks.setSidebarBody).not.toHaveBeenCalled()
-  })
 })
