@@ -23,6 +23,7 @@ import {
 } from './journal-input-lineage'
 import { JournalInputDomainIndex } from './journal-input-domain-index'
 import { JournalInputCandidates } from './journal-input-candidates'
+import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
 
 export class JournalInputCardIndex {
   private index: JournalInputPlaceIndex | undefined
@@ -232,17 +233,16 @@ export class JournalInputCardIndex {
     card: QueuedMessageRow
   ): void {
     this.ensure(state)
-    const sameCoordinate =
-      prior?.queuedAt?.epoch === card.queuedAt?.epoch &&
-      prior?.queuedAt?.sequence === card.queuedAt?.sequence
     if (
       prior &&
       prior.position === card.position &&
       prior.state === card.state &&
       prior.holdReason === card.holdReason &&
       prior.consumedAs === card.consumedAs &&
-      sameCoordinate &&
-      Boolean(prior.body.command) === Boolean(card.body.command)
+      prior.queuedAt?.epoch === card.queuedAt?.epoch &&
+      prior.queuedAt?.sequence === card.queuedAt?.sequence &&
+      Boolean(prior.body.command) === Boolean(card.body.command) &&
+      !!orchestrationMailNotice(prior.body.from) === !!orchestrationMailNotice(card.body.from)
     ) {
       return
     }
