@@ -137,7 +137,7 @@ export const onboardingWindowsTerminalSnapshotSchema = z
 // Why: no `is_git_repo` here; the signal moved to `repo_added.is_git_repo`.
 export const onboardingCompletedSchema = z
   .object({
-    path: onboardingPathSchema,
+    path: onboardingPathSchema.or(z.literal('workspace')),
     total_duration_ms: z.number().int().nonnegative(),
     cohort: cohortSchema
   })

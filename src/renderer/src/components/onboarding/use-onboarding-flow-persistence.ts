@@ -91,7 +91,7 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
     async (
       outcome: 'completed' | 'dismissed',
       lastStepReached: StepNumber,
-      completedPath?: 'add_project_modal',
+      completedPath?: 'add_project_modal' | 'workspace',
       dismissedExtras?: DismissedExtras
     ): Promise<boolean> => {
       if (closedRef.current) {

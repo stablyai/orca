@@ -20,7 +20,7 @@ import {
 type CloseWith = (
   outcome: 'completed' | 'dismissed',
   lastStepReached: StepNumber,
-  completedPath?: 'add_project_modal',
+  completedPath?: 'add_project_modal' | 'workspace',
   dismissedExtras?: { advancedVia: 'button' | 'keyboard'; durationMs: number }
 ) => Promise<boolean>
 
@@ -37,6 +37,7 @@ type OnboardingFlowActionsArgs = {
   ) => void
   settings: GlobalSettings | null
   persistCurrentStep: () => Promise<PersistCurrentStepResult>
+  hasSelectedWorkspace: boolean
   closeWith: CloseWith
   openModal: (modal: 'add-repo') => void
   getNextStepIndex: (index: number) => number
@@ -59,6 +60,7 @@ export function useOnboardingFlowActions({
   trackTaskSourcesSnapshot,
   settings,
   persistCurrentStep,
+  hasSelectedWorkspace,
   closeWith,
   openModal,
   getNextStepIndex,
@@ -118,13 +120,19 @@ export function useOnboardingFlowActions({
           trackCurrentStepCompleted(advancedVia)
           if (currentStep.id === 'notifications') {
             setBusyLabel(
-              translate(
-                'components.onboarding.flow.actions.openingAddProject',
-                'Opening Add Project...'
-              )
+              hasSelectedWorkspace
+                ? translate('components.onboarding.flow.actions.continue', 'Continue')
+                : translate(
+                    'components.onboarding.flow.actions.openingAddProject',
+                    'Opening Add Project...'
+                  )
             )
-            const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, 'add_project_modal')
-            if (closed) {
+            const closed = await closeWith(
+              'completed',
+              ONBOARDING_FINAL_STEP,
+              hasSelectedWorkspace ? 'workspace' : 'add_project_modal'
+            )
+            if (closed && !hasSelectedWorkspace) {
               openModal('add-repo')
             }
             return
@@ -160,6 +168,7 @@ export function useOnboardingFlowActions({
       currentStep.id,
       currentStep.stepNumber,
       getNextStepIndex,
+      hasSelectedWorkspace,
       onOnboardingChange,
       openModal,
       persistCurrentStep,
