@@ -11,9 +11,9 @@ import {
   resolveSourceControlCompareBaseRef,
   resolveSourceControlPickerBaseRef,
   shouldClearBranchCompareForMissingBase
-} from '../../../../shared/source-control-base-ref-resolution'
-import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
-import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
+} from '../../../../shared/source-control/decisions/source-control-base-ref-resolution'
+import type { GitBranchCompareSummary } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitUpstreamStatus } from '../../../../shared/git/status/git-status-types'
 
 type ReactElementLike = {
   type: unknown

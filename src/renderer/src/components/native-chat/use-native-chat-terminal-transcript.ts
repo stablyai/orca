@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { useMemo } from 'react'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 

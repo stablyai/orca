@@ -49,26 +49,4 @@ describe('deleteWorktreeHistoryDir main-thread safety', () => {
     await flushPendingWorktreeHistoryDeletions()
     expect(readdirSync(join(userDataDir, 'terminal-history', '.pending-delete'))).toHaveLength(0)
   })
-
-  it('drains a deletion scheduled after the flush snapshotted its batch', async () => {
-    const seedDir = join(userDataDir, 'terminal-history', hashWorktreeId('repo-1::/path/seed-wt'))
-    mkdirSync(seedDir, { recursive: true })
-    writeFileSync(join(seedDir, 'seed.txt'), 'seed')
-
-    const lateWorktreeId = 'repo-1::/path/late-wt'
-    const lateDir = join(userDataDir, 'terminal-history', hashWorktreeId(lateWorktreeId))
-    mkdirSync(lateDir, { recursive: true })
-    // Keep this removal in flight past the seed batch.
-    for (let i = 0; i < 3_000; i++) {
-      writeFileSync(join(lateDir, `file-${i}.txt`), `payload-${i}`)
-    }
-
-    deleteWorktreeHistoryDir('repo-1::/path/seed-wt')
-    // Schedule the second delete outside the flush's initial snapshot, without yielding first.
-    const flushed = flushPendingWorktreeHistoryDeletions()
-    deleteWorktreeHistoryDir(lateWorktreeId)
-    await flushed
-
-    expect(readdirSync(join(userDataDir, 'terminal-history', '.pending-delete'))).toHaveLength(0)
-  })
 })

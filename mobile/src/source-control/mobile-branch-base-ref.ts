@@ -8,7 +8,7 @@ import { worktreeSummaryRead } from './mobile-worktree-metadata-operations'
 import {
   resolveSourceControlBaseRef,
   resolveSourceControlCompareBaseRef
-} from '../../../src/shared/source-control-base-ref-resolution'
+} from '../../../src/shared/source-control/decisions/source-control-base-ref-resolution'
 
 // The branch compare also honours desktop's compare-against-upstream setting.
 export type MobileBranchCompareTarget = {

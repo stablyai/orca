@@ -4,12 +4,12 @@ import type { AgentProviderSessionMetadata } from '../../../../shared/agent-sess
 import {
   type AgentLaunchRuntime,
   agentLaunchQuotingShell
-} from '../../../../shared/agent-launch-runtime'
+} from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveWslHostAgentCmdOverrides } from '../../wsl-host-agent-terminal-launch'
 import {
   type AiVaultResumeLaunchSettings,

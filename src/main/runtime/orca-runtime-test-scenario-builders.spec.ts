@@ -1,3 +1,4 @@
+import * as gitExecFile from '../git/command-runner/git-exec-file'
 import { CrewChanges } from './orchestration/crew/crew-changes'
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import * as mocks from './orca-runtime-test-mocks.spec'
@@ -6,7 +7,7 @@ import type { Mock } from 'vitest'
 const { HEADLESS_RUNTIME_WINDOW_ID, OrcaRuntimeService, electronMocks } = mocks
 const { getBrowserHostLeaseRegistry, getDefaultWorkspaceSession, getRuntimeBrowserPageRegistry } =
   mocks
-const { gitRunner, vi } = mocks
+const { vi } = mocks
 
 import * as fixtures from './orca-runtime-test-fixtures.spec'
 
@@ -19,9 +20,9 @@ const { makeWorkspaceSessionWithHeadlessTerminal, store } = fixtures
 import type {
   BrowserClientHostCommandEvent,
   RuntimeBrowserClientPlacement,
-  TerminalSideEffectBatch,
   WorkspaceSessionState
 } from './orca-runtime-test-mocks.spec'
+import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
 import type { OrchestrationDb } from './orchestration/db'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
@@ -389,7 +390,7 @@ function mockReconcileGit(options: {
 }) {
   const { postFetchSha = 'new-base-sha', ancestor = true, baseRefMissing = false } = options
 
-  return vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+  return vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args, options) => {
     const command = args as string[]
     const cwd = (options as { cwd?: string } | undefined)?.cwd
     if (

@@ -10,13 +10,13 @@ import type {
 import type { BrowserTabCreateRequest } from '../../shared/browser-tab-create-request'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentLaunchTabPublishReply,
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
-import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+} from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,

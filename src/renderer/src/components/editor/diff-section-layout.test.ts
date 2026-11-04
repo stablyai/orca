@@ -8,7 +8,7 @@ import {
   usesLargeDiffFallbackHeight
 } from './diff-section-layout'
 import type { DiffSection } from './diff-section-types'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 
 const largeTextSection: DiffSection = {
   key: 'section',

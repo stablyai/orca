@@ -3,7 +3,7 @@ import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plug
 import {
   getExperimentalPaneSearchEntries,
   getExperimentalSearchEntry
-} from '../components/settings/experimental-search'
+} from '../components/settings/advanced/experimental-search'
 import { i18n, loadRendererUiLanguage, setRendererPluginLanguagePacks, translate } from './i18n'
 import { createLocalizedCatalog } from './localized-catalog'
 

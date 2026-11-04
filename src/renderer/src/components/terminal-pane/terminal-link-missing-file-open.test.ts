@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { openDetectedFilePath } from './terminal-link-handlers'
-import type { FileOpenFailure } from './terminal-file-open-routing'
+import type { FileOpenFailure } from './terminal-file-open-failure'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
   flushAsyncWork,

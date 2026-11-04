@@ -1,5 +1,5 @@
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-lead-status-fold'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import type { EnrichedAgentHookEventPayload } from '../server-types'
 
 // Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.

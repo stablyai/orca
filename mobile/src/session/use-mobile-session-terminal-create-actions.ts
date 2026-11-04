@@ -6,7 +6,7 @@ import { terminalCreateCopy } from './mobile-session-terminal-create-copy'
 import { buildTerminalSendParams } from '../terminal/terminal-send-request'
 import { terminalRecordsEqual } from './mobile-terminal-records'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
-import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import {
   hostSupportsMobileChatFork,
   mobileChatForkCreateReplyMessage,
@@ -16,7 +16,7 @@ import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
 import { useMobileTerminalCreateRouteOwner } from './use-mobile-terminal-create-route-owner'
 import { launchMobileSessionQuickCommand } from './mobile-session-quick-command-launch'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { requestMobileSessionTerminalCreate } from './mobile-session-terminal-create-request'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'

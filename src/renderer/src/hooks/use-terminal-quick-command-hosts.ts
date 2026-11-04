@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,

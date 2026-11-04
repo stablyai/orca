@@ -24,7 +24,7 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { RuntimeStore } from './runtime-store-contract'
 
-import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../git/worktrees/catalog/worktree-path-comparison'
 import { mergeWorktree } from '../ipc/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../workspaces/catalog/worktree-lineage-pruning'
 import { getRepoOwnedWorktreeMeta } from '../workspaces/catalog/worktree-metadata-ownership'

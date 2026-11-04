@@ -2,16 +2,16 @@
 import { z } from 'zod'
 import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
 import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
-import { browserSessionRegistry } from '../../browser-session-registry'
-import { getBrowserExtensionInstallStore } from '../browser-extension-install-store'
-import { notifyBrowserExtensionListChanged } from '../browser-extension-list-changes'
+import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
+import { notifyBrowserExtensionListChanged } from '../installation/browser-extension-list-changes'
 import { setBrowserExtensionEnabled } from '../browser-extension-management'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import { hasBrowserExtensionUserGesture } from './permissions'
 
 /**

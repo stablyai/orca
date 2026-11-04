@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { commitChanges, completeMerge } from '../../git/status'
+import { commitChanges, completeMerge } from '../../git/source-control/commit-changes'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'

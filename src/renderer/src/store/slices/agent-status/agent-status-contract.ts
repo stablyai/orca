@@ -5,8 +5,8 @@ import type {
   AgentType,
   ParsedAgentStatusPayload,
   TurnEndDisposition
-} from '../../../../../shared/agent-status-types'
-import type { AgentStatusObservation } from '../../../../../shared/agent-status-observation'
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusObservation } from '../../../../../shared/agent-status/contracts/agent-status-observation'
 import type { ProgramStatusFacet } from '../../../../../shared/program-status/facet'
 import type {
   AgentProviderSessionMetadata,

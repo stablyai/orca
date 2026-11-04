@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from './agent-status/contracts/agent-status-ipc-payload'
 import { mintFleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
 import {
   projectOrchestrationFleet,

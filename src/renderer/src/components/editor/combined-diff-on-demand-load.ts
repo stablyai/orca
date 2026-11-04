@@ -1,6 +1,6 @@
 import { hasBinaryFileExtension } from '../../../../shared/binary-file-extensions'
-import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 
 export const MAX_AUTOMATIC_DIFF_CHANGED_LINES = 10_000
 

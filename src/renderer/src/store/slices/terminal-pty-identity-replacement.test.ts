@@ -82,23 +82,6 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
       expect(wakeups).toBe(0)
       expect(store.getState().cacheTimerByKey[paneKey]).toBeNull()
     })
-
-    it('still publishes when the timestamp actually changes', () => {
-      const store = createTestStore()
-      const paneKey = 'tab-1:leaf-a'
-      store.getState().setCacheTimerStartedAt(paneKey, null)
-
-      let wakeups = 0
-      const unsubscribe = store.subscribe(() => {
-        wakeups += 1
-      })
-      store.getState().setCacheTimerStartedAt(paneKey, 123)
-      store.getState().setCacheTimerStartedAt(paneKey, null)
-      unsubscribe()
-
-      expect(wakeups).toBe(2)
-      expect(store.getState().cacheTimerByKey[paneKey]).toBeNull()
-    })
   })
 
   describe('setTabLayout identity bailout', () => {

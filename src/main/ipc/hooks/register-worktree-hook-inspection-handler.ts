@@ -6,7 +6,7 @@ import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { readFile, stat } from 'node:fs/promises'
-import { isENOENT } from '../filesystem/filesystem-path-containment'
+import { isENOENT } from '../filesystem/access/filesystem-path-containment'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 

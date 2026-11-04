@@ -8,10 +8,9 @@ import {
   nativeChatLaunchAgentForLeaf
 } from '../../components/native-chat/native-chat-leaf-routing'
 import type { MobileSessionWorktreeInputs } from './types'
+import { isClaudeManagementTitle } from '../../../../shared/agent-status/title/agent-title-core'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import {
-  isClaudeManagementTitle,
-  isTerminalLeafId,
-  makePaneKey,
   mobileTerminalSurfaceId,
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId,

@@ -25,7 +25,6 @@ import {
 import { NativeChatContextClearFade } from './NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from './use-structured-prompt-response-hold'
-import { nativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { NativeChatStructuredPromptSlot } from './NativeChatStructuredPromptSlot'
 import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
 import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
@@ -159,7 +158,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     rootRef,
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
-  const fileLinkProps = { onLinkClick, allowFileUriLinks: onLinkClick !== undefined }
+  const links = { onLinkClick, allowFileUriLinks: onLinkClick !== undefined }
   const handOff = useNativeChatHandOff({
     pane: props,
     directory: fileLinkContext,
@@ -314,7 +313,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   isVisible={props.isVisible && childNavigator.child === null}
                   awaitingInput={prompt === null ? null : 'shown'}
                   stopping={stopControls.stopping}
-                  {...fileLinkProps}
+                  {...links}
                   runtimeContext={imageRuntimeContext}
                   deliveryNotices={deliveryNotices}
                 />
@@ -361,14 +360,11 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 response={promptResponse}
                 shouldFocus={!promptsUnanswerable && paneActive && childNavigator.child === null}
                 answerInputRef={questionAnswerInputRef}
-                asyncQuestion={nativeChatStructuredAsyncQuestion(
-                  props,
-                  controller,
-                  session,
-                  transport,
-                  submits
-                )}
-                {...fileLinkProps}
+                pane={props}
+                session={session}
+                transport={transport}
+                submits={submits}
+                {...links}
               />
               {composerShown && (
                 <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />

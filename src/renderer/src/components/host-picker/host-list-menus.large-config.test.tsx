@@ -38,13 +38,14 @@ vi.mock('@/components/ui/dropdown-menu', () => {
 vi.mock('../sidebar/use-sidebar-host-scope-options', () => ({
   useSidebarHostScopeOptions: () => ({ hostOptions, hostScopeOptions: [] })
 }))
-vi.mock('../settings/use-notification-source-options', () => ({
+vi.mock('../settings/notifications/use-notification-source-options', () => ({
   useNotificationSourceOptions: () => hostOptions
 }))
 
 const { SidebarHostScopeMenuSection } = await import('../sidebar/SidebarHostScopeMenuSection')
-const { NotificationHostToggles } = await import('../settings/NotificationHostToggles')
-const { WorkspaceDirectorySetting } = await import('../settings/WorkspaceDirectorySetting')
+const { NotificationHostToggles } =
+  await import('../settings/notifications/NotificationHostToggles')
+const { WorkspaceDirectorySetting } = await import('../settings/general/WorkspaceDirectorySetting')
 
 function nodeCount(): number {
   return document.body.getElementsByTagName('*').length

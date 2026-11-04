@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { useNativeChatChildHistory } from './use-native-chat-child-history'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'

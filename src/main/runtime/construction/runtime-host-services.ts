@@ -15,9 +15,9 @@ import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../shared
 import { RuntimePreservedBranchCleanup } from '../runtime-preserved-branch-cleanup'
 import type * as TerminalContracts from '../runtime-terminal-contracts'
 
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
-import type { AgentStatus } from '../../../shared/agent-detection'
+import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../runtime-legacy-worker-terminal-recovery-persistence'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../runtime-legacy-worker-terminal-recovery-controller'
 import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/worker-terminal-release-reconciliation'

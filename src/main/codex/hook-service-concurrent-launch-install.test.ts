@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import type { CodexHookAnswer, CodexHookHashes } from './codex-hook-trust-derivation'
 
 const { getPathMock, homedirMock, installExclusivelyMock, refreshExclusivelyMock, answerMock } =

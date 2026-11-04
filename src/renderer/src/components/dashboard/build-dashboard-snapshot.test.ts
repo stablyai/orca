@@ -3,11 +3,11 @@ import {
   buildDashboardSnapshot,
   type DashboardSnapshotInput as DashboardSnapshotState
 } from './build-dashboard-snapshot'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
-  type AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentStatusOrchestrationContext
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import { DASHBOARD_MAX_LABEL_LENGTH } from '../../../../shared/dashboard-snapshot'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'

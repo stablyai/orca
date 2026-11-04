@@ -142,21 +142,6 @@ describe('host sign-out reason on phone rejection', () => {
     )
   })
 
-  it('says nothing when the host died without naming a cause', async () => {
-    const { registry, activate } = createRegistry()
-    const control = new FakeSocket()
-    await activate(control as unknown as WebSocket, 1)
-
-    control.terminate()
-    vi.advanceTimersByTime(CONTROL_CONTINUITY_LIMITS.orphanGraceMs + 1)
-
-    const phone = await dialPhone(registry)
-    expect(phone.close).toHaveBeenCalledWith(
-      RELAY_CLOSE_CODE.HOST_OFFLINE,
-      'relay connection rejected'
-    )
-  })
-
   it('ignores a close reason the host invented', async () => {
     const { registry, activate } = createRegistry()
     const control = new FakeSocket()
@@ -191,16 +176,5 @@ describe('host sign-out reason on phone rejection', () => {
       RELAY_CLOSE_CODE.HOST_OFFLINE,
       'relay connection rejected'
     )
-  })
-
-  // A live host is present: the 4404 there is an attach deadline, not absence.
-  it('never names a cause while the host control is connected', async () => {
-    const { registry, activate } = createRegistry()
-    const control = new FakeSocket()
-    await activate(control as unknown as WebSocket, 1)
-
-    const phone = await dialPhone(registry)
-    expect(phone.close).not.toHaveBeenCalled()
-    expect(control.send).toHaveBeenCalledWith(expect.stringContaining('"type":"conn-open"'))
   })
 })

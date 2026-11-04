@@ -17,7 +17,7 @@ import type {
   MobileGitBranchCompareReply
 } from './git-compare-reply-schema'
 import type { MobileGitStatusHostPayload } from './git-status-reply-schema'
-import type { ConflictResolution } from '../../../src/shared/source-control-entry-actions'
+import type { ConflictResolution } from '../../../src/shared/source-control/listing/source-control-entry-actions'
 import {
   canOpenMobileGitStatusEntry,
   getMobileConflictResolutions,

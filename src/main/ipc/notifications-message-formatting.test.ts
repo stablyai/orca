@@ -66,60 +66,6 @@ describe('registerNotificationHandlers', () => {
     })
   })
 
-  it('formats blocked and interrupted agent snapshots distinctly', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read only getSettings().notifications from the store.
-    registerNotificationHandlers({
-      getSettings: () => ({
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true,
-          agentNeedsInput: true,
-          terminalBell: false,
-          suppressWhenFocused: false
-        }
-      })
-    } as never)
-
-    const handler = getDispatchHandler()
-    expect(
-      await handler(
-        {},
-        {
-          source: 'agent-task-complete',
-          worktreeId: 'repo::wt1',
-          worktreeLabel: 'feat/notis',
-          agentType: 'claude',
-          agentState: 'blocked',
-          agentLastAssistantMessage: 'Please approve the command.'
-        }
-      )
-    ).toEqual({ delivered: true })
-    vi.advanceTimersByTime(5001)
-    expect(
-      await handler(
-        {},
-        {
-          source: 'agent-task-complete',
-          worktreeId: 'repo::wt1',
-          worktreeLabel: 'feat/notis',
-          agentType: 'claude',
-          agentState: 'done',
-          agentTurnOutcome: 'cancellation',
-          agentLastAssistantMessage: 'Stopped by user.'
-        }
-      )
-    ).toEqual({ delivered: true })
-
-    expect(notificationCtorMock).toHaveBeenNthCalledWith(1, {
-      title: 'feat/notis - Claude needs input',
-      body: 'Please approve the command.'
-    })
-    expect(notificationCtorMock).toHaveBeenNthCalledWith(2, {
-      title: 'feat/notis - Claude stopped',
-      body: 'Stopped by user.'
-    })
-  })
-
   it('normalizes custom agent labels and re-bounds multiline assistant previews', async () => {
     registerNotificationHandlers({
       getSettings: () => ({

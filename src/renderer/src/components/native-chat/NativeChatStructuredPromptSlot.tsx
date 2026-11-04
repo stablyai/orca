@@ -1,11 +1,14 @@
 import { cancelStructuredPrompt } from './native-chat-structured-stop-controls'
-import type { ComponentProps, ReactElement, RefObject } from 'react'
+import type { ComponentProps, RefObject } from 'react'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionPromptQuestions } from '../../../../shared/agent-session/agent-session-question-answer'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestionCard'
 import { chatApprovalFromJournal } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import { nativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
+
+type AsyncQuestionContext = Parameters<typeof nativeChatStructuredAsyncQuestion>
 import type { StructuredPromptItem } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type { useStructuredPromptResponseHold } from './use-structured-prompt-response-hold'
 
@@ -16,16 +19,23 @@ export function NativeChatStructuredPromptSlot({
   response,
   shouldFocus,
   answerInputRef,
-  asyncQuestion,
+  pane,
+  session,
+  transport,
+  submits,
   ...fileLinkProps
 }: {
   prompt: StructuredPromptItem | null
   agent: StructuredAgentId
-  controller: Pick<ReturnType<typeof useStructuredAgentSession>, 'turnId' | 'cancel'>
+  controller: AsyncQuestionContext[1] &
+    Pick<ReturnType<typeof useStructuredAgentSession>, 'turnId' | 'cancel'>
   response: ReturnType<typeof useStructuredPromptResponseHold>
   shouldFocus: boolean
   answerInputRef: RefObject<HTMLInputElement | null>
-  asyncQuestion: ReactElement
+  pane: AsyncQuestionContext[0]
+  session: AsyncQuestionContext[2]
+  transport: AsyncQuestionContext[3]
+  submits: AsyncQuestionContext[4]
 } & Pick<
   ComponentProps<typeof NativeChatApprovalCard>,
   'onLinkClick' | 'allowFileUriLinks'
@@ -56,9 +66,17 @@ export function NativeChatStructuredPromptSlot({
           onCancel={onCancel}
           shouldFocus={shouldFocus}
           answerInputRef={answerInputRef}
+          {...fileLinkProps}
         />
       ) : null}
-      {asyncQuestion}
+      {nativeChatStructuredAsyncQuestion(
+        pane,
+        controller,
+        session,
+        transport,
+        submits,
+        fileLinkProps
+      )}
     </>
   )
 }

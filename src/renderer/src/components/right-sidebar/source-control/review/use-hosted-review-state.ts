@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
-import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
-import { resolveHostedReviewCreationProvider } from '../../../../../../shared/hosted-review-creation-providers'
+import { resolveHostedReviewCreationProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review-cache-state'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type {

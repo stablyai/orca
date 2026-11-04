@@ -4,7 +4,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { createRunningPullRequestGenerationRecord } from '@/store/slices/pull-request-generation'
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
+import type { HostedReviewCreationEligibility } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { useGenerateBeforeCreatePullRequest } from './use-generate-before-create-pull-request'
 

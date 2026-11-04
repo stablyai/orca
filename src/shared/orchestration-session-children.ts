@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { AgentType } from './agent-status/contracts/agent-status-types'
 import type { NativeChatSubagentState } from './native-chat/native-chat-types'
 
 export const ORCHESTRATION_SESSION_CHILDREN_CAPABILITY =

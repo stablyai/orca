@@ -7,7 +7,7 @@ import type {
 } from './worktrees/create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type {
   WorktreeBaseStatusEvent,
@@ -29,7 +29,7 @@ import type {
   Worktree
 } from '../../../../shared/worktree/types'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
-import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
+import type { TerminalGitHubPRLink } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TerminalPaneRecoveryOutcome } from '../../../../shared/terminal-tab-types'
 import type {

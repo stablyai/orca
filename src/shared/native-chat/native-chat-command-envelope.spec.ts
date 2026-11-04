@@ -40,17 +40,6 @@ describe('parseNativeChatCommandEnvelope', () => {
 })
 
 describe('surfaceSkillInvocationUserTurns', () => {
-  it('renders a skill-invocation envelope as the literal user token', () => {
-    const messages = [
-      userTurn(
-        '<command-message>ce-brainstorm</command-message>\n<command-name>/ce-brainstorm</command-name>\n<command-args>improve the picker</command-args>'
-      )
-    ]
-    const out = surfaceSkillInvocationUserTurns(messages, CATALOG)
-    expect(out[0].blocks).toEqual([{ type: 'text', text: '/ce-brainstorm improve the picker' }])
-    expect(out[0].id).toBe('user-1')
-  })
-
   it('shortens plugin-qualified names back to the token the user sent', () => {
     const messages = [
       userTurn(

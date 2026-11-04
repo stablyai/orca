@@ -2,15 +2,15 @@ import {
   TerminalStreamOpcode,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { iterateTerminalOutputFrameChunks } from '../../terminal-output-frame-chunks'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
   scanTerminalReplyQuerySequences,
   type TerminalReplyQueryScanState,
   type TerminalReplyQuerySequence
-} from '../../../../../shared/terminal-reply-query-scan'
-import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
+import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { measureTerminalStreamByteLength } from '../../terminal-stream-byte-length'
 import { createTerminalOutputBatcher, type TerminalOutputBatcher } from './terminal-output-batcher'
 import { trimPendingOutputToBudget } from './terminal-stream-replay'

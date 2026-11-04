@@ -12,7 +12,7 @@ import {
   canUseGitHubRepoContext,
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
-import { getBrokenChecks } from '../../../../../shared/pr-checks-fix-prompt'
+import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type {
@@ -22,7 +22,7 @@ import type {
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
-import { sortChecksBySeverity } from '../../../../../shared/pr-check-severity-order'
+import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
 import {
   getCheckCountChips,
   getCheckCounts,

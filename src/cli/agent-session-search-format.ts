@@ -4,7 +4,7 @@ import type {
   AiVaultSearchResponse,
   AiVaultSearchStatus
 } from '../shared/ai-vault-search-types'
-import { terminalSafeLine } from '../shared/terminal-safe-text'
+import { terminalSafeLine } from '../shared/terminal/output/terminal-safe-text'
 
 type SessionSearchResults = Extract<AiVaultSearchResponse, { kind: 'results' }>
 /** Malformed cursors are a caller mistake and leave through the CLI error channel. */

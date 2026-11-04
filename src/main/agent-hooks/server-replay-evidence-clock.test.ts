@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
-import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import type { EnrichedAgentHookEventPayload } from './server/server-types'
 import { buildBody, PANE } from './server.test-fixtures'
 

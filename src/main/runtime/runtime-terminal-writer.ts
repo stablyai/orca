@@ -1,11 +1,11 @@
 import {
   getWindowsInputRecordPasteBurstMs,
   resolveAgentPromptSubmitDelayForAgent
-} from '../../shared/agent-prompt-injection'
+} from '../../shared/agent-launch/startup/agent-prompt-injection'
 import type { TerminalAgent } from '../../shared/terminal-agent'
-import { iterateTerminalInputChunks } from '../../shared/terminal-input'
+import { iterateTerminalInputChunks } from '../../shared/terminal/input/terminal-input'
 import type { TerminalInputSource } from './terminal-input-admission'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import {
   WRITE_ACCEPTED,
   writeRefused,
