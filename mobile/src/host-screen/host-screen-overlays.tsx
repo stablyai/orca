@@ -223,6 +223,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         // Use the platform opener: React Native Linking.openURL resolves without opening anything inside the shell’s WebView.
         openExternalUrl={openExternalLink}
         onCreated={(worktreeId, worktreeName, warning, executionHost) => {
+          actions.closeNewWorktreeModal()
           void catalog.fetchWorktrees({ allowDuringModal: true })
           actions.navigateFromHostList(
             workspaceRouteHref(

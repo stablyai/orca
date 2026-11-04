@@ -424,6 +424,7 @@ describe('NewWorktreeModal project targets', () => {
     const desktop = vi.fn((method: string) => reply(method, repos, 'darwin'))
     const server = vi.fn((method: string) => reply(method, [serverRepo, serverSshRepo], 'linux'))
     const onCreated = vi.fn()
+    const onClose = vi.fn()
     recordHostDescriptor('host-1', { machineName: null, platform: 'darwin' })
 
     await act(async () => {
@@ -437,7 +438,7 @@ describe('NewWorktreeModal project targets', () => {
           hostId: 'host-1',
           hostLabelById: new Map<ExecutionHostId, string>([['runtime:env-1', 'scratch-server']]),
           onCreated,
-          onClose: () => {},
+          onClose,
           openExternalUrl: () => {}
         })
       )
@@ -482,6 +483,11 @@ describe('NewWorktreeModal project targets', () => {
       expect.anything()
     )
     expect(onCreated).toHaveBeenCalledWith('srv-wt', expect.any(String), undefined, 'runtime:env-1')
+    expect(onCreated).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+
+    act(() => form.props.onClose())
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it("offers the desktop's servers, by name, in a sheet opened before the list has them", async () => {
