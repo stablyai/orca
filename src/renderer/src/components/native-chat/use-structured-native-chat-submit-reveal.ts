@@ -43,9 +43,10 @@ export function useStructuredNativeChatSubmitReveal(
     // Resume can be refused or find nothing paused, so it reveals only once the host lifts it.
     const revealing = (lift: () => Promise<boolean>) => async (): Promise<boolean> => {
       const isCurrent = capturePresentation()
+      const reveal = captureRevealLatest()
       const resumed = await lift()
       if (resumed && isCurrent()) {
-        revealLatest()
+        reveal()
       }
       return resumed
     }
@@ -72,7 +73,7 @@ export function useStructuredNativeChatSubmitReveal(
         return steered
       }
     }
-  }, [capturePresentation, queuedMessages, revealLatest, startsHeld])
+  }, [capturePresentation, captureRevealLatest, queuedMessages, revealLatest, startsHeld])
   return {
     messageListRef,
     revealLatest,
