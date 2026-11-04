@@ -46,12 +46,11 @@ export function partitionNodeTestBodies(bodies) {
   }
 }
 
-// Declarations share one `@/` namespace; a phone declaration's `@/` path that a renderer file also
-// occupies would silently resolve to the renderer, so name it instead.
-export function findShadowedPhoneAliases(output) {
-  const phone = path.join(output, 'mobile/src')
+// Declarations and the phone test bodies share one `@/` namespace; a phone `@/` path that a renderer
+// file also occupies would silently resolve to the renderer, so name it instead.
+export function findShadowedPhoneAliases(output, phoneBodies = [], root = repoRoot) {
   const renderer = path.join(output, 'src/renderer/src')
-  const problems = []
+  const sources = phoneBodies.map((body) => [body, path.join(root, body)])
   const visit = (directory) => {
     for (const entry of fs.existsSync(directory)
       ? fs.readdirSync(directory, { withFileTypes: true })
@@ -60,21 +59,23 @@ export function findShadowedPhoneAliases(output) {
       if (entry.isDirectory()) {
         visit(file)
       } else if (file.endsWith('.d.ts')) {
-        for (const [, spec] of fs.readFileSync(file, 'utf8').matchAll(/['"]@\/([^'"]+)['"]/g)) {
-          if (
-            ['.d.ts', '/index.d.ts'].some((suffix) =>
-              fs.existsSync(path.join(renderer, `${spec}${suffix}`))
-            )
-          ) {
-            problems.push(
-              `phone declaration alias resolves to a renderer file: ${toPosix(path.relative(output, file))} imports @/${spec}`
-            )
-          }
-        }
+        sources.push([toPosix(path.relative(output, file)), file])
       }
     }
   }
-  visit(phone)
+  visit(path.join(output, 'mobile/src'))
+  const problems = []
+  for (const [name, file] of sources) {
+    for (const [, spec] of fs.readFileSync(file, 'utf8').matchAll(/['"]@\/([^'"]+)['"]/g)) {
+      if (
+        ['.d.ts', '/index.d.ts'].some((suffix) =>
+          fs.existsSync(path.join(renderer, `${spec}${suffix}`))
+        )
+      ) {
+        problems.push(`phone alias resolves to a renderer file: ${name} imports @/${spec}`)
+      }
+    }
+  }
   return problems
 }
 
@@ -201,7 +202,11 @@ export function runNodeTestsTypecheck({ root = repoRoot, run = runProcessSync } 
     mirrorDeclarationInputs(producers, root, output)
     const check = compile(NODE_TEST_PROJECT, ['--noEmit'], root, run)
     const problems = [
-      ...findShadowedPhoneAliases(output),
+      ...findShadowedPhoneAliases(
+        output,
+        expected.map((file) => `mobile/${file}`),
+        root
+      ),
       ...checkNodeTestProgram(check.files, { realRoot: fs.realpathSync(root), expected: bodies })
     ]
     const prefix = `${toPosix(fs.realpathSync(root))}/`

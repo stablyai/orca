@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal'
 import {
   checkNodeTestProgram,
+  findShadowedPhoneAliases,
   parseCompilerPass,
   partitionNodeTestBodies,
   readNodeTestBodies
@@ -328,6 +329,26 @@ describe('checked transfers', () => {
         local: ['src/a.test.ts'],
         external: ['src/main/b.test.ts', 'src/main/helper.ts']
       })
+    } finally {
+      removeTreeSync(root)
+    }
+  })
+
+  it('names a phone declaration or phone test body whose @/ import a renderer file shadows', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-pr36356-shadowed-alias-'))
+    const output = path.join(root, 'out')
+    const write = (file: string, text: string) => {
+      fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
+      fs.writeFileSync(path.join(root, file), text)
+    }
+    try {
+      write('out/src/renderer/src/lib/x.d.ts', 'export {}')
+      write('out/mobile/src/a.d.ts', "import '@/lib/x'\nimport '@/lib/phone-only'")
+      write('mobile/src/b.test.ts', "import { y } from '@/lib/x'")
+      expect(findShadowedPhoneAliases(output, ['mobile/src/b.test.ts'], root)).toEqual([
+        'phone alias resolves to a renderer file: mobile/src/b.test.ts imports @/lib/x',
+        'phone alias resolves to a renderer file: mobile/src/a.d.ts imports @/lib/x'
+      ])
     } finally {
       removeTreeSync(root)
     }

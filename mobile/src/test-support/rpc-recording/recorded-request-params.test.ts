@@ -309,7 +309,7 @@ describe('recorded requests against the host params contract', () => {
           { action: 'linear', id: 'linear-assigned', args: { query: '  ', workspace: null } },
           {
             complete: 'linear.listIssues#1',
-            params: { filter: 'assigned', limit: 50, workspaceId: undefined },
+            params: { filter: 'assigned', limit: 50 },
             reply: { ok: true, result: [] }
           },
           { checkpoint: 'success' }
