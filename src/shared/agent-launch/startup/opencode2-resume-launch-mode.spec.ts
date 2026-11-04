@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAiVaultResumeCommand } from '../../ai-vault-resume-command'
+import { buildAiVaultResumeCommand } from '../../ai-vault/resume/ai-vault-resume-command'
 import { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
 

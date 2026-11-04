@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   AI_VAULT_WSL_CARRYOVER_SCOPE_LIMIT,
   carryOverUnconfirmedWslSessions,

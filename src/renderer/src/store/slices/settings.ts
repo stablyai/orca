@@ -26,7 +26,7 @@ import { translate } from '@/i18n/i18n'
 import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
-} from '../../../../shared/mobile-pairing-custom-address'
+} from '../../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 import {
   hydrateOwnerWorktreeVisibilityDefaults,
   type WorktreeVisibilityDefaultsByHost

@@ -1,4 +1,4 @@
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { withReconnectJitter } from '../../../shared/reconnect-jitter'
 import { WebRuntimeConnectionHeartbeat } from './web-runtime-connection-heartbeat'
 import {
@@ -12,7 +12,7 @@ import {
 } from './web-runtime-connection-auth'
 import type { WebRuntimeAuthPlan } from './web-runtime-credential-source'
 import { WebRuntimeConnectionTimers } from './web-runtime-connection-timers'
-import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
+import type { PairedE2EEClientHandshake } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import { withWebClientUpgradeMarker } from '../../../shared/web-origin-security'
 import type { WebRuntimeTransportSubscription } from './web-runtime-subscription-contract'
 import { WebRuntimeSubscriptionRegistry } from './web-runtime-subscription-registry'
@@ -26,7 +26,7 @@ import { WebRuntimeConnectionWaiters } from './web-runtime-connection-waiters'
 import {
   runtimeEnvironmentSetupFailure,
   type RuntimeEnvironmentSetupFailure
-} from '../../../shared/runtime-environment-subscription-setup'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15_000]
 

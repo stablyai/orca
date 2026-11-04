@@ -6,7 +6,7 @@ import { StrictMode, useSyncExternalStore } from 'react'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileRelayStatusDetail } from '../../../../../../shared/mobile-relay-status'
+import type { MobileRelayStatusDetail } from '../../../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type {
   OrcaCloudSignInProgress,
   OrcaProfileAuthStatus

@@ -1,5 +1,5 @@
 import type * as ClientHostRuntime from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { z } from 'zod'
 import type {
   GoogleCookieClearLocalTarget,

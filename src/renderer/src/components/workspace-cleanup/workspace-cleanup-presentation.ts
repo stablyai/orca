@@ -8,9 +8,10 @@ import type {
 } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
-import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
+import './workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type WorkspaceCleanupSortKey = 'activity' | 'name' | 'repo' | 'review' | 'git'

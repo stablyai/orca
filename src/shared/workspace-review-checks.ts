@@ -9,7 +9,7 @@ import {
   getWorkspaceAttachmentKey,
   getWorkspaceAttachmentUrlScope,
   normalizeWorkspaceAttachments
-} from './workspace-attachment-normalization'
+} from './workspace-attachments/workspace-attachment-normalization'
 
 export type WorkspaceReviewCheckDetails = {
   stale?: boolean

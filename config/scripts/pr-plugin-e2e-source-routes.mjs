@@ -38,7 +38,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
   ),
   pluginRoute(
     'plugins.catalog-and-page',
-    ['plugin-install-link', 'plugin-marketplace-content'],
+    ['plugin-install-link'],
     [
       `${UI}(?:catalog\\/|list\\/|page\\/|PluginContributionIcon|dialogs\\/Plugin(?:Install|CatalogLink|MarketplaceSource)Dialog)`,
       `${UI}state\\/use-plugin-(?:catalog|install-link|install-action|marketplace-lifecycle|page-navigation|page-model|hover-prefetch|in-use|art-palettes|contribution-source)`,
@@ -48,7 +48,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/main\\/plugins\\/plugin-(?:list-projection|client-list|image-)',
       'src\\/shared\\/plugins\\/(?:catalog\\/|installation\\/|images\\/|plugin-list-entry|contributions\\/plugin-contribution-(?:summary|points))'
     ].join('|'),
-    'plugin-git-fixture|plugin-gleam-catalog-fixture|plugin-language-pack-fixture'
+    'plugin-git-fixture|plugin-gleam-catalog-fixture'
   ),
   pluginRoute(
     'plugins.file-type-suggestion',
@@ -83,14 +83,14 @@ const SPECIFIC_PLUGIN_ROUTES = [
   ),
   pluginRoute(
     'plugins.syntax-and-language-packs',
-    ['plugin-syntax-smoke', 'plugin-marketplace-content'],
+    ['plugin-syntax-smoke'],
     [
       `${UI}page\\/PluginContributionAction(?:Syntax|Language)`,
       `${STORE}(?:syntax-packs|syntax-failures|language-packs)`,
       'src\\/main\\/plugins\\/contributions\\/plugin-(?:syntax|language-pack)-registry',
       'src\\/shared\\/plugins\\/(?:languages\\/|plugin-language-pack-i18n-resources|artifacts\\/plugin-(?:syntax|language-pack)-artifact)'
     ].join('|'),
-    'plugin-smoke|plugin-language-pack-fixture'
+    'plugin-smoke'
   ),
   pluginRoute(
     'plugins.custom-editors-and-new-files',
@@ -241,15 +241,6 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.view-shot-editor',
     ['plugin-shot-editor'],
     'src\\/cli\\/handlers\\/plugin-shot-editor'
-  ),
-  pluginRoute(
-    'plugins.vm-recipes',
-    ['plugin-marketplace-content'],
-    [
-      'src\\/main\\/plugins\\/plugin-(?:approved-vm-recipes|vm-recipe-)',
-      'src\\/shared\\/plugins\\/artifacts\\/plugin-vm-recipe-artifact'
-    ].join('|'),
-    'plugin-language-pack-fixture'
   ),
   pluginRoute(
     'plugins.startup-and-manifest',

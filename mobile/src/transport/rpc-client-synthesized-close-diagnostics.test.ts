@@ -1,7 +1,7 @@
 // Pin diagnostic clocks and auth-failed latches when RN omits close and later delivers the stale event.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { connect } from './rpc-client'
-import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../src/shared/paired-e2ee-handshake-deadline'
+import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-handshake-deadline'
 import { diagnoseConnection } from '../diagnostics/connection-diagnostics-analysis'
 import type { ConnectionLogEntry } from './types'
 import { recordSocketDeadlineAppState } from './socket-deadline-clock'

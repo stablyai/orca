@@ -3,17 +3,21 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   addManagedOrcadEnvironment,
   refreshManagedOrcadPairing,
   removeManagedOrcadEnvironment
-} from '../../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments, resolveEnvironment } from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import {
+  listEnvironments,
+  resolveEnvironment
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshRemotePtyLease, SshTarget } from '../../../shared/ssh-types'
 import { closeTestStores, createSqliteTestStore } from '../../persistence/persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'

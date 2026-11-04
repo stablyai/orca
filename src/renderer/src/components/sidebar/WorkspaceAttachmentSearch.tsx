@@ -17,7 +17,7 @@ import type { SmartNameMode } from '../../../../shared/new-workspace/smart-works
 import { useWorkItemSourceSearch } from '../new-workspace/use-work-item-source-search'
 import { SmartWorkspaceSourceTabs } from '../new-workspace/SmartWorkspaceSourceTabs'
 import { SmartWorkspaceSourceResultList } from '../new-workspace/SmartWorkspaceSourceResultList'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {
   ATTACHMENT_INPUT_KINDS,
   isAttachmentInputKind,

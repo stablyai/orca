@@ -7,7 +7,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorktreeMetaUpdateOptions } from '@/store/slices/worktree-helpers'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 vi.mock('@/components/ui/tooltip', () => ({

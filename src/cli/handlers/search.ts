@@ -1,4 +1,4 @@
-import { createSessionSearchClient } from '../../shared/ai-vault-search-client'
+import { createSessionSearchClient } from '../../shared/ai-vault/search/ai-vault-search-client'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 import {
   formatSessionSearchResponse,

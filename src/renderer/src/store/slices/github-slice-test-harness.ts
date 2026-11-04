@@ -11,7 +11,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace-attachments'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace-attachments/workspace-attachments'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason

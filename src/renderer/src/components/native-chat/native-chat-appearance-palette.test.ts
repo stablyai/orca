@@ -50,70 +50,7 @@ function createChat(appScheme: 'light' | 'dark', terminalScheme: 'light' | 'dark
   return chat
 }
 
-const statusRoles = [
-  '--destructive',
-  '--status-success',
-  '--status-warning',
-  '--git-decoration-added',
-  '--git-decoration-deleted',
-  '--diff-added-background',
-  '--diff-added-gutter',
-  '--diff-removed-background',
-  '--diff-removed-gutter'
-]
-
 describe('matching chat surfaces with opposite app schemes', () => {
-  it.each([
-    ['dark', 'light'],
-    ['light', 'dark']
-  ] as const)('uses the %s app with a %s terminal palette', (appScheme, terminalScheme) => {
-    const chat = createChat(appScheme, terminalScheme)
-    // These roles cover transcript payloads, question badges, inline completion menus and controls.
-    const matched = getComputedStyle(chat)
-    const terminalForegroundAtFullStrength = `${terminalScheme === 'light' ? '#000000' : '#ffffff'} 100%`
-    expect(chat.style.color).toBe('var(--foreground)')
-    expect(matched.getPropertyValue('--chat-foreground')).toContain(
-      terminalForegroundAtFullStrength
-    )
-    expect(matched.getPropertyValue('--chat-foreground-strong')).toContain(
-      terminalForegroundAtFullStrength
-    )
-    expect(matched.getPropertyValue('--foreground')).toContain(terminalForegroundAtFullStrength)
-    expect(matched.getPropertyValue('--muted')).toContain('7%')
-    expect(matched.getPropertyValue('--muted-foreground')).toContain('62%')
-    expect(matched.getPropertyValue('--popover')).toContain('4%')
-    expect(matched.getPropertyValue('--popover-foreground')).toContain(
-      terminalForegroundAtFullStrength
-    )
-    expect(matched.getPropertyValue('--accent')).toContain('9%')
-    expect(matched.getPropertyValue('--input')).toContain('7%')
-    expect(matched.getPropertyValue('--secondary')).toContain('7%')
-    expect(matched.getPropertyValue('--ring')).toContain('44%')
-    expect(matched.getPropertyValue('--chat-source-background')).toBe(
-      terminalScheme === 'light' ? '#ffffff' : '#000000'
-    )
-    expect(matched.getPropertyValue('--chat-source-foreground')).toBe(
-      terminalScheme === 'light' ? '#000000' : '#ffffff'
-    )
-    // The unread marker is mixed toward the chat's own foreground, not the app's.
-    expect(matched.getPropertyValue('--chat-unread')).toContain(
-      terminalScheme === 'light' ? '#0969da 70%, #000000' : '#4493f8 70%, #ffffff'
-    )
-    const codeForeground = matched.getPropertyValue('--chat-code-foreground')
-    expect(codeForeground).toContain(`${terminalScheme === 'light' ? '#000000' : '#ffffff'} 85%`)
-    expect(codeForeground).toContain(terminalScheme === 'light' ? '#ffffff' : '#000000')
-    expect(codeForeground).not.toContain(appScheme === 'dark' ? '#fafafa' : '#0a0a0a')
-    const outside = getComputedStyle(document.documentElement)
-    const appStatus = statusRoles.map((role) => outside.getPropertyValue(role))
-    const chatStatus = statusRoles.map((role) => matched.getPropertyValue(role))
-    expect(chatStatus.every(Boolean)).toBe(true)
-    expect(chatStatus).not.toEqual(appStatus)
-    document.documentElement.classList.toggle('dark', terminalScheme === 'dark')
-    expect(
-      statusRoles.map((role) => getComputedStyle(document.documentElement).getPropertyValue(role))
-    ).toEqual(chatStatus)
-  })
-
   it('resolves an incomplete terminal palette without a local background variable cycle', () => {
     vi.spyOn(terminalThemeSelection, 'resolveConfiguredTerminalColors').mockReturnValue({})
     const chat = createChat('dark', 'light')

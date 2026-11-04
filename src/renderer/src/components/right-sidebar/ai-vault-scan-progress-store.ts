@@ -1,5 +1,5 @@
 import { useCallback, useState, useSyncExternalStore } from 'react'
-import type { AiVaultScanProgress } from '../../../../shared/ai-vault-scan-progress'
+import type { AiVaultScanProgress } from '../../../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostScope } from '../../../../shared/execution-host'
 
 const MAX_PROGRESS_ENTRIES = 8

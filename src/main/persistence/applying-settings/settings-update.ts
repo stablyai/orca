@@ -34,7 +34,7 @@ import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
-} from '../../../shared/mobile-pairing-custom-address'
+} from '../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-reconciliation'
 import { normalizeSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'

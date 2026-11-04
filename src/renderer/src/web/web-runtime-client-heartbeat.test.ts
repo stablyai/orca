@@ -1,7 +1,7 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
-import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
-import { createFixedKeyLegacyHandshakeForTest } from '../../../shared/paired-e2ee-fixed-key-test-fixture'
+import type { PairedE2EEClientHandshake } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
+import { createFixedKeyLegacyHandshakeForTest } from '../../../shared/remote-runtime/e2ee/paired-e2ee-fixed-key-test-fixture'
 import { WebRuntimeClient } from './web-runtime-client'
 
 // Half-open WebSockets can stay OPEN without close/error; detect silence while visible and disarm timers while hidden.

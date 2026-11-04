@@ -3,7 +3,7 @@ import { structuredAgentSessionOptionOverridesRefusal } from '../../../../../nat
 import {
   codexFastServiceTier,
   CODEX_DEFAULT_SERVICE_TIER
-} from '../../../../../codex/codex-structured-service-tier'
+} from '../../../../../codex/structured/catalog/codex-structured-service-tier'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 

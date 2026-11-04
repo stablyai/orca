@@ -1,4 +1,4 @@
-import { readWslHostDeployments } from '../../../shared/wsl-host-deployment-store'
+import { readWslHostDeployments } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import {
   wslHostsPolicyMovedProjects,
   wslHostsPolicyState,
