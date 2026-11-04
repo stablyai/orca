@@ -81,6 +81,9 @@ export type WorktreeMeta = {
   baseRef?: string
   /** True when Orca checked out a pre-existing local branch that delete must not prune. */
   preserveBranchOnDelete?: boolean
+  /** Whether the branch name came from the user rather than from folding the workspace name.
+   *  Absent on worktrees created before this was recorded, which is not the same as `false`. */
+  branchNameWasExplicit?: boolean
   /** See {@link Worktree.pushTarget}. Persisted so refreshed worktree lists keep the target. */
   pushTarget?: GitPushTarget
   /** Explicit marker stamped when Orca creates the worktree. */
