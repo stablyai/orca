@@ -23,7 +23,10 @@ export class AgentLaunchExecutionError extends Error {
 
 /** A replayed refusal, in the words it was refused with when its record kept them. */
 export function agentLaunchRefusalError(refusal: AgentLaunchRefusal): Error {
-  return Object.assign(new Error(refusal.said ?? refusal.code), { code: refusal.code })
+  return Object.assign(new Error(refusal.said ?? refusal.code), {
+    code: refusal.code,
+    ...(refusal.code === 'agent_unconfigured' ? { data: { retrySafe: false } } : {})
+  })
 }
 
 export function settleQuietly(settlement: Promise<void>): Promise<void> {

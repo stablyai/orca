@@ -252,6 +252,41 @@ describe('orca cli agent launch', () => {
     ])
   })
 
+  it('reports a definite agent_unconfigured refusal without retrySafe when agent is disabled', async () => {
+    queueFixtures(callMock, agentLaunchHostFixture())
+    callMock.mockRejectedValueOnce(
+      new RuntimeRpcFailureError({
+        id: 'refused',
+        ok: false,
+        error: {
+          code: 'agent_unconfigured',
+          message: 'Agent opencode is disabled. Choose an enabled agent.',
+          data: { retrySafe: false }
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const args = [
+      'agent',
+      'launch',
+      '--agent',
+      'opencode',
+      '--worktree',
+      `id:${WORKTREE_ID}`,
+      '--json'
+    ]
+    await main(args, '/tmp/repo')
+    expect(process.exitCode).toBe(1)
+    const output = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(output.error).toMatchObject({
+      code: 'agent_unconfigured',
+      message: 'Agent opencode is disabled. Choose an enabled agent.',
+      data: { retrySafe: false }
+    })
+    expect(output.error.code).not.toBe('agent_session_operation_unknown')
+    expect(output.error.data?.retrySafe).toBe(false)
+  })
+
   it('uses the caller folder identity after validating its native host and enclosing path', async () => {
     process.env.ORCA_WORKSPACE_ID = 'folder:caller'
     queueFixtures(

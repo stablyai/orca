@@ -39,6 +39,7 @@ import { resolveStartupShell } from '../../shared/agent-launch/startup/tui-agent
 import { resolveWslSessionContext } from '../daemon/wsl-session-context'
 import { isTuiAgentEnabled } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
+import { OrchestrationError } from './orchestration/orchestration-error'
 
 /** No launch command could be built for a requested `startupAgent`. */
 export class AgentLaunchUnbuildableError extends Error {}
@@ -111,7 +112,11 @@ export async function resolveAgentTerminalCreateOptions(
       throw new Error('runtime_unavailable')
     }
     if (!isTuiAgentEnabled(opts.startupAgent, store.getSettings().disabledTuiAgents)) {
-      throw new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`)
+      throw new OrchestrationError(
+        'agent_unconfigured',
+        `Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`,
+        { retrySafe: false }
+      )
     }
   }
   if (!launchAgent || !store) {
