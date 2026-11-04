@@ -1,8 +1,14 @@
-import '../unused-default-rpc-methods.test-fixture'
+import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
-import { AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session/requests/agent-session-current-requests-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { AcpStructuredOptions } from '../../../acp/acp-structured-options'
@@ -10,6 +16,7 @@ import { NewSessionResponseSchema } from '../../../acp/generated/acp-protocol.ge
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
 import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/structured-agent-session-subscribers'
 import {
+  sendParams,
   attachParams,
   call,
   clearStructuredHostStub,
@@ -31,6 +38,8 @@ import {
   hostTestOperationId
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { holdDelivery } from '../../../native-chat/agent-session-wire/structured-agent-session-delivery-hold.test-fixture'
+import { queuedImageHistoryReader } from './structured-agent-session-queued-image-capability'
+import '../unused-default-rpc-methods.test-fixture'
 
 beforeEach(installStructuredHostStub)
 afterEach(clearStructuredHostStub)
@@ -81,6 +90,7 @@ it.each([
     expect(hostCalls.history).toHaveBeenCalledWith(
       request,
       undefined,
+      queuedImageHistoryReader(client ?? {}),
       replaceHistory,
       settledBodies
     )
@@ -267,6 +277,95 @@ describe('prompt response parameters', () => {
 })
 
 describe('agentSession.send reply timing', () => {
+  it('answers an actual ended legacy send as unknown while keeping raw delivery pending for later proof', async () => {
+    const rig = await createQueuedMessageTestRig()
+    hostCalls.send.mockImplementation(rig.host.send.bind(rig.host))
+    hostCalls.waitForSendSettlement.mockImplementation(
+      rig.host.waitForSendSettlement.bind(rig.host)
+    )
+    const held = new Set<string>()
+    rig.host.deps.adapter.heldSends = () => held
+    rig.dispatch.mockImplementation(async ({ clientMessageId }) => {
+      held.add(clientMessageId)
+      return { state: 'admitted' }
+    })
+    const body = hostTestMessage('legacy answered consumer')
+    const id = hostTestOperationId()
+    const action = call(
+      'agentSession.send',
+      { envelope: rig.envelope({ body }, 'agentSession.send', id), body },
+      {
+        ...STRUCTURED_CLIENT,
+        clientCapabilities: Array.from<string>(STRUCTURED_CLIENT.clientCapabilities).filter(
+          (capability) =>
+            capability !== AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY &&
+            capability !== AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
+        )
+      }
+    )
+    try {
+      await eventually(() => expect(rig.dispatch).toHaveBeenCalledOnce())
+      held.delete(id)
+      rig.providerEvents().appendItem(
+        { provider: 'legacy', agent: 'codex', sessionId: 'thread-1', recordId: 'final' },
+        {
+          kind: 'status',
+          tone: 'error',
+          text: 'final error',
+          providerFrame: {
+            provider: 'codex',
+            kind: 'notification:error',
+            payload: { head: '{}', byteLength: 2, digest: '', truncated: false }
+          }
+        },
+        { turnScope: { kind: 'thread' } }
+      )
+      await rig.host.flushStreamedEvents(HOST_SESSION)
+      expect(await action).toMatchObject({
+        ok: true,
+        result: { value: { submission: { dispatchState: 'unknown' } } }
+      })
+      expect((await rig.submission(id))?.dispatchState).toBe('pending')
+      await rig.settleAccepted(id, 'late')
+      expect((await rig.submission(id))?.dispatchState).toBe('accepted')
+    } finally {
+      await rig.host.close(HOST_SESSION, 'user-close')
+      await action
+      await rig.dispose()
+    }
+  })
+  it('holds a pending reply until handover for a client that cannot show a later rejection', async () => {
+    hostCalls.send.mockResolvedValueOnce(pendingSendResult())
+    hostCalls.waitForSendSettlement.mockResolvedValueOnce(undefined)
+
+    await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
+
+    expect(hostCalls.waitForSendSettlement).toHaveBeenCalledWith(SESSION, 'client-1', {
+      until: 'handed-over-or-behind-command',
+      budgetMs: STRUCTURED_AGENT_SESSION_START_WAIT_MS
+    })
+  })
+
+  it('answers at acceptance for the local desktop and paired desktop clients (W2)', async () => {
+    for (const clientCapabilities of [
+      DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES,
+      // A paired desktop gains the structured surface as its own capability; the reply rule rides
+      // on the list it already sends.
+      [...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+    ]) {
+      hostCalls.send.mockResolvedValueOnce(pendingSendResult())
+      const response = await call('agentSession.send', sendParams(), {
+        clientKind: 'runtime',
+        clientCapabilities: [...clientCapabilities]
+      })
+      expect(response).toMatchObject({
+        ok: true,
+        result: { value: { submission: { dispatchState: 'pending' } } }
+      })
+    }
+    expect(hostCalls.waitForSendSettlement).not.toHaveBeenCalled()
+  })
+
   it('keeps an old phone image send immediate and never recovers its interrupted send as a hidden card', async () => {
     const rig = await createQueuedMessageTestRig()
     hostCalls.send.mockImplementation(rig.host.send.bind(rig.host))
@@ -321,15 +420,38 @@ describe('agentSession.send reply timing', () => {
       release()
       await closed
       rig.crashRestartHostProcess()
-      expect(await rig.drafts()).toEqual([])
+      expect(await rig.drafts()).toEqual([{ messageId: interrupted.id, state: 'waiting' }])
       expect(await rig.submission(interrupted.id)).toMatchObject({
         source: { kind: 'user' },
         dispatchState: 'rejected'
       })
-      expect(await rig.submission(interrupted.id)).not.toHaveProperty('keptAsQueuedMessageId')
+      expect((await rig.submission(interrupted.id))?.keptAsQueuedMessageId).toBe(interrupted.id)
     } finally {
       release()
       await rig.dispose()
     }
   })
 })
+
+function pendingSendResult() {
+  return {
+    ok: true,
+    replayed: false,
+    fence: 1,
+    cursor: { epoch: 'epoch-a', sequence: 1 },
+    value: {
+      clientMessageId: 'client-1',
+      submission: {
+        clientMessageId: 'client-1',
+        fence: 1,
+        payloadFingerprint: 'fingerprint',
+        dispatchState: 'pending' as const,
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: null,
+        handoverRecorded: true as const
+      }
+    }
+  }
+}

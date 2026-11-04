@@ -451,6 +451,7 @@ it.each(['WF1', 'WF2', 'literal', 'enum', 63, 64] as const)(
       const restarted = await reopened.history(
         { sessionId: SESSION, direction: 'tail' },
         undefined,
+        undefined,
         true,
         true
       )
@@ -466,6 +467,7 @@ it.each(['WF1', 'WF2', 'literal', 'enum', 63, 64] as const)(
     }
     const history = await hostTestState().host.history(
       { sessionId: SESSION, direction: 'tail' },
+      undefined,
       undefined,
       true,
       true
@@ -487,6 +489,7 @@ it.each(['WF1', 'WF2', 'literal', 'enum', 63, 64] as const)(
       const page = await hostTestState().host.history(
         { sessionId: SESSION, direction, cursor: { epoch: journal.cursor().epoch, sequence } },
         undefined,
+        undefined,
         false,
         true
       )
@@ -496,6 +499,7 @@ it.each(['WF1', 'WF2', 'literal', 'enum', 63, 64] as const)(
     }
     const reset = await hostTestState().host.history(
       { sessionId: SESSION, direction: 'after', cursor: { epoch: 'old-epoch', sequence: 0 } },
+      undefined,
       undefined,
       false,
       true
@@ -650,6 +654,7 @@ it('certifies twenty actual large-description form cancellations in their compos
         direction,
         ...(direction === 'tail' ? {} : { cursor: { epoch: grouped.epoch, sequence } })
       },
+      undefined,
       undefined,
       true,
       true

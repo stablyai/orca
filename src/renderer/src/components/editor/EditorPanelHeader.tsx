@@ -11,6 +11,7 @@ import EditorViewToggle, {
   SVG_VIEW_MODE_METADATA
 } from './view-mode/EditorViewToggle'
 import type { CustomEditorToggleValue, EditorToggleValue } from './view-mode/EditorViewToggle'
+import { MarkdownDefaultViewContextMenu } from './view-mode/MarkdownDefaultViewContextMenu'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { DiffNotesSendMenu } from './diff/review/DiffNotesSendMenu'
 import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'
@@ -114,6 +115,28 @@ export function EditorPanelHeader({
   const { changeCount, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
   const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
   const nextChangeShortcut = useShortcutKeyDetails('editor.nextChange')
+
+  // Why: Markdown edit tabs expose the default view on right-click; other files keep a plain switcher.
+  const canSetMarkdownDefaultView = isMarkdown && activeFile.mode === 'edit'
+  const editorViewToggle = (
+    <EditorViewToggle
+      value={effectiveToggleValue}
+      modes={availableEditorToggleModes}
+      onChange={onEditorToggleChange}
+      metadataOverride={
+        isCsv
+          ? CSV_VIEW_MODE_METADATA
+          : isNotebook
+            ? NOTEBOOK_VIEW_MODE_METADATA
+            : isSvg
+              ? SVG_VIEW_MODE_METADATA
+              : Object.keys(customEditorTitles).length > 0
+                ? CUSTOM_EDITOR_SOURCE_METADATA
+                : undefined
+      }
+      customEditorTitles={customEditorTitles}
+    />
+  )
 
   return (
     <div className="editor-header">
@@ -277,25 +300,15 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
-      {hasEditorToggle && !activeFile.csvPreviewOnly && (
-        <EditorViewToggle
-          value={effectiveToggleValue}
-          modes={availableEditorToggleModes}
-          onChange={onEditorToggleChange}
-          metadataOverride={
-            isCsv
-              ? CSV_VIEW_MODE_METADATA
-              : isNotebook
-                ? NOTEBOOK_VIEW_MODE_METADATA
-                : isSvg
-                  ? SVG_VIEW_MODE_METADATA
-                  : Object.keys(customEditorTitles).length > 0
-                    ? CUSTOM_EDITOR_SOURCE_METADATA
-                    : undefined
-          }
-          customEditorTitles={customEditorTitles}
-        />
-      )}
+      {hasEditorToggle &&
+        !activeFile.csvPreviewOnly &&
+        (canSetMarkdownDefaultView ? (
+          <MarkdownDefaultViewContextMenu onSelectView={onEditorToggleChange}>
+            {editorViewToggle}
+          </MarkdownDefaultViewContextMenu>
+        ) : (
+          editorViewToggle
+        ))}
       {canShowMarkdownTableOfContents && (
         <TooltipProvider delayDuration={300}>
           <Tooltip>

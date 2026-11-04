@@ -14,7 +14,6 @@ import {
 // Require structured.v1 from remote callers before exposing journals/mutations; legacy mobile may receive session-tab metadata placeholders.
 
 import { projectBackgroundTaskEvent } from './structured-agent-session-background-task-capability'
-import { projectQueuedImageCardPublication } from './structured-agent-session-queued-image-capability'
 import { projectTurnItemEvent } from './structured-agent-session-turn-item-capability'
 import { defineMethod, defineStreamingMethod } from '../core'
 import {
@@ -66,6 +65,7 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { refusingStructuredAgentSessionCreatesClosedFirst } from './structured-agent-session-close-before-create'
+import * as queuedImages from './structured-agent-session-queued-image-capability'
 import { projectReceiptDeviceEvent } from './structured-agent-session-receipt-devices'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
@@ -216,8 +216,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         readsSettledBodies: clientReadsSettledBodies(ctx),
         id: subscriptionId,
         sessionId: params.sessionId,
+        ...queuedImages.queuedImageSubscriber(ctx),
         projectQueuePublication: (publication) =>
-          projectQueuedImageCardPublication(publication, ctx),
+          queuedImages.projectQueuedImageCardPublication(publication, ctx),
         emit: (event) =>
           emit(
             projectReceiptDeviceEvent(

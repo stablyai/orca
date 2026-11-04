@@ -1,6 +1,3 @@
-// Fit phone bridge limits by splitting queue/roster lists into side batches.
-// Omit slash commands because phones read them through agentSession.options.
-
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
@@ -19,6 +16,8 @@ import {
 } from './agent-session-item-wire-form'
 import { jsonBytes, shortenJsonStringsToFit } from './json-string-shortening'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
+// Fit phone bridge limits by splitting queue/roster lists into side batches.
+// Omit slash commands because phones read them through agentSession.options.
 
 const BOUNDED_FRAME_READER: HistoryReader = {
   form: (item) => boundedFrameItem(agentJournalItemForWire(item)),
@@ -29,17 +28,28 @@ const SETTLED_BODY_BOUNDED_READER: HistoryReader = {
   form: (item) => boundedFrameItem(agentJournalItemForWire(item, true)),
   budgetBytes: BOUNDED_FRAME_CONTENT_BUDGET_BYTES
 }
+/** How a subscriber's rows are read, and so how its pages are sized. */
 export function subscriberHistoryReader(subscriber: {
   boundedFrames: boolean
   emit?: (event: AgentSessionSubscribeEvent) => void
+  readHistorySnapshot?: HistoryReader['snapshot']
+  readQueueSourceIds?: HistoryReader['queueSourceIds']
 }): HistoryReader {
-  return subscriberReadsSettledBodies(subscriber.emit)
+  // The settled-body capability picks each row's form; an older queued-image reader adds its snapshot.
+  const reader = subscriberReadsSettledBodies(subscriber.emit)
     ? subscriber.boundedFrames
       ? SETTLED_BODY_BOUNDED_READER
       : SETTLED_BODY_HISTORY_READER
     : subscriber.boundedFrames
       ? BOUNDED_FRAME_READER
       : CLIENT_HISTORY_READER
+  return subscriber.readHistorySnapshot
+    ? {
+        ...reader,
+        snapshot: subscriber.readHistorySnapshot,
+        queueSourceIds: subscriber.readQueueSourceIds
+      }
+    : reader
 }
 
 /** Omit oversized metadata rather than exceeding the envelope; readers treat absence as unspecified. */
@@ -144,10 +154,34 @@ type BoundedSideLists = {
 /** Send history first, then side lists; reuse empty history batches for the first list. */
 export function boundedFrames(
   event: AgentSessionSubscribeEvent,
-  side: BoundedSideLists
+  side: BoundedSideLists,
+  previousCursor?: AgentJournalCursor
 ): AgentSessionSubscribeEvent[] {
   if (event.type === 'end') {
     return [event]
+  }
+  if (event.type === 'batch' && jsonBytes(event.batch) > BOUNDED_FRAME_CONTENT_BUDGET_BYTES) {
+    const split = <T>(values: T[], first: boolean): T[] => {
+      const middle = Math.ceil(values.length / 2)
+      return first ? values.slice(0, middle) : values.slice(middle)
+    }
+    const half = (first: boolean): BatchFrame => ({
+      ...event,
+      batch: {
+        cursor: first ? (previousCursor ?? event.batch.cursor) : event.batch.cursor,
+        items: split(event.batch.items, first),
+        submissions: split(event.batch.submissions, first),
+        removedItemIds: split(event.batch.removedItemIds, first)
+      }
+    })
+    return [
+      ...boundedFrames(
+        half(true),
+        { queued: undefined, backgroundTasks: undefined },
+        previousCursor
+      ),
+      ...boundedFrames(half(false), side, previousCursor)
+    ]
   }
   const lists: SideFields[] = [
     ...(side.queued === undefined ? [] : [boundedQueuePublication(side.queued)]),
