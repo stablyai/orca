@@ -8,7 +8,7 @@ import {
   mountTextGenerationDialog,
   pickDialogAgent,
   pickDialogSaveTarget
-} from './source-control-action-dialog.test-fixture'
+} from './source-control/panel/source-control-action-dialog.test-fixture'
 
 const initialState = useAppStore.getState()
 afterEach(() => {
