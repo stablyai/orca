@@ -66,7 +66,6 @@
 1 test-no-polling-loop:src/main/daemon/headless-emulator-snapshot-cost.bench.test.ts
 1 test-no-polling-loop:src/main/daemon/node-pty-conout-worker-errors.test.ts
 1 test-no-polling-loop:src/main/daemon/repro-12101-mouse-tracking-survives-agent-death.test.ts
-1 test-no-polling-loop:src/main/git/worktrees/removal/worktree-removal-large-tree.bench.test.ts
 1 test-no-polling-loop:src/main/ipc/folder-repo-git-upgrade.test.ts
 1 test-no-polling-loop:src/main/ipc/native-chat.test.ts
 1 test-no-polling-loop:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
@@ -186,7 +185,6 @@
 1 test-no-real-time-wait:src/main/codex/hooks/installation/hook-service-managed-codex-hashes.test.ts
 1 test-no-real-time-wait:src/main/codex/hooks/reconciliation/codex-hook-toggle-off-wins.test.ts
 1 test-no-real-time-wait:src/main/codex/structured/launch/codex-structured-real-cli-command-env.test.ts
-1 test-no-real-time-wait:src/main/codex/structured/turns/codex-structured-dispatch-boundary.test.ts
 1 test-no-real-time-wait:src/main/codex/structured/turns/codex-structured-turn-open-wait.test.ts
 1 test-no-real-time-wait:src/main/codex/trust/hooks/codex-hook-hash-lookup.test.ts
 1 test-no-real-time-wait:src/main/computer/desktop-script-runtime-host.test.ts
@@ -210,7 +208,6 @@
 1 test-no-real-time-wait:src/main/git/worktrees/creation/worktree-configured-paths-concurrency.test.ts
 1 test-no-real-time-wait:src/main/git/worktrees/removal/remove-worktree-branch-cleanup.test.ts
 1 test-no-real-time-wait:src/main/git/worktrees/removal/worktree-prune-guard.test.ts
-1 test-no-real-time-wait:src/main/git/worktrees/removal/worktree-removal-large-tree.bench.test.ts
 1 test-no-real-time-wait:src/main/gitlab/work-item-details.test.ts
 1 test-no-real-time-wait:src/main/grok/grok-hook-stdin-no-eof.test.ts
 1 test-no-real-time-wait:src/main/ipc/created-worktree-reconciliation.test.ts
@@ -315,7 +312,6 @@
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/use-structured-agent-session-read.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/checks-panel/review-actions/use-checks-panel-generation.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/file-explorer/watching/file-explorer-watch-refresh-scheduler.test.ts
-1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/hosted-review/folder-checks/parent-pr-checks-refresh.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/source-control/review/use-pull-request-generation.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/sidebar/sidebar-feedback/SidebarFeedbackDialog.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/status-bar/NativeChatResumeStatusSegment.test.tsx
@@ -568,7 +564,6 @@
 1 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.queued-turn-order.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.unsent-message.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/settings/accounts/providers/GrokAccountsSection.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/sidebar/SidebarToolbar.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-agent-expansion-coupling.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-child-real-card.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/status-bar/workspace-space-worktree-row.test.tsx
@@ -648,7 +643,6 @@
 1 test-timeout-needs-reason:src/main/daemon/terminal-history-large-checkpoint-cold-restore.test.ts
 1 test-timeout-needs-reason:src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts
 1 test-timeout-needs-reason:src/main/git/worktrees/creation/worktree-preparation-cancel-latency.bench.test.ts
-1 test-timeout-needs-reason:src/main/git/worktrees/removal/worktree-removal-large-tree.bench.test.ts
 1 test-timeout-needs-reason:src/main/git/worktrees/removal/worktree-removal-real-git.test.ts
 1 test-timeout-needs-reason:src/main/hermes/hook-service.test.ts
 1 test-timeout-needs-reason:src/main/ipc/preflight-runnable-local-cli.test.ts
@@ -1242,7 +1236,7 @@
 3 test-no-wall-clock:src/main/runtime/orca-runtime-codex-idle-title-chat-address.test.ts
 3 test-no-wall-clock:src/main/runtime/orchestration-cli-subprocess.test.ts
 3 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/fleet-status-terminal-identity.test.ts
-3 test-no-wall-clock:src/main/runtime/workspace-layout-live-titles.test.ts
+2 test-no-wall-clock:src/main/runtime/workspace-layout-live-titles.test.ts
 3 test-no-wall-clock:src/main/star-nag/service-threshold-prompt.test.ts
 3 test-no-wall-clock:src/main/windows/windows-msys-job.win32.test.ts
 3 test-no-wall-clock:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts

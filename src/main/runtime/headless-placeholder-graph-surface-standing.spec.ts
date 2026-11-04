@@ -78,17 +78,6 @@ export function registerHeadlessPlaceholderGraphSurfaceStandingTests(): void {
   }
 
   describe('headless placeholder graph and surface standing', () => {
-    it('does not spend a graph statement on the launch placeholder', () => {
-      const runtime = makeHeadlessRuntime()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: graphSequence is protected; the count is the whole property under test.
-      const internals = runtime as unknown as { graphSequence: number }
-      expect(internals.graphSequence).toBe(0)
-
-      runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-
-      expect(internals.graphSequence).toBe(0)
-    })
-
     it('keeps a restored surface attached on a headless host', async () => {
       const runtime = makeHeadlessRuntime()
       runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })

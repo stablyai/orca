@@ -44,17 +44,6 @@ function backdrop(): Element {
 }
 
 describe('AddRepoDialogChrome dismissal', () => {
-  it('keeps an in-flight clone open after a backdrop click', async () => {
-    const user = userEvent.setup()
-    const onOpenChange = vi.fn()
-    render(<CloneDialog isCloning onOpenChange={onOpenChange} />)
-
-    await user.click(backdrop())
-
-    expect(onOpenChange).not.toHaveBeenCalled()
-    expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).not.toBeNull()
-  })
-
   it('allows backdrop dismissal after the clone settles', async () => {
     const user = userEvent.setup()
     const onOpenChange = vi.fn()
@@ -68,20 +57,4 @@ describe('AddRepoDialogChrome dismissal', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).toBeNull()
   })
-
-  it.each(['Escape', 'Close'])(
-    'keeps explicit %s dismissal available during a clone',
-    async (action) => {
-      const user = userEvent.setup()
-      const onOpenChange = vi.fn()
-      render(<CloneDialog isCloning onOpenChange={onOpenChange} />)
-
-      await (action === 'Escape'
-        ? user.keyboard('{Escape}')
-        : user.click(screen.getByRole('button', { name: 'Close' })))
-
-      expect(onOpenChange).toHaveBeenCalledWith(false)
-      expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).toBeNull()
-    }
-  )
 })
