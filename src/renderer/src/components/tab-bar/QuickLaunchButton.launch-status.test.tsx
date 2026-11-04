@@ -71,7 +71,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { ReviewNotesSendMenuContent } from '@/components/editor/ReviewNotesSendMenuContent'
+import { ReviewNotesSendMenuContent } from '@/components/editor/review-note-delivery/ReviewNotesSendMenuContent'
 import {
   QuickLaunchAgentMenuItems,
   ProjectedAgentMenuItems,

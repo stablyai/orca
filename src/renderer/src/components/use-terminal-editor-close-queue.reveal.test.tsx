@@ -3,7 +3,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type * as EditorAutosaveModule from './editor/editor-autosave'
+import type * as EditorAutosaveModule from './editor/autosave/editor-autosave'
 
 type FakeOpenFile = { id: string; worktreeId: string; isDirty: boolean; relativePath: string }
 const store = vi.hoisted((): { openFiles: FakeOpenFile[]; activeWorktreeId: string | null } => ({
@@ -34,7 +34,7 @@ vi.mock('./window-close-request-coordinator', () => ({
 vi.mock('@/lib/shutdown-checkpoint-failure-toast', () => ({
   showShutdownCheckpointFailureToast: vi.fn()
 }))
-vi.mock('./editor/editor-autosave', async (importActual) => ({
+vi.mock('./editor/autosave/editor-autosave', async (importActual) => ({
   ...(await importActual<typeof EditorAutosaveModule>()),
   requestEditorSaveQuiesce: vi.fn(async () => () => {})
 }))
@@ -43,7 +43,7 @@ const { useTerminalEditorCloseFoundation } = await import('./use-terminal-editor
 const { useTerminalEditorCloseQueue } = await import('./use-terminal-editor-close-queue')
 const { useTerminalEditorCloseDialogActions } =
   await import('./use-terminal-editor-close-dialog-actions')
-const { requestEditorFileClose } = await import('./editor/editor-autosave')
+const { requestEditorFileClose } = await import('./editor/autosave/editor-autosave')
 
 const setActiveWorktree = vi.fn()
 const setActiveFile = vi.fn()

@@ -2879,7 +2879,6 @@
           "ae3b00ca82": "Configurar tarefas do GitHub",
           "ff92d15436": "O Orca vai avisá-lo quando os agentes terminarem ou precisarem de ajuda.",
           "b054332836": "Configurar notificações",
-          "04ae28d8ca": "Escolha a aparência que você vai encarar por horas.",
           "f396db9f20": "Deixe com a sua cara",
           "322fc50a18": "O Orca funciona com todo agente de CLI. Escolha o que você vai usar mais. Troque quando quiser.",
           "198b148b3c": "Escolha seu agente padrão",
@@ -3105,7 +3104,6 @@
             "5c938d39ac": "sem",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Nenhuma outra conta",
             "d450654fa2": "Conta do Claude",
             "11e2354daf": "Runtime de uso do Claude",
             "3dd7ddfae1": "Abrir detalhes do Claude e alternador de conta",
@@ -19992,7 +19990,32 @@
           "system": "Seguir o sistema",
           "dark": "Suave para os olhos",
           "light": "Claro e nítido"
-        }
+        },
+        "looks": {
+          "activeNow": "agora",
+          "browsePlugins": "Explorar plugins",
+          "browseThemePlugins": "Explorar plugins de temas",
+          "colorMode": "Modo de cor",
+          "colorModeCaption": "Claro, escuro ou igual ao sistema.",
+          "darkLook": "Visual escuro",
+          "darkLooks": "Visuais escuros",
+          "lightLook": "Visual claro",
+          "lightLooks": "Visuais claros",
+          "moreThemes": "Mais temas",
+          "next": "Mais visuais",
+          "orcaDark": "Orca escuro",
+          "orcaLight": "Orca claro",
+          "pluginsHint": "Há mais temas disponíveis como plugins.",
+          "previous": "Visuais anteriores",
+          "showsWhenDark": "Aparece quando o sistema está no modo escuro",
+          "showsWhenLight": "Aparece quando o sistema está no modo claro",
+          "slotLabel": "Visual a editar",
+          "sourceBuiltIn": "Integrado",
+          "sourceCommunity": "Paleta do terminal",
+          "themes": "Tema",
+          "themesCaption": "Opcional. Vá além com temas do app e paletas do terminal."
+        },
+        "subtitle": "Escolha claro ou escuro e, se quiser, um tema. Altere ambos quando quiser em Configurações."
       },
       "integrations": {
         "capabilities": {
