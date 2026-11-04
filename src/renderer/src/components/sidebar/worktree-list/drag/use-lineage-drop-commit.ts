@@ -7,10 +7,10 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import { isEligibleWorktreeParent } from '../../workspace-actions/parenting/worktree-parent-candidates'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
-import { getReorderedWorktreeIdsToUnnest } from '../../worktree-lineage-drag-drop'
+import { getReorderedWorktreeIdsToUnnest } from './worktree-lineage-drag-drop'
 import { unnestWorktrees } from '../../workspace-actions/parenting/worktree-unnest'
 import { getWorktreeIdFromHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { WorktreeDragGroup } from '../../worktree-manual-order'
+import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>

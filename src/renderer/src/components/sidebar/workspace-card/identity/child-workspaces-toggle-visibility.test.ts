@@ -11,16 +11,16 @@ import {
   getRenderedLineageChipKeys,
   resolveChildWorkspacesToggleGroupKey
 } from './child-workspaces-toggle-target'
-import { computeRenderedSidebarRows } from '../../rendered-sidebar-worktree-order'
+import { computeRenderedSidebarRows } from '../../worktree-list/listing/rendered-sidebar-worktree-order'
 import { useSidebarWorktreeSelection } from '../../worktree-list/navigation/use-selection'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import {
-  computeVisibleWorktrees,
   setVisibleWorktreeIds,
   setVisibleWorktreeShortcutTargets
-} from '../../visible-worktrees'
-import { buildVisibleWorktreeOptionsFromState } from '../../visible-worktree-options-from-state'
-import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
+} from '../../worktree-list/listing/visible-worktrees'
+import { computeVisibleWorktrees } from '../../worktree-list/listing/compute-visible-worktrees'
+import { buildVisibleWorktreeOptionsFromState } from '../../worktree-list/listing/visible-worktree-options-from-state'
+import { repo, worktree } from '../../worktree-list/grouping/worktree-list-groups-test-fixtures'
 
 const initialState = useAppStore.getInitialState()
 const parent: Worktree = { ...worktree, id: 'parent', instanceId: 'parent-instance' }

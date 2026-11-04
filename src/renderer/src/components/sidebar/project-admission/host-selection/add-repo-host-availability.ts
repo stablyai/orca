@@ -1,4 +1,4 @@
-import type { SidebarHostOption } from '../../sidebar-host-options'
+import type { SidebarHostOption } from '../../worktree-list/controls/sidebar-host-options'
 
 export function canSelectAddRepoHost(
   host: Pick<SidebarHostOption, 'health' | 'kind' | 'compatibility'>
