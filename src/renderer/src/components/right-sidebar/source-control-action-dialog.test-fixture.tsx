@@ -37,6 +37,7 @@ import {
   type RenderHookResult
 } from '@testing-library/react'
 import { expect, vi, type Mock } from 'vitest'
+import type { ComponentProps } from 'react'
 
 export type SaveAction = NonNullable<SourceControlAgentActionDialogProps['onSaveAgentDefault']>
 
@@ -170,7 +171,15 @@ export async function pickDialogAgent(label: string, terminal: boolean) {
   fireEvent.click(row)
 }
 
-export function mountTextGenerationDialog(customAgentCommand = '') {
+type TextGenerationDialogProps = ComponentProps<typeof SourceControlTextGenerationDialog>
+
+export function mountTextGenerationDialog(customAgentCommand = ''): {
+  view: RenderResult
+  repo: Repo
+  onGenerate: Mock<TextGenerationDialogProps['onGenerate']>
+  onSaveDefaults: Mock<TextGenerationDialogProps['onSaveDefaults']>
+  onOpenChange: Mock<TextGenerationDialogProps['onOpenChange']>
+} {
   const settings = getDefaultSettings('/tmp/source-control-shared-picker')
   settings.sourceControlAi = {
     ...settings.sourceControlAi!,
