@@ -4,6 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../../execution-host/project-runtime-git-options'
+import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
 import { discardRepoPreparations } from './worktree-create-preparation-pool'
 import { preparationPathKey } from './worktree-create-preparation-claim'
 import { preparationHostKey } from './worktree-preparation-discard-retry'
@@ -12,7 +13,7 @@ import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-
 
 /** Removal is the last point Orca knows this repo, so reclaim its armed and crash-left checkouts now. */
 export function releaseWorktreeCreatePreparationsForRepo(
-  store: Parameters<typeof getLocalProjectWorktreeGitOptions>[0],
+  store: ProjectRuntimeResolutionStore,
   repo: Repo
 ): void {
   if (getRepoRoutingConnectionId(repo) || isFolderRepo(repo)) {

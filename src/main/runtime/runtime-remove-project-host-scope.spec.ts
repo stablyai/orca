@@ -96,27 +96,25 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
   describe('repo.rm while a workspace create is open', () => {
     it('refuses the host row whose create is open, not its same-id twin', async () => {
       const { runtime, repos, removeProjectForHost } = createRuntime()
-      let finishRemoteCreate!: () => void
-      const remoteCreate = withProjectWorktreeCreate(
-        repos[1],
-        () => new Promise<void>((resolve) => (finishRemoteCreate = resolve))
-      )
+      const holdCreate = (repo: Repo) => {
+        let finish!: () => void
+        const create = withProjectWorktreeCreate(repo, () => new Promise<void>((r) => (finish = r)))
+        return () => {
+          finish()
+          return create
+        }
+      }
 
+      const finishRemoteCreate = holdCreate(repos[1])
       await expect(runtime.removeProject('path:/remote/dup')).rejects.toMatchObject({
         code: 'worktree_create_in_progress'
       })
       expect(removeProjectForHost).not.toHaveBeenCalled()
+      await finishRemoteCreate()
 
-      finishRemoteCreate()
-      await remoteCreate
-      let finishLocalCreate!: () => void
-      const localCreate = withProjectWorktreeCreate(
-        repos[0],
-        () => new Promise<void>((resolve) => (finishLocalCreate = resolve))
-      )
+      const finishLocalCreate = holdCreate(repos[0])
       await runtime.removeProject('path:/remote/dup')
-      finishLocalCreate()
-      await localCreate
+      await finishLocalCreate()
       expect(repos.map((repo) => repo.path)).toEqual(['/laptop/dup'])
     })
   })
