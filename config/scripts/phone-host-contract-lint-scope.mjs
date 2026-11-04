@@ -35,12 +35,12 @@ export const CONTRACT_LINT_TOOL_FILES = new Set([
 ])
 
 // Inputs that change the declarations without a static import edge: the phone project (both its
-// producer and the consumer live there), the host producer's include, and ambient declarations.
+// producer and the consumer live there), the host producer's include, and ambient or native-addon declarations.
 function isDirectInput(file, bodies) {
   return (
     file.startsWith('mobile/') ||
     file.startsWith('src/shared/') ||
-    (file.startsWith('src/') && file.endsWith('.d.ts')) ||
+    ((file.startsWith('src/') || file.startsWith('native/')) && file.endsWith('.d.ts')) ||
     bodies.has(file) ||
     CONTRACT_LINT_TOOL_FILES.has(file)
   )

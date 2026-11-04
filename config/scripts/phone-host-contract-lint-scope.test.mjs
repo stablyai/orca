@@ -12,6 +12,11 @@ describe('phone/host contract lint scope', () => {
     { name: 'a change the producers reach', files: [RENDERER_OUTSIDE, IN_CLOSURE], run: true },
     { name: 'an ambient declaration', files: ['src/types/build-constants.d.ts'], run: true },
     {
+      name: 'a native addon declaration',
+      files: ['native/windows-security/index.d.ts'],
+      run: true
+    },
+    {
       name: 'a contract body',
       files: ['src/main/codex/codex-url-opener-contract.test.ts'],
       run: true
