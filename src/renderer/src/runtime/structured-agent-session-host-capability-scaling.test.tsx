@@ -33,8 +33,8 @@ import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared
 import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import * as runtimeRpc from './runtime-rpc-client'
-import { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   useStructuredAgentSessionOwnPermissionState,
   useStructuredAgentSessionHostEditsQueuedSkills

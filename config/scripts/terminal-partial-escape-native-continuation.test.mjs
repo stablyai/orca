@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
-import { advancePartialEscapeTail } from '../../src/shared/terminal-partial-escape-tail'
+import { advancePartialEscapeTail } from '../../src/shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 const require = createRequire(import.meta.url)
 const { Terminal } = require(process.env.ORCA_PARTIAL_ESCAPE_HEADLESS ?? '@xterm/headless')

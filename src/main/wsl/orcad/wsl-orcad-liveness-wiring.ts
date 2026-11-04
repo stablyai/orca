@@ -3,8 +3,8 @@ import {
   probeThenWatchWslOrcadBridges,
   type WslOrcadBridgeActivity
 } from './wsl-orcad-bridge-activity'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
-import { parsePairingCode } from '../../../shared/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS

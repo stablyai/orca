@@ -5,9 +5,9 @@ import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
-} from '../../../../../shared/pr-comment-audience'
+} from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
-import { groupPRComments } from '../../../../../shared/pr-comment-groups'
+import { groupPRComments } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import {
   getCommentReplyTargetCandidates,
   resolveCommentReplyTarget

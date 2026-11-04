@@ -73,6 +73,8 @@ export type AgentModelCatalogReadParams = {
     resolve: () => Promise<string | null | { path: string | null; identity: unknown }>
   }
   sessionId?: string
+  /** Capability observation only; never changes the chat's selected input. */
+  selectedModel?: string
   /** Where a new chat would run; null when one was named but is not a local directory. */
   workspacePath?: string | null
   /** Answer for the folder the named session runs in, as its new-chat read did. */

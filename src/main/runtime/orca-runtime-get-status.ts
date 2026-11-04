@@ -7,7 +7,7 @@ import {
   runtimeBrowserCommandsFactorySupportsClientHosting,
   runtimeBrowserUnavailableCause
 } from './runtime-browser-commands-factory'
-import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identity-mode-store'
+import { isBrowserIdentityModeStoreInitialized } from '../browser/identity/browser-identity-mode-store'
 import { servesLocalWslMigrationSource } from '../orcad/orcad-migration-wsl-destination'
 import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { advertisedOrcadMigrationDestinationCapabilities } from '../orcad/orcad-migration-destination-capabilities'
@@ -23,10 +23,12 @@ import {
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
-  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
+  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
+import {
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+} from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   type RuntimeDegradation,
   type RuntimeStatus,
@@ -306,6 +308,8 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyControl
     wakeFolderRepoGitUpgradeWatch()
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })
+    // Automation owners are projected from projects, so open lists must re-read them (STA-12812).
+    this.notifyAutomationsChanged({ reason: 'definition' })
   }
 
   // Automation/IPC writes need a public stream entry; older clients drop this unknown event without negotiation.

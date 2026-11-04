@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { capTerminalScrollbackSessionBuffer } from '../../../../shared/workspace-session-terminal-buffers'
-import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal/replay/terminal-scrollback-limits'
 import { clampUtf8Tail } from './pty-eager-buffer-clamp'
 import { PtyShutdownOutputQueue } from './pty-shutdown-output-queue'
 import { DeferredReattachLiveDataQueue } from './deferred-reattach-live-data-queue'
@@ -85,7 +85,9 @@ describe('capped terminal buffer retention', () => {
 
     expect(errors[0]).toHaveLength(COUNT)
     expect(
-      errors[0].every((text, index) => text.length === 4000 && text.endsWith(`:${index}`))
+      errors[0].every(
+        ({ message }, index) => message.length === 4000 && message.endsWith(`:${index}`)
+      )
     ).toBe(true)
     expect(growth).toBeLessThan(PARENT_CHARS)
   })

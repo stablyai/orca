@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-launch-runtime-capability'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import { PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'

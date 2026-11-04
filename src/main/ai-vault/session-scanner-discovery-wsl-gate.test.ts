@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Dirent } from 'node:fs'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 
 const fsMocks = vi.hoisted(() => ({ readdir: vi.fn(), stat: vi.fn() }))
 

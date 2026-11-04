@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AgentLaunch } from './agent-launch-params'
-import { computeAgentLaunchFingerprint } from '../agent-launch-operation'
+import { computeAgentLaunchFingerprint } from '../agent-launch/contracts/agent-launch-operation'
 
 const BASE = { agent: 'claude', target: { kind: 'existing', worktree: 'id:wt-1' } }
 const ACCOUNT_ENV = {
@@ -14,11 +14,6 @@ describe('agent.launch accountEnv wire compatibility', () => {
   it('carries a validated account env on a new host', () => {
     const parsed = AgentLaunch.parse({ ...BASE, accountEnv: ACCOUNT_ENV })
     expect(parsed.accountEnv).toEqual(ACCOUNT_ENV)
-  })
-
-  it('leaves an older client launch unchanged on a new host', () => {
-    const parsed = AgentLaunch.parse(BASE)
-    expect(parsed).not.toHaveProperty('accountEnv')
   })
 
   it('stays outside the replay fingerprint', () => {

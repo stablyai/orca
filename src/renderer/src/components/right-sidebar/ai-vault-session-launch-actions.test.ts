@@ -6,7 +6,7 @@ import type * as ForkStartup from '@/lib/ai-vault-session-fork-startup'
 import { cleanup, render, fireEvent, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrchestrationPartyLocationResult } from '../../../../shared/orchestration-caller-status'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
 
 const mocks = vi.hoisted(() => ({

@@ -1,4 +1,7 @@
-import type { AiVaultScanIssue, AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type {
+  AiVaultScanIssue,
+  AiVaultSession
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { RpcClient } from '../transport/rpc-client'
 
 export type AgentHistoryScreenState =

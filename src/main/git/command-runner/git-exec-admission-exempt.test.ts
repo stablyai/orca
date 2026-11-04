@@ -10,8 +10,8 @@ vi.mock('node:child_process', async (importOriginal) => ({
 }))
 
 import { gitExecFileAsync } from './git-exec-file'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
 import {
-  GitAdmissionScheduler,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests
 } from './git-subprocess-admission'

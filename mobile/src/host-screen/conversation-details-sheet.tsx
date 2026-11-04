@@ -37,7 +37,7 @@ export function ConversationDetailsSheet({
           <Text style={styles.title}>{details.title}</Text>
           <Text style={styles.detail} selectable>
             {[
-              `${copy.host}: ${details.workspace?.hostContextLabel ?? hostTitle}`,
+              `${copy.host}: ${details.workspaceContext?.hostContextLabel ?? hostTitle}`,
               details.workspace
                 ? `${copy.workspace}: ${details.workspace.displayName}\n${details.workspace.path}`
                 : details.history?.cwd,

@@ -3,19 +3,22 @@ import {
   type RelayHookAdmissionOptions
 } from './agent-hook-event-admission'
 import { admitRelayOpenCodeTui } from './agent-hook-request'
-import { checkHookOwnerPresence } from '../shared/agent-hook-owner-presence'
-import type { HookRootEvidenceReader } from '../shared/hook-process-root-evidence'
-import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import { checkHookOwnerPresence } from '../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import type { HookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import { normalizeHookPayload } from '../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import { isAgentHookSource, type AgentHookSource } from '../shared/agent-hook-relay'
+import {
+  isAgentHookSource,
+  type AgentHookSource
+} from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   buildSpoolHookBody,
   drainAgentHookSpoolAsync,
   type SpoolRecord
-} from '../shared/agent-hook-spool'
+} from '../shared/agent-hook-listener/transport/agent-hook-spool'
 import { hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
-import { hookRootAnswerDeadline } from '../shared/hook-root-attempts'
+import { hookRootAnswerDeadline } from '../shared/agent-hook-listener/presence/hook-root-attempts'
 import type { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
 
 type RelayHookSpoolHost = {

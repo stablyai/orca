@@ -13,13 +13,13 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import NewWorkspaceComposerModal from './NewWorkspaceComposerModal'
+import { agentPickerChoiceSeeds } from '../../../shared/agent-launch/picker/agent-launch-picker-defaults'
 import {
-  agentPickerChoiceSeeds,
   agentPickerDraft,
   type AgentPickerDraft,
   type AgentPickerEntry
-} from '../../../shared/agent-launch-picker'
-import { applyAgentPickerEdit } from '../../../shared/agent-launch-picker-edits'
+} from '../../../shared/agent-launch/picker/agent-launch-picker'
+import { applyAgentPickerEdit } from '../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import * as composerDecisions from '@/hooks/composer-state/composer-decisions'
 import { useFolderSubmitOrchestration } from '@/hooks/composer-state/folder-submit-orchestration'
 import {

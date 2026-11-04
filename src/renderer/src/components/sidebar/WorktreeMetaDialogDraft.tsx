@@ -24,7 +24,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 import { findIndexedRepoOwnerForHost } from '@/lib/worktree-runtime-owner-index'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import type { WorkspaceAttachment } from '../../../../shared/worktree/types'
 import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
 import { WorktreeLinkedItemsField } from './WorktreeLinkedItemsField'

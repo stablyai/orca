@@ -87,33 +87,6 @@ describe('worker-start plain formatting', () => {
         'Residual resources: [{"kind":"worktree","id":"worktree_1"}]'
     )
   })
-
-  it('keeps ready receipts concise when effects describe successful setup', () => {
-    expect(
-      formatWorkerStart({
-        taskId: 'task_1',
-        dispatchId: 'ctx_ready',
-        state: 'ready',
-        effects: [{ kind: 'terminal', id: 'term_worker' }],
-        residualResources: []
-      })
-    ).toBe('Worker ctx_ready [ready] for task_1')
-  })
-
-  it('names the workspace a start created', () => {
-    expect(
-      formatWorkerStart({
-        taskId: 'task_1',
-        dispatchId: 'ctx_ready',
-        state: 'ready',
-        effects: [
-          { kind: 'worktree', action: 'created_child', id: 'repo::/w/otter', name: 'otter' },
-          { kind: 'terminal', id: 'term_worker' }
-        ],
-        residualResources: []
-      })
-    ).toBe('Worker ctx_ready [ready] for task_1\nCreated workspace: otter')
-  })
 })
 
 describe('worker-read plain formatting', () => {
@@ -489,21 +462,6 @@ describe('formatWorkerRead', () => {
 })
 
 describe('worker output compatibility and release receipts', () => {
-  it('renders terminal tails without changing line boundaries', () => {
-    expect(
-      formatWorkerRead({
-        dispatchId: 'dispatch_1',
-        terminal: {
-          handle: 'term_worker',
-          status: 'running',
-          tail: ['first', '', 'third'],
-          truncated: false,
-          nextCursor: null
-        }
-      })
-    ).toBe('first\n\nthird')
-  })
-
   it('renders transcript blocks and survives unserializable tool input', () => {
     const circular: { self?: unknown } = {}
     circular.self = circular

@@ -43,3 +43,33 @@ it.each<{ visibleHostIds: ExecutionHostId[] | null; expected: readonly Execution
     expect(projects).toHaveLength(expected.length * 2)
   }
 )
+
+it('uses phone-owned host context for legacy rows without trusting same-named wire fields', () => {
+  const workspace = {
+    ...conversationWorkspace({
+      hostId: undefined,
+      agents: [conversationAgent({ paneKey: 'chat:remote' })]
+    }),
+    hostContextHostId: 'local',
+    hostContextHealthLabel: 'healthy'
+  }
+  const context = {
+    hostContextHostId: 'ssh:one',
+    hostContextLabel: 'Remote development',
+    hostContextHealthLabel: 'Disconnected'
+  } as const
+  const [project] = buildProjectConversations({
+    workspaces: [workspace],
+    hostContextOf: () => context,
+    visibleHostIds: ['ssh:one'],
+    history: [],
+    repos: [],
+    tabs: new Map(),
+    now: 1000,
+    untitled: 'New conversation'
+  })
+  expect(project?.hostId).toBe('ssh:one')
+  expect(project?.hostLabel).toBe('Remote development')
+  expect(project?.data[0]?.workspace).toBe(workspace)
+  expect(project?.data[0]?.workspaceContext).toBe(context)
+})

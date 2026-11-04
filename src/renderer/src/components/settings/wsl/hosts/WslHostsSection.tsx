@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
-} from '../../../../../../shared/runtime-environments'
+} from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'

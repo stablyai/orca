@@ -1,6 +1,6 @@
 import { AlertTriangle, GitBranch, Server, Trash2 } from 'lucide-react'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { cn } from '@/lib/utils'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'

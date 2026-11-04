@@ -12,7 +12,7 @@ import {
   getPRFileContentsRenderLimit,
   getPRFileDiffResult
 } from '@/components/github/pr-file-diff-mapping'
-import type { GitDiffResult } from '../../../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../../../shared/git/diff/git-diff-compare-types'
 import type {
   GitHubOwnerRepo,
   GitHubPRFile,

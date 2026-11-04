@@ -10,7 +10,7 @@ import {
   captureOpenCode2SqliteSession
 } from './session-scanner-opencode2-sqlite'
 import { withFullFirstUserPromptCapture } from '../../session-scanner-first-user-prompt-capture'
-import type { AiVaultScanIssue } from '../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 let tempDirs: string[] = []
 

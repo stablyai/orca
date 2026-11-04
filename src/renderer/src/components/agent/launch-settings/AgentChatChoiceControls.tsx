@@ -1,5 +1,5 @@
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
 import { useManagedRuntimeInstall } from '@/runtime/use-managed-runtime-install'

@@ -9,8 +9,8 @@ import {
   rollbackManagedOrcadEnvironment,
   updateManagedOrcadEnvironment
 } from '../../ssh/orcad-runtime-maintenance'
-import { getOrcadSshDeployment } from '../../../shared/runtime-environments'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { getOrcadSshDeployment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type {
   OrcadManagedRestartResult,
   OrcadManagedStaleLockReclaimRequest,

@@ -7,7 +7,7 @@ import {
   setVisibleWorktreeShortcutTargets
 } from './visible-worktrees'
 import type { AppState } from '@/store/types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'

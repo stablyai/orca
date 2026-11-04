@@ -2,23 +2,25 @@ import { useRef } from 'react'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   SourceControlAiSettingsPatch,
   SourceControlAiSettings
-} from '../../../../../shared/source-control-ai-types'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
-  normalizeSourceControlAiSettings,
   readSourceControlAiModelChoiceForHost,
-  selectSourceControlAiModelChoiceForHost
-} from '../../../../../shared/source-control-ai'
-import { SOURCE_CONTROL_TEXT_ACTION_IDS } from '../../../../../shared/source-control-ai-actions'
+  selectSourceControlAiModelChoiceForHost,
+  withDiscoveredModels
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
+import { SOURCE_CONTROL_TEXT_ACTION_IDS } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+
 import {
   CUSTOM_AGENT_ID,
   isCustomAgentId,
   type CommitMessageModelCapability
-} from '../../../../../shared/commit-message-agent-spec'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/commit-message-host-key'
+} from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
 import { getRuntimeGitScope } from '../../../runtime/runtime-git-client-context'
 import { useAppStore } from '../../../store/index'
 import { CustomAgentCommandField } from './CustomAgentCommandField'
@@ -63,20 +65,7 @@ export function mergeDiscoveredModelsIntoCommitMessageConfig(
       : currentChoice
   return {
     ...config,
-    discoveredModelsByAgent:
-      hostKey === 'local'
-        ? {
-            ...config.discoveredModelsByAgent,
-            [agentId]: models
-          }
-        : config.discoveredModelsByAgent,
-    discoveredModelsByAgentByHost: {
-      ...config.discoveredModelsByAgentByHost,
-      [hostKey]: {
-        ...config.discoveredModelsByAgentByHost?.[hostKey],
-        [agentId]: models
-      }
-    },
+    ...withDiscoveredModels(config, agentId, models, hostKey),
     selectedModelByAgent: selectedModelChoice.selectedModelByAgent ?? config.selectedModelByAgent,
     selectedModelByAgentByHost: selectedModelChoice.selectedModelByAgentByHost
   }

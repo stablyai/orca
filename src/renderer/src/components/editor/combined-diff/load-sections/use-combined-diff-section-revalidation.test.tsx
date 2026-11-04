@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 import type { OpenFile } from '@/store/slices/editor'
 import type { FsChangedPayload } from '../../../../../../shared/filesystem-entry-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { useCombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { useCombinedDiffSectionRevalidation } from './use-combined-diff-section-revalidation'
 

@@ -1,9 +1,9 @@
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   canonicalSourceControlActionSelection,
   type SelectedSourceControlActionRecipe
-} from '../../../../shared/source-control-action-selection'
+} from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { Info, RefreshCw, RotateCcw, Settings, Sparkles, TriangleAlert } from 'lucide-react'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { sourceControlPickerDraft } from '../../lib/source-control-agent-launch-picker'
@@ -19,11 +19,11 @@ import {
 } from '@/components/ui/select'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
+import type { SourceControlLaunchActionId } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { SourceControlAiWriteTarget } from '../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
 import type {

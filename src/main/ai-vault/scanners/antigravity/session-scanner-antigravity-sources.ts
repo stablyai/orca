@@ -2,7 +2,7 @@ import { completeAntigravityTranscriptPairs } from './antigravity-transcript-can
 import { ANTIGRAVITY_HISTORY_ROOTS } from '../../../../shared/antigravity-session-origin'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { AiVaultScanIssue } from '../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   isAntigravityTranscriptPath,
   shouldDescendAntigravityBrainDirectory

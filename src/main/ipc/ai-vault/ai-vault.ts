@@ -15,7 +15,7 @@ import {
   cancelledAiVaultListResult,
   mergeAiVaultListResults
 } from '../../ai-vault/session-list-results'
-import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
+import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
@@ -24,7 +24,7 @@ import {
   type AiVaultListResult,
   type AiVaultSubagentListArgs,
   type AiVaultSubagentListResult
-} from '../../../shared/ai-vault-types'
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { handleAiVaultGetFirstUserPrompt } from '../../ai-vault/session-first-user-prompt-handler'
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
 import {
@@ -47,11 +47,11 @@ import {
   resetAiVaultHostLegCacheForTests,
   scanHostLegWithCache
 } from './ai-vault-host-leg-cache'
-import { requestedAiVaultSessionDepth } from '../../../shared/ai-vault-session-depth'
+import { requestedAiVaultSessionDepth } from '../../../shared/ai-vault/scanning/ai-vault-session-depth'
 import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
-} from '../../../shared/ai-vault-session-title'
+} from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import {
   resolveAiVaultSessionTitlesByHost,
   type RuntimeAiVaultSessionTitleResolver

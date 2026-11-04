@@ -24,7 +24,8 @@ import {
   deriveNotesSendAgentTargets,
   type NotesSendAgentTarget
 } from '@/lib/notes-send-agent-targets'
-import { agentKindForAgentType, formatAgentTypeLabel } from '@/lib/agent-status'
+import { agentKindForAgentType } from '@/lib/agent-status'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { track } from '@/lib/telemetry'
 import { useNow } from '@/hooks/use-now'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -32,7 +33,7 @@ import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timesta
 import { selectLivePtyIdsForWorktree } from '@/components/sidebar/worktree-card-status-inputs'
 import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
-import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'

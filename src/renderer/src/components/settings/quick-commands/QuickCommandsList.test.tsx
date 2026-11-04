@@ -7,7 +7,7 @@ import type * as I18nModule from '@/i18n/i18n'
 import type {
   TerminalCommandQuickCommand,
   TerminalQuickCommand
-} from '../../../../../shared/terminal-quick-command-types'
+} from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { QuickCommandsList } from './QuickCommandsList'
 
 vi.mock('@/i18n/i18n', async (importOriginal) => {

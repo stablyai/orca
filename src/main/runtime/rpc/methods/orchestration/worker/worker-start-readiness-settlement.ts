@@ -5,7 +5,7 @@ import {
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
-import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
 import { reportedWorkerOutcome } from './worker-start-receipt'
 import { chatAssigneeSessionId } from '../../../../orchestration/chat-assignee'

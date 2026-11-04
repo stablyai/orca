@@ -1,8 +1,6 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import {
-  getEnvironmentStorePath,
-  listEnvironments
-} from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getEnvironmentStorePath } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import type { Store } from '../../persistence/loading-store/store'
 import { watchFileAcrossReplacement } from '../filesystem/watcher-process/rebinding-file-watch'
 

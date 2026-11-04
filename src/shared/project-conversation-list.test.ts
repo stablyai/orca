@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { projectConversations, projectConversationTitle } from './project-conversation-list'
 import { conversationPreferenceKey } from './conversation-navigation-preferences'
-import type { AiVaultSession } from './ai-vault-types'
+import type { AiVaultSession } from './ai-vault/contracts/ai-vault-types'
 const row = (id: string, date: string): AiVaultSession => ({
   id,
   sessionId: id,

@@ -1,6 +1,10 @@
-import { toAiVaultProjectKey } from '../../../src/shared/ai-vault-project-key'
+import type { WorktreeHostContextOf } from '../worktree/worktree-host-context-labels'
+import { toAiVaultProjectKey } from '../../../src/shared/ai-vault/scanning/ai-vault-project-key'
 import { createConversationWorkspaceMatcher } from '../../../src/shared/conversation-workspace-matcher'
-import { folderGroupKey, folderLabel } from '../../../src/shared/ai-vault-session-filters'
+import {
+  folderGroupKey,
+  folderLabel
+} from '../../../src/shared/ai-vault/session-display/ai-vault-session-filters'
 import {
   conversationPreferenceKey,
   conversationProjectVisibilityKey,
@@ -30,6 +34,7 @@ export type { ConversationRow, ConversationProject } from './conversation-projec
 
 export function buildProjectConversations(args: {
   workspaces: readonly Worktree[]
+  hostContextOf?: WorktreeHostContextOf
   repos: readonly SectionRepo[]
   tabs: ReadonlyMap<string, readonly ConversationTab[]>
   history: readonly ConversationHistory[]
@@ -43,7 +48,8 @@ export function buildProjectConversations(args: {
 }): ConversationProject[] {
   const projects = new Map<string, ConversationProject>()
   const ownerKeys = new Map<string, string | null>()
-  const hostOf = (workspace: Worktree) => workspace.hostId ?? workspace.hostContextHostId ?? 'local'
+  const hostOf = (workspace: Worktree) =>
+    workspace.hostId ?? args.hostContextOf?.(workspace)?.hostContextHostId ?? 'local'
   const visibleHosts = args.visibleHostIds ? new Set(args.visibleHostIds) : null
   const workspaces = visibleHosts
     ? args.workspaces.filter((workspace) => visibleHosts.has(hostOf(workspace)))
@@ -110,8 +116,8 @@ export function buildProjectConversations(args: {
       }
       projects.set(key, project)
     }
-    project.hostLabel ??= workspace.hostContextLabel
-    project.hostHealthLabel ??= workspace.hostContextHealthLabel
+    project.hostLabel ??= args.hostContextOf?.(workspace)?.hostContextLabel
+    project.hostHealthLabel ??= args.hostContextOf?.(workspace)?.hostContextHealthLabel
     project.workspaces.push(workspace)
     const agents = (workspace.agents ?? []).filter((agent) => !agent.parentPaneKey)
     const used = new Set<string>()
@@ -154,6 +160,7 @@ export function buildProjectConversations(args: {
         status: agent ? agentDotState(agent, args.now) : 'idle',
         at: agent ? agentRowTimeAt(agent) : 0,
         workspace,
+        workspaceContext: args.hostContextOf?.(workspace),
         paneKey,
         history: saved,
         preferenceKey: saved
@@ -184,6 +191,7 @@ export function buildProjectConversations(args: {
         status: agentDotState(agent, args.now),
         at: agentRowTimeAt(agent),
         workspace,
+        workspaceContext: args.hostContextOf?.(workspace),
         paneKey: agent.paneKey
       })
     }
@@ -270,6 +278,7 @@ export function buildProjectConversations(args: {
       status: sessionId ? 'saved' : 'transcript',
       at: Date.parse(session.updatedAt ?? session.modifiedAt) || 0,
       workspace,
+      workspaceContext: workspace ? args.hostContextOf?.(workspace) : undefined,
       executionHostId: session.executionHostId,
       history: session,
       preferenceKey: conversationPreferenceKey({

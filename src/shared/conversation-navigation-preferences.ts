@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import type { AiVaultSession } from './ai-vault-types'
-import { sessionFileExecutionNamespace } from './ai-vault-scope-cwd-match'
+import type { AiVaultSession } from './ai-vault/contracts/ai-vault-types'
+import { sessionFileExecutionNamespace } from './ai-vault/scanning/ai-vault-scope-cwd-match'
 import { antigravitySessionOrigin } from './antigravity-session-origin'
 
 export const CONVERSATION_NAVIGATION_CAPABILITY = 'ui.conversationPreferences.v1'

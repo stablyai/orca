@@ -1,11 +1,11 @@
 import {
   parseTerminalOscColorQuery,
   type TerminalOscColorQueryParseResult
-} from './terminal-osc-color-reply'
+} from './terminal/protocol/queries/terminal-osc-color-reply'
 import {
   parseTerminalOscAppearanceQuery,
   type TerminalOscAppearanceQueryParseResult
-} from './terminal-osc-appearance-query'
+} from './terminal/protocol/queries/terminal-osc-appearance-query'
 
 const KITTY_QUERY = '\x1b[?u'
 export const COLOR_SCHEME_QUERY = '\x1b[?996n'

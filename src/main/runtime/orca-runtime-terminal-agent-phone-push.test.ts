@@ -1,6 +1,6 @@
 // Exercise windowless phone pushes under Node, as orcad runs them.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_DONE_QUIET_MS } from '../../shared/agent-transitions'
+import { AGENT_DONE_QUIET_MS } from '../../shared/agent-status/lifecycle/agent-transitions'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { getDefaultNotificationSettings } from '../../shared/notification-settings-defaults'
 import { AgentHookServer } from '../agent-hooks/server'

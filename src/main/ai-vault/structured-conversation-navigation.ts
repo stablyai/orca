@@ -1,6 +1,6 @@
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isGenericConversationTitle } from '../../shared/project-conversation-list'
-import { conversationNameSeed } from '../../shared/conversation-name-generation'
+import { conversationNameSeed } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { structuredConversationJournalPreview } from './structured-conversation-journal-preview'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
@@ -11,7 +11,7 @@ import {
   aiVaultSessionRecoverableSignalCount,
   type AiVaultListResult,
   type AiVaultSession
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { structuredAgentRuntimeMetadata } from '../runtime/structured-agent-runtime-metadata'

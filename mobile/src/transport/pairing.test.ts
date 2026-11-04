@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodePairingUrl, extractPairingCodeFromUrl, parsePairingCode } from './pairing'
-import type { PairingOffer } from './types'
-import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../src/shared/mobile-pairing-protocol-limits'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../src/shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
 
 const offer: PairingOffer = {
   v: 2,

@@ -1,6 +1,9 @@
 import type { JSX, ReactNode } from 'react'
 import { Files, GitBranch, ListChecks, PanelRight } from 'lucide-react'
-import { AI_VAULT_AGENT_LABELS, AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
+import {
+  AI_VAULT_AGENT_LABELS,
+  AI_VAULT_AGENTS
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   getLocalExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID

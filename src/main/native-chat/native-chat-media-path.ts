@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'

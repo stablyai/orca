@@ -1,7 +1,7 @@
 import {
   applyWorkspaceCleanupPolicy,
   type WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 
 /** Stamp explicit agent-stop consent; scan live-agent labels alone are not approval and must be rewritten before final dispatch. */
 export function withWorkspaceCleanupAgentStopApproval(

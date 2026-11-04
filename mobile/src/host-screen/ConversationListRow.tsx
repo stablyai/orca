@@ -1,6 +1,6 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { MoreHorizontal, Pin } from 'lucide-react-native'
-import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { AgentStateDot } from '../components/AgentStateDot'
 import { colors } from '../theme/mobile-theme'
@@ -28,7 +28,7 @@ export function ConversationListRow({
 }) {
   useMobileColorScheme()
   const copy = conversationCopy()
-  const offline = !connected || Boolean(item.workspace?.hostContextHealthLabel)
+  const offline = !connected || Boolean(item.workspaceContext?.hostContextHealthLabel)
   return (
     <View style={styles.row} testID="conversation-row">
       <Pressable

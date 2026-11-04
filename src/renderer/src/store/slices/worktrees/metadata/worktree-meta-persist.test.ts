@@ -4,9 +4,9 @@ import { WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY } from '../../../../.
 import {
   WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY
-} from '../../../../../../shared/workspace-attachment-capabilities'
+} from '../../../../../../shared/workspace-attachments/workspace-attachment-capabilities'
 import { persistWorktreeMeta } from './worktree-meta-persist'
-import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 
 const mocks = vi.hoisted(() => ({
   assertCapability: vi.fn(),

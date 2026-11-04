@@ -283,7 +283,8 @@
       "stoppedManually": "수동으로 중지됨",
       "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
       "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
-      "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트)."
+      "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
+      "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "이 대화에서 계속할 수 있습니다.",
@@ -330,7 +331,10 @@
       "emptyAnswer": "빈 답변",
       "resolved": "해결됨",
       "resolver": "{{device}}에서 답변됨",
-      "unavailable": "선택한 답변을 사용할 수 없습니다."
+      "unavailable": "선택한 답변을 사용할 수 없습니다.",
+      "thisPhone": "이 휴대전화",
+      "computer": "컴퓨터",
+      "otherDevice": "다른 기기"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
@@ -525,6 +529,24 @@
     "agentMessage": {
       "handedOffToAgent": "에이전트에게 넘김",
       "startedAgent": "에이전트 시작됨"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "첨부 파일 응답을 읽을 수 없습니다. 다시 시도하세요.",
+      "incompleteReply": "첨부 파일이 변경되었거나 응답이 불완전합니다. 닫고 다시 시도하세요.",
+      "notText": "이 파일은 텍스트로 미리 볼 수 없습니다. 저장한 후 다른 앱에서 여세요.",
+      "openFailed": "첨부 파일을 열 수 없습니다. 다시 시도하세요.",
+      "hostUpdate": "이 호스트는 아직 텍스트 첨부 파일을 열 수 없습니다. 해당 호스트에서 Orca를 업데이트한 후 다시 시도하세요.",
+      "copyTooLarge": "파일이 너무 커서 복사할 수 없습니다. 대신 저장하세요.",
+      "connectionChanged": "연결이 변경되었습니다. 첨부 파일을 다시 열어 보세요.",
+      "hostChanged": "첨부 파일의 호스트가 변경되었습니다. 닫은 후 다시 여세요.",
+      "readFailed": "첨부 파일을 읽을 수 없습니다. 다시 연결한 후 시도하세요. 파일이 삭제되었거나 변경되었을 수 있습니다.",
+      "copyFrame": "이 첨부 파일을 전체 복사하려면 예정된 휴대전화 업데이트가 필요합니다.",
+      "copyFailed": "첨부 파일을 복사할 수 없습니다. 다시 시도하세요.",
+      "pastedText": "붙여넣은 텍스트",
+      "textAttachment": "텍스트 첨부 파일",
+      "byteSize": "{{size}}바이트",
+      "saveUpdate": "저장 기능은 휴대전화 업데이트에서 제공될 예정입니다.",
+      "fullCopySaveUpdate": "이 첨부 파일의 전체 복사와 저장 기능은 휴대전화 업데이트에서 제공될 예정입니다."
     }
   },
   "common": {
@@ -799,7 +821,8 @@
     },
     "prSidebar": {
       "loading": "PR 로드 중…",
-      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다."
+      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다.",
+      "retryLoading": "PR 로드 다시 시도"
     },
     "protocolBlockScreen": {
       "backToHosts": "호스트로 돌아가기",
@@ -2038,7 +2061,8 @@
       "promptUnconfirmed": "에이전트가 시작되었지만 프롬프트가 전송되었는지 확인하지 못했습니다."
     },
     "prActionsEngine": {
-      "mergeFailed": "PR을 병합하지 못했습니다."
+      "mergeFailed": "PR을 병합하지 못했습니다.",
+      "refreshFailed": "풀 리퀘스트를 새로 고치지 못했습니다."
     },
     "prAiTriageLaunch": {
       "agentStarted": "에이전트 시작됨",
@@ -3194,7 +3218,6 @@
       "pipelineJobs_one": "작업 {{count}}개",
       "pipelineJobs_other": "작업 {{count}}개",
       "rerunAll": "모두 재실행",
-      "rerunFailed": "실패한 체크 재실행",
       "subIssueTitle": "하위 이슈 제목",
       "subIssues": "하위 이슈"
     },
@@ -3425,7 +3448,6 @@
       "requestReview": "리뷰 요청",
       "requestReviewers": "리뷰어 요청",
       "rerunAll": "모두 재실행",
-      "rerunFailed": "실패한 체크 재실행",
       "reviewers": "리뷰어",
       "viewFile": "보기"
     },

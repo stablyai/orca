@@ -1,12 +1,12 @@
 import { AiVaultLocalScanError, listAiVaultSessions } from '../../ai-vault/cached-session-list'
 import { aiVaultScanIssueResult } from '../../ai-vault/session-list-results'
-import { classifyAiVaultScanError } from '../../../shared/ai-vault-scan-error-message'
+import { classifyAiVaultScanError } from '../../../shared/ai-vault/scanning/ai-vault-scan-error-message'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import {
   isAiVaultScanCancelledError,
   type AiVaultListArgs,
   type AiVaultListResult
-} from '../../../shared/ai-vault-types'
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 
 // Like remote failures, local scanner/cache/WSL failures must degrade to issues without discarding healthy hosts.
 export async function scanLocalAiVaultSessionsAsIssue(

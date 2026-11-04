@@ -3,7 +3,7 @@ import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { SessionSidecarObservation } from './parse-cache/session-sidecar-stat'
 import type { FileWithMtime } from './session-scanner-types'
 import { scanIssueTextFromError } from './session-scan-issues'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 
 export type SessionFileObservation =
   | { file: Omit<FileWithMtime, 'modifiedAt'>; sidecarPath?: string }

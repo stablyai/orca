@@ -14,13 +14,13 @@ import {
   getStageAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry
-} from '../../../../../../shared/source-control-discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import type {
   SourceControlDisplaySectionId,
   SourceControlEntryGroups
-} from '../../../../../../shared/source-control-section-order'
+} from '../../../../../../shared/source-control/listing/source-control-section-order'
 import type { FlatEntry } from '../listing/use-selection'
-import type { GitStageWorktreeScope } from '../../../../../../shared/git-stage-worktree-scope'
+import type { GitStageWorktreeScope } from '../../../../../../shared/git/paths/git-stage-worktree-scope'
 
 /** Handlers run with void; catch Git failures to avoid silent unhandled rejections. */
 function reportBulkMutationFailure(error: unknown): void {

@@ -23,7 +23,7 @@ import {
   agentSessionRefusalReasonWords,
   type AgentSessionRefusalHolder
 } from './agent-session-refusal-reason-words'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../tui-agent-display-names'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../agent-launch/catalog/tui-agent-display-names'
 import { expiredAttachmentsSentence } from './agent-session-attachment-failure-words'
 import { agentSessionExpiredAttachmentNames } from './agent-session-expired-attachments'
 

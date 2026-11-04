@@ -3,12 +3,12 @@ import { aiVaultOrchestrationChildSessionIds } from '../../../ai-vault/structure
 import {
   requestedAiVaultSessionDepth,
   truncateAiVaultListResult
-} from '../../../../shared/ai-vault-session-depth'
+} from '../../../../shared/ai-vault/scanning/ai-vault-session-depth'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
-} from '../../../../shared/ai-vault-search-contract'
+} from '../../../../shared/ai-vault/search/ai-vault-search-contract'
 import {
   searchSessionService,
   sessionSearchServiceStatus
@@ -17,10 +17,10 @@ import { defineMethod } from '../core'
 import { conditionalAiVaultListResult } from '../../../ai-vault/session-list-fingerprint'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
 import { copyStructuredChatConversation } from '../../../ai-vault/structured-chat-conversation-copy'
-import type { AiVaultPrepareSessionResumeArgs } from '../../../../shared/ai-vault-resume-preparation'
+import type { AiVaultPrepareSessionResumeArgs } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { describeAiVaultScanError } from '../../../../shared/ai-vault-scan-error-message'
+import { describeAiVaultScanError } from '../../../../shared/ai-vault/scanning/ai-vault-scan-error-message'
 import {
   assertLegacyAiVaultResumeAllowed,
   projectStructuredAiVaultSessions,

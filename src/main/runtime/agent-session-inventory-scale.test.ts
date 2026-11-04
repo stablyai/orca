@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { composeWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
-import { searchHit, searchResults } from '../../shared/ai-vault-search-test-fixture'
+import { searchHit, searchResults } from '../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import { listResult } from '../ai-vault/structured-session-ownership.test-support'
 import {
   assertLegacyAiVaultResumeCommandAllowed,
@@ -21,7 +21,7 @@ import {
   scaleRecord
 } from './agent-session-scale.test-fixture'
 import { findWorkspaceReferences } from './runtime-reference-find'
-import { parseWorkspaceReferenceUrl } from '../../shared/workspace-reference-identity'
+import { parseWorkspaceReferenceUrl } from '../../shared/workspace-attachments/workspace-reference-identity'
 import { createReferenceAgentIndex } from './runtime-reference-agents'
 import {
   seedTestAgentSessionRecordStore,

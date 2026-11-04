@@ -5,7 +5,7 @@ import {
   WORKSPACE_CLEANUP_IDLE_SIGNAL_VALUES,
   WORKSPACE_CLEANUP_PRESENCE_VALUES,
   WORKSPACE_CLEANUP_TRI_STATE_VALUES
-} from '../../../../shared/workspace-cleanup-facet-rankings'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-facet-rankings'
 import {
   FacetCheckbox,
   FacetChoice,

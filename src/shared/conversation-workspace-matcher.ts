@@ -1,4 +1,4 @@
-import { createAiVaultScopeCwdMatcher } from './ai-vault-scope-cwd-match'
+import { createAiVaultScopeCwdMatcher } from './ai-vault/scanning/ai-vault-scope-cwd-match'
 import { normalizeRuntimePathForComparison } from './cross-platform-path'
 import type { ExecutionHostId } from './execution-host'
 

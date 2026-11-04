@@ -1,6 +1,10 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentDotState } from '../worktree/agent-row-display'
-import type { SectionRepo, Worktree } from '../worktree/workspace-list-types'
+import type {
+  SectionRepo,
+  Worktree,
+  WorktreeHostContextView
+} from '../worktree/workspace-list-types'
 import type { ConversationHistory } from './conversation-records'
 
 export type ConversationRow = {
@@ -11,6 +15,7 @@ export type ConversationRow = {
   status: AgentDotState | 'saved' | 'transcript'
   at: number
   workspace: Worktree | null
+  workspaceContext?: WorktreeHostContextView
   executionHostId?: ExecutionHostId
   paneKey?: string
   preferenceKey?: string

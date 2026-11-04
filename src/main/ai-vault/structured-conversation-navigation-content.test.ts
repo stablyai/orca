@@ -2,7 +2,7 @@ import { agentSessionConversationView } from '../../shared/agent-session/lifecyc
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { createJournalTablesSql } from '../native-chat/agent-session-journal/journal-database-schema'

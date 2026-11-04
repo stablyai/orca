@@ -133,13 +133,18 @@ export function useHostScreenController({
   })
 
   const hostPlatform = useResolvedHostPlatform(state, hostId)
-  const displayWorktrees = useHostDisplayWorktrees(connState, state, hostPlatform)
+  const { worktrees: displayWorktrees, hostContextOf } = useHostDisplayWorktrees(
+    connState,
+    state,
+    hostPlatform
+  )
   const feed = sidebarFeed?.feed ?? null
   const sectionsResult = useHostListSections({
     client,
     hostId,
     feed,
     displayWorktrees,
+    hostContextOf,
     hostPlatform,
     state
   })
@@ -170,6 +175,7 @@ export function useHostScreenController({
     connState,
     contentMaxWidth,
     displayWorktrees,
+    hostContextOf,
     embedded,
     existingWorktreePaths,
     floatingWorkspaceEnabled,

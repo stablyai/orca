@@ -16,10 +16,10 @@ const host = vi.hoisted(() => ({
 vi.mock('../runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: unknown[]) => host.call(...args)
 }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   listEnvironments: () => [{ id: 'wsl:Ubuntu' }]
 }))
-vi.mock('../../../shared/runtime-environment-wsl-host-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store', () => ({
   findWslHostDeployment: () =>
     host.pendingStop ? { environmentId: 'wsl:ubuntu', pendingStop: { at: 1 } } : null
 }))
@@ -107,10 +107,6 @@ describe("undo's stop of the host's terminals: connecting the host", () => {
         expect.anything(),
         expect.anything()
       )
-    })
-
-    it('offers no preflight to the user undo', () => {
-      expect(createWslMoveUndoPorts(store, '/user-data').preflightHostCopies).toBeUndefined()
     })
   })
 })

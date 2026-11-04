@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import type * as OpenCodeWslClient from './session-scanner-opencode-wsl-client'
 import type { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { listOpenCodeSqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
 
 const mocks = vi.hoisted(() => ({ list: vi.fn<OpenCodeSqliteWorkerClient['list']>() }))

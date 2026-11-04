@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { launchFloatingWorkspaceAgentShortcut } from './agent-tab-shortcut-launch'
 
 const mocks = vi.hoisted(() => {

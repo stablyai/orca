@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
-import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status-types'
+import type { AgentStatusIpcPayload } from './agent-status/contracts/agent-status-ipc-payload'
+import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status/contracts/agent-status-freshness'
 import {
   mintFleetAgentStatusEvidence,
   type FleetEvidenceBinding

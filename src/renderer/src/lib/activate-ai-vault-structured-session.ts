@@ -1,5 +1,5 @@
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   StructuredSessionOpenSource,
   StructuredSessionOpenResult,

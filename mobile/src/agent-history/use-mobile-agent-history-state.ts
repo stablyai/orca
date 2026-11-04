@@ -18,7 +18,7 @@ import type {
   AiVaultScanIssue,
   AiVaultScope,
   AiVaultSession
-} from '../../../src/shared/ai-vault-types'
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   deriveMobileAiVaultScopePaths,
   mobileAiVaultScanScopePaths
@@ -28,7 +28,7 @@ import {
   agentHistorySessionScan
 } from './mobile-agent-history-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import { AI_VAULT_SELECTED_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/ai-vault-runtime-capabilities'
+import { AI_VAULT_SELECTED_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import type { AgentHistoryScreenState } from './agent-history-sections'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

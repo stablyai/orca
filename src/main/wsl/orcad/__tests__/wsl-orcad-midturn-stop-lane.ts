@@ -11,7 +11,7 @@ import type {
   AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session/agent-session-wire'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
-import type { PairedRuntimeConnection } from '../../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { subscribeRemoteRuntimeRequest } from '../../../../shared/remote-runtime/remote-runtime-client'
 import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
 import { quotePosixShell } from '../../../../shared/shell-argument-quoting'

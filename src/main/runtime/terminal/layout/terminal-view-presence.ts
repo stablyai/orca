@@ -1,10 +1,10 @@
 import { OrcaRuntimeWithRecordAgentPromptLifecycleState } from '../output/terminal-output-generation'
-import type { TerminalOscLinkRange } from '../../../../shared/terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
-import type { DriverState } from '../../orca-runtime-core'
-import { addListenerToMap } from '../../orca-runtime-core'
+
+import { type DriverState, addListenerToMap } from '../../orca-runtime-core'
 import { notifyRuntimeListeners } from '../../runtime-async-boundaries'
 import type { RuntimeTerminalBufferSnapshot } from '../../runtime-terminal-state-records'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../../orca-runtime-postlude'

@@ -3,7 +3,7 @@ import {
   agentMessageSenderName,
   type AgentMessageSender
 } from '../../../shared/agent-session/agent-session-message-source'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { OrchestrationDb } from './db'
 import { resolveOrchestrationParty } from './orchestration-party'
 

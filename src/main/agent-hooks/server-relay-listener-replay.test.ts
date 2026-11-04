@@ -4,8 +4,8 @@ import {
   createHookListenerState,
   type HookListenerState
 } from '../../shared/agent-hook-listener/listener-state'
-import { normalizeHookPayload } from '../../shared/agent-hook-listener'
-import { createShedSubagentsField } from '../../shared/agent-hook-relay'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import { createShedSubagentsField } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { buildBody, PANE } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
