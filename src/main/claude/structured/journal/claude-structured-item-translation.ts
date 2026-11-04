@@ -5,6 +5,7 @@ import type {
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import { journalPayload } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+import { isClaudeInjectedUserMessage } from '../../claude-internal-message-content'
 
 export type ClaudeMessageEnvelope = {
   sessionId: string
@@ -40,9 +41,7 @@ export function readClaudeMessageEnvelope(
   const sessionId = claudeText(frame.session_id)
   const uuid = claudeText(frame.uuid)
   const role = message?.role
-  const isInjectedUserTurn =
-    frame.type === 'user' &&
-    (frame.isMeta === true || frame.isSynthetic === true || frame.isCompactSummary === true)
+  const isInjectedUserTurn = isClaudeInjectedUserMessage(frame)
   return sessionId && uuid && (role === 'assistant' || role === 'user')
     ? {
         sessionId,

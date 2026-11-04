@@ -26,7 +26,6 @@ import type {
   StructuredAgentSessionItemAppendOptions
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
-import { decodeClaudeTranscriptLine } from '../native-chat/transcript-line-decoders-claude'
 import { claudeSourceBlockId } from './claude-streamed-block-identity'
 import {
   claudeMessageIdentity,
@@ -41,9 +40,9 @@ import {
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { createClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from './claude-session-state-turn-over'
-import { claudeEnvelopeStopHookFeedbackRow } from './claude-stop-hook-feedback'
+import { claudeMessageWithoutSyntheticText } from './claude-internal-message-content'
+import { claudeTranscriptPrompt } from './claude-transcript-prompt'
 
-/** An isolated projection of final source items, compared with saved historical content. */
 export function createClaudeTranscriptImportPlan(input: {
   sessionId: string
   providerSessionId: string
@@ -159,7 +158,14 @@ export function createClaudeTranscriptImportPlan(input: {
   return {
     restore: (row: Record<string, unknown>) => {
       input.check()
-      const frame = { ...row, session_id: row.sessionId, parent_tool_use_id: null }
+      const frame = claudeMessageWithoutSyntheticText({
+        ...row,
+        session_id: row.sessionId,
+        parent_tool_use_id: null
+      })
+      if (!frame) {
+        return
+      }
       const envelope = readClaudeMessageEnvelope(frame)
       const queued = row.type === 'attachment'
       // The tail reader keeps only rows that carry one.
@@ -195,16 +201,8 @@ export function createClaudeTranscriptImportPlan(input: {
           matchSource([claudeToolIdentity(envelope.sessionId, result.toolUseId)])
         }
       }
-      const prompt =
-        queued ||
-        (envelope?.role === 'user' &&
-          !claudeEnvelopeStopHookFeedbackRow(envelope) &&
-          envelope.content.some((part) => claudeRecord(part)?.type !== 'tool_result'))
-      const decoded = prompt
-        ? decodeClaudeTranscriptLine(JSON.stringify(row), `${input.providerSessionId}:${uuid}`)
-        : null
-      // A stop marker restates the chat's own interrupted turn, which its turn row already reads.
-      if (prompt && (!decoded || decoded.role === 'system')) {
+      const { decoded, ignored } = claudeTranscriptPrompt(row, envelope, input.providerSessionId)
+      if (ignored) {
         return
       }
       uuids.push(uuid)
@@ -257,7 +255,6 @@ export function createClaudeTranscriptImportPlan(input: {
       input.check()
       idle()
       translator.flush()
-      // A row that renders nothing (a thinking block saved without its text) adds no divider either.
       const rows = [...mutations.values()]
       const batch = createHistoryCatchUpBatch()
       const firstCreated = rows.find(

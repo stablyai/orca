@@ -29,7 +29,12 @@ import type { createClaudeStreamedTextCheckpoints } from './claude-streamed-text
 import type { ClaudeStreamedThinking } from './claude-streamed-thinking'
 import type { ClaudeProvisionalRowCorrections } from './claude-provisional-row-corrections'
 import type { ClaudeSubagentIdentities } from './claude-subagent-identities'
-import { claudeTurnOpenedBySendEcho, type ClaudeTurnSource } from './claude-turn-opening'
+import {
+  claudeStreamTurnSource,
+  claudeStreamTurnStartSource,
+  claudeTurnOpenedBySendEcho,
+  type ClaudeTurnSource
+} from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
 import type { ClaudeAssistantFailures } from './claude-assistant-failures'
 import type { ClaudeUsageLimits } from './claude-usage-limits'
@@ -51,6 +56,22 @@ export type ClaudeMessageJournalContext = {
   assistantFailures: ClaudeAssistantFailures
   usageLimits: ClaudeUsageLimits
   threadGoal: ClaudeThreadGoal
+}
+
+export function journalClaudeStream(
+  ctx: ClaudeMessageJournalContext,
+  message: Record<string, unknown>,
+  observedAt: number
+): boolean {
+  const delta = ctx.streamedBlocks.observe(message, observedAt)
+  const thinking = ctx.streamedThinking.observe(message, observedAt)
+  const source =
+    delta || thinking ? claudeStreamTurnSource(message) : claudeStreamTurnStartSource(message)
+  ctx.turn.ensureOpen(message, source, observedAt)
+  if (delta) {
+    ctx.streamedText.append(delta.identity, delta.text, delta.parentToolUseId)
+  }
+  return delta !== null || thinking
 }
 
 export function journalClaudeMessage(
