@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { AGENT_STATUS_STATES } from '../../agent-status-types'
-import { AGENT_TURN_OUTCOMES } from '../../agent-turn-outcome'
+import { AGENT_STATUS_STATES } from '../../agent-status/contracts/agent-status-types'
+import { AGENT_TURN_OUTCOMES } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { PluginEventName } from '../manifest/plugin-manifest'
 import {
   PLUGIN_TERMINAL_ID_MAX_LENGTH,

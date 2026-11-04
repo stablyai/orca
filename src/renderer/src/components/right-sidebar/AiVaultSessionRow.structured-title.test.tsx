@@ -20,7 +20,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
 }))
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests

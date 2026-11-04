@@ -7,7 +7,7 @@ import {
   nativeChatTurnStatusCopy
 } from '../native-chat-turn-status-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import type { AgentTurnOutcome } from '../../../../../src/shared/agent-turn-outcome'
+import type { AgentTurnOutcome } from '../../../../../src/shared/agent-status/lifecycle/agent-turn-outcome'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'

@@ -7,10 +7,9 @@ import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
 import { useRef, useState } from 'react'
-import { agentSessionPromptQuestions } from '../../../../shared/agent-session/agent-session-question-answer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from './use-structured-chat-live-session'
-import { NativeChatStructuredApprovalCard } from './NativeChatStructuredApprovalCard'
+import { NativeChatStructuredPromptCard } from './NativeChatStructuredPromptCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
@@ -21,7 +20,6 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatContextClearFade } from './NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from './use-structured-prompt-response-hold'
-import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestionCard'
 import { nativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
 import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
@@ -157,7 +155,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     rootRef,
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
-  const fileLinkProps = { onLinkClick, allowFileUriLinks: onLinkClick !== undefined }
+  const links = { onLinkClick, allowFileUriLinks: onLinkClick !== undefined }
   const handOff = useNativeChatHandOff({
     pane: props,
     directory: fileLinkContext,
@@ -197,7 +195,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     composerReady: composerShown && install.slot.kind !== 'install',
     surfaceReady: !composerShown || install.slot.kind === 'install'
   })
-  const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
   const transport = useNativeChatStructuredComposerTransport({
     props,
     controller,
@@ -320,7 +317,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                       awaitingInput={prompt === null ? null : 'shown'}
                       turnActivity={controller.turnActivity}
                       stopping={stopControls.stopping}
-                      {...{ ...fileLinkProps, structuredAttachments: true }}
+                      {...{ ...links, structuredAttachments: true }}
                       runtimeContext={imageRuntimeContext}
                       deliveryNotices={deliveryNotices}
                     />
@@ -362,8 +359,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               />
             )}
             {composerShown ? null : <NativeChatPromptSlotNotices notices={notices} />}
-            {prompt?.body.kind === 'approval' ? (
-              <NativeChatStructuredApprovalCard
+            {prompt ? (
+              <NativeChatStructuredPromptCard
                 key={`${prompt.itemId}:${prompt.revision}`}
                 prompt={prompt}
                 response={promptResponse}
@@ -371,21 +368,18 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 formSubmitEnabled={ordinaryMessages === 'supported'}
                 onCancel={cancelPrompt}
                 shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
-                {...fileLinkProps}
-              />
-            ) : null}
-            {prompt && questionBody ? (
-              <NativeChatStructuredQuestionCard
-                key={`${prompt.itemId}:${prompt.revision}`}
-                questions={agentSessionPromptQuestions(questionBody)}
-                onAnswer={(response) => void promptResponse.respond(prompt, response)}
-                isSubmitting={promptResponse.holds(prompt)}
-                onCancel={cancelPrompt}
-                shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
                 answerInputRef={questionAnswerInputRef}
+                {...links}
               />
             ) : null}
-            {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
+            {nativeChatStructuredAsyncQuestion(
+              props,
+              controller,
+              session,
+              transport,
+              submits,
+              links
+            )}
             {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
             {composerShown ? (
               <NativeChatComposer

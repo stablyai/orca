@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import { AGENT_DONE_QUIET_MS, type AgentTransition } from '../../shared/agent-transitions'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import {
+  AGENT_DONE_QUIET_MS,
+  type AgentTransition
+} from '../../shared/agent-status/lifecycle/agent-transitions'
 import type { NotificationSettings } from '../../shared/notification-settings-types'
 import type {
   MobileNotificationDispatchEvent,

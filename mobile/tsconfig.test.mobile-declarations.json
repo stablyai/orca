@@ -36,7 +36,12 @@
     "src/mobile-web-shell/bridge/bridge-reply-chunking.ts",
     "src/platform/external-link.web.ts",
     "src/session/mobile-structured-agent-prompts.ts",
-    "src/transport/rpc-envelope-fields.ts"
+    "src/transport/rpc-envelope-fields.ts",
+    "src/host-screen/host-sidebar-feed-sections.ts",
+    "src/worktree/workspace-list-sections.ts",
+    "src/worktree/worktree-catalog-snapshot-client.ts",
+    "src/worktree/worktree-host-context-labels.ts",
+    "src/worktree/workspace-view-settings.ts"
   ],
   "include": ["**/*.d.ts"],
   "exclude": ["node_modules"]

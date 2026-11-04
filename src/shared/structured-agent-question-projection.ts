@@ -2,7 +2,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalQuestionItem
 } from './agent-session/journal/agent-session-journal-types'
-import { isAskUserQuestionTool } from './agent-question-answered-intent'
+import { isAskUserQuestionTool } from './agent-status/lifecycle/agent-question-answered-intent'
 import { parseAskFromToolInput } from './native-chat/input/native-chat-ask'
 import { agentJournalItemRowOrigin } from './agent-session/journal/agent-session-journal-position'
 import { agentJournalLinkageFields } from './agent-session/journal/agent-session-journal-producer'

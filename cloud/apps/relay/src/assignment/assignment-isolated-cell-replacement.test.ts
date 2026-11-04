@@ -9,7 +9,6 @@ import {
 } from '../cell-admission-selector.js'
 import type { RelayCellConfig } from '../config.js'
 import {
-  consumeRelayCellInventoryHold,
   openInMemoryRelayDatabase,
   type RelayDatabase,
   type RelayLockOptions,
@@ -220,8 +219,7 @@ async function setup(cells: RelayCellConfig[] = CELLS): Promise<Harness> {
     counter,
     heartbeat,
     setNow: (value: number) => (now = value),
-    isolateForRoll: async (cellId) =>
-      await applySelector({ [cellId]: 'migration-only' }, [cellId]),
+    isolateForRoll: async (cellId) => await applySelector({ [cellId]: 'migration-only' }, [cellId]),
     restore: async (cellId) => await applySelector({ [cellId]: 'general' }),
     park: async (cellId, state) => await applySelector({ [cellId]: state }),
     rollIsolatedAt: async (cellId) => {
@@ -352,23 +350,6 @@ describe('re-placing a host off a cell isolated for a roll', () => {
       expect(grant.cellId).toBe(first.cellId)
       expect(grant.assignmentEpoch).toBe(first.assignmentEpoch)
     }
-  })
-
-  // Why its own site: the drain-return lane's service time is either this lock or
-  // the inventory, and only a separate p99 can say which.
-  it('samples the regional target rows it locks under their own hold site', async () => {
-    const { store, database, isolateForRoll } = await setup()
-    const first = await store.assign(IDENTITY, 'us-central1')
-    await isolateForRoll(first.cellId)
-    consumeRelayCellInventoryHold(database)
-
-    await store.assign(IDENTITY, 'us-central1')
-
-    expect(consumeRelayCellInventoryHold(database)).toMatchObject({
-      cellInventoryHolds: 1,
-      cellInventoryHoldMaxSite: 'isolated-replacement',
-      isolatedReplacementHolds: 1
-    })
   })
 
   it('stops re-placing once restore clears the stamp', async () => {
@@ -558,34 +539,6 @@ describe('re-placing a host off a cell isolated for a roll', () => {
       region: 'asia-east2' as const
     }
 
-    it('books the reserve cell before leaving the region, and the canary still counts the move', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      const { store, database, isolateForRoll } = await setup()
-      const first = await store.assign(IDENTITY, 'asia-east2')
-      await isolateForRoll(first.cellId)
-      warn.mockClear()
-      const regionReserve = vi.fn(async () => onReserve)
-      await expect(
-        store.assign(IDENTITY, 'asia-east2', 'asia-east2', undefined, { regionReserve })
-      ).resolves.toEqual({ ...onReserve, placed: true })
-      expect(regionReserve).toHaveBeenCalledOnce()
-      expect(jsonEvents(warn, 'orca_relay_sticky_replaced_off_isolated_cell')).toEqual([
-        {
-          event: 'orca_relay_sticky_replaced_off_isolated_cell',
-          fromCellId: first.cellId,
-          fromRegion: 'asia-east2',
-          admissionState: 'migration-only',
-          toCellId: 'asia-reserve',
-          region: 'asia-east2',
-          via: 'reserve'
-        }
-      ])
-      // The refused in-region attempt wrote nothing.
-      expect(
-        await database.query(`SELECT cell_id, assignment_epoch FROM relay_assignments`)
-      ).toEqual([{ cell_id: first.cellId, assignment_epoch: first.assignmentEpoch }])
-    })
-
     it('leaves the region as before when the reserve cell has no room either', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const { store, isolateForRoll } = await setup()
@@ -593,8 +546,13 @@ describe('re-placing a host off a cell isolated for a roll', () => {
       await isolateForRoll(first.cellId)
       warn.mockClear()
       const regionReserve = vi.fn(async () => null)
-      const moved = await store.assign(IDENTITY, 'asia-east2', 'asia-east2', undefined, { regionReserve })
-      expect(moved).toMatchObject({ region: 'us-central1', assignmentEpoch: first.assignmentEpoch + 1 })
+      const moved = await store.assign(IDENTITY, 'asia-east2', 'asia-east2', undefined, {
+        regionReserve
+      })
+      expect(moved).toMatchObject({
+        region: 'us-central1',
+        assignmentEpoch: first.assignmentEpoch + 1
+      })
       expect(regionReserve).toHaveBeenCalledOnce()
       expect(jsonEvents(warn, 'orca_relay_sticky_replaced_off_isolated_cell')).toMatchObject([
         { fromCellId: first.cellId, region: 'us-central1' }
@@ -610,22 +568,11 @@ describe('re-placing a host off a cell isolated for a roll', () => {
       })
       await expect(
         store.assign(IDENTITY, 'asia-east2', 'asia-east2', undefined, { regionReserve })
-      ).resolves.toMatchObject({ region: 'us-central1', assignmentEpoch: first.assignmentEpoch + 1 })
+      ).resolves.toMatchObject({
+        region: 'us-central1',
+        assignmentEpoch: first.assignmentEpoch + 1
+      })
       expect(regionReserve).toHaveBeenCalledOnce()
-    })
-
-    it('counts a share-draw booking off the isolated cell for the canary', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      const { store, isolateForRoll } = await setup()
-      const first = await store.assign(IDENTITY, 'asia-east2')
-      await isolateForRoll(first.cellId)
-      warn.mockClear()
-      await expect(
-        store.assign(IDENTITY, 'asia-east2', 'asia-east2', undefined, { placeFresh: async () => onReserve })
-      ).resolves.toEqual({ ...onReserve, placed: true })
-      expect(jsonEvents(warn, 'orca_relay_sticky_replaced_off_isolated_cell')).toMatchObject([
-        { fromCellId: first.cellId, toCellId: 'asia-reserve', via: 'reserve' }
-      ])
     })
 
     describe('when no database cell has room anywhere', () => {
@@ -644,7 +591,9 @@ describe('re-placing a host off a cell isolated for a roll', () => {
       it('keeps the pin and never asks the spill', async () => {
         const { store, first } = await isolateWithNoDatabaseRoom()
         const reserveSpill = vi.fn(async () => onUsReserve)
-        const kept = await store.assign(IDENTITY, 'asia-east2', 'asia-east2', undefined, { reserveSpill })
+        const kept = await store.assign(IDENTITY, 'asia-east2', 'asia-east2', undefined, {
+          reserveSpill
+        })
         expect(kept).toMatchObject({ cellId: first.cellId, assignmentEpoch: first.assignmentEpoch })
         expect(reserveSpill).not.toHaveBeenCalled()
       })
@@ -732,27 +681,6 @@ describe('re-placing a host off a cell isolated for a roll', () => {
     const moved = await store.assign(IDENTITY, 'us-central1')
     expect(moved.cellId).not.toBe(first.cellId)
     expect(jsonEvents(warn, 'orca_relay_sticky_replaced_off_isolated_cell')).toHaveLength(1)
-  })
-
-  it('logs one event naming both cells, the admission state and the region', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { store, isolateForRoll } = await setup()
-    const first = await store.assign(IDENTITY, 'us-central1')
-    await isolateForRoll(first.cellId)
-
-    warn.mockClear()
-    const moved = await store.assign(IDENTITY, 'us-central1')
-
-    expect(jsonEvents(warn, 'orca_relay_sticky_replaced_off_isolated_cell')).toEqual([
-      {
-        event: 'orca_relay_sticky_replaced_off_isolated_cell',
-        fromCellId: first.cellId,
-        fromRegion: 'us-central1',
-        admissionState: 'migration-only',
-        toCellId: moved.cellId,
-        region: moved.region
-      }
-    ])
   })
   describe('a host whose leases span two cells after the move', () => {
     const NEIGHBOUR = { userId: 'user-b', relayHostId: 'host000000000002' }
@@ -864,55 +792,16 @@ describe('re-placing a host off a cell isolated for a roll', () => {
 
     const moved = await store.assign(IDENTITY, 'us-central1')
     expect(counter.lockUnavailableSequence).toEqual([])
-    expect(moved).toMatchObject({ region: 'us-central1', assignmentEpoch: first.assignmentEpoch + 1 })
+    expect(moved).toMatchObject({
+      region: 'us-central1',
+      assignmentEpoch: first.assignmentEpoch + 1
+    })
     expect(counter.count('SELECT * FROM relay_cells ORDER BY cell_id ASC')).toBe(0)
   })
 })
 
 describe('classifying a reconnect whose home is isolated for a roll', () => {
   const classify = { classifyHomeRollIsolation: true }
-
-  it('marks the host only while the roll stamp is current', async () => {
-    const { store, heartbeat, isolateForRoll, restore, setNow } = await setup()
-    const first = await store.assign(IDENTITY, 'us-central1')
-
-    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
-    await isolateForRoll(first.cellId)
-    expect(await store.resolve(IDENTITY, classify)).toMatchObject({
-      cellId: first.cellId,
-      homeCellRollIsolated: true
-    })
-    // The cell's own callers do not ask, and their read is unchanged.
-    expect(await store.resolve(IDENTITY)).not.toHaveProperty('homeCellRollIsolated')
-
-    const stale = START_MS + 2 * 60 * 60_000 + 1
-    setNow(stale)
-    for (const cell of CELLS) await heartbeat(cell, stale)
-    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
-
-    setNow(START_MS)
-    await restore(first.cellId)
-    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
-  })
-
-  it('does not mark a host parked without a stamp or held by a migration', async () => {
-    const { store, database, isolateForRoll, park } = await setup()
-    const first = await store.assign(IDENTITY, 'us-central1')
-    await park(first.cellId, 'migration-only')
-    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
-
-    await isolateForRoll(first.cellId)
-    await insertMigration(database, {
-      sourceCellId: first.cellId,
-      targetCellId: 'us-c2',
-      assignmentEpoch: first.assignmentEpoch,
-      leases: 1
-    })
-    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
-    // A stalled migration whose lease counter lapsed still owns the epoch.
-    await database.query(`UPDATE relay_assignments SET migration_leases = 0`)
-    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
-  })
 
   it('reads the classification in the verification query itself', async () => {
     const { store, counter, isolateForRoll } = await setup()

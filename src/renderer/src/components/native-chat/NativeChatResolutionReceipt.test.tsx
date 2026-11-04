@@ -681,7 +681,10 @@ describe('resolution receipts', () => {
       })
       rerender(<Harness body={receiptFor([answered, second])} />)
       expect(screen.getByText('Branch?')).toHaveClass('truncate')
-      expect(screen.queryByRole('button')).toBeNull()
+      expect(screen.getByRole('button', { name: /Asked:/ })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      )
     })
 
     it('stays plain once answered, since each question is listed with its answer', () => {
@@ -709,14 +712,17 @@ describe('resolution receipts', () => {
       expect(screen.getByText('Yes')).toBeInTheDocument()
     })
 
-    it('leaves a cancelled single question that fits its line as plain text', () => {
+    it('keeps a cancelled single question expandable even when it fits its line', () => {
       render(
         <Harness
           body={{ ...grouped, question: FIRST, questions: grouped.questions?.slice(0, 1) }}
         />
       )
       expect(screen.getByText(FIRST)).toHaveClass('truncate')
-      expect(screen.queryByRole('button')).toBeNull()
+      expect(screen.getByRole('button', { name: /Asked:/ })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      )
       expect(screen.queryByRole('list')).toBeNull()
     })
   })

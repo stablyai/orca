@@ -1,3 +1,5 @@
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { agentSessionFormBooleanLabels } from '../../../../shared/agent-session-form-copy'
 import { useNativeChatSettledBody } from './native-chat-settled-body'
@@ -18,13 +20,15 @@ import {
 export function NativeChatResolutionReceipt({
   body: presentation,
   disclosureId,
-  awaiting = true
+  awaiting = true,
+  onLinkClick
 }: {
   body: NativeChatResolvedPrompt
   /** Message this receipt stands in for; keys the question row's disclosure. */
   disclosureId?: string
   /** False once the prompting agent ends: report the pending question without implying anyone still waits. */
   awaiting?: boolean
+  onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element | null {
   useUiLanguageRevision()
   const hydrated = useNativeChatSettledBody(presentation)
@@ -38,6 +42,7 @@ export function NativeChatResolutionReceipt({
   if (body.resolution.state === 'pending') {
     return body.kind === 'question' ? (
       <NativeChatAwaitingInputRow
+        onLinkClick={onLinkClick}
         subject={subject}
         pending={awaiting}
         disclosureKey={askDisclosureKey}
@@ -63,6 +68,7 @@ export function NativeChatResolutionReceipt({
       {body.kind === 'question' ? (
         <NativeChatAwaitingInputRow
           pending={false}
+          onLinkClick={onLinkClick}
           subject={subject}
           disclosureKey={askDisclosureKey}
           listsQuestions={answers.length === 0}
@@ -89,7 +95,14 @@ export function NativeChatResolutionReceipt({
         const heading = nativeChatReceiptAnswerHeading(subject, answer)
         return (
           <div key={key}>
-            {heading ? <p>{heading}</p> : null}
+            {heading ? (
+              // Form field titles stay plain, as the form card shows them; question text carries links.
+              body.kind === 'question' ? (
+                <NativeChatQuestionText content={heading} onLinkClick={onLinkClick} />
+              ) : (
+                <p>{heading}</p>
+              )
+            ) : null}
             <p
               className={
                 body.kind === 'approval' && body.form

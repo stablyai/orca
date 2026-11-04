@@ -10,7 +10,7 @@
       "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
     },
     {
-      "file": "src/shared/git-fork-sync.ts",
+      "file": "src/shared/git/remotes/git-fork-sync.ts",
       "inputs": [],
       "emptyEnv": [],
       "sourceClosureSha256": "3e8caddb2b392603cdb3732f1b06c2f97749da0abcac10bce592b30fff4e6ac2",
@@ -18,7 +18,7 @@
       "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
     },
     {
-      "file": "src/shared/git-remote-identity.ts",
+      "file": "src/shared/git/remotes/git-remote-identity.ts",
       "inputs": [],
       "emptyEnv": [],
       "sourceClosureSha256": "cc60ace7dc539e3a52f35a6195ac5712cee358a76d11cbb9486ea90de058b05c",

@@ -1,6 +1,6 @@
 import { Activity } from 'lucide-react-native'
 import { View } from 'react-native'
-import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
+import type { AgentWorkingMode } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii } from '../theme/mobile-theme'

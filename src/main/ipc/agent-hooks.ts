@@ -2,9 +2,9 @@ import { ipcMain } from 'electron'
 import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
-} from '../../shared/agent-status-types'
-import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
-import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
+} from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentInterruptInferenceRequest } from '../../shared/agent-status/lifecycle/agent-interrupt-intent'
+import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-status/lifecycle/agent-question-answered-intent'
 import { agentHookServer } from '../agent-hooks/server'
 import { getMigrationUnsupportedPtySnapshot } from '../agent-hooks/migration-unsupported-pty-state'
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'

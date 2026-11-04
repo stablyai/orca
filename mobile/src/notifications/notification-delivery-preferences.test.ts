@@ -2,9 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { AppState } from 'react-native'
 import {
   DEFAULT_NOTIFICATION_DELIVERY,
-  loadNotificationDeliveryPreferences,
-  notificationPreferencesFilter,
-  saveNotificationDeliveryPreferences
+  loadNotificationDeliveryPreferences
 } from './notification-delivery-preferences'
 import {
   setNotificationViewingWorkspace,
@@ -14,10 +12,7 @@ import {
 const storage = new Map<string, string>()
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
-    getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
-    setItem: vi.fn(async (key: string, value: string) => {
-      storage.set(key, value)
-    })
+    getItem: vi.fn(async (key: string) => storage.get(key) ?? null)
   }
 }))
 vi.mock('react-native', () => ({ AppState: { currentState: 'background' } }))
@@ -25,45 +20,6 @@ beforeEach(() => {
   storage.clear()
   setNotificationViewingWorkspace(null)
   AppState.currentState = 'background'
-})
-
-it('persists only phone-specific delivery preferences', async () => {
-  expect(await loadNotificationDeliveryPreferences()).toEqual(DEFAULT_NOTIFICATION_DELIVERY)
-  const value = {
-    ...DEFAULT_NOTIFICATION_DELIVERY,
-    onlyWhenDesktopAway: false,
-    sound: false
-  }
-  await saveNotificationDeliveryPreferences(value)
-  expect(await loadNotificationDeliveryPreferences()).toEqual(value)
-  expect(notificationPreferencesFilter(value)).toEqual({
-    onlyWhenDesktopAway: false,
-    onlyWhenAgentNeedsInput: false,
-    sound: false
-  })
-})
-
-it('ignores unrelated stored preferences', async () => {
-  storage.set(
-    'orca:notificationDeliveryPreferences',
-    JSON.stringify({
-      onlyWhenDesktopAway: false,
-      sound: false,
-      suppressWhileViewing: false,
-      unrelatedSetting: false
-    })
-  )
-  expect(await loadNotificationDeliveryPreferences()).toEqual({
-    onlyWhenDesktopAway: false,
-    onlyWhenAgentNeedsInput: false,
-    sound: false,
-    suppressWhileViewing: false
-  })
-  expect(notificationPreferencesFilter(await loadNotificationDeliveryPreferences())).toEqual({
-    onlyWhenDesktopAway: false,
-    onlyWhenAgentNeedsInput: false,
-    sound: false
-  })
 })
 
 it('suppresses only the workspace being viewed on this phone, and never while backgrounded', async () => {

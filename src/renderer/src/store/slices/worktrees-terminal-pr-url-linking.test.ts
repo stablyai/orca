@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostedReviewInfo, HostedReviewForBranchArgs } from '../../../../shared/hosted-review'
+import type {
+  HostedReviewInfo,
+  HostedReviewForBranchArgs
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import {

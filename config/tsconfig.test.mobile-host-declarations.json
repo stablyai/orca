@@ -44,6 +44,7 @@
     "../src/main/runtime/runtime-rpc.ts",
     "../src/main/runtime/rpc/methods/status.ts",
     "../src/renderer/src/web/web-paired-e2ee-primitives.ts",
+    "../src/main/runtime/runtime-worktree-ps-summaries.ts",
     "../src/types/build-constants.d.ts"
   ],
   "include": ["../src/shared/**/*.ts", "../src/shared/**/*.tsx"],

@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
 import type { WorkspaceSpaceChange } from '../../../../shared/workspace-space-change'
 import { useAppStore } from '@/store'

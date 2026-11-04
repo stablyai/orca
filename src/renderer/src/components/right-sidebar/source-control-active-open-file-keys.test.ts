@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
+import type { GitBranchCompareSummary } from '../../../../shared/git/diff/git-diff-compare-types'
 import { toBranchCompareSnapshot } from '@/store/slices/editor/git/git-status-reconciliation'
 import {
   buildActiveOpenFileSignature,

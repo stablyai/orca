@@ -1,4 +1,4 @@
-import { mergeGitConfigEnvProtocol } from '../../../shared/git-credential-prompt-env'
+import { mergeGitConfigEnvProtocol } from '../../../shared/git/commands/git-credential-prompt-env'
 import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
 import {
   ORCA_IMAGE_PROTOCOL_ENV,
@@ -10,7 +10,7 @@ import { stripInheritedBuildModeEnv } from '../../pty/shell-startup/build-mode-e
 import { stripPiProcessOwnerEnv } from '../../pty/shell-startup/pi-process-owner-env'
 import { removeInheritedNoColor } from '../../pty/shell-startup/terminal-color-env'
 import { isWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
-import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
+import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-context'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'

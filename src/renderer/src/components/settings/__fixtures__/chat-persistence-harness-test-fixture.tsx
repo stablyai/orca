@@ -1,4 +1,4 @@
-import { useAppStore } from '../../../store'
+import { useAppStore } from '../../../store/index'
 import {
   renderChatSettingsSection,
   type ChatSettingsRenderContext

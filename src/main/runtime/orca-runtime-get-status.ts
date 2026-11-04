@@ -306,6 +306,8 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyControl
     wakeFolderRepoGitUpgradeWatch()
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })
+    // Automation owners are projected from projects, so open lists must re-read them (STA-12812).
+    this.notifyAutomationsChanged({ reason: 'definition' })
   }
 
   // Automation/IPC writes need a public stream entry; older clients drop this unknown event without negotiation.

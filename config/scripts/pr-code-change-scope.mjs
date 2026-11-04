@@ -67,6 +67,7 @@ const GLOBAL_FORCE_FILES = new Set(['package.json', 'pnpm-lock.yaml'])
 const GIT_COMPAT_PREFIXES = [
   '.github/actions/prepare-git-compatibility/',
   'src/shared/git-',
+  'src/shared/git/',
   'src/shared/review-head-tracking-ref',
   'src/shared/worktree/local-base-branch-fast-forward',
   'src/main/git/',
@@ -255,9 +256,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/runtime-worktree-contracts',
   'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
   // Turn-end status a newer host publishes and an older desktop reads (cross-version-host-observed-turn-end).
-  'src/shared/agent-turn-outcome',
-  'src/shared/agent-status-types',
-  'src/shared/agent-lead-status-fold',
+  'src/shared/agent-status/lifecycle/agent-turn-outcome',
+  'src/shared/agent-status/contracts/agent-status-types',
+  'src/shared/agent-status/lifecycle/agent-lead-status-fold',
   'src/shared/agent-session-turn-record',
   'src/shared/agent-session/view/structured-agent-session-agent-status',
   'src/shared/agent-session/view/structured-agent-session-projection',

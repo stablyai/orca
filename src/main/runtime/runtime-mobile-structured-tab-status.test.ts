@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { AgentHookServer } from '../agent-hooks/server'

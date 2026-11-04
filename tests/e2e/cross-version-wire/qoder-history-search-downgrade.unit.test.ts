@@ -16,6 +16,7 @@ import {
 import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault-types'
 import { redactForTransport } from '../../../src/shared/ai-vault-search-transport'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
+import { prepareReleaseFixtures } from './release-fixture-setup'
 
 const PRE_QODER_HOSTS = ['v1.4.211', 'b49abdb1f4da6b3d62dfa9ccf3c74dc9e74d291c']
 const QODER_HOST = 'f97ca2a49d9c711dab54a656a7f8a47ae6c6749c'
@@ -24,10 +25,13 @@ const LEGACY_AGENTS = AI_VAULT_AGENTS.filter(
 )
 afterEach(() => setSessionSearchService(null))
 
-async function releaseSearchSchemas(ref: string) {
-  const checkout = await materializeReleaseCheckout(ref)
-  return importReleaseCheckoutModule(checkout, 'src/shared/ai-vault-search-contract.ts')
-}
+const releaseSearchSchemas = prepareReleaseFixtures(
+  [...PRE_QODER_HOSTS, QODER_HOST],
+  async (ref) => {
+    const checkout = await materializeReleaseCheckout(ref)
+    return importReleaseCheckoutModule(checkout, 'src/shared/ai-vault-search-contract.ts')
+  }
+)
 
 function releaseParser(schema: unknown) {
   if (

@@ -1,7 +1,10 @@
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
-import type { AgentRowState } from '../../../../shared/agent-row-decay-state'
+import type {
+  AgentStatusEntry,
+  AgentType
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentRowState } from '../../../../shared/agent-status/presentation/agent-row-decay-state'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { AgentChildRowModel } from '../../../../shared/agent-child-row-model'
+import type { AgentChildRowModel } from '../../../../shared/agent-status/presentation/agent-child-row-model'
 
 export type DashboardAgentRow = {
   /** Synthetic subagent keys identify rows only; they have no PTY and must never be parsed as pane keys. */

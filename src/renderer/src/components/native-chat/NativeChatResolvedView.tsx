@@ -385,7 +385,7 @@ export function NativeChatResolvedView({
             onDismiss={promptCardPresentation.dismiss}
             onCollapse={promptCardPresentation.collapse}
             shouldFocus={shownPromptCard !== null && isVisible && isFocusedGroup}
-            answerInputRef={questionAnswerInputRef}
+            {...{ answerInputRef: questionAnswerInputRef, onLinkClick }}
           />
         </div>
       ) : null}

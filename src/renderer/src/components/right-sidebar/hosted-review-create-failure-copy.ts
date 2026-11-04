@@ -3,9 +3,9 @@ import type {
   CreateHostedReviewResult,
   CreateStackedHostedReviewResult,
   HostedReviewProvider
-} from '../../../../shared/hosted-review'
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { translate } from '@/i18n/i18n'
-import { isStackedReviewFailureReason } from '../../../../shared/stacked-hosted-review-failure-copy'
+import { isStackedReviewFailureReason } from '../../../../shared/source-control/hosted-review/stacked-hosted-review-failure-copy'
 import { stackedFailureMessage } from './stacked-review-create-failure-copy'
 import { authRequiredDetail } from './hosted-review-sign-in-copy'
 import {

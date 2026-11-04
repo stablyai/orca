@@ -217,11 +217,7 @@ export const createCheckActions = (
           repo?.executionHostId,
           repo !== undefined
         )
-        if (prStatusUpdate?.prCache) {
-          nextState.prCache = prStatusUpdate.prCache
-        }
-
-        return nextState
+        return { ...nextState, ...prStatusUpdate }
       })
       return checks
     })().finally(() => {

@@ -7,7 +7,7 @@ import type {
 } from './agent-session-background-task-wire'
 import type { AgentSessionRewindReason } from './lifecycle/agent-session-rewind'
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
-import type { AgentChildWorkView } from '../agent-status-child-work-view'
+import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
@@ -23,7 +23,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from './journal/agent-session-journal-types'
-import type { AgentTurnOutcome } from '../agent-turn-outcome'
+import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
 import type { AgentProviderSessionMetadata } from './lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'

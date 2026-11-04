@@ -4,7 +4,7 @@ import type {
   RestoreSpawnIntent,
   SpawnDeferralReason
 } from '../../../../shared/host-spawn-admission'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   TerminalLaunchResult,
   AgentProviderSessionMetadata,

@@ -2,7 +2,7 @@ import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { SlashCommandSuggestion } from '../../../../shared/native-chat/input/native-chat-slash-commands'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isAiVaultAgent } from '../../../../shared/ai-vault-types'
 import { selectAiVaultPanelWorkspace } from '../right-sidebar/ai-vault-panel-workspace'
 import { openAgentSessionHistoryModal } from '../right-sidebar/agent-session-history-modal'

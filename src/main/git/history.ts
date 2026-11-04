@@ -1,5 +1,8 @@
-import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
-import { loadGitHistoryFromExecutor } from '../../shared/git-history'
+import type {
+  GitHistoryOptions,
+  GitHistoryResult
+} from '../../shared/git/history/git-history-types'
+import { loadGitHistoryFromExecutor } from '../../shared/git/history/git-history-execution'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
