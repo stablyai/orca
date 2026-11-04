@@ -184,14 +184,8 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       })
     )
     const admittedCount = Math.floor(REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES / retainedBytes)
-    const pendingRequests = (
-      connection as unknown as {
-        pendingRequests: Map<
-          string,
-          { preparedRequest?: { serializedRequest: string | null } | null }
-        >
-      }
-    ).pendingRequests
+    // Read the private ledger through TypeScript's index escape, keeping its real type.
+    const pendingRequests = connection['pendingRequests']
     const requests = Array.from({ length: admittedCount }, () =>
       connection.request('worktree.large', params, 60_000).catch(() => undefined)
     )

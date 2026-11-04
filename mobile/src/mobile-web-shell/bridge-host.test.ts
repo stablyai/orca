@@ -8,7 +8,9 @@ import {
   clientFrame,
   createFakeRpcClient,
   flushBridge,
-  rpcSuccess
+  rpcSuccess,
+  shellFence,
+  shellLocalCall
 } from './bridge-host-test-fakes'
 import {
   BRIDGE_MAX_MESSAGE_BYTES,
@@ -36,17 +38,12 @@ describe('requests', () => {
       })
     )
     // The shell adds only its local pre-send fence; method, params and the page's options pass through.
-    const forwarded = bridge.client.requests.map(({ args: [method, params, options] }) => {
-      const { beforeSend, ...rest } = (options ?? {}) as { beforeSend?: () => void }
-      return [method, params, rest, typeof beforeSend]
-    })
-    expect(forwarded).toEqual([
+    expect(bridge.client.requests.map(({ args }) => shellLocalCall(args))).toEqual([
       ['status.get', undefined, {}, 'function'],
       ['status.get', { a: 1 }, {}, 'function'],
       ['status.get', undefined, { timeoutMs: 50 }, 'function']
     ])
-    const fence = (index: number) =>
-      (bridge.client.requests[index]!.args[2] as { beforeSend: () => void }).beforeSend
+    const fence = (index: number) => shellFence(bridge.client.requests[index]!.args)
     bridge.host.receive(clientFrame({ type: 'cancel', id: ID, target: 'request' }))
     expect(fence(0)).toThrow(BRIDGE_REQUEST_RETIRED)
     expect(fence(1)).not.toThrow()

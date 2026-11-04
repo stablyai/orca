@@ -116,3 +116,33 @@ export async function flushBridge(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
 }
+
+// The shell forwards an ordinary request's method, params and the page's options, adding only its
+// local pre-send fence; compare those, and the fence's kind, without reaching into it.
+export function shellLocalCall([method, params, options]: readonly unknown[]): unknown[] {
+  const forwarded: Record<string, unknown> = {}
+  let fence = 'undefined'
+  if (typeof options === 'object' && options !== null) {
+    for (const [key, value] of Object.entries(options)) {
+      if (key === 'beforeSend') {
+        fence = typeof value
+      } else {
+        forwarded[key] = value
+      }
+    }
+  }
+  return [method, params, forwarded, fence]
+}
+
+// The fence the shell passed with a forwarded request.
+export function shellFence([, , options]: readonly unknown[]): () => void {
+  if (typeof options === 'object' && options !== null && 'beforeSend' in options) {
+    const { beforeSend } = options
+    if (typeof beforeSend === 'function') {
+      return () => {
+        Reflect.apply(beforeSend, undefined, [])
+      }
+    }
+  }
+  throw new Error('The shell passed no pre-send fence')
+}

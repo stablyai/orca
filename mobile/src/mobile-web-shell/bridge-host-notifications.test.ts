@@ -1,7 +1,12 @@
 import { BRIDGE_EXTERNAL_LINK_FULL_URL } from './bridge/bridge-frame-fields'
 import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
-import { clientFrame, createFakeRpcClient, flushBridge } from './bridge-host-test-fakes'
+import {
+  clientFrame,
+  createFakeRpcClient,
+  flushBridge,
+  shellLocalCall
+} from './bridge-host-test-fakes'
 import {
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
@@ -183,7 +188,12 @@ describe('notifications, refusals and the fence', () => {
     bridge.host.receive(
       clientFrame({ type: 'request', id: ID, method: 'status.get', hostId: 'other-host' })
     )
-    expect(bridge.client.requests[0]?.args).toEqual(['status.get'])
+    expect(shellLocalCall(bridge.client.requests[0]!.args)).toEqual([
+      'status.get',
+      undefined,
+      {},
+      'function'
+    ])
   })
 })
 

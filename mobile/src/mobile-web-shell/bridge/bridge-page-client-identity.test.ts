@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { BRIDGE_PAGE_CLIENT_ID } from './bridge-page-client-identity'
 import { HARNESS_CLIENT_IDENTITY, harness, ID } from '../bridge-host-test-harness'
-import { bridgeId, clientFrame } from '../bridge-host-test-fakes'
+import { bridgeId, clientFrame, shellLocalCall } from '../bridge-host-test-fakes'
 import {
   createFakeBridgePortPair as createPair,
   PORT_PAIR_CLIENT_IDENTITY
@@ -78,8 +78,8 @@ describe('the shell substitutes on both doors to the client', () => {
         clientFrame({ type: 'request', id: bridgeId(index + 3), method: 'terminal.send', params })
       )
     )
-    expect(bridge.client.requests.slice(1).map(({ args }) => args)).toEqual(
-      controls.map((params) => ['terminal.send', params])
+    expect(bridge.client.requests.slice(1).map(({ args }) => shellLocalCall(args))).toEqual(
+      controls.map((params) => ['terminal.send', params, {}, 'function'])
     )
   })
 
@@ -135,7 +135,9 @@ describe('the shell substitutes on both doors to the client', () => {
     })
 
     bridge.host.receive(clientFrame({ type: 'request', id: bridgeId(9), method: 'status.get' }))
-    expect(bridge.client.requests.map(({ args }) => args)).toEqual([['status.get']])
+    expect(bridge.client.requests.map(({ args }) => shellLocalCall(args))).toEqual([
+      ['status.get', undefined, {}, 'function']
+    ])
   })
 })
 

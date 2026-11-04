@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { BridgeHostRequests } from './bridge-host-requests'
-import { bridgeId, createFakeRpcClient, rpcSuccess } from './bridge-host-test-fakes'
+import { bridgeId, createFakeRpcClient, rpcSuccess, shellLocalCall } from './bridge-host-test-fakes'
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as capability } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 
 const params = { repo: 'id:clone', ownerRepo: { owner: 'fork', repo: 'widgets' } }
@@ -64,12 +64,7 @@ it('uses one unscoped first-hop probe, leaves final S distinct from D, and prese
     })
   }
   // Unrelated calls keep their data; the shell adds only its local pre-send fence.
-  expect(
-    f.client.requests.slice(2).map(({ args: [method, sent, options] }) => {
-      const { beforeSend, ...rest } = (options ?? {}) as { beforeSend?: () => void }
-      return [method, sent, rest, typeof beforeSend]
-    })
-  ).toEqual([
+  expect(f.client.requests.slice(2).map(({ args }) => shellLocalCall(args))).toEqual([
     ['github.listLabels', undefined, {}, 'function'],
     ['github.listLabels', params, {}, 'function'],
     ['github.listLabels', undefined, { envelope }, 'function']

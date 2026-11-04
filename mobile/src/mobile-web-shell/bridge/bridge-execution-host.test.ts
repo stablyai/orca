@@ -2,6 +2,7 @@ import { onTestFinished, describe, expect, it, vi } from 'vitest'
 import { scopeRpcClientToExecutionHost } from '../../transport/execution-host-scoped-rpc-client'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse } from '../../transport/types'
+import { shellLocalCall } from '../bridge-host-test-fakes'
 import { createBridgePortPair } from './bridge-port-pair-test-harness'
 import { createPageClient, INIT } from './bridge-page-client-test-harness'
 
@@ -43,8 +44,8 @@ describe('a server workspace call across the shell bridge', () => {
     server.subscribe('terminal.subscribe', { terminal: 't1' }, () => {})
     await pair.flush()
 
-    expect(shell.sendRequest.mock.calls).toEqual([
-      ['worktree.ps', { limit: 1 }, { envelope: { executionHost: SERVER } }]
+    expect(shell.sendRequest.mock.calls.map((call) => shellLocalCall(call))).toEqual([
+      ['worktree.ps', { limit: 1 }, { envelope: { executionHost: SERVER } }, 'function']
     ])
     expect(shell.subscribe.mock.calls).toEqual([
       [

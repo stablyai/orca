@@ -41,12 +41,13 @@ const external = [
   'src/main/codex/codex-form-transport-envelope.test.ts',
   'src/main/codex/codex-settled-body-contract-fixture.ts'
 ]
+const none: string[] = []
 const cleanTransfers = () => ({
   ok: true,
   expected: transfers,
-  external: [] as string[],
+  external: [...none],
   programTestFiles: transfers,
-  programExternalFiles: [] as string[],
+  programExternalFiles: [...none],
   failures: [],
   problems: []
 })

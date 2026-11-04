@@ -9,7 +9,7 @@ import {
   markRpcDeliveryUnknown
 } from '../../transport/rpc-delivery-ambiguity'
 
-import { createFakeRpcClient } from '../bridge-host-test-fakes'
+import { createFakeRpcClient, shellLocalCall } from '../bridge-host-test-fakes'
 import { BRIDGE_MAX_MESSAGE_BYTES, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
 import { bridgeOrdinaryBackstopMs } from './bridge-client-requests'
@@ -27,12 +27,6 @@ function readError(thrown: unknown): Error {
     throw new Error(`expected an Error, got ${typeof thrown}`)
   }
   return thrown
-}
-
-// The shell forwards method, params and the page's options, adding only its local pre-send fence.
-function shellLocal([method, params, options]: readonly unknown[]): unknown[] {
-  const { beforeSend, ...rest } = (options ?? {}) as { beforeSend?: () => void }
-  return [method, params, rest, typeof beforeSend]
 }
 
 async function ready(pair: BridgePortPair): Promise<BridgePortPair> {
@@ -55,7 +49,7 @@ describe('bridge round trip: requests', () => {
     void pair.client.sendRequest('worktree.ps', { host: 'a' })
     void pair.client.sendRequest('worktree.ps', { host: 'a' }, { timeoutMs: 50 })
     await pair.flush()
-    expect(pair.rpc.requests.map((request) => shellLocal(request.args))).toEqual([
+    expect(pair.rpc.requests.map((request) => shellLocalCall(request.args))).toEqual([
       ['worktree.ps', undefined, {}, 'function'],
       ['worktree.ps', { host: 'a' }, {}, 'function'],
       ['worktree.ps', { host: 'a' }, { timeoutMs: 50 }, 'function']
@@ -321,7 +315,7 @@ describe('bridge round trip: lost replies', () => {
     const pair = await ready(
       createFakeBridgePortPair({
         holdToPage: (json) => {
-          const frame = JSON.parse(json) as { type: string; part?: { i: number; of: number } }
+          const frame: { type: string; part?: { i: number; of: number } } = JSON.parse(json)
           return frame.type === 'reply' && drop(frame.part) && held.push(json) > 0
         }
       })
@@ -455,7 +449,7 @@ it('keeps source signals local, cancels only the abandoned waiter and preserves 
     .catch((error) => error)
   await pair.flush()
   expect(beforeSend).toHaveBeenCalledOnce()
-  expect(shellLocal(pair.rpc.requests[0]!.args)).toEqual([
+  expect(shellLocalCall(pair.rpc.requests[0]!.args)).toEqual([
     'status.get',
     undefined,
     { timeoutMs: 50 },
