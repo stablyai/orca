@@ -18089,6 +18089,104 @@
           "noMovableChat": "「{{action}}」を実行できません。移動できるアクティブなチャットがありません。",
           "clientUnsupported": "「{{action}}」を実行できません。このクライアントとランタイムは対応していません。"
         }
+      },
+      "newWorkspace": {
+        "multiRepo": {
+          "chooseSetup": "{{project}} のセットアップを選択",
+          "removeProject": "{{project}} を削除",
+          "selectedProjects": "選択したプロジェクト",
+          "useHost": "{{host}} を使用",
+          "addAnotherGitProject": "別の git プロジェクトを追加すると、複数のリポジトリにまたがるワークスペースを作成できます。",
+          "unavailableOnHost": "このホストでは利用できません",
+          "noSetupOnHost": "{{host}} にセットアップがありません",
+          "directSshUnsupported": "直接 SSH のセットアップはマルチリポジトリに対応していません",
+          "wslUnsupported": "WSL のセットアップはマルチリポジトリに対応していません",
+          "folderProject": "フォルダープロジェクト（git ワークツリーなし）",
+          "setupNotReady": "{{host}} のセットアップは準備ができていません",
+          "limitReached": "1 つのワークスペースに含められるプロジェクトは最大 12 件です",
+          "creating": "作成中…",
+          "createFailed": "ワークスペースを作成できませんでした",
+          "mixedHosts": "選択したプロジェクトが複数のホストにまたがっています。続行するにはホストを選択してください。",
+          "chooseHost": "ホストを選択",
+          "updateHost": "複数のリポジトリにまたがって作成するにはホストを更新してください",
+          "sameAsLast": "前回と同じ: {{projects}}",
+          "workspaceHost": "ワークスペースのホスト",
+          "blocked_other": "{{count}} 件のプロジェクトを削除するか、ホストを切り替えてください",
+          "createInProjects_other": "{{count}} 件のプロジェクトに作成",
+          "branchDiffers_other": "{{count}} 件のプロジェクトでブランチが異なります",
+          "branchInAll_other": "{{count}} 件すべてのプロジェクトでブランチ {{name}}"
+        }
+      },
+      "multiRepo": {
+        "strip": {
+          "label": "{{name}} のリポジトリ",
+          "all": "すべて",
+          "changed_other": "{{count}} 件変更"
+        },
+        "root": {
+          "emptyTitle": "このワークスペースにリポジトリがありません",
+          "retryAll": "すべて再試行",
+          "open": "{{repo}} を開く",
+          "retry": "再試行",
+          "removeFromWorkspace": "ワークスペースから削除",
+          "creating": "作成中 {{done}}/{{total}}",
+          "waiting": "待機中",
+          "creatingRow": "作成中…",
+          "interruptedRow": "中断",
+          "missingOnDisk": "ディスク上にありません",
+          "projectRemoved": "プロジェクトは削除されました",
+          "failedRow": "失敗",
+          "failedPathOccupied": "フォルダーはすでに使用中です",
+          "failedBranchConflict": "ブランチはすでに使用中です",
+          "failedGit": "Git で作成できませんでした",
+          "failedSetup": "セットアップに失敗しました",
+          "failedRepoUnavailable": "プロジェクトを利用できません",
+          "failedHostUnavailable": "ホストを利用できません",
+          "clean": "クリーン",
+          "notCreated": "{{names}} はまだ作成されていません。ワークスペースフォルダーには準備済みのリポジトリのみが含まれます。",
+          "deleteWorkspace": "ワークスペースを削除",
+          "retryRepo": "{{repo}} を再試行",
+          "repos_other": "{{count}} 件のリポジトリ",
+          "failed_other": "{{count}} 件失敗",
+          "interrupted_other": "{{count}} 件中断",
+          "missing_other": "{{count}} 件見つかりません",
+          "withChanges_other": "{{count}} 件に変更あり",
+          "changed_other": "{{count}} 件変更"
+        },
+        "delete": {
+          "checking": "確認中…",
+          "close": "閉じる",
+          "cancel": "キャンセル",
+          "title": "{{name}} を削除しますか？",
+          "body_other": "{{count}} 件のワークツリーと、空の場合はワークスペースフォルダーを削除します。完全にマージ済みのブランチは削除され、未マージのコミットがあるブランチは保持されます。",
+          "confirm_other": "ワークスペースと {{count}} 件のワークツリーを削除",
+          "removing": "削除中…",
+          "removedKept": "削除しました。ブランチ {{branch}} は保持されます",
+          "removed": "削除しました",
+          "failed": "失敗",
+          "gone": "ワークツリーはすでにありません。記録のみ削除します",
+          "dirtyUnknown": "変更を確認できませんでした",
+          "dirty_other": "未コミットのファイル {{count}} 件",
+          "unpublishedUnknown": "コミットを確認できませんでした",
+          "unpublished_other": "{{branch}} に未公開のコミット {{count}} 件",
+          "branchKept": "ブランチは保持されます: 未マージのコミットあり",
+          "branchUnknown": "ブランチを確認できませんでした",
+          "force": "{{repo}} の変更を破棄",
+          "folderKeptNotEmpty": "フォルダーは保持されました: ファイルが含まれています（{{path}}）",
+          "folderKeptNotOwned": "フォルダーは保持されました: Orca が作成したものではありません（{{path}}）",
+          "folderKeptFailed": "フォルダーは保持されました: 削除できませんでした（{{path}}）",
+          "bodyEmpty": "ワークスペースの記録と、空の場合はそのフォルダーを削除します。",
+          "confirmEmpty": "ワークスペースを削除",
+          "retryFailed_other": "失敗した {{count}} 件を再試行",
+          "discard_other": "削除して {{count}} 件のリポジトリの変更を破棄"
+        },
+        "memberDelete": {
+          "keeps_other": "{{name}} のみを削除します。ワークスペースには {{count}} 件のリポジトリが残ります。"
+        },
+        "removeFromWorkspace": {
+          "done": "{{name}} を {{workspace}} から外しました",
+          "undo": "元に戻す"
+        }
       }
     },
     "i18n": {
@@ -21679,7 +21777,9 @@
       "terminalSplitRight": "ターミナルを右に分割",
       "terminalSplitDown": "ターミナルを下に分割",
       "terminalSwitchInputSource": "入力ソース / 言語を切り替え（ネイティブ）",
-      "newAgentTab": "新規 {{agent}} タブ"
+      "newAgentTab": "新規 {{agent}} タブ",
+      "workspaceNextRepo": "ワークスペース内の次のリポジトリ",
+      "workspacePreviousRepo": "ワークスペース内の前のリポジトリ"
     },
     "group": {
       "global": "グローバル",

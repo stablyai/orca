@@ -17,7 +17,7 @@ import { MultiRepoDeleteSheet } from './MultiRepoDeleteSheet'
 
 function textOf(node: ReactTestInstance): string {
   return node
-    .findAllByType('Text')
+    .findAll((child) => String(child.type) === 'Text')
     .map((text) => text.children.join(''))
     .join('|')
 }

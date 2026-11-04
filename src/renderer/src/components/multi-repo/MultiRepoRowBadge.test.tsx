@@ -68,6 +68,13 @@ describe('MultiRepoRowBadge', () => {
     expect(container.textContent).toContain('3 repos')
   })
 
+  it('uses the singular for a one-repo workspace', () => {
+    const { container } = render(<MultiRepoRowBadge folderWorkspace={workspace([member('a')])} />)
+    expect(container.textContent).toContain('2 changed')
+    expect(container.textContent).toContain('1 repo')
+    expect(container.textContent).not.toContain('1 repos')
+  })
+
   it('spells out a failure and progress in words, never a bare dot', () => {
     const { container, rerender } = render(
       <MultiRepoRowBadge

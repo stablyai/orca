@@ -999,6 +999,32 @@
       "folder": "資料夾",
       "project": "專案 {{repo}}",
       "remoteHost": "遠端主機"
+    },
+    "multiRepoDeleteSheet": {
+      "hostUnavailable": "此主機無法刪除工作區",
+      "checkFailed": "無法檢查工作區",
+      "deleteFailed": "無法刪除工作區",
+      "checking": "正在檢查 {{name}}…",
+      "deleteTitle": "刪除 {{name}}？",
+      "close": "關閉",
+      "checkAgain": "重新檢查",
+      "removesWorktrees_one": "這將移除 {{count}} 個工作樹，並在工作區資料夾為空時將其刪除。已完全合併的分支會被刪除；含有未合併提交的分支會保留。",
+      "removesWorktrees_other": "這將移除 {{count}} 個工作樹，並在工作區資料夾為空時將其刪除。已完全合併的分支會被刪除；含有未合併提交的分支會保留。",
+      "deleteFromDesktop": "請在桌面端刪除以捨棄變更。",
+      "cancel": "取消",
+      "deleting": "正在刪除…",
+      "delete": "刪除",
+      "deleted": "已刪除 {{name}}",
+      "notFullyDeleted": "{{name}} 未完全刪除",
+      "retryFailed_one": "重試 {{count}} 個失敗項目",
+      "retryFailed_other": "重試 {{count}} 個失敗項目"
+    },
+    "multiRepoMemberRows": {
+      "collapseRepos": "{{chip}}，收合存放庫",
+      "expandRepos": "{{chip}}，展開存放庫",
+      "retrying": "正在重試",
+      "retryMember": "重試 {{name}}",
+      "retry": "重試"
     }
   },
   "connection": {
@@ -2620,6 +2646,9 @@
       "waitForStart": "請等待代理程式完成啟動。",
       "waitForTurn": "請等待代理程式完成回覆，或將其停止。",
       "waitMoment": "請稍候。"
+    },
+    "mobileSessionRepoSwitcher": {
+      "switchRepo": "{{label}}，切換存放庫"
     }
   },
   "settings": {
@@ -3909,6 +3938,40 @@
       "inProgress": "進行中",
       "inReview": "審查中",
       "pinned": "已固定"
+    },
+    "multiRepoSessionSiblings": {
+      "all": "全部"
+    },
+    "multiRepoDeleteSheetModel": {
+      "nothingOnDisk": "磁碟上沒有可移除的內容",
+      "dirtyUnknown": "無法檢查未提交的變更",
+      "uncommittedFiles_other": "{{count}} 個未提交的檔案",
+      "unpublishedUnknown": "無法檢查未發布的提交",
+      "unpublishedCommits_other": "{{count}} 個未發布的提交",
+      "clean": "沒有未提交的變更",
+      "removedBranchKept": "已移除。分支 {{branch}} 已保留：有未合併的提交",
+      "removed": "已移除",
+      "dropped": "已從工作區移出",
+      "failed": "失敗：{{message}}",
+      "folderKeptNotEmpty": "資料夾已保留：其中包含檔案（{{path}}）",
+      "folderKeptNotOwned": "資料夾已保留：它不是由 Orca 建立的（{{path}}）",
+      "folderKeptFailed": "資料夾已保留：無法將其移除（{{path}}）",
+      "uncommittedFiles_one": "{{count}} 個未提交的檔案",
+      "unpublishedCommits_one": "{{count}} 個未發布的提交"
+    },
+    "multiRepoWorkspaceSummary": {
+      "creating": "正在建立 {{done}}/{{total}}",
+      "repos_other": "{{count}} 個存放庫",
+      "failed_other": "{{count}} 個失敗",
+      "interrupted_other": "{{count}} 個已中斷",
+      "waiting": "等待中",
+      "creatingState": "正在建立",
+      "ready": "就緒",
+      "failedState": "失敗",
+      "interruptedState": "已中斷",
+      "repos_one": "{{count}} 個存放庫",
+      "failed_one": "{{count}} 個失敗",
+      "interrupted_one": "{{count}} 個已中斷"
     }
   }
 }

@@ -8,16 +8,11 @@ export function countBlockedProjects(resolutions: readonly SelectedProjectResolu
 /** Text beside a disabled Create; null when the selection can be sent. */
 export function getMultiRepoCreateBlockedReason(blockedCount: number): string | null {
   if (blockedCount > 0) {
-    return blockedCount === 1
-      ? translate(
-          'auto.components.newWorkspace.multiRepo.blockedOne',
-          'Remove 1 project or switch host'
-        )
-      : translate(
-          'auto.components.newWorkspace.multiRepo.blockedMany',
-          'Remove {{n}} projects or switch host',
-          { n: blockedCount }
-        )
+    return translate(
+      'auto.components.newWorkspace.multiRepo.blocked',
+      'Remove {{count}} projects or switch host',
+      { count: blockedCount, defaultValue_one: 'Remove {{count}} project or switch host' }
+    )
   }
   return null
 }
@@ -35,10 +30,8 @@ export function getMultiRepoPrimaryActionLabel(projectCount: number, creating: b
   }
   return translate(
     'auto.components.newWorkspace.multiRepo.createInProjects',
-    'Create in {{n}} projects',
-    {
-      n: projectCount
-    }
+    'Create in {{count}} projects',
+    { count: projectCount, defaultValue_one: 'Create in {{count}} project' }
   )
 }
 
@@ -48,22 +41,20 @@ export function getMultiRepoBranchHelper(
   projectCount: number,
   overrideCount: number
 ): string {
-  if (overrideCount === 1) {
-    return translate(
-      'auto.components.newWorkspace.multiRepo.branchDiffersOne',
-      'Branch differs in 1 project'
-    )
-  }
-  if (overrideCount > 1) {
+  if (overrideCount > 0) {
     return translate(
       'auto.components.newWorkspace.multiRepo.branchDiffers',
-      'Branch differs in {{n}} projects',
-      { n: overrideCount }
+      'Branch differs in {{count}} projects',
+      { count: overrideCount, defaultValue_one: 'Branch differs in {{count}} project' }
     )
   }
   return translate(
     'auto.components.newWorkspace.multiRepo.branchInAll',
-    'Branch {{name}} in all {{n}} projects',
-    { name: name.trim(), n: projectCount }
+    'Branch {{name}} in all {{count}} projects',
+    {
+      name: name.trim(),
+      count: projectCount,
+      defaultValue_one: 'Branch {{name}} in {{count}} project'
+    }
   )
 }

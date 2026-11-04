@@ -340,6 +340,56 @@
           }
         }
       },
+      "multiRepo": {
+        "delete": {
+          "body_one": "This removes {{count}} worktree and the workspace folder if it is empty. Branches that are fully merged are deleted; branches with unmerged commits are kept.",
+          "body_other": "This removes {{count}} worktrees and the workspace folder if it is empty. Branches that are fully merged are deleted; branches with unmerged commits are kept.",
+          "confirm_one": "Delete workspace and {{count}} worktree",
+          "confirm_other": "Delete workspace and {{count}} worktrees",
+          "dirty_one": "{{count}} uncommitted file",
+          "dirty_other": "{{count}} uncommitted files",
+          "discard_one": "Delete and discard changes in {{count}} repo",
+          "discard_other": "Delete and discard changes in {{count}} repos",
+          "retryFailed_one": "Retry {{count}} failed",
+          "retryFailed_other": "Retry {{count}} failed",
+          "unpublished_one": "{{count}} unpublished commit on {{branch}}",
+          "unpublished_other": "{{count}} unpublished commits on {{branch}}"
+        },
+        "memberDelete": {
+          "keeps_one": "Only deletes {{name}}. The workspace keeps {{count}} repo.",
+          "keeps_other": "Only deletes {{name}}. The workspace keeps {{count}} repos."
+        },
+        "root": {
+          "changed_one": "{{count}} changed",
+          "changed_other": "{{count}} changed",
+          "failed_one": "{{count}} failed",
+          "failed_other": "{{count}} failed",
+          "interrupted_one": "{{count}} interrupted",
+          "interrupted_other": "{{count}} interrupted",
+          "missing_one": "{{count}} missing",
+          "missing_other": "{{count}} missing",
+          "repos_one": "{{count}} repo",
+          "repos_other": "{{count}} repos",
+          "withChanges_one": "{{count}} with changes",
+          "withChanges_other": "{{count}} with changes"
+        },
+        "strip": {
+          "changed_one": "{{count}} changed",
+          "changed_other": "{{count}} changed"
+        }
+      },
+      "newWorkspace": {
+        "multiRepo": {
+          "blocked_one": "Remove {{count}} project or switch host",
+          "blocked_other": "Remove {{count}} projects or switch host",
+          "branchDiffers_one": "Branch differs in {{count}} project",
+          "branchDiffers_other": "Branch differs in {{count}} projects",
+          "branchInAll_one": "Branch {{name}} in {{count}} project",
+          "branchInAll_other": "Branch {{name}} in all {{count}} projects",
+          "createInProjects_one": "Create in {{count}} project",
+          "createInProjects_other": "Create in {{count}} projects"
+        }
+      },
       "onboarding": {
         "AgentStep": {
           "showMoreAgents_one": "Show {{count}} more agent →",
@@ -1225,18 +1275,6 @@
               }
             }
           }
-        }
-      },
-      "multiRepo": {
-        "delete": {
-          "body_one": "This removes {{count}} worktree and the workspace folder if it is empty. Branches that are fully merged are deleted; branches with unmerged commits are kept.",
-          "body_other": "This removes {{count}} worktrees and the workspace folder if it is empty. Branches that are fully merged are deleted; branches with unmerged commits are kept.",
-          "confirm_one": "Delete workspace and {{count}} worktree",
-          "confirm_other": "Delete workspace and {{count}} worktrees",
-          "dirty_one": "{{count}} uncommitted file",
-          "dirty_other": "{{count}} uncommitted files",
-          "unpublished_one": "{{count}} unpublished commit on {{branch}}",
-          "unpublished_other": "{{count}} unpublished commits on {{branch}}"
         }
       }
     },

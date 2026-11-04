@@ -18089,6 +18089,104 @@
           "noMovableChat": "“{{action}}” 실행 불가 — 이동 가능한 활성 채팅이 없습니다.",
           "clientUnsupported": "“{{action}}” 실행 불가 — 이 클라이언트와 런타임에서 지원하지 않습니다."
         }
+      },
+      "newWorkspace": {
+        "multiRepo": {
+          "chooseSetup": "{{project}}의 설정 선택",
+          "removeProject": "{{project}} 제거",
+          "selectedProjects": "선택한 프로젝트",
+          "useHost": "{{host}} 사용",
+          "addAnotherGitProject": "다른 git 프로젝트를 추가하여 여러 저장소에 걸친 워크스페이스를 만드세요.",
+          "unavailableOnHost": "이 호스트에서 사용할 수 없음",
+          "noSetupOnHost": "{{host}}에 설정 없음",
+          "directSshUnsupported": "직접 SSH 설정은 다중 저장소를 지원하지 않습니다",
+          "wslUnsupported": "WSL 설정은 다중 저장소를 지원하지 않습니다",
+          "folderProject": "폴더 프로젝트, git 워크트리 없음",
+          "setupNotReady": "{{host}}의 설정이 준비되지 않았습니다",
+          "limitReached": "워크스페이스에는 프로젝트를 최대 12개까지 포함할 수 있습니다",
+          "creating": "만드는 중…",
+          "createFailed": "워크스페이스를 만들지 못했습니다",
+          "mixedHosts": "선택한 프로젝트가 둘 이상의 호스트에 걸쳐 있습니다. 계속하려면 호스트를 선택하세요.",
+          "chooseHost": "호스트 선택",
+          "updateHost": "여러 저장소에 걸쳐 만들려면 호스트를 업데이트하세요",
+          "sameAsLast": "지난번과 동일: {{projects}}",
+          "workspaceHost": "워크스페이스 호스트",
+          "blocked_other": "프로젝트 {{count}}개를 제거하거나 호스트를 전환하세요",
+          "createInProjects_other": "프로젝트 {{count}}개에 만들기",
+          "branchDiffers_other": "프로젝트 {{count}}개에서 브랜치가 다름",
+          "branchInAll_other": "프로젝트 {{count}}개 모두에서 브랜치 {{name}}"
+        }
+      },
+      "multiRepo": {
+        "strip": {
+          "label": "{{name}}의 저장소",
+          "all": "전체",
+          "changed_other": "{{count}}개 변경됨"
+        },
+        "root": {
+          "emptyTitle": "이 워크스페이스에 저장소가 없습니다",
+          "retryAll": "모두 다시 시도",
+          "open": "{{repo}} 열기",
+          "retry": "다시 시도",
+          "removeFromWorkspace": "워크스페이스에서 제거",
+          "creating": "만드는 중 {{done}}/{{total}}",
+          "waiting": "대기 중",
+          "creatingRow": "만드는 중…",
+          "interruptedRow": "중단됨",
+          "missingOnDisk": "디스크에 없음",
+          "projectRemoved": "프로젝트가 제거됨",
+          "failedRow": "실패",
+          "failedPathOccupied": "폴더가 이미 사용 중임",
+          "failedBranchConflict": "브랜치가 이미 사용 중임",
+          "failedGit": "Git이 만들지 못함",
+          "failedSetup": "설정 실패",
+          "failedRepoUnavailable": "프로젝트를 사용할 수 없음",
+          "failedHostUnavailable": "호스트를 사용할 수 없음",
+          "clean": "변경 없음",
+          "notCreated": "{{names}}은(는) 아직 만들어지지 않았습니다. 워크스페이스 폴더에는 준비된 저장소만 있습니다.",
+          "deleteWorkspace": "워크스페이스 삭제",
+          "retryRepo": "{{repo}} 다시 시도",
+          "repos_other": "저장소 {{count}}개",
+          "failed_other": "{{count}}개 실패",
+          "interrupted_other": "{{count}}개 중단됨",
+          "missing_other": "{{count}}개 없음",
+          "withChanges_other": "{{count}}개 변경 사항 있음",
+          "changed_other": "{{count}}개 변경됨"
+        },
+        "delete": {
+          "checking": "확인 중…",
+          "close": "닫기",
+          "cancel": "취소",
+          "title": "{{name}}을(를) 삭제할까요?",
+          "body_other": "워크트리 {{count}}개와 비어 있는 경우 워크스페이스 폴더를 제거합니다. 완전히 병합된 브랜치는 삭제되고, 병합되지 않은 커밋이 있는 브랜치는 유지됩니다.",
+          "confirm_other": "워크스페이스와 워크트리 {{count}}개 삭제",
+          "removing": "제거 중…",
+          "removedKept": "제거됨. 브랜치 {{branch}} 유지됨",
+          "removed": "제거됨",
+          "failed": "실패",
+          "gone": "워크트리가 이미 없습니다. 기록만 제거됩니다",
+          "dirtyUnknown": "변경 사항을 확인할 수 없음",
+          "dirty_other": "커밋되지 않은 파일 {{count}}개",
+          "unpublishedUnknown": "커밋을 확인할 수 없음",
+          "unpublished_other": "{{branch}}에 게시되지 않은 커밋 {{count}}개",
+          "branchKept": "브랜치 유지 예정: 병합되지 않은 커밋 있음",
+          "branchUnknown": "브랜치를 확인할 수 없음",
+          "force": "{{repo}}의 변경 사항 버리기",
+          "folderKeptNotEmpty": "폴더 유지됨: 파일이 있습니다({{path}})",
+          "folderKeptNotOwned": "폴더 유지됨: Orca가 만든 폴더가 아닙니다({{path}})",
+          "folderKeptFailed": "폴더 유지됨: 제거할 수 없습니다({{path}})",
+          "bodyEmpty": "워크스페이스 기록과 비어 있는 경우 해당 폴더를 제거합니다.",
+          "confirmEmpty": "워크스페이스 삭제",
+          "retryFailed_other": "실패한 {{count}}개 다시 시도",
+          "discard_other": "삭제하고 저장소 {{count}}개의 변경 사항 버리기"
+        },
+        "memberDelete": {
+          "keeps_other": "{{name}}만 삭제합니다. 워크스페이스에는 저장소 {{count}}개가 남습니다."
+        },
+        "removeFromWorkspace": {
+          "done": "{{name}}이(가) {{workspace}}에서 제외됨",
+          "undo": "실행 취소"
+        }
       }
     },
     "i18n": {
@@ -21679,7 +21777,9 @@
       "terminalSplitRight": "터미널 오른쪽으로 분할",
       "terminalSplitDown": "터미널 아래로 분할",
       "terminalSwitchInputSource": "입력 소스/언어 전환(네이티브)",
-      "newAgentTab": "새 {{agent}} 탭"
+      "newAgentTab": "새 {{agent}} 탭",
+      "workspaceNextRepo": "워크스페이스의 다음 저장소",
+      "workspacePreviousRepo": "워크스페이스의 이전 저장소"
     },
     "group": {
       "global": "글로벌",

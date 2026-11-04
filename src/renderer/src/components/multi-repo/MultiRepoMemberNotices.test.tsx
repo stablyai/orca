@@ -28,11 +28,15 @@ const workspace: FolderWorkspace = {
   lastActivityAt: 0,
   createdAt: 0,
   updatedAt: 0,
-  multiRepo: {
+  multiRepo: multiRepoOf(['a', 'b', 'c'])
+}
+
+function multiRepoOf(ids: string[]): NonNullable<FolderWorkspace['multiRepo']> {
+  return {
     version: 1,
     executionHostId: 'local',
     rootOwnedByOrca: true,
-    members: ['a', 'b', 'c'].map((id) => ({
+    members: ids.map((id) => ({
       memberId: id,
       repoId: `repo-${id}`,
       dirName: id,
@@ -64,6 +68,14 @@ describe('MultiRepoMemberDeleteNote', () => {
   it('says only that repo goes and how many the workspace keeps', () => {
     const { container } = render(<MultiRepoMemberDeleteNote worktreeId="wt-b" />)
     expect(container.textContent).toBe('Only deletes web. The workspace keeps 2 repos.')
+  })
+
+  it('uses the singular when the workspace keeps one repo', () => {
+    useAppStore.setState({
+      folderWorkspaces: [{ ...workspace, multiRepo: multiRepoOf(['a', 'b']) }]
+    })
+    const { container } = render(<MultiRepoMemberDeleteNote worktreeId="wt-b" />)
+    expect(container.textContent).toBe('Only deletes web. The workspace keeps 1 repo.')
   })
 
   it('renders nothing for a worktree that is not a member', () => {

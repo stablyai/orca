@@ -1089,6 +1089,36 @@
       "folder": "Папка",
       "project": "Проект {{repo}}",
       "remoteHost": "Удалённый сервер"
+    },
+    "multiRepoDeleteSheet": {
+      "hostUnavailable": "Этот хост недоступен для удаления рабочих пространств",
+      "checkFailed": "Не удалось проверить рабочее пространство",
+      "deleteFailed": "Не удалось удалить рабочее пространство",
+      "checking": "Проверка {{name}}…",
+      "deleteTitle": "Удалить {{name}}?",
+      "close": "Закрыть",
+      "checkAgain": "Проверить снова",
+      "removesWorktrees_one": "Будет удалено {{count}} рабочее дерево и папка рабочего пространства, если она пуста. Полностью слитые ветки удаляются; ветки с неслитыми коммитами сохраняются.",
+      "removesWorktrees_few": "Будет удалено {{count}} рабочих дерева и папка рабочего пространства, если она пуста. Полностью слитые ветки удаляются; ветки с неслитыми коммитами сохраняются.",
+      "removesWorktrees_many": "Будет удалено {{count}} рабочих деревьев и папка рабочего пространства, если она пуста. Полностью слитые ветки удаляются; ветки с неслитыми коммитами сохраняются.",
+      "removesWorktrees_other": "Будет удалено {{count}} рабочего дерева и папка рабочего пространства, если она пуста. Полностью слитые ветки удаляются; ветки с неслитыми коммитами сохраняются.",
+      "deleteFromDesktop": "Чтобы отменить изменения, удалите на компьютере.",
+      "cancel": "Отмена",
+      "deleting": "Удаление…",
+      "delete": "Удалить",
+      "deleted": "{{name}} удалено",
+      "notFullyDeleted": "{{name}} удалено не полностью",
+      "retryFailed_one": "Повторить {{count}} неудачное",
+      "retryFailed_few": "Повторить {{count}} неудачных",
+      "retryFailed_many": "Повторить {{count}} неудачных",
+      "retryFailed_other": "Повторить {{count}} неудачного"
+    },
+    "multiRepoMemberRows": {
+      "collapseRepos": "{{chip}}, свернуть репозитории",
+      "expandRepos": "{{chip}}, развернуть репозитории",
+      "retrying": "Повторная попытка",
+      "retryMember": "Повторить {{name}}",
+      "retry": "Повторить"
     }
   },
   "connection": {
@@ -2776,6 +2806,9 @@
       "waitForStart": "Дождитесь запуска агента.",
       "waitForTurn": "Дождитесь ответа агента или остановите его.",
       "waitMoment": "Подождите немного."
+    },
+    "mobileSessionRepoSwitcher": {
+      "switchRepo": "{{label}}, сменить репозиторий"
     }
   },
   "settings": {
@@ -4131,6 +4164,50 @@
       "inProgress": "В работе",
       "inReview": "На проверке",
       "pinned": "Закреплено"
+    },
+    "multiRepoSessionSiblings": {
+      "all": "Все"
+    },
+    "multiRepoDeleteSheetModel": {
+      "nothingOnDisk": "На диске нечего удалять",
+      "dirtyUnknown": "Не удалось проверить незакоммиченные изменения",
+      "uncommittedFiles_one": "{{count}} незакоммиченный файл",
+      "uncommittedFiles_few": "{{count}} незакоммиченных файла",
+      "uncommittedFiles_many": "{{count}} незакоммиченных файлов",
+      "uncommittedFiles_other": "{{count}} незакоммиченного файла",
+      "unpublishedUnknown": "Не удалось проверить неопубликованные коммиты",
+      "unpublishedCommits_one": "{{count}} неопубликованный коммит",
+      "unpublishedCommits_few": "{{count}} неопубликованных коммита",
+      "unpublishedCommits_many": "{{count}} неопубликованных коммитов",
+      "unpublishedCommits_other": "{{count}} неопубликованного коммита",
+      "clean": "Нет незакоммиченных изменений",
+      "removedBranchKept": "Удалено. Ветка {{branch}} сохранена: есть неслитые коммиты",
+      "removed": "Удалено",
+      "dropped": "Убрано из рабочего пространства",
+      "failed": "Ошибка: {{message}}",
+      "folderKeptNotEmpty": "Папка сохранена: в ней есть файлы ({{path}})",
+      "folderKeptNotOwned": "Папка сохранена: её создал не Orca ({{path}})",
+      "folderKeptFailed": "Папка сохранена: не удалось её удалить ({{path}})"
+    },
+    "multiRepoWorkspaceSummary": {
+      "creating": "Создание {{done}}/{{total}}",
+      "repos_one": "{{count}} репозиторий",
+      "repos_few": "{{count}} репозитория",
+      "repos_many": "{{count}} репозиториев",
+      "repos_other": "{{count}} репозитория",
+      "failed_one": "{{count}} с ошибкой",
+      "failed_few": "{{count}} с ошибкой",
+      "failed_many": "{{count}} с ошибкой",
+      "failed_other": "{{count}} с ошибкой",
+      "interrupted_one": "{{count}} прерван",
+      "interrupted_few": "{{count}} прерваны",
+      "interrupted_many": "{{count}} прерваны",
+      "interrupted_other": "{{count}} прервано",
+      "waiting": "Ожидание",
+      "creatingState": "Создание",
+      "ready": "Готово",
+      "failedState": "Ошибка",
+      "interruptedState": "Прервано"
     }
   }
 }

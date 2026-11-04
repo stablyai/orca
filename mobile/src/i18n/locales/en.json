@@ -813,6 +813,40 @@
       "inProgress": "In progress",
       "closed": "Closed",
       "done": "Done"
+    },
+    "multiRepoSessionSiblings": {
+      "all": "All"
+    },
+    "multiRepoDeleteSheetModel": {
+      "nothingOnDisk": "Nothing on disk to remove",
+      "dirtyUnknown": "Could not check for uncommitted changes",
+      "uncommittedFiles_one": "{{count}} uncommitted file",
+      "uncommittedFiles_other": "{{count}} uncommitted files",
+      "unpublishedUnknown": "Could not check unpublished commits",
+      "unpublishedCommits_one": "{{count}} unpublished commit",
+      "unpublishedCommits_other": "{{count}} unpublished commits",
+      "clean": "No uncommitted changes",
+      "removedBranchKept": "Removed. Branch {{branch}} kept: unmerged commits",
+      "removed": "Removed",
+      "dropped": "Removed from workspace",
+      "failed": "Failed: {{message}}",
+      "folderKeptNotEmpty": "Folder kept: it contains files ({{path}})",
+      "folderKeptNotOwned": "Folder kept: Orca did not create it ({{path}})",
+      "folderKeptFailed": "Folder kept: it could not be removed ({{path}})"
+    },
+    "multiRepoWorkspaceSummary": {
+      "creating": "Creating {{done}}/{{total}}",
+      "repos_one": "{{count}} repo",
+      "repos_other": "{{count}} repos",
+      "failed_one": "{{count}} failed",
+      "failed_other": "{{count}} failed",
+      "interrupted_one": "{{count}} interrupted",
+      "interrupted_other": "{{count}} interrupted",
+      "waiting": "Waiting",
+      "creatingState": "Creating",
+      "ready": "Ready",
+      "failedState": "Failed",
+      "interruptedState": "Interrupted"
     }
   },
   "components": {
@@ -1275,6 +1309,32 @@
       "detailsChangedMessage": "The account or reset offer changed before the host contacted Codex. Review the updated details, then confirm again.",
       "resetFailed": "Could not reset rate limits",
       "confirmTitle": "Use a rate-limit reset?"
+    },
+    "multiRepoDeleteSheet": {
+      "hostUnavailable": "This host is not available for workspace deletion",
+      "checkFailed": "Could not check the workspace",
+      "deleteFailed": "Could not delete the workspace",
+      "checking": "Checking {{name}}…",
+      "deleteTitle": "Delete {{name}}?",
+      "close": "Close",
+      "checkAgain": "Check again",
+      "removesWorktrees_one": "This removes {{count}} worktree and the workspace folder if it is empty. Branches that are fully merged are deleted; branches with unmerged commits are kept.",
+      "removesWorktrees_other": "This removes {{count}} worktrees and the workspace folder if it is empty. Branches that are fully merged are deleted; branches with unmerged commits are kept.",
+      "deleteFromDesktop": "Delete from desktop to discard changes.",
+      "cancel": "Cancel",
+      "deleting": "Deleting…",
+      "delete": "Delete",
+      "deleted": "{{name}} deleted",
+      "notFullyDeleted": "{{name}} not fully deleted",
+      "retryFailed_one": "Retry {{count}} failed",
+      "retryFailed_other": "Retry {{count}} failed"
+    },
+    "multiRepoMemberRows": {
+      "collapseRepos": "{{chip}}, collapse repos",
+      "expandRepos": "{{chip}}, expand repos",
+      "retrying": "Retrying",
+      "retryMember": "Retry {{name}}",
+      "retry": "Retry"
     }
   },
   "pullRequest": {
@@ -2463,6 +2523,9 @@
       "chatNotFound": "Orca can't find this chat.",
       "startNewChat": "Start a new chat to continue.",
       "tryAgain": "Try again."
+    },
+    "mobileSessionRepoSwitcher": {
+      "switchRepo": "{{label}}, switch repo"
     }
   },
   "chat": {

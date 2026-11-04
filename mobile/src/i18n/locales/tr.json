@@ -1003,6 +1003,32 @@
       "folder": "Klasör",
       "project": "{{repo}} projesi",
       "remoteHost": "Uzak sunucu"
+    },
+    "multiRepoDeleteSheet": {
+      "hostUnavailable": "Bu ana bilgisayar çalışma alanı silme için kullanılamıyor",
+      "checkFailed": "Çalışma alanı kontrol edilemedi",
+      "deleteFailed": "Çalışma alanı silinemedi",
+      "checking": "{{name}} kontrol ediliyor…",
+      "deleteTitle": "{{name}} silinsin mi?",
+      "close": "Kapat",
+      "checkAgain": "Tekrar kontrol et",
+      "removesWorktrees_one": "Bu işlem {{count}} worktree’yi ve boşsa çalışma alanı klasörünü kaldırır. Tamamen birleştirilmiş dallar silinir; birleştirilmemiş commit’leri olan dallar korunur.",
+      "removesWorktrees_other": "Bu işlem {{count}} worktree’yi ve boşsa çalışma alanı klasörünü kaldırır. Tamamen birleştirilmiş dallar silinir; birleştirilmemiş commit’leri olan dallar korunur.",
+      "deleteFromDesktop": "Değişiklikleri atmak için masaüstünden silin.",
+      "cancel": "İptal",
+      "deleting": "Siliniyor…",
+      "delete": "Sil",
+      "deleted": "{{name}} silindi",
+      "notFullyDeleted": "{{name}} tamamen silinemedi",
+      "retryFailed_one": "Başarısız {{count}} öğeyi yeniden dene",
+      "retryFailed_other": "Başarısız {{count}} öğeyi yeniden dene"
+    },
+    "multiRepoMemberRows": {
+      "collapseRepos": "{{chip}}, depoları daralt",
+      "expandRepos": "{{chip}}, depoları genişlet",
+      "retrying": "Yeniden deneniyor",
+      "retryMember": "{{name}} yeniden dene",
+      "retry": "Yeniden dene"
     }
   },
   "connection": {
@@ -2624,6 +2650,9 @@
       "waitForStart": "Ajanın başlatılmasının tamamlanmasını bekleyin.",
       "waitForTurn": "Ajanın yanıtını tamamlamasını bekleyin veya durdurun.",
       "waitMoment": "Biraz bekleyin."
+    },
+    "mobileSessionRepoSwitcher": {
+      "switchRepo": "{{label}}, depo değiştir"
     }
   },
   "settings": {
@@ -3913,6 +3942,40 @@
       "inProgress": "Devam ediyor",
       "inReview": "İncelemede",
       "pinned": "Sabitlenenler"
+    },
+    "multiRepoSessionSiblings": {
+      "all": "Tümü"
+    },
+    "multiRepoDeleteSheetModel": {
+      "nothingOnDisk": "Diskte kaldırılacak bir şey yok",
+      "dirtyUnknown": "Commit edilmemiş değişiklikler kontrol edilemedi",
+      "uncommittedFiles_one": "Commit edilmemiş {{count}} dosya",
+      "uncommittedFiles_other": "Commit edilmemiş {{count}} dosya",
+      "unpublishedUnknown": "Yayımlanmamış commit’ler kontrol edilemedi",
+      "unpublishedCommits_one": "Yayımlanmamış {{count}} commit",
+      "unpublishedCommits_other": "Yayımlanmamış {{count}} commit",
+      "clean": "Commit edilmemiş değişiklik yok",
+      "removedBranchKept": "Kaldırıldı. {{branch}} branch’i korundu: birleştirilmemiş commit’ler var",
+      "removed": "Kaldırıldı",
+      "dropped": "Çalışma alanından kaldırıldı",
+      "failed": "Başarısız: {{message}}",
+      "folderKeptNotEmpty": "Klasör korundu: dosya içeriyor ({{path}})",
+      "folderKeptNotOwned": "Klasör korundu: Orca tarafından oluşturulmadı ({{path}})",
+      "folderKeptFailed": "Klasör korundu: kaldırılamadı ({{path}})"
+    },
+    "multiRepoWorkspaceSummary": {
+      "creating": "Oluşturuluyor {{done}}/{{total}}",
+      "repos_one": "{{count}} repo",
+      "repos_other": "{{count}} repo",
+      "failed_one": "{{count}} başarısız",
+      "failed_other": "{{count}} başarısız",
+      "interrupted_one": "{{count}} kesintiye uğradı",
+      "interrupted_other": "{{count}} kesintiye uğradı",
+      "waiting": "Bekliyor",
+      "creatingState": "Oluşturuluyor",
+      "ready": "Hazır",
+      "failedState": "Başarısız",
+      "interruptedState": "Kesintiye uğradı"
     }
   }
 }

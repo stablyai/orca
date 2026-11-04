@@ -18187,6 +18187,104 @@
           "noMovableChat": "無法執行「{{action}}」— 沒有作用中且可移動的聊天。",
           "clientUnsupported": "無法執行「{{action}}」— 此用戶端與執行環境不支援此操作。"
         }
+      },
+      "newWorkspace": {
+        "multiRepo": {
+          "chooseSetup": "為 {{project}} 選擇設定",
+          "removeProject": "移除 {{project}}",
+          "selectedProjects": "已選專案",
+          "useHost": "使用 {{host}}",
+          "addAnotherGitProject": "再新增一個 Git 專案，即可建立跨存放庫的工作區。",
+          "unavailableOnHost": "在此主機上無法使用",
+          "noSetupOnHost": "{{host}} 上沒有設定",
+          "directSshUnsupported": "直接 SSH 設定不支援多存放庫",
+          "wslUnsupported": "WSL 設定不支援多存放庫",
+          "folderProject": "資料夾專案，沒有 Git 工作樹",
+          "setupNotReady": "{{host}} 上的設定尚未就緒",
+          "limitReached": "一個工作區最多包含 12 個專案",
+          "creating": "正在建立…",
+          "createFailed": "工作區建立失敗",
+          "mixedHosts": "所選專案分布在多台主機上。請選擇一台主機以繼續。",
+          "chooseHost": "選擇主機",
+          "updateHost": "請更新主機以跨存放庫建立",
+          "sameAsLast": "與上次相同：{{projects}}",
+          "workspaceHost": "工作區主機",
+          "blocked_other": "移除 {{count}} 個專案或切換主機",
+          "createInProjects_other": "在 {{count}} 個專案中建立",
+          "branchDiffers_other": "{{count}} 個專案的分支不同",
+          "branchInAll_other": "在全部 {{count}} 個專案中使用分支 {{name}}"
+        }
+      },
+      "multiRepo": {
+        "strip": {
+          "label": "{{name}} 中的存放庫",
+          "all": "全部",
+          "changed_other": "{{count}} 個有變更"
+        },
+        "root": {
+          "emptyTitle": "此工作區中沒有存放庫",
+          "retryAll": "全部重試",
+          "open": "開啟 {{repo}}",
+          "retry": "重試",
+          "removeFromWorkspace": "從工作區移除",
+          "creating": "正在建立 {{done}}/{{total}}",
+          "waiting": "等待中",
+          "creatingRow": "正在建立…",
+          "interruptedRow": "已中斷",
+          "missingOnDisk": "磁碟上不存在",
+          "projectRemoved": "專案已移除",
+          "failedRow": "失敗",
+          "failedPathOccupied": "資料夾已被佔用",
+          "failedBranchConflict": "分支已被使用",
+          "failedGit": "Git 無法建立",
+          "failedSetup": "設定失敗",
+          "failedRepoUnavailable": "專案無法使用",
+          "failedHostUnavailable": "主機無法使用",
+          "clean": "無變更",
+          "notCreated": "{{names}} 尚未建立。工作區資料夾中僅包含已就緒的存放庫。",
+          "deleteWorkspace": "刪除工作區",
+          "retryRepo": "重試 {{repo}}",
+          "repos_other": "{{count}} 個存放庫",
+          "failed_other": "{{count}} 個失敗",
+          "interrupted_other": "{{count}} 個已中斷",
+          "missing_other": "{{count}} 個遺失",
+          "withChanges_other": "{{count}} 個有變更",
+          "changed_other": "{{count}} 個有變更"
+        },
+        "delete": {
+          "checking": "正在檢查…",
+          "close": "關閉",
+          "cancel": "取消",
+          "title": "刪除 {{name}}？",
+          "body_other": "這將移除 {{count}} 個工作樹，並在工作區資料夾為空時將其刪除。已完全合併的分支會被刪除；含有未合併提交的分支會保留。",
+          "confirm_other": "刪除工作區和 {{count}} 個工作樹",
+          "removing": "正在移除…",
+          "removedKept": "已移除。分支 {{branch}} 已保留",
+          "removed": "已移除",
+          "failed": "失敗",
+          "gone": "工作樹已不存在。僅移除記錄",
+          "dirtyUnknown": "無法檢查變更",
+          "dirty_other": "{{count}} 個未提交的檔案",
+          "unpublishedUnknown": "無法檢查提交",
+          "unpublished_other": "{{branch}} 上有 {{count}} 個未發布的提交",
+          "branchKept": "將保留分支：有未合併的提交",
+          "branchUnknown": "無法檢查分支",
+          "force": "捨棄 {{repo}} 中的變更",
+          "folderKeptNotEmpty": "資料夾已保留：其中包含檔案（{{path}}）",
+          "folderKeptNotOwned": "資料夾已保留：它不是由 Orca 建立的（{{path}}）",
+          "folderKeptFailed": "資料夾已保留：無法將其移除（{{path}}）",
+          "bodyEmpty": "這將移除工作區記錄，並在其資料夾為空時將其刪除。",
+          "confirmEmpty": "刪除工作區",
+          "retryFailed_other": "重試 {{count}} 個失敗項目",
+          "discard_other": "刪除並捨棄 {{count}} 個存放庫中的變更"
+        },
+        "memberDelete": {
+          "keeps_other": "僅刪除 {{name}}。工作區仍保留 {{count}} 個存放庫。"
+        },
+        "removeFromWorkspace": {
+          "done": "{{name}} 已離開 {{workspace}}",
+          "undo": "復原"
+        }
       }
     },
     "i18n": {
@@ -21413,7 +21511,9 @@
       "terminalSplitRight": "向右分割終端機",
       "terminalSplitDown": "向下分割終端機",
       "terminalSwitchInputSource": "切換輸入來源／語言（原生）",
-      "newAgentTab": "新增 {{agent}} 分頁"
+      "newAgentTab": "新增 {{agent}} 分頁",
+      "workspaceNextRepo": "工作區中的下一個存放庫",
+      "workspacePreviousRepo": "工作區中的上一個存放庫"
     },
     "group": {
       "global": "全域",

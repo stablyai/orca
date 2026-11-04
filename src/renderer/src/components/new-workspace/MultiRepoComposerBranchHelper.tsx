@@ -18,14 +18,3 @@ export function MultiRepoComposerBranchHelper({
     </p>
   )
 }
-
-/** Opens the host picker inside the multi-repo project section. */
-export function useChooseMultiRepoHost(
-  composerRef: React.RefObject<HTMLDivElement | null> | undefined
-): () => void {
-  return React.useCallback((): void => {
-    composerRef?.current
-      ?.querySelector<HTMLElement>('[data-multi-repo-host-field="true"] button')
-      ?.click()
-  }, [composerRef])
-}

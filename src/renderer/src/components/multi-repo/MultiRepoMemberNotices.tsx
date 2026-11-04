@@ -39,17 +39,15 @@ export function MultiRepoMemberDeleteNote({
   const keeps = multiRepo.members.filter((member) => member.memberId !== found.member.memberId)
   return (
     <p className="text-xs text-muted-foreground">
-      {keeps.length === 1
-        ? translate(
-            'auto.components.multiRepo.memberDelete.keepsOne',
-            'Only deletes {{name}}. The workspace keeps 1 repo.',
-            { name }
-          )
-        : translate(
-            'auto.components.multiRepo.memberDelete.keepsMany',
-            'Only deletes {{name}}. The workspace keeps {{n}} repos.',
-            { name, n: keeps.length }
-          )}
+      {translate(
+        'auto.components.multiRepo.memberDelete.keeps',
+        'Only deletes {{name}}. The workspace keeps {{count}} repos.',
+        {
+          name,
+          count: keeps.length,
+          defaultValue_one: 'Only deletes {{name}}. The workspace keeps {{count}} repo.'
+        }
+      )}
     </p>
   )
 }

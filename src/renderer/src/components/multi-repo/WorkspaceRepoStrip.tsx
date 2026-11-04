@@ -51,8 +51,9 @@ export default function WorkspaceRepoStrip(): React.JSX.Element | null {
                 : entry.label}
               {entry.changedCount !== null && entry.changedCount > 0 ? (
                 <span className="text-muted-foreground">
-                  {translate('auto.components.multiRepo.strip.changed', '{{n}} changed', {
-                    n: entry.changedCount
+                  {translate('auto.components.multiRepo.strip.changed', '{{count}} changed', {
+                    count: entry.changedCount,
+                    defaultValue_one: '{{count}} changed'
                   })}
                 </span>
               ) : null}

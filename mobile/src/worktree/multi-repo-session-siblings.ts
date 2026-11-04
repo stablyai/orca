@@ -1,4 +1,5 @@
 import { folderWorkspaceKey } from '../../../src/shared/workspace-scope'
+import { translate } from '../i18n/mobile-i18n'
 import type { MultiRepoSiblingList } from './multi-repo-workspace-reply-schema'
 
 export type MultiRepoSessionSiblings = {
@@ -26,7 +27,12 @@ export function resolveMultiRepoSessionSiblings(
       workspaceName: workspace.name,
       currentMemberName: current?.dirName ?? null,
       destinations: [
-        { key: rootId, label: 'All', worktreeId: rootId, current: worktreeId === rootId },
+        {
+          key: rootId,
+          label: translate('worktree.multiRepoSessionSiblings.all', 'All'),
+          worktreeId: rootId,
+          current: worktreeId === rootId
+        },
         ...members.flatMap((member) =>
           member.state === 'ready' && member.worktreeId
             ? [

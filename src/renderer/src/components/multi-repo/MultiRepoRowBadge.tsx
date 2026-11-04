@@ -35,8 +35,9 @@ export default function MultiRepoRowBadge({
     <span className="inline-flex items-center gap-1.5">
       {summary.changed > 0 ? (
         <span className="text-[11px] text-muted-foreground">
-          {translate('auto.components.multiRepo.strip.changed', '{{n}} changed', {
-            n: summary.changed
+          {translate('auto.components.multiRepo.strip.changed', '{{count}} changed', {
+            count: summary.changed,
+            defaultValue_one: '{{count}} changed'
           })}
         </span>
       ) : null}

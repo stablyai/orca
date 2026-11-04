@@ -999,6 +999,32 @@
       "folder": "文件夹",
       "project": "项目 {{repo}}",
       "remoteHost": "远程主机"
+    },
+    "multiRepoDeleteSheet": {
+      "hostUnavailable": "此主机无法删除工作区",
+      "checkFailed": "无法检查工作区",
+      "deleteFailed": "无法删除工作区",
+      "checking": "正在检查 {{name}}…",
+      "deleteTitle": "删除 {{name}}？",
+      "close": "关闭",
+      "checkAgain": "重新检查",
+      "removesWorktrees_one": "这将移除 {{count}} 个工作树，并在工作区文件夹为空时将其删除。已完全合并的分支会被删除；含有未合并提交的分支会保留。",
+      "removesWorktrees_other": "这将移除 {{count}} 个工作树，并在工作区文件夹为空时将其删除。已完全合并的分支会被删除；含有未合并提交的分支会保留。",
+      "deleteFromDesktop": "请在桌面端删除以丢弃更改。",
+      "cancel": "取消",
+      "deleting": "正在删除…",
+      "delete": "删除",
+      "deleted": "已删除 {{name}}",
+      "notFullyDeleted": "{{name}} 未完全删除",
+      "retryFailed_one": "重试 {{count}} 个失败项",
+      "retryFailed_other": "重试 {{count}} 个失败项"
+    },
+    "multiRepoMemberRows": {
+      "collapseRepos": "{{chip}}，收起仓库",
+      "expandRepos": "{{chip}}，展开仓库",
+      "retrying": "正在重试",
+      "retryMember": "重试 {{name}}",
+      "retry": "重试"
     }
   },
   "connection": {
@@ -2620,6 +2646,9 @@
       "waitForStart": "请等待智能体完成启动。",
       "waitForTurn": "请等待智能体完成回复，或将其停止。",
       "waitMoment": "请稍候。"
+    },
+    "mobileSessionRepoSwitcher": {
+      "switchRepo": "{{label}}，切换仓库"
     }
   },
   "settings": {
@@ -3909,6 +3938,40 @@
       "inProgress": "进行中",
       "inReview": "评审中",
       "pinned": "已固定"
+    },
+    "multiRepoSessionSiblings": {
+      "all": "全部"
+    },
+    "multiRepoDeleteSheetModel": {
+      "nothingOnDisk": "磁盘上没有可移除的内容",
+      "dirtyUnknown": "无法检查未提交的更改",
+      "uncommittedFiles_other": "{{count}} 个未提交的文件",
+      "unpublishedUnknown": "无法检查未发布的提交",
+      "unpublishedCommits_other": "{{count}} 个未发布的提交",
+      "clean": "没有未提交的更改",
+      "removedBranchKept": "已移除。分支 {{branch}} 已保留：有未合并的提交",
+      "removed": "已移除",
+      "dropped": "已从工作区移出",
+      "failed": "失败：{{message}}",
+      "folderKeptNotEmpty": "文件夹已保留：其中包含文件（{{path}}）",
+      "folderKeptNotOwned": "文件夹已保留：它不是由 Orca 创建的（{{path}}）",
+      "folderKeptFailed": "文件夹已保留：无法将其移除（{{path}}）",
+      "uncommittedFiles_one": "{{count}} 个未提交的文件",
+      "unpublishedCommits_one": "{{count}} 个未发布的提交"
+    },
+    "multiRepoWorkspaceSummary": {
+      "creating": "正在创建 {{done}}/{{total}}",
+      "repos_other": "{{count}} 个仓库",
+      "failed_other": "{{count}} 个失败",
+      "interrupted_other": "{{count}} 个已中断",
+      "waiting": "等待中",
+      "creatingState": "正在创建",
+      "ready": "就绪",
+      "failedState": "失败",
+      "interruptedState": "已中断",
+      "repos_one": "{{count}} 个仓库",
+      "failed_one": "{{count}} 个失败",
+      "interrupted_one": "{{count}} 个已中断"
     }
   }
 }

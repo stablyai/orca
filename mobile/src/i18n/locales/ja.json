@@ -999,6 +999,32 @@
       "folder": "フォルダー",
       "project": "プロジェクト {{repo}}",
       "remoteHost": "リモートホスト"
+    },
+    "multiRepoDeleteSheet": {
+      "hostUnavailable": "このホストではワークスペースを削除できません",
+      "checkFailed": "ワークスペースを確認できませんでした",
+      "deleteFailed": "ワークスペースを削除できませんでした",
+      "checking": "{{name}} を確認中…",
+      "deleteTitle": "{{name}} を削除しますか？",
+      "close": "閉じる",
+      "checkAgain": "再確認",
+      "removesWorktrees_one": "{{count}} 件のワークツリーと、空の場合はワークスペースフォルダーを削除します。完全にマージ済みのブランチは削除され、未マージのコミットがあるブランチは保持されます。",
+      "removesWorktrees_other": "{{count}} 件のワークツリーと、空の場合はワークスペースフォルダーを削除します。完全にマージ済みのブランチは削除され、未マージのコミットがあるブランチは保持されます。",
+      "deleteFromDesktop": "変更を破棄するにはデスクトップから削除してください。",
+      "cancel": "キャンセル",
+      "deleting": "削除中…",
+      "delete": "削除",
+      "deleted": "{{name}} を削除しました",
+      "notFullyDeleted": "{{name}} を完全には削除できませんでした",
+      "retryFailed_one": "失敗した {{count}} 件を再試行",
+      "retryFailed_other": "失敗した {{count}} 件を再試行"
+    },
+    "multiRepoMemberRows": {
+      "collapseRepos": "{{chip}}、リポジトリを折りたたむ",
+      "expandRepos": "{{chip}}、リポジトリを展開",
+      "retrying": "再試行中",
+      "retryMember": "{{name}} を再試行",
+      "retry": "再試行"
     }
   },
   "connection": {
@@ -2620,6 +2646,9 @@
       "waitForStart": "Agent の起動が終わるまでお待ちください。",
       "waitForTurn": "Agent の応答が終わるまで待つか、Agent を停止してください。",
       "waitMoment": "しばらくお待ちください。"
+    },
+    "mobileSessionRepoSwitcher": {
+      "switchRepo": "{{label}}、リポジトリを切り替え"
     }
   },
   "settings": {
@@ -3909,6 +3938,40 @@
       "inProgress": "進行中",
       "inReview": "レビュー中",
       "pinned": "ピン留め済み"
+    },
+    "multiRepoSessionSiblings": {
+      "all": "すべて"
+    },
+    "multiRepoDeleteSheetModel": {
+      "nothingOnDisk": "ディスク上に削除するものはありません",
+      "dirtyUnknown": "未コミットの変更を確認できませんでした",
+      "uncommittedFiles_other": "未コミットのファイル {{count}} 件",
+      "unpublishedUnknown": "未公開のコミットを確認できませんでした",
+      "unpublishedCommits_other": "未公開のコミット {{count}} 件",
+      "clean": "未コミットの変更はありません",
+      "removedBranchKept": "削除しました。ブランチ {{branch}} は保持されます: 未マージのコミットあり",
+      "removed": "削除しました",
+      "dropped": "ワークスペースから外しました",
+      "failed": "失敗: {{message}}",
+      "folderKeptNotEmpty": "フォルダーは保持されました: ファイルが含まれています（{{path}}）",
+      "folderKeptNotOwned": "フォルダーは保持されました: Orca が作成したものではありません（{{path}}）",
+      "folderKeptFailed": "フォルダーは保持されました: 削除できませんでした（{{path}}）",
+      "uncommittedFiles_one": "未コミットのファイル {{count}} 件",
+      "unpublishedCommits_one": "未公開のコミット {{count}} 件"
+    },
+    "multiRepoWorkspaceSummary": {
+      "creating": "作成中 {{done}}/{{total}}",
+      "repos_other": "{{count}} 件のリポジトリ",
+      "failed_other": "{{count}} 件失敗",
+      "interrupted_other": "{{count}} 件中断",
+      "waiting": "待機中",
+      "creatingState": "作成中",
+      "ready": "準備完了",
+      "failedState": "失敗",
+      "interruptedState": "中断",
+      "repos_one": "{{count}} 件のリポジトリ",
+      "failed_one": "{{count}} 件失敗",
+      "interrupted_one": "{{count}} 件中断"
     }
   }
 }

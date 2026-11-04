@@ -1003,6 +1003,32 @@
       "folder": "Ordner",
       "project": "Projekt {{repo}}",
       "remoteHost": "Remote-Host"
+    },
+    "multiRepoDeleteSheet": {
+      "hostUnavailable": "Dieser Host ist für das Löschen von Arbeitsbereichen nicht verfügbar",
+      "checkFailed": "Arbeitsbereich konnte nicht geprüft werden",
+      "deleteFailed": "Arbeitsbereich konnte nicht gelöscht werden",
+      "checking": "{{name}} wird geprüft…",
+      "deleteTitle": "{{name}} löschen?",
+      "close": "Schließen",
+      "checkAgain": "Erneut prüfen",
+      "removesWorktrees_one": "Dadurch wird {{count}} Worktree entfernt und der Arbeitsbereichsordner, falls er leer ist. Vollständig gemergte Branches werden gelöscht; Branches mit nicht gemergten Commits bleiben erhalten.",
+      "removesWorktrees_other": "Dadurch werden {{count}} Worktrees entfernt und der Arbeitsbereichsordner, falls er leer ist. Vollständig gemergte Branches werden gelöscht; Branches mit nicht gemergten Commits bleiben erhalten.",
+      "deleteFromDesktop": "Auf dem Desktop löschen, um Änderungen zu verwerfen.",
+      "cancel": "Abbrechen",
+      "deleting": "Wird gelöscht…",
+      "delete": "Löschen",
+      "deleted": "{{name}} gelöscht",
+      "notFullyDeleted": "{{name}} nicht vollständig gelöscht",
+      "retryFailed_one": "{{count}} fehlgeschlagenen erneut versuchen",
+      "retryFailed_other": "{{count}} fehlgeschlagene erneut versuchen"
+    },
+    "multiRepoMemberRows": {
+      "collapseRepos": "{{chip}}, Repos einklappen",
+      "expandRepos": "{{chip}}, Repos ausklappen",
+      "retrying": "Wird erneut versucht",
+      "retryMember": "{{name}} erneut versuchen",
+      "retry": "Erneut versuchen"
     }
   },
   "connection": {
@@ -2624,6 +2650,9 @@
       "waitForStart": "Warten, bis der Agent vollständig gestartet ist.",
       "waitForTurn": "Warten, bis der Agent fertig geantwortet hat, oder ihn stoppen.",
       "waitMoment": "Einen Moment warten."
+    },
+    "mobileSessionRepoSwitcher": {
+      "switchRepo": "{{label}}, Repo wechseln"
     }
   },
   "settings": {
@@ -3913,6 +3942,40 @@
       "inProgress": "In Bearbeitung",
       "inReview": "Im Review",
       "pinned": "Angeheftet"
+    },
+    "multiRepoSessionSiblings": {
+      "all": "Alle"
+    },
+    "multiRepoDeleteSheetModel": {
+      "nothingOnDisk": "Nichts auf dem Datenträger zu entfernen",
+      "dirtyUnknown": "Nicht committete Änderungen konnten nicht geprüft werden",
+      "uncommittedFiles_one": "{{count}} nicht committete Datei",
+      "uncommittedFiles_other": "{{count}} nicht committete Dateien",
+      "unpublishedUnknown": "Nicht veröffentlichte Commits konnten nicht geprüft werden",
+      "unpublishedCommits_one": "{{count}} nicht veröffentlichter Commit",
+      "unpublishedCommits_other": "{{count}} nicht veröffentlichte Commits",
+      "clean": "Keine nicht committeten Änderungen",
+      "removedBranchKept": "Entfernt. Branch {{branch}} beibehalten: nicht gemergte Commits",
+      "removed": "Entfernt",
+      "dropped": "Aus Arbeitsbereich entfernt",
+      "failed": "Fehlgeschlagen: {{message}}",
+      "folderKeptNotEmpty": "Ordner beibehalten: Er enthält Dateien ({{path}})",
+      "folderKeptNotOwned": "Ordner beibehalten: Er wurde nicht von Orca erstellt ({{path}})",
+      "folderKeptFailed": "Ordner beibehalten: Er konnte nicht entfernt werden ({{path}})"
+    },
+    "multiRepoWorkspaceSummary": {
+      "creating": "Wird erstellt {{done}}/{{total}}",
+      "repos_one": "{{count}} Repo",
+      "repos_other": "{{count}} Repos",
+      "failed_one": "{{count}} fehlgeschlagen",
+      "failed_other": "{{count}} fehlgeschlagen",
+      "interrupted_one": "{{count}} unterbrochen",
+      "interrupted_other": "{{count}} unterbrochen",
+      "waiting": "Wartet",
+      "creatingState": "Wird erstellt",
+      "ready": "Bereit",
+      "failedState": "Fehlgeschlagen",
+      "interruptedState": "Unterbrochen"
     }
   }
 }

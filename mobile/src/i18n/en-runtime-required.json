@@ -108,6 +108,12 @@
       "unsentNotes_one": "{{count}} unsent note",
       "unsentNotes_other": "{{count}} unsent notes"
     },
+    "multiRepoDeleteSheet": {
+      "removesWorktrees_one": "This removes {{count}} worktree and the workspace folder if it is empty. Branches that are fully merged are deleted; branches with unmerged commits are kept.",
+      "removesWorktrees_other": "This removes {{count}} worktrees and the workspace folder if it is empty. Branches that are fully merged are deleted; branches with unmerged commits are kept.",
+      "retryFailed_one": "Retry {{count}} failed",
+      "retryFailed_other": "Retry {{count}} failed"
+    },
     "worktreeListRow": {
       "children_one": "{{count}} child",
       "children_other": "{{count}} children"
@@ -318,6 +324,20 @@
       "hours_other": "{{count}}h",
       "minutes_one": "{{count}}m",
       "minutes_other": "{{count}}m"
+    },
+    "multiRepoDeleteSheetModel": {
+      "uncommittedFiles_one": "{{count}} uncommitted file",
+      "uncommittedFiles_other": "{{count}} uncommitted files",
+      "unpublishedCommits_one": "{{count}} unpublished commit",
+      "unpublishedCommits_other": "{{count}} unpublished commits"
+    },
+    "multiRepoWorkspaceSummary": {
+      "failed_one": "{{count}} failed",
+      "failed_other": "{{count}} failed",
+      "interrupted_one": "{{count}} interrupted",
+      "interrupted_other": "{{count}} interrupted",
+      "repos_one": "{{count}} repo",
+      "repos_other": "{{count}} repos"
     }
   }
 }

@@ -15,32 +15,41 @@ export function getRootPanelHeaderText(summary: MultiRepoWorkspaceSummary): stri
     )
   } else {
     parts.push(
-      summary.total === 1
-        ? translate('auto.components.multiRepo.root.repoOne', '1 repo')
-        : translate('auto.components.multiRepo.root.repoMany', '{{n}} repos', { n: summary.total })
+      translate('auto.components.multiRepo.root.repos', '{{count}} repos', {
+        count: summary.total,
+        defaultValue_one: '{{count}} repo'
+      })
     )
   }
   if (summary.failed > 0) {
     parts.push(
-      translate('auto.components.multiRepo.root.failed', '{{n}} failed', { n: summary.failed })
+      translate('auto.components.multiRepo.root.failed', '{{count}} failed', {
+        count: summary.failed,
+        defaultValue_one: '{{count}} failed'
+      })
     )
   }
   if (summary.interrupted > 0) {
     parts.push(
-      translate('auto.components.multiRepo.root.interrupted', '{{n}} interrupted', {
-        n: summary.interrupted
+      translate('auto.components.multiRepo.root.interrupted', '{{count}} interrupted', {
+        count: summary.interrupted,
+        defaultValue_one: '{{count}} interrupted'
       })
     )
   }
   if (summary.missing > 0) {
     parts.push(
-      translate('auto.components.multiRepo.root.missing', '{{n}} missing', { n: summary.missing })
+      translate('auto.components.multiRepo.root.missing', '{{count}} missing', {
+        count: summary.missing,
+        defaultValue_one: '{{count}} missing'
+      })
     )
   }
   if (summary.withChanges > 0) {
     parts.push(
-      translate('auto.components.multiRepo.root.withChanges', '{{n}} with changes', {
-        n: summary.withChanges
+      translate('auto.components.multiRepo.root.withChanges', '{{count}} with changes', {
+        count: summary.withChanges,
+        defaultValue_one: '{{count}} with changes'
       })
     )
   }
@@ -68,8 +77,9 @@ export function getRootPanelStatusText(status: RootPanelRowStatus): string {
       }
       return status.changedCount === 0
         ? translate('auto.components.multiRepo.root.clean', 'Clean')
-        : translate('auto.components.multiRepo.root.changed', '{{n}} changed', {
-            n: status.changedCount
+        : translate('auto.components.multiRepo.root.changed', '{{count}} changed', {
+            count: status.changedCount,
+            defaultValue_one: '{{count}} changed'
           })
   }
 }

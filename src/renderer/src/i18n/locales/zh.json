@@ -18089,6 +18089,104 @@
           "noMovableChat": "无法运行“{{action}}” — 没有活动且可移动的聊天。",
           "clientUnsupported": "无法运行“{{action}}” — 此客户端和运行时不支持该操作。"
         }
+      },
+      "newWorkspace": {
+        "multiRepo": {
+          "chooseSetup": "为 {{project}} 选择设置",
+          "removeProject": "移除 {{project}}",
+          "selectedProjects": "已选项目",
+          "useHost": "使用 {{host}}",
+          "addAnotherGitProject": "再添加一个 Git 项目，即可创建跨仓库的工作区。",
+          "unavailableOnHost": "在此主机上不可用",
+          "noSetupOnHost": "{{host}} 上没有设置",
+          "directSshUnsupported": "直接 SSH 设置不支持多仓库",
+          "wslUnsupported": "WSL 设置不支持多仓库",
+          "folderProject": "文件夹项目，没有 Git 工作树",
+          "setupNotReady": "{{host}} 上的设置尚未就绪",
+          "limitReached": "一个工作区最多包含 12 个项目",
+          "creating": "正在创建…",
+          "createFailed": "工作区创建失败",
+          "mixedHosts": "所选项目分布在多个主机上。请选择一个主机以继续。",
+          "chooseHost": "选择主机",
+          "updateHost": "请更新主机以跨仓库创建",
+          "sameAsLast": "与上次相同：{{projects}}",
+          "workspaceHost": "工作区主机",
+          "blocked_other": "移除 {{count}} 个项目或切换主机",
+          "createInProjects_other": "在 {{count}} 个项目中创建",
+          "branchDiffers_other": "{{count}} 个项目的分支不同",
+          "branchInAll_other": "在全部 {{count}} 个项目中使用分支 {{name}}"
+        }
+      },
+      "multiRepo": {
+        "strip": {
+          "label": "{{name}} 中的仓库",
+          "all": "全部",
+          "changed_other": "{{count}} 个有更改"
+        },
+        "root": {
+          "emptyTitle": "此工作区中没有仓库",
+          "retryAll": "全部重试",
+          "open": "打开 {{repo}}",
+          "retry": "重试",
+          "removeFromWorkspace": "从工作区移除",
+          "creating": "正在创建 {{done}}/{{total}}",
+          "waiting": "等待中",
+          "creatingRow": "正在创建…",
+          "interruptedRow": "已中断",
+          "missingOnDisk": "磁盘上不存在",
+          "projectRemoved": "项目已移除",
+          "failedRow": "失败",
+          "failedPathOccupied": "文件夹已被占用",
+          "failedBranchConflict": "分支已被使用",
+          "failedGit": "Git 无法创建",
+          "failedSetup": "设置失败",
+          "failedRepoUnavailable": "项目不可用",
+          "failedHostUnavailable": "主机不可用",
+          "clean": "无更改",
+          "notCreated": "{{names}} 尚未创建。工作区文件夹中仅包含已就绪的仓库。",
+          "deleteWorkspace": "删除工作区",
+          "retryRepo": "重试 {{repo}}",
+          "repos_other": "{{count}} 个仓库",
+          "failed_other": "{{count}} 个失败",
+          "interrupted_other": "{{count}} 个已中断",
+          "missing_other": "{{count}} 个缺失",
+          "withChanges_other": "{{count}} 个有更改",
+          "changed_other": "{{count}} 个有更改"
+        },
+        "delete": {
+          "checking": "正在检查…",
+          "close": "关闭",
+          "cancel": "取消",
+          "title": "删除 {{name}}？",
+          "body_other": "这将移除 {{count}} 个工作树，并在工作区文件夹为空时将其删除。已完全合并的分支会被删除；含有未合并提交的分支会保留。",
+          "confirm_other": "删除工作区和 {{count}} 个工作树",
+          "removing": "正在移除…",
+          "removedKept": "已移除。分支 {{branch}} 已保留",
+          "removed": "已移除",
+          "failed": "失败",
+          "gone": "工作树已不存在。仅移除记录",
+          "dirtyUnknown": "无法检查更改",
+          "dirty_other": "{{count}} 个未提交的文件",
+          "unpublishedUnknown": "无法检查提交",
+          "unpublished_other": "{{branch}} 上有 {{count}} 个未发布的提交",
+          "branchKept": "将保留分支：有未合并的提交",
+          "branchUnknown": "无法检查分支",
+          "force": "放弃 {{repo}} 中的更改",
+          "folderKeptNotEmpty": "文件夹已保留：其中包含文件（{{path}}）",
+          "folderKeptNotOwned": "文件夹已保留：它不是由 Orca 创建的（{{path}}）",
+          "folderKeptFailed": "文件夹已保留：无法将其移除（{{path}}）",
+          "bodyEmpty": "这将移除工作区记录，并在其文件夹为空时将其删除。",
+          "confirmEmpty": "删除工作区",
+          "retryFailed_other": "重试 {{count}} 个失败项",
+          "discard_other": "删除并放弃 {{count}} 个仓库中的更改"
+        },
+        "memberDelete": {
+          "keeps_other": "仅删除 {{name}}。工作区仍保留 {{count}} 个仓库。"
+        },
+        "removeFromWorkspace": {
+          "done": "{{name}} 已离开 {{workspace}}",
+          "undo": "撤销"
+        }
       }
     },
     "i18n": {
@@ -21733,7 +21831,9 @@
       "terminalSplitRight": "向右拆分终端",
       "terminalSplitDown": "向下拆分终端",
       "terminalSwitchInputSource": "切换输入法/语言（原生）",
-      "newAgentTab": "新建 {{agent}} 标签页"
+      "newAgentTab": "新建 {{agent}} 标签页",
+      "workspaceNextRepo": "工作区中的下一个仓库",
+      "workspacePreviousRepo": "工作区中的上一个仓库"
     },
     "group": {
       "global": "全局",

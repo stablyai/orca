@@ -254,6 +254,8 @@ export class MultiRepoWorkspaceService {
           placement: { parentDir: workspace.folderPath, leafName: member.dirName },
           creationId: member.memberId,
           activate: false,
+          // Every create and retry is the user's act, so member terminals may start a stopped WSL distro.
+          wslUserAct: true,
           ...(workspace.creatorProvenance ? { creatorProvenance: workspace.creatorProvenance } : {})
         })
         recordMultiRepoMemberLineage(

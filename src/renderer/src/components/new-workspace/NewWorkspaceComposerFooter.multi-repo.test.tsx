@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NewWorkspaceComposerFooter } from './NewWorkspaceComposerFooter'
@@ -38,7 +38,7 @@ function multi(patch: Partial<MultiRepoComposerView>): MultiRepoComposerView {
 
 function render(
   multiRepo: MultiRepoComposerView,
-  extra: { onChooseHost?: () => void; createDisabled?: boolean } = {}
+  extra: { composerRef?: React.RefObject<HTMLDivElement | null>; createDisabled?: boolean } = {}
 ): void {
   act(() => {
     root.render(
@@ -51,7 +51,7 @@ function render(
         creating={false}
         primaryActionLabel="Create in 3 projects"
         multiRepo={multiRepo}
-        onChooseHost={extra.onChooseHost}
+        composerRef={extra.composerRef}
         submitShortcutModifierLabel="Cmd"
       />
     )
@@ -68,9 +68,14 @@ describe('NewWorkspaceComposerFooter in multi-repo mode', () => {
     expect(container.querySelector('button[disabled]')).not.toBeNull()
   })
 
-  it('keeps a mixed-hosts error inline with a Choose host action', () => {
-    const onChooseHost = vi.fn()
-    render(multi({ mixedHostsError: true }), { onChooseHost })
+  it('keeps a mixed-hosts error inline with a Choose host action that opens the host picker', () => {
+    const composer = document.createElement('div')
+    composer.innerHTML =
+      '<div data-multi-repo-host-field="true"><button type="button"></button></div>'
+    const hostTrigger = composer.querySelector('button')
+    const openHostPicker = vi.fn()
+    hostTrigger?.addEventListener('click', openHostPicker)
+    render(multi({ mixedHostsError: true }), { composerRef: { current: composer } })
     const alert = container.querySelector('[role="alert"]')
     expect(alert?.textContent).toContain(
       'Selected projects span more than one host. Pick a host to continue.'
@@ -81,7 +86,7 @@ describe('NewWorkspaceComposerFooter in multi-repo mode', () => {
     act(() => {
       action?.click()
     })
-    expect(onChooseHost).toHaveBeenCalledTimes(1)
+    expect(openHostPicker).toHaveBeenCalledTimes(1)
   })
 
   it('shows the multi-repo create error instead of the single-repo one', () => {

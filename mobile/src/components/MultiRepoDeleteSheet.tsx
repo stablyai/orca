@@ -18,6 +18,7 @@ import {
   multiRepoDeleteRowStatus,
   multiRepoRootKeptText
 } from '../worktree/multi-repo-delete-sheet-model'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { BottomDrawer } from './BottomDrawer'
 
 const DELETE_TIMEOUT_MS = 120_000
@@ -48,6 +49,7 @@ export function MultiRepoDeleteSheet({
   memberNames,
   onClose
 }: Props) {
+  const t = useMobileTranslation()
   const [phase, setPhase] = useState<Phase>({ kind: 'inspecting' })
   const requestIdRef = useRef(0)
 
@@ -57,7 +59,13 @@ export function MultiRepoDeleteSheet({
     }
     if (!client) {
       requestIdRef.current += 1
-      setPhase({ kind: 'error', message: 'This host is not available for workspace deletion' })
+      setPhase({
+        kind: 'error',
+        message: t(
+          'components.multiRepoDeleteSheet.hostUnavailable',
+          'This host is not available for workspace deletion'
+        )
+      })
       return
     }
     const requestId = ++requestIdRef.current
@@ -72,11 +80,14 @@ export function MultiRepoDeleteSheet({
       if (requestId === requestIdRef.current) {
         setPhase({
           kind: 'error',
-          message: error instanceof Error ? error.message : 'Could not check the workspace'
+          message:
+            error instanceof Error
+              ? error.message
+              : t('components.multiRepoDeleteSheet.checkFailed', 'Could not check the workspace')
         })
       }
     }
-  }, [client, folderWorkspaceId])
+  }, [client, folderWorkspaceId, t])
 
   useEffect(() => {
     if (folderWorkspaceId) {
@@ -109,12 +120,18 @@ export function MultiRepoDeleteSheet({
         if (requestId === requestIdRef.current) {
           setPhase({
             kind: 'error',
-            message: error instanceof Error ? error.message : 'Could not delete the workspace'
+            message:
+              error instanceof Error
+                ? error.message
+                : t(
+                    'components.multiRepoDeleteSheet.deleteFailed',
+                    'Could not delete the workspace'
+                  )
           })
         }
       }
     },
-    [client, folderWorkspaceId]
+    [client, folderWorkspaceId, t]
   )
 
   const nameOf = (memberId: string, repoId: string): string => memberNames.get(memberId) ?? repoId
@@ -125,19 +142,33 @@ export function MultiRepoDeleteSheet({
         return (
           <View style={localStyles.centered}>
             <ActivityIndicator color={colors.textSecondary} />
-            <Text style={localStyles.muted}>Checking {workspaceName}…</Text>
+            <Text style={localStyles.muted}>
+              {t('components.multiRepoDeleteSheet.checking', 'Checking {{name}}…', {
+                name: workspaceName
+              })}
+            </Text>
           </View>
         )
       case 'error':
         return (
           <View>
             <View style={styles.confirmContent}>
-              <Text style={styles.confirmTitle}>Delete {workspaceName}?</Text>
+              <Text style={styles.confirmTitle}>
+                {t('components.multiRepoDeleteSheet.deleteTitle', 'Delete {{name}}?', {
+                  name: workspaceName
+                })}
+              </Text>
               <Text style={styles.confirmMessage}>{phase.message}</Text>
             </View>
             <View style={styles.confirmButtons}>
-              <SheetButton label="Close" onPress={onClose} />
-              <SheetButton label="Check again" onPress={() => void inspect()} />
+              <SheetButton
+                label={t('components.multiRepoDeleteSheet.close', 'Close')}
+                onPress={onClose}
+              />
+              <SheetButton
+                label={t('components.multiRepoDeleteSheet.checkAgain', 'Check again')}
+                onPress={() => void inspect()}
+              />
             </View>
           </View>
         )
@@ -146,15 +177,21 @@ export function MultiRepoDeleteSheet({
         const { inspection } = phase
         const blocked = multiRepoDeleteBlockedByChanges(inspection.members)
         const deleting = phase.kind === 'deleting'
+        const count = inspection.members.length
         return (
           <View>
             <View style={styles.confirmContent}>
-              <Text style={styles.confirmTitle}>Delete {workspaceName}?</Text>
+              <Text style={styles.confirmTitle}>
+                {t('components.multiRepoDeleteSheet.deleteTitle', 'Delete {{name}}?', {
+                  name: workspaceName
+                })}
+              </Text>
               <Text style={styles.confirmMessage}>
-                This removes {inspection.members.length}{' '}
-                {inspection.members.length === 1 ? 'worktree' : 'worktrees'} and the workspace
-                folder if it is empty. Branches that are fully merged are deleted; branches with
-                unmerged commits are kept.
+                {t(
+                  'components.multiRepoDeleteSheet.removesWorktrees_other',
+                  'This removes {{count}} worktrees and the workspace folder if it is empty. Branches that are fully merged are deleted; branches with unmerged commits are kept.',
+                  { count }
+                )}
               </Text>
               {inspection.members.map((member) => {
                 const status = multiRepoDeleteRowStatus(member)
@@ -171,14 +208,25 @@ export function MultiRepoDeleteSheet({
               })}
               {blocked ? (
                 <Text style={[styles.confirmMessage, localStyles.risky]}>
-                  Delete from desktop to discard changes.
+                  {t(
+                    'components.multiRepoDeleteSheet.deleteFromDesktop',
+                    'Delete from desktop to discard changes.'
+                  )}
                 </Text>
               ) : null}
             </View>
             <View style={styles.confirmButtons}>
-              <SheetButton label="Cancel" onPress={onClose} disabled={deleting} />
               <SheetButton
-                label={deleting ? 'Deleting…' : 'Delete'}
+                label={t('components.multiRepoDeleteSheet.cancel', 'Cancel')}
+                onPress={onClose}
+                disabled={deleting}
+              />
+              <SheetButton
+                label={
+                  deleting
+                    ? t('components.multiRepoDeleteSheet.deleting', 'Deleting…')
+                    : t('components.multiRepoDeleteSheet.delete', 'Delete')
+                }
                 destructive
                 disabled={blocked || deleting}
                 onPress={() => void runDelete(inspection)}
@@ -195,8 +243,16 @@ export function MultiRepoDeleteSheet({
             <View style={styles.confirmContent}>
               <Text style={styles.confirmTitle}>
                 {result.workspaceRemoved
-                  ? `${workspaceName} deleted`
-                  : `${workspaceName} not fully deleted`}
+                  ? t('components.multiRepoDeleteSheet.deleted', '{{name}} deleted', {
+                      name: workspaceName
+                    })
+                  : t(
+                      'components.multiRepoDeleteSheet.notFullyDeleted',
+                      '{{name}} not fully deleted',
+                      {
+                        name: workspaceName
+                      }
+                    )}
               </Text>
               {result.members.map((member) => (
                 <View key={member.memberId} style={localStyles.row}>
@@ -219,10 +275,17 @@ export function MultiRepoDeleteSheet({
               ) : null}
             </View>
             <View style={styles.confirmButtons}>
-              <SheetButton label="Close" onPress={onClose} />
+              <SheetButton
+                label={t('components.multiRepoDeleteSheet.close', 'Close')}
+                onPress={onClose}
+              />
               {failed > 0 ? (
                 <SheetButton
-                  label={`Retry ${failed} failed`}
+                  label={t(
+                    'components.multiRepoDeleteSheet.retryFailed_other',
+                    'Retry {{count}} failed',
+                    { count: failed }
+                  )}
                   destructive
                   onPress={() => void runDelete(phase.inspection)}
                 />

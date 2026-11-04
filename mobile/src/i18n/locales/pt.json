@@ -1046,6 +1046,34 @@
       "folder": "Pasta",
       "project": "Projeto {{repo}}",
       "remoteHost": "Host remoto"
+    },
+    "multiRepoDeleteSheet": {
+      "hostUnavailable": "Este host não está disponível para excluir espaços de trabalho",
+      "checkFailed": "Não foi possível verificar o espaço de trabalho",
+      "deleteFailed": "Não foi possível excluir o espaço de trabalho",
+      "checking": "Verificando {{name}}…",
+      "deleteTitle": "Excluir {{name}}?",
+      "close": "Fechar",
+      "checkAgain": "Verificar novamente",
+      "removesWorktrees_one": "Isso remove {{count}} worktree e a pasta do espaço de trabalho, se estiver vazia. Branches totalmente mesclados são excluídos; branches com commits não mesclados são mantidos.",
+      "removesWorktrees_many": "Isso remove {{count}} worktrees e a pasta do espaço de trabalho, se estiver vazia. Branches totalmente mesclados são excluídos; branches com commits não mesclados são mantidos.",
+      "removesWorktrees_other": "Isso remove {{count}} worktrees e a pasta do espaço de trabalho, se estiver vazia. Branches totalmente mesclados são excluídos; branches com commits não mesclados são mantidos.",
+      "deleteFromDesktop": "Exclua pelo desktop para descartar as alterações.",
+      "cancel": "Cancelar",
+      "deleting": "Excluindo…",
+      "delete": "Excluir",
+      "deleted": "{{name}} excluído",
+      "notFullyDeleted": "{{name}} não foi totalmente excluído",
+      "retryFailed_one": "Tentar novamente {{count}} com falha",
+      "retryFailed_many": "Tentar novamente {{count}} com falha",
+      "retryFailed_other": "Tentar novamente {{count}} com falha"
+    },
+    "multiRepoMemberRows": {
+      "collapseRepos": "{{chip}}, recolher repositórios",
+      "expandRepos": "{{chip}}, expandir repositórios",
+      "retrying": "Tentando novamente",
+      "retryMember": "Tentar novamente {{name}}",
+      "retry": "Tentar novamente"
     }
   },
   "connection": {
@@ -2700,6 +2728,9 @@
       "waitForStart": "Aguarde o agente terminar de iniciar.",
       "waitForTurn": "Aguarde o agente terminar de responder ou interrompa-o.",
       "waitMoment": "Aguarde um momento."
+    },
+    "mobileSessionRepoSwitcher": {
+      "switchRepo": "{{label}}, trocar de repositório"
     }
   },
   "settings": {
@@ -4022,6 +4053,45 @@
       "inProgress": "Em andamento",
       "inReview": "Em revisão",
       "pinned": "Fixados"
+    },
+    "multiRepoSessionSiblings": {
+      "all": "Todos"
+    },
+    "multiRepoDeleteSheetModel": {
+      "nothingOnDisk": "Nada no disco para remover",
+      "dirtyUnknown": "Não foi possível verificar as alterações não commitadas",
+      "uncommittedFiles_one": "{{count}} arquivo não commitado",
+      "uncommittedFiles_many": "{{count}} arquivos não commitados",
+      "uncommittedFiles_other": "{{count}} arquivos não commitados",
+      "unpublishedUnknown": "Não foi possível verificar os commits não publicados",
+      "unpublishedCommits_one": "{{count}} commit não publicado",
+      "unpublishedCommits_many": "{{count}} commits não publicados",
+      "unpublishedCommits_other": "{{count}} commits não publicados",
+      "clean": "Nenhuma alteração não commitada",
+      "removedBranchKept": "Removido. Branch {{branch}} mantido: commits não mesclados",
+      "removed": "Removido",
+      "dropped": "Removido do workspace",
+      "failed": "Falhou: {{message}}",
+      "folderKeptNotEmpty": "Pasta mantida: contém arquivos ({{path}})",
+      "folderKeptNotOwned": "Pasta mantida: o Orca não a criou ({{path}})",
+      "folderKeptFailed": "Pasta mantida: não foi possível removê-la ({{path}})"
+    },
+    "multiRepoWorkspaceSummary": {
+      "creating": "Criando {{done}}/{{total}}",
+      "repos_one": "{{count}} repositório",
+      "repos_many": "{{count}} repositórios",
+      "repos_other": "{{count}} repositórios",
+      "failed_one": "{{count}} com falha",
+      "failed_many": "{{count}} com falha",
+      "failed_other": "{{count}} com falha",
+      "interrupted_one": "{{count}} interrompido",
+      "interrupted_many": "{{count}} interrompidos",
+      "interrupted_other": "{{count}} interrompidos",
+      "waiting": "Aguardando",
+      "creatingState": "Criando",
+      "ready": "Pronto",
+      "failedState": "Falhou",
+      "interruptedState": "Interrompido"
     }
   }
 }

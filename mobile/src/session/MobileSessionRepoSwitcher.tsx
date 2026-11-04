@@ -11,6 +11,7 @@ import {
   workspaceRouteHref
 } from '../navigation/workspace-execution-host'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function MobileSessionRepoSwitcher({
   controller,
@@ -19,6 +20,7 @@ export function MobileSessionRepoSwitcher({
   controller: MobileSessionController
   title: string
 }) {
+  const t = useMobileTranslation()
   const { client, connState, hostCapabilities, hostId, router, worktreeId } = controller
   const executionHost = useWorkspaceExecutionHost()
   const siblings = useMultiRepoSessionSiblings({ client, connState, hostCapabilities, worktreeId })
@@ -39,7 +41,13 @@ export function MobileSessionRepoSwitcher({
       <Pressable
         style={localStyles.trigger}
         accessibilityRole="button"
-        accessibilityLabel={`${label}, switch repo`}
+        accessibilityLabel={t(
+          'session.mobileSessionRepoSwitcher.switchRepo',
+          '{{label}}, switch repo',
+          {
+            label
+          }
+        )}
         onPress={() => setOpen(true)}
       >
         <Text style={[sessionStyles.sessionTitle, localStyles.title]} numberOfLines={1}>

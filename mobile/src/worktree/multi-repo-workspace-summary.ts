@@ -4,6 +4,7 @@ import type {
   MultiRepoMemberState
 } from '../../../src/shared/multi-repo-workspace'
 import type { Worktree } from './workspace-list-types'
+import { translate } from '../i18n/mobile-i18n'
 
 export type MobileMultiRepoMember = Pick<
   MultiRepoMember,
@@ -42,14 +43,29 @@ export function multiRepoChipText(
     members.filter((member) => member.state === state).length
   const pending = count('queued') + count('creating')
   if (pending > 0) {
-    return `Creating ${count('ready')}/${members.length}`
+    return translate('worktree.multiRepoWorkspaceSummary.creating', 'Creating {{done}}/{{total}}', {
+      done: count('ready'),
+      total: members.length
+    })
   }
-  const parts = [members.length === 1 ? '1 repo' : `${members.length} repos`]
+  const parts = [
+    translate('worktree.multiRepoWorkspaceSummary.repos_other', '{{count}} repos', {
+      count: members.length
+    })
+  ]
   if (count('failed') > 0) {
-    parts.push(`${count('failed')} failed`)
+    parts.push(
+      translate('worktree.multiRepoWorkspaceSummary.failed_other', '{{count}} failed', {
+        count: count('failed')
+      })
+    )
   }
   if (count('interrupted') > 0) {
-    parts.push(`${count('interrupted')} interrupted`)
+    parts.push(
+      translate('worktree.multiRepoWorkspaceSummary.interrupted_other', '{{count}} interrupted', {
+        count: count('interrupted')
+      })
+    )
   }
   return parts.join(' · ')
 }
@@ -57,15 +73,15 @@ export function multiRepoChipText(
 export function multiRepoMemberStateLabel(state: MultiRepoMemberState): string {
   switch (state) {
     case 'queued':
-      return 'Waiting'
+      return translate('worktree.multiRepoWorkspaceSummary.waiting', 'Waiting')
     case 'creating':
-      return 'Creating'
+      return translate('worktree.multiRepoWorkspaceSummary.creatingState', 'Creating')
     case 'ready':
-      return 'Ready'
+      return translate('worktree.multiRepoWorkspaceSummary.ready', 'Ready')
     case 'failed':
-      return 'Failed'
+      return translate('worktree.multiRepoWorkspaceSummary.failedState', 'Failed')
     case 'interrupted':
-      return 'Interrupted'
+      return translate('worktree.multiRepoWorkspaceSummary.interruptedState', 'Interrupted')
   }
 }
 

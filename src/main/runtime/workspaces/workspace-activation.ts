@@ -28,7 +28,7 @@ import type {
   WorktreeLineage,
   WorktreeLineageWarning
 } from '../../../shared/worktree/lineage-types'
-import { recordLineageOutsideMultiRepoParent } from '../multi-repo-workspace/multi-repo-member-lock'
+import { recordLineageOutsideMultiRepoParent } from '../multi-repo-workspace/multi-repo-lineage-guard'
 import {
   deliverStartupFollowupPrompt,
   pasteWorktreeStartupDraftWhenReady,

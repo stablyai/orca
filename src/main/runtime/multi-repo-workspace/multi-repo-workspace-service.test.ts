@@ -131,6 +131,10 @@ describe('multi-repo create and retry', () => {
       'ready',
       'ready'
     ])
+    // Create and retry are the user's act: a member's setup terminal may start a stopped WSL distro.
+    for (const [args] of port.createWorktree.mock.calls) {
+      expect(args).toMatchObject({ activate: false, wslUserAct: true })
+    }
   })
 
   it('adopts a worktree already registered at the expected path on retry', async () => {

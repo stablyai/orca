@@ -31,21 +31,17 @@ export function getDeleteButtonLabel(
   failedCount: number
 ): string {
   if (phase === 'retry') {
-    return translate('auto.components.multiRepo.delete.retryFailed', 'Retry {{n}} failed', {
-      n: failedCount
+    return translate('auto.components.multiRepo.delete.retryFailed', 'Retry {{count}} failed', {
+      count: failedCount,
+      defaultValue_one: 'Retry {{count}} failed'
     })
   }
   if (forcedCount > 0) {
-    return forcedCount === 1
-      ? translate(
-          'auto.components.multiRepo.delete.discardOne',
-          'Delete and discard changes in 1 repo'
-        )
-      : translate(
-          'auto.components.multiRepo.delete.discardMany',
-          'Delete and discard changes in {{n}} repos',
-          { n: forcedCount }
-        )
+    return translate(
+      'auto.components.multiRepo.delete.discard',
+      'Delete and discard changes in {{count}} repos',
+      { count: forcedCount, defaultValue_one: 'Delete and discard changes in {{count}} repo' }
+    )
   }
   if (repoCount === 0) {
     return translate('auto.components.multiRepo.delete.confirmEmpty', 'Delete workspace')

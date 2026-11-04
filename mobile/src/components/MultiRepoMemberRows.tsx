@@ -18,6 +18,7 @@ import {
   type MobileMultiRepoMember,
   type MobileMultiRepoSummary
 } from '../worktree/multi-repo-workspace-summary'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
   summary: MobileMultiRepoSummary
@@ -32,6 +33,7 @@ export function MultiRepoMemberRows({
   onOpenMember,
   onRetryMember
 }: Props) {
+  const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(() => multiRepoRowNeedsAttention(summary))
   const chip = multiRepoChipText(summary.members)
   return (
@@ -40,7 +42,13 @@ export function MultiRepoMemberRows({
         style={styles.toggle}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityLabel={`${chip}, ${expanded ? 'collapse' : 'expand'} repos`}
+        accessibilityLabel={
+          expanded
+            ? t('components.multiRepoMemberRows.collapseRepos', '{{chip}}, collapse repos', {
+                chip
+              })
+            : t('components.multiRepoMemberRows.expandRepos', '{{chip}}, expand repos', { chip })
+        }
         onPress={(event) => {
           event.stopPropagation()
           setExpanded((value) => !value)
@@ -80,6 +88,7 @@ function MemberRow({
   onOpen: (member: MobileMultiRepoMember) => void
   onRetry: (member: MobileMultiRepoMember) => void
 }) {
+  const t = useMobileTranslation()
   const busy = retrying || member.state === 'creating'
   const openable = member.state === 'ready' && Boolean(member.worktreeId)
   const detail =
@@ -114,7 +123,7 @@ function MemberRow({
             {member.dirName}
           </Text>
           <Text style={styles.memberDetail} numberOfLines={2}>
-            {retrying ? 'Retrying' : detail}
+            {retrying ? t('components.multiRepoMemberRows.retrying', 'Retrying') : detail}
           </Text>
         </View>
       </Pressable>
@@ -123,13 +132,15 @@ function MemberRow({
           style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
           disabled={retrying}
           accessibilityRole="button"
-          accessibilityLabel={`Retry ${member.dirName}`}
+          accessibilityLabel={t('components.multiRepoMemberRows.retryMember', 'Retry {{name}}', {
+            name: member.dirName
+          })}
           onPress={(event) => {
             event.stopPropagation()
             onRetry(member)
           }}
         >
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryText}>{t('components.multiRepoMemberRows.retry', 'Retry')}</Text>
         </Pressable>
       ) : null}
     </View>
