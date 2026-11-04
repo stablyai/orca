@@ -104,8 +104,6 @@ describe('MobileNativeChatMessage', () => {
     }
   )
 
-  // An older host refuses the read; the row keeps today's placeholder.
-
   it('draws a background task as its row, not the plain sentence written for older clients', () => {
     const task = (overrides: Partial<NativeChatBackgroundTaskBlock>): NativeChatMessage =>
       projectStructuredItemToNativeChat({

@@ -1,7 +1,7 @@
 import { Text, View } from 'react-native'
 import type { NativeChatBackgroundTaskBlock } from '../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatBackgroundTaskRun } from '../../../../../src/shared/native-chat/transcript/native-chat-background-task-run'
-import { AgentStateDot } from '../../../components/AgentStateDot'
+import { AGENT_STATE_DOT_SIZE, AgentStateDot } from '../../../components/AgentStateDot'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
@@ -11,7 +11,6 @@ import { BackgroundTaskKindIcon } from '../input/MobileNativeChatBackgroundTasks
 import { scaledType } from './mobile-native-chat-message-styles'
 
 const ICON_SIZE = 14
-const DOT_SIZE = 10
 
 export function MobileNativeChatBackgroundTaskRun({
   block,
@@ -24,7 +23,7 @@ export function MobileNativeChatBackgroundTaskRun({
   const row = nativeChatBackgroundTaskRun(block, sayMobileBackgroundTask)
   const meta = scaledType(typography.metaSize, fontScale)
   // Lines up under the label, past the icon and the dot.
-  const indent = { paddingLeft: ICON_SIZE * fontScale + DOT_SIZE + 2 * spacing.sm }
+  const indent = { paddingLeft: ICON_SIZE * fontScale + AGENT_STATE_DOT_SIZE + 2 * spacing.sm }
   return (
     <View testID="background-task-run" style={styles.run}>
       <View style={styles.header}>

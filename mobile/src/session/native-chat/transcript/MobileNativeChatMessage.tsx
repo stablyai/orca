@@ -35,10 +35,7 @@ import {
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
 import { MobileNativeChatBackgroundTaskRun } from './MobileNativeChatBackgroundTaskRun'
-import {
-  backgroundTaskBlocks,
-  withoutBackgroundTaskRows
-} from '../../../../../src/shared/native-chat/input/native-chat-background-task-row'
+import { withoutBackgroundTaskRows } from '../../../../../src/shared/native-chat/input/native-chat-background-task-row'
 import { ToolRun } from './MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { styles } from './mobile-native-chat-message-styles'
@@ -155,8 +152,12 @@ function MobileNativeChatMessageImpl({
     [run, message.blocks]
   )
   // Task rows replace their plain-text twins, which the host writes for readers without task blocks.
-  const drawnProse = isReasoning ? [] : withoutSubagentGroupTwins(withoutBackgroundTaskRows(prose))
-  const backgroundTasks = isReasoning ? [] : backgroundTaskBlocks(prose)
+  const { backgroundTasks } = deriveNativeChatRowContent(message.blocks)
+  const drawnProse = isReasoning
+    ? []
+    : withoutSubagentGroupTwins(
+        backgroundTasks.length > 0 ? withoutBackgroundTaskRows(prose) : prose
+      )
   const isSystem = message.role === 'system'
   const showToolRun = tools.length > 0
   const askPending = structuredActivityUi
@@ -334,7 +335,7 @@ function MobileNativeChatMessageImpl({
               {isUser ? null : showFull}
             </>
           )}
-          {backgroundTasks.map((task) => (
+          {(isReasoning ? [] : backgroundTasks).map((task) => (
             <MobileNativeChatBackgroundTaskRun
               key={task.taskId}
               block={task}
