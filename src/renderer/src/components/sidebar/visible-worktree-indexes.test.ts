@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type * as ResolvedWorktreeLineage from '../../../../shared/resolved-worktree-lineage'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
@@ -19,8 +19,10 @@ vi.mock('../../../../shared/resolved-worktree-lineage', async (importOriginal) =
   }
 })
 
-import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
-import type { computeVisibleWorktrees } from './compute-visible-worktrees'
+import {
+  computeVisibleWorktreeIds,
+  type computeVisibleWorktrees
+} from './compute-visible-worktrees'
 
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { getLineageAncestorIndex } from './visible-worktree-indexes'

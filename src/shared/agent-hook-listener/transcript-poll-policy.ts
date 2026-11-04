@@ -1,9 +1,9 @@
-import type { AgentHookSource } from '../agent-hook-relay'
+import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import { hasCodexTranscriptSubagents } from './providers/codex-state'
 import { hasMuseSessionLog } from './providers/muse-events'
-import { mainAgentStatusEqual } from '../main-agent-status'
+import { mainAgentStatusEqual } from '../agent-status/lifecycle/main-agent-status'
 
 export function shouldPollHookTranscript(
   state: HookListenerState,

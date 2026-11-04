@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   _getWorktreeAgentOrchestrationIndexBuildCountForTest,
   EMPTY_WORKTREE_AGENT_ORCHESTRATION,

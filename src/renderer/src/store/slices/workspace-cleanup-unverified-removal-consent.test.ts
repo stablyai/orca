@@ -1,6 +1,6 @@
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { describe, expect, it, vi } from 'vitest'
-import type { WorkspaceCleanupScanResult } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanResult } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   NOW,
   WORKTREE_ID,

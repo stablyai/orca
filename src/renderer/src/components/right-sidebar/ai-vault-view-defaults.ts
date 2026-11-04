@@ -4,7 +4,7 @@ import {
   type AiVaultGroup,
   type AiVaultSearchSort,
   type AiVaultSort
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT, type AiVaultSessionLimit } from './ai-vault-session-limit'
 
 // Share the default across initial state, adjustment count, and Reset view so they cannot diverge.

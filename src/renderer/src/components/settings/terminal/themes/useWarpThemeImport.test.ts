@@ -4,7 +4,7 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import {
   MAX_TERMINAL_CUSTOM_THEMES,
   type WarpThemeImportPreview
-} from '../../../../../../shared/terminal-custom-themes'
+} from '../../../../../../shared/terminal-themes/terminal-custom-themes'
 
 const mockStateValues: unknown[] = []
 let mockStateIndex = 0

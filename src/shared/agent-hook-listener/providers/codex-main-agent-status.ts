@@ -1,5 +1,5 @@
-import type { AgentMainAgentStatus } from '../../agent-status-types'
-import type { CodexLeadTurnState } from '../listener-state'
+import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
+import type { CodexLeadTurnState } from '../main-agent-turn-state'
 
 /** The `mainAgent` fact a Codex row publishes, straight from the root record. */
 export function codexMainAgentStatusForPayload(

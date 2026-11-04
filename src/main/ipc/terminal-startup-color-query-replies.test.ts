@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getStartupTerminalIngressIntent } from './terminal-startup-color-query-replies'
-import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
-import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress-intent'
+import { PtyStartupIngress } from '../../shared/terminal/pty/ingress/pty-startup-ingress'
+import { parsePtyStartupIngressIntent } from '../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
 
 it.each([{ launchAgent: 'omp' }, { command: 'omp' }, { telemetry: { agent_kind: 'omp' } }])(
   'keeps keyboard startup support without theme colors: %j',

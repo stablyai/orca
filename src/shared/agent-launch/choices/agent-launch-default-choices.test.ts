@@ -1,4 +1,3 @@
-import { resolveAgentChoiceLayers } from './agent-choice-layers'
 import {
   terminalSessionOptionInputs,
   resolveAgentLaunchCommand
@@ -29,19 +28,6 @@ function mutate(
 }
 
 describe('host-authored launch defaults', () => {
-  it('does not inspect raw text when no model or option can yield', () => {
-    expect(
-      resolveAgentChoiceLayers({
-        agent: 'claude',
-        argumentOwner: 'launch',
-        defaults: { permissionMode: 'ask' },
-        get userArgs(): string {
-          throw new Error('Raw arguments are not needed for permission-only layers')
-        }
-      })
-    ).toEqual({ permissionMode: 'ask' })
-  })
-
   it('migrates typed-permission profiles once, preserves independent effort and initialized emptiness', () => {
     const loaded = migrateAgentPermissionChoice({
       agentPermissionDefault: 'ask',

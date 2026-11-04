@@ -11,7 +11,11 @@ import {
 } from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
 import type { PtyReplayDataMeta } from './pty-transport-types'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -146,6 +150,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     paneBuffer: 'normal' | 'alternate' | 'alternate-queued' = 'alternate'
   ): Promise<PaneEvent[]> {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport('agent-pty')
     const replay: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -174,7 +179,9 @@ describe('remote snapshot replay onto a live alt screen', () => {
       events.push({ cols, rows })
     })
     const deps = buildPaneConnectionDeps(() => mockStoreState)
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+    const binding = connectPanePty(
+      ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks))
+    )
     await flushAsyncTicks(8)
     pane.terminal.cols = COLS
     pane.terminal.rows = ROWS

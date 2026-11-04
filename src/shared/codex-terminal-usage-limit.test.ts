@@ -3,7 +3,7 @@ import { appendFileSync, mkdtempSync, renameSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
-import { normalizeAndAccept } from './agent-hook-listener-test-harness'
+import { normalizeAndAccept } from './agent-hook-listener/normalization/agent-hook-listener-test-harness'
 import { pollCodexTranscriptStatus } from './agent-hook-listener/providers/codex-transcript-poll'
 import {
   createCodexSubagentTranscriptState,

@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render as renderComponent, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { WorkspaceDecisionDetails } from './workspace-space-decision-details'
 import { WorkspaceSpaceWorktreeRow } from './workspace-space-worktree-row'
 import { TooltipProvider } from '../ui/tooltip'

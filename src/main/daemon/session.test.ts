@@ -10,7 +10,7 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   _resetPtyOwnerHostColorsForTest,
   setPtyOwnerHostColors
-} from '../../shared/pty-owner-color-query-colors'
+} from '../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({

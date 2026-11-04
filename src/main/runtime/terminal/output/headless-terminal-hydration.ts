@@ -2,7 +2,7 @@ import type {
   RuntimeHeadlessTerminal,
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { splitFreebuffScreenUpdates } from '../../../../shared/freebuff-screen-status'
 import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './terminal-buffer-operations'
 import { observeFreebuffTerminalStatus } from '../../freebuff-terminal-status'
@@ -16,9 +16,9 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import {
   detectAgentStatusFromTitle,
   normalizeTerminalTitle
-} from '../../../../shared/agent-detection'
+} from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-authority'
-import { advancePartialEscapeTail } from '../../../../shared/terminal-partial-escape-tail'
+import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal

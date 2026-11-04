@@ -73,7 +73,6 @@ function createScope(client: RpcClient) {
     terminalsRef: { current: [] },
     setSessionTabs: vi.fn<(updater: PlacementUpdater) => void>(),
     sessionTabsRef: { current: sessionTabs },
-    defaultTerminalHandlesToLiveInput: vi.fn(),
     setActiveHandle: vi.fn(),
     activeSessionTabId: 'existing-tab',
     activeSessionTabIdRef: { current: 'existing-tab' },

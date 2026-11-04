@@ -2,11 +2,11 @@ import { shouldClearAssistantMessageRetry } from '../../../shared/agent-hook-lis
 import { RelaySessionGenerations } from './server-relay-sessions'
 import { retainHookRootContext } from '../../../shared/agent-hook-listener/pane-provider-session'
 import { deriveCliWriterTopology } from './cli-writer-observation'
-import { previewHookPresence } from '../../../shared/agent-hook-presence-transition'
+import { previewHookPresence } from '../../../shared/agent-hook-listener/presence/agent-hook-presence-transition'
 import {
   needsHookRootEvidence,
   readHookProcessVerdict
-} from '../../../shared/agent-hook-owner-presence'
+} from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
 import {
   reconcileCodexStatusEvent,
   markCodexLeadTurnInterrupted
@@ -14,10 +14,10 @@ import {
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
-} from '../../../shared/agent-status-identity'
+} from '../../../shared/agent-status/identity/agent-status-identity'
 import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
-import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
-import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/claude-owed-notification-expiry-timers'
+import type { AgentStatusObservationOrigin } from '../../../shared/agent-status/contracts/agent-status-observation'
+import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
 import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
   attachClaudePermissionToolUseId,
@@ -26,7 +26,7 @@ import {
   withHeldChildWaitMainAgent
 } from './server-claude-status-rules'
 import { isForeignTurnHook } from './server-foreign-turn-hook'
-import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
+import { resolveCancelVerdictLatch } from '../../../shared/agent-hook-listener/state/agent-hook-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
 

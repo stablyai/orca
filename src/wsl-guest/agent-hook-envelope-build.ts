@@ -1,8 +1,11 @@
 // Build SSH hook envelopes from parsed events/raw bodies; publication owns shedding and redelivery.
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
+import type {
+  AgentHookRelayEnvelope,
+  AgentHookSource
+} from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { hasSeparateHookSessionAdmission } from '../shared/agent-hook-listener/pane-provider-session'
-import { projectHostTurnEnd } from '../shared/agent-status-types'
+import { projectHostTurnEnd } from '../shared/agent-status/contracts/agent-status-types'
 
 // Why: cap metadata to prevent a misbehaving CLI growing the cache unboundedly.
 const MAX_HOOK_META_LEN = 64

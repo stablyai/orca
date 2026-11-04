@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
-} from '../../../../shared/browser-client-host-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BrowserClientHostCommandDispatcher } from './browser-client-host-command-dispatcher'
 
 const authority: BrowserClientHostLeaseAuthority = {

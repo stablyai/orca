@@ -15,7 +15,7 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import type { PtyTransport } from './pty-transport-types'
 import {
   createRemoteRuntimeTransportMocks,

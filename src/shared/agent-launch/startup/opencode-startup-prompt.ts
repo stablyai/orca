@@ -1,4 +1,4 @@
-import { isOpenCodeRunCommand } from '../../opencode-headless-command'
+import { isOpenCodeRunCommand } from '../../agent-status/process/opencode-headless-command'
 import { sha256 } from '../../sha256'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'

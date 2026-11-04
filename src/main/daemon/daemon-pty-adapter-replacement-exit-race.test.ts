@@ -5,7 +5,7 @@ import { setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
+import { formatTerminalStartFailure } from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,

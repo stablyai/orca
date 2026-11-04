@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
 import { terminalUsageLimitGuard } from '../../shared/agent-hook-listener/terminal-usage-limit-guard'
-import { reduceHostTurnEnd } from '../../shared/agent-hook-turn-end-timing'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { reduceHostTurnEnd } from '../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { afterEach, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
@@ -13,7 +13,7 @@ import {
   writeRefused,
   writeUnverifiable,
   type WriteSettlement
-} from '../../shared/pty-write-settlement'
+} from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../shared/native-chat/native-chat-usage-limit-cut'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type * as PluginHookDispatch from '../plugins/hooks/plugin-hook-dispatch'

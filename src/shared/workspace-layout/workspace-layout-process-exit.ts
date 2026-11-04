@@ -1,6 +1,6 @@
 // Retire proven exits unless the failure must remain visible. Negative codes and attach absence only unbind; neither proves process exit.
 
-import { isProvenProcessExit } from '../terminal-exit-cause'
+import { isProvenProcessExit } from '../terminal/pty/lifecycle/terminal-exit-cause'
 import { omitStoredFields } from './stored-record-fields'
 import { applied, leafIdsOf, setLeaf, type Applied } from './workspace-layout-command-steps'
 import { updateLegacyPersistence } from './workspace-layout-legacy-persistence'

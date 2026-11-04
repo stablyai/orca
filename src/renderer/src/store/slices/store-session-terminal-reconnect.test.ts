@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test-helpers'
 import { computeVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'

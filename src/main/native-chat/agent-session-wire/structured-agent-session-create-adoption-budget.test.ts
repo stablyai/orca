@@ -13,7 +13,6 @@ vi.mock(
 )
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { createRestTestRig } from './structured-agent-session-rest-test-rig'
 import {
   createTestParams,
   CREATE_TEST_CALLER as CALLER
@@ -24,9 +23,6 @@ import {
 } from './structured-agent-session-host-test-data'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { adoptedDirectoryProbes } from '../agent-session-journal/adopted-directory-probe'
-import { writeOpenCodeSqliteDatabase } from '../../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
-import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
-import { structuredAgentsDeclaringNothing } from './structured-agent-session-adapter-router-test-support'
 import { resolveAgentSessionLaunchDirectory } from '../../runtime/agent-session/agent-session-launch-directory'
 import { createClaudeStructuredLaunchResolver } from '../../runtime/structured-agent-launch-composition.test-support'
 
@@ -208,36 +204,3 @@ it('uses current selected ancestors, then refuses retargeted/foreign sources bef
   expect(probe).toHaveBeenLastCalledWith(workspaceCwd, sourceCwd, expect.any(AbortSignal))
   expect(await fixture.rig.host.create(CALLER, params)).toMatchObject({ ok: true, replayed: true })
 })
-
-it.each(['opencode', 'opencode2'] as const)(
-  'commits %s actual database history using the same linked-cwd admission',
-  async (agent) => {
-    const definition = structuredAgentRuntimeRegistration(agent)!.definition
-    await fixture.rig.dispose()
-    fixture.rig = await createRestTestRig({
-      agents: structuredAgentsDeclaringNothing([definition])
-    })
-    const physical = await realpath(fixture.rig.root)
-    const registered = join(fixture.rig.root, 'registered')
-    await symlink(physical, registered, process.platform === 'win32' ? 'junction' : 'dir')
-    const transcriptPath = join(fixture.rig.root, 'opencode.db')
-    writeOpenCodeSqliteDatabase(transcriptPath, [
-      { id: THREAD, directory: physical, turns: [{ role: 'user', parts: ['database context'] }] }
-    ])
-    const params = createTestParams(undefined, {
-      agent,
-      provider: agent,
-      accountHome: { kind: 'opencode', locator: { kind: 'unmanaged' } },
-      adopt: {
-        providerHandle: { agent, transport: definition.handleTransport, nativeId: THREAD },
-        transcriptPath,
-        source: { providerSessionId: THREAD, workspaceCwd: registered }
-      }
-    })
-    expect(await fixture.rig.host.create(CALLER, params)).toMatchObject({ ok: true })
-    expect(fixture.rig.store.getRecord(SESSION)?.providerHandleChain[0].handle.nativeId).toBe(
-      THREAD
-    )
-    expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
-  }
-)

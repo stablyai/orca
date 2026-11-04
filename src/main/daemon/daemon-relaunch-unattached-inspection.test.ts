@@ -5,8 +5,8 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { DaemonServer } from './daemon-server'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
 import { inspectPtyProviderProcessForRenderer } from '../providers/pty-process-inspection'
-import { isClientOnlyUnverifiableInspection } from '../../shared/terminal-process-inspection'
-import { probePtyRunningWorkWithInspection } from '../../shared/pty-running-work-probe'
+import { isClientOnlyUnverifiableInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { probePtyRunningWorkWithInspection } from '../../shared/terminal/pty/lifecycle/pty-running-work-probe'
 
 // After a relaunch every WSL bridge pane the window had not reopened read
 // `unverifiable`, so no move could pass its terminal gate.

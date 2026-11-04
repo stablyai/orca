@@ -2,7 +2,7 @@
 // Forward guest loopback hooks over framed stdio and expose home-scoped installer operations (STA-1515).
 // Exit with stdin: a lingering listener can let WSL forwarding capture the freed Windows port and blackhole hooks.
 import { TERMINAL_USAGE_LIMIT_SOURCE_METHOD } from '../shared/terminal-usage-limit-source-validation'
-import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-interrupt-reconciliation'
+import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
 import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../shared/claude-agent-view'
 import { homedir } from 'node:os'
 
@@ -17,9 +17,9 @@ import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
   AGENT_HOOK_PANE_ROOT_METHOD
-} from '../shared/agent-hook-relay'
+} from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
-import { createLocalHookRootEvidenceReader } from '../shared/hook-process-root-evidence-reader'
+import { createLocalHookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence-reader'
 import { createRelayPaneRootResolver } from './relay-pane-root'
 import {
   sanitizeWslHookInstanceKey,

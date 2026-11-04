@@ -8,8 +8,8 @@ import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/da
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type * as ActivateTabAndFocusPaneModule from '@/lib/activate-tab-and-focus-pane'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'

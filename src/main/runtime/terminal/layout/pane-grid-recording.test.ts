@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { PaneGridRecorder, PANE_GRID_FLUSH_BUDGET_MS } from './pane-grid-recording'
 

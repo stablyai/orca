@@ -5,8 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { rememberPaneKeyForPty, ptyPaneKey, paneKeyPtyId } from '../main/ipc/pty/pane/key-state'
 import { AgentHookServer, _internals } from '../main/agent-hooks/server'
 import { RelayAgentHookServer } from './agent-hook-server'
-import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
-import { makePaneKey } from '../shared/stable-pane-id'
+import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
 
 vi.mock('../main/telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../main/telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))

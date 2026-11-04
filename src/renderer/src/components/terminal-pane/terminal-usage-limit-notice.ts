@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionUsageLimit } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
 
 export type TerminalUsageLimitNotice = {

@@ -7,13 +7,13 @@ import {
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleLeafIdFromRoot
 } from '../../../shared/runtime-pane-title-leaf-id'
-import { containsAgentSpinnerGlyph } from '../../../shared/agent-title-core'
-import { isSyntheticAgentPermissionTitle } from '../../../shared/synthetic-agent-title'
+import { containsAgentSpinnerGlyph } from '../../../shared/agent-status/title/agent-title-glyphs'
+import { isSyntheticAgentPermissionTitle } from '../../../shared/agent-status/title/synthetic-agent-title'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../shared/terminal-tab-types'
+} from '../../../shared/workspace-layout/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 import { rankWorktreeStatus, type WorktreeStatus } from '../../../shared/worktree-status-rollup'

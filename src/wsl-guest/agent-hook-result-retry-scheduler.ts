@@ -10,18 +10,18 @@ import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
 } from '../shared/agent-hook-listener/grok-result-discovery'
-import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
-import { pickHostTurnEnd } from '../shared/agent-status-types'
+import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { pickHostTurnEnd } from '../shared/agent-status/contracts/agent-status-types'
 import {
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../shared/agent-hook-listener/transcript-poll-policy'
-import { AgentTranscriptPollScheduler } from '../shared/agent-transcript-poll-scheduler'
-import { ClaudeOwedNotificationExpiryTimers } from '../shared/claude-owed-notification-expiry-timers'
+import { AgentTranscriptPollScheduler } from '../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
+import { ClaudeOwedNotificationExpiryTimers } from '../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50

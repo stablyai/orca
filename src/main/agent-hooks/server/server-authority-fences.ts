@@ -1,5 +1,5 @@
 import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServerTerminalUsageLimit } from './server-terminal-usage-limit'
 import type {
   EnrichedAgentHookEventPayload,

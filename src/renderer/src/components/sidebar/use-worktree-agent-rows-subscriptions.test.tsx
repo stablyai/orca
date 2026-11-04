@@ -7,11 +7,9 @@ import { readStoreListenerCount } from '@/store/store-listener-census'
 import { makeTab } from '@/store/slices/store-test-helpers'
 import type { AppState } from '@/store/types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { verifyMirroredTerminalLineage } from './mirrored-terminal-lineage.test-fixture'
 import type { RuntimeAgentLineageTestModule } from '../../../../shared/runtime-agent-lineage-consumer.test-fixture'

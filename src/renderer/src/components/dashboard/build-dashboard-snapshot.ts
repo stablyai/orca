@@ -1,4 +1,4 @@
-import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import type { AppState } from '@/store/types'
@@ -9,7 +9,7 @@ import {
   type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   resolveDashboardCardTerminalInput,
   type DashboardCardTerminalInputState

@@ -1,9 +1,9 @@
 // Open forwards prove no identity; require an authenticated status call from the pinned server.
-import { parsePairingCode } from '../../../shared/pairing'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
-} from '../../../shared/paired-runtime-connection'
+} from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
 import {
   isRecoverableRemoteRuntimeConnectionError,
@@ -13,7 +13,7 @@ import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { verifyRuntimePairingIdentity } from '../../runtime/runtime-environment-identity-verification'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { orcadBoundPort } from './orcad-managed-bound-port'

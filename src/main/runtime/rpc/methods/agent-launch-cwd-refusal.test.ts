@@ -1,3 +1,4 @@
+import type * as RuntimeEnvironmentStore from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -34,10 +35,17 @@ vi.mock('../../../../cli/runtime-client', async () => {
 
 vi.mock('../../../../cli/runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
 }))
+
+vi.mock(
+  '../../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
+    listEnvironments: listEnvironmentsMock
+  })
+)
 
 import { createConnection } from 'node:net'
 import { mkdtemp, rm } from 'node:fs/promises'

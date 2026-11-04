@@ -1,7 +1,7 @@
-import { hasShedSubagentsField } from '../../../shared/agent-hook-relay'
-import { readAgentPaneRootBinding } from '../../../shared/agent-process-presence'
+import { hasShedSubagentsField } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { readAgentPaneRootBinding } from '../../../shared/agent-status/process/agent-process-presence'
 import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex-state'
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 
 // One binding per pane a relay asked about; a link restart drops them all.
 const MAX_PANE_ROOT_BINDINGS = 512

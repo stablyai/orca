@@ -1,7 +1,7 @@
 import type {
   AgentProcessPresence,
   AgentProcessVerdict
-} from '../../../shared/agent-process-presence'
+} from '../../../shared/agent-status/process/agent-process-presence'
 import type { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
 
@@ -14,26 +14,30 @@ import {
   createHookTransportInterferenceTracker,
   describeHookTransportInterference,
   type HookTransportInterferenceReport
-} from '../../../shared/agent-hook-transport-interference'
+} from '../../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import {
   AgentStatusObservationSequencer,
   createAgentStatusAuthorityId,
   type AgentStatusObservation,
   type AgentStatusObservationOrigin
-} from '../../../shared/agent-status-observation'
+} from '../../../shared/agent-status/contracts/agent-status-observation'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../../../shared/agent-hook-relay'
-import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
-import type { SpoolRecord } from '../../../shared/agent-hook-spool'
-import { createAgentStatusStore, type AgentStatusStore } from '../../../shared/agent-status-store'
-import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
-import type { AgentStatusSubject } from '../../../shared/agent-status-subject'
+import type { SpoolRecord } from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
+import {
+  createAgentStatusStore,
+  type AgentStatusStore
+} from '../../../shared/agent-status/store/agent-status-store'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
+import type { AgentStatusSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
 import type {
   AgentHookAuthorityEvidence,
   AgentHookProviderSessionIdentity,
   AgentHookStatusChangeEntry,
   AgentHookStatusFreshnessObservation,
+  AgentStatusDispositionEvent,
   AgentPromptSentDedupeEntry,
   EnrichedAgentHookEventPayload,
   LocalHookNormalizationArgs,
@@ -197,15 +201,7 @@ export abstract class AgentHookServerState {
   protected abstract markTabClosedForAgentStatus(tabId: string): void
   protected abstract getAgentStatusDisposition(
     paneKey: string,
-    event?: {
-      source?: AgentHookSource
-      rawSource?: unknown
-      hookEventName?: string
-      isReplay?: boolean
-      hasExplicitPrompt?: boolean
-      launchToken?: string
-      retainedLaunchTokenHash?: string
-    }
+    event?: AgentStatusDispositionEvent
   ): 'accept' | 'restart' | 'suppress'
   protected abstract isClosedAgentStatusTabForPaneKey(paneKey: string): boolean
   protected abstract takeRetiredPaneRestartId(paneKey: string): string | undefined

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { LayoutApplyParams } from '../../../shared/rpc-contract/workspace-layout-params'
 import { bindAutomationTerminal } from './automation-terminal-ownership'
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
-import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../shared/agent-status-types'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../shared/agent-status/contracts/agent-status-field-normalization'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { buildBody, PANE, LEAF_2, LEAF_3 } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({

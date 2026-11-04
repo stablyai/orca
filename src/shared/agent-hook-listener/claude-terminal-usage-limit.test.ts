@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it } from 'vitest'
 import { readClaudeTerminalUsageLimit } from './claude-terminal-usage-limit'
 import { createHookListenerState } from './listener-state'
-import { normalizeAndAccept, CLAUDE_PROMPT_ID } from '../agent-hook-listener-test-harness'
+import {
+  normalizeAndAccept,
+  CLAUDE_PROMPT_ID
+} from './normalization/agent-hook-listener-test-harness'
 
 const NOW = 1_793_752_550_000
 const RESET_SECONDS = 1_793_756_137

@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs'
-import type { AgentHookSource } from '../agent-hook-relay'
+import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import { parseHookBodyPayloadRecord } from './grok-result-discovery'
 import { readString } from './tool-input-preview'

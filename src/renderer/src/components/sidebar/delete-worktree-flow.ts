@@ -23,7 +23,7 @@ import {
   runWorktreeDeletesInParallel,
   runWorktreeDeleteWithToast
 } from './worktree-delete-execution'
-import { collectRemovalUnsavedFiles } from '@/components/editor/removal-unsaved-editor-files'
+import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 
 export { runWorktreeDeletesInParallel, runWorktreeDeleteWithToast }
 

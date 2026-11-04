@@ -5,8 +5,8 @@ import { isStructuredTab } from '../../../../shared/agent-session/view/structure
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { makeTab } from '@/store/slices/store-test-helpers'
 
 // Load the native graph during collection; fixture state stays per test.
@@ -46,7 +46,8 @@ export async function verifyMirroredTerminalLineage(
   const { buildTerminalUnifiedTab } = await import('@/runtime/web-session-tabs-sync/tab-builders')
   const { toRemoteRuntimePtyId } =
     await import('../../../../shared/remote-runtime/remote-runtime-pty-id')
-  const { toWebTerminalSurfaceTabId } = await import('../../../../shared/terminal-surface-id')
+  const { toWebTerminalSurfaceTabId } =
+    await import('../../../../shared/workspace-layout/terminal-surface-id')
   const { projectStatus } =
     await import('@/components/native-chat/structured-agent-session-status-projection')
   const { structuredAgentSessionPaneKey: pane, structuredAgentSessionTabId: tabId } =

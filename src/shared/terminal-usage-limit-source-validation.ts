@@ -1,6 +1,9 @@
-import { readAgentProcessIdentity, type AgentProcessIdentity } from './agent-process-presence'
-import { isRecord } from './agent-status-child-work-value-guards'
-import { parsePaneKey } from './stable-pane-id'
+import {
+  readAgentProcessIdentity,
+  type AgentProcessIdentity
+} from './agent-status/process/agent-process-presence'
+import { isRecord } from './agent-status/child-work/agent-status-child-work-value-guards'
+import { parsePaneKey } from './workspace-layout/stable-pane-id'
 
 export const TERMINAL_USAGE_LIMIT_SOURCE_METHOD = 'agent_hook.validateUsageLimit'
 

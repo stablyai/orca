@@ -1,7 +1,7 @@
 import type { TerminalUsageLimitSourceResult } from '../../../../shared/terminal-usage-limit-source-validation'
 import { randomUUID } from 'node:crypto'
 import { OrcaRuntimeWithAgentPromptRequestCorrelation } from '../../orca-runtime-agent-prompt-request-correlation'
-import { readTerminalComposerTypedText } from '../../../../shared/terminal-composer-draft'
+import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import { hasTerminalDialogScreen } from '../../claude-open-dialog-hold'
 import { detectTerminalWaitBlockedReason } from '../../terminal-wait-detection'

@@ -3,7 +3,7 @@ import { forgetBrowserExtensionActionProfile } from '../actions/browser-extensio
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { getBrowserExtensionProfileStateStore } from '../profile-storage/browser-extension-profile-state-store'

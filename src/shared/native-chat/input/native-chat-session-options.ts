@@ -1,4 +1,4 @@
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 
 export type SessionOptionValue = string | boolean
 

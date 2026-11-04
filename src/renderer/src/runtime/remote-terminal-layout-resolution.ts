@@ -1,4 +1,4 @@
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 
 // All client ingestion shares host-authoritative layout resolution. Never guess directions for known leaves: resolved trees persist/push back, so guesses destroy real layout on disk. Prune known trees to surviving leaves and graft only genuinely new ones; every invented direction is reported.
 

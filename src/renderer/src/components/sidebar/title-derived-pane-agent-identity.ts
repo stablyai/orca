@@ -1,7 +1,7 @@
-import { titleShowsNoAgent } from '../../../../shared/agent-detection'
-import type { AgentType } from '../../../../shared/agent-status-types'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
-import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
+import { titleShowsNoAgent } from '../../../../shared/agent-status/process/shell-process-detection'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 export const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {

@@ -1,11 +1,11 @@
-import type { ParsedAgentStatusPayload } from '../../agent-status-types'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
 import {
   continueMainAgentStatus,
   foldAgentLeadStatus,
   mainAgentTurnInterrupted,
   type AgentLeadStatusResolution
-} from '../../agent-lead-status-fold'
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
 import {
   codexRosterChildWorkLiveness,
   codexRosterToSnapshots,
@@ -19,7 +19,8 @@ import {
   type CodexSubagentTranscriptState
 } from '../../codex-subagent-transcript'
 import type { AgentHookEventPayload } from '../listener-event'
-import type { CodexLeadTurnState, HookListenerState } from '../listener-state'
+import type { HookListenerState } from '../listener-state'
+import type { CodexLeadTurnState } from '../main-agent-turn-state'
 import { codexMainAgentStatusForPayload, codexLeadOutcomeForEvent } from './codex-main-agent-status'
 export { codexMainAgentStatusForPayload, codexLeadOutcomeForEvent } from './codex-main-agent-status'
 

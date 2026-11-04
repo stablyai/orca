@@ -18,7 +18,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 // Drive real wire frames through multiplexer and transport so SnapshotStart’s pending escape reaches replay.

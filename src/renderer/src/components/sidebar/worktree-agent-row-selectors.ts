@@ -3,10 +3,10 @@ import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-statu
 import type { AppState } from '@/store/types'
 import type {
   AgentStatusEntry,
-  AgentStatusOrchestrationContext,
-  MigrationUnsupportedPtyEntry
-} from '../../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+  AgentStatusOrchestrationContext
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   type LiveEntriesByWorktreeCache,
   liveEntryWorktreeId,
@@ -15,7 +15,7 @@ import {
 } from './worktree-agent-live-index-patch'
 import { selectWorktreeAgentOrchestration } from './worktree-agent-orchestration-index'
 import { createWorktreeRecordSelector } from '@/store/worktree-record-selector-cache'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 // Why frozen and exported: card hooks return these from their inactive branch,
 // so the identity has to be shared app-wide and safe from stray writes.

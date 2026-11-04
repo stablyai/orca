@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LAYOUT_OWNER_WRITTEN_SESSION_GOLDEN_PATH } from '../../../shared/__fixtures__/layout-owner-written-session-golden-paths'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { emptyTerminalSessionProfile, openTopologyStore } from './terminal-topology-profile-fixture'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))

@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { ShellOpenExternalEditorResult } from '../../../../shared/shell-open-types'
+import type { ShellOpenExternalEditorResult } from '../../../../shared/shell/opening/shell-open-types'
 
 export function showOpenFailureToast(
   result: Exclude<ShellOpenExternalEditorResult, { ok: true }>,

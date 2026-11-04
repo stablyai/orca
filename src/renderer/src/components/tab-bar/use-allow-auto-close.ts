@@ -7,7 +7,7 @@ import {
   setWorkerKeptOpen,
   type WorkerAutoCloseSubject
 } from '@/lib/worker-auto-close'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 function tabWorkerSubjects(tabId: string, sessionId: string | undefined): WorkerAutoCloseSubject[] {

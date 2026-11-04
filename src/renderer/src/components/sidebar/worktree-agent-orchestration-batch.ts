@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   EMPTY_WORKTREE_AGENT_ORCHESTRATION_INDEX,
   selectWorktreeAgentOrchestrationIndex

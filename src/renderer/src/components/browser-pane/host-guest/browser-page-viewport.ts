@@ -28,6 +28,8 @@ const browserPageViewports = new Map<string, BrowserPageViewport>()
 // Remember chrome insets across shell recovery/profile/slot rebuilds that do not trigger React remeasurement.
 const browserPageChromeInsetHeights = new Map<string, number>()
 const browserPageViewportPresetSizes = new Map<string, { width: number; height: number }>()
+// An agent's size outlives pane remounts until the page's next load or a user preset clears it.
+const browserPageAgentViewportSizes = new Map<string, { width: number; height: number }>()
 const MAX_REMEMBERED_BROWSER_PAGE_INSETS = 512
 
 const slotRootListeners = new Map<string, Set<() => void>>()
@@ -136,7 +138,7 @@ export function ensureBrowserPageViewport(
 
   const viewport = { shell, chromeInset, devToolsSplit, container, scroller, content }
   browserPageViewports.set(browserPageId, viewport)
-  applyViewportPresetSizeStyles(viewport, browserPageViewportPresetSizes.get(browserPageId) ?? null)
+  applyViewportPresetSizeStyles(viewport, browserPageBoxSize(browserPageId))
   return viewport
 }
 
@@ -165,22 +167,47 @@ function applyViewportPresetSizeStyles(
   viewport.scroller.style.overflow = size ? 'auto' : ''
 }
 
-export function setBrowserPageViewportPresetSize(
+function browserPageBoxSize(browserPageId: string): { width: number; height: number } | null {
+  return (
+    browserPageAgentViewportSizes.get(browserPageId) ??
+    browserPageViewportPresetSizes.get(browserPageId) ??
+    null
+  )
+}
+
+function rememberSize(
+  sizes: Map<string, { width: number; height: number }>,
   browserPageId: string,
   size: { width: number; height: number } | null
 ): void {
   if (size) {
-    browserPageViewportPresetSizes.set(browserPageId, size)
+    sizes.set(browserPageId, size)
   } else {
-    browserPageViewportPresetSizes.delete(browserPageId)
+    sizes.delete(browserPageId)
   }
   const viewport = browserPageViewports.get(browserPageId)
   if (viewport) {
-    applyViewportPresetSizeStyles(viewport, size)
+    applyViewportPresetSizeStyles(viewport, browserPageBoxSize(browserPageId))
   }
 }
 
+export function setBrowserPageViewportPresetSize(
+  browserPageId: string,
+  size: { width: number; height: number } | null
+): void {
+  rememberSize(browserPageViewportPresetSizes, browserPageId, size)
+}
+
+/** An agent's viewport sizes the box ahead of the user's preset until cleared. */
+export function setBrowserPageAgentViewportSize(
+  browserPageId: string,
+  size: { width: number; height: number } | null
+): void {
+  rememberSize(browserPageAgentViewportSizes, browserPageId, size)
+}
+
 export function clearBrowserPageViewportPresetSize(browserPageId: string): void {
+  browserPageAgentViewportSizes.delete(browserPageId)
   setBrowserPageViewportPresetSize(browserPageId, null)
 }
 

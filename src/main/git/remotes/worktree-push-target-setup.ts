@@ -1,6 +1,6 @@
 import type { GitPushTarget } from '../../../shared/worktree/types'
-import { findGitRemoteNameByFetchUrl } from '../../../shared/git-remote-url-index'
-import { getGitCurrentBranchName } from '../../../shared/git-current-branch'
+import { findGitRemoteNameByFetchUrl } from '../../../shared/git/remotes/git-remote-url-index'
+import { getGitCurrentBranchName } from '../../../shared/git/refs/git-current-branch'
 import { sameGitHubRemoteUrl, type GitRemoteExec } from './worktree-push-target-cleanup'
 import {
   buildNarrowForkFetchRefspec,
