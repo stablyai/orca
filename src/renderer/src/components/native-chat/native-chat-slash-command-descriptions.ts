@@ -50,6 +50,12 @@ const SHARED_SLASH_COMMAND_DESCRIPTIONS: SlashCommandDescriptionCopy = {
         'Review the current changes'
       )
   },
+  mcp: {
+    'List configured MCP tools': () =>
+      translate('components.native-chat.slashCommandDescriptions.mcp', 'List configured MCP tools'),
+    'List configured MCP tools and servers': () =>
+      translate('components.native-chat.slashCommandDescriptions.mcp', 'List configured MCP tools')
+  },
   context: {
     'Show context usage': () =>
       translate(

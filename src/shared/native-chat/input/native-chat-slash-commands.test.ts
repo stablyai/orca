@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { sessionReportedSkills, sessionSlashCommandSuggestions } from './native-chat-slash-commands'
+import {
+  filterSlashCommands,
+  getAgentSlashCommands,
+  sessionReportedSkills,
+  sessionSlashCommandSuggestions
+} from './native-chat-slash-commands'
 
 describe('a session that reports its own command surface', () => {
   const reported = [
@@ -52,5 +57,34 @@ describe('a session that reports its own command surface', () => {
         kindUnspecified: true
       }
     ])
+  })
+})
+
+describe('curated agent slash commands', () => {
+  it('includes /mcp in Claude Code slash commands with description', () => {
+    const claudeCommands = getAgentSlashCommands('claude')
+    expect(claudeCommands).toContainEqual({
+      name: 'mcp',
+      description: 'List configured MCP tools'
+    })
+  })
+
+  it('includes /mcp in OpenClaude commands via inherited Claude catalog', () => {
+    const openClaudeCommands = getAgentSlashCommands('openclaude')
+    expect(openClaudeCommands).toContainEqual({
+      name: 'mcp',
+      description: 'List configured MCP tools'
+    })
+  })
+
+  it('populates curated description when session reports /mcp for Claude', () => {
+    expect(sessionSlashCommandSuggestions('claude', [{ name: 'mcp', kind: 'command' }])).toEqual([
+      { name: 'mcp', description: 'List configured MCP tools' }
+    ])
+  })
+
+  it('matches /mcp through prefix filtering in Claude commands', () => {
+    const matches = filterSlashCommands(getAgentSlashCommands('claude'), 'mc')
+    expect(matches).toEqual([{ name: 'mcp', description: 'List configured MCP tools' }])
   })
 })

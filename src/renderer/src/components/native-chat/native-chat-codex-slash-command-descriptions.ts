@@ -209,10 +209,6 @@ export const CODEX_SLASH_COMMAND_DESCRIPTIONS: SlashCommandDescriptionCopy = {
         'Choose or hide the terminal pet'
       )
   },
-  mcp: {
-    'List configured MCP tools': () =>
-      translate('components.native-chat.slashCommandDescriptions.mcp', 'List configured MCP tools')
-  },
   plugins: {
     'Browse plugins': () =>
       translate('components.native-chat.slashCommandDescriptions.plugins', 'Browse plugins')
