@@ -15,10 +15,10 @@ vi.mock('./spawned-command-tree-kill', () => ({
 import { gitStreamStdout } from './git-stream-stdout'
 import {
   acquireGitAdmission,
-  GitAdmissionScheduler,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests
 } from './git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
 
 function mockChild(): ChildProcess {
   const child = new EventEmitter() as EventEmitter & Record<string, unknown>

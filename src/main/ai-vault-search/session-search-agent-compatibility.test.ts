@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from 'vitest'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   fakeSearchService,
   searchHit,
   searchResults
-} from '../../shared/ai-vault-search-test-fixture'
+} from '../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import {
   searchSessionService,
   setSessionSearchService,

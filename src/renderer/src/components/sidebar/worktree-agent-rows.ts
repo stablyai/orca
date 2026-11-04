@@ -1,13 +1,13 @@
 import type { Tab } from '../../../../shared/tab-types'
-import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status-worktree-attribution'
+import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
-  type AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentStatusOrchestrationContext
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   makePaneKey,
   parseLegacyNumericPaneKey,
@@ -19,7 +19,7 @@ import type {
   TerminalTab
 } from '../../../../shared/terminal-tab-types'
 import { resolveRuntimePaneTitleLeafId } from '../../../../shared/runtime-pane-title-leaf-id'
-import { resolveDecayedAgentRowState } from '../../../../shared/agent-row-decay-state'
+import { resolveDecayedAgentRowState } from '../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'

@@ -1,4 +1,4 @@
-import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { RenderRow } from '../listing/render-row'
 import {
   getWorktreeExecutionHostId,

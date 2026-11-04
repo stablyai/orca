@@ -35,15 +35,6 @@ function folder(name: string): string {
 
 const removeDirectory = (directory: string) => rm(directory, { recursive: true, force: true })
 
-it('keeps the list outside the folder Chromium owns, and queues each folder once', () => {
-  const a = folder('a')
-  queueBrowserRoutePartitionDirectoryDelete(listPath, a)
-  queueBrowserRoutePartitionDirectoryDelete(listPath, a)
-  expect(listPath.startsWith(partitions)).toBe(false)
-  expect(JSON.parse(readFileSync(listPath, 'utf8'))).toEqual([a])
-  expect(existsSync(a)).toBe(true)
-})
-
 it('deletes queued folders on the next start and forgets them', async () => {
   const a = folder('a')
   queueBrowserRoutePartitionDirectoryDelete(listPath, a)

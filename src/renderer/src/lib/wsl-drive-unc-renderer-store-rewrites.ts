@@ -42,7 +42,8 @@ const STORE_REWRITES: Record<StoreId, (keys: WslDriveUncRendererKeys) => Promise
     )
   },
   'notebook-environments': async (keys) => {
-    const { copyEnvironments } = await import('../components/editor/ipynb-kernel-store')
+    const { copyEnvironments } =
+      await import('../components/editor/notebook/kernel/ipynb-kernel-store')
     copyEnvironments((filePath, environment) =>
       convertedNotebookEnvironment(filePath, environment, keys)
     )

@@ -208,7 +208,7 @@ import { createPageClient } from '../mobile-web-shell/bridge/bridge-page-client-
 import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import { withGitHubTargetOperation } from '../tasks/github-work-item-operation'
 import { githubIssueUpdate } from '../tasks/mobile-task-item-state-operations'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as exactCapability } from '../../../src/shared/source-control-runtime-capabilities'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as exactCapability } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 
 const exactRepo = { owner: 'fork', repo: 'widgets', host: 'github.corp' }
 function boundUpdate(client: RpcClient) {

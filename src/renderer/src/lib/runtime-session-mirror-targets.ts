@@ -1,7 +1,7 @@
 import {
   lastVerifiedRuntimeStatus,
   type RuntimeHostStatusSnapshot
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   isDisconnectedRuntimeHostState,

@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
-import type { ReactNode } from 'react'
-import { act } from 'react'
+
+import { type ReactNode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import {
   createDefaultWorkspaceCleanupFilterState,
   type WorkspaceCleanupFilterState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 import { WorkspaceCleanupGitReviewFacets } from './workspace-cleanup-git-review-facets'
 import { WorkspaceCleanupLifecycleFacets } from './workspace-cleanup-lifecycle-facets'
 import type {

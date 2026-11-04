@@ -4,7 +4,7 @@ import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-s
 import { translate } from '@/i18n/i18n'
 import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { PreparedAgentSessionFork } from '../terminal-pane/terminal-agent-session-fork'
 import { copyAgentSessionContext } from '@/lib/copy-agent-session-context'
 import { TerminalAgentSessionForkDialog } from '../terminal-pane/TerminalAgentSessionForkDialog'

@@ -1,7 +1,7 @@
 import React from 'react'
 
 import { cn } from '@/lib/utils'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { WorktreeCardHeader } from './worktree-card-header'
 import { WorktreeCardMetaRow } from './worktree-card-meta-row'
 import { WorktreeCardIdentityHover } from './worktree-card-details-items'

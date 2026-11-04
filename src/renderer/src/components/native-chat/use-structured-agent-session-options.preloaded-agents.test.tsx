@@ -40,7 +40,7 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', ()
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 import { installHostModelCatalogSnapshotsSync } from '@/runtime/host-model-catalog-snapshots-sync'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'

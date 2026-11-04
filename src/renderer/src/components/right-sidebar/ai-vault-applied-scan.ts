@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
+import type { AiVaultListResult } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { reuseAiVaultListResult } from './ai-vault-session-identity'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 

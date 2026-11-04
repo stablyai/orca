@@ -2,8 +2,8 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { RESET_MOUSE_REPORTING } from '../../../../shared/terminal-mode-reset-profiles'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { RESET_MOUSE_REPORTING } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type * as CoordinatorModule from './agent-completion-coordinator'
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
@@ -17,7 +17,11 @@ import {
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
@@ -141,6 +145,7 @@ async function connectAgentPane(args: {
   terminal: ReturnType<typeof createPane>['terminal']
 }> {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
   const transport = createMockTransport(args.ptyId)
   transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -155,10 +160,13 @@ async function connectAgentPane(args: {
     ...mockPanePtyArgs(
       pane,
       createManager(paneId),
-      buildPaneConnectionDeps(() => mockStoreState, {
-        tabId,
-        isVisibleRef: { current: args.visible ?? false }
-      })
+      bindPaneAgentTitleMocks(
+        buildPaneConnectionDeps(() => mockStoreState, {
+          tabId,
+          isVisibleRef: { current: args.visible ?? false }
+        }),
+        agentTitleMocks
+      )
     )
   )
   await vi.advanceTimersByTimeAsync(20)
@@ -183,7 +191,9 @@ async function seedHookRow(
 ): Promise<AgentStatusEntry> {
   // Why the real slice: the row must carry the acceptedStatusSeq a real accepted hook stamps.
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
-  const realStore = createTestStore()
+  const realStore = createTestStore(
+    (await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')).isClaudeAgent
+  )
   realStore.getState().setAgentStatus(paneKey, { state, prompt: 'ship it', agentType })
   const row = realStore.getState().agentStatusByPaneKey[paneKey]
   mockStoreState.agentStatusByPaneKey[paneKey] = row

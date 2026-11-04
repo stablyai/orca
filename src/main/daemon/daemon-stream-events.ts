@@ -1,4 +1,4 @@
-import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import type { TerminalGitHubPRLink } from '../../shared/terminal/links/terminal-github-pr-link-detector'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 

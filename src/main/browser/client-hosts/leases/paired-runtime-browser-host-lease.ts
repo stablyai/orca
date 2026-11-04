@@ -1,10 +1,12 @@
+import type {
+  BrowserClientHostCommandEvent,
+  BrowserClientHostLeaseAuthority
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
-  BrowserClientHostCommandResult,
-  type BrowserClientHostCommandEvent,
-  type BrowserClientHostCommandResult as BrowserClientHostCommandResultType,
-  type BrowserClientHostLeaseAuthority
-} from '../../../../shared/browser-client-host-protocol'
-import { BROWSER_CLIENT_PAGE_METADATA_METHOD } from '../../../../shared/browser-client-page-metadata-protocol'
+  BrowserClientAutomationResult as BrowserClientHostCommandResult,
+  type BrowserClientAutomationResult as BrowserClientHostCommandResultType
+} from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { BROWSER_CLIENT_PAGE_METADATA_METHOD } from '../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import { assertBrowserClientHostAttachOptions } from '../lifecycle/browser-client-host-attach-request'
 import {
   BrowserHostReconnectDelay,

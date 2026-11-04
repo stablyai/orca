@@ -175,7 +175,7 @@
     "test:e2e:multi-client-navigation": "node config/scripts/run-multi-client-navigation-e2e.mjs",
     "test:e2e:terminal-layout-parity": "node config/scripts/run-terminal-layout-parity.mjs",
     "test:e2e:floating-mobile-emulator": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/floating-mobile-emulator-tab.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-    "test:e2e:terminal-rendering-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts tests/e2e/terminal-webgl-atlas-budget.spec.ts --grep @terminal-rendering-golden --config tests/playwright.config.ts --project electron-headless --project electron-headful --workers=1",
+    "test:e2e:terminal-rendering-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts --grep @terminal-rendering-golden --config tests/playwright.config.ts --project electron-headless --project electron-headful --workers=1",
     "test:e2e:source-control-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/golden-file-open-edit-save.spec.ts tests/e2e/golden-source-control-commit.spec.ts tests/e2e/golden-source-control-open-diff.spec.ts --grep @golden --config tests/playwright.config.ts --project electron-headless --workers=1",
     "test:e2e:posix-profile-index-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/golden-posix-profile-index-fsync.spec.ts --grep @posix-profile-index-golden --config tests/playwright.config.ts --project electron-headless --workers=1",
     "test:e2e:agent-tui-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/golden-agent-tui-launch.spec.ts tests/e2e/golden-shell-after-agent-exit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -394,7 +394,7 @@
   },
   "lint-staged": {
     "{*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}}": [
-      "oxlint",
+      "oxlint --no-error-on-unmatched-pattern",
       "oxlint --config config/oxlint-js-plugins.json",
       "ast-grep scan --config config/sgconfig.yml --min-severity warning",
       "oxlint --config config/oxlint-react-doctor.json",

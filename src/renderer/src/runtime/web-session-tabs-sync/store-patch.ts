@@ -11,8 +11,8 @@ import {
   pickHostTurnEnd,
   pickParsedAgentStatusPayload,
   type TurnEndDisposition
-} from '../../../../shared/agent-status-types'
-import { normalizeTurnCompletedAtField } from '../../../../shared/agent-status-field-normalization'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import { normalizeTurnCompletedAtField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { isSeenHostReplay } from '@/hooks/ipc-events/agent-status-routing'
 import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
 import { observeAgentHookCompletionForNotification } from '@/hooks/agent-hook-completion-notifications'

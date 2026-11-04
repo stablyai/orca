@@ -4,7 +4,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
-import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
+import { createTerminalTitleTracker } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolveTabAgentFromSignalSnapshot } from '../../../../shared/tab-agent-from-signals'
 import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
 

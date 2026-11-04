@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -43,7 +46,7 @@ vi.mock('child_process', async () => {
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import * as compatibilityEvidence from '../shared/orchestration-compatibility-evidence'
-import * as nativeHosts from '../shared/folder-workspace-execution-host'
+import * as nativeHosts from '../shared/folder-workspaces/folder-workspace-execution-host'
 import * as workspaceSelection from './caller-host-worktree-selection'
 import { reportCliError } from './cli-error'
 import { main } from './index'

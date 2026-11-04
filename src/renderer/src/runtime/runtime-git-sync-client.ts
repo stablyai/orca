@@ -1,6 +1,9 @@
-import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../../shared/git-fork-sync'
-import type { GitUpstreamStatus } from '../../../shared/git-status-types'
-import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../shared/git-rebase-source'
+import type {
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult
+} from '../../../shared/git/remotes/git-fork-sync'
+import type { GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
+import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../shared/git/remotes/git-rebase-source'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { translate } from '@/i18n/i18n'

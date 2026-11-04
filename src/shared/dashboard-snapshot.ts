@@ -1,5 +1,5 @@
-import type { agentVerdictDisplayMark } from './agent-main-agent-verdict'
-import type { AgentType, AgentWorkingMode } from './agent-status-types'
+import type { agentVerdictDisplayMark } from './agent-status/lifecycle/agent-main-agent-verdict'
+import type { AgentType, AgentWorkingMode } from './agent-status/contracts/agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'

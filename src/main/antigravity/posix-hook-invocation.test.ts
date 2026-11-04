@@ -5,14 +5,17 @@ import type * as OsModule from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
 import { z } from 'zod'
-import { tokenizeCommandLine } from '../../shared/agent-command-line-entrypoint'
+import { tokenizeCommandLine } from '../../shared/agent-status/process/agent-command-line-entrypoint'
 import { spawnProcess } from '@orca/process-host'
 import { AntigravityHookService } from './hook-service'
 import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
 import { wrapPosixHookCommand } from '../agent-hooks/posix-hook-command'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import { readAgentProcess } from '../../shared/agent-process-presence-probe'
-import { buildSpoolHookBody, readSpoolFile } from '../../shared/agent-hook-spool'
+import { readAgentProcess } from '../../shared/agent-status/process/agent-process-presence-probe'
+import {
+  buildSpoolHookBody,
+  readSpoolFile
+} from '../../shared/agent-hook-listener/transport/agent-hook-spool'
 
 const { homeMock } = vi.hoisted(() => ({ homeMock: vi.fn<() => string>() }))
 vi.mock('node:os', async (importOriginal) => ({

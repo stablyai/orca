@@ -9,7 +9,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -59,6 +63,7 @@ describe('hidden query carry vs a following OSC', () => {
 
   it('does not paint an OSC payload after the reveal restore when a hidden chunk ended mid-CSI', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport('pty-id')
     const dataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -79,6 +84,8 @@ describe('hidden query carry vs a following OSC', () => {
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
     const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
+    bindPaneAgentTitleMocks(args[2], agentTitleMocks)
+
     const binding = connectPanePty(...args)
     const rendered = new Terminal({ cols: 120, rows: 40, allowProposedApi: true })
     try {

@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { createTestStore } from '../../src/renderer/src/store/slices/store-test-helpers'
 import { sleepingRecordFromEntry } from '../../src/renderer/src/store/slices/agent-status/agent-status-sleeping-records'
 import { getAgentResumeArgv } from '../../src/shared/agent-launch/startup/agent-resume-argv'
-import { readAgentProcess } from '../../src/shared/agent-process-presence-probe'
+import { readAgentProcess } from '../../src/shared/agent-status/process/agent-process-presence-probe'
 import { AgentHookServer } from '../../src/main/agent-hooks/server'
 import { buildBody, PANE, postHookEvent } from '../../src/main/agent-hooks/server.test-fixtures'
 

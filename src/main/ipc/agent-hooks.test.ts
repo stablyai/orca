@@ -67,7 +67,7 @@ vi.mock('../claude/hook-service', () => ({
 vi.mock('../openclaude/hook-service', () => ({
   openClaudeHookService: { getStatus: vi.fn(() => ({ agent: 'openclaude', state: 'absent' })) }
 }))
-vi.mock('../codex/hook-service', () => ({
+vi.mock('../codex/hooks/installation/hook-service', () => ({
   codexHookService: { getStatus: vi.fn(() => ({ agent: 'codex', state: 'absent' })) }
 }))
 vi.mock('../gemini/hook-service', () => ({

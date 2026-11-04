@@ -1,4 +1,4 @@
-import EditorAutosaveController from './editor/EditorAutosaveController'
+import EditorAutosaveController from './editor/autosave/EditorAutosaveController'
 import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/browser-guest-paint-retention'
 import { TerminalTitlebarTabs } from './TerminalTitlebarTabs'
 import { TerminalSplitWorkspaceSurfaces } from './TerminalSplitWorkspaceSurfaces'

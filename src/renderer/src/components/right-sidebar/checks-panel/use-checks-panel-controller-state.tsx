@@ -12,12 +12,12 @@ import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/gi
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/project-execution-runtime'
-import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control-ai-recipe-save'
+import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { saveSourceControlAiActionRecipeForTarget } from '../source-control/ai/recipe-persistence'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { PRRefreshErrorType } from '../../../../../shared/github/pull-request-refresh-types'

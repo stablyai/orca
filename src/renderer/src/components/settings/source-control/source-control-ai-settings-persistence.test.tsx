@@ -12,8 +12,8 @@ import {
   settingsModel,
   type SettingsPersistenceModel
 } from '../__fixtures__/settings-persistence-test-fixture'
-import * as selection from '../../../../../shared/source-control-launch-agent-selection'
-import * as lifts from '../../../../../shared/source-control-action-permission-lift'
+import * as selection from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
+import * as lifts from '../../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
 import * as shell from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { TooltipProvider } from '../../ui/tooltip'
 import { RUNTIME_CAPABILITIES } from '../../../../../shared/protocol-version'
@@ -21,7 +21,7 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import {
   getDefaultSourceControlAiSettings,
   normalizeSourceControlAiSettings
-} from '../../../../../shared/source-control-ai'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), dismiss: vi.fn() }
@@ -653,7 +653,7 @@ it.each(
     const { makeWorktree } = await import('@/store/slices/worktrees-slice-test-fixtures')
     const { planAgentSessionLaunch } = await import('@/lib/agent-session-launch-plan')
     const { projectSourceControlActionLaunch } =
-      await import('../../../../../shared/source-control-action-launch-preferences')
+      await import('../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences')
     for (const selected of ['terminal', 'chat'] as const) {
       if (selected === 'chat') {
         await open()

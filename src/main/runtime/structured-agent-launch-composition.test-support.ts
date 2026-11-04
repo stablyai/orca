@@ -16,11 +16,11 @@ import {
   claudeStructuredLaunchPart,
   type ClaudeStructuredLaunchPartDeps
 } from '../claude/structured/launch/claude-structured-launch-resolution'
-import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../codex/structured/launch/codex-structured-agent-definition'
 import {
   codexStructuredLaunchPart,
   type CodexStructuredLaunchPartDeps
-} from '../codex/codex-structured-launch-resolution'
+} from '../codex/structured/launch/codex-structured-launch-resolution'
 import type { PrepareNativeChatVisuals } from '../native-chat/native-chat-visuals-delivery'
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import { PI_RPC_AGENT } from '../pi/rpc-agent-definition'

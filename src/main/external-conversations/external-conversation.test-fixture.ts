@@ -12,7 +12,7 @@ import type { AgentPaneWorkspace } from '../agent-hooks/agent-transition-detecto
 import type { LaunchedAgentForeground } from '../runtime/launched-agent-foreground'
 
 import type { ExternalConversationLinkStore } from './external-conversation-links'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
 import type { AgentSessionResumeResult } from '../runtime/session-lifecycle/projection/resume-agent-session-in-workspace'
 import type { ConversationTerminal } from './external-conversation-seam'

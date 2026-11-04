@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { WindowsDriveMount } from '../../runtime/wsl-guest-drive-mountinfo'
 import { collectWslDriveUncScope, wslDriveUncWorktreeId } from './wsl-drive-unc-project-scope'

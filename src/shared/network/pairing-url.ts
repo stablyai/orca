@@ -1,4 +1,4 @@
-import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-pairing-protocol-limits'
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../remote-runtime/pairing/mobile-pairing-protocol-limits'
 
 export function normalizePairingUrl(value: string): string | null {
   if (value.length > PAIRING_ENDPOINT_MAX_CHARACTERS || containsAsciiControlCharacter(value)) {

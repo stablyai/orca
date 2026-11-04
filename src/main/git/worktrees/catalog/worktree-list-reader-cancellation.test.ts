@@ -21,7 +21,7 @@ vi.mock('../../command-runner/wsl-path-translation', async (importOriginal) => (
   ...(await importOriginal<Record<string, unknown>>()),
   translateWslOutputPaths: (output: string) => output
 }))
-vi.mock('../../../../shared/git-worktree-admin', () => ({
+vi.mock('../../../../shared/git/worktrees/git-worktree-admin', () => ({
   annotateWorktreeLocksFromAdmin: async (_repoPath: string, rows: GitWorktreeInfo[]) => rows
 }))
 

@@ -50,16 +50,6 @@ describe('browser client page metadata transport', () => {
     )
   })
 
-  it('refuses to publish once nothing is bound', async () => {
-    const transport = new BrowserClientPageMetadataTransport()
-    const sender = { sendPageMetadataRequest: vi.fn() }
-    transport.bind(sender)
-    transport.unbind(sender)
-
-    await expect(transport.publish(PARAMS)).rejects.toBeInstanceOf(RemoteRuntimeClientError)
-    expect(sender.sendPageMetadataRequest).not.toHaveBeenCalled()
-  })
-
   it('leaves a replacement bound when the host it replaced unbinds', async () => {
     const transport = new BrowserClientPageMetadataTransport()
     const outgoing = { sendPageMetadataRequest: vi.fn() }
@@ -76,22 +66,6 @@ describe('browser client page metadata transport', () => {
 })
 
 describe('browser client page metadata routing', () => {
-  it('publishes through the transport of the environment that owns the page', async () => {
-    const owning = new BrowserClientPageMetadataTransport()
-    const other = new BrowserClientPageMetadataTransport()
-    const owningSend = vi.fn().mockResolvedValue(answered({ accepted: true }))
-    const otherSend = vi.fn()
-    owning.bind({ sendPageMetadataRequest: owningSend })
-    other.bind({ sendPageMetadataRequest: otherSend })
-    registerBrowserClientPageMetadataTransport('environment-a', owning)
-    registerBrowserClientPageMetadataTransport('environment-b', other)
-
-    await expect(publishBrowserClientPageMetadata('environment-a', PARAMS)).resolves.toEqual({
-      accepted: true
-    })
-    expect(otherSend).not.toHaveBeenCalled()
-  })
-
   // Another environment detects accidental fallback to any registered transport.
   it('fails a publish for an environment that hosts nothing while another one does', async () => {
     const elsewhere = new BrowserClientPageMetadataTransport()

@@ -5,7 +5,7 @@ import { buildPosixStdoutFence } from '../../shared/posix-stdout-fence'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
-import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { getSystemCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
 

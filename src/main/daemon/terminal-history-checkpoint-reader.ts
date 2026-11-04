@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { isTerminalOscLinkRanges } from '../../shared/terminal-osc-link-ranges'
+import { isTerminalOscLinkRanges } from '../../shared/terminal/links/terminal-osc-link-ranges'
 import { readTerminalHistoryJsonAsync } from './terminal-history-file-reader'
 import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
