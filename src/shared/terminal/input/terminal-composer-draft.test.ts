@@ -165,6 +165,25 @@ describe('detectTerminalComposerDraft', () => {
     expect(detectTerminalComposerDraft(wrapped)?.text).toBe('fix thefailing test')
   })
 
+  it('does not take a status row past the closing frame as draft evidence (#38015)', () => {
+    // typedRowsBelow includes rows below the frame (status lines are undimmed);
+    // the continuation scan stops at the frame, so a ghost suggestion above it
+    // still reads as no draft.
+    const ghostWithStatus = {
+      rows: ['────────', '❯'],
+      typedRows: ['────────', '❯'],
+      promptGlyphBoldRows: [false, false],
+      rowsBelow: ['────────', 'gpt-5.6 \u00b7 ~/repo'],
+      typedRowsBelow: ['────────', 'gpt-5.6 \u00b7 ~/repo'],
+      beforeCursor: '❯',
+      afterCursor: '',
+      rawAfterCursor: ' Try committing the staged changes',
+      cursorHidden: false,
+      cursorViewportRow: 4
+    }
+    expect(detectTerminalComposerDraft(ghostWithStatus)).toBeNull()
+  })
+
   it('keeps a typed draft whose stock placeholder is still rendered to its right', () => {
     // Repaints can leave the placeholder beside typed text; do not mask that user draft.
     const context = {

@@ -163,9 +163,19 @@ function detectTerminalComposer(
   // fallback stays for what it was added for: a wrapped draft's tail below the caret, and a
   // stock placeholder that the placeholder check can retire.
   const hasUndimmedAfterCursor = context.afterCursor.trim().length > 0
-  const hasTypedContinuationBelow = context.typedRowsBelow.some(
-    (row, index) => row.trim() && !COMPOSER_FRAME_LINE.test(context.rowsBelow[index] ?? '')
-  )
+  // Same boundary as the continuation walk: a status row below the closing frame
+  // is not part of the composer, so it cannot prove a wrapped draft.
+  const hasTypedContinuationBelow = (() => {
+    for (let index = 0; index < context.typedRowsBelow.length; index += 1) {
+      if (COMPOSER_FRAME_LINE.test(context.rowsBelow[index] ?? '') || index === codexFooterIndex) {
+        return false
+      }
+      if ((context.typedRowsBelow[index] ?? '').trim()) {
+        return true
+      }
+    }
+    return false
+  })()
   const rawContinuationRows = composerContinuationRows(
     context,
     context.rawAfterCursor,
