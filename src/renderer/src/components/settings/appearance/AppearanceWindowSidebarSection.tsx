@@ -43,24 +43,14 @@ function recordStatusBarToggleInteraction(
 ): void {
   if (id === 'resource-usage') {
     recordFeatureInteraction('resource-manager')
-  } else if (id === 'ports') {
-    recordFeatureInteraction('ports')
-  } else if (id === 'ssh') {
-    recordFeatureInteraction('ssh')
-  } else if (
-    id === 'claude' ||
-    id === 'codex' ||
-    id === 'gemini' ||
-    id === 'opencode-go' ||
-    id === 'kimi' ||
-    id === 'antigravity' ||
-    id === 'minimax' ||
-    id === 'grok' ||
-    id === 'cursor'
-  ) {
+  } else if (id === 'ports' || id === 'ssh') {
+    recordFeatureInteraction(id)
+  } else if (id !== 'zcode') {
     recordFeatureInteraction('usage-tracking')
   }
 }
+
+const STATUS_BAR_KEYWORDS = ['status bar', 'indicators']
 
 export function AppearanceWindowSidebarSection({
   settings,
@@ -90,11 +80,10 @@ export function AppearanceWindowSidebarSection({
     'auto.components.settings.AppearancePane.statusBarDescription',
     'Choose which indicators appear in the status bar.'
   )
-  const statusBarKeywords = ['status bar', 'indicators']
   const statusBarSectionMatches = matchesSettingsSearch(searchQuery, {
     title: statusBarTitle,
     description: statusBarDescription,
-    keywords: statusBarKeywords
+    keywords: STATUS_BAR_KEYWORDS
   })
   const statusBarControlMatches =
     matchesSettingsSearch(searchQuery, usagePercentageDisplayEntry) ||
@@ -130,7 +119,7 @@ export function AppearanceWindowSidebarSection({
 
         <SearchableSetting
           title={statusBarTitle}
-          keywords={statusBarKeywords}
+          keywords={STATUS_BAR_KEYWORDS}
           forceVisible={forceVisiblePrimary || statusBarSectionMatches || statusBarControlMatches}
         >
           <SettingsRow label={statusBarTitle} description={statusBarDescription} control={null} />
@@ -239,6 +228,26 @@ export function AppearanceWindowSidebarSection({
                             }
                           ]}
                         />
+                      }
+                    />
+                  </SearchableSetting>
+
+                  <SearchableSetting
+                    title={translate(
+                      'auto.components.settings.AppearancePane.showHomeButton',
+                      'Show Home Button'
+                    )}
+                    description={sidebarEntries[3]?.description}
+                    keywords={sidebarEntries[3]?.keywords ?? ['home', 'sidebar', 'button']}
+                  >
+                    <SettingsSwitchRow
+                      label={translate(
+                        'auto.components.settings.AppearancePane.showHomeButton',
+                        'Show Home Button'
+                      )}
+                      checked={settings.showHomeButton !== false}
+                      onChange={() =>
+                        updateSettings({ showHomeButton: !(settings.showHomeButton !== false) })
                       }
                     />
                   </SearchableSetting>

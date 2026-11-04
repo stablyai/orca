@@ -15,6 +15,7 @@ import type { AgentPermissionGlobalSettings } from './agent-launch/permissions/t
 import type { TerminalColorOverrideGlobalSettings } from './terminal-themes/terminal-color-overrides'
 import type { WindowMaterialSettings } from './window-material'
 import type { EditorSaveSettings } from './editor-save-settings'
+import type { SidebarButtonSettings } from './sidebar-button-settings'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ClaudeAgentViewSettings &
@@ -33,4 +34,5 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   TerminalScrollSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
-  EditorSaveSettings
+  EditorSaveSettings &
+  SidebarButtonSettings

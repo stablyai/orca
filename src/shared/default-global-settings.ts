@@ -165,6 +165,7 @@ export function buildDefaultSettings(args: {
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
     showTasksButton: true,
+    showHomeButton: true,
     showAutomationsButton: true,
     artifactsEnabled: true,
     artifactSharingEnabled: false,

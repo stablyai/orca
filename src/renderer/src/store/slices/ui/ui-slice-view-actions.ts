@@ -96,6 +96,19 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         activeView: state.previousViewBeforeArtifacts,
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'artifacts')
       })),
+    openHomePage: () => {
+      get().recordViewVisit('home')
+      set((state) => ({
+        activeView: 'home',
+        previousViewBeforeHome:
+          state.activeView === 'home' ? state.previousViewBeforeHome : state.activeView
+      }))
+    },
+    closeHomePage: () =>
+      set((state) => ({
+        activeView: state.previousViewBeforeHome,
+        worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'home')
+      })),
     openMobilePage: () =>
       set((state) => ({
         activeView: 'mobile',
