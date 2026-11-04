@@ -127,27 +127,43 @@ export function automationCopyLaunchSetup(
   updates: AutomationUpdateInput,
   input: AutomationCreateInput
 ): AutomationCreateInput {
-  if (!current) {
+  if (!current && input.launchSetupPatch?.sources === undefined) {
     return input
   }
   const copied = applyAutomationLaunchSetupPatch(
-    { ...updates, agentId: updates.agentId ?? current.agentId },
-    current
+    current ? { ...updates, agentId: updates.agentId ?? current.agentId } : input,
+    current ?? undefined
   )
   const canonical = automationCanonicalLaunchSetup(copied)
   if (!hasModernAutomationLaunchSetup(canonical)) {
-    if (canonical.extraAgentArgs === undefined) {
+    const patch = current ? updates.launchSetupPatch : input.launchSetupPatch
+    const modernIntent =
+      patch?.copy !== undefined ||
+      patch?.choices !== undefined ||
+      (patch?.arguments !== undefined && patch.arguments.kind !== 'legacy-extras') ||
+      patch?.sources?.arguments !== undefined ||
+      Boolean(patch?.sources?.retiredChoices?.length)
+    if (modernIntent) {
       return input
     }
-    return input.launchSetupPatch
+    const { extraAgentArgs: _extras, launchSetupPatch: _patch, ...rest } = input
+    return input.launchSetupPatch || canonical.surface !== undefined
       ? {
-          ...input,
+          ...rest,
           launchSetupPatch: {
-            ...input.launchSetupPatch,
-            arguments: { kind: 'legacy-extras', value: canonical.extraAgentArgs }
+            ...(canonical.surface !== undefined ? { surface: canonical.surface } : {}),
+            arguments: { kind: 'legacy-extras', value: canonical.extraAgentArgs ?? '' }
           }
         }
-      : { ...input, extraAgentArgs: canonical.extraAgentArgs }
+      : {
+          ...rest,
+          ...(canonical.extraAgentArgs !== undefined
+            ? { extraAgentArgs: canonical.extraAgentArgs }
+            : {})
+        }
+  }
+  if (!current) {
+    return input
   }
   const { extraAgentArgs: _extras, ...rest } = input
   return { ...rest, launchSetupPatch: { copy: canonical } }

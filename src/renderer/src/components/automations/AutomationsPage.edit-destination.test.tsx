@@ -85,6 +85,55 @@ function addCollidingRuntimeProject(): void {
 }
 
 describe('AutomationsPage edit fencing', () => {
+  it('moves a pending supplemental edit to an older host, including a further legacy edit', async () => {
+    const automation = makeAutomation({ surface: 'terminal', extraAgentArgs: '--add-dir docs' })
+    api.automations.list.mockResolvedValue([])
+    scopedList([automation])
+    runtimeHost([], [])
+    addRuntimeProject()
+    capableChatDestination()
+    runtimeCreateReturns(makeAutomation({ id: 'a-moved' }))
+    await renderPage()
+    await settleHostQueries()
+    await act(async () => mocks.listPanel?.openEditDialog(listedRow(automation.id)))
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) =>
+        editAutomationLegacyDraft(launchDraft(current), '--add-dir docs --add-dir fixtures', true)
+      )
+    })
+    await act(async () => mocks.editorDialog?.editDestination?.onSelect(RUNTIME_SELF_KEY))
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...editAutomationLegacyDraft(
+          launchDraft(current),
+          '--add-dir docs --add-dir examples',
+          false
+        ),
+        projectId: RUNTIME_REPO_ID,
+        workspaceId: RUNTIME_WORKSPACE_ID
+      }))
+    })
+    await save()
+    expect(mocks.editorDialog?.notice).toBeFalsy()
+    expect(createRpcCalls()).toHaveLength(1)
+    expect(createRpcCalls()[0]?.[2]).toMatchObject({
+      launchSetupPatch: {
+        surface: 'terminal',
+        arguments: { kind: 'legacy-extras', value: '--add-dir docs --add-dir examples' }
+      }
+    })
+    expect(createRpcCalls()[0]?.[2]).not.toHaveProperty('launchSetupPatch.sources')
+    expect(api.automations.delete).toHaveBeenCalledWith(
+      expect.objectContaining({ id: automation.id })
+    )
+    const createIndex = mocks.callRuntimeRpc.mock.calls.findIndex(
+      (call) => call[1] === 'automation.create'
+    )
+    expect(mocks.callRuntimeRpc.mock.invocationCallOrder[createIndex]).toBeLessThan(
+      api.automations.delete.mock.invocationCallOrder[0]
+    )
+  })
+
   it.each(['full-first', 'legacy-first', 'template-rebind'] as const)(
     'saves accepted sources through destination callbacks and the latest owner: %s',
     async (order) => {
