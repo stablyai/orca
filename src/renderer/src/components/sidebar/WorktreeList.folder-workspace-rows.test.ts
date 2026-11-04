@@ -1,4 +1,9 @@
+// @vitest-environment happy-dom
+
+import React, { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -29,12 +34,21 @@ import {
   getPaddingLeft
 } from './worktree-list-card-markup-queries'
 
+const createMocks = vi.hoisted(() => ({ activateAndRevealFolderWorkspace: vi.fn() }))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealFolderWorkspace: createMocks.activateAndRevealFolderWorkspace
+}))
+
 vi.mock('@/store', () => createAppStoreModuleMock())
 vi.mock('@tanstack/react-virtual', () => createReactVirtualModuleMock())
 vi.mock('@/hooks/useVirtualizedScrollAnchor', () => createVirtualizedScrollAnchorModuleMock())
 vi.mock('./project-header-drag', () => createProjectHeaderDragModuleMock())
 vi.mock('./WorktreeCard', () => createWorktreeCardModuleMock())
-vi.mock('./WorktreeCardAgents', () => createWorktreeCardAgentsModuleMock())
+vi.mock('./WorktreeCardAgents', () => ({
+  ...createWorktreeCardAgentsModuleMock(),
+  SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT: 'orca:test-suppress-scroll-adjustment'
+}))
 vi.mock('./WorktreeTitleInlineRename', () => createWorktreeTitleInlineRenameModuleMock())
 vi.mock('./WorktreeContextMenu', () => createWorktreeContextMenuModuleMock())
 vi.mock('@/components/ui/tooltip', () => createTooltipModuleMock())
@@ -194,6 +208,58 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).toContain(
       'aria-activedescendant="worktree-list-option-local%7Cfolder%3Afolder-workspace-1"'
     )
+  })
+
+  it('creates directly in the clicked folder project while a git worktree is current', async () => {
+    const { group } = setFolderWorkspaceFixtureState()
+    const createdWorkspace = makeFolderWorkspace(group.id, { id: 'new-folder-workspace' })
+    const createFolderWorkspace = vi.fn().mockResolvedValue(createdWorkspace)
+    mockStore.state.createFolderWorkspace = createFolderWorkspace
+    mockStore.state.setVisibleReviewCardWorktreeIds = vi.fn()
+    mockStore.state.activeWorkspaceKey = 'worktree:current-git-worktree'
+    mockStore.state.activeWorktreeId = 'current-git-worktree'
+    const { default: WorktreeList } = await import('./WorktreeList')
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    try {
+      act(() => {
+        root.render(
+          React.createElement(
+            ConfirmationDialogContext.Provider,
+            { value: async () => false },
+            React.createElement(WorktreeList, {
+              scrollOffsetRef: { current: 0 },
+              scrollAnchorRef: { current: null }
+            })
+          )
+        )
+      })
+      const button = container.querySelector<HTMLButtonElement>(
+        '[aria-label="Create workspace for Folder Group"]'
+      )
+      expect(button).not.toBeNull()
+      await act(async () => button!.click())
+
+      expect(createFolderWorkspace).toHaveBeenCalledWith(
+        {
+          projectGroupId: group.id,
+          name: 'Folder Group workspace',
+          connectionId: null,
+          linkedTask: null
+        },
+        { runtimeEnvironmentId: null }
+      )
+      expect(createMocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
+        createdWorkspace.id,
+        { agent: null, runtimeEnvironmentId: null }
+      )
+      expect(mockStore.state.openModal).not.toHaveBeenCalled()
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+    }
   })
 
   it('keeps folder workspace cards one compact step under their group header', async () => {

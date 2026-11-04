@@ -11,6 +11,7 @@ import type { TaskSourceContext } from '../../../../shared/task-source-context'
 type FolderWorkspaceCreateInput = {
   projectGroupId: string
   name: string
+  folderPath?: string
   connectionId?: string | null
   linkedTask: FolderWorkspace['linkedTask']
   linkedTaskSourceContext?: TaskSourceContext | null
@@ -39,6 +40,8 @@ export type SubmitFolderWorkspaceCreateParams = {
   isRemote?: boolean
   launchSource?: LaunchSource
   runtimeEnvironmentId?: string | null
+  folderPath?: string
+  connectionId?: string | null
   createFolderWorkspace: (input: FolderWorkspaceCreateInput) => Promise<FolderWorkspace | null>
   onOpenChange: (open: boolean) => void
 }
