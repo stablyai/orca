@@ -15,7 +15,7 @@ import {
   adapterFor,
   fakeCodex,
   identityFor
-} from '@orca/test-host/main/codex/codex-structured-session-adapter-fixture'
+} from '@orca/test-host/main/codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import {
   attach,
   CALLER,

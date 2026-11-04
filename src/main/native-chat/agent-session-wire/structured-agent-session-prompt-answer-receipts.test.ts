@@ -7,7 +7,7 @@ import {
   adapterFor,
   fakeCodex,
   identityFor
-} from '../../codex/codex-structured-session-adapter-fixture'
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { beforeEach, describe, expect, it, type Mock } from 'vitest'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session/agent-session-host-authority'
@@ -38,12 +38,15 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
-import { codexApprovalItem, codexPromptIdentity } from '../../codex/codex-structured-prompt-items'
 import {
-  CodexPromptRegistry,
+  codexApprovalItem,
+  codexPromptIdentity
+} from '../../codex/structured/prompts/codex-structured-prompt-items'
+import {
   applyCodexPromptAnswer,
   prepareCodexPromptAnswer
-} from '../../codex/codex-structured-prompt-replies'
+} from '../../codex/structured/prompts/codex-structured-prompt-replies'
+import { CodexPromptRegistry } from '../../codex/structured/prompts/codex-prompt-registry'
 
 const OLD = NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 60_000
 const FUTURE = NOW + 6 * 60_000

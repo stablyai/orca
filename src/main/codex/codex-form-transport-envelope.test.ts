@@ -32,8 +32,8 @@ import {
   adapterFor,
   fakeCodex,
   identityFor
-} from '@orca/test-host/main/codex/codex-structured-session-adapter-fixture'
-import { CodexPromptRegistry } from '@orca/test-host/main/codex/codex-prompt-registry'
+} from '@orca/test-host/main/codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
+import { CodexPromptRegistry } from '@orca/test-host/main/codex/structured/prompts/codex-prompt-registry'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
@@ -63,8 +63,8 @@ import {
   AgentSessionSettledBodyPieceSchema,
   AGENT_SESSION_SETTLED_BODY_CAPABILITY
 } from '@orca/test-host/shared/agent-session-settled-body'
-import { readCodexMcpElicitation } from '@orca/test-host/main/codex/codex-mcp-elicitation'
-import { codexPromptIdentity } from '@orca/test-host/main/codex/codex-structured-prompt-items'
+import { readCodexMcpElicitation } from '@orca/test-host/main/codex/structured/prompts/codex-mcp-elicitation'
+import { codexPromptIdentity } from '@orca/test-host/main/codex/structured/prompts/codex-structured-prompt-items'
 import { agentJournalItemKey } from '@orca/test-host/shared/agent-session/journal/agent-session-journal-item-key'
 import {
   call,

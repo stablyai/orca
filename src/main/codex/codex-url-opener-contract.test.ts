@@ -7,7 +7,7 @@ import {
   adapterFor,
   fakeCodex,
   identityFor
-} from '@orca/test-host/main/codex/codex-structured-session-adapter-fixture'
+} from '@orca/test-host/main/codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import {
   attach,
   hostTestState
@@ -16,7 +16,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
 } from '@orca/test-host/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { readCodexMcpElicitation } from '@orca/test-host/main/codex/codex-mcp-elicitation'
+import { readCodexMcpElicitation } from '@orca/test-host/main/codex/structured/prompts/codex-mcp-elicitation'
 import { projectStructuredPermission } from '@orca/test-mobile/session/mobile-structured-agent-prompts'
 import { createBridgePortPair } from '@orca/test-mobile/mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { createFakeRpcClient } from '@orca/test-mobile/mobile-web-shell/bridge-host-test-fakes'

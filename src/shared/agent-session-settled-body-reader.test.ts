@@ -1,5 +1,5 @@
-import { readCodexPendingPrompt } from '../main/codex/codex-prompt-request'
-import { codexPromptIdentity } from '../main/codex/codex-structured-prompt-items'
+import { readCodexPendingPrompt } from '../main/codex/structured/prompts/codex-prompt-request'
+import { codexPromptIdentity } from '../main/codex/structured/prompts/codex-structured-prompt-items'
 import * as admission from './remote-runtime/requests/remote-runtime-prepared-request-admission'
 import { afterEach, expect, it, vi } from 'vitest'
 import {

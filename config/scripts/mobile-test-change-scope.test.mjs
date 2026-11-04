@@ -37,7 +37,7 @@ function scheduledBy(patterns, file) {
 }
 
 it.each([
-  'src/main/codex/codex-mcp-elicitation.ts',
+  'src/main/codex/structured/prompts/codex-mcp-elicitation.ts',
   'src/renderer/src/components/native-chat/NativeChatApprovalCard.tsx',
   'src/main/native-chat/agent-session-journal/journal-store.ts',
   'src/main/runtime/mobile-desktop-relay/relayed-phone-frames.ts',
@@ -56,7 +56,7 @@ it.each([
 })
 
 it.each([
-  'src/main/codex/codex-mcp-elicitation.test.ts',
+  'src/main/codex/structured/prompts/codex-mcp-elicitation.test.ts',
   'src/renderer/src/components/native-chat/NativeChatApprovalCard.test.tsx'
 ])('leaves other desktop suites to desktop checks: %s', (file) => {
   expect(scheduledBy(workflow.on.pull_request.paths, file)).toBe(false)
