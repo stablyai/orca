@@ -86,6 +86,7 @@ import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import {
   POSIX_HOOK_JSON_STDIN_PRELUDE,
   POSIX_HOOK_JSON_STDIN_READER,
+  POSIX_HOOK_STDIN_EXEC,
   POSIX_HOOK_STDIN_READER,
   WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
 } from './hook-stdin-contract'
@@ -590,7 +591,8 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     for (const [agent, script] of scripts) {
       const captureIndex = Math.max(
         script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
-        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
+        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`),
+        script.indexOf(`payload=$(${POSIX_HOOK_STDIN_EXEC.reader})`)
       )
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
