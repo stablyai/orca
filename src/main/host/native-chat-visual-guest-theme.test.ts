@@ -1,16 +1,27 @@
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, IpcMainEvent } from 'electron'
+import type * as SiteDisplayController from '../browser/site-settings/browser-site-display-controller'
+import {
+  configureBrowserSiteDisplayStore,
+  updateBrowserSiteDisplay
+} from '../browser/site-settings/browser-site-display-store'
 import {
   NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH as PUBLISH,
   NATIVE_CHAT_VISUAL_GUEST_THEME_READ as READ,
   NATIVE_CHAT_VISUAL_GUEST_THEME_UPDATE as UPDATE
 } from '../../shared/native-chat/native-chat-visual-shell'
 
-const { ipc, classify, display } = vi.hoisted(() => ({
+const { ipc, classify, display, profileForSession, sshProfileForSession } = vi.hoisted(() => ({
   ipc: { on: vi.fn(), removeListener: vi.fn() },
   classify: vi.fn(() => true),
+  profileForSession: vi.fn((): string | null => 'default'),
+  sshProfileForSession: vi.fn((): string | null => null),
   display: {
+    onGuestDocumentStart: vi.fn(),
     setGuestColorSchemeFallback: vi.fn(),
     onGuestRetired: vi.fn(),
     onMainFrameNavigationCommitted: vi.fn()
@@ -29,12 +40,23 @@ vi.mock('../native-chat/native-chat-visual-guest-location', () => ({
 vi.mock('../browser/site-settings/browser-site-display-controller', () => ({
   browserSiteDisplayController: display
 }))
+vi.mock('../browser/sessions/browser-session-registry', () => ({
+  browserSessionRegistry: { profileIdForSession: profileForSession }
+}))
+vi.mock('../browser/routing/local-host-partitions/local-ssh-browser-partitions', () => ({
+  localSshBrowserProfileIdForSession: sshProfileForSession
+}))
 import { installNativeChatVisualGuestTheme } from './native-chat-visual-guest-theme'
+
+const { BrowserSiteDisplayController } = await vi.importActual<typeof SiteDisplayController>(
+  '../browser/site-settings/browser-site-display-controller'
+)
 
 function contents(id: number, hostWebContents: EventEmitter | null = null) {
   return Object.assign(new EventEmitter(), {
     id,
     mainFrame: { url: 'file:///scratch/mock.html' },
+    session: {},
     hostWebContents,
     getType: () => 'webview',
     isDestroyed: () => false,
@@ -48,7 +70,7 @@ function setup() {
   const guest = contents(2)
   guest.hostWebContents = host
   const handler = (channel: string) => ipc.on.mock.calls.findLast(([name]) => name === channel)![1]
-  const event = (sender = guest, senderFrame = sender.mainFrame) => {
+  const event = (sender = guest, senderFrame = sender.mainFrame, onReply = () => {}) => {
     let replied = false
     let reply: unknown
     const fixture = { sender, senderFrame }
@@ -59,6 +81,7 @@ function setup() {
         if (!replied) {
           replied = true
           reply = value
+          onReply()
         }
       }
     })
@@ -69,8 +92,9 @@ function setup() {
 }
 const dark = { colorScheme: 'dark', tokens: { '--background': '#111' } }
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   classify.mockReturnValue(true)
+  profileForSession.mockReturnValue('default')
 })
 
 describe('visual guest theme handoff', () => {
@@ -101,7 +125,11 @@ describe('visual guest theme handoff', () => {
     publish(event(host), dark)
     read(event())
     read(event())
-    expect(display.setGuestColorSchemeFallback).toHaveBeenCalledWith(guest, 'dark')
+    expect(display.onGuestDocumentStart).toHaveBeenCalledWith(guest, {
+      url: guest.mainFrame.url,
+      profileId: 'default',
+      colorScheme: 'dark'
+    })
     publish(event(host), dark)
     expect(guest.send).not.toHaveBeenCalled()
     const light = { ...dark, colorScheme: 'light' }
@@ -147,8 +175,13 @@ describe('visual guest theme handoff', () => {
         expect(guest.listenerCount('did-navigate')).toBe(1)
         expect(guest.listenerCount('destroyed')).toBe(1)
       }
+      expect(profileForSession).toHaveBeenCalledTimes(2 * population)
       display.setGuestColorSchemeFallback.mockClear()
+      profileForSession.mockClear()
+      publish(event(host), dark)
+      expect(display.setGuestColorSchemeFallback).not.toHaveBeenCalled()
       publish(event(host), { ...dark, colorScheme: 'light' })
+      expect(profileForSession).not.toHaveBeenCalled()
       expect(display.setGuestColorSchemeFallback).toHaveBeenCalledTimes(population)
       expect(guests.reduce((sum, guest) => sum + guest.send.mock.calls.length, 0)).toBe(population)
       for (const guest of guests) {
@@ -158,6 +191,54 @@ describe('visual guest theme handoff', () => {
       expect(guests.reduce((sum, guest) => sum + guest.send.mock.calls.length, 0)).toBe(population)
     }
   )
+
+  it('resolves the prepared SSH profile only after local Session lookup misses', () => {
+    const { host, guest, event, publish, read } = setup()
+    profileForSession.mockReturnValue(null)
+    sshProfileForSession.mockReturnValue('ssh-work')
+    publish(event(host), dark)
+    read(event())
+    expect(sshProfileForSession).toHaveBeenCalledExactlyOnceWith(guest.session)
+    expect(display.onGuestDocumentStart).toHaveBeenCalledWith(
+      guest,
+      expect.objectContaining({ profileId: 'ssh-work' })
+    )
+  })
+
+  it('applies saved media at the authenticated frame URL before every synchronous reply', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-visual-media-'))
+    configureBrowserSiteDisplayStore(directory)
+    updateBrowserSiteDisplay('work', 'file://', { colorScheme: 'light' })
+    const controller = new BrowserSiteDisplayController()
+    display.onGuestDocumentStart.mockImplementation(
+      controller.onGuestDocumentStart.bind(controller)
+    )
+    const { host, guest, event, publish, read } = setup()
+    const sent: string[] = []
+    const debuggerEvents = new EventEmitter()
+    Object.assign(guest, {
+      getURL: () => '',
+      debugger: Object.assign(debuggerEvents, {
+        isAttached: () => true,
+        sendCommand: (_method: string, params: { features: { value: string }[] }) => {
+          sent.push(params.features[0].value)
+          return Promise.resolve({})
+        }
+      })
+    })
+    profileForSession.mockReturnValue('work')
+    try {
+      publish(event(host), dark)
+      for (let document = 1; document <= 2; document++) {
+        read(
+          event(guest, guest.mainFrame, () => expect(sent).toEqual(Array(document).fill('light')))
+        )
+      }
+    } finally {
+      controller.onGuestRetired(guest.id)
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
 
   it('does not overwrite another window’s synchronous answer', () => {
     const first = setup()

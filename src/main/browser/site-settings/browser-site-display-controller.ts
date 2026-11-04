@@ -64,25 +64,27 @@ export class BrowserSiteDisplayController {
     guest.on('dom-ready', onDomReady)
     this.guests.set(guest.id, {
       guest,
-      profileId: profileId ?? 'default',
+      profileId: previous?.fallbackColorScheme ? previous.profileId : (profileId ?? 'default'),
       stopWatchingDomReady: () => guest.off('dom-ready', onDomReady),
       colorScheme: previous?.colorScheme ?? null,
       fallbackColorScheme: previous?.fallbackColorScheme
     })
-    this.applyColorScheme(guest.id)
+    if (!previous?.fallbackColorScheme) {
+      this.applyColorScheme(guest.id)
+    }
     this.applyZoom(guest.id)
   }
 
-  /** Document previews use media emulation without becoming browser pages or inheriting zoom. */
-  setGuestColorSchemeFallback(
+  /** Each admitted document needs its effective media before authored scripts, even on reload. */
+  onGuestDocumentStart(
     guest: Electron.WebContents,
-    colorScheme: BrowserSiteColorScheme | undefined
+    document: { url: string; profileId: string | null; colorScheme: BrowserSiteColorScheme }
   ): void {
+    if (guest.isDestroyed()) {
+      return
+    }
     let tracked = this.guests.get(guest.id)
     if (!tracked) {
-      if (!colorScheme || guest.isDestroyed()) {
-        return
-      }
       tracked = {
         guest,
         profileId: null,
@@ -90,6 +92,19 @@ export class BrowserSiteDisplayController {
         colorScheme: null
       }
       this.guests.set(guest.id, tracked)
+    }
+    tracked.profileId = document.profileId
+    tracked.fallbackColorScheme = document.colorScheme
+    this.applyColorScheme(guest.id, document.url)
+  }
+
+  setGuestColorSchemeFallback(
+    guest: Electron.WebContents,
+    colorScheme: BrowserSiteColorScheme | undefined
+  ): void {
+    const tracked = this.guests.get(guest.id)
+    if (!tracked) {
+      return
     }
     if (tracked.fallbackColorScheme === colorScheme) {
       return
@@ -119,12 +134,12 @@ export class BrowserSiteDisplayController {
     }
   }
 
-  getPageDisplay(guestId: number): BrowserPageSiteDisplay | null {
+  getPageDisplay(guestId: number, documentUrl?: string): BrowserPageSiteDisplay | null {
     const tracked = this.guests.get(guestId)
     if (!tracked) {
       return null
     }
-    const site = browserSiteDisplayKey(tracked.guest.getURL())
+    const site = browserSiteDisplayKey(documentUrl ?? tracked.guest.getURL())
     const saved = site && tracked.profileId ? getBrowserSiteDisplay(tracked.profileId, site) : {}
     return {
       site,
@@ -193,12 +208,13 @@ export class BrowserSiteDisplayController {
     }
   }
 
-  private applyColorScheme(guestId: number): void {
+  private applyColorScheme(guestId: number, documentUrl?: string): void {
     const tracked = this.guests.get(guestId)
     if (!tracked || tracked.guest.isDestroyed()) {
       return
     }
-    const colorScheme = this.getPageDisplay(guestId)?.colorScheme ?? tracked.fallbackColorScheme
+    const colorScheme =
+      this.getPageDisplay(guestId, documentUrl)?.colorScheme ?? tracked.fallbackColorScheme
     if (!colorScheme && !tracked.colorScheme?.standing) {
       return
     }

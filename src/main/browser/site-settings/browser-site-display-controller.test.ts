@@ -9,7 +9,10 @@ import {
   normalizeBrowserPageZoomLevel
 } from '../../../shared/browser-page-zoom'
 import { BrowserSiteDisplayController } from './browser-site-display-controller'
-import { configureBrowserSiteDisplayStore } from './browser-site-display-store'
+import {
+  configureBrowserSiteDisplayStore,
+  updateBrowserSiteDisplay
+} from './browser-site-display-store'
 
 type FakeGuest = Electron.WebContents &
   EventEmitter & { url: string; level: number; mediaSent: unknown[] }
@@ -142,14 +145,22 @@ describe('BrowserSiteDisplayController color scheme', () => {
     const controller = new BrowserSiteDisplayController()
     const preview = fakeGuest('orca-preview://grant/theme.html')
     preview.level = 1
-    controller.setGuestColorSchemeFallback(preview, 'dark')
+    controller.onGuestDocumentStart(preview, {
+      url: preview.url,
+      profileId: null,
+      colorScheme: 'dark'
+    })
     controller.onMainFrameNavigationCommitted(preview.id)
     expect(preview.mediaSent).toEqual(['dark', 'dark'])
     expect(preview.level).toBe(1)
     expect(preview.listenerCount('dom-ready')).toBe(0)
 
     const local = fakeGuest('file:///chat-scratch/theme.html')
-    controller.setGuestColorSchemeFallback(local, 'dark')
+    controller.onGuestDocumentStart(local, {
+      url: local.url,
+      profileId: 'work',
+      colorScheme: 'dark'
+    })
     controller.onGuestRegistered(local, 'work')
     controller.setColorScheme(local.id, 'light')
     controller.setGuestColorSchemeFallback(local, 'light')
@@ -173,16 +184,83 @@ describe('BrowserSiteDisplayController color scheme', () => {
       fakeGuest('orca-preview://grant/a.html')
     )
     for (const guest of guests) {
-      controller.setGuestColorSchemeFallback(guest, 'dark')
+      controller.onGuestDocumentStart(guest, {
+        url: guest.url,
+        profileId: null,
+        colorScheme: 'dark'
+      })
+      controller.onGuestDocumentStart(guest, {
+        url: guest.url,
+        profileId: null,
+        colorScheme: 'dark'
+      })
+      expect(guest.mediaSent).toEqual(['dark', 'dark'])
+      expect(guest.debugger.listenerCount('detach')).toBe(1)
       guest.mediaSent.length = 0
     }
     for (const guest of guests) {
       controller.setGuestColorSchemeFallback(guest, 'light')
     }
     expect(guests.reduce((total, guest) => total + guest.mediaSent.length, 0)).toBe(population)
+    for (const guest of guests) {
+      controller.setGuestColorSchemeFallback(guest, 'light')
+      controller.onGuestRetired(guest.id)
+      expect(guest.debugger.isAttached()).toBe(false)
+      expect(guest.debugger.listenerCount('detach')).toBe(0)
+      controller.setGuestColorSchemeFallback(guest, 'dark')
+    }
+    expect(guests.reduce((total, guest) => total + guest.mediaSent.length, 0)).toBe(population)
     expect(ordinary.mediaSent).toEqual([])
     expect(ordinary.debugger.isAttached()).toBe(false)
   })
+
+  it.each([
+    { order: 'read-first', profileId: 'work', colorScheme: 'light', saved: 'dark' },
+    { order: 'registration-first', profileId: 'work', colorScheme: 'light', saved: 'dark' },
+    { order: 'read-first', profileId: 'default', colorScheme: 'dark', saved: 'light' },
+    { order: 'registration-first', profileId: 'default', colorScheme: 'dark', saved: 'light' }
+  ] as const)(
+    'keeps actual $profileId precedence across $order, reload and debugger loss',
+    ({ order, profileId, colorScheme, saved }) => {
+      const controller = new BrowserSiteDisplayController()
+      updateBrowserSiteDisplay('default', 'file://', { colorScheme: 'light' })
+      updateBrowserSiteDisplay('work', 'file://', { colorScheme: 'dark' })
+      const guest = fakeGuest('')
+      const document = {
+        url: 'file:///chat-scratch/chart.html',
+        profileId,
+        colorScheme
+      }
+      const rendererProfile = profileId === 'work' ? 'default' : 'work'
+      if (order === 'registration-first') {
+        controller.onGuestRegistered(guest, rendererProfile)
+      }
+      controller.onGuestDocumentStart(guest, document)
+      expect(guest.mediaSent.at(-1)).toBe(saved)
+      controller.onGuestRegistered(guest, rendererProfile)
+      expect(guest.mediaSent.at(-1)).toBe(saved)
+      guest.url = document.url
+      controller.onGuestRegistered(guest, rendererProfile)
+      expect(controller.getPageDisplay(guest.id)?.colorScheme).toBe(saved)
+      expect(guest.listenerCount('dom-ready')).toBe(1)
+      expect(guest.debugger.listenerCount('detach')).toBe(1)
+      guest.debugger.detach()
+      expect(guest.debugger.isAttached()).toBe(false)
+      const before = guest.mediaSent.length
+      controller.onGuestDocumentStart(guest, document)
+      expect(guest.mediaSent.slice(before)).toEqual([saved])
+      expect(guest.debugger.isAttached()).toBe(true)
+      controller.setColorScheme(guest.id, null)
+      expect(guest.mediaSent.at(-1)).toBe(colorScheme)
+      const replacement = fakeGuest('')
+      controller.onGuestDocumentStart(replacement, document)
+      expect(replacement.mediaSent).toEqual([colorScheme])
+      controller.onGuestRetired(guest.id)
+      controller.onGuestRetired(replacement.id)
+      expect(guest.listenerCount('dom-ready')).toBe(0)
+      expect(guest.debugger.listenerCount('detach')).toBe(0)
+    }
+  )
 
   it('sets the site scheme as each page commits and clears it once on leaving', () => {
     const controller = new BrowserSiteDisplayController()
