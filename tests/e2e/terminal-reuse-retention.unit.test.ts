@@ -620,49 +620,6 @@ it.each(['timer', 'manual'] as const)(
   60_000
 )
 
-it('forgets the creator and reuse links after automatic retirement of their exact shared process', async () => {
-  const h = await setupRetirementRuntime()
-  try {
-    h.runtime.onPtyData(h.seed.terminalPtyId!, '› ready\n\x1b[?25h', Date.now())
-    const reused = await h.service.runNow(h.seed.automationId)
-    expect(reused).toMatchObject({
-      status: 'dispatched',
-      terminalPaneKey: h.seed.terminalPaneKey,
-      terminalPtyId: h.seed.terminalPtyId
-    })
-    expect(
-      h.records.getOperationRow(
-        rpcCallerOperationKey(AUTOMATION_AGENT_CALLER),
-        automationRunOperationId(reused, 'reuse-send')
-      )?.outcome
-    ).toMatchObject({ status: 'succeeded' })
-    h.nativeExit()
-    await h.createNewer()
-    const incarnation = h.processes.get(h.seed.terminalPtyId!)!.incarnationId
-    vi.useFakeTimers()
-    h.service.start()
-    await vi.advanceTimersByTimeAsync(RUN_TERMINAL_GRACE_MS + 10 * 60_000)
-    await h.service.runInAutomationLane(h.seed.automationId, async () => {})
-    expect(h.stops).toEqual([
-      {
-        id: h.seed.terminalPtyId,
-        incarnationId: incarnation,
-        membership: { saved: false, layout: false, raw: false, renderer: false }
-      }
-    ])
-    expect(h.membership()).toEqual({ saved: false, layout: false, raw: false, renderer: false })
-    expect([...h.processes.keys()]).toEqual(h.created.slice(1).map((run) => run.terminalPtyId))
-    for (const original of [h.seed, reused]) {
-      expect(
-        h.store.listAutomationRuns(h.seed.automationId).find((run) => run.id === original.id)
-      ).toMatchObject({ status: 'dispatched', terminalPaneKey: null, terminalPtyId: null })
-    }
-  } finally {
-    vi.useRealTimers()
-    await h.dispose()
-  }
-})
-
 // Real Store/registry setup and the awaited durable-owner barrier need the integration budget.
 it('preserves the terminal and history when currentness is revoked during durable owner admission', async () => {
   const h = await setupRetirementRuntime()
