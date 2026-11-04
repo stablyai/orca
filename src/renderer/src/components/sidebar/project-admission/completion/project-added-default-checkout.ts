@@ -61,10 +61,12 @@ function getDetectedProjectDefaultCheckout(
   if (detected?.authoritative !== true) {
     return null
   }
+  const worktrees = getProjectWorktreesForHost(detected.worktrees, executionHostId)
+  // Adding a project never reveals discovered worktrees: a picked linked worktree opens itself.
   return (
-    getProjectWorktreesForHost(detected.worktrees, executionHostId).find(
-      (worktree) => worktree.isMainWorktree
-    ) ?? null
+    worktrees.find((worktree) => worktree.isMainWorktree && worktree.visible) ??
+    worktrees.find((worktree) => worktree.selectedCheckout) ??
+    null
   )
 }
 
@@ -85,31 +87,17 @@ async function findDetectedDefaultCheckout(
         detected?.authoritative === true ? 'no_default_checkout' : 'no_authoritative_detection'
     }
   }
-  if (!detectedDefaultCheckout.visible) {
-    // Freshly cloned primary checkouts may be hidden externals; expose them when adding the project.
-    const updated = executionHostId
-      ? await state.updateRepo(
-          repoId,
-          { externalWorktreeVisibility: 'show' },
-          { hostId: executionHostId }
-        )
-      : await state.updateRepo(repoId, { externalWorktreeVisibility: 'show' })
-    if (!updated) {
-      return { worktree: null, reason: 'show_detected_default_failed' }
-    }
-  }
   const refreshed = await useAppStore
     .getState()
     .fetchWorktrees(repoId, ownerRefreshOptions(executionHostId))
   if (!refreshed) {
     return { worktree: null, reason: 'authoritative_refresh_failed' }
   }
-  const worktree = getProjectDefaultCheckout(
+  const worktree =
     getProjectWorktreesForHost(
       selectWorktreesByRepo(useAppStore.getState())[repoId] ?? [],
       executionHostId
-    )
-  )
+    ).find((candidate) => candidate.id === detectedDefaultCheckout.id) ?? null
   return {
     worktree,
     reason: worktree ? 'detected_default_checkout' : 'refreshed_default_missing'
@@ -154,7 +142,6 @@ export async function openProjectDefaultCheckout({
   }
 
   if (defaultCheckout) {
-    // Linked worktrees Orca didn't create stay hidden; the sidebar's discovered-worktrees line offers them.
     // Onboarding must reveal its default checkout even when the normal sidebar preference hides it.
     const state = useAppStore.getState()
     if (state.hideDefaultBranchWorkspace) {

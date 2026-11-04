@@ -103,7 +103,6 @@ export const addRepoDefaultCheckoutHandoffReasonSchema = z.enum([
   'detected_default_checkout',
   'no_authoritative_detection',
   'no_default_checkout',
-  'show_detected_default_failed',
   'authoritative_refresh_failed',
   'refreshed_default_missing'
 ])
