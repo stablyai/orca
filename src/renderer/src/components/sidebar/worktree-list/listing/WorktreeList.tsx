@@ -61,6 +61,7 @@ const useSidebarListModel =
     ? useMainSidebarListModel
     : useWindowSidebarListModel
 
+/** Own the mounted sidebar's bulk-collapse scope, clearing it when filters hide every workspace. */
 const WorktreeList = React.memo(function WorktreeList({
   scrollOffsetRef,
   scrollAnchorRef,

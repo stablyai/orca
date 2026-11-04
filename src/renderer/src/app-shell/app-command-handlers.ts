@@ -74,6 +74,7 @@ export function getKeybindingContext(target: EventTarget | null): KeybindingCont
     : 'app'
 }
 
+/** Share command guards and claiming across keyboard and programmatic dispatch; true means handled. */
 export function createAppCommandHandlers(
   state: AppShortcutState,
   input?: ShortcutDispatchInput,

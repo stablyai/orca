@@ -23,6 +23,7 @@ type SidebarWorkspaceOptionsMenuProps = {
   onMenuOpenChange?: (open: boolean) => void
 }
 
+/** Bind workspace options to the mounted list's collapse scope and the user's toggle shortcut. */
 const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsMenu({
   preserveWorkspaceBoardOpen = false,
   onMenuOpenChange

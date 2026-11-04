@@ -6,6 +6,7 @@ import { shouldCollapseAllGroups } from '../../../shared/sidebar-list/section-co
 
 const useSidebarGroupScope = create<{ keys: readonly string[] }>(() => ({ keys: [] }))
 
+/** Register list membership; cleanup clears only its own registration so a newer scope survives. */
 export function registerSidebarGroupCollapseScope(keys: readonly string[]): () => void {
   useSidebarGroupScope.setState({ keys })
   return () => {
@@ -24,6 +25,7 @@ export function hasSidebarGroupCollapseScope(): boolean {
   return useSidebarGroupScope.getState().keys.length > 0
 }
 
+/** Apply the mounted list's scope with scroll anchoring; return false when no groups are registered. */
 export function setSidebarGroupsCollapsed(collapsed: boolean): boolean {
   const { keys } = useSidebarGroupScope.getState()
   if (keys.length === 0) {

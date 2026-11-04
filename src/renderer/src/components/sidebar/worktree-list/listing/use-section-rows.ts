@@ -82,6 +82,7 @@ function createSidebarHostOptionsSelector() {
   }
 }
 
+/** Derive visible section rows and pre-collapse membership from one window-owned plan. */
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))

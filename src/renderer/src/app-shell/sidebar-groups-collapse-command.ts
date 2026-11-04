@@ -6,6 +6,7 @@ import {
 } from '@/lib/sidebar-group-collapse'
 import type { KeybindingActionId } from '../../../shared/keybindings'
 
+/** Claim the shared sidebar toggle only when the mounted list has groups and focus permits it. */
 export function createSidebarGroupsCollapseCommand(
   claim: (actionId: KeybindingActionId, run: () => void) => boolean,
   creationLayoutActive: boolean,

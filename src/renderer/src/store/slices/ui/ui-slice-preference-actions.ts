@@ -170,6 +170,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         return { collapsedGroups: next }
       }),
 
+    /** Persist the requested groups' collapse state while preserving every key outside that scope. */
     setGroupsCollapsed: (keys, collapsed) => {
       if (keys.length === 0) {
         return

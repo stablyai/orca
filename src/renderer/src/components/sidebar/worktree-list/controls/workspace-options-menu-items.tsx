@@ -261,6 +261,7 @@ function SectionHeading({ section }: { section: WorkspaceViewSection }): JSX.Ele
   }
 }
 
+/** Offer both bulk operations when supplied, advertising the shortcut only for the next toggle action. */
 export function WorkspaceOptionsMenuItems({
   preserveWorkspaceBoardOpen = false,
   groupCollapseAction

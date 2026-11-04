@@ -87,6 +87,7 @@ export function useGlobalKeybindings(args: {
       )()
     )
 
+    /** Route physical and double-tap input by focus context, stopping after the first handled action. */
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
       const state = readShortcutState()
       const {

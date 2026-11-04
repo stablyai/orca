@@ -79,6 +79,7 @@ async function openMenu(frame: HTMLElement): Promise<void> {
   actionItem('Expand all')
 }
 
+/** Find actions in the portaled menu; fail if the requested operation is absent. */
 function actionItem(label: string): HTMLElement {
   const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((element) =>
     element.textContent?.startsWith(label)
@@ -89,6 +90,7 @@ function actionItem(label: string): HTMLElement {
   return item
 }
 
+/** Require the toggle shortcut beside exactly the operation the keyboard would perform next. */
 function assertToggleShortcut(label: string): void {
   const shortcuts = document.querySelectorAll('[data-slot="dropdown-menu-shortcut"]')
   if (
@@ -99,6 +101,7 @@ function assertToggleShortcut(label: string): void {
   }
 }
 
+/** Exercise an enabled menu action and verify its scope after the UI has painted. */
 async function selectAction(label: 'Collapse all' | 'Expand all'): Promise<void> {
   const item = actionItem(label)
   if (item.hasAttribute('data-disabled')) {
@@ -109,6 +112,7 @@ async function selectAction(label: 'Collapse all' | 'Expand all'): Promise<void>
   assertCollapseState(label === 'Collapse all')
 }
 
+/** Verify nested and virtualized groups change while filtered groups and selection stay intact. */
 function assertCollapseState(collapsed: boolean): void {
   const state = useAppStore.getState()
   const expected = collapsed
@@ -250,6 +254,7 @@ export const keyboardCollapsed = defineFixture({
 export const empty = defineFixture({
   ...base,
   store: { ...base.store, repos: [], projectGroups: [], worktreesByRepo: {}, folderWorkspaces: [] },
+  /** Keep both operations visible but disabled, with no active shortcut when the list has no groups. */
   interact: async (frame) => {
     await openMenu(frame)
     for (const label of ['Collapse all', 'Expand all']) {
