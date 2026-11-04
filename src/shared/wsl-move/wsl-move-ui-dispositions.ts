@@ -29,6 +29,9 @@ export const UI_STATE_DISPOSITIONS = {
   acknowledgedAgentsByPaneKey: moveDisposition(38, { note: 'Pane keys are kept.' }),
   activityClearedAtByPaneKey: moveDisposition(38, { note: 'Pane keys are kept.' }),
   manuallyUnreadTurnsByPaneKey: moveDisposition(38, { note: 'Pane keys are kept.' }),
+  prReadMarks: moveDisposition(38, {
+    note: 'Keys carry the producing host, so a moved repo starts its PRs unread rather than inheriting a local mark.'
+  }),
   trustedOrcaHooks: notApplicableDisposition(
     40,
     'Kept by repoId, which the move keeps; wsl-moved-repo-ui-retention.ts stops the trust prune dropping it.'

@@ -149,7 +149,9 @@ export function usePersistedUIWriter(): void {
       // Retain Clear completed across restart.
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
       // Retain explicit mark-unread across restart.
-      manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey
+      manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey,
+      // Retain which PRs were read; the mark itself decides when new activity re-raises one.
+      prReadMarks: s.prReadMarks
     }))
   )
   useEffect(() => {

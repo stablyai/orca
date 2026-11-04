@@ -9,6 +9,7 @@ import { isFeatureInteractionId } from '../feature-interactions'
 import type { FeatureInteractionId } from '../feature-interactions'
 import { ACTIVITY_GROUP_BY_VALUES, THREAD_READ_FILTER_VALUES } from '../agents-view-thread-filters'
 import { isReleaseChannel } from '../release-channel'
+import { PRReadMarksSchema } from '../github/pr-read-mark'
 import type { ReleaseChannel } from '../release-channel'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'
 import { TaskResumeState } from './task-resume-state-params'
@@ -206,6 +207,7 @@ export const UiUpdateFields = z
     acknowledgedAgentsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     activityClearedAtByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     manuallyUnreadTurnsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
+    prReadMarks: PRReadMarksSchema.optional(),
     browserDefaultUrl: NullableString.optional(),
     browserDefaultSearchEngine: z
       .enum(['google', 'duckduckgo', 'bing', 'kagi'])

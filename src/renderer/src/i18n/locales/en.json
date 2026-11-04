@@ -3268,7 +3268,11 @@
           "linearViewNotFound": "Saved Linear view was not found.",
           "linearViewRestoreFailed": "Failed to restore saved Linear view."
         },
-        "shownCount_one": "{{count}} shown"
+        "shownCount_one": "{{count}} shown",
+        "draftPullRequestNumberUnread": "Draft pull request #{{number}}, unread",
+        "pullRequestNumberUnread": "Pull request #{{number}}, unread",
+        "markPullRequestRead": "Mark read",
+        "markPullRequestUnread": "Mark unread"
       },
       "Terminal": {
         "73768427cf": "Close",

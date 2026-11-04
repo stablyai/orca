@@ -5,6 +5,7 @@ import type {
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { PRReadMark } from '../pr-read-state'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
@@ -151,6 +152,11 @@ export type UISliceCore = {
   /** Per-pane cutoffs used to hide activity entries cleared by the user. */
   activityClearedAtByPaneKey: Record<string, number>
   applyActivityClearedAt: (patch: Record<string, number | null>) => void
+  /** Per-PR read marks: one activity fingerprint each, compared against the live row. */
+  prReadMarks: Record<string, PRReadMark>
+  markPRsRead: (items: readonly GitHubWorkItem[]) => void
+  markPRsUnread: (items: readonly GitHubWorkItem[]) => void
+  adoptPRsAsRead: (items: readonly GitHubWorkItem[]) => void
   /** Session-local protection for turns explicitly marked unread. */
   manuallyUnreadTurnsByPaneKey: Record<string, number>
   clearManuallyUnreadTurns: (paneKeys: string[]) => void

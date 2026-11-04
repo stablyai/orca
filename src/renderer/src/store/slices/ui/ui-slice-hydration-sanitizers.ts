@@ -2,6 +2,7 @@ import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/fi
 import type { AppState } from '../../types'
 import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import { PRReadMarkSchema, type PRReadMark } from '../../../../../shared/github/pr-read-mark'
 import type {
   TaskViewPresetId,
   TopLevelView,
@@ -127,6 +128,24 @@ export function sanitizePaneKeyTimestampRecord(
 }
 
 export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecord
+
+/** Read marks are PR versions, not clock stamps: they carry no age cutoff, only shape and key safety. */
+export function sanitizePRReadMarks(value: unknown): Record<string, PRReadMark> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const out: Record<string, PRReadMark> = {}
+  for (const [key, mark] of Object.entries(value as Record<string, unknown>)) {
+    if (!isSafePersistedRecordKey(key)) {
+      continue
+    }
+    const parsed = PRReadMarkSchema.safeParse(mark)
+    if (parsed.success) {
+      out[key] = parsed.data
+    }
+  }
+  return out
+}
 
 /** Cutoffs trail status receipt times; double the status TTL so pruning cannot resurrect a cleared entry still retained by main. */
 export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {

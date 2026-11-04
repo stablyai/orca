@@ -1,7 +1,7 @@
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import { useCallback, useMemo, useEffect } from 'react'
+import { useCallback, useMemo, useEffect, useRef } from 'react'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { taskPageGitHubItemKey } from '@/components/task-page/github/task-page-github-work-item-mutation-keys'
 import { deriveTaskPagePRCheckSummary } from '../task-page-pr-check-summary'
@@ -14,6 +14,7 @@ import {
 import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
 import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
 import { useTaskPageGitHubListPending } from './use-task-page-github-list-pending'
+import { useAppStore } from '@/store'
 export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetadataModel) {
   const {
     repos,
@@ -151,6 +152,15 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
       ensurePRChecksLoaded(item)
     }
   }, [ensurePRChecksLoaded, filteredWorkItems, githubMode, showPRManagementColumns, taskSource])
+  // Adopt the first list as already seen, so an upgrade (or a first run) does not mark every PR unread.
+  const adoptedPRsRef = useRef(false)
+  useEffect(() => {
+    if (adoptedPRsRef.current || filteredWorkItems.length === 0) {
+      return
+    }
+    adoptedPRsRef.current = true
+    useAppStore.getState().adoptPRsAsRead(filteredWorkItems)
+  }, [filteredWorkItems])
   let lastLoadedPageIndex = 0
   for (let index = 0; index < pages.length; index += 1) {
     if (pages[index] !== null) {

@@ -3,6 +3,7 @@ import type { AppState } from '../types'
 import type { UISlice } from './ui/ui-slice-contract'
 import { createUiAgentActions } from './ui/ui-slice-agent-actions'
 import { createUiTaskActions } from './ui/ui-slice-task-actions'
+import { createUiPRReadActions } from './ui/ui-slice-pr-read-actions'
 import { createUiViewActions } from './ui/ui-slice-view-actions'
 import { createUiSettingsActions } from './ui/ui-slice-settings-actions'
 import { createUiModalActions } from './ui/ui-slice-modal-actions'
@@ -26,9 +27,11 @@ export type {
 } from './ui/ui-slice-contract'
 
 export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merged creators cover UISlice; the remaining gap is activeView's wider optional type.
   ({
     ...createUiAgentActions(set, get),
     ...createUiTaskActions(set, get),
+    ...createUiPRReadActions(set, get),
     ...createUiViewActions(set, get),
     ...createUiSettingsActions(set, get),
     ...createUiModalActions(set, get),

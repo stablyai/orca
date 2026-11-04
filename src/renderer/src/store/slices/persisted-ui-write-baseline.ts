@@ -1,4 +1,5 @@
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { PRReadMark } from '../../../../shared/github/pr-read-mark'
 
 /** Capture hydrated baseline and persist only locally changed fields: shared desktop/web/mobile UI snapshots otherwise overwrite peers’ disjoint updates (STA-5781). */
 export type PersistedUIWriteBaseline = {
@@ -28,6 +29,7 @@ export type PersistedUIWriteBaseline = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   activityClearedAtByPaneKey: Record<string, number>
   manuallyUnreadTurnsByPaneKey: Record<string, number>
+  prReadMarks: Record<string, PRReadMark>
 }
 
 // Require exhaustive Record coverage; keyof arrays validate members but silently omit new fields, losing persistence (ui-state-schema-parity.ts).
@@ -57,7 +59,8 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   filterRepoIds: true,
   acknowledgedAgentsByPaneKey: true,
   activityClearedAtByPaneKey: true,
-  manuallyUnreadTurnsByPaneKey: true
+  manuallyUnreadTurnsByPaneKey: true,
+  prReadMarks: true
 } satisfies Record<keyof PersistedUIWriteBaseline, true>
 
 export const PERSISTED_UI_WRITE_BASELINE_FIELDS = Object.keys(
@@ -106,7 +109,8 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
     field === 'showDotfilesByWorktree' ||
     field === 'acknowledgedAgentsByPaneKey' ||
     field === 'activityClearedAtByPaneKey' ||
-    field === 'manuallyUnreadTurnsByPaneKey'
+    field === 'manuallyUnreadTurnsByPaneKey' ||
+    field === 'prReadMarks'
   ) {
     return shallowRecordEqual(
       a as Record<string, unknown> | undefined,
