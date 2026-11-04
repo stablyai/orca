@@ -208,7 +208,7 @@ describe('worktree creation chat handoff', () => {
         fallbackCreatureName: 'feature',
         isProjectGroupTarget: false,
         isSubmissionCancelled: () => false,
-        linkedPR: undefined,
+        linkedPR: null,
         linkedWorkItem: null,
         name: 'feature',
         parsedLinkedIssueNumber: 42,
