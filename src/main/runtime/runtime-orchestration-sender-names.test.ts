@@ -741,6 +741,7 @@ it('uses exact saved custody for follow-up dispatch identity and refuses a later
       worktreeId: WORKTREE,
       ownership: 'owned'
     })
+  db.completeDispatch(first.id)
   const next = start()
   db.transferWorkerTerminalResourceStatement({
     resourceId: resource.id,
