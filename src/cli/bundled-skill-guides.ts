@@ -3912,14 +3912,13 @@ const ORCHESTRATION_MARKDOWN = [
   "",
   "`ORCA skills get orchestration --reference references/<file>.md`",
   "",
-  "| Situation                                           | Reference                                 |",
-  "| --------------------------------------------------- | ----------------------------------------- |",
-  "| Task DAGs, several Runs                             | `references/coordinator-loop.md`          |",
-  "| Child worktrees, SSH, WSL, a connected server       | `references/placement-and-remote.md`      |",
-  "| Group messages                                      | `references/messaging-and-gates.md`       |",
-  "| Failed worker; retry, stop, reset; coordinator gone | `references/recovery-and-cleanup.md`      |",
-  "| Custom argv or terminal layout                      | `references/low-level-topology.md`        |",
-  "| Legacy labels, adopted Runs, takeover               | `references/legacy-contract-migration.md` |",
+  "| Situation                                      | Reference                            |",
+  "| ---------------------------------------------- | ------------------------------------ |",
+  "| Task DAGs, several Runs                        | `references/coordinator-loop.md`     |",
+  "| Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |",
+  "| Group messages                                 | `references/messaging-and-gates.md`  |",
+  "| A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |",
+  "| Custom argv or terminal layout                 | `references/low-level-topology.md`   |",
   "",
 ].join('\n')
 
@@ -3946,29 +3945,6 @@ const ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN = [
   "A later `run-create` keeps your earlier Runs: their mail still wakes you, but",
   "commands without `--run` use the newest Run, so pass `--run <id>` for an earlier",
   "one. `run-use` keeps only the Run it names.",
-  "",
-].join('\n')
-
-// oxfmt-ignore
-const ORCHESTRATION_LEGACY_CONTRACT_MIGRATION_REFERENCE_MARKDOWN = [
-  "# Legacy contract migration",
-  "",
-  "Follow a legacy label's printed command exactly, with the same executable.",
-  "",
-  "This applies only to the Run Orca adopted automatically from the legacy",
-  "contract. For any other Run whose coordinator is gone, use plain `run-use`",
-  "([Recovery and cleanup](recovery-and-cleanup.md#coordinator-gone)).",
-  "",
-  "Only if the adopted Run's original coordinator is gone or cannot prove",
-  "ownership, take over from your own terminal:",
-  "",
-  "```text",
-  "ORCA orchestration run-use --id <adopted_run_id> --takeover-legacy",
-  "ORCA orchestration check --run <adopted_run_id>",
-  "```",
-  "",
-  "Never take over from an active coordinator, and never start a second editor",
-  "just because Orca updated.",
   "",
 ].join('\n')
 
@@ -4052,23 +4028,6 @@ const ORCHESTRATION_RECOVERY_AND_CLEANUP_REFERENCE_MARKDOWN = [
   "",
   "`orchestration reset` deletes coordination state; run it only when the user",
   "gives that state up.",
-  "",
-  "## Coordinator gone",
-  "",
-  "If the Run's coordinator has exited and the user asks you to continue its Run,",
-  "bind it to your own terminal, then read its mail and Tasks:",
-  "",
-  "```text",
-  "ORCA orchestration run-use --id <run_id>",
-  "ORCA orchestration check --run <run_id>",
-  "ORCA orchestration task-list --run <run_id>",
-  "```",
-  "",
-  "`run-use` keeps only the Run it names, so your other Runs stop waking you; use",
-  "a terminal that coordinates no other Run. Never take a Run from a coordinator",
-  "that is still active. `--takeover-legacy`",
-  "is only for the automatically adopted legacy Run; see",
-  "[Legacy contract migration](legacy-contract-migration.md).",
   "",
   "## User-directed recovery after the breaker",
   "",
@@ -4215,6 +4174,6 @@ export const BUNDLED_SKILL_GUIDES = [
     description: "Run work in separate Orca worker agents and get their results back. Use when the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply, decision gates), or when the work needs something your own subagents cannot give: a different agent (such as Codex from Claude) or its own Orca workspace. \"Have Codex (or Claude) review this and report back\" means an Orca worker of that agent, even when you have your own model subagents. Also use when you are a dispatched worker (a prompt with Task and Dispatch IDs: ask, worker_done). Otherwise prefer your own subagents, including for long or parallel work. Use `orca-cli` to hand work off with nothing expected back (\"hand off\", \"handover\", \"give this to another agent\", \"another worktree\"), and for terminal control, shell commands, worktree management, and reading or waiting on terminals.",
     markdown: ORCHESTRATION_MARKDOWN,
     aliases: [],
-    references: [{ name: "coordinator-loop", markdown: ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN }, { name: "legacy-contract-migration", markdown: ORCHESTRATION_LEGACY_CONTRACT_MIGRATION_REFERENCE_MARKDOWN }, { name: "low-level-topology", markdown: ORCHESTRATION_LOW_LEVEL_TOPOLOGY_REFERENCE_MARKDOWN }, { name: "messaging-and-gates", markdown: ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN }, { name: "placement-and-remote", markdown: ORCHESTRATION_PLACEMENT_AND_REMOTE_REFERENCE_MARKDOWN }, { name: "recovery-and-cleanup", markdown: ORCHESTRATION_RECOVERY_AND_CLEANUP_REFERENCE_MARKDOWN }]
+    references: [{ name: "coordinator-loop", markdown: ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN }, { name: "low-level-topology", markdown: ORCHESTRATION_LOW_LEVEL_TOPOLOGY_REFERENCE_MARKDOWN }, { name: "messaging-and-gates", markdown: ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN }, { name: "placement-and-remote", markdown: ORCHESTRATION_PLACEMENT_AND_REMOTE_REFERENCE_MARKDOWN }, { name: "recovery-and-cleanup", markdown: ORCHESTRATION_RECOVERY_AND_CLEANUP_REFERENCE_MARKDOWN }]
   }
 ] as const satisfies readonly BundledSkillGuide[]

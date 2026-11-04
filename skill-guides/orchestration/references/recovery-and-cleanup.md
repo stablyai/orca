@@ -16,23 +16,6 @@ stopped; check `worker-show` before acting again.
 `orchestration reset` deletes coordination state; run it only when the user
 gives that state up.
 
-## Coordinator gone
-
-If the Run's coordinator has exited and the user asks you to continue its Run,
-bind it to your own terminal, then read its mail and Tasks:
-
-```text
-ORCA orchestration run-use --id <run_id>
-ORCA orchestration check --run <run_id>
-ORCA orchestration task-list --run <run_id>
-```
-
-`run-use` keeps only the Run it names, so your other Runs stop waking you; use
-a terminal that coordinates no other Run. Never take a Run from a coordinator
-that is still active. `--takeover-legacy`
-is only for the automatically adopted legacy Run; see
-[Legacy contract migration](legacy-contract-migration.md).
-
 ## User-directed recovery after the breaker
 
 After three failed starts in one `--retry-of` chain, the Dispatch circuit-breaks
