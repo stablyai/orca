@@ -25,7 +25,7 @@ import {
 } from '../../../shared/process-table-snapshot-reader'
 import { selectForegroundProcessCandidate } from '../../../shared/foreground-process-selection'
 import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
-import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
+import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import {
   resolveAgentForegroundProcessWithAvailability,
   type AgentForegroundProcessResolution,

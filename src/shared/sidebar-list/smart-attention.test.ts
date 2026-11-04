@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStateHistoryEntry,
-  type AgentStatusEntry
-} from '../agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../agent-status/contracts/agent-status-freshness'
+import type { AgentStateHistoryEntry } from '../agent-status/lifecycle/agent-state-history'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import {
   IDLE,
   buildAttentionByWorktree,

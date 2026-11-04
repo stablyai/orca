@@ -1,5 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
-import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallState,
+  AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { readHooksJson } from '../agent-hooks/installer-utils'
 import {
   assertLoadableHookTrustConfig,

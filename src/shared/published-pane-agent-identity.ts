@@ -1,5 +1,5 @@
-import { collectAgentTitleEvidence } from './agent-title-evidence'
-import { resolvePaneAgentIdentity } from './pane-agent-identity-resolver'
+import { collectAgentTitleEvidence } from './agent-status/title/agent-title-evidence'
+import { resolvePaneAgentIdentity } from './agent-status/identity/pane-agent-identity-resolver'
 import type { TerminalAgent } from './terminal-agent'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 

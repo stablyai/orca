@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { makeTab } from '@/store/slices/store-test-helpers'

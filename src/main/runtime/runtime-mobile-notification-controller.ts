@@ -1,5 +1,5 @@
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
-import type { AgentStatusState } from '../../shared/agent-status-types'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import {
   agentSessionAttentionSubjectPrefix,
   attentionOriginWasRead,

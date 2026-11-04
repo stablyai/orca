@@ -1,6 +1,6 @@
 import { selectWorktreesByRepo, selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import { memo, useEffect, useId, useRef, useState, type ComponentProps } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'

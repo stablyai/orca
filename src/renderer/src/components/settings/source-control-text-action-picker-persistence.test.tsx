@@ -2,7 +2,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { persist, settingsModel } from './__fixtures__/settings-persistence-test-fixture'
 import { ChatPersistenceHarness } from './__fixtures__/chat-persistence-harness-test-fixture'
 import { renderGlobalCommitCard } from './__fixtures__/global-commit-card-test-fixture'

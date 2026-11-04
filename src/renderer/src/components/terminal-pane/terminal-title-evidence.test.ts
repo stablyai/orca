@@ -9,9 +9,9 @@ import { installTitleSpawnBell } from './pty-connection/title-spawn-bell'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './pty-connection/confirmed-shell-agent-title'
 
 import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
-import { isNormalizedAgentTitleStamp } from '../../../../shared/agent-title-status'
+import { isNormalizedAgentTitleStamp } from '../../../../shared/agent-status/title/agent-title-status'
 
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => ({
       settings: { terminalGpuAcceleration: 'auto' },

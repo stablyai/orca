@@ -13,7 +13,7 @@ import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../share
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../browser/sessions/browser-session-proxy'

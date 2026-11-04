@@ -3,8 +3,8 @@ import {
   selectFreshAgentRowForMobileTab,
   selectFreshExplicitAgentStatus
 } from './runtime-hook-agent-row-selection'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
 const OTHER_PANE_KEY = 'tab-1:22222222-2222-4222-8222-222222222222'

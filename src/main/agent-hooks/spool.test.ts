@@ -17,7 +17,7 @@ import {
   drainAgentHookSpoolAsync,
   launchTokenHash,
   type SpoolRecord
-} from '../../shared/agent-hook-spool'
+} from '../../shared/agent-hook-listener/transport/agent-hook-spool'
 import { AgentHookServer, _internals } from './server'
 import { buildBody } from './server.test-fixtures'
 import { _internals as codexInternals } from '../codex/hook-service'

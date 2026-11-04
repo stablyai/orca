@@ -7,7 +7,7 @@ import { expect, test } from './helpers/orca-app'
 import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
 import { waitForSessionReady } from './helpers/store'
 import { RuntimeClient } from '../../src/cli/runtime-client'
-import { recognizeAgentProcess } from '../../src/shared/agent-process-recognition'
+import { recognizeAgentProcess } from '../../src/shared/agent-status/process/agent-process-recognition'
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../src/shared/orchestration-timing-budgets'
 
 const execFileAsync = promisify(execFile)

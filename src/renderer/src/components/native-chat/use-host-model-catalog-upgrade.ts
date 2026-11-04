@@ -4,7 +4,7 @@ import {
   type AgentSessionUnavailable
 } from '../../../../shared/agent-session/agent-session-availability'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import {
   settleStructuredAgentSessionBuiltinCatalog,

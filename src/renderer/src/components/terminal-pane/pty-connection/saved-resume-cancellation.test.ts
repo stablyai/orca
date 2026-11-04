@@ -1,6 +1,6 @@
 import { bindBuildColdRestoreAgentResumeStartup } from './cold-restore-resume-startup'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata
@@ -23,7 +23,7 @@ const fixture = vi.hoisted(() => ({
   paste: vi.fn(),
   parsed: vi.fn(async () => {})
 }))
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => fixture.state, setState: fixture.setState }
 }))
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
