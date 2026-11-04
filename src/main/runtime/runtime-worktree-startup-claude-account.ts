@@ -6,10 +6,8 @@ import type { LocalWindowsTerminalRuntimeOptions } from '../../shared/local-wind
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { getCodexSelectionTargetForPty } from '../ipc/pty/host-env/codex-home'
 import { newWorktreeLaunchScope } from './agent-launch-scope-runtime'
-import {
-  resolveLocalProjectRuntimeForRepo,
-  resolveLocalPtyOptions
-} from '../local-project-runtime-resolution'
+import { resolveLocalProjectRuntimeForRepo } from '../workspaces/execution-host/local-project-runtime-resolution'
+import { resolveLocalPtyOptions } from '../workspaces/execution-host/local-project-runtime-pty-options'
 
 /**
  * Resolves and validates a create's `--account` before anything is created on disk; the caller

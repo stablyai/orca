@@ -21,7 +21,7 @@ import { makeTerminalTab, TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session
 import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlite-authority'
 
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
 import { _resetPtyBindingSpanSamplingForTests } from './loading-store/pty-binding-span'
 

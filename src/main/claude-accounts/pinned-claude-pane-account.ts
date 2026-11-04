@@ -1,4 +1,4 @@
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { getPinnedClaudeAccountIdForPty } from './claude-pinned-pty-registry'
 
 type PersistedTerminalLayouts = Record<

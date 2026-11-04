@@ -4,20 +4,21 @@ import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
 import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
+import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { Label } from '../../ui/label'
 import { Separator } from '../../ui/separator'
 import { useShallow } from 'zustand/react/shallow'
 import { RepositoryHooksSection } from './execution/RepositoryHooksSection'
-import { McpConfigSection } from '../McpConfigSection'
-import { WorktreeSymlinksSection } from '../WorktreeSymlinksSection'
-import { SparsePresetSettingsSection } from '../SparsePresetSettingsSection'
+import { McpConfigSection } from './mcp/McpConfigSection'
+import { WorktreeSymlinksSection } from './execution/WorktreeSymlinksSection'
+import { SparsePresetSettingsSection } from './execution/SparsePresetSettingsSection'
 import { RepositorySourceControlAiSection } from './source-control/RepositorySourceControlAiSection'
-import { SearchableSetting } from '../SearchableSetting'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { RepositoryRemoveProjectButton } from './RepositoryRemoveProjectButton'
-import type { SettingsProjectRemovalScope } from '../settings-project-list'
-import { matchesSettingsSearch } from '../settings-search'
+import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
+import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '@/store/index'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './identity/RepositoryIconPicker'
@@ -30,6 +31,10 @@ import { matchesRepositoryIdentitySearch } from './identity/repository-identity-
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
 import { getProjectRuntimeSessionSummary } from './execution/repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/worktree-visibility-defaults-by-host'
+import {
+  RepositoryFormatterSection,
+  getRepositoryFormatterSearchEntry
+} from './RepositoryFormatterSection'
 
 export type RepositoryPaneRepoUpdate = Omit<
   Partial<Repo>,
@@ -68,6 +73,8 @@ type RepositoryPaneProps = {
     projectId: string,
     updates: ProjectUpdateArgs['updates']
   ) => void | Promise<unknown>
+  /** Lets the repository's text pickers save model lists its host reports. */
+  writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
 
 export function RepositoryPane({
@@ -87,7 +94,8 @@ export function RepositoryPane({
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false,
-  updateProject
+  updateProject,
+  writeSourceControlAiSettings
 }: RepositoryPaneProps): React.JSX.Element {
   const isFolder = isFolderRepo(repo)
   // Bind writes to the switcher-selected owner; same-ID/self-paired repos must not use focused-host fallback.
@@ -340,12 +348,22 @@ export function RepositoryPane({
       </section>
     ) : null,
     hooksSection,
+    forceFullPaneForRepoMatch ||
+    matchesSettingsSearch(searchQuery, [getRepositoryFormatterSearchEntry()]) ? (
+      <RepositoryFormatterSection
+        key={`formatter-${repo.id}-${selectedHostId}`}
+        repo={repo}
+        updateRepo={updateSelectedRepo}
+        forceVisible={forceFullPaneForRepoMatch}
+      />
+    ) : null,
     !isFolder &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sourceControlAiEntries)) ? (
       <RepositorySourceControlAiSection
         key="source-control-ai"
         repo={repo}
         updateRepo={updateSelectedRepo}
+        writeSourceControlAiSettings={writeSourceControlAiSettings}
       />
     ) : null,
     !isFolder &&

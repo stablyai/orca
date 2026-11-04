@@ -18,7 +18,10 @@ const fakes = vi.hoisted(() => ({
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => '/data' })
 }))
-vi.mock('../wsl', () => ({ getDefaultWslDistro: () => null, getWslHome: () => null }))
+vi.mock('../wsl/discovery/distro-catalog', () => ({
+  getDefaultWslDistro: () => null,
+  getWslHome: () => null
+}))
 vi.mock('./claude-profile-router', () => ({
   ClaudeProfileRouter: function ClaudeProfileRouter() {
     return fakes.host

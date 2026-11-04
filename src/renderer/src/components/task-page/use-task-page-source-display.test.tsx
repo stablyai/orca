@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { i18n } from '@/i18n/i18n'
 import type { WorkItemsCacheSources } from '@/store/github/cache-model'
@@ -11,24 +10,27 @@ import { createGlobalSettingsFixture } from '../../../../shared/global-settings-
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { getGitHubTaskKind } from '../../../../shared/task-github-search'
 import type { TaskProvider } from '../../../../shared/task-providers'
-import { parseTaskQuery } from '../../../../shared/task-query'
 import { getTaskPageRepoCacheRows } from './task-page-cache-selectors'
 import type * as CacheSelectors from './task-page-cache-selectors'
 import { getTaskPageRepoCacheInput, getTaskPageRepoSourceContext } from './task-page-source-context'
 import { getSourceOptions } from './task-page-localized-options'
-import { useTaskPageStoreBindings } from './use-task-page-store-bindings'
-import { useTaskPageRepoSelection } from './use-task-page-repo-selection'
-import { useTaskPageRuntimeHosts } from './use-task-page-runtime-hosts'
-import { useTaskPageSourceAvailability } from './use-task-page-source-availability'
-import { useTaskPageProviderState } from './use-task-page-provider-state'
-import { useTaskPageGitHubListState } from './github/use-task-page-github-list-state'
-import { useTaskPageGitHubDetail } from './github/use-task-page-github-detail'
-import { useTaskPageGitHubCacheReconciliation } from './github/use-task-page-github-cache-reconciliation'
 import { useTaskPageSourceDisplay } from './use-task-page-source-display'
-import { TaskPageGitHubFilters } from './github/Filters'
-import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
+import {
+  Q1,
+  Q2,
+  upstream,
+  fork,
+  sources,
+  repo,
+  sshTwin,
+  listAnswers,
+  setIssueSourcePreference,
+  view,
+  harnessRenders,
+  Harness,
+  installSourceDisplayTestLifecycle
+} from './use-task-page-source-display.test-fixture'
 
 vi.mock('@/components/github/PRFilterDropdowns', () => ({ default: () => null }))
 // Count the source reader's own work at its boundary; writers keep the uninstrumented cache.
@@ -92,80 +94,7 @@ vi.mock('./task-page-cache-selectors', async (importOriginal) => {
   }
 })
 
-const Q1 = 'is:issue is:open'
-const Q2 = 'is:issue label:bug'
-const upstream = { owner: 'upstream-owner', repo: 'project' }
-const fork = { owner: 'fork-owner', repo: 'project', host: 'ghe.example.com' }
-const sources = (issues: GitHubOwnerRepo | null, prs = issues): WorkItemsCacheSources => ({
-  issues,
-  prs,
-  originCandidate: fork,
-  upstreamCandidate: upstream
-})
-// Saved project identity is the upstream; the list's resolved source can differ.
-const repo: Repo = {
-  id: 'repo',
-  path: '/repo',
-  displayName: 'Project',
-  badgeColor: '#000',
-  addedAt: 1,
-  executionHostId: 'local',
-  upstream
-}
-const sshTwin: Repo = {
-  ...repo,
-  path: '/ssh/repo',
-  connectionId: 'box',
-  executionHostId: 'ssh:box'
-}
-
-const initialStore = useAppStore.getState()
-const initialApiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
-// listWorkItems answers by repo path and query; a missing answer fails the fetch.
-let listAnswers: Map<string, WorkItemsCacheSources>
-const setIssueSourcePreference = vi.fn()
-
-function useMountedSourceDisplay() {
-  const store = useTaskPageStoreBindings()
-  const selection = useTaskPageRepoSelection(store)
-  const hosts = useTaskPageRuntimeHosts(selection)
-  const availability = useTaskPageSourceAvailability(hosts)
-  const provider = useTaskPageProviderState(availability)
-  const list = useTaskPageGitHubListState(provider)
-  const detail = useTaskPageGitHubDetail(list)
-  const reconciled = useTaskPageGitHubCacheReconciliation(detail)
-  // Stage 21 derives the kind the same way before handing off to the source display.
-  const withKind = Object.assign(reconciled, {
-    activeGithubTaskKind: getGitHubTaskKind(
-      reconciled.activeTaskPreset,
-      reconciled.appliedTaskSearch
-    )
-  })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field the source display reads comes from stages 1-8 or the kind above; stages 9-20 add none of them.
-  const sourceDisplayInput = withKind as unknown as typeof withKind &
-    Parameters<typeof useTaskPageSourceDisplay>[0]
-  return useTaskPageSourceDisplay(sourceDisplayInput)
-}
-let view: ReturnType<typeof useMountedSourceDisplay>
-function Harness() {
-  view = useMountedSourceDisplay()
-  const filtersFields = {
-    ...view,
-    setIssueSourcePreference,
-    appliedTaskQuery: parseTaskQuery(view.appliedTaskSearch),
-    loadedGitHubAuthorLogins: [],
-    primaryGithubFilterSlug: null,
-    githubTasksBusy: false,
-    newIssueTargetRepo: null
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mounted stage-8 model plus these stubs cover every field Filters reads; later-stage handlers are never fired here.
-  const filtersModel = filtersFields as unknown as TaskPageComposerActionsModel
-  return (
-    <TooltipProvider>
-      <TaskPageGitHubFilters model={filtersModel} />
-    </TooltipProvider>
-  )
-}
+installSourceDisplayTestLifecycle()
 
 function mount(repos: Repo[], query = Q1) {
   useAppStore.setState({
@@ -200,13 +129,16 @@ function sourceRowCount() {
   return screen.queryAllByRole('group', { name: 'Issue source' }).length
 }
 // Summary, single-repo link and Filters source row must make the same claim.
-function expectSurfaces(source: (GitHubOwnerRepo & { host?: string }) | null) {
+function expectSurfaces(
+  source: (GitHubOwnerRepo & { host?: string }) | null,
+  knownCandidates = false
+) {
   const { taskSourceContextSummary: summary, selectedGitHubRepoExternalLink: link } = view
   if (!source) {
     expect(summary.label).toMatch(/Selected project$/)
     expect(summary.title).not.toMatch(/Source:/)
     expect(link).toBeNull()
-    expect(sourceRowCount()).toBe(0)
+    expect(sourceRowCount()).toBe(knownCandidates ? 1 : 0)
     return
   }
   const slug = `${source.owner}/${source.repo}`
@@ -215,39 +147,6 @@ function expectSurfaces(source: (GitHubOwnerRepo & { host?: string }) | null) {
   expect(link).toEqual({ url: `https://${source.host ?? 'github.com'}/${slug}`, label: slug })
   expect(sourceRowCount()).toBe(1)
 }
-
-beforeEach(() => {
-  listAnswers = new Map()
-  setIssueSourcePreference.mockReset()
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      gh: {
-        viewer: vi.fn().mockResolvedValue(null),
-        listWorkItems: vi.fn(async ({ repoPath, query = '' }) => {
-          const answer = listAnswers.get(`${repoPath}\0${query}`)
-          if (!answer) {
-            throw new Error('list failed')
-          }
-          return { items: [], sources: answer }
-        })
-      },
-      repos: { update: vi.fn(async ({ repoId }) => ({ ...repo, id: repoId })) },
-      ui: { set: vi.fn().mockResolvedValue(undefined) }
-    }
-  })
-  useAppStore.setState({ ...initialStore, workItemsCache: {} }, true)
-})
-afterEach(async () => {
-  await i18n.changeLanguage('en')
-  cleanup()
-  useAppStore.setState(initialStore, true)
-  if (initialApiDescriptor) {
-    Object.defineProperty(window, 'api', initialApiDescriptor)
-  } else {
-    Reflect.deleteProperty(window, 'api')
-  }
-})
 
 describe('Tasks source display', () => {
   it('carries the last shown entry across a query change, live, until a current entry or eviction', async () => {
@@ -266,22 +165,22 @@ describe('Tasks source display', () => {
     expectSurfaces(fork)
     await fetchList(repo, Q1, sources(upstream))
     expectSurfaces(upstream)
-    // Another query's result never takes over the display.
+    // A changed served mapping retires old claims across queries; raw choices stay mounted.
     await fetchList(repo, 'is:issue is:closed', sources(fork))
-    expectSurfaces(upstream)
+    expectSurfaces(null, true)
 
     await fetchList(repo, Q2, sources(fork))
     expectSurfaces(fork)
     fireEvent.click(screen.getByRole('button', { name: 'Origin' }))
     expect(setIssueSourcePreference).toHaveBeenCalledWith('repo', '/repo', 'origin', 'local')
 
-    // A real preference change evicts the row's entries while Filters stays mounted.
+    // An owned preference change detaches rows while known choices stay mounted.
     applyQuery('is:issue is:closed sort:updated')
     expectSurfaces(fork)
     await act(() =>
       useAppStore.getState().setIssueSourcePreference('repo', '/repo', 'upstream', 'local')
     )
-    expectSurfaces(null)
+    expectSurfaces(null, true)
     await fetchList(repo, 'is:issue is:closed sort:updated', sources(upstream))
     expectSurfaces(upstream)
   })
@@ -326,7 +225,11 @@ describe('Tasks source display', () => {
     // A row that leaves the selection forgets its history.
     act(() => view.setRepoSelection(new Set()))
     act(() => view.setRepoSelection(new Set(['repo'])))
-    expect(view.githubSourceDisplayState.map((state) => state.sources)).toEqual([null, null])
+    expect(view.githubSourceDisplayState.map((state) => state.sources?.issues ?? null)).toEqual([
+      null,
+      null
+    ])
+    expect(sourceRowCount()).toBe(1)
   })
 
   it('re-translates the mounted summary when the language changes', async () => {
@@ -555,5 +458,44 @@ describe('Tasks source display scaling', () => {
       // Same rows, a tenth of the cache: identical work.
       expect(smallCache[update]).toEqual(small[update])
     }
+  })
+})
+
+describe('Tasks source collection subscriptions', () => {
+  it('renders for the selected owner candidate and count publications only', async () => {
+    const neighbour: Repo = { ...repo, id: 'neighbour', path: '/neighbour' }
+    const other: Repo = { ...sshTwin, id: 'other', path: '/other' }
+    mount([repo])
+    act(() => useAppStore.setState((s) => ({ repos: [...s.repos, neighbour, other] })))
+    await act(async () => {})
+    const owner = useAppStore.getState().githubSourceCollections
+    const capture = (row: Repo) => owner.capture(row, getTaskPageRepoSourceContext(row, 'github'))
+    const envelope = { items: [], sources: sources(fork) }
+    const publish = (row: Repo, totalPages: number, query = '') =>
+      owner.answer(
+        owner.countKey([capture(row).scope], query, view.githubPerRepoPageLimit),
+        [capture(row)],
+        { totalCount: totalPages, totalPages },
+        query,
+        view.githubPerRepoPageLimit
+      )
+    const rendersFor = async (update: () => unknown) => {
+      harnessRenders.count = 0
+      await act(async () => {
+        update()
+      })
+      return harnessRenders.count
+    }
+    for (const row of [neighbour, other]) {
+      expect(await rendersFor(() => owner.accept(capture(row), envelope, Q1, true))).toBe(0)
+      expect(await rendersFor(() => publish(row, 3, Q1))).toBe(0)
+    }
+    expect(sourceRowCount()).toBe(0)
+    expect(await rendersFor(() => owner.accept(capture(repo), envelope, Q1, true))).toBeGreaterThan(
+      0
+    )
+    expect(sourceRowCount()).toBe(1)
+    expect(await rendersFor(() => publish(repo, 3, Q1))).toBeGreaterThan(0)
+    expect(screen.getByTestId('mounted-count')).toHaveTextContent('3')
   })
 })

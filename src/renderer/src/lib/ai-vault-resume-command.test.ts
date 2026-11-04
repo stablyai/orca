@@ -3,10 +3,10 @@ import { getDefaultSettings } from '../../../shared/constants'
 import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  getAiVaultAgentProviderSession,
   buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree
 } from './ai-vault-resume-command'
+import { getAiVaultAgentProviderSession } from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { dropDeletedRemoteResumeCwd } from './ai-vault-session-resume-preparation'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 

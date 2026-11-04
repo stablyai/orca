@@ -11,7 +11,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -55,6 +59,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('does not surface the zero-dimensions diagnostic for a hidden pane', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
@@ -62,7 +68,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       pane.terminal.rows = 0
       const deps = createDeps({ isVisibleRef: { current: false } })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       await flushAsyncTicks()
 
       expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
@@ -70,6 +80,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('still surfaces the zero-dimensions diagnostic for a visible pane', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
@@ -77,7 +89,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       pane.terminal.rows = 0
       const deps = createDeps({ isVisibleRef: { current: true } })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       await flushAsyncTicks()
 
       expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
@@ -89,6 +105,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     // Do not race PTY respawn into worktree deletion; main’s removal fence must not flash a raw error before unmount.
     it('skips a fresh spawn while the pane worktree is being deleted', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -98,7 +116,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       // Use a unique tab ID to avoid pending-spawn entries from other tests and force fresh spawn.
       const deps = createDeps({ tabId: 'tab-removal-skip-spawn' })
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
       await flushAsyncTicks()
 
       expect(transport.connect).not.toHaveBeenCalled()
@@ -108,6 +130,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     // A queued row may still fail its own delete and stay; a new terminal there must still start.
     it('still spawns while the pane worktree is only queued for deletion', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -116,7 +140,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       }
       const deps = createDeps({ tabId: 'tab-queued-delete-spawn' })
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+      )
       await flushAsyncTicks()
 
       expect(transport.connect).toHaveBeenCalled()
@@ -125,6 +153,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     // Read the live store before retiring a disposed spawn, or a remounted pane’s shell could be killed.
     it('lets a disposed spawn survive while the pane surface still exists in the store', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const deps = createDeps({ tabId: 'tab-retain-disposed-spawn' })
@@ -133,7 +163,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
         tabsByWorktree: { 'wt-1': [{ id: 'tab-retain-disposed-spawn', ptyId: null }] }
       }
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+      )
       await flushAsyncTicks()
 
       const retain = createdTransportOptions[0]?.retainDisposedSpawn
@@ -161,11 +195,17 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('carries the pane placement onto its transport', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       transportFactoryQueue.push(createMockTransport())
       const placement = { kind: 'new-tab' } as const
       const deps = createDeps({ tabId: 'tab-placement', placement })
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
       await flushAsyncTicks()
 
       expect(createdTransportOptions[0]).toMatchObject({ placement })
@@ -173,12 +213,18 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('fresh-spawns normally when the pane worktree is not being deleted', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       // Use a unique tab ID to force fresh spawn, matching the skip control.
       const deps = createDeps({ tabId: 'tab-removal-control-spawn' })
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+      )
       await flushAsyncTicks()
 
       expect(transport.connect).toHaveBeenCalled()
@@ -187,6 +233,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     // A racing spawn, including under a removing parent worktree, must swallow main’s removal fence instead of flashing its raw banner.
     it('swallows a worktree-removal fence error instead of surfacing it', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE } =
         await import('../../../../shared/worktree/removal-fence-error')
       const transport = createMockTransport()
@@ -200,7 +248,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       transportFactoryQueue.push(transport)
       const deps = createDeps({ tabId: 'tab-fence-swallow' })
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks8)
+      )
       await flushAsyncTicks()
 
       // Require captured onError wiring before invoking it; optional invocation could falsely pass without exercising suppression.
@@ -214,6 +266,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('still surfaces non-fence spawn errors through the pane error sink', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       const capturedOnError: { current: ((message: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -225,7 +279,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       transportFactoryQueue.push(transport)
       const deps = createDeps({ tabId: 'tab-real-error-surface' })
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
+      )
       await flushAsyncTicks()
 
       expect(capturedOnError.current).toBeTypeOf('function')
@@ -263,6 +321,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('threads the resolved local project runtime into IPC terminal transport options', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -276,7 +336,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
         projects: [{ id: 'repo1', localWindowsRuntimePreference: { kind: 'windows-host' } }]
       }
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks10)
+      )
       await flushAsyncTicks()
 
       expect(createdTransportOptions[0]?.projectRuntime).toEqual({
@@ -293,6 +357,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('keeps an explicit host fallback out of the project runtime', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -306,7 +372,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
         }
       }
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks11)
+      )
       await flushAsyncTicks()
 
       expect(createdTransportOptions[0]?.projectRuntime).toBeUndefined()
@@ -314,6 +384,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('spawns a Floating agent on native Windows beside an active WSL project', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks12 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { createIpcPtyTransport } = await import('./pty-transport')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const transport = createMockTransport()
@@ -341,12 +413,15 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       connectPanePty(
         createPane(1) as never,
         createManager(1) as never,
-        createDeps({
-          tabId: 'tab-floating-agent',
-          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-          cwd: 'C:\\Users\\alice',
-          startup: { launchAgent: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            tabId: 'tab-floating-agent',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            cwd: 'C:\\Users\\alice',
+            startup: { launchAgent: 'codex' }
+          }) as never,
+          agentTitleMocks12
+        )
       )
       await flushAsyncTicks()
 
@@ -362,6 +437,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('observes live terminal GitHub PR URLs before agent completion', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks13 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -372,7 +449,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks13)
+      )
       await flushAsyncTicks()
 
       capturedDataCallback.current?.('Created https://github.com/acme/orca/pull/42\r\n')
@@ -390,6 +471,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('surfaces an actionable error when a Codex backfill timeout drops to the shell', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks14 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -404,7 +487,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
         startup: { command: 'codex', launchAgent: 'codex' }
       })
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks14)
+      )
       await flushAsyncTicks()
       capturedDataCallback.current?.('timed out waiting for state db back')
       capturedDataCallback.current?.('fill\r\n')
@@ -418,12 +505,18 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     it('drops keystrokes while the replay guard is engaged, then forwards once it releases', async () => {
       // A stuck replay guard caused reconnect input lockout; verify suppression while armed and forwarding after release.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks15 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('ssh:ssh-1@@pty-1')
       transportFactoryQueue.push(transport)
       const deps = createDeps()
 
-      connectPanePty(pane as never, createManager(1, 1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1, 1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks15)
+      )
       await flushAsyncTicks()
 
       transport.sendInput.mockClear()
@@ -438,6 +531,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('preserves classified user input during replay while suppressing synthetic replies', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks16 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const userInputListeners = new Set<() => void>()
       Object.assign(pane.terminal, {
@@ -459,7 +554,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
           deferred.push(() => forward(data))
         }
       })
-      connectPanePty(pane as never, createManager(1, 1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1, 1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks16)
+      )
       await flushAsyncTicks()
       transport.sendInput.mockClear()
       deps.replayingPanesRef.current.set(pane.id, 1)
@@ -514,6 +613,8 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('settles a queued startup only after the pane binds its spawned PTY', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks17 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-resume')
       transportFactoryQueue.push(transport)
       const onStartupBound = vi.fn()
@@ -525,7 +626,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       connectPanePty(
         createPane(1) as never,
         createManager(1) as never,
-        createDeps({ startup, onStartupBound }) as never
+        bindPaneAgentTitleMocks(createDeps({ startup, onStartupBound }) as never, agentTitleMocks17)
       )
 
       expect(onStartupBound).not.toHaveBeenCalled()

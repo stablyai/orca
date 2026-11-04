@@ -134,6 +134,10 @@ export function createRepoUpdateActions(
       const ownerTarget = getProjectSetupRuntimeTarget(ownerHostId)
       const updateChainKey = getRepoHostIdentityForParts(projectId, ownerHostId)
       const applyRepoUpdate = async () => {
+        // Why at dispatch: an earlier queued update (an account change) may legitimately replace the owner.
+        const sourceOwner = get().githubSourceCollections?.capture(
+          get().repos.find((r) => repoMatchesHostIdentity(r, projectId, ownerHostId)) ?? ownerRepo
+        )
         try {
           const sanitizedUpdates = sanitizeRepoUpdate(updates)
           const target = ownerTarget
@@ -160,8 +164,15 @@ export function createRepoUpdateActions(
               if (!matchesOwner) {
                 return r
               }
+              if (sourceOwner && !s.githubSourceCollections?.owns(sourceOwner)) {
+                return r
+              }
               if (updatedRepo) {
-                return adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+                return (
+                  s.githubSourceCollections?.adopt(
+                    adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+                  ) ?? adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+                )
               }
               let mergedRepo: Repo = r
               const {
@@ -216,7 +227,7 @@ export function createRepoUpdateActions(
               } else if (agentAccounts !== undefined) {
                 mergedRepo = { ...mergedRepo, agentAccounts }
               }
-              return mergedRepo
+              return s.githubSourceCollections?.adopt(mergedRepo) ?? mergedRepo
             })
             return {
               repos: nextRepos,

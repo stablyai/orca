@@ -1,7 +1,7 @@
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
-import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getProvider } from '../provider/registry'
 import {
   recoverFreshSpawnProviderRouting,
@@ -11,7 +11,7 @@ import {
   mintPtySessionId,
   ptySessionIdForAgentCreateOperation
 } from '../../../daemon/pty-session-id'
-import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
+import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
 import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
 import {
   applyRuntimeClaudeProfileTerminalEnv,

@@ -1,4 +1,7 @@
-import { getPRCommentGroupRoot, type PRCommentGroup } from '../../../shared/pr-comment-groups'
+import {
+  getPRCommentGroupRoot,
+  type PRCommentGroup
+} from '../../../shared/source-control/review-comments/pr-comment-groups'
 import type { PRComment } from '../../../shared/github/comment-types'
 
 /** How a comment group should read in the PR sidebar triage UI. */

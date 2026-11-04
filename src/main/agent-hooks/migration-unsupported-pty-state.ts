@@ -1,4 +1,4 @@
-import type { MigrationUnsupportedPtyEntry } from '../../shared/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 type MigrationUnsupportedPtyEvent =
   | { type: 'set'; entry: MigrationUnsupportedPtyEntry }

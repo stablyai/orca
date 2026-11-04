@@ -40,7 +40,8 @@ export const AGENT_LAUNCH_CALLER_PROFILES: readonly AgentLaunchCallerProfile[] =
   },
   {
     id: 'source-control-action',
-    caller: 'src/renderer/src/components/right-sidebar/runSourceControlAgentActionStart.ts',
+    caller:
+      'src/renderer/src/components/right-sidebar/source-control/ai/runSourceControlAgentActionStart.ts',
     args: {
       agent: 'codex',
       worktreeId: 'wt-1',

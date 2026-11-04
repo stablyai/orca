@@ -3,14 +3,14 @@ import { stat } from 'node:fs/promises'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import {
   getLocalWorktreePathAccess,
   toLocalWorktreeRuntimePath
 } from '../workspaces/removal/local-worktree-filesystem'
 import { isWorktreePathMissing } from '../workspaces/removal/worktree-removal-safety'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
-import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
+import { getRepoOwnedWorktreeMeta } from '../workspaces/catalog/worktree-metadata-ownership'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
   getRuntimeFolderWorkspaceRootId,

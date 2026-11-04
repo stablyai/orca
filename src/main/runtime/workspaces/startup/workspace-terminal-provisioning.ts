@@ -6,7 +6,7 @@ import type { WorktreeTerminalProvisioningHost } from '../../runtime-worktree-te
 import type { WorktreeStartupReadinessHost } from '../../runtime-worktree-startup-readiness'
 import { prefetchWorktreeCreateBase } from '../../../workspaces/creation/worktree-create-base-prefetch'
 import { prepareWorktreeCreateForRepo } from '../../../workspaces/creation/preparation/worktree-create-preparation'
-import { getWorktreeCreatePrefetchGitOptions } from '../../../project-runtime-git-options'
+import { getWorktreeCreatePrefetchGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   resolveWorktreeStartupClaudeAccount,
   worktreeStartupClaudeAccountTarget

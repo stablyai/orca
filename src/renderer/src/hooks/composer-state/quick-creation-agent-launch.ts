@@ -5,7 +5,7 @@ import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
 import { findLaunchRepo, resolveLaunchClaudeAccountId } from '@/lib/claude-launch-account'
 import { chooseClaudeLaunchAccountIdForRepo } from '@/components/claude-account-prompt/choose-claude-launch-account'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 export type QuickAgentLaunch = {
   /** The account the startup runs on: the prompt's pick, else the project's saved account. */

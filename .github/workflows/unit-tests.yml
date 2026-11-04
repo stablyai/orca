@@ -30,6 +30,10 @@ on:
         description: JSON array of shard assignments, produced by unit-plan.yml.
         required: true
         type: string
+      download_selection_plan:
+        description: Download an applied selection plan; full runs discover and shard the entire inventory.
+        default: true
+        type: boolean
 
       module_cache:
         description: Transform cache policy (off, cold producer, or warm restore).
@@ -126,9 +130,11 @@ jobs:
         if: steps.module-cache.outputs.key != ''
         env:
           ORCA_UNIT_CACHE_RESTORE_HIT: ${{ steps.module-cache-restore.outputs.cache-matched-key != '' }}
+          ORCA_UNIT_CACHE_MODE: ${{ inputs.module_cache }}
         run: node config/scripts/ci-unit-module-cache.mjs prepare
 
       - uses: actions/download-artifact@v8
+        if: inputs.download_selection_plan
         continue-on-error: true
         with:
           name: unit-selection-attempt-${{ github.run_attempt }}

@@ -5,6 +5,7 @@ import {
   type FeatureInteractionState
 } from '../../../../shared/feature-interactions'
 import { useAppStore } from '@/store'
+import { isContextualTourSessionConsumed } from '@/store/slices/ui/ui-slice-tour-actions'
 
 const TOUR_SOURCES = {
   'workspace-board': 'workspace_board_visible',
@@ -74,7 +75,7 @@ export function useContextualTour(
   )
   const contextualToursSeenIds = useAppStore((s) => s.contextualToursSeenIds)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
-  const contextualTourShownThisSession = useAppStore((s) => s.contextualTourShownThisSession)
+  const contextualToursStartedThisSession = useAppStore((s) => s.contextualToursStartedThisSession)
   const contextualToursOnboardingVisible = useAppStore((s) => s.contextualToursOnboardingVisible)
   const contextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.contextualToursBlockingSurfaceVisible
@@ -167,8 +168,11 @@ export function useContextualTour(
       contextualToursOnboardingVisible ||
       contextualToursBlockingSurfaceVisible ||
       activeContextualTourId !== null ||
-      contextualTourShownThisSession ||
-      contextualToursSeenIds.includes(id)
+      contextualToursSeenIds.includes(id) ||
+      isContextualTourSessionConsumed(
+        { contextualToursSeenIds, contextualToursStartedThisSession },
+        id
+      )
     ) {
       return
     }
@@ -178,7 +182,7 @@ export function useContextualTour(
     let requestPending = false
     let cancelled = false
     const request = (): void => {
-      if (frame !== null || requestPending) {
+      if (cancelled || frame !== null || requestPending) {
         return
       }
       requestPending = true
@@ -192,14 +196,14 @@ export function useContextualTour(
         getContextualToursSeenIds: () => useAppStore.getState().contextualToursSeenIds
       }).then((shouldRequest) => {
         requestPending = false
-        if (!shouldRequest) {
+        if (cancelled || !shouldRequest) {
           return
         }
         attempts += 1
         frame = window.requestAnimationFrame(() => {
           frame = null
           const latestSnapshot = enabledInteractionSnapshotRef.current
-          if (useAppStore.getState().contextualToursSeenIds.includes(id)) {
+          if (cancelled || useAppStore.getState().contextualToursSeenIds.includes(id)) {
             return
           }
           requestContextualTour(
@@ -248,7 +252,7 @@ export function useContextualTour(
     contextualToursBlockingSurfaceVisible,
     activeModal,
     contextualToursAutoEligible,
-    contextualTourShownThisSession,
+    contextualToursStartedThisSession,
     contextualToursOnboardingVisible,
     contextualToursSeenIds,
     enabled,

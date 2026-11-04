@@ -3,12 +3,12 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { relativePathInsideRoot } from '../../shared/cross-platform-path'
 import { APPIMAGE_NODE_RUNTIME_SEGMENTS } from '../../shared/appimage-node-runtime'
-import { resolveAppImageRuntimeIdentity } from '../appimage-runtime-identity'
+import { resolveAppImageRuntimeIdentity } from '../updater/linux-package/appimage-runtime-identity'
 import {
   isAppImageExtractionComplete,
   resolveAppImageExtractedRoot
 } from '../cli/appimage-extracted-root'
-import { envWithoutAppImageRuntime } from '../pty/appimage-terminal-env'
+import { envWithoutAppImageRuntime } from '../pty/shell-startup/appimage-terminal-env'
 import type { DurableDaemonScopeCommand } from './daemon-cgroup-scope'
 
 export type AppImageGenerationDaemonLaunch = {

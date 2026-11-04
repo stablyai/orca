@@ -1,3 +1,4 @@
+import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import {
@@ -5,7 +6,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { NativeChatComposerDraftOwner } from './native-chat-composer-draft-storage'
 
 type SetupHandle = { scopeKey: string; active: boolean; readonly initialScope: string }
@@ -14,7 +15,7 @@ export type LaunchDraftSource = NativeChatComposerDraftOwner & {
   agent: string
   origin: string
   /** Authored options per slot: the plain row's empty slot, or a search preset's own. */
-  options?: Map<string, AgentPickerDraft>
+  options?: Map<string, AgentPickerRetainedSetup>
   references: Map<string, string>
   handles: Map<string, SetupHandle>
 }
@@ -231,7 +232,7 @@ export function captureLaunchDraftDestination(
   }
 }
 export function readLaunchSetupOptions(scope: string, slot = ''): AgentPickerDraft | undefined {
-  return launchDraftSource(scope)?.options?.get(slot)
+  return launchDraftSource(scope)?.options?.get(slot)?.draft
 }
 export function clearLaunchDraftSourcesForTests(): void {
   handles.clear()

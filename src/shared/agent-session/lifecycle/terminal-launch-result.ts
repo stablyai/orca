@@ -1,10 +1,13 @@
-import type { AgentStatusCacheIdentity, RefusedPaneResume } from '../../agent-status-ipc-payload'
+import type {
+  AgentStatusCacheIdentity,
+  RefusedPaneResume
+} from '../../agent-status/contracts/agent-status-ipc-payload'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from './agent-session-resume'
-import type { TuiAgent } from '../../tui-agent'
+import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 /** A host home check for this exact saved continuation, not a terminal writer claim. */
 export type SavedResumeDecision = {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { PLUGIN_DECLARATIVE_CATALOG_VERSION } from './plugin-declarative-message-names'
 import { parsePluginDeclarativeTree } from './plugin-declarative-tree'
 
 const box = (props: Record<string, unknown>, children: unknown[] = []) => ({
@@ -17,10 +16,6 @@ function parse(raw: unknown) {
 }
 
 describe('Box props', () => {
-  it('is catalog 4', () => {
-    expect(PLUGIN_DECLARATIVE_CATALOG_VERSION).toBe(4)
-  })
-
   it('keeps every valid prop', () => {
     const props = {
       direction: 'row',

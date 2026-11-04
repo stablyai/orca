@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { resolveProjectClaudeAccount } from '../claude-accounts/project-claude-account-resolution'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 

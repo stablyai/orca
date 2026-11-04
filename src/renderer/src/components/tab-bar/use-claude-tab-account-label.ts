@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-account-types'
 import { claudeTabAccountLabel, pinnedClaudeTabAccountId } from '@/lib/claude-tab-account-label'
 import { claudeAccountsTargetForRepo, findLaunchRepo } from '@/lib/claude-launch-account'

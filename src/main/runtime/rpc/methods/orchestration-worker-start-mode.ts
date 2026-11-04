@@ -5,14 +5,15 @@ import {
   downgradeAgentLaunchModeForHost,
   readAgentLaunchModeSettings,
   resolveAgentLaunchModeOnHost,
-  type AgentLaunchModeReceipt,
   type AgentLaunchModeSettings,
   type AgentLaunchModeVocabulary
 } from '../../../agent-launch/agent-launch-mode'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+
+import type { AgentLaunchModeReceipt } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
-export type WorkerStartModeReceipt = AgentLaunchModeReceipt
+type WorkerStartModeReceipt = AgentLaunchModeReceipt
 
 /** Keep orchestration's exact worker/reused-terminal wording; receipts are read beside dispatch records. */
 export const WORKER_START_VOCABULARY: AgentLaunchModeVocabulary = {

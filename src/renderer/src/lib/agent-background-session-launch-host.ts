@@ -13,7 +13,7 @@ import {
 } from '@/lib/execution-host-facts'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { launchHostIsRemote } from '../../../shared/agent-launch-remote'
+import { launchHostIsRemote } from '../../../shared/agent-launch/startup/agent-launch-remote'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,

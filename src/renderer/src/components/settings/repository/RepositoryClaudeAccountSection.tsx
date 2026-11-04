@@ -4,13 +4,13 @@ import type { ClaudeManagedAccountSummary } from '../../../../../shared/managed-
 import type { RepoAgentAccounts } from '../../../../../shared/claude/project-claude-account-preference'
 import { repoAgentAccountsEqual } from '../../../../../shared/claude/project-claude-account-preference'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
-import { SearchableSetting } from '../SearchableSetting'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { useAppStore } from '../../../store'
 import { claudeAccountsTargetForRepo } from '@/lib/claude-launch-account'
 import { fetchProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
-import { providerAccountMatchesView } from '../provider-account-visibility'
+import { providerAccountMatchesView } from '../../provider-accounts/provider-account-visibility'
 import { translate } from '@/i18n/i18n'
-import { searchKeywords } from '../settings-search-keywords'
+import { searchKeywords } from '../search/settings-search-keywords'
 import {
   ASK_VALUE,
   DEFAULT_VALUE,

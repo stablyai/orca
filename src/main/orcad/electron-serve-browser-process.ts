@@ -5,8 +5,8 @@ import {
 import {
   BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
   BrowserExpectedUrlMismatch
-} from '../../shared/browser-expected-url'
-import { browserExpectedUrlMismatchError } from '../browser/browser-expected-page-url'
+} from '../../shared/browser/client-hosting/browser-expected-url'
+import { browserExpectedUrlMismatchError } from '../browser/cdp/input/browser-expected-page-url'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { BrowserError } from '../browser/browser-error'

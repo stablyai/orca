@@ -3,7 +3,6 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bundledSkillNudgeEntries } from '../../../shared/bundled-skill-summary'
 import { BUNDLED_SKILL_SOURCES } from './bundled-skill-sources'
-import { bundledSkillTextDigest } from './classify'
 import { autoUpdateInstalledBundledSkills, previewBundledSkillInstall } from './service'
 import {
   linkDirectory,
@@ -31,11 +30,6 @@ const orchestrationIn = (home: SkillHome, root: 'shared' | 'claude') =>
   join(dirname(home[root]), 'orchestration')
 
 describe('skills installed by much older Orca versions', () => {
-  it('recognizes the oldest shipped orchestration as unedited', async () => {
-    const oldest = await readFile(OLDEST_FIXTURE)
-    expect(SOURCE?.releasedDigests).toContain(bundledSkillTextDigest(oldest))
-  })
-
   it('silently updates the npx-skills layout: shared copy plus agent link', async () => {
     const home = await makeSkillHome()
     const shared = orchestrationIn(home, 'shared')

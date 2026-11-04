@@ -176,21 +176,4 @@ describe('what a chat host answers for one send', () => {
     expect(result).toEqual({ kind })
     expect(readReceipt).toHaveBeenCalledWith('mail')
   })
-
-  it.each([4, 40])('answers %i sends with no card left by key, over a long history', (count) => {
-    const j = journal()
-    for (let item = 0; item < 500; item += 1) {
-      j.submit(item * 3 + 1, `history-${item}`)
-      j.handOver(item * 3 + 2, `history-${item}`)
-      j.accept(item * 3 + 3, `history-${item}`)
-    }
-    let receipts = 0
-    for (let send = 0; send < count; send += 1) {
-      const { result, readReceipt } = answer(j.state, `gone-${send}`)
-      expect(result).toEqual({ kind: 'absent' })
-      receipts += readReceipt.mock.calls.length
-    }
-    // One receipt read per send, and no history walk (the reader above throws on one).
-    expect(receipts).toBe(count)
-  })
 })

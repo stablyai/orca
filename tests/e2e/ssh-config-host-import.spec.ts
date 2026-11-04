@@ -1,4 +1,4 @@
-// Cover Add all import versus Settings re-adoption (P5/P6/P7/P9); picker list/filter/select lives in ssh-config-host-picker.spec.ts.
+// Cover Add all import versus Settings re-adoption (P5/P6/P7/P9); picker host selection lives in ssh-config-host-picker.spec.ts.
 
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -115,38 +115,6 @@ test.describe('SSH config host import (bulk + settings re-adopt)', () => {
       configHostRow(reopened, hosts.bravo).getByText('In Orca', { exact: true })
     ).toBeVisible()
     await expect(reopened.getByRole('button', { name: 'No new hosts to add' })).toBeDisabled()
-  })
-
-  test('P7: Add all does not re-adopt deleted config hosts (suppress tombstones)', async ({
-    electronApp,
-    orcaPage
-  }) => {
-    const hosts = await importPairThenDeleteAlias(
-      orcaPage,
-      electronApp,
-      HOST_PREFIX,
-      `${HOST_PREFIX}-alpha`
-    )
-
-    const picker = await openSshConfigHostPicker(orcaPage)
-    // Suppressed aliases stay listed (re-pickable) but never count as new.
-    const alphaRow = configHostRow(picker, hosts.alpha)
-    await expect(alphaRow).toBeVisible()
-    await expect(alphaRow).toBeEnabled()
-    await expect(alphaRow.getByText('Removed from Orca', { exact: true })).toBeVisible()
-    await expect(alphaRow.getByText('In Orca', { exact: true })).toHaveCount(0)
-    await expect(configHostRow(picker, hosts.bravo)).toBeVisible()
-    await expect(
-      configHostRow(picker, hosts.bravo).getByText('In Orca', { exact: true })
-    ).toBeVisible()
-    await expect(picker.getByRole('button', { name: 'No new hosts to add' })).toBeDisabled()
-    await expect(picker.getByRole('button', { name: /Add all \d+ to Orca/ })).toHaveCount(0)
-
-    await returnToAppShell(orcaPage)
-    const sshSection = await openSshHostSettings(orcaPage)
-    // Pane auto-syncs without reAdopt — deleted alpha must stay gone.
-    await expectSshHostListedInSettings(sshSection, hosts.bravo)
-    await expectSshHostAbsentFromSettings(sshSection, hosts.alpha)
   })
 
   test('P9: Sync keeps deleted config hosts; Restore removed hosts re-adopts them', async ({

@@ -2,7 +2,7 @@ import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanError,
   WorkspaceCleanupScanProgress
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { appendWorkspaceCleanupItems } from './workspace-cleanup-scan-primitives'
 
 const WORKSPACE_CLEANUP_PROGRESS_EMIT_INTERVAL_MS = 100

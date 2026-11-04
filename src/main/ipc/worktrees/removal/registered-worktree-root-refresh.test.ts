@@ -6,7 +6,7 @@ import type { Repo } from '../../../../shared/repo-types'
 const mocks = vi.hoisted(() => ({ graph: vi.fn(), stat: vi.fn(), realpath: vi.fn() }))
 vi.mock('node:fs', () => ({ realpathSync: (path: string) => path, statSync: mocks.stat }))
 vi.mock('node:fs/promises', () => ({ stat: mocks.stat, realpath: mocks.realpath }))
-vi.mock('../../../repo-worktrees', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreeGraph: mocks.graph,
   isRepoRoot: vi.fn(() => false)
 }))
@@ -14,10 +14,10 @@ vi.mock('../../worktree-logic', () => ({
   computeWorkspaceRoot: vi.fn(),
   getWorktreePathSettings: vi.fn()
 }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
   getWorktreeMirrorDistroForRuntime: vi.fn()
 }))
-import { resolveAuthorizedPath } from '../../filesystem/filesystem-auth'
+import { resolveAuthorizedPath } from '../../filesystem/access/filesystem-auth'
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,

@@ -2,7 +2,10 @@ import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test
 import { describe, expect, it } from 'vitest'
 import { harness, STRUCTURED_PREFERENCE } from './agent-launch-executor.test-fixture'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
-import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type {
+  AgentLaunchIntent,
+  AgentLaunchResult
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { readCreatedWorkspaceLaunch } from './agent-launch-created-workspace'
 

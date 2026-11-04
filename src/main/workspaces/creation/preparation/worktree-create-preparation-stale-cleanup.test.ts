@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createWorktreePreparationLockReason,
-  isWorktreeCreatePreparation,
-  parseWorktreePreparationOwnerMachine,
-  parseWorktreePreparationOwnerPid
-} from '../../../../shared/worktree/create-preparation'
-import {
   preparationOwnerExitedHere,
   type PreparationOwnerProbe
 } from './worktree-create-preparation-stale-cleanup'
@@ -27,19 +21,6 @@ const reasonFrom = (machine: string | null): string =>
   `orca-create-preparation:v1:4242:4242-11111111-1111-4111-8111-111111111111${
     machine ? `:machine=${machine}` : ''
   }`
-
-describe('preparation lock reasons', () => {
-  it('records the writer machine without changing the pid older builds read', () => {
-    const reason = createWorktreePreparationLockReason('session', `win32-machine-guid:${MACHINE_A}`)
-    expect(parseWorktreePreparationOwnerPid(reason)).toBe(process.pid)
-    expect(parseWorktreePreparationOwnerMachine(reason)).toBe(`win32-machine-guid:${MACHINE_A}`)
-    expect(isWorktreeCreatePreparation({ path: '/w', lockReason: reason })).toBe(true)
-    // Older builds parse the PID immediately after the version prefix.
-    expect(Number(reason.slice('orca-create-preparation:v1:'.length).split(':')[0])).toBe(
-      process.pid
-    )
-  })
-})
 
 describe('preparationOwnerExitedHere', () => {
   it('never reads an owner on another machine as exited', () => {

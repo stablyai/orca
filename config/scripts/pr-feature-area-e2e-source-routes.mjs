@@ -17,7 +17,7 @@ function featureRoute(id, specs, prefixes) {
 export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   featureRoute(
     'feature.automations-ui',
-    ['automation-prompt-disclosure', 'automation-runs-dashboard'],
+    ['automation-prompt-disclosure'],
     [`${COMPONENTS}automations/`]
   ),
   featureRoute(
@@ -61,8 +61,17 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     [
       'src/main/ai-vault/',
       'src/main/ai-vault-search/',
-      `${COMPONENTS}right-sidebar/ai-vault-`,
-      `${COMPONENTS}right-sidebar/AiVault`
+      `${COMPONENTS}right-sidebar/ai-vault/accounts/AiVault`,
+      `${COMPONENTS}right-sidebar/ai-vault/accounts/ai-vault-`,
+      `${COMPONENTS}right-sidebar/ai-vault/panel/AiVault`,
+      `${COMPONENTS}right-sidebar/ai-vault/scanning/AiVault`,
+      `${COMPONENTS}right-sidebar/ai-vault/scanning/ai-vault-`,
+      `${COMPONENTS}right-sidebar/ai-vault/scope/ai-vault-`,
+      `${COMPONENTS}right-sidebar/ai-vault/search/AiVault`,
+      `${COMPONENTS}right-sidebar/ai-vault/search/ai-vault-`,
+      `${COMPONENTS}right-sidebar/ai-vault/session-actions/ai-vault-`,
+      `${COMPONENTS}right-sidebar/ai-vault/session-list/AiVault`,
+      `${COMPONENTS}right-sidebar/ai-vault/session-list/ai-vault-`
     ]
   ),
   featureRoute(
@@ -87,7 +96,6 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['project-group-creation-visibility', 'project-group-manual-sort'],
     ['src/main/project-groups/', 'src/renderer/src/store/project-groups/']
   ),
-  featureRoute('feature.usage-overview', ['usage-overview'], [`${COMPONENTS}stats/`]),
   featureRoute(
     'feature.new-workspace',
     [

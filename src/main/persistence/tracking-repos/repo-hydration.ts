@@ -6,7 +6,7 @@ import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
 import { normalizeRepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
-import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
+import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeOrcadRetainedMarker } from '../../../shared/orcad-retained-marker'
 import {
   sanitizeForkSyncMode,

@@ -1,8 +1,8 @@
-import { readAgentEffortLevel } from '../../agent-effort-level'
-import type { AgentHookSource } from '../../agent-hook-relay'
-import type { AgentStatusState } from '../../agent-status-types'
-import type { AgentMainAgentStatus } from '../../main-agent-status'
-import type { TuiAgent } from '../../tui-agent'
+import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
+import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
+import type { AgentStatusState } from '../../agent-status/contracts/agent-status-types'
+import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
+import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 export const RESUMABLE_TUI_AGENTS = [
   'claude',

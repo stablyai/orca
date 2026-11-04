@@ -11,15 +11,15 @@ vi.mock('@/i18n/localized-catalog', () => ({
       loader()
 }))
 
-vi.mock('./settings-search-keywords', () => ({
+vi.mock('./search/settings-search-keywords', () => ({
   translateSearchKeyword: (_key: string, fallback: string) => [fallback]
 }))
 
-import { matchesSettingsSearch } from './settings-search'
+import { matchesSettingsSearch } from './search/settings-search'
 import {
   getAccountsClaudeSearchEntries,
   getAskClaudeAccountPerProjectSearchKeywords
-} from './accounts-claude-search'
+} from './accounts/accounts-claude-search'
 
 describe('getAccountsClaudeSearchEntries ask-per-project entry', () => {
   it('stays visible under the same query that opens the Claude section', () => {

@@ -1,13 +1,13 @@
-import type { AgentIdleEdgeMeta } from '../../../../../shared/terminal-output-side-effects'
+import type { AgentIdleEdgeMeta } from '../../../../../shared/terminal/output/terminal-output-side-effects'
 import { idleEdgeSettledAtRest, isClaudeIdleEdge } from '@/lib/agent-idle-edge'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import { useAppStore } from '@/store'
-import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-types'
+import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
 } from '../agent-completion-coordinator-types'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-status/title/agent-title-owner'
 import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
   AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS,

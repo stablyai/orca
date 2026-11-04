@@ -1,4 +1,4 @@
-import type { AgentLaunchModeReason } from '../../shared/agent-launch-intent'
+import type { AgentLaunchModeReason } from '../../shared/agent-launch/contracts/agent-launch-intent'
 
 export type AgentLaunchDowngradeReason = Exclude<
   AgentLaunchModeReason,

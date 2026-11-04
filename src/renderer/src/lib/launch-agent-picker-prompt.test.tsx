@@ -9,7 +9,7 @@ import {
   structuredLaunchIntent,
   launchErrorMocks
 } from './launch-agent-structured-chat-test-fixture'
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import { useTabAgentMenuLaunch } from '@/components/tab-bar/QuickLaunchButton'
@@ -31,7 +31,7 @@ import {
   changePrompt,
   promptEditor
 } from '@/components/native-chat/native-chat-prompt-editor.test-support'
-import type { AgentPickerEntry } from '../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import * as launcher from './launch-agent-in-new-tab'
 import type * as StructuredLaunch from './launch-structured-agent-session'
 import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
@@ -114,7 +114,7 @@ function editor(): HTMLElement {
   return document.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
 }
 function button(name: string): HTMLButtonElement {
-  return [...document.querySelectorAll('button')].find((button) => button.textContent === name)!
+  return screen.getByRole('button', { name })
 }
 
 it.each(
@@ -369,8 +369,9 @@ it('holds an actual clipboard-image paste until its save settles before launchin
   }
 })
 
-import * as hostPreferences from '@/components/settings/use-host-agent-launch-preferences'
-import * as launchSettings from '@/components/settings/agent-launch-settings-transport'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+import * as hostPreferences from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import * as launchSettings from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import * as webEnvironment from '@/runtime/web-runtime-session-environment'
 import * as worktreeHost from '@/lib/worktree-runtime-owner'
 import * as terminalCreate from '@/runtime/web-runtime-terminal-create-operation'
@@ -402,7 +403,7 @@ it.each([
         ...(failure === 'paste' ? { promptDelivery: 'submit-after-ready' } : {})
       })
     )
-    const preferences = Promise.withResolvers<hostPreferences.AgentLaunchPreferences>()
+    const preferences = Promise.withResolvers<AgentLaunchPreferences>()
     vi.spyOn(hostPreferences, 'ensureAgentLaunchPreferences').mockImplementation(
       () => preferences.promise
     )

@@ -2,14 +2,14 @@ import { useCallback } from 'react'
 import { Loader2, Server, ServerOff } from 'lucide-react'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { Button } from '@/components/ui/button'
-import { SshHostNodeMirrorAction } from '@/components/settings/SshHostNodeMirrorAction'
-import { SshHostMoveAnywayButton } from '@/components/settings/SshHostMoveAnywayAction'
+import { SshHostNodeMirrorAction } from '@/components/settings/ssh/server-actions/SshHostNodeMirrorAction'
+import { SshHostMoveAnywayButton } from '@/components/settings/ssh/server-actions/SshHostMoveAnywayAction'
 import { OpenPlainSshTerminalButton } from '@/components/plain-ssh-terminal/OpenPlainSshTerminalButton'
 import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
-import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
+import { runWorktreeDelete } from '../sidebar/workspace-actions/deletion/delete-worktree-flow'
 import {
   connectRuntimeEnvironmentSshTarget,
   resyncRuntimeEnvironmentSshTargets

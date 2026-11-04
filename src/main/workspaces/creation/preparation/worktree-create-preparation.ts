@@ -1,7 +1,7 @@
-import { worktreePreparationGit } from '../../../git/worktree-create-git-executor'
+import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
-import type { ProjectRuntimeResolutionStore } from '../../../local-project-runtime-resolution'
+import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
 import type { Repo } from '../../../../shared/repo-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
@@ -11,8 +11,11 @@ import type {
   PreparedCheckoutReset,
   WorktreeCreatePhase
 } from '../../../../shared/worktree/create-timing-vocabulary'
-import type { AddWorktreeOptions, AddWorktreeResult } from '../../../git/worktree-operation-options'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktree-preparation-lock'
+import type {
+  AddWorktreeOptions,
+  AddWorktreeResult
+} from '../../../git/worktrees/worktree-operation-options'
+import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import {
   _resetPreparationPoolForTests,
   hasPendingPreparations,
@@ -32,11 +35,11 @@ import {
 import {
   discardPreparedWorktree,
   finalizePreparedWorktree
-} from '../../../git/worktree-create-preparation'
+} from '../../../git/worktrees/creation/worktree-create-preparation'
 import {
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
-} from '../../../project-runtime-git-options'
+} from '../../execution-host/project-runtime-git-options'
 import { computeWorkspaceRootAsync, getWorktreePathSettings } from '../../../ipc/worktree-logic'
 import {
   recordPreparationConsume,
@@ -126,6 +129,10 @@ async function prepareWorktreeCreateInBackground(
     getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
   )
   const canonicalBase = await canonicalBaseRef(repo.path, baseBranch, options)
+  // Project removal already released this repo's checkouts; arming one now would orphan it.
+  if (store.getRepo && !store.getRepo(repo.id)) {
+    return
+  }
   return startPreparation({
     repoPath: repo.path,
     workspaceRoot,

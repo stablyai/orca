@@ -7,7 +7,7 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import { computeWorkspaceRoot, getWorktreePathSettings } from '../../ipc/worktree-logic'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Repo } from '../../../shared/repo-types'
-import { parseWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
 
 export const WORKTREE_TRASH_DIR_NAME = '.orca-worktree-trash'

@@ -1,17 +1,23 @@
 import { useAppStore } from '@/store'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import type { ComposerModel } from './composer-model'
-import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
+import {
+  type AgentStartupPlan,
+  buildAgentDraftLaunchPlan,
+  buildAgentStartupPlan
+} from '../../../../shared/agent-launch/startup/tui-agent-startup'
+
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { withClaudeLaunchAccount } from '@/lib/claude-launch-account'
+import { getAgentLabel } from '@/lib/agent-catalog'
+import { translate } from '@/i18n/i18n'
 import {
   requireExecutionHostPlatform,
   type ExecutionHostPlatformFact
@@ -28,6 +34,8 @@ export type QuickComposerStartupInput = {
   isRemote: boolean
   telemetrySource: WorktreeCreationRequest['telemetrySource']
   claudeAccountId?: string
+  launchInputs?: WorktreeCreationRequest['launchInputs']
+  route?: WorktreeCreationRequest['agentLaunchRoute']
 }
 
 export type QuickComposerStartup = {
@@ -44,6 +52,8 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
       : resolveAgentStartupPlanInputs({
           agent,
           settings: settings ?? {},
+          agentArgs: input.launchInputs?.agentArgs,
+          sessionOptions: input.launchInputs?.sessionOptions,
           platform: requireExecutionHostPlatform(input.launchHost),
           shell: input.shell ?? undefined,
           isRemote: input.isRemote
@@ -85,6 +95,15 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
       ...startupPlan,
       launchConfig: withClaudeLaunchAccount(startupPlan.launchConfig, input.claudeAccountId)
     }
+  }
+  if (agent && input.route !== 'structured-native-chat' && !startupPlan) {
+    throw new Error(
+      translate(
+        'agentPicker.workspaceStartupFailed',
+        'Could not start {{agent}}. Check Arguments in this setup and try again.',
+        { agent: getAgentLabel(agent) }
+      )
+    )
   }
   const telemetry: AgentStartedTelemetry | null =
     agent === null

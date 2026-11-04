@@ -1,7 +1,7 @@
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { Automation } from '../../../../shared/automations-types'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 

@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => {
     group: vi.fn(),
     type: vi.fn(),
     state: {
+      agentStatusByPaneKey: {},
+      retainedAgentsByPaneKey: {},
       activeWorktreeId: 'wt-chat',
       activeWorkspaceExecutionHostId: 'local' as const,
       unifiedTabsByWorktree

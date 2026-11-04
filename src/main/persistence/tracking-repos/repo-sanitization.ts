@@ -1,6 +1,7 @@
 import type { RepoProjectHostSetupMethod } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
-import type { GitRemoteIdentity } from '../../../shared/git-remote-identity'
+import { editorFormatterSchema } from '../../../shared/editor-formatter'
+import type { GitRemoteIdentity } from '../../../shared/git/remotes/git-remote-identity'
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
@@ -71,6 +72,7 @@ export function sanitizeRepoUpdatesForPersistence<
     Pick<
       Repo,
       | 'badgeColor'
+      | 'editorFormatter'
       | 'repoIcon'
       | 'upstream'
       | 'gitRemoteIdentity'
@@ -87,6 +89,9 @@ export function sanitizeRepoUpdatesForPersistence<
   }
 >(updates: T): T {
   const sanitized = { ...updates }
+  if ('editorFormatter' in sanitized && sanitized.editorFormatter !== undefined) {
+    sanitized.editorFormatter = editorFormatterSchema.parse(sanitized.editorFormatter)
+  }
   if ('defaultJiraProject' in sanitized) {
     const reference = normalizeJiraProjectReference(sanitized.defaultJiraProject)
     if (reference === undefined) {

@@ -2,10 +2,10 @@
 
 import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
-import type { ClosedTerminalTabTombstone } from '../closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstone } from './closed-terminal-tab-tombstones'
 import type { Tab, TabGroup } from '../tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
-import type { PersistedOpenFile } from '../workspace-session-state-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
+import type { PersistedOpenFile } from '../workspace-session/workspace-session-state-types'
 import {
   SESSION_FIELD_OWNERS,
   type BrowserTabLiveState,

@@ -13,8 +13,8 @@ import type {
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session/failures/agent-session-failure-words'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { ConnectAcpAgent } from './acp-structured-connection'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 // Grace begins at cancellation, before process close.
 export const ACP_STOP_GRACE_MS = 4_000

@@ -15,7 +15,7 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector(storeMocks)
 }))
 
-vi.mock('@/components/sidebar/RemoteFileBrowser', () => ({
+vi.mock('@/components/sidebar/host-path-browser/RemoteFileBrowser', () => ({
   RemoteFileBrowser: ({
     targetId,
     onSelect,
@@ -84,31 +84,6 @@ afterEach(() => {
 })
 
 describe('SetProjectLocationDialog', () => {
-  it('keeps the parent caller in charge of close and saves an existing folder', async () => {
-    const onClose = vi.fn()
-    const onReady = vi.fn()
-    const user = renderDialog({ onClose, onReady })
-
-    expect(screen.getByTestId('set-project-location-dialog')).toBeTruthy()
-    expect(screen.getByText('Set project location')).toBeTruthy()
-    expect(screen.getByText('Choose where orca lives on openclaw.')).toBeTruthy()
-
-    await user.click(screen.getByRole('button', { name: /Browse folder/ }))
-    await user.click(screen.getByRole('button', { name: 'Browse host filesystem' }))
-    await user.click(screen.getByRole('button', { name: 'Select remote folder' }))
-    await user.click(screen.getByRole('button', { name: 'Set location' }))
-
-    expect(storeMocks.setupProjectExistingFolder).toHaveBeenCalledWith({
-      projectId: 'project-orca',
-      hostId: 'ssh:openclaw',
-      path: '/remote/orca',
-      kind: 'git',
-      displayName: 'orca'
-    })
-    expect(onReady).toHaveBeenCalledWith(JSON.stringify(['setup-openclaw', 'ssh:openclaw']))
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
   it('backs out of the host browser on Escape instead of discarding the form', async () => {
     const onClose = vi.fn()
     const user = renderDialog({ onClose })

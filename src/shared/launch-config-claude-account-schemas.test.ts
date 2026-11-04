@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { parseWorkspaceSession } from './workspace-session-schema'
+import { parseWorkspaceSession } from './workspace-session/workspace-session-schema'
 import { TerminalCreateParams } from './rpc-contract/terminal-unary-params'
 import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
 } from './rpc-contract/agent-session-params'
-import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
+import { buildSleepingAgentLaunchConfig } from './agent-session/lifecycle/sleeping-agent-launch-config'
 import { ACTIVE_CLAUDE_ACCOUNT } from './claude/project-claude-account-preference'
 
 function persistedLaunchConfig(claudeAccountId: unknown) {

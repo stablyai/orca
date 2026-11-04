@@ -2,7 +2,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-account-types'
 import type { RepoAgentAccounts } from '../../../../shared/claude/project-claude-account-preference'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -13,7 +13,7 @@ import {
   resolveLaunchClaudeAccountId
 } from '@/lib/claude-launch-account'
 import { fetchProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
-import { providerAccountMatchesView } from '../settings/provider-account-visibility'
+import { providerAccountMatchesView } from '../provider-accounts/provider-account-visibility'
 import { requestClaudeAccountPrompt } from './claude-account-prompt-state'
 import { claudeAccountPinningUnsupportedReasonInState } from '../settings/repository-claude-account'
 

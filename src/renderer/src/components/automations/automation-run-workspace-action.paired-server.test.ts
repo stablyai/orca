@@ -13,7 +13,7 @@ import type {
 } from '../../../../shared/automation-owner-ref'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   makeAutomation,
   makeAutomationListRow,
@@ -23,8 +23,9 @@ import {
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '../sidebar/folder-workspace-composer-submit-fixtures'
-import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
+} from '../sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
+import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { getRuntimeEnvironmentIdForFolderWorkspace } from '@/lib/folder-workspace-runtime-owner'
 import { hostStableKey, toStableCatalogRef } from '../../../../shared/automation-owner-key'
 import { capturedAutomationOwnerKey } from './automation-captured-owner'

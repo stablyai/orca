@@ -4,7 +4,7 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
-import { copyLaunchConfig } from '../../../shared/agent-resume-record-from-status'
+import { copyLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 
 type CreateTabOptions = { pendingStartup?: { launchConfig?: SleepingAgentLaunchConfig } }
 const mockCreateTab = vi.fn(

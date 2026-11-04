@@ -5,7 +5,7 @@ import { createHostedReviewSlice } from './hosted-review'
 import './hosted-review-card-refresh'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import { HostedReviewCreationEligibilityTimeoutError } from './hosted-review-cache-state'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import '../../../../shared/constants'
 
 const runtimeRpc = vi.hoisted(() => ({

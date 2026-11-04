@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { claudePinnedLaunchError } from '../../../shared/claude/claude-pinned-launch-error'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 
 const { mockCreateTerminal, mockToastError } = vi.hoisted(() => ({
   mockCreateTerminal: vi.fn(),
@@ -21,11 +21,11 @@ vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeAgentSessionTerminalWithLaunchDraft: vi.fn()
 }))
 
-vi.mock('@/components/settings/agent-launch-settings-transport', () => ({
+vi.mock('@/runtime/agent-launch-settings/agent-launch-settings-transport', () => ({
   hostSupportsLaunchChoices: vi.fn(async () => false)
 }))
 
-vi.mock('@/components/settings/use-host-agent-launch-preferences', () => ({
+vi.mock('@/runtime/agent-launch-settings/use-host-agent-launch-preferences', () => ({
   ensureAgentLaunchPreferences: vi.fn(async () => ({}))
 }))
 

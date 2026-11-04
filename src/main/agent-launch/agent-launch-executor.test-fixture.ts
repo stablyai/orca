@@ -2,7 +2,7 @@ import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test
 import { vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import type { AgentLaunchSurfaceFactory } from './agent-launch-surface-factories'
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
+import type { AgentLaunchIntent } from '../../shared/agent-launch/contracts/agent-launch-intent'
 
 export const STRUCTURED_PREFERENCE = {
   nativeChatProviders: EVERY_AGENT_CHAT

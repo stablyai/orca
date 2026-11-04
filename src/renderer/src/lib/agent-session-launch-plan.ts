@@ -1,7 +1,6 @@
-import { isPinnableClaudeAccountId } from '../../../shared/claude/project-claude-account-preference'
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/structured-agent-session-create'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   isLocalExecutionHost,
   parseExecutionHostId,
@@ -23,7 +22,10 @@ import {
   type AgentLaunchRoute,
   type AgentLaunchRoutingInput
 } from '@/lib/agent-launch-routing'
-import { findLaunchRepo, resolveLaunchClaudeAccountId } from '@/lib/claude-launch-account'
+import {
+  launchPinsClaudeAccount,
+  type ClaudeAccountRouteArgs
+} from '@/lib/agent-session-launch-claude-account'
 import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-launch-prompt-delivery'
 import {
   beginStructuredAgentLaunchSettlement,
@@ -38,11 +40,6 @@ import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilit
 
 export type AgentLaunchSurface = 'chat' | 'terminal'
 
-type ClaudeAccountRouteArgs = AgentLaunchRouteArgs & {
-  /** A one-time account choice; the project's saved account applies when omitted. */
-  claudeAccountId?: string
-}
-
 export type AgentSessionLaunchRequest = ClaudeAccountRouteArgs & {
   requestId: AgentLaunchRequestId
   requestedSurface?: AgentLaunchSurface
@@ -53,6 +50,7 @@ export type AgentSessionLaunchRequest = ClaudeAccountRouteArgs & {
   promptKeptByCaller?: true
   /** Options this launch asks for over the saved chat defaults, e.g. an action's model. */
   launchOptions?: Readonly<Record<string, string>>
+  chatLaunchOptions?: Readonly<Record<string, string>>
 }
 
 /** Carry the decided route and delivery fields in memory so post-create launches and same-session retries reuse them without re-resolving. */
@@ -70,6 +68,7 @@ export type AgentSessionLaunchVerdict = {
   promptKeptByCaller?: true
   draftFromScope?: string
   launchOptions?: Readonly<Record<string, string>>
+  chatLaunchOptions?: Readonly<Record<string, string>>
 }
 
 export type AgentSessionStructuredFeasibilityRequest = AgentLaunchRouteArgs & {
@@ -108,7 +107,9 @@ function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): Structured
     ...(verdict.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
     ...(verdict.draftFromScope ? { draftFromScope: verdict.draftFromScope } : {}),
     ...(verdict.executionHostId ? { executionHostId: verdict.executionHostId } : {}),
-    ...(verdict.launchOptions ? { launchOptions: verdict.launchOptions } : {})
+    ...(verdict.chatLaunchOptions !== undefined || verdict.launchOptions !== undefined
+      ? { launchOptions: verdict.chatLaunchOptions ?? verdict.launchOptions }
+      : {})
   }
 }
 
@@ -155,6 +156,13 @@ function beginStructuredPlanLaunch(
 export function adoptAgentSessionLaunchVerdict(
   verdict: AgentSessionLaunchVerdict
 ): AgentSessionLaunchPlan {
+  verdict = {
+    ...verdict,
+    ...(verdict.launchOptions !== undefined ? { launchOptions: { ...verdict.launchOptions } } : {}),
+    ...(verdict.chatLaunchOptions !== undefined
+      ? { chatLaunchOptions: { ...verdict.chatLaunchOptions } }
+      : {})
+  }
   return {
     ...verdict,
     begin: (hooks, target) => beginStructuredPlanLaunch(verdict, hooks, target),
@@ -171,18 +179,6 @@ export function structuredAgentSessionLaunchFeasible(
   const { settings, ...args } = request
   // Carry narrow settings on the built input so callers can name exact dependencies without a whole store object.
   return structuredAgentLaunchSupported({ ...buildAgentLaunchRouteInput(store, args), settings })
-}
-
-// Why: a structured session has no account-pinning path, so a pinned Claude launch runs in a terminal.
-function launchPinsClaudeAccount(
-  store: AgentLaunchRouteStore,
-  request: ClaudeAccountRouteArgs
-): boolean {
-  if (request.agent !== 'claude') {
-    return false
-  }
-  const repo = findLaunchRepo(store, request.workspace)
-  return isPinnableClaudeAccountId(resolveLaunchClaudeAccountId(repo, request.claudeAccountId))
 }
 
 function resolvePlannedRoute(
@@ -328,6 +324,9 @@ export function planAgentSessionLaunch(
     ...(request.resumeFrom ? { resumeFrom: request.resumeFrom } : {}),
     ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {}),
     ...(request.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
-    ...(request.launchOptions ? { launchOptions: request.launchOptions } : {})
+    ...(request.launchOptions ? { launchOptions: request.launchOptions } : {}),
+    ...(request.chatLaunchOptions !== undefined
+      ? { chatLaunchOptions: request.chatLaunchOptions }
+      : {})
   })
 }

@@ -2,8 +2,8 @@ import { translate } from '@/i18n/i18n'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
-import { SearchableSetting } from './SearchableSetting'
-import { getAskClaudeAccountPerProjectSearchKeywords } from './accounts-claude-search'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { getAskClaudeAccountPerProjectSearchKeywords } from './accounts/accounts-claude-search'
 
 export function ClaudeAskPerProjectSetting({
   settings,

@@ -1,21 +1,18 @@
 import type {
   AgentLaunchIntent,
   AgentLaunchResult,
-  AgentLaunchTarget
-} from '../../shared/agent-launch-intent'
+  AgentLaunchTarget,
+  AgentLaunchModeReceipt
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentLaunchModeHostRuntime } from './agent-launch-project-claude-account'
-import type {
-  readAgentLaunchModeSettings,
-  AgentLaunchModeReceipt,
-  AgentLaunchModeVocabulary
-} from './agent-launch-mode'
+import type { readAgentLaunchModeSettings, AgentLaunchModeVocabulary } from './agent-launch-mode'
 import type {
   AgentLaunchSurfaceFactory,
   AgentLaunchWorkspaceFactory
 } from './agent-launch-surface-factories'
 
 /** Persist the surface result before delivery so a host crash leaves an honest prompt receipt. */
-export type AgentLaunchPublishedSurface = AgentLaunchResult
+type AgentLaunchPublishedSurface = AgentLaunchResult
 
 type AgentLaunchExecutionBase = {
   runtime: AgentLaunchModeHostRuntime & Parameters<typeof readAgentLaunchModeSettings>[0]

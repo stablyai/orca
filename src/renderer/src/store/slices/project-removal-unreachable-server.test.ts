@@ -19,7 +19,7 @@ import {
   observeRuntimeHostStatusForPendingRemovals,
   resetPendingRuntimeRepoRemovalReplayForTests
 } from '../repos/pending-runtime-repo-removal-replay'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() }

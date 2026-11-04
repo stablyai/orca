@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { i18n } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
-import { renderClaudeAccountsSection } from './accounts-pane-claude-section'
-import type { AccountsPaneSectionModel } from './accounts-pane-types'
+import { renderClaudeAccountsSection } from './accounts/claude/accounts-pane-claude-section'
+import type { AccountsPaneSectionModel } from './accounts/accounts-pane-types'
 
 function buildModel(updateSettings: AccountsPaneSectionModel['updateSettings']) {
   const accountRuntime = { runtime: 'host' as const, wslDistro: null, label: 'This device' }

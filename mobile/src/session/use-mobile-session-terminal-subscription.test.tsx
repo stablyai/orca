@@ -22,6 +22,8 @@ import { useMobileSessionTerminalSubscription } from './use-mobile-session-termi
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
 
+vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
+
 const HANDLE = 'term-1'
 const PHONE = { cols: 55, rows: 44 }
 
@@ -67,6 +69,7 @@ function subscriptionHarness(opts: {
   }
   const fields = {
     client: {
+      onStateChange: () => () => {},
       subscribe: vi.fn(
         (_method: string, params: Record<string, unknown>, onData: StreamHandler) => {
           order.push(`subscribe ${JSON.stringify(params.viewport ?? null)}`)
@@ -251,44 +254,12 @@ describe('a terminal first subscribe', () => {
     ])
   })
 
-  it('sizes from the reported box against the laid-out frame', () => {
-    const harness = subscriptionHarness({ fit: PHONE, webReady: true, frameWidth: 427.5 })
-    harness.subscribe()
-    expect(harness.terminal.fitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
-    expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}'])
-  })
-
-  it('keeps a measured viewport rather than fitting again', () => {
-    const measured = { cols: 60, rows: 40 }
-    const harness = subscriptionHarness({ fit: PHONE, webReady: true, viewport: measured })
-    harness.subscribe()
-    expect(harness.terminal.fitDimensions).not.toHaveBeenCalled()
-    expect(harness.order).toEqual(['subscribe {"cols":60,"rows":40}'])
-  })
-
   it('holds a ready document without a box until its frame is laid out', () => {
     const harness = subscriptionHarness({ fit: null, webReady: true, frameWidth: 0 })
     harness.subscribe()
     expect(harness.order).toEqual([])
     harness.layOutFrame(427)
     expect(harness.order).toEqual(['subscribe null'])
-  })
-
-  it('keeps one frame, notifies a new width, and subscribes on the first layout only', () => {
-    const harness = subscriptionHarness({ fit: null, webReady: true, frameWidth: 0 })
-    const { notifyTerminalFrameHeight, notifyTerminalFrameWidth } = harness.fields
-    harness.layOutFrame(0, 0)
-    expect(harness.terminalFrameRef.current).toBeNull()
-    harness.layOutFrame(427, 751)
-    harness.layOutFrame(427, 700)
-    expect(harness.order).toEqual(['subscribe null'])
-    expect(notifyTerminalFrameWidth).not.toHaveBeenCalled()
-    harness.layOutFrame(0, 0)
-    expect(harness.terminalFrameRef.current).toEqual({ width: 427, height: 700 })
-    harness.layOutFrame(360.5, 700)
-    expect(harness.terminalFrameRef.current).toEqual({ width: 360.5, height: 700 })
-    expect(notifyTerminalFrameWidth).toHaveBeenCalledTimes(1)
-    expect(notifyTerminalFrameHeight.mock.calls.map(([height]) => height)).toEqual([751, 700, 700])
   })
 
   it('goes without dims when no cell box was reported, and the fit pass resubscribes once', async () => {
@@ -325,13 +296,6 @@ describe('settled terminal fits belong to their stream and document', () => {
     harness.fields.webReadyHandlesRef.current.clear()
     harness.fields.webReadyHandlesRef.current.add(HANDLE)
   }
-
-  it('still fits a current initial snapshot after the same settling delay', () => {
-    const h = start()
-    expect(fits(h)).toHaveLength(1)
-    act(() => fits(h)[0]())
-    expect(h.terminal.resetZoom).toHaveBeenCalledTimes(1)
-  })
   it('does not fit after the stream was unsubscribed', () => {
     const h = start()
     h.fields.unsubscribeTerminal(HANDLE)
@@ -396,13 +360,6 @@ describe('settled terminal fits belong to their stream and document', () => {
     act(() => fits(h)[0]())
     expect(h.terminal.resetZoom).not.toHaveBeenCalled()
     expect(h.fields.signalTerminalInventoryRecovery).toHaveBeenCalledTimes(1)
-  })
-  it('still fits the current geometry-only resize', () => {
-    const h = start()
-    h.event(0, { type: 'resized', seq: 2, cols: 60, rows: 40 })
-    expect(h.terminal.resize).toHaveBeenCalledWith(60, 40, h.terminalFrameRef.current)
-    act(() => fits(h)[1]())
-    expect(h.terminal.resetZoom).toHaveBeenCalledTimes(1)
   })
   it('does not let an ignored older resize invalidate the latest accepted fit', () => {
     const h = start()

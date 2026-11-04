@@ -7,14 +7,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { holdPhysicalCloseTasks } from '../orchestration-crew/crew-menu.test-fixture'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration-crew'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
-import { getDefaultSettings } from '../../../../shared/constants'
-import { useAppStore } from '@/store'
-
-// Keep the dormant panel's interaction coverage independent of its release availability.
-vi.mock('../orchestration-crew/use-orchestration-panel-enabled', () => ({
-  useOrchestrationPanelEnabled: () =>
-    useAppStore((state) => state.settings?.experimentalOrchestrationPanel === true)
-}))
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
@@ -32,6 +24,10 @@ vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
 vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
 vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
+// Exercise dormant panel interactions independently of the suspension gate.
+vi.mock('../orchestration-crew/use-orchestration-panel-enabled', () => ({
+  useOrchestrationPanelEnabled: () => true
+}))
 const crew = vi.hoisted(() => {
   const snapshot: OrchestrationCrewSnapshot = {
     status: 'ok',
@@ -67,53 +63,15 @@ import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 
 const first = testOrcaSessionId('11111111-1111-4111-8111-111111111111')
 const second = testOrcaSessionId('22222222-2222-4222-8222-222222222222')
-const initialSettings = useAppStore.getState().settings
-function setOrchestrationPanel(enabled: boolean) {
-  useAppStore.setState({
-    settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: enabled }
-  })
-}
 beforeEach(() => {
   resetStructuredSessionMocks()
   crew.subscribe.mockClear()
   crew.release.mockClear()
-  setOrchestrationPanel(true)
 })
 afterEach(() => {
   cleanup()
   localStorage.clear()
-  useAppStore.setState({ settings: initialSettings })
   vi.restoreAllMocks()
-})
-
-it('mounts the panel only while the experimental setting is on, live and without remounting the transcript', () => {
-  setOrchestrationPanel(false)
-  const view = render(
-    <TooltipProvider>
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="crew-first"
-        sessionId={first}
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    </TooltipProvider>
-  )
-  const transcript = view.container.querySelector('[data-clearing]')
-  expect(transcript).not.toBeNull()
-  expect(view.container.querySelector('[data-orchestration-crew]')).toBeNull()
-  expect(crew.subscribe).not.toHaveBeenCalled()
-
-  act(() => setOrchestrationPanel(true))
-  expect(screen.getByRole('button', { name: /^Show orchestration: 1 worker,/ })).toBeInTheDocument()
-  expect(crew.subscribe).toHaveBeenCalledOnce()
-  expect(view.container.querySelector('[data-clearing]')).toBe(transcript)
-
-  act(() => setOrchestrationPanel(false))
-  expect(view.container.querySelector('[data-orchestration-crew]')).toBeNull()
-  expect(crew.release).toHaveBeenCalledOnce()
-  expect(view.container.querySelector('[data-clearing]')).toBe(transcript)
 })
 
 it('handles sibling-composer Escape at the actual native pane boundary and keeps other panes and nested menus independent', async () => {

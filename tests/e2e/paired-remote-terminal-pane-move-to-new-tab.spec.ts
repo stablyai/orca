@@ -12,7 +12,7 @@ import {
   callPairedRuntime,
   waitForPairedClientWorktree
 } from './helpers/paired-client-host-session'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { dragPaneOutToTabStrip, waitForBoundPanes } from './helpers/terminal-layout-journeys'
 import { splitActiveTerminalPane } from './helpers/terminal'
 

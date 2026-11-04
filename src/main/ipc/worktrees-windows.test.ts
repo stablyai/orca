@@ -1,3 +1,4 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 
@@ -11,7 +12,6 @@ const {
   resolveLocalGitUsernameMock,
   getDefaultBaseRefMock,
   resolveDefaultBaseRefWithLocalGitMock,
-  resolveDefaultBaseRefViaExecMock,
   getBranchConflictKindMock,
   getPRForBranchMock,
   createGitHubPullRequestMock,
@@ -40,7 +40,6 @@ const {
   resolveLocalGitUsernameMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
   resolveDefaultBaseRefWithLocalGitMock: vi.fn(),
-  resolveDefaultBaseRefViaExecMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
   createGitHubPullRequestMock: vi.fn(),
@@ -61,6 +60,16 @@ const {
   deleteWorktreeHistoryDirMock: vi.fn()
 }))
 
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = await getWorktreeOwnerMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty,
+    listWorktreesSharedStrict: (await getWorktreeOwnerMocks()).listWorktreesSharedStrict
+  }
+})
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock,
@@ -68,31 +77,57 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: listWorktreesMock,
-  listWorktreesStrict: listWorktreesMock,
-  listWorktreesSharedStrict: listWorktreesMock,
-  listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesMock,
-  describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
-  assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
-  addWorktree: addWorktreeMock,
-  removeWorktree: removeWorktreeMock
-}))
+const { getWorktreeOwnerMocks } = vi.hoisted(() => {
+  function createWorktreeOwnerMocks() {
+    return (() => ({
+      listWorktrees: listWorktreesMock,
+      listWorktreesStrict: listWorktreesMock,
+      listWorktreesSharedStrict: listWorktreesMock,
+      listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesMock,
+      describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
+      assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
+      addWorktree: addWorktreeMock,
+      removeWorktree: removeWorktreeMock
+    }))()
+  }
+  let fixture: ReturnType<typeof createWorktreeOwnerMocks> | undefined
+  return { getWorktreeOwnerMocks: () => (fixture ??= createWorktreeOwnerMocks()) }
+})
 
-vi.mock('../git/worktree-listing', async (importOriginal) => ({
+vi.mock('../git/worktrees/removal/worktree-removal-preflight', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict: listWorktreesMock
+  assertWorktreeCleanForRemoval: (await getWorktreeOwnerMocks()).assertWorktreeCleanForRemoval
 }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+vi.mock('../git/worktrees/creation/worktree-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addWorktree: (await getWorktreeOwnerMocks()).addWorktree
+}))
+
+vi.mock('../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  removeWorktree: (await getWorktreeOwnerMocks()).removeWorktree
+}))
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: listWorktreesMock,
+  describeCreatedWorktree: (await getWorktreeOwnerMocks()).describeCreatedWorktree
+}))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+}))
+
+vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileSync: vi.fn()
 }))
 
 vi.mock('../git/repo', () => ({
   getDefaultBaseRef: getDefaultBaseRefMock,
   resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
-  resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getBranchConflictKind: getBranchConflictKindMock
 }))
 
@@ -133,7 +168,7 @@ vi.mock('./pty/provider/state-cleanup', () => ({
 }))
 vi.mock('./pty/provider/registry', () => ({ getLocalPtyProvider: getLocalPtyProviderMock }))
 
-vi.mock('../terminal-history-deletion', () => ({
+vi.mock('../pty/history/terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
@@ -187,7 +222,6 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     resolveLocalGitUsernameMock.mockReset()
     getDefaultBaseRefMock.mockReset()
     resolveDefaultBaseRefWithLocalGitMock.mockReset()
-    resolveDefaultBaseRefViaExecMock.mockReset()
     getBranchConflictKindMock.mockReset()
     getPRForBranchMock.mockReset()
     createGitHubPullRequestMock.mockReset()
@@ -277,7 +311,6 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     resolveLocalGitUsernameMock.mockResolvedValue('')
     getDefaultBaseRefMock.mockReturnValue('origin/main')
     resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue('origin/main')
-    resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
     getEffectiveHooksMock.mockReturnValue(null)
