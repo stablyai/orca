@@ -34,6 +34,8 @@ const mocks = vi.hoisted(() => {
   return { state, prepare: vi.fn(), save: vi.fn(), goal: vi.fn(async () => true) }
 })
 
+vi.mock('./NativeChatComposerWorkspace', () => ({ NativeChatComposerWorkspace: () => null }))
+
 vi.mock('../../store', () => {
   const state = {
     tabsByWorktree: {},
