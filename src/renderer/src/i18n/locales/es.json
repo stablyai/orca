@@ -16916,6 +16916,8 @@
                 "newTerminal": "nueva terminal",
                 "newTerminalTab": "nueva pestaña de terminal",
                 "newShell": "nuevo shell",
+                "splitChatRight": "dividir chat a la derecha",
+                "splitChatDown": "dividir chat abajo",
                 "terminalTab": "pestaña de terminal",
                 "createWorktree": "crear worktree",
                 "addWorktree": "agregar worktree",

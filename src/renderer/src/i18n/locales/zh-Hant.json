@@ -16955,6 +16955,8 @@
                 "newTerminal": "新終端機",
                 "newTerminalTab": "新的終端機分頁",
                 "newShell": "新 shell",
+                "splitChatRight": "向右分割聊天",
+                "splitChatDown": "向下分割聊天",
                 "terminalTab": "終端機分頁",
                 "createWorktree": "建立工作樹",
                 "addWorktree": "新增工作樹",

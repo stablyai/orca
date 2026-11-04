@@ -17689,6 +17689,8 @@
                 "newTerminal": "новый терминал",
                 "newTerminalTab": "новая вкладка терминала",
                 "newShell": "новая оболочка",
+                "splitChatRight": "разделить чат вправо",
+                "splitChatDown": "разделить чат вниз",
                 "terminalTab": "вкладка терминала",
                 "createWorktree": "создать рабочее дерево",
                 "addWorktree": "добавить рабочее дерево",

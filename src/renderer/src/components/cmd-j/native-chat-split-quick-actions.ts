@@ -36,20 +36,32 @@ export function getNativeChatSplitQuickActions(): CmdJQuickAction[] {
     'auto.components.terminal.pane.TerminalContextMenu.98bccf4fa2',
     'Split Terminal Down'
   )
+  const terminal = translate(
+    'auto.components.tab.bar.TerminalTabSplitMenuSection.splitTerminal',
+    'Split terminal'
+  )
   return [
     splitAction('right', {
       id: 'split-chat-right',
       title: right,
       description: right,
       icon: PanelRightClose,
-      verbKeywords: [right]
+      verbKeywords: [
+        right,
+        terminal,
+        translate('auto.components.cmd.j.quick.actions.verbs.splitChatRight', 'split chat right')
+      ]
     }),
     splitAction('down', {
       id: 'split-chat-down',
       title: down,
       description: down,
       icon: PanelBottomClose,
-      verbKeywords: [down]
+      verbKeywords: [
+        down,
+        terminal,
+        translate('auto.components.cmd.j.quick.actions.verbs.splitChatDown', 'split chat down')
+      ]
     })
   ]
 }

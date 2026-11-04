@@ -17180,6 +17180,8 @@
                 "newTerminal": "Neues Terminal öffnen",
                 "newTerminalTab": "Neuen Terminal-Tab öffnen",
                 "newShell": "Neue Shell öffnen",
+                "splitChatRight": "Chat nach rechts teilen",
+                "splitChatDown": "Chat nach unten teilen",
                 "terminalTab": "Terminal-Tab",
                 "createWorktree": "Worktree erstellen",
                 "addWorktree": "Worktree hinzufügen",

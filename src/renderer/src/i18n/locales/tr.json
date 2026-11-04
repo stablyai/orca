@@ -17169,6 +17169,8 @@
                 "newTerminal": "yeni terminal",
                 "newTerminalTab": "yeni terminal sekmesi",
                 "newShell": "yeni shell",
+                "splitChatRight": "sohbeti sağa böl",
+                "splitChatDown": "sohbeti aşağı böl",
                 "terminalTab": "terminal sekmesi",
                 "createWorktree": "worktree oluştur",
                 "addWorktree": "worktree ekle",

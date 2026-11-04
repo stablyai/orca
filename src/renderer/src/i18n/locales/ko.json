@@ -16507,6 +16507,8 @@
                 "newTerminal": "새 terminal",
                 "newTerminalTab": "새 terminal 탭",
                 "newShell": "새 셸",
+                "splitChatRight": "바로 채팅 분할",
+                "splitChatDown": "채팅을 분할하다",
                 "terminalTab": "terminal 탭",
                 "createWorktree": "작업 트리 만들기",
                 "addWorktree": "작업 트리 추가",

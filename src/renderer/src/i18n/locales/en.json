@@ -17442,6 +17442,8 @@
                 "newTerminal": "new terminal",
                 "newTerminalTab": "new terminal tab",
                 "newShell": "new shell",
+                "splitChatRight": "split chat right",
+                "splitChatDown": "split chat down",
                 "terminalTab": "terminal tab",
                 "createWorktree": "create worktree",
                 "addWorktree": "add worktree",

@@ -16507,6 +16507,8 @@
                 "newTerminal": "新規ターミナル",
                 "newTerminalTab": "新規ターミナルタブ",
                 "newShell": "新規シェル",
+                "splitChatRight": "チャットを右に分割",
+                "splitChatDown": "チャットを分割する",
                 "terminalTab": "ターミナルタブ",
                 "createWorktree": "ワークツリーを作成する",
                 "addWorktree": "ワークツリーを追加",

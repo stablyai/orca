@@ -17140,6 +17140,8 @@
                 "newTerminal": "nouveau terminal",
                 "newTerminalTab": "nouvel onglet de terminal",
                 "newShell": "nouveau shell",
+                "splitChatRight": "diviser le chat à droite",
+                "splitChatDown": "diviser la discussion",
                 "terminalTab": "onglet de terminal",
                 "createWorktree": "créer un worktree",
                 "addWorktree": "ajouter un worktree",

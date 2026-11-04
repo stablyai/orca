@@ -16507,6 +16507,8 @@
                 "newTerminal": "新终端",
                 "newTerminalTab": "新的终端选项卡",
                 "newShell": "新shell",
+                "splitChatRight": "拆分聊天权限",
+                "splitChatDown": "拆分聊天",
                 "terminalTab": "终端选项卡",
                 "createWorktree": "创建工作树",
                 "addWorktree": "添加工作树",
