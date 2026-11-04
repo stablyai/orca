@@ -1,13 +1,13 @@
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
-import { dropAgentResumeArgvFromCommand } from '../../../../shared/agent-resume-argv-drop'
+import { dropAgentResumeArgvFromCommand } from '../../../../shared/agent-launch/startup/agent-resume-argv-drop'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import { dropUnverifiedCodexResumeArgv } from '../../../codex/codex-unverified-resume-launch'
-import type { CodexSessionResumePreparation } from '../../../codex/codex-session-resume-home'
+import { dropUnverifiedCodexResumeArgv } from '../../../codex/history/resume/codex-unverified-resume-launch'
+import type { CodexSessionResumePreparation } from '../../../codex/history/resume/codex-session-resume-home'
 import { CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE, codexHomePathsEqual } from './codex-home'
 import type { PrepareCodexSessionResume } from './types'
 

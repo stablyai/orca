@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as BackgroundDistroGate from '../wsl-background-distro-gate'
+import type * as BackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
 
 const {
   handlers,
@@ -36,8 +36,8 @@ vi.mock('../startup/hydrate-shell-path', () => ({
   hydrateShellPath: vi.fn(async () => ({ ok: false })),
   mergePathSegments: vi.fn()
 }))
-vi.mock('../wsl', () => ({ getDefaultWslDistro: getDefaultWslDistroMock }))
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({ getDefaultWslDistro: getDefaultWslDistroMock }))
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundDistroGate>()),
   readWslDistroRunningState: readWslDistroRunningStateMock
 }))

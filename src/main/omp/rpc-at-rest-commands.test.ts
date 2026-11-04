@@ -28,8 +28,6 @@ beforeEach(async () => {
   context = {
     deps: {
       stateDirectory: root,
-      hostId: 'local',
-      claimKeyId: 'test',
       resolveWorkspacePath: async (id) => join(root, id),
       resolveLaunchArgs: async () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'system' }),

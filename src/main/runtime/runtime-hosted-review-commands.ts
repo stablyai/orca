@@ -6,7 +6,7 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
   HostedReviewForBranchReply
-} from '../../shared/hosted-review'
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type {
   GitHubPRRefreshReason,
@@ -21,7 +21,7 @@ import {
 } from '../github/client'
 import { admissionTierForRefreshReason } from '../github/pr-refresh-candidate-policy'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
-import { hostedReviewForBranchReply } from '../../shared/hosted-review'
+import { hostedReviewForBranchReply } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import { readHostedReviewForBranch } from '../source-control/hosted-review'
 import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
@@ -31,7 +31,7 @@ import {
 } from '../source-control/hosted-review-creation'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
-import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
+import { guardWslUncPathAccess } from '../wsl/filesystem/wsl-unc-access-gate'
 
 type HostedReviewTargetArgs = { repoSelector: string; worktreeSelector?: string }
 

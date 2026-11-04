@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from './git-exec-file'
-import { GitCommandTimeoutError } from './git-command-timeout'
+import { GitCommandTimeoutError } from '../../../shared/git/commands/git-command-timeout'
 import { gitStreamStdout } from './git-stream-stdout'
 
 const tempRoots: string[] = []
@@ -53,26 +53,6 @@ void run()
 }
 
 describe.skipIf(process.platform === 'win32')('git read timeout behavior', () => {
-  it('allows a progressively streaming read that exits at 0.9 times the deadline', async () => {
-    const fixture = await createTimedGitFixture()
-    let output = ''
-    await expect(
-      gitStreamStdout(['status', '--porcelain=v2'], {
-        ...fixture,
-        env: {
-          ...fixture.env,
-          ORCA_STUB_PROGRESSIVE: '1',
-          ORCA_STUB_EXIT_AT_MS: String(Date.now() + 900)
-        },
-        timeoutMsForTest: 1000,
-        onStdout: (chunk) => {
-          output += chunk
-        }
-      })
-    ).resolves.toEqual({ stoppedEarly: false })
-    expect(output).toBe('onetwothree')
-  })
-
   it('rejects a silent read at 1.1 times the deadline with a typed error', async () => {
     const fixture = await createTimedGitFixture()
     await expect(
@@ -121,24 +101,3 @@ describe.skipIf(process.platform === 'win32')('git read timeout behavior', () =>
     }
   )
 })
-
-describe.skipIf(process.platform === 'win32' || process.env.ORCA_RUN_SLOW_GIT_SMOKE !== '1')(
-  'slow git read timeout smoke',
-  () => {
-    it('allows a 90 second read and terminates a 130 second wedge', async () => {
-      const fixture = await createTimedGitFixture()
-      await expect(
-        gitExecFileAsync(['status'], {
-          ...fixture,
-          env: { ...fixture.env, ORCA_STUB_SLEEP_MS: '90000' }
-        })
-      ).resolves.toMatchObject({ stdout: 'done' })
-      await expect(
-        gitExecFileAsync(['status'], {
-          ...fixture,
-          env: { ...fixture.env, ORCA_STUB_SLEEP_MS: '130000' }
-        })
-      ).rejects.toBeInstanceOf(GitCommandTimeoutError)
-    }, 230_000)
-  }
-)

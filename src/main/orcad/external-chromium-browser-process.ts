@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
 import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
 import { BrowserError } from '../browser/browser-error'
-import { assertUploadFilesExist } from '../browser/browser-upload-files'
+import { assertUploadFilesExist } from '../browser/cdp/input/browser-upload-files'
 import {
   agentBrowserEvalCommand,
   ExternalChromiumBrowserSession,
@@ -22,7 +22,7 @@ import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
 import { runExternalChromiumPageInput, type PageInputSession } from './external-chromium-page-input'
 import { agentBrowserSnapshotArgs } from '../browser/agent-browser/agent-browser-snapshot-arguments'
 import { Snapshot } from '../../shared/rpc-contract/browser-observation-params'
-import { ExpectedPageUrlGuard } from '../browser/browser-expected-page-url'
+import { ExpectedPageUrlGuard } from '../browser/cdp/input/browser-expected-page-url'
 
 const AgentBrowserCurrentUrl = z.object({ url: z.string() })
 

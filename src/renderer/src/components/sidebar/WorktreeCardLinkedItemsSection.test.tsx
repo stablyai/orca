@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import type { WorkspaceReferenceDetailsMap } from './workspace-reference-details'
 

@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import { BoundedMap } from '../../shared/bounded-map'
-import { isRecord } from '../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { ompNativeToolResults } from './rpc-tool-results'
 import { OmpRpcBackgroundServices } from './rpc-background-services'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 
 const id = z.string().min(1).max(512)

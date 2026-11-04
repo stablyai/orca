@@ -16,6 +16,7 @@ export type AgentModelCatalogProbe = ((
     signal?: AbortSignal
     workspacePath?: string
     cwd?: string
+    selectedModels?: readonly string[]
     operation?: StructuredAgentResolutionOperation
   }
 ) => Promise<AgentModelCatalogSuccess>) & {
@@ -32,8 +33,6 @@ export type AgentModelCatalogProbe = ((
     operation?: StructuredAgentResolutionOperation
   ) => Promise<AgentModelCatalogResolvedProbe>
 }
-
-export { independentAgentModelCatalog } from '../../../shared/agent-model-catalog-ownership'
 
 /** Agents supply probes or opt out; the service owns caching, refresh and publication. */
 export type AgentModelCatalogDiscovery =

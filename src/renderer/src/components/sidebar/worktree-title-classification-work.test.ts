@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import * as AgentNameTokenMatchModule from '../../../../shared/agent-name-token-match'
+import * as AgentNameTokenMatchModule from '../../../../shared/agent-status/title/agent-name-token-match'
 import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
-import * as Evidence from '../../../../shared/agent-title-evidence'
-import * as Frames from '../../../../shared/agent-title-name-anchoring'
-import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
+import * as Evidence from '../../../../shared/agent-status/title/agent-title-evidence'
+import * as Frames from '../../../../shared/agent-status/title/agent-title-name-anchoring'
+import { createTerminalTitleTracker } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolveTabAgentFromSignalSnapshot } from '../../../../shared/tab-agent-from-signals'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
-import type * as OpenCode from '../../../../shared/opencode-terminal-title'
-import * as Status from '../../../../shared/agent-title-status'
+import type * as OpenCode from '../../../../shared/agent-status/title/providers/opencode-terminal-title'
+import * as Status from '../../../../shared/agent-status/title/agent-title-status'
 import * as Wrappers from '../../../../shared/terminal-title-wrapper-segments'
 import * as Ingress from '../terminal-pane/terminal-title-evidence'
 
@@ -17,19 +17,22 @@ const work = vi.hoisted((): { strict: boolean; frames: number[] } => ({
   strict: false,
   frames: []
 }))
-vi.mock('../../../../shared/opencode-terminal-title', async (importOriginal) => {
-  const actual = await importOriginal<typeof OpenCode>()
-  return {
-    ...actual,
-    isOpenCodeNativeTitle: vi.fn((title: string) => {
-      if (work.strict) {
-        work.frames.push(title.length)
-      }
-      return actual.isOpenCodeNativeTitle(title)
-    })
+vi.mock(
+  '../../../../shared/agent-status/title/providers/opencode-terminal-title',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof OpenCode>()
+    return {
+      ...actual,
+      isOpenCodeNativeTitle: vi.fn((title: string) => {
+        if (work.strict) {
+          work.frames.push(title.length)
+        }
+        return actual.isOpenCodeNativeTitle(title)
+      })
+    }
   }
-})
-vi.mock('../../../../shared/agent-title-status', async (importOriginal) => {
+)
+vi.mock('../../../../shared/agent-status/title/agent-title-status', async (importOriginal) => {
   const actual = await importOriginal<typeof Status>()
   return { ...actual, normalizeTerminalTitle: vi.fn(actual.normalizeTerminalTitle) }
 })
@@ -42,7 +45,7 @@ vi.mock('../terminal-pane/terminal-title-evidence', async (importOriginal) => {
   return { ...actual, resolvePaneTitleDecision: vi.fn(actual.resolvePaneTitleDecision) }
 })
 
-vi.mock('../../../../shared/agent-title-evidence', async (importOriginal) => {
+vi.mock('../../../../shared/agent-status/title/agent-title-evidence', async (importOriginal) => {
   const actual = await importOriginal<typeof Evidence>()
   return {
     ...actual,
@@ -56,17 +59,20 @@ vi.mock('../../../../shared/agent-title-evidence', async (importOriginal) => {
     })
   }
 })
-vi.mock('../../../../shared/agent-title-name-anchoring', async (importOriginal) => {
-  const actual = await importOriginal<typeof Frames>()
-  return {
-    ...actual,
-    agentForNativeFrame: vi.fn(actual.agentForNativeFrame),
-    isNeutralAgentTitleWrapper: vi.fn(actual.isNeutralAgentTitleWrapper)
+vi.mock(
+  '../../../../shared/agent-status/title/agent-title-name-anchoring',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof Frames>()
+    return {
+      ...actual,
+      agentForNativeFrame: vi.fn(actual.agentForNativeFrame),
+      isNeutralAgentTitleWrapper: vi.fn(actual.isNeutralAgentTitleWrapper)
+    }
   }
-})
+)
 
 // Count the leaf titleHasAgentName regex to measure unchanged-title work across store writes.
-vi.mock('../../../../shared/agent-name-token-match', async (importOriginal) => {
+vi.mock('../../../../shared/agent-status/title/agent-name-token-match', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentNameTokenMatchModule>()
   return { ...actual, titleHasAgentName: vi.fn(actual.titleHasAgentName) }
 })

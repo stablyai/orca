@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 
 const childSchema = z.object({

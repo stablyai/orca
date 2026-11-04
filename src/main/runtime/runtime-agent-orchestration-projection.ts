@@ -1,4 +1,4 @@
-import type { AgentStatusOrchestrationContext } from '../../shared/agent-status-types'
+import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import { creatorFirstParent, crewTaskDisplay } from './orchestration/crew/crew-rules'
 import { parsePaneKey } from '../../shared/stable-pane-id'

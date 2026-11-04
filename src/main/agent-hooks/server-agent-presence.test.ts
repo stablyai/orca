@@ -12,7 +12,9 @@ vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }
 const probe = vi.hoisted(() =>
   vi.fn(async (): Promise<'live' | 'unverifiable' | 'exited'> => 'unverifiable')
 )
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe
+}))
 const servers: AgentHookServer[] = []
 const temporaryPaths: string[] = []
 

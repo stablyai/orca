@@ -98,6 +98,14 @@ export function registerRuntimeClientIpcBridge(
     event: RuntimeClientEvent,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
+    if (event.type === 'notificationAttentionAcknowledged') {
+      void window.api.notifications
+        .acknowledgeAttention(event.acknowledgement, toRuntimeExecutionHostId(environmentId))
+        .catch((error: unknown) =>
+          console.warn('[notifications] Remote acknowledgement failed', error)
+        )
+      return
+    }
     if (event.type === 'worktreeTerminalSleepState') {
       applyHostWorktreeTerminalSleepState(environmentId, event)
       return

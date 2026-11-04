@@ -1,11 +1,11 @@
 import { buildHookProcessCapture } from '../agent-hooks/hook-process-capture'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
   buildPosixScrubSafeEnvRestoreLines,
   buildWindowsScrubSafeEnvRestoreLines
-} from '../../shared/agent-hook-scrub-safe-env'
+} from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import {
   buildPosixCursorReplayGuardLines,
   buildWindowsCursorReplayGuardLines

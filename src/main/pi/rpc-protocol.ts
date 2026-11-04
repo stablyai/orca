@@ -1,15 +1,8 @@
 import { z } from 'zod'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 
-export const piRpcModelSchema = z.looseObject({
-  id: z.string(),
-  provider: z.string(),
-  name: z.string().optional(),
-  contextWindow: z.number().nonnegative().optional(),
-  reasoning: z.boolean().optional(),
-  input: z.array(z.string()).optional()
-})
-export type PiRpcModel = z.infer<typeof piRpcModelSchema>
+import { piRpcModelSchema } from './rpc-model-schema'
+export { piRpcModelSchema, type PiRpcModel } from './rpc-model-schema'
 
 export const piRpcStateSchema = z.looseObject({
   model: piRpcModelSchema.nullish(),

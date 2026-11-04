@@ -18,7 +18,7 @@ import {
   useSourceControlSubmoduleStatus,
   type UseSourceControlSubmoduleStatusResult
 } from './source-control/listing/use-submodule-status'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 
 const roots: Root[] = []
 

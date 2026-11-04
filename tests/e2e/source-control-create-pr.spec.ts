@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import type { CreateHostedReviewResult } from '../../src/shared/hosted-review'
+import type { CreateHostedReviewResult } from '../../src/shared/source-control/hosted-review/hosted-review-contracts'
 
 type CreatePRPayload = {
   repoPath: string

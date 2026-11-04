@@ -41,10 +41,10 @@ vi.mock('../../src/main/pi/titlebar-extension-service', () =>
     m.piTitlebarExtensionModuleMock()
   )
 )
-vi.mock('../../src/main/pwsh', () =>
+vi.mock('../../src/main/pty/shell-startup/pwsh', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
 )
-vi.mock('../../src/main/wsl', async (importOriginal) =>
+vi.mock('../../src/main/wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('../../src/main/ipc/pty/pty-ipc-mock-registry')).wslModuleMock(
     await importOriginal()
   )
@@ -66,12 +66,12 @@ vi.mock('../../src/main/agent-hooks/migration-unsupported-pty-state', () =>
     m.migrationUnsupportedPtyModuleMock()
   )
 )
-vi.mock('../../src/main/codex/codex-pane-account-registry', () =>
+vi.mock('../../src/main/codex/configuration/homes/codex-pane-account-registry', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexPaneAccountRegistryModuleMock()
   )
 )
-vi.mock('../../src/main/codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../src/main/codex/history/index/codex-state-db-backfill-recovery', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexBackfillRecoveryModuleMock()
   )

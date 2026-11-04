@@ -25,7 +25,7 @@ import {
   forgetStructuredSessionSelection,
   registerStructuredSelectionCatalogStore
 } from '@/lib/structured-agent-session-selection-controller'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 function makeStatus(runtimeId: string): RuntimeStatus {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture carries only the fields the slice reads.

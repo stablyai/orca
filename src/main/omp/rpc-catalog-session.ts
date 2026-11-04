@@ -1,3 +1,4 @@
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -14,6 +15,8 @@ import type { PiRpcConnection } from '../pi/rpc-session'
 import type { StructuredAgentModelCatalogContext } from '../runtime/structured-agent-runtime-registration-types'
 import { openOmpRpcConnection } from './rpc-connection'
 import { buildOmpRpcLaunch, resolveOmpRpcInvocation } from './rpc-launch'
+
+const logger = createStructuredAgentSessionLogger()
 
 export async function runOmpRpcCatalogSession<T>(
   context: StructuredAgentModelCatalogContext,
@@ -62,7 +65,7 @@ export async function runOmpRpcCatalogSession<T>(
     )
   } finally {
     await rm(scratch, { recursive: true, force: true, maxRetries: 3 }).catch((error: unknown) =>
-      context.deps.logger.warn(`OMP ${options.kind} catalog scratch cleanup failed`, {
+      (context.deps.logger ?? logger).warn(`OMP ${options.kind} catalog scratch cleanup failed`, {
         scope: `omp-rpc-${options.kind}-catalog`,
         error
       })

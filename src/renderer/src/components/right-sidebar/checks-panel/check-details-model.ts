@@ -1,5 +1,5 @@
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../shared/github/check-types'
-import { getCheckConclusion } from '../../../../../shared/pr-check-status-label'
+import { getCheckConclusion } from '../../../../../shared/source-control/checks/pr-check-status-label'
 import { getIntlLocale } from '@/i18n/i18n'
 
 export type CheckDetailsLoadState = {

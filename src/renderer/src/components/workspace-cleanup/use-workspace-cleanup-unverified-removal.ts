@@ -1,12 +1,12 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity,
   resolveWorkspaceCleanupRemovalHostId
-} from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type {
   WorkspaceCleanupFailure,
   WorkspaceCleanupRemoveResult

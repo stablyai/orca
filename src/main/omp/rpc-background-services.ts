@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { BoundedMap } from '../../shared/bounded-map'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 
 const id = z.string().min(1).max(512)
 const serviceSchema = z.object({

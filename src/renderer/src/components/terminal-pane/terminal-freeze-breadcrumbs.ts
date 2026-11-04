@@ -8,7 +8,7 @@ import {
   TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB,
   recordTerminalWebglDiagnostic,
   setTerminalWebglDiagnosticRecorder
-} from '../../../../shared/terminal-webgl-diagnostics'
+} from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { maybeStartTerminalRenderDesyncSentinel } from './terminal-render-desync-trigger'
 
 const rendererDeliveryBreadcrumbs = createPtyDeliveryBreadcrumbRing()

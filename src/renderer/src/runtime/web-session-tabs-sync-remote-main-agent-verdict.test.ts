@@ -1,7 +1,7 @@
 // mainAgent can fail while subagents keep state/start/update time unchanged. Mirror that verdict and invalidate the epoch-cached worktree rollup.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { AgentMainAgentStatus } from '../../../shared/main-agent-status'
+import type { AgentMainAgentStatus } from '../../../shared/agent-status/lifecycle/main-agent-status'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'

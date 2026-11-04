@@ -1,7 +1,7 @@
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentStatusObservedPaneIdentities } from '../runtime/agent-status-observed-pane-identity'
 import type { AgentHookServer } from './server'
-import { isAgentStatusHooksEnabled } from '../../shared/agent-status-hooks-setting'
+import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 
 type RuntimeDeps = NonNullable<ConstructorParameters<typeof OrcaRuntimeService>[2]>
 

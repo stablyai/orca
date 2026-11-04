@@ -31,7 +31,7 @@ import {
   withoutPiCallerEnv,
   type PiRpcLaunchOptions
 } from '../pi/rpc-launch'
-import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
+import { resolveOmpSessionsDir } from '../ai-vault/scanners/omp/omp-session-root'
 import { findOmpSessionByCwd } from './omp-session-cwd-lookup'
 import { parsePiModelOptionId } from '../pi/rpc-options'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'

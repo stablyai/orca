@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { observePtyForeground } from '../../pty/pty-master-foreground-observation'
+import { observePtyForeground } from '../../pty/process-retirement/pty-master-foreground-observation'
 import type * as pty from 'node-pty'
 import type { IPtyProvider, PtySpawnOptions } from '../pty-provider-contract'
 import type { PtyProcessInfo } from '../pty-process-info'
@@ -18,7 +18,7 @@ import {
 } from './local-pty-foreground-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import type { PtyProcessInspection, PtyProcessInspectionOptions } from '../pty-process-inspection'
-import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal-osc-color-reply'
+import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   _resetPtyOwnerHostColorsForTest,
   setPtyOwnerHostColors

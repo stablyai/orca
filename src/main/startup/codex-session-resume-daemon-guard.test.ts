@@ -2,11 +2,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { VerifiedCodexResumeSource } from '../codex/codex-session-resume-preparation'
+import type { VerifiedCodexResumeSource } from '../codex/history/resume/codex-session-resume-preparation'
 import {
   CODEX_DAEMON_OVERRIDE_MARKER,
   codexDaemonSocketPathExceedsLimit
-} from '../codex/codex-daemon-socket-path-guard'
+} from '../codex/configuration/shared-server/codex-daemon-socket-path-guard'
 
 const mocks = vi.hoisted(() => ({
   hooksEnabled: false,
@@ -20,27 +20,27 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { getPath: vi.fn(() => '/tmp/orca-user-data') } }))
-vi.mock('../codex/hook-service', () => ({
+vi.mock('../codex/hooks/installation/hook-service', () => ({
   codexHookService: {
     installForLaunchPrep: mocks.installForLaunchPrep,
     refreshRuntimeUserHooksForLaunchPrep: mocks.refreshRuntimeUserHooksForLaunchPrep
   }
 }))
-vi.mock('../codex/codex-hook-reconcile', () => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', () => ({
   reconcileCodexHooksForLaunch: mocks.reconcileCodexHooksForLaunch
 }))
-vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../shared/agent-hook-listener/configuration/agent-status-hooks-setting', () => ({
   isAgentStatusHooksEnabledForAgent: () => mocks.hooksEnabled
 }))
-vi.mock('../codex/codex-home-paths', async (importOriginal) => ({
+vi.mock('../codex/configuration/homes/codex-home-paths', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getSystemCodexHomePath: () => mocks.systemHomePath,
   getOrcaManagedCodexHomePath: () => mocks.sharedHomePath
 }))
-vi.mock('../codex/codex-session-resume-preparation', () => ({
+vi.mock('../codex/history/resume/codex-session-resume-preparation', () => ({
   prepareCodexSessionResume: mocks.prepareCodexSessionResume
 }))
-vi.mock('../codex/codex-legacy-session-resume', () => ({
+vi.mock('../codex/history/resume/codex-legacy-session-resume', () => ({
   prepareLegacySharedCodexSessionResume: mocks.prepareLegacySharedCodexSessionResume
 }))
 vi.mock('./main-process-state', () => ({

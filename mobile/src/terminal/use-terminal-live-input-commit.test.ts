@@ -53,10 +53,6 @@ function createTerminalLiveInputCommitHarness({
     captures.push(text)
   }
   const liveInputRef: RefObject<TextInput | null> = { current: null }
-  const liveInputTerminalHandles = new Set([activeHandle])
-  const liveInputTerminalHandlesRef: RefObject<Set<string>> = {
-    current: new Set([activeHandle])
-  }
   const sent: string[] = []
   const failures = vi.fn()
   let currentSendResult = sendResult
@@ -81,8 +77,6 @@ function createTerminalLiveInputCommitHarness({
       onSendFailure: failures,
       framesLivePaste: () => bracketedPaste,
       liveInputRef,
-      liveInputTerminalHandles,
-      liveInputTerminalHandlesRef,
       sendLiveTerminalInputRef,
       setLiveInputCapture
     })

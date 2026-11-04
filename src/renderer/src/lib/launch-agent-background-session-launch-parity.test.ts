@@ -41,8 +41,10 @@ const load = perClientLoader(async () => ({
   switch: await import('../../../shared/layout-owner-switch'),
   remoteCreate: await import('./runtime-agent-background-create'),
   remoteStream: await import('@/runtime/runtime-terminal-stream'),
-  preferences: await import('@/components/settings/use-host-agent-launch-preferences'),
-  settingsTransport: await import('@/components/settings/agent-launch-settings-transport'),
+  preferences:
+    await import('@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'),
+  settingsTransport:
+    await import('@/runtime/agent-launch-settings/agent-launch-settings-transport'),
   workspace: await import('@/hooks/automation-dispatch-workspace')
 }))
 

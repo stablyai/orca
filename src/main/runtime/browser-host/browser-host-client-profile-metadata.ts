@@ -1,7 +1,7 @@
 import {
   BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY,
   BrowserClientProfileMetadata
-} from '../../../shared/browser-client-profile-switch-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 
 type BrowserHostClientProfileResolver = (browserProfileId: string) => unknown
 

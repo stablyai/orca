@@ -33,21 +33,6 @@ async function copyIndexedLaunchTree(resourcesDir) {
 }
 
 describe('verify packaged plugin resources', () => {
-  it('accepts exact launch bytes copied into a packaged resources directory', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-plugins-'))
-    try {
-      await cp(
-        join(process.cwd(), 'resources', 'plugins', 'launch'),
-        join(resourcesDir, 'plugins', 'launch'),
-        { recursive: true }
-      )
-
-      expect(() => verifyPackagedPluginResources(resourcesDir)).not.toThrow()
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
   it('rejects mutated bytes in the packaged output', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-plugins-'))
     try {

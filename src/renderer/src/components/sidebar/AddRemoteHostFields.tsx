@@ -8,9 +8,12 @@ import {
   translateHostAccessLinkError,
   translateRemotePairingEndpointKind
 } from '@/lib/remote-pairing-copy'
-import type { ParseHostAccessLinkResult } from '../../../../shared/remote-pairing-address'
-import { applyParsedSshHostInput, type EditingTarget } from '../settings/ssh-target-draft'
-import { SshHostAdvancedFields } from '../settings/SshHostAdvancedFields'
+import type { ParseHostAccessLinkResult } from '../../../../shared/remote-runtime/pairing/remote-pairing-address'
+import {
+  applyParsedSshHostInput,
+  type EditingTarget
+} from '../settings/ssh/targets/ssh-target-draft'
+import { SshHostAdvancedFields } from '../settings/ssh/targets/SshHostAdvancedFields'
 
 export function SshHostFields({
   form,

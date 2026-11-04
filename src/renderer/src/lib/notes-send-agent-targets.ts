@@ -3,7 +3,7 @@ import {
   type StructuredChatTabNames
 } from '@/runtime/structured-chat-tab-name'
 import { structuredChatTabById } from './structured-chat-tab-index'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { AppState } from '@/store/types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { resolveTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'

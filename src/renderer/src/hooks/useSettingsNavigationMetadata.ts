@@ -1,11 +1,12 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 // Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
+// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
-} from '@/components/settings/runtime-environments-search'
-import { getTerminalPaneSearchEntries } from '@/components/settings/terminal-search'
+} from '@/components/settings/runtime-environments/catalog/runtime-environments-search'
+import { getTerminalPaneSearchEntries } from '@/components/settings/terminal/terminal-search'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'

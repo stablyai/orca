@@ -46,8 +46,6 @@ it.each([false, true])(
     const probe = createOmpRpcModelCatalogProbe({
       deps: {
         stateDirectory: 'isolated-state',
-        hostId: 'local',
-        claimKeyId: 'test',
         resolveWorkspacePath: async () => 'workspace',
         resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ account: 'system' }),

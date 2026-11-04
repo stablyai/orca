@@ -20,7 +20,7 @@ import {
 import {
   AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
   typeAgentTuiCommand
-} from '../../../../shared/agent-tui-command-typing'
+} from '../../../../shared/agent-launch/startup/agent-tui-command-typing'
 import {
   cancelNativeChatPtySends,
   enqueueNativeChatPtySend,
@@ -63,17 +63,23 @@ export function sendNativeChatMessage(
       if (isCancelled()) {
         return
       }
-      clearThenWrite(ptyId, options, delay, () => {
-        if (isCancelled()) {
-          return
-        }
-        sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
-        // Measure the Enter delay from the actual body write so renderer stalls cannot collapse the gap.
-        delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-          markSubmitted()
-        })
-      })
+      clearThenWrite(
+        ptyId,
+        options,
+        delay,
+        () => {
+          if (isCancelled()) {
+            return
+          }
+          sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
+          // Measure the Enter delay from the actual body write so renderer stalls cannot collapse the gap.
+          delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
+            sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+            markSubmitted()
+          })
+        },
+        markSubmitted
+      )
     },
     {
       onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options)
@@ -173,8 +179,8 @@ export function sendNativeChatTypedCommand(
           }
         }).then(finish, () => finish('rejected'))
       }
-      if (options?.clearInput) {
-        clearThenWrite(ptyId, options, delay, typeCommand)
+      if (options?.clearInput !== undefined && options.clearInput !== '') {
+        clearThenWrite(ptyId, options, delay, typeCommand, markSubmitted)
       } else {
         typeCommand()
       }

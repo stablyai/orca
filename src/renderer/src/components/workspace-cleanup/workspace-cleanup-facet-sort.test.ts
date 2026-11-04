@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DAY, FACET_NOW, makeNamedFacets } from './workspace-cleanup-facet.test.fixture'
 import { sortWorkspaceCleanupFacets } from './workspace-cleanup-facet-sort'
-import type { WorkspaceCleanupSortField } from '../../../../shared/workspace-cleanup-filter-model'
+import type { WorkspaceCleanupSortField } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 function names(
   rows: ReturnType<typeof makeNamedFacets>[],

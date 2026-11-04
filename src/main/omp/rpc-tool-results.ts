@@ -1,4 +1,4 @@
-import { isRecord } from '../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 export type OmpNativeToolResult = {
   details: Record<string, unknown>

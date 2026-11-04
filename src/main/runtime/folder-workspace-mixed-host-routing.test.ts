@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import {
   FOLDER_HOST_CASES,
   MIXED_GROUP,
   MIXED_FOLDER,
   ROUTING_REPOS
-} from '../../shared/folder-workspace-host-routing.test-fixture'
+} from '../../shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { LayoutApplyOutcome } from '../../shared/workspace-layout/workspace-layout-command-types'

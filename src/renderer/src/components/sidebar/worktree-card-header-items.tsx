@@ -157,7 +157,7 @@ function renderIdentityIcon(
       next instanceof Element &&
       root.contains(next) &&
       !next.closest('[data-worktree-card-identity-indicator]') &&
-      !root.querySelector('[data-worktree-card-identity-indicator]:focus')
+      !root.querySelector('[data-worktree-card-identity-indicator]:focus-visible')
     ) {
       detailsHoverControl.handleHoverOpenChange(true)
     }

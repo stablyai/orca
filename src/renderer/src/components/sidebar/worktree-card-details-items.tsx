@@ -1,6 +1,6 @@
 import React from 'react'
 import { useComposedRefs } from 'radix-ui/internal'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { WorktreeCardDetailsHover, WorktreeCardMetaBadges } from './WorktreeCardMeta'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import type { WorktreeCardController } from './use-worktree-card-controller'
@@ -142,7 +142,7 @@ export function WorktreeCardIdentityHover({
           if (
             !open ||
             !identityRef.current?.querySelector(
-              '[data-worktree-card-identity-indicator]:hover, [data-worktree-card-identity-indicator]:focus'
+              '[data-worktree-card-identity-indicator]:hover, [data-worktree-card-identity-indicator]:focus-visible'
             )
           ) {
             hoverControl.handleHoverOpenChange(open)
