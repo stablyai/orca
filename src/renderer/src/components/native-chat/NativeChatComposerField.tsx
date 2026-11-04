@@ -27,6 +27,7 @@ import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPre
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
+import { useNativeChatDictationSubmit } from './use-native-chat-dictation-submit'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 
@@ -180,6 +181,7 @@ export function NativeChatComposerField({
   launchPrompt
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
+  useNativeChatDictationSubmit(textareaRef, onSend)
   const optionCount =
     autocomplete.mode === 'slash'
       ? autocomplete.items.length
@@ -342,6 +344,8 @@ export function NativeChatComposerField({
               isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
               disabled={disabled}
+              // Enter in a launch prompt starts an agent, which dictation must not do on its own.
+              dictationAutoSend={!launch}
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
               onKeyUp={editorKeyUp}

@@ -642,7 +642,7 @@ it.each(['updated', 'not-editable', 'clean-gone', 'cancel'] as const)(
         })
       act(() => hook.result.current.editor!.change('submitted'))
       act(() => hook.result.current.editor!.save())
-      act(() => insertText('speech', captured))
+      act(() => void insertText('speech', captured))
       await act(async () =>
         reply!({
           kind: 'done',
@@ -656,7 +656,7 @@ it.each(['updated', 'not-editable', 'clean-gone', 'cancel'] as const)(
         expect(hook.result.current.editor!.text).toContain('speech')
       }
     }
-    act(() => insertText('later', captured))
+    act(() => void insertText('later', captured))
     if (outcome === 'cancel') {
       expect(readNativeChatDraftCache(SCOPE)).toBe('')
     } else if (outcome === 'clean-gone') {

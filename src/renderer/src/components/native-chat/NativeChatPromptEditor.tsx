@@ -37,6 +37,7 @@ import type {
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
 import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
 import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
+import { DICTATION_AUTO_SEND_ATTRIBUTE } from '../dictation/dictation-auto-send'
 
 import { useNativeChatComposerMount } from './native-chat-composer-mount'
 
@@ -58,6 +59,7 @@ function NativePromptEditor({
   isComposing = NOT_COMPOSING,
   initialValue,
   disabled,
+  dictationAutoSend = false,
   placeholder,
   onChange,
   onSelect,
@@ -116,6 +118,7 @@ function NativePromptEditor({
           role: 'textbox',
           'aria-multiline': 'true',
           'aria-label': placeholder,
+          ...(dictationAutoSend ? { [DICTATION_AUTO_SEND_ATTRIBUTE]: '' } : {}),
           class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:first-child]:before:text-chat-foreground-faint [&_p.is-editor-empty:first-child]:before:float-left [&_p.is-editor-empty:first-child]:before:h-0 [&_p.is-editor-empty:first-child]:before:pointer-events-none`,
           ...Object.fromEntries(Object.entries(events).filter(([key]) => key.startsWith('aria-')))
         },

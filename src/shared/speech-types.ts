@@ -73,6 +73,8 @@ export type VoiceSettings = {
   language: string
   dictationMode: DictationMode
   terminalConfirmBeforeInsert: boolean
+  autoSendAfterDictation: boolean
+  autoSendDelayMs: number
   userModels: UserModelConfig[]
   openAiApiKeyConfigured: boolean
   /** null = system default input device */

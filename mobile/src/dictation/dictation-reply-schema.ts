@@ -28,10 +28,13 @@ const speechModelSchema = z.looseObject({
 
 // Require models because the sheet calls some/map unguarded; list, delete and config-write replies all replace the displayed setup.
 // Preserve unknown dictationMode strings and absent mode: consumers compare toggle/hold. enabled and selectedModelId have guarded fallbacks.
+// autoSend fields stay salvaged: hosts older than the setting omit them, and absent reads as off.
 export const dictationSetupSchema = z.looseObject({
   enabled: salvagedOptional('enabled', z.boolean()),
   selectedModelId: salvagedOptional('selectedModelId', z.string()),
   dictationMode: salvagedOptional('dictationMode', z.string()),
+  autoSendAfterDictation: salvagedOptional('autoSendAfterDictation', z.boolean()),
+  autoSendDelayMs: salvagedOptional('autoSendDelayMs', z.number()),
   models: salvagingArray(speechModelSchema)
 })
 
