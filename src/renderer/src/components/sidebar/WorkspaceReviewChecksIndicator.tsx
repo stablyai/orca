@@ -2,8 +2,8 @@ import { getProviderChecksOutcome } from '../../../../shared/source-control/chec
 import React from 'react'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceReviewChecksSummary } from '../../../../shared/workspace-review-checks'
-import { ReviewIcon } from './worktree-review-helpers'
-import { reviewStateLabel } from './WorktreeCardMetadataStatusBadges'
+import { ReviewIcon } from './workspace-card/review/worktree-review-presentation'
+import { reviewStateLabel } from './workspace-card/metadata/WorktreeCardMetadataStatusBadges'
 
 export function workspaceReviewChecksLabel(summary: WorkspaceReviewChecksSummary): string {
   const outcome = getProviderChecksOutcome(summary)

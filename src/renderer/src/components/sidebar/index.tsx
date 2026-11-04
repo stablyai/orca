@@ -27,12 +27,18 @@ import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
 // Keep the Agents activity pipeline out of the workspace view’s initial bundle.
 const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
 
-const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
+const WorktreeMetaDialog = lazyWithRetry(
+  () => import('./workspace-card/metadata/WorktreeMetaDialog')
+)
 const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
-const SleepTwinWorkspaceDialog = lazyWithRetry(() => import('./SleepTwinWorkspaceDialog'))
+const SleepTwinWorkspaceDialog = lazyWithRetry(
+  () => import('./workspace-actions/sleep/SleepTwinWorkspaceDialog')
+)
 const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'))
 const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
-const ForgetSshWorkspaceDialog = lazyWithRetry(() => import('./ForgetSshWorkspaceDialog'))
+const ForgetSshWorkspaceDialog = lazyWithRetry(
+  () => import('./workspace-actions/deletion/ForgetSshWorkspaceDialog')
+)
 const AgentDashboardSidebarHost = lazyWithRetry(() => import('./AgentDashboardSidebarHost'))
 
 const MIN_WIDTH = 220

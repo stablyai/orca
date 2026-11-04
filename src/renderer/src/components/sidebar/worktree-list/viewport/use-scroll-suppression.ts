@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
-import { SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT } from '../../WorktreeCardAgents'
+import { SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT } from '../../workspace-card/activity/WorktreeCardAgents'
 import {
   createPendingRevealScroll,
   isRevealScrollSettling,

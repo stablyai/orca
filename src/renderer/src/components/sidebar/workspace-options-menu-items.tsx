@@ -27,7 +27,7 @@ import {
   WorktreeCardDisplayMenuItem,
   WorktreeCardLayoutMenuItem,
   WorktreeCardPropertiesMenuItem
-} from './worktree-card-option-items'
+} from './workspace-card/surface/worktree-card-option-items'
 import {
   getShownWorkspaceViewSections,
   type WorkspaceViewOptionKey,

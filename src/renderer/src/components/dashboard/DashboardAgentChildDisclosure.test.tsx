@@ -1,14 +1,14 @@
 /** @vitest-environment happy-dom */
 import { fireEvent, render, screen, cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CompactAgentRow } from '../sidebar/worktree-card-compact-agent-row'
+import { CompactAgentRow } from '../sidebar/workspace-card/activity/worktree-card-compact-agent-row'
 import { TooltipProvider } from '../ui/tooltip'
 import DashboardAgentRow from './DashboardAgentRow'
 import type { DashboardAgentRow as AgentRow } from './useDashboardData'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 
 vi.mock('./use-agent-row-conversation-name', () => ({ useAgentRowConversationName: () => null }))
-vi.mock('../sidebar/CacheTimer', () => ({
+vi.mock('../sidebar/workspace-card/activity/CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownForPane: () => null
 }))
