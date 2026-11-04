@@ -58,6 +58,11 @@ const NO_DEADLINE = Number.MAX_SAFE_INTEGER
 const LEASE_MS = 6 * 60 * 60 * 1000
 
 export class HostRelay extends DurableObject<Env> {
+  // A reset (code update past max_delay, runtime restart, eviction) drops sockets without close
+  // events. A stored session with no live control is then treated as orphaned from this boot, so the
+  // desktop can rebind within the grace and keep splices, which live in SpliceRelay objects.
+  private readonly bootAt = Date.now()
+
   private get pingIntervalMs(): number {
     return Number(this.env.PING_INTERVAL_MS)
   }
@@ -263,7 +268,8 @@ export class HostRelay extends DurableObject<Env> {
     const withinGrace =
       stored !== undefined &&
       (otherControls.length > 0 ||
-        (stored.orphanedAt !== null && now - stored.orphanedAt <= this.orphanGraceMs))
+        (stored.orphanedAt !== null && now - stored.orphanedAt <= this.orphanGraceMs) ||
+        (stored.orphanedAt === null && now - this.bootAt <= this.orphanGraceMs))
     const secret = a.hello?.controlResumeSecret
     const rebind =
       stored !== undefined &&

@@ -469,6 +469,25 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
     after.client.closeNow()
   }
 
+  // F1: after a forced reset (no close events), a desktop that rebinds within the grace keeps its
+  // generation, so splices living in SpliceRelay objects are not torn down.
+  {
+    const before = makeControl(ctx, ORIGIN)
+    const b = await before.client.connect()
+    await fetch(`${ORIGIN}/__spike/abort/${ctx.relayHostId}`).catch(() => {})
+    await waitFor(() => before.events.closes.length > 0, 5000)
+    await sleep(300)
+    const back = makeControl(ctx, ORIGIN, {
+      previousGeneration: b.generation,
+      controlResumeSecret: b.controlResumeSecret
+    })
+    const r = await back.client.connect().catch((e: Error) => e)
+    record('F1 rebind after forced reset keeps generation',
+      !(r instanceof Error) && r.generation === b.generation,
+      r instanceof Error ? r.message : `gen ${b.generation}->${r.generation}`)
+    back.client.closeNow()
+  }
+
   // Bad JWT -> 401 before upgrade; malformed host id -> 429.
   {
     const bad = new WebSocket(`ws://127.0.0.1:${PORT}/v1/host/control`, { headers: { authorization: 'Bearer nope' } })
