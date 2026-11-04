@@ -13,7 +13,6 @@ export function terminalUsageLimitCutMatches(
 ): row is AgentHookEventPayload {
   return (
     row !== undefined &&
-    row.toolAgentId === undefined &&
     row.providerSessionOnly !== true &&
     row.agentPresence?.ended !== true &&
     row.structuredHost === undefined &&

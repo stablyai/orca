@@ -1,3 +1,14 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import {
+  createHookListenerState,
+  seedLegacyAgentStatusForTests
+} from '../../shared/agent-hook-listener/listener-state'
+import { terminalUsageLimitGuard } from '../../shared/agent-hook-listener/terminal-usage-limit-guard'
+import { reduceHostTurnEnd } from '../../shared/agent-hook-turn-end-timing'
+import { makePaneKey } from '../../shared/stable-pane-id'
 import { afterEach, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
@@ -179,4 +190,84 @@ it('rechecks owner after an asynchronous guest reply before handing off input', 
   await vi.advanceTimersByTimeAsync(10000)
   expect(await result).toEqual({ status: 'refused', reason: 'changed' })
   expect(write).not.toHaveBeenCalled()
+})
+
+it('submits the owned failed root after an attributed child releases it', async () => {
+  const { runtime, write } = await setup()
+  const directory = mkdtempSync(join(tmpdir(), 'orca-root-dispatch-'))
+  try {
+    const path = join(directory, 'transcript.jsonl')
+    const sessionId = '44444444-4444-4444-8444-444444444444'
+    const promptId = '33333333-3333-4333-8333-333333333333'
+    const paneKey = makePaneKey(
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222'
+    )
+    writeFileSync(
+      path,
+      `${[
+        {
+          type: 'user',
+          sessionId,
+          promptId,
+          uuid: 'user',
+          parentUuid: null,
+          isSidechain: false,
+          message: { content: 'Finish' }
+        },
+        {
+          type: 'assistant',
+          sessionId,
+          uuid: 'quota',
+          parentUuid: 'user',
+          isSidechain: false,
+          apiError: 'usage_limit_reached',
+          error: 'rate_limit'
+        }
+      ]
+        .map((row) => JSON.stringify(row))
+        .join('\n')}\n`
+    )
+    const state = createHookListenerState()
+    const accept = (payload: Record<string, unknown>) => {
+      const event = normalizeHookPayload(
+        state,
+        'claude',
+        {
+          paneKey,
+          payload: {
+            session_id: sessionId,
+            prompt_id: promptId,
+            transcript_path: path,
+            ...payload
+          }
+        },
+        'production'
+      )!
+      const next = {
+        ...event,
+        ...reduceHostTurnEnd(state.lastStatusByPaneKey.get(paneKey), event, Date.now(), true)
+      }
+      seedLegacyAgentStatusForTests(state, next)
+      return next
+    }
+    accept({ hook_event_name: 'UserPromptSubmit', prompt: 'Finish' })
+    accept({ hook_event_name: 'SubagentStart', agent_id: 'areviewer-1' })
+    const failed = accept({ hook_event_name: 'StopFailure', error: 'rate_limit' })
+    const cut = { sessionId, turnEndedAt: failed.turnEndedAt! }
+    expect(terminalUsageLimitGuard(state, paneKey, cut)).toBeNull()
+    const released = accept({ hook_event_name: 'SubagentStop', agent_id: 'areviewer-1' })
+    expect(released.toolAgentId).toBe('areviewer-1')
+    const guard = terminalUsageLimitGuard(state, paneKey, cut)!
+    expect(guard()).toBe(true)
+    const result = runtime.continueTerminalUsageLimit(HANDLE, guard, 'desktop')
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await result).toEqual({ status: 'turn-started' })
+    expect(write.mock.calls.map(([, bytes]) => bytes)).toEqual([
+      expect.stringContaining(PROMPT),
+      '\r'
+    ])
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })

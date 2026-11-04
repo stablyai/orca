@@ -179,7 +179,13 @@ export function normalizeClaudeSessionStart(
       sessionStartSource !== 'resume' &&
       sessionStartSource !== 'clear')
   ) {
-    if (eventAgentId === undefined && clearClaudeMainAgentUsageLimit(state, paneKey)) {
+    if (
+      eventAgentId === undefined &&
+      state.claudeSessionOwnerByPaneKey.get(paneKey) !== undefined &&
+      state.claudeSessionOwnerByPaneKey.get(paneKey) === readString(hookPayload, 'session_id') &&
+      state.claudeLeadStateByPaneKey.has(paneKey)
+    ) {
+      clearClaudeMainAgentUsageLimit(state, paneKey)
       return buildClaudeCachedLeadStatusPayload(state, undefined, paneKey, hookPayload)
     }
     // Only known idle sources qualify; compact restarts and child SessionStart cannot settle a live lead.

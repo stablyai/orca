@@ -30,6 +30,9 @@ export function canRefineClaudeUsageLimit(
 
 /** Child events retain the pending root; the bounded callback verifies its captured identity. */
 export function shouldClearAssistantMessageRetry(event: AgentHookEventPayload): boolean {
+  if (event.hookEventName === 'SessionStart' && !event.toolAgentId) {
+    return true
+  }
   const pendingRoot =
     event.payload.agentType === 'claude' &&
     event.payload.sessionBoundary !== true &&

@@ -64,6 +64,7 @@ async function start(kind: 'local' | 'guest') {
   return {
     path,
     local,
+    sourceRow: () => server['state'].lastStatusByPaneKey.get(paneKey),
     replay: () => relay.replayCachedPayloadsForPanes(),
     validate: (value: unknown) => relay.validateTerminalUsageLimit(value),
     read: () => (kind === 'guest' ? latest : local.getStatusSnapshotForPane(paneKey)[0]),
@@ -138,6 +139,15 @@ it.each(['local', 'guest'] as const)(
       const cut = { sessionId, turnEndedAt: failed.turnEndedAt! }
       const initial = host.local.prepareTerminalUsageLimitSource(paneKey, ptyId, cut)!
       cleanups.push(() => initial.dispose())
+      expect(initial.isCurrent()).toBe(true)
+      expect(host.validate(initial.remote!.request)).toEqual({ status: 'current' })
+      await host.post('codex', { hook_event_name: 'Stop', turn_id: 'root' })
+      host.replay()
+      expect(host.local.getStatusSnapshotForPane(paneKey)[0]).toMatchObject({
+        mainAgent: main,
+        turnEndedAt: failed.turnEndedAt,
+        turnEndDisposition: 'identified'
+      })
       expect(initial.isCurrent()).toBe(true)
       expect(host.validate(initial.remote!.request)).toEqual({ status: 'current' })
       const movedPane = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
@@ -389,7 +399,7 @@ it.each([
     tool_name: 'Bash'
   })
   if (timing === 'after-release') {
-    await host.post('claude', { hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
+    await host.post('claude', { hook_event_name: 'SubagentStop', agent_id: 'areviewer-1' })
     expect(host.read()?.turnEndedAt).toBe(1_793_751_000_010)
   }
   appendFileSync(
@@ -413,10 +423,19 @@ it.each([
       host.replay()
       expect(host.read()?.turnEndedAt).toBeUndefined()
     }
-    await host.post('claude', { hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
+    await host.post('claude', { hook_event_name: 'SubagentStop', agent_id: 'areviewer-1' })
   }
   expect(host.read()?.turnEndedAt).toBe(1_793_751_000_010)
   expect(host.read()?.turnEndDisposition).toBe('identified')
+  expect(host.local.getStatusSnapshotForPane(paneKey)[0]?.mainAgent?.usageLimit).toEqual({})
+  if (kind === 'local') {
+    expect(
+      host.local.prepareTerminalUsageLimitContinuation(paneKey, {
+        sessionId,
+        turnEndedAt: 1_793_751_000_010
+      })?.()
+    ).toBe(true)
+  }
   if (kind === 'guest') {
     expect(
       host.validate({ paneKey, sessionId, turnEndedAt: 1_793_751_000_010, source: 'claude' })
@@ -456,7 +475,7 @@ it.each(['ambiguous', 'cancelled', 'new-root', 'session-restart'] as const)(
     } else {
       await host.post('claude', { hook_event_name: 'SessionStart', source: 'startup' })
     }
-    await host.post('claude', { hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
+    await host.post('claude', { hook_event_name: 'SubagentStop', agent_id: 'areviewer-1' })
     const ended = host.read()!
     expect(ended.turnEndDisposition).not.toBe('identified')
     if (mode === 'ambiguous') {
@@ -472,3 +491,189 @@ it.each(['ambiguous', 'cancelled', 'new-root', 'session-restart'] as const)(
     ).toEqual({ status: 'changed' })
   }
 )
+
+it('imports the first Codex quota on Stop and on child attribution without a healing poll', async () => {
+  const host = await start('guest')
+  const ptyId = 'quota-first-source-pty'
+  rememberPaneKeyForPty(ptyId, paneKey)
+  cleanups.push(() => {
+    ptyPaneKey.delete(ptyId)
+    paneKeyPtyId.delete(paneKey)
+  })
+  const started = (turn: string) => event({ type: 'task_started', turn_id: turn })
+  const failed = (turn: string) =>
+    event({
+      type: 'task_complete',
+      turn_id: turn,
+      error: { codex_error_info: 'usage_limit_exceeded' }
+    })
+  writeFileSync(host.path, jsonl(started('first')))
+  await host.post('codex', {
+    hook_event_name: 'UserPromptSubmit',
+    turn_id: 'first',
+    prompt: 'Finish'
+  })
+  appendFileSync(host.path, jsonl(failed('first')))
+  await host.post('codex', { hook_event_name: 'Stop', turn_id: 'first' })
+  const first = host.local.getStatusSnapshotForPane(paneKey)[0]
+  expect(first.mainAgent).toMatchObject({ state: 'done', outcome: 'failure', usageLimit: {} })
+  const firstCut = { sessionId, turnEndedAt: first.turnEndedAt! }
+  const prepared = host.local.prepareTerminalUsageLimitSource(paneKey, ptyId, firstCut)!
+  cleanups.push(() => prepared.dispose())
+  expect(prepared.isCurrent()).toBe(true)
+  expect(host.validate(prepared.remote!.request)).toEqual({ status: 'current' })
+  host.replay()
+  expect(prepared.isCurrent()).toBe(true)
+
+  appendFileSync(host.path, jsonl(started('second')))
+  await host.post('codex', {
+    hook_event_name: 'UserPromptSubmit',
+    turn_id: 'second',
+    prompt: 'Next'
+  })
+  expect(prepared.isCurrent()).toBe(false)
+  await host.post('codex', { hook_event_name: 'Stop', turn_id: 'second' })
+  const before = host.local.getStatusSnapshotForPane(paneKey)[0]
+  expect(before.mainAgent?.usageLimit).toBeUndefined()
+  appendFileSync(host.path, jsonl(failed('second')))
+  await host.post('codex', { hook_event_name: 'SubagentStart', agent_id: 'child' })
+  expect(host.local.getStatusSnapshotForPane(paneKey)[0]).toMatchObject({
+    state: 'working',
+    mainAgent: { state: 'done', outcome: 'failure', usageLimit: {} }
+  })
+  await host.post('codex', { hook_event_name: 'SubagentStop', agent_id: 'child' })
+  const ended = host.local.getStatusSnapshotForPane(paneKey)[0]
+  expect(ended).toMatchObject({
+    state: 'done',
+    turnEndedAt: before.turnEndedAt,
+    mainAgent: { state: 'done', outcome: 'failure', usageLimit: {} }
+  })
+  const childCut = host.local.prepareTerminalUsageLimitSource(paneKey, ptyId, {
+    sessionId,
+    turnEndedAt: ended.turnEndedAt!
+  })!
+  cleanups.push(() => childCut.dispose())
+  expect(childCut.isCurrent()).toBe(true)
+  expect(host.validate(childCut.remote!.request)).toEqual({ status: 'current' })
+})
+
+it.each(['local', 'guest'] as const)(
+  '%s compact cancels a pending failed cut before typed flush',
+  async (kind) => {
+    const host = await start(kind)
+    const user = {
+      type: 'user',
+      sessionId,
+      promptId,
+      uuid: 'user',
+      parentUuid: null,
+      isSidechain: false,
+      message: { content: 'Finish' }
+    }
+    writeFileSync(host.path, jsonl(user))
+    await host.post('claude', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt_id: promptId,
+      prompt: 'Finish'
+    })
+    await host.post('claude', { hook_event_name: 'SubagentStart', agent_id: 'areviewer-1' })
+    await host.post('claude', {
+      hook_event_name: 'StopFailure',
+      prompt_id: promptId,
+      error: 'rate_limit'
+    })
+    const completed = host.sourceRow()?.hostTurn?.completed
+    expect(completed).toBeDefined()
+    await host.post('claude', { hook_event_name: 'SessionStart', source: 'compact' })
+    expect(host.sourceRow()?.hostTurn).toMatchObject({ currentTurnKey: 'seed', completed })
+    expect(host.local.getStatusSnapshotForPane(paneKey)[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done', outcome: 'failure' }
+    })
+    await host.post('claude', { hook_event_name: 'SubagentStop', agent_id: 'areviewer-1' })
+    appendFileSync(
+      host.path,
+      jsonl({
+        type: 'assistant',
+        sessionId,
+        uuid: 'quota',
+        parentUuid: 'user',
+        isSidechain: false,
+        apiError: 'usage_limit_reached',
+        error: 'rate_limit'
+      })
+    )
+    await vi.advanceTimersByTimeAsync(300)
+    const retired = host.local.getStatusSnapshotForPane(paneKey)[0]
+    expect(retired.mainAgent?.usageLimit).toBeUndefined()
+    expect(retired.turnEndedAt).toBeUndefined()
+    expect(host.sourceRow()?.hostTurn).toMatchObject({ currentTurnKey: 'seed', completed })
+    expect(
+      host.local.prepareTerminalUsageLimitContinuation(paneKey, {
+        sessionId,
+        turnEndedAt: completed!.endedAt
+      })
+    ).toBeNull()
+    if (kind === 'guest') {
+      expect(
+        host.validate({ paneKey, sessionId, turnEndedAt: completed!.endedAt, source: 'claude' })
+      ).toEqual({ status: 'changed' })
+    }
+    await host.post('claude', { hook_event_name: 'Stop', prompt_id: promptId })
+    if (kind === 'guest') {
+      host.replay()
+    }
+    expect(host.local.getStatusSnapshotForPane(paneKey)[0]?.turnEndedAt).toBeUndefined()
+
+    appendFileSync(
+      host.path,
+      jsonl({ ...user, uuid: 'next-user', promptId: '33333333-3333-4333-8333-333333333333' })
+    )
+    await host.post('claude', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt_id: '33333333-3333-4333-8333-333333333333',
+      prompt: 'Next'
+    })
+    const opened = host.sourceRow()?.hostTurn?.currentTurnKey
+    await host.post('claude', { hook_event_name: 'SessionStart', source: 'compact' })
+    expect(host.sourceRow()?.hostTurn?.currentTurnKey).toBe(opened)
+    expect(host.local.getStatusSnapshotForPane(paneKey)[0]?.mainAgent?.state).toBe('working')
+    await host.post('claude', { hook_event_name: 'Stop' })
+    expect(host.local.getStatusSnapshotForPane(paneKey)[0]?.turnEndDisposition).toBe('identified')
+  }
+)
+
+it('never promotes a child-only Claude quota into a root action', async () => {
+  const host = await start('local')
+  writeFileSync(
+    host.path,
+    jsonl(
+      { type: 'user', sessionId, promptId, uuid: 'user', parentUuid: null, isSidechain: false },
+      {
+        type: 'assistant',
+        sessionId,
+        uuid: 'child-quota',
+        parentUuid: 'user',
+        isSidechain: true,
+        apiError: 'usage_limit_reached',
+        error: 'rate_limit'
+      }
+    )
+  )
+  await host.post('claude', {
+    hook_event_name: 'UserPromptSubmit',
+    prompt_id: promptId,
+    prompt: 'Finish'
+  })
+  await host.post('claude', { hook_event_name: 'SubagentStart', agent_id: 'areviewer-1' })
+  await host.post('claude', {
+    hook_event_name: 'StopFailure',
+    agent_id: 'areviewer-1',
+    prompt_id: promptId,
+    error: 'rate_limit'
+  })
+  const row = host.local.getStatusSnapshotForPane(paneKey)[0]
+  expect(row.mainAgent?.state).toBe('working')
+  expect(row.mainAgent?.usageLimit).toBeUndefined()
+  expect(row.turnEndedAt).toBeUndefined()
+})

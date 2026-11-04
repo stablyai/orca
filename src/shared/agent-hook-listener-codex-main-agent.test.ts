@@ -72,4 +72,54 @@ describe('the Codex root record seeded from a durable row', () => {
     )
     expect(reconciled).toMatchObject({ state: 'waiting', mainAgent: { state: 'working' } })
   })
+
+  it.each(['Stop', undefined, 'SubagentStop'])(
+    'keeps a consumed cancellation when %s carries late parent quota',
+    (eventName) => {
+      seedCodexStateFromSnapshot(state, PANE_KEY, {
+        state: 'done',
+        mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 42 }
+      })
+      const payload = {
+        state: 'done' as const,
+        prompt: 'ship',
+        agentType: 'codex' as const,
+        mainAgent: {
+          state: 'done' as const,
+          outcome: 'failure' as const,
+          usageLimit: {},
+          stateStartedAt: 99
+        }
+      }
+      const reconciled = reconcileRemoteCodexState(
+        state,
+        PANE_KEY,
+        eventName,
+        eventName === 'SubagentStop' ? 'child' : undefined,
+        payload,
+        undefined
+      )
+      expect(reconciled.mainAgent).toEqual({
+        state: 'done',
+        outcome: 'cancellation',
+        stateStartedAt: 42
+      })
+      expect(state.codexLeadStateByPaneKey.get(PANE_KEY)).toMatchObject({ outcome: 'cancellation' })
+      expect(
+        reconcileRemoteCodexState(
+          state,
+          PANE_KEY,
+          'UserPromptSubmit',
+          undefined,
+          {
+            state: 'working',
+            prompt: 'next',
+            agentType: 'codex',
+            mainAgent: { state: 'working', stateStartedAt: 100 }
+          },
+          reconciled
+        ).mainAgent
+      ).toMatchObject({ state: 'working' })
+    }
+  )
 })
