@@ -34,6 +34,11 @@ vi.mock('@/runtime/layout-owner-pane-intents', () => ({
   holdTabPaneTree: () => mocks.paneRelease
 }))
 
+vi.mock('../../../shared/stable-pane-id', async (importOriginal) => {
+  const original = await importOriginal<typeof stablePaneId>()
+  return { ...original, parsePaneKey: vi.fn(original.parsePaneKey) }
+})
+
 import { sendLayoutApply } from './layout-apply-send'
 import { afterWorkspaceLayoutCommands } from './layout-apply-call'
 import { isDrawnGroupLayoutHeld } from './layout-owner-drawn-tab-holds'
@@ -41,6 +46,10 @@ import { recordSleepingRecordChangesThroughLayoutOwner } from '@/store/terminals
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { LayoutApplyParams } from '../../../shared/rpc-contract/workspace-layout-params'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { createTestStore, makeTab, seedStore } from '@/store/slices/store-test-helpers'
+import { useAppStore } from '@/store'
+import { followSleepingRecordsInLayoutOwner } from './sleeping-records-to-layout-owner'
+import * as stablePaneId from '../../../shared/stable-pane-id'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the owner lookup is mocked and never reads the state.
 const NO_STATE = {} as never
@@ -94,6 +103,127 @@ it('carries the observed record or observed absence through the existing rendere
   expect(second).toMatchObject({ type: 'wake', expectedRecords: captured })
   expect(conflict).toHaveBeenCalledExactlyOnceWith(workspace, [record.paneKey])
   expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+})
+
+it('groups N and 10N same-tab and wide-tab sleeping records linearly', async () => {
+  vi.useRealTimers()
+  mocks.frame.arrives = true
+  mocks.owner.kind = 'resolved'
+  mocks.sent.reply = { ok: true, result: {} }
+  const workspace = 'repo::/sleep-scaling'
+  const store = createTestStore()
+  seedStore(store, { tabsByWorktree: {} })
+  const subscription = vi.spyOn(useAppStore, 'subscribe').mockImplementation(store.subscribe)
+  followSleepingRecordsInLayoutOwner()
+  try {
+    for (const wide of [false, true]) {
+      for (const count of [20, 200]) {
+        let tabVisits = 0
+        const tabs = Array.from({ length: wide ? count : 1 }, (_, index) => {
+          const id = `tab-${index}`
+          const tab = makeTab({ id, worktreeId: workspace })
+          Object.defineProperty(tab, 'id', {
+            get: () => {
+              tabVisits++
+              return id
+            },
+            enumerable: true,
+            configurable: true
+          })
+          return tab
+        })
+        store.setState({
+          tabsByWorktree: { [workspace]: tabs },
+          sleepingAgentSessionsByPaneKey: {}
+        })
+        await afterWorkspaceLayoutCommands({ kind: 'local' }, workspace, async () => {})
+        const live = Array.from({ length: count }, (_, index): SleepingAgentSessionRecord => ({
+          paneKey: `tab-${wide ? index : 0}:${index.toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`,
+          worktreeId: workspace,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: `session-${index}` },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: count,
+          origin: 'live'
+        }))
+        store.setState({
+          sleepingAgentSessionsByPaneKey: Object.fromEntries(
+            live.map((record) => [record.paneKey, record])
+          )
+        })
+        await afterWorkspaceLayoutCommands({ kind: 'local' }, workspace, async () => {})
+        const records = live.map((record) => ({ ...record, origin: 'quit' as const }))
+        const known = new Set<unknown>(records)
+        const put = Map.prototype.set
+        let copiedRecords = 0
+        Map.prototype.set = function (key, value) {
+          if (Array.isArray(value) && known.has(value[0])) {
+            const iterate = value[Symbol.iterator].bind(value)
+            value[Symbol.iterator] = function* (): Generator<unknown, undefined, unknown> {
+              copiedRecords += value.length
+              yield* iterate()
+              return undefined
+            }
+          }
+          return put.call(this, key, value)
+        }
+        vi.mocked(callRuntimeRpc).mockClear()
+        vi.mocked(stablePaneId.parsePaneKey).mockClear()
+        tabVisits = 0
+        try {
+          store.setState({
+            sleepingAgentSessionsByPaneKey: Object.fromEntries(
+              records.map((record) => [record.paneKey, record])
+            )
+          })
+          await afterWorkspaceLayoutCommands({ kind: 'local' }, workspace, async () => {})
+          expect(callRuntimeRpc).toHaveBeenCalledTimes(wide ? count : 1)
+          const commands = vi
+            .mocked(callRuntimeRpc)
+            .mock.calls.map((call) => LayoutApplyParams.parse(call[2]).command)
+          expect(commands.every((command) => command.type === 'sleep')).toBe(true)
+          expect(
+            commands.flatMap((command) => (command.type === 'sleep' ? (command.records ?? []) : []))
+          ).toEqual(records)
+          expect(copiedRecords).toBeLessThanOrEqual(count * 8)
+          expect(tabVisits).toBeGreaterThan(0)
+          expect(tabVisits).toBeLessThanOrEqual(count * 8)
+          expect(stablePaneId.parsePaneKey).toHaveBeenCalled()
+          expect(vi.mocked(stablePaneId.parsePaneKey).mock.calls.length).toBeLessThanOrEqual(
+            count * 8
+          )
+          vi.mocked(callRuntimeRpc).mockClear()
+          store.setState({ activeWorktreeId: 'unrelated::/workspace' })
+          await afterWorkspaceLayoutCommands({ kind: 'local' }, workspace, async () => {})
+          expect(callRuntimeRpc).not.toHaveBeenCalled()
+          if (wide) {
+            vi.mocked(stablePaneId.parsePaneKey).mockClear()
+            tabVisits = 0
+            store.setState({ sleepingAgentSessionsByPaneKey: {} })
+            await afterWorkspaceLayoutCommands({ kind: 'local' }, workspace, async () => {})
+            expect(callRuntimeRpc).toHaveBeenCalledTimes(count)
+            expect(
+              vi
+                .mocked(callRuntimeRpc)
+                .mock.calls.every(
+                  (call) => LayoutApplyParams.parse(call[2]).command.type === 'wake'
+                )
+            ).toBe(true)
+            expect(tabVisits).toBeLessThanOrEqual(count * 8)
+            expect(vi.mocked(stablePaneId.parsePaneKey).mock.calls.length).toBeLessThanOrEqual(
+              count * 8
+            )
+          }
+        } finally {
+          Map.prototype.set = put
+        }
+      }
+    }
+  } finally {
+    subscription.mockRestore()
+  }
 })
 
 describe('sendLayoutApply holds with no answer', () => {

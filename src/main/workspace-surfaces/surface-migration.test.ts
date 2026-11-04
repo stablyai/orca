@@ -6,6 +6,7 @@ import { seedWorkspaceSurfaces } from './surface-migration'
 import { emptySurfaceHostDomain } from '../../shared/workspace-surfaces/surface-profile-domain'
 import { nameBasedUuid } from '../../shared/workspace-layout/workspace-layout-minted-ids'
 import { workspaceSurfaceSchema } from '../../shared/workspace-surfaces/surface-schema'
+import { reserveImportedSurfaceIdentities } from './surface-migration-identities'
 
 const leafId = '339343d0-9fcb-4d4d-8bf6-69615be0f927'
 const snapshot: WorkspaceSessionState = {
@@ -334,4 +335,58 @@ describe('canonical surface migration and presentation projection', () => {
     expect(snapshot).toEqual(before)
     expect(projectSurfaceSession('local', snapshot, []).unifiedTabs?.folder).toHaveLength(2)
   })
+})
+
+it('indexes migration mapping history once per import batch and reuses the exact elected identities at N and 10N', () => {
+  const counts = [20, 200].map((count) => {
+    let visits = 0
+    const evidence = emptySurfaceHostDomain()
+    evidence.identityMappings = Array.from({ length: count }, (_, index) => ({
+      workspaceId: 'folder',
+      kind: 'host-tab' as const,
+      get previousId() {
+        visits++
+        return `historical-${index}`
+      },
+      currentId: `historical-current-${index}`
+    }))
+    const incoming: WorkspaceSurface[] = Array.from({ length: count }, (_, index) => ({
+      hostId: 'local',
+      workspaceId: 'folder',
+      hostTabId: `tab-${index}`,
+      occurrence: `occurrence-${index}`,
+      revision: 1,
+      createdAt: 1,
+      content: { kind: 'agent-session', sessionId: `conversation-${index}`, agent: 'codex' }
+    }))
+    const reserved = incoming.map((surface) => surface.hostTabId)
+    let minted = 0
+    const first = reserveImportedSurfaceIdentities(
+      incoming,
+      [],
+      reserved,
+      evidence,
+      () => `new-${++minted}`
+    )
+    const firstVisits = visits
+    const mappingCount = evidence.identityMappings.length
+    visits = 0
+    const replay = reserveImportedSurfaceIdentities(
+      incoming,
+      [],
+      reserved,
+      evidence,
+      () => `new-${++minted}`
+    )
+    expect(replay).toEqual(first)
+    expect(evidence.identityMappings).toHaveLength(mappingCount)
+    expect(first.every((surface, index) => surface.hostTabId !== incoming[index]!.hostTabId)).toBe(
+      true
+    )
+    expect(firstVisits).toBeGreaterThan(0)
+    expect(firstVisits).toBeLessThanOrEqual(2 * count)
+    expect(visits).toBeLessThanOrEqual(2 * count)
+    return firstVisits
+  })
+  expect(counts[1]).toBeLessThanOrEqual(counts[0]! * 10)
 })

@@ -1,9 +1,6 @@
 import { surfaceExecutionKernelChanged } from '../../shared/workspace-surfaces/surface-execution-provenance'
 import { isDeepStrictEqual } from 'node:util'
-import {
-  boundSurfaceRunAllocation,
-  type SurfaceAllocation
-} from '../../shared/workspace-surfaces/surface-allocation'
+import type { SurfaceAllocation } from '../../shared/workspace-surfaces/surface-allocation'
 import type {
   SurfaceExecutionScope,
   SurfaceExecutorAdmission,
@@ -41,23 +38,15 @@ export class SurfaceAllocationRecovery {
     if (this.disposed) {
       return
     }
+    // Same-boot unknown work keeps interest until an owner/domain wake, never a launch gate.
     this.deps.pending?.(
       result.hostId,
-      result.allocations.some((allocation) => Boolean(allocation.resourceId))
+      result.allocations.some((allocation) =>
+        Boolean(allocation.resourceId && allocation.executorId)
+      )
     )
-    const allocated = new Set(result.allocations.map((allocation) => allocation.allocationId))
-    const bindings = wake
-      ? (result.host?.surfaces ?? []).flatMap((surface) =>
-          surface.content?.kind === 'terminal'
-            ? Object.keys(surface.content.leaves).flatMap((leafId) => {
-                const bound = boundSurfaceRunAllocation(surface, leafId)
-                return bound?.executorId && !allocated.has(bound.allocationId) ? [bound] : []
-              })
-            : []
-        )
-      : []
     const present = new Set<string>()
-    for (const allocation of [...result.allocations, ...bindings]) {
+    for (const allocation of result.allocations) {
       const key = JSON.stringify([result.hostId, allocation.allocationId])
       present.add(key)
       const before = this.latest.get(key)
@@ -89,11 +78,13 @@ export class SurfaceAllocationRecovery {
   }
 
   wakeAllocation(admission: SurfaceExecutorAdmission): void {
-    if (!isDeepStrictEqual(admission.scope, this.deps.scope())) {
-      return
-    }
     const key = JSON.stringify([admission.hostId, admission.allocationId])
-    if (this.latest.has(key)) {
+    const allocation = this.latest.get(key)?.allocation
+    if (
+      allocation?.resourceId === admission.resourceId &&
+      allocation.executorId === admission.executorId &&
+      isDeepStrictEqual(allocation.provenance ?? null, admission.provenance ?? null)
+    ) {
       this.enqueue(key)
     }
   }

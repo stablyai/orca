@@ -1,3 +1,4 @@
+import { releaseSurfaceAdmissions } from '../../workspace-surfaces/surface-admission-capture'
 import { isDeepStrictEqual } from 'node:util'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { surfaceLayoutOutcome } from '../../workspace-surfaces/surface-layout-outcome'
@@ -68,105 +69,103 @@ export async function applyCanonicalLayoutCommand(
         (hostId) => [hostId, structuredClone(context.sessions.getWorkspaceSession(hostId))] as const
       )
   )
-  const captured = new Map(
-    owners
-      .filter((hostId) => !legacy.has(hostId))
-      .map((hostId) => [
-        hostId,
-        captureSurfaceLayoutCommand(
-          context.runtime.workspaceSurfaces!,
+  const captured = new Map<ExecutionHostId, ReturnType<typeof captureSurfaceLayoutCommand>>()
+  const capture = (hostId: ExecutionHostId) =>
+    captureSurfaceLayoutCommand(
+      context.runtime.workspaceSurfaces!,
+      hostId,
+      context.sessions.getWorkspaceSession(hostId),
+      command,
+      run.live,
+      context.sessions
+        .getWorkspaceSessionHostIds()
+        .map((id) => context.sessions.getWorkspaceSession(id))
+    )
+  try {
+    for (const hostId of owners) {
+      if (!legacy.has(hostId)) {
+        captured.set(hostId, capture(hostId))
+      }
+    }
+    for (const hostId of legacy.keys()) {
+      await context.surfaces.executeWorkspaceSurfaceCommand({ type: 'initialize', hostId })
+    }
+    for (const [hostId, previous] of legacy) {
+      const current = context.sessions.getWorkspaceSession(hostId)
+      if (!isDeepStrictEqual(terminalOwnerState(previous), terminalOwnerState(current))) {
+        return { ok: false, code: 'tab_not_found' }
+      }
+      captured.set(hostId, capture(hostId))
+    }
+    let refused: LayoutApplyOutcome = { ok: false, code: 'workspace_not_found' }
+    const views = new Map<ExecutionHostId, ReturnType<typeof applyCommandToSession>['views']>()
+    const results = await context.surfaces.executeWorkspaceSurfaceTransaction(() => {
+      const partitions = owners.map((hostId) => context.sessions.getWorkspaceSession(hostId))
+      if (run.admit && !run.admit(partitions)) {
+        refused = { ok: false, code: 'tab_not_found' }
+        return []
+      }
+      const changes = owners.map((hostId, index) => {
+        const session = partitions[index]!
+        const normalized = captured.get(hostId)!.request.command
+        const change = applyCommandToSession(
           hostId,
-          context.sessions.getWorkspaceSession(hostId),
-          command,
+          session,
+          normalized,
+          partitionEditorViewsOf(context.runtime, hostId),
           run.live
         )
-      ])
-  )
-  for (const hostId of legacy.keys()) {
-    await context.surfaces.executeWorkspaceSurfaceCommand({ type: 'initialize', hostId })
-  }
-  for (const [hostId, previous] of legacy) {
-    const current = context.sessions.getWorkspaceSession(hostId)
-    if (!isDeepStrictEqual(terminalOwnerState(previous), terminalOwnerState(current))) {
-      return { ok: false, code: 'tab_not_found' }
-    }
-    captured.set(
-      hostId,
-      captureSurfaceLayoutCommand(
-        context.runtime.workspaceSurfaces!,
-        hostId,
-        current,
-        command,
-        run.live
-      )
-    )
-  }
-  let refused: LayoutApplyOutcome = { ok: false, code: 'workspace_not_found' }
-  const views = new Map<ExecutionHostId, ReturnType<typeof applyCommandToSession>['views']>()
-  const results = await context.surfaces.executeWorkspaceSurfaceTransaction(() => {
-    const partitions = owners.map((hostId) => context.sessions.getWorkspaceSession(hostId))
-    if (run.admit && !run.admit(partitions)) {
-      refused = { ok: false, code: 'tab_not_found' }
-      return []
-    }
-    const changes = owners.map((hostId, index) => {
-      const session = partitions[index]!
-      const normalized = captured.get(hostId)!.request.command
-      const change = applyCommandToSession(
-        hostId,
-        session,
-        normalized,
-        partitionEditorViewsOf(context.runtime, hostId),
-        run.live
-      )
-      views.set(hostId, change.views)
-      return { hostId, session, change, normalized }
+        views.set(hostId, change.views)
+        return { hostId, session, change, normalized }
+      })
+      const failure = changes.find(({ change }) => !change.value.ok)?.change
+      if (changes.length === 0 || failure) {
+        refused = failure?.value ?? refused
+        return []
+      }
+      return changes.map(({ hostId, session }) => ({ ...captured.get(hostId)!, session }))
     })
-    const failure = changes.find(({ change }) => !change.value.ok)?.change
-    if (changes.length === 0 || failure) {
-      refused = failure?.value ?? refused
-      return []
+    if (results.length === 0) {
+      return refused
     }
-    return changes.map(({ hostId, session }) => ({ ...captured.get(hostId)!, session }))
-  })
-  if (results.length === 0) {
-    return refused
-  }
-  for (const result of results) {
-    const hostId = hostIds.find((id) => id === result.hostId)!
-    const outcome = result.outcome
+    for (const result of results) {
+      const hostId = hostIds.find((id) => id === result.hostId)!
+      const outcome = result.outcome
+      if (
+        !outcome ||
+        typeof outcome !== 'object' ||
+        !('status' in outcome) ||
+        outcome.status !== 'accepted' ||
+        !('result' in outcome)
+      ) {
+        continue
+      }
+      const retainedViews = views.get(hostId)
+      if (retainedViews) {
+        keepPartitionEditorViews(context.runtime, hostId, retainedViews)
+      }
+    }
+    const outcome = results[0]!.outcome
     if (
-      !outcome ||
-      typeof outcome !== 'object' ||
-      !('status' in outcome) ||
-      outcome.status !== 'accepted' ||
-      !('result' in outcome)
+      outcome &&
+      typeof outcome === 'object' &&
+      'status' in outcome &&
+      outcome.status === 'accepted' &&
+      'result' in outcome
     ) {
-      continue
+      if (
+        outcome.effects.stopPtyIds.length &&
+        run.stopBeforeWrite?.(outcome.effects.stopPtyIds) === false
+      ) {
+        throw new Error('Previous terminal could not be stopped; retry the terminal start')
+      }
+      run.onEffects?.(outcome.effects)
+      return { ok: true, result: outcome.result }
     }
-    const retainedViews = views.get(hostId)
-    if (retainedViews) {
-      keepPartitionEditorViews(context.runtime, hostId, retainedViews)
-    }
+    return surfaceLayoutOutcome(outcome)
+  } finally {
+    releaseSurfaceAdmissions([...captured.values()])
   }
-  const outcome = results[0]!.outcome
-  if (
-    outcome &&
-    typeof outcome === 'object' &&
-    'status' in outcome &&
-    outcome.status === 'accepted' &&
-    'result' in outcome
-  ) {
-    if (
-      outcome.effects.stopPtyIds.length &&
-      run.stopBeforeWrite?.(outcome.effects.stopPtyIds) === false
-    ) {
-      throw new Error('Previous terminal could not be stopped; retry the terminal start')
-    }
-    run.onEffects?.(outcome.effects)
-    return { ok: true, result: outcome.result }
-  }
-  return surfaceLayoutOutcome(outcome)
 }
 
 /** Initialization may reshape device presentation; it cannot grant an older intent a new terminal owner. */

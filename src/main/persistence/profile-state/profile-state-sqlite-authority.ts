@@ -1,3 +1,9 @@
+import type { SurfaceKey } from '../../../shared/workspace-surfaces/surface-content'
+import type {
+  SurfaceStorageRead,
+  SurfaceStorageReadResult
+} from '../../../shared/workspace-surfaces/surface-storage-read'
+import { readSurfaceOwner } from '../../workspace-surfaces/surface-owner-read'
 import { writeCompleteProfileStateDomains } from './profile-state-complete-domain-write'
 import type { JournalPersistenceEffect } from '../../native-chat/agent-session-journal/journal-persistence-plan'
 import type Database from '../../sqlite/sync-database'
@@ -18,14 +24,15 @@ import {
   readAcceptedProfileStateParsedSnapshot,
   readProfileStateParsedSnapshot,
   readProfileStateRevision,
-  readProfileStateSnapshot
+  readProfileStateSnapshot,
+  ProfileStateRevisionConflictError
 } from './profile-state-documents'
+import type { openWritableProfileStateDatabase } from './profile-state-database'
 import {
-  openWritableProfileStateDatabase,
+  openMarkedWritableProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from './profile-state-database'
 import { writeProfileStateDomains } from './profile-state-domain-writes'
-import { ProfileStateRevisionConflictError } from './profile-state-document-validation'
 import { assertProfileStateRevisionOnDisk } from './profile-state-revision-readmission'
 import {
   quarantineProfileStateDatabase,
@@ -34,7 +41,6 @@ import {
 import { writeProfileStateAuthorityJsonExport } from './legacy-json/profile-state-authority-exports'
 import { serializedProfileDomainReplacements } from './profile-state-complete-replacements'
 import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
-import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
 import type {
   SurfaceStorageCommand,
@@ -48,6 +54,14 @@ import {
 
 /** Reuse one writable handle; fenced domain commits preserve unchanged normalized rows. */
 export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
+  private surfaceInvalidations: readonly SurfaceKey[] = []
+
+  takeSurfaceInvalidations(): readonly SurfaceKey[] {
+    const keys = this.surfaceInvalidations
+    this.surfaceInvalidations = []
+    return keys
+  }
+
   private retired = false
   private observedRevision: number | undefined
   private writableDatabase: ReturnType<typeof openWritableProfileStateDatabase> | undefined
@@ -103,7 +117,9 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     this.assertActive()
     const opened = openProfileStateDatabaseReadOnly(this.databasePath, this.profileId)
     try {
-      const snapshot = readAcceptedProfileStateParsedSnapshot(opened.db, rawJson)
+      const snapshot = readAcceptedProfileStateParsedSnapshot(opened.db, rawJson, {
+        excludeSurfaceEvidence: true
+      })
       if (snapshot === undefined) {
         return undefined
       }
@@ -121,7 +137,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     const opened =
       this.writableDatabase ?? openProfileStateDatabaseReadOnly(this.databasePath, this.profileId)
     try {
-      const snapshot = readProfileStateParsedSnapshot(opened.db)
+      const snapshot = readProfileStateParsedSnapshot(opened.db, { excludeSurfaceEvidence: true })
       return this.createInitialState(
         snapshot.revision,
         snapshot.revision === 0 ? undefined : snapshot.state
@@ -159,11 +175,17 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
   ): void {
     this.observeCurrentRevision()
     const opened = this.openWritableDatabase()
-    this.observedRevision = writeProfileStateDomains(opened.db, {
+    const committed = writeProfileStateDomains(opened.db, {
       expectedRevision: this.observedRevision ?? 0,
       replacements,
       automationRunsAfter
-    }).revision
+    })
+    this.observedRevision = committed.revision
+    this.surfaceInvalidations = committed.surfaceInvalidations ?? []
+  }
+
+  readSurface(request: SurfaceStorageRead): SurfaceStorageReadResult {
+    return this.surfaceWrite((db, revision) => readSurfaceOwner(db, revision, request)).result
   }
 
   executeSurfaceCommand(command: SurfaceStorageCommand): SurfaceStorageResult {
@@ -171,12 +193,12 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       .result
   }
 
-  executeSurfaceTransaction(commands: readonly SurfaceStorageMutation[]): SurfaceStorageResult[] {
+  executeSurfaceTransaction(commands: readonly SurfaceStorageMutation[]) {
     return this.surfaceWrite((db, revision) => executeSurfaceOwnerCommands(db, revision, commands))
       .results
   }
 
-  executeSurfaceJointTransaction(transaction: SurfaceJointTransaction): SurfaceStorageResult[] {
+  executeSurfaceJointTransaction(transaction: SurfaceJointTransaction) {
     return this.surfaceWrite((db, revision) =>
       executeSurfaceJointTransaction(db, revision, transaction)
     ).results
@@ -225,12 +247,15 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     this.writeCompleteSerializedDomains(serializedProfileDomainReplacements(payload))
   }
 
-  writeCompleteSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): void {
+  writeCompleteSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]) {
     this.observeCurrentRevision()
     this.observedRevision = writeCompleteProfileStateDomains(
       () => this.openWritableDatabase().db,
       this.observedRevision,
-      replacements
+      replacements,
+      (keys) => {
+        this.surfaceInvalidations = keys
+      }
     )
   }
 
@@ -278,10 +303,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     })
   }
 
-  private createInitialState(
-    revision: number,
-    value: Record<string, unknown> | undefined
-  ): ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority> {
+  private createInitialState(revision: number, value: Record<string, unknown> | undefined) {
     this.observedRevision = revision
     return createProfileStateStartupTransfer(this, value, () => {
       this.assertActive()
@@ -304,16 +326,10 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   private openWritableDatabase(): NonNullable<ProfileStateSqliteAuthority['writableDatabase']> {
     this.assertActive()
-    if (!this.writableDatabase) {
-      const opened = openWritableProfileStateDatabase(this.databasePath, this.profileId)
-      try {
-        ensureProfileStateAuthorityMarker(this.databasePath)
-        this.writableDatabase = opened
-      } catch (error) {
-        opened.db.close()
-        throw error
-      }
-    }
+    this.writableDatabase ??= openMarkedWritableProfileStateDatabase(
+      this.databasePath,
+      this.profileId
+    )
     return this.writableDatabase
   }
 }

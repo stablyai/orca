@@ -1,6 +1,6 @@
-import { onTestFinished } from 'vitest'
+import { onTestFinished, expect, it, vi } from 'vitest'
 import { observeNativeJournalSql } from '../native-chat/agent-session-journal/journal-native-test-instrumentation'
-import { expect, it, vi } from 'vitest'
+
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionOperationKey } from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'

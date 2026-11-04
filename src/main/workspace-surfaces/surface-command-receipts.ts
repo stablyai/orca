@@ -6,6 +6,7 @@ import {
   type SurfaceCommandOutcome
 } from '../../shared/workspace-surfaces/surface-command'
 import { parseJson } from './surface-rows'
+import { recordSurfaceReceipt } from './surface-transaction-changes'
 
 export const MAX_SURFACE_COMMAND_LIFETIME_MS = 720_000
 
@@ -43,6 +44,19 @@ export function runSurfaceCommand(
     throw new Error('surface_domain_not_initialized')
   }
   const outcome = surfaceCommandOutcomeSchema.parse(apply())
+  for (const expired of db
+    .prepare(
+      'SELECT host_id, caller_id, command_id FROM main.workspace_surface_commands WHERE expires_at <= ?'
+    )
+    .all(now())) {
+    recordSurfaceReceipt(
+      db,
+      String(expired.host_id),
+      String(expired.caller_id),
+      String(expired.command_id),
+      null
+    )
+  }
   db.prepare('DELETE FROM main.workspace_surface_commands WHERE expires_at <= ?').run(now())
   db.prepare(`INSERT INTO main.workspace_surface_commands
     (host_id, caller_id, command_id, fingerprint, expires_at, result_json)
@@ -54,5 +68,12 @@ export function runSurfaceCommand(
     identity.expiresAt,
     JSON.stringify(outcome)
   )
+  recordSurfaceReceipt(db, identity.hostId, identity.callerId, identity.commandId, {
+    callerId: identity.callerId,
+    commandId: identity.commandId,
+    fingerprint,
+    expiresAt: identity.expiresAt,
+    outcome
+  })
   return outcome
 }

@@ -1,3 +1,23 @@
+import {
+  SURFACE_EVIDENCE_PREFIX,
+  surfaceEvidenceDocumentSchema
+} from '../../shared/workspace-surfaces/surface-evidence-document'
+import {
+  exportProfileStateJson,
+  importProfileStateJson,
+  readProfileStateParsedSnapshot,
+  readProfileStateRevision
+} from '../persistence/profile-state/profile-state-documents'
+import {
+  writeProfileStateDomains,
+  writeProfileStateDomainsInTransaction
+} from '../persistence/profile-state/profile-state-domain-writes'
+import { buildCompleteDocumentReplacements } from '../persistence/profile-state/profile-state-complete-replacements'
+import { attachSurfaceEvidenceReader } from './surface-cold-evidence'
+import { reserveImportedSurfaceIdentities } from './surface-migration-identities'
+import { readSurfaceOwner } from './surface-owner-read'
+import { readSurfaceProfileSnapshot } from './surface-profile-cache'
+import { runTargetOf } from '../../shared/workspace-surfaces/surface-allocation'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,9 +31,9 @@ import type { WorkspaceSurface } from '../../shared/workspace-surfaces/surface-c
 import { projectSurfaceSession } from '../../shared/workspace-surfaces/surface-session-projection'
 import { openWritableProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
-import { readProfileStateRevision } from '../persistence/profile-state/profile-state-documents'
+
 import { withProfileStateWriteTransaction } from '../persistence/profile-state/profile-state-write-transaction'
-import { writeProfileStateDomainsInTransaction } from '../persistence/profile-state/profile-state-domain-writes'
+
 import {
   captureSurfaceProfileDomain,
   markSurfaceIndices,
@@ -27,6 +47,10 @@ import { hashProfileStatePayload } from '../persistence/profile-state/profile-st
 import { PROFILE_STATE_META_REVISION } from '../persistence/profile-state/profile-state-database-schema'
 import { executeSurfaceOwnerCommand, executeSurfaceOwnerCommands } from './surface-owner-command'
 import { preserveSurfaceRecoveryObligations } from './surface-recovery-obligations'
+import {
+  surfaceCarrierFromRecoveryJson,
+  surfaceDocumentsFromRecoveryJson
+} from './surface-recovery-evidence'
 
 let directory: string
 let databasePath: string
@@ -303,7 +327,7 @@ it('accepts terminal commands without opening a corrupt chat file and retains ex
     resource: { ptyId: 'late-process', incarnationId: 'late-incarnation' }
   })
   expect(late.outcome).toMatchObject({ status: 'accepted', allocation: { decision: 'aborting' } })
-  expect(late.host.surfaces[0]?.content).toBeNull()
+  expect(late.host.surfaces).toEqual([])
   expect(late.session.tabsByWorktree.folder ?? []).toEqual([])
   expect(late.allocations).toHaveLength(1)
   expect(readFileSync(chatPath)).toEqual(corruptChat)
@@ -318,7 +342,7 @@ it('imports an old terminal close once and keeps the exact unacknowledged resour
   const authority = new ProfileStateSqliteAuthority(databasePath, 'test-profile')
   authority.readSerializedState()
   const closed = authority.executeSurfaceCommand({ type: 'initialize', hostId: 'local' })
-  expect(closed.host.surfaces[0]?.content).toBeNull()
+  expect(closed.host.surfaces).toEqual([])
   expect(closed.allocations).toMatchObject([
     {
       allocationId: 'run',
@@ -352,16 +376,12 @@ it('imports old process replacement without carrying a previous run identity int
     throw new Error('Terminal replacement was lost')
   }
   expect(content.leaves[leafId]?.runId).not.toBe('run')
-  expect(imported.allocations).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({ allocationId: 'run', decision: 'aborting', resourceId: 'process' }),
-      expect.objectContaining({
-        allocationId: content.leaves[leafId]!.runId,
-        decision: 'committed',
-        resource: { ptyId: 'replacement-process', incarnationId: 'replacement-incarnation' }
-      })
-    ])
-  )
+  expect(imported.allocations).toMatchObject([
+    { allocationId: 'run', decision: 'aborting', resourceId: 'process' }
+  ])
+  expect(
+    imported.allocations.some((row) => row.allocationId === content.leaves[leafId]!.runId)
+  ).toBe(false)
   expect(imported.session.terminalLayoutsByTabId.terminal!.ptyIdsByLeafId![leafId]).toBe(
     'replacement-process'
   )
@@ -398,6 +418,29 @@ it('keeps later exact retirement and receipt when recovery selects older content
   expect(preserveSurfaceRecoveryObligations(undefined, later)!.hosts.local!.allocations).toEqual(
     recovered.hosts.local!.allocations
   )
+})
+
+it('reconstructs acknowledged later binding debt without changing selected content and lets explicit abort win', () => {
+  const later = commit((repository) => repository.initialize('local', [terminal]))
+  const selected = structuredClone(later)
+  selected.hosts.local!.surfaces = []
+  expect(later.hosts.local!.allocations).toEqual([])
+  const recovered = preserveSurfaceRecoveryObligations(selected, later)!
+  expect(recovered.hosts.local!.surfaces).toEqual([])
+  expect(recovered.hosts.local!.allocations).toMatchObject([
+    {
+      allocationId: 'run',
+      decision: 'aborting',
+      resourceId: 'process',
+      resource: { ptyId: 'process', incarnationId: 'incarnation' }
+    }
+  ])
+  const stillBound = preserveSurfaceRecoveryObligations(later, later)!
+  expect(stillBound.hosts.local!.allocations).toEqual([])
+  later.hosts.local!.allocations = recovered.hosts.local!.allocations
+  expect(
+    preserveSurfaceRecoveryObligations(stillBound, later)!.hosts.local!.allocations
+  ).toMatchObject([{ allocationId: 'run', decision: 'aborting' }])
 })
 
 it('does not let an old terminal close retire a native successor after one-file recovery', () => {
@@ -536,3 +579,224 @@ it('commits remote partition commands at one revision and rolls every partition 
   expect(readSurfaceProfileDomain(db)).toEqual(before)
   expect(readProfileStateRevision(db)).toBe(created.revision)
 })
+
+it('reads only the last reserved recovery root while retaining nested exact resource facts', () => {
+  const carrier = commit((repository) => repository.initialize('local', [terminal]))
+  const payload = JSON.stringify(carrier)
+  const largeHistory = JSON.stringify('unrelated history '.repeat(10_000))
+  const raw = `{"workspaceSurfaces":{"invalid":"earlier duplicate"},"history":${largeHistory},"nested":{"workspaceSurfaces":null},"workspaceSurfaces":${payload},"tail":[false,null,42]}`
+  expect(surfaceCarrierFromRecoveryJson(raw)).toEqual(carrier)
+  expect(
+    surfaceCarrierFromRecoveryJson(`{"nested":{"workspaceSurfaces":${payload}}}`)
+  ).toBeUndefined()
+  expect(() => surfaceCarrierFromRecoveryJson(`[${payload}]`)).toThrow('root must be an object')
+  expect(() => surfaceCarrierFromRecoveryJson(raw.slice(0, -1))).toThrow()
+  expect(() => surfaceCarrierFromRecoveryJson('{"workspaceSurfaces":null}')).toThrow()
+  expect(() =>
+    surfaceDocumentsFromRecoveryJson('{"workspaceSurfaceEvidence/invalid":false}')
+  ).toThrow()
+})
+
+it('uses exact committed root stamps for warm reads, ignores unrelated profile revisions and discards rollback state', () => {
+  commit((repository) => repository.initialize('local', [terminal]))
+  const target = runTargetOf(terminal, leafId)!
+  const request = { type: 'run' as const, hostId: 'local', target }
+  const first = readSurfaceOwner(db, readProfileStateRevision(db), request)
+  expect(first.result).toMatchObject({ type: 'run', surface: terminal })
+  const snapshot = readSurfaceProfileSnapshot(db)
+  withProfileStateWriteTransaction(db, () => {
+    writeProfileStateDomainsInTransaction(db, {
+      expectedRevision: readProfileStateRevision(db),
+      replacements: [{ domain: 'settings', payload: '{"theme":"dark"}' }]
+    })
+  })
+  expect(readSurfaceProfileSnapshot(db)).toBe(snapshot)
+  expect(readSurfaceOwner(db, readProfileStateRevision(db), request).result).toMatchObject({
+    surface: terminal
+  })
+  expect(() =>
+    withProfileStateWriteTransaction(db, () => {
+      const domain = readSurfaceProfileDomain(db)
+      domain.hosts.local!.surfaces = []
+      writeProfileStateDomainsInTransaction(
+        db,
+        {
+          expectedRevision: readProfileStateRevision(db),
+          replacements: []
+        },
+        domain
+      )
+      throw new Error('rollback staged root')
+    })
+  ).toThrow('rollback staged root')
+  expect(readSurfaceOwner(db, readProfileStateRevision(db), request).result).toMatchObject({
+    surface: terminal
+  })
+  // A replacement root is visible, even on the same connection; removed/bad derived tables cannot prove absence.
+  commit((repository) =>
+    repository.replaceContent({
+      ...key,
+      callerId: 'exact-read',
+      commandId: 'close',
+      expiresAt: 100,
+      expected: terminal,
+      content: null
+    })
+  )
+  db.exec('DROP TABLE main.workspace_surface_index_meta')
+  expect(readSurfaceOwner(db, readProfileStateRevision(db), request).result).toMatchObject({
+    surface: { content: null }
+  })
+  db.close()
+  db = openWritableProfileStateDatabase(databasePath, 'test-profile').db
+  expect(readSurfaceOwner(db, readProfileStateRevision(db), request).result).toMatchObject({
+    surface: { content: null }
+  })
+})
+
+it('moves hot evidence atomically to generic cold documents and preserves selective, complete and old JSON roundtrips', () => {
+  const seeded = commit((repository) => repository.initialize('local', [terminal]))
+  const host = seeded.hosts.local!
+  const raw = ' { "broken" : true, "spacing": "exact" } '
+  host.retainedReferences.push({ workspaceId: 'folder', kind: 'pane', id: 'old', raw })
+  host.identityMappings.push({
+    workspaceId: 'folder',
+    kind: 'host-tab',
+    previousId: 'container',
+    currentId: 'mapped'
+  })
+  db.exec(`CREATE TRIGGER fail_cold_insert BEFORE INSERT ON profile_state_documents
+    WHEN NEW.domain LIKE 'workspaceSurfaceEvidence/%' BEGIN SELECT RAISE(ABORT, 'preservation failed'); END`)
+  const revision = readProfileStateRevision(db)
+  expect(() =>
+    withProfileStateWriteTransaction(db, () =>
+      writeProfileStateDomainsInTransaction(
+        db,
+        { expectedRevision: revision, replacements: [] },
+        structuredClone(seeded)
+      )
+    )
+  ).toThrow('preservation failed')
+  expect(readProfileStateRevision(db)).toBe(revision)
+  expect(
+    db
+      .prepare('SELECT count(*) AS n FROM profile_state_documents WHERE domain >= ? AND domain < ?')
+      .get(SURFACE_EVIDENCE_PREFIX, `${SURFACE_EVIDENCE_PREFIX}\uffff`)?.n
+  ).toBe(0)
+  db.exec('DROP TRIGGER fail_cold_insert')
+  withProfileStateWriteTransaction(db, () =>
+    writeProfileStateDomainsInTransaction(
+      db,
+      { expectedRevision: revision, replacements: [] },
+      seeded
+    )
+  )
+  expect(readSurfaceProfileDomain(db).hosts.local).toMatchObject({
+    retainedReferences: [],
+    identityMappings: []
+  })
+  const before = exportProfileStateJson(db)
+  const cold = Object.entries(JSON.parse(before))
+    .filter(([key]) => key.startsWith(SURFACE_EVIDENCE_PREFIX))
+    .map(([key, value]) => [key, surfaceEvidenceDocumentSchema.parse(value)] as const)
+  expect(cold).toHaveLength(2)
+  expect(cold.some(([, value]) => value.kind === 'reference' && value.value.raw === raw)).toBe(true)
+  const [existingKey, existingValue] = cold.find(([, value]) => value.kind === 'reference')!
+  const changedEvidence = {
+    ...existingValue,
+    value: { workspaceId: 'folder', kind: 'pane', id: 'old', raw: 'overwritten' }
+  }
+  expect(() =>
+    withProfileStateWriteTransaction(db, () =>
+      writeProfileStateDomainsInTransaction(
+        db,
+        {
+          expectedRevision: readProfileStateRevision(db),
+          replacements: [{ domain: existingKey, payload: JSON.stringify(changedEvidence) }]
+        },
+        readSurfaceProfileDomain(db)
+      )
+    )
+  ).toThrow('Conflicting surface evidence')
+  expect(exportProfileStateJson(db)).toBe(before)
+
+  writeProfileStateDomains(db, {
+    expectedRevision: readProfileStateRevision(db),
+    replacements: [{ domain: 'settings', payload: '{}' }]
+  })
+  const complete = buildCompleteDocumentReplacements(db, [{ domain: 'settings', payload: '{}' }])
+  expect(complete.some(({ domain }) => domain.startsWith(SURFACE_EVIDENCE_PREFIX))).toBe(false)
+  writeProfileStateDomains(db, {
+    expectedRevision: readProfileStateRevision(db),
+    replacements: complete
+  })
+  expect(
+    Object.entries(JSON.parse(exportProfileStateJson(db))).filter(([key]) =>
+      key.startsWith(SURFACE_EVIDENCE_PREFIX)
+    )
+  ).toEqual(cold)
+  const roundtrip = exportProfileStateJson(db)
+  importProfileStateJson(db, roundtrip)
+  expect(
+    Object.entries(JSON.parse(exportProfileStateJson(db))).filter(([key]) =>
+      key.startsWith(SURFACE_EVIDENCE_PREFIX)
+    )
+  ).toEqual(cold)
+  expect(
+    Object.keys(readProfileStateParsedSnapshot(db, { excludeSurfaceEvidence: true }).state).some(
+      (key) => key.startsWith(SURFACE_EVIDENCE_PREFIX)
+    )
+  ).toBe(false)
+  const evidence = { ...host, retainedReferences: [], identityMappings: [] }
+  attachSurfaceEvidenceReader(db, 'local', evidence)
+  const renamed = reserveImportedSurfaceIdentities(
+    [terminal],
+    [terminal],
+    [],
+    evidence,
+    () => 'minted-other'
+  )
+  expect(renamed[0]?.hostTabId).toBe('mapped')
+})
+
+it.each([10, 100])(
+  'protects complete saves without reading %i cold payloads or mapping buckets on warm commands',
+  (count) => {
+    commit((repository) => repository.initialize('local', [terminal]))
+    const host = readSurfaceProfileDomain(db).hosts.local!
+    host.retainedReferences = Array.from({ length: count }, (_, index) => ({
+      workspaceId: 'other',
+      kind: 'pane' as const,
+      id: String(index),
+      raw: 'x'.repeat(1000)
+    }))
+    const next = readSurfaceProfileDomain(db)
+    next.hosts.local = host
+    withProfileStateWriteTransaction(db, () =>
+      writeProfileStateDomainsInTransaction(
+        db,
+        { expectedRevision: readProfileStateRevision(db), replacements: [] },
+        next
+      )
+    )
+    const reads: string[] = []
+    const prepare = db.prepare.bind(db)
+    db.prepare = (sql: string) => {
+      reads.push(sql)
+      return prepare(sql)
+    }
+    try {
+      buildCompleteDocumentReplacements(db, [{ domain: 'settings', payload: '{}' }])
+      executeSurfaceOwnerCommand(db, readProfileStateRevision(db), {
+        type: 'query',
+        hostId: 'local'
+      })
+      expect(
+        reads.filter((sql) => sql.includes('payload') && sql.includes('domain >= ? AND domain < ?'))
+      ).toHaveLength(0)
+      expect(reads.length).toBeLessThan(30)
+    } finally {
+      db.prepare = prepare
+    }
+  }
+)

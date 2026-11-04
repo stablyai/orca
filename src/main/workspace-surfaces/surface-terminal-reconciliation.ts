@@ -6,12 +6,10 @@ import type {
   TerminalSurfaceContent,
   WorkspaceSurface
 } from '../../shared/workspace-surfaces/surface-content'
-import { runTargetOf } from '../../shared/workspace-surfaces/surface-allocation'
 import { seedWorkspaceSurfaces } from './surface-migration'
 import { reserveImportedSurfaceIdentities } from './surface-migration-identities'
 import { surfaceProjectionFingerprint } from './surface-legacy-projection'
 import { advanceDomain, readSurface, rowKey, writeChanges } from './surface-rows'
-import { readAllocation, writeAllocation } from './surface-allocation-rows'
 
 /** Old executables edit compatibility output; import only the delta against its exact exported occurrence. */
 export function reconcileLegacyTerminalSurfaces(
@@ -21,7 +19,7 @@ export function reconcileLegacyTerminalSurfaces(
   host: SurfaceHostDomain,
   mintId: () => string
 ): void {
-  const incoming = seedWorkspaceSurfaces(hostId, session, [], mintId, host).filter(
+  const incoming = seedWorkspaceSurfaces(hostId, session, [], mintId, host, false).filter(
     (surface) => surface.content?.kind === 'terminal'
   )
   const baseline = Object.values(host.terminalBaselines)
@@ -82,9 +80,6 @@ export function reconcileLegacyTerminalSurfaces(
   }
   writeChanges(db, [...changes.values()])
   advanceDomain(db, hostId)
-  for (const imported of changes.values()) {
-    retainImportedAdoption(db, imported)
-  }
 }
 
 function sameLegacyContent(a: WorkspaceSurface, b: WorkspaceSurface): boolean {
@@ -133,30 +128,5 @@ function retainImportedRuns(
         ]
       })
     )
-  }
-}
-
-/** Imported processes still require exact executor adoption after the old runtime has exited. */
-export function retainImportedAdoption(db: Database.Database, surface: WorkspaceSurface): void {
-  if (surface.content?.kind !== 'terminal') {
-    return
-  }
-  for (const [id, leaf] of Object.entries(surface.content.leaves)) {
-    if (!leaf.facts.ptyId || readAllocation(db, surface.hostId, leaf.runId)) {
-      continue
-    }
-    writeAllocation(db, {
-      allocationId: leaf.runId,
-      target: runTargetOf(surface, id)!,
-      resourceId: leaf.facts.ptyId,
-      executorId: leaf.executorId ?? null,
-      provenance: leaf.provenance ?? null,
-      expiresAt: 0,
-      resource: {
-        ptyId: leaf.facts.ptyId,
-        ...(leaf.facts.incarnationId ? { incarnationId: leaf.facts.incarnationId } : {})
-      },
-      decision: 'committed'
-    })
   }
 }

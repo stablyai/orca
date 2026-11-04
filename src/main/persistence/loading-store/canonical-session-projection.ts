@@ -5,7 +5,7 @@ import type { StoreRuntimeState } from './store-runtime-state'
 
 /** Session snapshots own the device shell; initialized host content always comes from its repository. */
 export function canonicalSessionProjection(
-  runtime: Pick<StoreRuntimeState, 'workspaceSurfaces'>,
+  runtime: Pick<StoreRuntimeState, 'workspaceSurfaces' | 'state'>,
   hostId: ExecutionHostId,
   session: WorkspaceSessionState
 ): WorkspaceSessionState {
@@ -13,10 +13,18 @@ export function canonicalSessionProjection(
   return repository?.initialized(hostId)
     ? projectSurfaceSession(
         hostId,
-        session,
+        {
+          ...session,
+          closedTerminalTabTombstonesByTabId: (hostId === 'local'
+            ? runtime.state.workspaceSession
+            : runtime.state.workspaceSessionsByHostId?.[hostId]
+          )?.closedTerminalTabTombstonesByTabId
+        },
         repository.all(hostId),
         repository.chatInitialized?.(hostId) ?? true,
-        repository.unresolvedNativeSessionIds?.(hostId)
+        repository.unresolvedNativeSessionIds?.(hostId),
+        new Set(),
+        repository.projectionCache?.(hostId)
       )
     : session
 }

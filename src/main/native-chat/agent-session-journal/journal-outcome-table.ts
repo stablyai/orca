@@ -1,8 +1,12 @@
 import type { JournalReadConnection } from './journal-sql-owner'
 import { prepareJournalAcceptance } from './journal-input-provenance'
-import { restoreJournalNativeFacts } from './journal-input-conversion'
+import {
+  restoreJournalNativeFacts,
+  detachJournalNativePrefix,
+  restoreJournalNativeState
+} from './journal-input-conversion'
 import { readLegacyRowsAsync, journalLegacyCardsFromRows } from './journal-queue-import'
-import { detachJournalNativePrefix, restoreJournalNativeState } from './journal-input-conversion'
+
 import type Database from '../../sqlite/sync-database'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'

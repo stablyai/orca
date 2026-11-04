@@ -1,7 +1,7 @@
 import { retainJournalReadViews } from './journal-read-view'
 import type { JournalPersistencePlan } from './journal-persistence-plan'
-import { prepareJournalAcceptance } from './journal-input-provenance'
-import { journalInputAcceptance } from './journal-input-provenance'
+import { prepareJournalAcceptance, journalInputAcceptance } from './journal-input-provenance'
+
 import { copyJournalNativeState } from './journal-input-conversion'
 import { journalInputOrder } from './journal-input-order'
 import type Database from '../../sqlite/sync-database'

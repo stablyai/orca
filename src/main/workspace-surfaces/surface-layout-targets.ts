@@ -142,7 +142,7 @@ export function compareSurfaceTarget(
   const expected = target.expected
   if (
     expected === null
-      ? current !== null
+      ? current?.content != null
       : current?.occurrence !== expected.occurrence ||
         (expected.revision !== undefined && current.revision !== expected.revision)
   ) {

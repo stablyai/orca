@@ -14,7 +14,12 @@ function byTab<T>(entries: readonly T[], paneKeyOf: (entry: T) => string): Map<s
   for (const entry of entries) {
     const tabId = parsePaneKey(paneKeyOf(entry))?.tabId
     if (tabId) {
-      byTabId.set(tabId, [...(byTabId.get(tabId) ?? []), entry])
+      const bucket = byTabId.get(tabId)
+      if (bucket) {
+        bucket.push(entry)
+      } else {
+        byTabId.set(tabId, [entry])
+      }
     }
   }
   return byTabId
@@ -84,12 +89,22 @@ export function changedSleepingRecords(
   previous: SleepingRecords,
   next: SleepingRecords
 ): { recorded: SleepingAgentSessionRecord[]; dropped: [string, SleepingAgentSessionRecord][] } {
-  const held = ([paneKey, record]: [string, SleepingAgentSessionRecord]): boolean =>
-    !isWorkspaceSleepRecord(record) &&
-    (state.tabsByWorktree[record.worktreeId]?.some(
-      (tab) => tab.id === parsePaneKey(paneKey)?.tabId
-    ) ??
-      false)
+  const heldTabs = new Map<string, Set<string>>()
+  const held = ([paneKey, record]: [string, SleepingAgentSessionRecord]): boolean => {
+    if (isWorkspaceSleepRecord(record)) {
+      return false
+    }
+    const tabId = parsePaneKey(paneKey)?.tabId
+    if (!tabId) {
+      return false
+    }
+    let tabs = heldTabs.get(record.worktreeId)
+    if (!tabs) {
+      tabs = new Set(state.tabsByWorktree[record.worktreeId]?.map((tab) => tab.id))
+      heldTabs.set(record.worktreeId, tabs)
+    }
+    return tabs.has(tabId)
+  }
   return {
     recorded: Object.entries(next)
       .filter((entry) => previous[entry[0]] !== entry[1] && held(entry))

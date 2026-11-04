@@ -1,4 +1,8 @@
-import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/orcad-migration-manifest'
+import {
+  serializeOrcadMigrationValue,
+  type OrcadMigrationImportReceipt,
+  type OrcadMigrationManifest
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { Repo } from '../../../shared/repo-types'
 
 export function selectNewRows<T extends { id: string }>(
@@ -42,5 +46,26 @@ export function sameOrcadRepositoryConfiguration(current: Repo, incoming: Repo):
 export function assertSameValue(left: unknown, right: unknown, label: string): void {
   if (serializeOrcadMigrationValue(left) !== serializeOrcadMigrationValue(right)) {
     throw new Error(`orcad_migration_dormant_id_conflict:${label}`)
+  }
+}
+
+export function assertOrcadMigrationReceiptMatchesManifest(
+  receipt: OrcadMigrationImportReceipt,
+  manifest: OrcadMigrationManifest
+): void {
+  const expected = {
+    source: manifest.source,
+    repositoryIds: manifest.payload.repositories.map((repo) => repo.id),
+    projectGroupIds: manifest.payload.projectGroups.map((group) => group.id),
+    folderWorkspaceIds: manifest.payload.folderWorkspaces.map((workspace) => workspace.id)
+  }
+  const actual = {
+    source: receipt.source,
+    repositoryIds: receipt.repositoryIds,
+    projectGroupIds: receipt.projectGroupIds,
+    folderWorkspaceIds: receipt.folderWorkspaceIds
+  }
+  if (serializeOrcadMigrationValue(actual) !== serializeOrcadMigrationValue(expected)) {
+    throw new Error('orcad_migration_receipt_manifest_mismatch')
   }
 }

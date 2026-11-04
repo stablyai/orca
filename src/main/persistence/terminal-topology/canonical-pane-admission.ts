@@ -1,3 +1,5 @@
+import { releaseSurfaceAdmissions } from '../../workspace-surfaces/surface-admission-capture'
+import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
 import { surfaceLayoutOutcome } from '../../workspace-surfaces/surface-layout-outcome'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSurfaceReader } from '../../../shared/workspace-surfaces/surface-reader'
@@ -46,54 +48,76 @@ export async function admitCanonicalTerminalRun(
     context.reader,
     hostId,
     context.sessions.getWorkspaceSession(hostId),
-    admission
+    admission,
+    {},
+    context.sessions
+      .getWorkspaceSessionHostIds()
+      .map((id) => context.sessions.getWorkspaceSession(id))
   )
-  let refusal: TerminalPaneAdmissionOutcome = 'tab_not_found'
-  const results = await context.surfaces.executeWorkspaceSurfaceTransaction(() => {
-    if (expectedSource !== undefined) {
-      const source = expectedSource && context.reader.read(expectedSource)
-      const current = source && expectedSource ? runTargetOf(source, expectedSource.leafId) : null
-      if (!expectedSource || !current || !sameRunTarget(current, expectedSource)) {
-        refusal = 'pane_not_found'
+  try {
+    let refusal: TerminalPaneAdmissionOutcome = 'tab_not_found'
+    const results = await context.surfaces.executeWorkspaceSurfaceTransaction(() => {
+      if (expectedSource !== undefined) {
+        const source = expectedSource && context.reader.read(expectedSource)
+        const current = source && expectedSource ? runTargetOf(source, expectedSource.leafId) : null
+        if (!expectedSource || !current || !sameRunTarget(current, expectedSource)) {
+          refusal = 'pane_not_found'
+          return []
+        }
+      }
+      if (
+        admission.type === 'createTerminalTab' &&
+        context.sessions
+          .getWorkspaceSessionHostIds()
+          .some((id) =>
+            hasClosedTerminalTabRecord(
+              context.sessions.getWorkspaceSession(id).closedTerminalTabTombstonesByTabId,
+              admission.tabId,
+              admission.workspace
+            )
+          )
+      ) {
+        refusal = 'tab_closed'
         return []
       }
-    }
-    const previous = context.reader.read({
-      hostId,
-      workspaceId: admission.workspace,
-      hostTabId: admission.tabId
+      return [{ ...captured, session: context.sessions.getWorkspaceSession(hostId) }]
     })
-    if (admission.type === 'createTerminalTab' && previous?.content === null) {
-      refusal = 'tab_closed'
-      return []
+    const outcome = results[0]?.outcome
+    if (
+      outcome &&
+      typeof outcome === 'object' &&
+      'status' in outcome &&
+      outcome.status === 'accepted' &&
+      'surfaces' in outcome
+    ) {
+      const surface = results[0]!.host.surfaces.find(
+        (candidate) =>
+          candidate.workspaceId === admission.workspace &&
+          candidate.content?.kind === 'terminal' &&
+          (candidate.hostTabId === admission.tabId ||
+            candidate.content.entityId === admission.tabId)
+      )
+      const leafId = admission.type === 'createTerminalTab' ? admission.leafId : admission.newLeafId
+      return {
+        outcome: outcome.surfaces.length === 0 ? 'exists' : 'admitted',
+        target: surface ? runTargetOf(surface, leafId) : null
+      }
     }
-    return [{ ...captured, session: context.sessions.getWorkspaceSession(hostId) }]
-  })
-  const outcome = results[0]?.outcome
-  if (
-    outcome &&
-    typeof outcome === 'object' &&
-    'status' in outcome &&
-    outcome.status === 'accepted' &&
-    'surfaces' in outcome
-  ) {
-    const surface = results[0]!.host.surfaces.find(
-      (candidate) =>
-        candidate.workspaceId === admission.workspace &&
-        candidate.content?.kind === 'terminal' &&
-        (candidate.hostTabId === admission.tabId || candidate.content.entityId === admission.tabId)
-    )
-    const leafId = admission.type === 'createTerminalTab' ? admission.leafId : admission.newLeafId
+    if (!outcome) {
+      return { outcome: refusal, target: null }
+    }
+    const failed = surfaceLayoutOutcome(outcome)
     return {
-      outcome: outcome.surfaces.length === 0 ? 'exists' : 'admitted',
-      target: surface ? runTargetOf(surface, leafId) : null
+      outcome: failed.ok
+        ? refusal
+        : admission.type === 'createTerminalTab' && failed.code === 'tab_not_found'
+          ? 'tab_closed'
+          : failed.code,
+      target: null
     }
+  } finally {
+    releaseSurfaceAdmissions([captured])
   }
-  if (!outcome) {
-    return { outcome: refusal, target: null }
-  }
-  const failed = surfaceLayoutOutcome(outcome)
-  return { outcome: failed.ok ? refusal : failed.code, target: null }
 }
 
 export async function withdrawCanonicalTerminalPane(

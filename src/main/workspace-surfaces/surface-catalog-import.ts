@@ -3,7 +3,7 @@ import type Database from '../sqlite/sync-database'
 import { normalizeOrcadMigrationImportReceipts } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { normalizeOrcadMigrationStagedCatalogs } from '../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
 import { normalizeOrcadMigrationEvictedReceipts } from '../../shared/orcad-migration/orcad-migration-evicted-receipts'
-import { assertOrcadMigrationReceiptMatchesManifest } from '../persistence/migrating-orcad-catalog/orcad-catalog-records'
+import { assertOrcadMigrationReceiptMatchesManifest } from '../persistence/migrating-orcad-catalog/orcad-catalog-row-identity'
 import { prepareOrcadMigrationWorkspaceSession } from '../persistence/migrating-orcad-catalog/orcad-destination-workspace-session'
 import type { ProfileStateDomainMutation } from '../persistence/profile-state/profile-state-domain-writes'
 import {

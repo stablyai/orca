@@ -4,6 +4,7 @@ import {
   type SurfaceProfileDomain
 } from '../../shared/workspace-surfaces/surface-profile-domain'
 import {
+  boundSurfaceRunAllocation,
   runLeafOf,
   type SurfaceAllocation
 } from '../../shared/workspace-surfaces/surface-allocation'
@@ -25,6 +26,29 @@ export function preserveSurfaceRecoveryObligations(
     const obligations = new Map(
       host.allocations.map((allocation) => [allocation.allocationId, allocation])
     )
+    // Selecting older content explicitly retires a later known binding; ordinary wake does not enroll it.
+    for (const surface of newer?.surfaces ?? []) {
+      if (surface.content?.kind !== 'terminal') {
+        continue
+      }
+      for (const leafId of Object.keys(surface.content.leaves)) {
+        const bound = boundSurfaceRunAllocation(surface, leafId)
+        if (!bound) {
+          continue
+        }
+        const selectedSurface = host.surfaces.find(
+          (row) => row.workspaceId === surface.workspaceId && row.hostTabId === surface.hostTabId
+        )
+        const selectedLeaf = runLeafOf(selectedSurface ?? null, bound.target)
+        if (
+          !selectedLeaf ||
+          selectedLeaf.facts.ptyId !== bound.resourceId ||
+          selectedLeaf.facts.incarnationId !== bound.resource?.incarnationId
+        ) {
+          obligations.set(bound.allocationId, bound)
+        }
+      }
+    }
     for (const allocation of newer?.allocations ?? []) {
       obligations.set(allocation.allocationId, structuredClone(allocation))
     }

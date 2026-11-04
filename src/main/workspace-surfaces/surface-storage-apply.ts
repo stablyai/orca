@@ -1,3 +1,11 @@
+import { attachSurfaceEvidenceReader } from './surface-cold-evidence'
+import {
+  hasClosedTerminalTabRecord,
+  recordClosedTerminalTabTombstone,
+  pruneClosedTerminalTabTombstones
+} from '../../shared/closed-terminal-tab-tombstones'
+import { invalidateSurfaceCapture } from './surface-transaction-changes'
+import { readSurfaceHostSession } from './surface-host-profile-session'
 import { retireSurfaceRunAfterKernelChange } from './surface-kernel-retirement'
 import { showNativeSurface } from './surface-native-show'
 import type Database from '../sqlite/sync-database'
@@ -14,10 +22,7 @@ import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-la
 import { saveWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-save'
 import type { WorkspaceSurfaceRepository } from './surface-repository'
 import { seedWorkspaceSurfaces } from './surface-migration'
-import {
-  reconcileLegacyTerminalSurfaces,
-  retainImportedAdoption
-} from './surface-terminal-reconciliation'
+import { reconcileLegacyTerminalSurfaces } from './surface-terminal-reconciliation'
 
 /** Applies only inside the admitted owner's transaction; publication waits for its common commit. */
 export function applySurfaceStorageCommand(
@@ -28,26 +33,30 @@ export function applySurfaceStorageCommand(
   storedSession: WorkspaceSessionState,
   command: Exclude<SurfaceStorageCommand, { type: 'query' }>,
   mintId: () => string,
-  now: () => number
+  now: () => number,
+  native = false
 ): { session: WorkspaceSessionState; outcome: SurfaceStorageResult['outcome'] } {
   let session = storedSession
   let outcome: SurfaceStorageResult['outcome'] = null
+  let otherCloseEvidence: WorkspaceSessionState[] | undefined
   switch (command.type) {
     case 'initialize': {
       if (!repository.initialized(hostId)) {
         const host = previous.hosts[hostId] ?? emptySurfaceHostDomain()
+        attachSurfaceEvidenceReader(db, hostId, host)
         const seeds = seedWorkspaceSurfaces(hostId, storedSession, [], mintId, host)
         repository.initialize(
           hostId,
           seeds.filter((surface) => surface.content?.kind === 'terminal'),
           Object.keys(storedSession.tabsByWorktree)
         )
-        for (const surface of seeds) {
-          retainImportedAdoption(db, surface)
-        }
         previous.hosts[hostId] = host
       } else {
+        attachSurfaceEvidenceReader(db, hostId, previous.hosts[hostId]!)
         reconcileLegacyTerminalSurfaces(db, hostId, storedSession, previous.hosts[hostId]!, mintId)
+      }
+      if (!native) {
+        previous.hosts[hostId]!.chatInitialization = 'unknown'
       }
       break
     }
@@ -55,7 +64,10 @@ export function applySurfaceStorageCommand(
       assertRequestHost(hostId, command.request.hostId)
       const loaded = loadWorkspaceLayoutWithoutReport(
         hostId,
-        command.session,
+        {
+          ...command.session,
+          closedTerminalTabTombstonesByTabId: storedSession.closedTerminalTabTombstonesByTabId
+        },
         nameBasedLoadContext()
       )
       const bindings = new Map(command.facts.bindings.map((binding) => [binding.paneKey, binding]))
@@ -83,6 +95,74 @@ export function applySurfaceStorageCommand(
         },
         (layout) => {
           session = saveWorkspaceLayout({ ...loaded, layout })
+          const input = command.request.command
+          const tabIds =
+            input.type === 'closeTabs'
+              ? input.tabIds
+              : input.type === 'closePane'
+                ? [input.tabId]
+                : []
+          for (const tabId of tabIds) {
+            const before = previous.hosts[hostId]?.surfaces.find(
+              (surface) => surface.workspaceId === input.workspace && surface.hostTabId === tabId
+            )
+            const oldTab = loaded.layout.workspaces[input.workspace]?.tabs.find(
+              (tab) => tab.id === tabId
+            )
+            if (
+              (before?.content && before.content.kind !== 'terminal') ||
+              (oldTab && oldTab.kind !== 'terminal') ||
+              layout.workspaces[input.workspace]?.tabs.some((tab) => tab.id === tabId)
+            ) {
+              continue
+            }
+            invalidateSurfaceCapture(db, { hostId, workspaceId: input.workspace, hostTabId: tabId })
+            session.closedTerminalTabTombstonesByTabId = recordClosedTerminalTabTombstone(
+              session.closedTerminalTabTombstonesByTabId,
+              before?.content?.kind === 'terminal' ? before.content.entityId : tabId,
+              {
+                worktreeId: input.workspace,
+                ...(input.type === 'closeTabs' && input.recordClose
+                  ? { reason: input.recordClose }
+                  : {})
+              },
+              now()
+            )
+          }
+          session.closedTerminalTabTombstonesByTabId = pruneClosedTerminalTabTombstones(
+            session.closedTerminalTabTombstonesByTabId,
+            now()
+          )
+        },
+        (tabId, workspaceId) => {
+          if (
+            hasClosedTerminalTabRecord(
+              storedSession.closedTerminalTabTombstonesByTabId,
+              tabId,
+              workspaceId,
+              now()
+            )
+          ) {
+            return true
+          }
+          if (!otherCloseEvidence) {
+            const row = db
+              .prepare(
+                "SELECT payload FROM main.profile_state_documents WHERE domain = 'workspaceSessionsByHostId'"
+              )
+              .get()
+            const remote: Record<string, WorkspaceSessionState> =
+              typeof row?.payload === 'string' ? (JSON.parse(row.payload) ?? {}) : {}
+            otherCloseEvidence = [readSurfaceHostSession(db, 'local'), ...Object.values(remote)]
+          }
+          return otherCloseEvidence.some((current) =>
+            hasClosedTerminalTabRecord(
+              current.closedTerminalTabTombstonesByTabId,
+              tabId,
+              workspaceId,
+              now()
+            )
+          )
         }
       )
       break
@@ -91,10 +171,29 @@ export function applySurfaceStorageCommand(
       assertRequestHost(hostId, command.identity.hostId)
       outcome = showNativeSurface(db, repository, storedSession, command)
       break
-    case 'replace':
+    case 'replace': {
       assertRequestHost(hostId, command.request.hostId)
-      outcome = repository.replaceContent(command.request)
+      const before = repository.read(command.request)
+      outcome = repository.replaceContent(command.request, () => {
+        if (
+          command.request.content === null &&
+          (!before?.content || before.content.kind === 'terminal')
+        ) {
+          session = {
+            ...storedSession,
+            closedTerminalTabTombstonesByTabId: recordClosedTerminalTabTombstone(
+              storedSession.closedTerminalTabTombstonesByTabId,
+              before?.content?.kind === 'terminal'
+                ? before.content.entityId
+                : command.request.hostTabId,
+              { worktreeId: command.request.workspaceId },
+              now()
+            )
+          }
+        }
+      })
       break
+    }
     case 'move':
       assertRequestHost(hostId, command.request.hostId)
       outcome = repository.move(command.request)

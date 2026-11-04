@@ -89,11 +89,7 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
         args.connectionId ? toSshExecutionHostId(args.connectionId) : LOCAL_EXECUTION_HOST_ID
       )
     if (target !== undefined) {
-      ctx.canonicalRun = new CanonicalPtyRun(
-        ctx.deps.store,
-        target,
-        args.resumeOrigin === 'saved' && Boolean(args.launchAgent && args.resumeProviderSession)
-      )
+      ctx.canonicalRun = new CanonicalPtyRun(ctx.deps.store, target)
     }
   }
   ctx.preAdoptedStablePane = args.adoptedStablePane ?? null

@@ -1,3 +1,13 @@
+import {
+  readSurfaceSqlRecoveryEvidence,
+  readSurfaceJsonRecoveryEvidence
+} from '../../../workspace-surfaces/surface-recovery-evidence'
+import { preserveSurfaceRecoveryObligations } from '../../../workspace-surfaces/surface-recovery-obligations'
+import { mergeSurfaceEvidenceDocuments } from '../../../workspace-surfaces/surface-cold-evidence'
+import {
+  WORKSPACE_SURFACE_DOMAIN,
+  surfaceProfileDomainSchema
+} from '../../../../shared/workspace-surfaces/surface-profile-domain'
 import { profileStateDatabaseFiles } from '../profile-state-storage-classification'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -40,7 +50,7 @@ export function restoreProfileStateJsonExport(
   options: ProfileStateJsonRecoveryOptions
 ): ProfileStateJsonRecovery {
   assertProfileStateMaintenance(options.maintenance, options)
-  const rawJson = readRecoveryExport(options.exportPath)
+  let { rawJson, selected } = readRecoveryExport(options.exportPath)
   const retainedExports = profileStateJsonExportPaths(options.dataFile)
   const retainedBackups = profileStateDatabaseBackupFiles(options.databasePath)
   const recoveryFiles = [options.exportPath, ...retainedExports, ...retainedBackups]
@@ -62,6 +72,26 @@ export function restoreProfileStateJsonExport(
 
   // Invalidate caches before removing database/export evidence.
   options.beforeRestore?.()
+  let carrier =
+    selected[WORKSPACE_SURFACE_DOMAIN] === undefined
+      ? undefined
+      : surfaceProfileDomainSchema.parse(selected[WORKSPACE_SURFACE_DOMAIN])
+  for (const evidence of [
+    readSurfaceJsonRecoveryEvidence(options.dataFile),
+    readSurfaceSqlRecoveryEvidence(options.databasePath, options.profileId)
+  ]) {
+    // Unreadable authority remains in the returned quarantine; only intact documents can merge.
+    if (evidence.kind === 'value') {
+      Object.assign(selected, mergeSurfaceEvidenceDocuments(selected, evidence.documents))
+      carrier = preserveSurfaceRecoveryObligations(carrier, evidence.carrier)
+    }
+  }
+  if (carrier || Object.keys(selected).some((key) => key.startsWith('workspaceSurfaceEvidence/'))) {
+    if (carrier) {
+      selected[WORKSPACE_SURFACE_DOMAIN] = preserveSurfaceRecoveryObligations(carrier, undefined)!
+    }
+    rawJson = JSON.stringify(selected)
+  }
   mkdirSync(dirname(options.dataFile), { recursive: true })
   writeFileDurableSync(durableWriteTempPath(options.dataFile), options.dataFile, rawJson)
 
@@ -89,11 +119,13 @@ export function restoreProfileStateJsonExport(
   return { quarantine, removedDatabaseFiles }
 }
 
-function readRecoveryExport(exportPath: string): string {
+function readRecoveryExport(exportPath: string): {
+  rawJson: string
+  selected: Record<string, unknown>
+} {
   if (exportPath.length === 0 || exportPath.includes('\0')) {
     throw new Error('Profile state recovery export path is invalid')
   }
   const rawJson = readFileSync(exportPath, 'utf8')
-  parseProfileStateRoot(rawJson)
-  return rawJson
+  return { rawJson, selected: parseProfileStateRoot(rawJson) }
 }

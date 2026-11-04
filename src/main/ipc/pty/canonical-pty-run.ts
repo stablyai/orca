@@ -18,8 +18,7 @@ export class CanonicalPtyRun {
 
   constructor(
     private readonly store: Store,
-    private target: SurfaceRunTarget | null,
-    private readonly restoresSavedWriter = false
+    private target: SurfaceRunTarget | null
   ) {}
 
   get bindingTarget(): SurfaceRunTarget | undefined {
@@ -32,14 +31,15 @@ export class CanonicalPtyRun {
       throw new Error('terminal_pane_owner_changed')
     }
     const target = this.target
-    const result = await this.store.executeWorkspaceSurfaceCommand({
-      type: 'query',
-      hostId: target.hostId
+    const result = await this.store.readWorkspaceSurface({
+      type: 'run',
+      hostId: target.hostId,
+      target
     })
-    const surface =
-      result.host.surfaces.find(
-        (row) => row.workspaceId === target.workspaceId && row.hostTabId === target.hostTabId
-      ) ?? null
+    if (result.type !== 'run') {
+      throw new Error('Unexpected surface read')
+    }
+    const surface = result.surface
     const leaf = runLeafOf(surface, target)
     if (
       !leaf ||
@@ -52,7 +52,7 @@ export class CanonicalPtyRun {
     if (!leaf.facts.ptyId) {
       return
     }
-    this.target = await restartCanonicalPtyRun(this.store, target, result)
+    this.target = await restartCanonicalPtyRun(this.store, target)
   }
 
   async spawn(
@@ -64,14 +64,15 @@ export class CanonicalPtyRun {
       throw new Error('terminal_pane_owner_changed')
     }
     const target = this.target
-    const current = await this.store.executeWorkspaceSurfaceCommand({
-      type: 'query',
-      hostId: target.hostId
+    const current = await this.store.readWorkspaceSurface({
+      type: 'run',
+      hostId: target.hostId,
+      target
     })
-    const surface =
-      current.host.surfaces.find(
-        (row) => row.workspaceId === target.workspaceId && row.hostTabId === target.hostTabId
-      ) ?? null
+    if (current.type !== 'run') {
+      throw new Error('Unexpected surface read')
+    }
+    const surface = current.surface
     const leaf = runLeafOf(surface, target)
     if (!leaf || surface?.content?.kind !== 'terminal') {
       throw new Error('terminal_pane_owner_changed')
@@ -97,7 +98,7 @@ export class CanonicalPtyRun {
           throw error
         }
       }
-      this.target = await restartCanonicalPtyRun(this.store, target, current)
+      this.target = await restartCanonicalPtyRun(this.store, target)
       options.sessionId = mintPtySessionId(options.worktreeId)
       options.isNewSession = true
     }
@@ -116,16 +117,14 @@ export class CanonicalPtyRun {
       resourceId
     }
     let executor = await provider.surfaceExecution?.identify(candidate)
-    const prior = current.allocations.find(
-      (allocation) => allocation.allocationId === this.target!.runId
-    )
+    const prior = current.allocation?.allocationId === this.target.runId ? current.allocation : null
     if (
-      !this.restoresSavedWriter &&
-      prior?.resourceId &&
-      (prior.decision === 'aborting' ||
-        (executor && prior.executorId && prior.executorId !== executor.executorId))
+      (!prior && !leaf.facts.ptyId) ||
+      (prior?.resourceId &&
+        (prior.decision === 'aborting' ||
+          (executor && prior.executorId && prior.executorId !== executor.executorId)))
     ) {
-      this.target = await restartCanonicalPtyRun(this.store, this.target, current)
+      this.target = await restartCanonicalPtyRun(this.store, this.target)
       this.enrolled = undefined
       resourceId = mintPtySessionId(options.worktreeId)
       options.sessionId = resourceId

@@ -20,7 +20,6 @@ import { writeAllocation } from './surface-allocation-rows'
 import { conflictingSurfaceIdentity } from './surface-identities'
 import {
   rowKey,
-  parseSurface,
   readWorkspace,
   withRetiredChatViews,
   writeChanges,
@@ -34,9 +33,21 @@ export function applySurfaceLayout(
   request: SurfaceLayoutRequest,
   view: SurfaceLayoutView,
   mintId: () => string,
-  present?: (model: WorkspaceLayoutModel) => void
+  present?: (model: WorkspaceLayoutModel) => void,
+  rawClosed?: (tabId: string, workspaceId: string) => boolean
 ): SurfaceCommandOutcome {
   const { hostId, command } = request
+  const creates =
+    command.type === 'createTerminalTab'
+      ? command.tabId
+        ? [command.tabId]
+        : []
+      : command.type === 'applyDefaultTabs'
+        ? command.tabs.map((tab) => tab.tabId)
+        : []
+  if (creates.some((tabId) => rawClosed?.(tabId, command.workspace))) {
+    return { status: 'conflict', code: 'tab_closed', current: null }
+  }
   const scopes =
     command.type === 'moveTabToWorkspace'
       ? [...new Set([command.workspace, command.toWorkspace])]
@@ -56,27 +67,35 @@ export function applySurfaceLayout(
       return conflict
     }
   }
-  const hostSurfaces = db
-    .prepare('SELECT row_json FROM main.workspace_surfaces WHERE host_id = ? ORDER BY rowid')
-    .all(hostId)
-    .map((row) => parseSurface(row.row_json))
-  const workspaceIds = new Set([
-    ...Object.keys(view.model.workspaces),
-    ...scopes,
-    ...hostSurfaces.map((surface) => surface.workspaceId)
-  ])
+  const affected = new Map(
+    scopes.map((workspaceId) => [
+      workspaceId,
+      before.filter((surface) => surface.workspaceId === workspaceId)
+    ])
+  )
+  const workspaceIds = new Set([...Object.keys(view.model.workspaces), ...scopes])
   const model: WorkspaceLayoutModel = {
     ...view.model,
     workspaces: Object.fromEntries(
-      [...workspaceIds].map((workspaceId) => [
-        workspaceId,
-        projectSurfaceWorkspace(
+      [...workspaceIds].map((workspaceId) => {
+        const workspace = view.model.workspaces[workspaceId]
+        return [
           workspaceId,
-          view.model.workspaces[workspaceId],
-          hostSurfaces,
-          view.chatVerified
-        )
-      ])
+          affected.has(workspaceId)
+            ? projectSurfaceWorkspace(
+                workspaceId,
+                workspace,
+                affected.get(workspaceId)!,
+                view.chatVerified
+              )
+            : {
+                ...workspace!,
+                tabs: workspace!.tabs.filter(
+                  (tab) => tab.kind !== 'terminal' && tab.kind !== 'agent-session'
+                )
+              }
+        ]
+      })
     )
   }
   const existing = existingLayoutCreateOutcome(model, command)
@@ -202,7 +221,15 @@ export function applySurfaceLayout(
       }
     }
   }
-  present?.(applied.model)
+  present?.({
+    ...applied.model,
+    workspaces: {
+      ...view.model.workspaces,
+      ...Object.fromEntries(
+        scopes.map((workspaceId) => [workspaceId, applied.model.workspaces[workspaceId]!])
+      )
+    }
+  })
   return {
     status: 'accepted',
     revision: committed.length ? advanceDomain(db, hostId) : domainRevision(db, hostId),

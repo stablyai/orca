@@ -1,9 +1,10 @@
+import { PROFILE_STATE_META_PROFILE_ID } from '../persistence/profile-state/profile-state-database-schema'
 import { isDeepStrictEqual } from 'node:util'
-import { readProfileStateDomain } from '../persistence/profile-state/profile-state-domain-reader'
-import {
-  WORKSPACE_SURFACE_DOMAIN,
-  surfaceProfileDomainSchema
-} from '../../shared/workspace-surfaces/surface-profile-domain'
+import { statSync } from 'node:fs'
+import type Database from '../sqlite/sync-database'
+import { openProfileStateDatabaseReadOnly } from '../persistence/profile-state/profile-state-database'
+import { withProfileStateReadSnapshot } from '../persistence/profile-state/profile-state-read-snapshot'
+import { readSurfaceProfileSnapshot } from './surface-profile-cache'
 import { runLeafOf, runTargetOf } from '../../shared/workspace-surfaces/surface-allocation'
 import type {
   SurfaceExecutorAdmission,
@@ -14,29 +15,80 @@ import type {
 export function readSurfaceExecutorIntent(
   admission: SurfaceExecutorAdmission
 ): SurfaceExecutorIntent {
-  const read = readProfileStateDomain(
-    admission.scope.databasePath,
-    admission.scope.profileId,
-    WORKSPACE_SURFACE_DOMAIN
-  )
-  if (read.kind !== 'value') {
+  const reader = new SurfaceExecutorIntentReader()
+  try {
+    return reader.read(admission)
+  } finally {
+    reader.close()
+  }
+}
+
+/** One read-worker lifetime, one current carrier handle; replacement never reuses an old inode. */
+export class SurfaceExecutorIntentReader {
+  private current:
+    | { databasePath: string; profileId: string; identity: string; db: Database.Database }
+    | undefined
+
+  close(): void {
+    this.current?.db.close()
+    this.current = undefined
+  }
+
+  read(admission: SurfaceExecutorAdmission): SurfaceExecutorIntent {
+    try {
+      const { databasePath, profileId } = admission.scope
+      const identity = fileIdentity(databasePath)
+      if (
+        this.current?.databasePath !== databasePath ||
+        this.current.profileId !== profileId ||
+        this.current.identity !== identity
+      ) {
+        this.close()
+        this.current = {
+          databasePath,
+          profileId,
+          identity,
+          db: openProfileStateDatabaseReadOnly(databasePath, profileId).db
+        }
+      }
+      const result = withProfileStateReadSnapshot(this.current.db, () =>
+        readIntent(this.current!.db, admission)
+      )
+      if (fileIdentity(databasePath) !== identity) {
+        this.close()
+        return { kind: 'unreadable' }
+      }
+      return result
+    } catch {
+      this.close()
+      return { kind: 'unreadable' }
+    }
+  }
+}
+
+function fileIdentity(path: string): string {
+  const stat = statSync(path, { bigint: true })
+  return `${stat.dev}:${stat.ino}:${stat.birthtimeNs}`
+}
+
+function readIntent(
+  db: Database.Database,
+  admission: SurfaceExecutorAdmission
+): SurfaceExecutorIntent {
+  if (
+    db
+      .prepare('SELECT value FROM main.profile_state_meta WHERE key = ?')
+      .get(PROFILE_STATE_META_PROFILE_ID)?.value !== admission.scope.profileId
+  ) {
     return { kind: 'unreadable' }
   }
-  const parsed = surfaceProfileDomainSchema.safeParse(read.value)
-  if (!parsed.success) {
-    return { kind: 'unreadable' }
-  }
-  const host = parsed.data.hosts[admission.hostId]
+  const root = readSurfaceProfileSnapshot(db)
+  const host = root.domain.hosts[admission.hostId]
   if (!host?.terminalInitialized) {
     return { kind: 'unreadable' }
   }
-  const allocations = host.allocations.filter(
-    (entry) => entry.allocationId === admission.allocationId
-  )
-  if (allocations.length > 1) {
-    return { kind: 'unreadable' }
-  }
-  const allocation = allocations[0]
+  const index = root.hosts.get(admission.hostId)!
+  const allocation = index.allocations.get(admission.allocationId)
   if (allocation) {
     if (
       allocation.resourceId !== admission.resourceId ||
@@ -48,35 +100,30 @@ export function readSurfaceExecutorIntent(
       return { kind: 'unreadable' }
     }
     if (allocation.decision === 'pending') {
-      const surfaces = host.surfaces.filter(
-        (surface) =>
-          surface.workspaceId === allocation.target.workspaceId &&
-          surface.hostTabId === allocation.target.hostTabId
+      const surface = index.surfaces.get(
+        JSON.stringify([allocation.target.workspaceId, allocation.target.hostTabId])
       )
-      if (surfaces.length !== 1 || !runLeafOf(surfaces[0]!, allocation.target)) {
+      if (!surface || !runLeafOf(surface, allocation.target)) {
         return { kind: 'unreadable' }
       }
     }
     return { kind: 'allocation', allocation }
   }
-  for (const surface of host.surfaces) {
-    if (surface.content?.kind !== 'terminal') {
-      continue
-    }
-    for (const [leafId, leaf] of Object.entries(surface.content.leaves)) {
-      if (
-        leaf.runId === admission.allocationId &&
-        leaf.executorId === admission.executorId &&
-        isDeepStrictEqual(leaf.provenance ?? null, admission.provenance ?? null) &&
-        leaf.facts.ptyId === admission.resourceId
-      ) {
-        return {
-          kind: 'bound',
-          target: runTargetOf(surface, leafId)!,
-          resource: {
-            ptyId: admission.resourceId,
-            ...(leaf.facts.incarnationId ? { incarnationId: leaf.facts.incarnationId } : {})
-          }
+  const bound = index.runs.get(admission.allocationId)
+  if (bound?.surface.content?.kind === 'terminal') {
+    const { surface, leafId } = bound
+    const leaf = bound.surface.content.leaves[leafId]!
+    if (
+      leaf.executorId === admission.executorId &&
+      isDeepStrictEqual(leaf.provenance ?? null, admission.provenance ?? null) &&
+      leaf.facts.ptyId === admission.resourceId
+    ) {
+      return {
+        kind: 'bound',
+        target: runTargetOf(surface, leafId)!,
+        resource: {
+          ptyId: admission.resourceId,
+          ...(leaf.facts.incarnationId ? { incarnationId: leaf.facts.incarnationId } : {})
         }
       }
     }

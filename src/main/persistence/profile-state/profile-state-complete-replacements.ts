@@ -1,3 +1,7 @@
+import {
+  SURFACE_EVIDENCE_PREFIX,
+  isSurfaceEvidenceDomain
+} from '../../../shared/workspace-surfaces/surface-evidence-document'
 import type { ProfileStateDomainReplacement } from '../loading-store/profile-state-authority'
 import type { openProfileStateDatabase } from './profile-state-database'
 import { parseProfileStateRoot } from './profile-state-document-validation'
@@ -27,8 +31,9 @@ export function buildCompleteDocumentReplacements(
   const incoming = new Set(domains)
   for (const row of db
     .prepare(`SELECT domain FROM profile_state_documents
+      WHERE domain < ? OR domain >= ?
       UNION SELECT domain FROM profile_state_automation_runs_meta WHERE presence <> 'document'`)
-    .all()) {
+    .all(SURFACE_EVIDENCE_PREFIX, `${SURFACE_EVIDENCE_PREFIX}\uffff`)) {
     if (isDomainRow(row)) {
       domains.add(row.domain)
     }
@@ -37,7 +42,7 @@ export function buildCompleteDocumentReplacements(
   return [
     ...replacements,
     ...[...domains]
-      .filter((domain) => !incoming.has(domain))
+      .filter((domain) => !incoming.has(domain) && !isSurfaceEvidenceDomain(domain))
       .map((domain) => ({ domain, payload: null }))
   ]
 }

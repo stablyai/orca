@@ -1,3 +1,4 @@
+import { removeProjectColdEvidence } from './profile-project-cold-evidence'
 import type { WorkspaceKey } from '../../shared/folder-workspace-types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
@@ -9,13 +10,17 @@ import {
   removeRepoFromWorkspaceSession
 } from './profile-project-session-state'
 import { isRepoWorktreeId, removeRepoWorktreeRecord } from './profile-project-worktree-identity'
+import { removeProjectSurfaces } from './profile-project-surface-transfer'
 
 export function removeSourceRepo(
   state: TransferProfileState,
   repoId: string
 ): TransferProfileState {
   const next: TransferProfileState = {
-    ...state,
+    ...removeProjectColdEvidence(state, repoId),
+    ...(state.workspaceSurfaces
+      ? { workspaceSurfaces: removeProjectSurfaces(state.workspaceSurfaces, repoId) }
+      : {}),
     repos: state.repos.filter((repo) => repo.id !== repoId),
     sparsePresetsByRepo: { ...state.sparsePresetsByRepo },
     retiredWorktreeNamesByRepo: { ...state.retiredWorktreeNamesByRepo },

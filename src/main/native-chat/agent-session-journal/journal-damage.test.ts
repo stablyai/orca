@@ -13,9 +13,8 @@ import type {
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import Database from '../../sqlite/sync-database'
 import { openJournalDatabase } from './journal-database'
-import { closeTestJournalHostDatabase } from './journal-host-database-test-support'
-import type { openAgentSessionJournal } from './journal-store-factory'
 import {
+  closeTestJournalHostDatabase,
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
   loadTestJournal,
@@ -24,6 +23,8 @@ import {
   deleteTestJournalRow,
   SAVED_BY_NEWER_ORCA
 } from './journal-host-database-test-support'
+import type { openAgentSessionJournal } from './journal-store-factory'
+
 import { journalOpenRefusalError } from './journal-open-failure'
 
 const IDENTITY: AgentSessionJournalIdentity = {

@@ -26,8 +26,11 @@ import {
   recoverPendingProfileProjectMoves
 } from './profile-project-move-intent'
 import { normalizeProfileProjectState, readProfileState } from './profile-project-state-file'
-import { Store } from '../persistence/loading-store/store'
-import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
+import { createLiveProfileStateStore } from '../persistence/profile-state/profile-state-live-store-factory'
+import {
+  buildCanonicalRunWorkers,
+  canonicalRunWorkerOptions
+} from '../ipc/pty/canonical-pty-run-test-support'
 import { removeSourceRepo } from './profile-project-source-removal'
 import {
   applyPayloadToTarget,
@@ -133,19 +136,49 @@ function preparedMove() {
   })
   const sourceAfter = removeSourceRepo(source.state, sourceRepo.id)
   const targetAfter = applyPayloadToTarget(target.state, payload)
+  const sourceChanges = prepareProfileProjectDomainChanges(
+    source.revision,
+    source.documents,
+    sourceAfter
+  )
+  const targetChanges = prepareProfileProjectDomainChanges(
+    target.revision,
+    target.documents,
+    targetAfter
+  )
   const intent = createProfileProjectDomainMoveIntent({
     sourceProfileId: 'source',
     targetProfileId: 'target',
-    source: prepareProfileProjectDomainChanges(source.revision, source.documents, sourceAfter),
-    target: prepareProfileProjectDomainChanges(target.revision, target.documents, targetAfter)
+    source: sourceChanges,
+    target: targetChanges
   })
-  return { intent, sourceAfter, targetAfter }
+  return {
+    intent,
+    sourceAfter: domainAfterImage(source.state, sourceChanges),
+    targetAfter: domainAfterImage(target.state, targetChanges)
+  }
 }
 
-beforeAll(() => {
+function domainAfterImage(
+  before: object,
+  changes: ReturnType<typeof prepareProfileProjectDomainChanges>
+): Record<string, unknown> {
+  const after: Record<string, unknown> = { ...before }
+  for (const { domain, payload } of changes.replacements) {
+    if (payload === null) {
+      delete after[domain]
+    } else {
+      after[domain] = JSON.parse(payload)
+    }
+  }
+  return JSON.parse(JSON.stringify(after))
+}
+
+beforeAll(async () => {
   crashRoot = mkdtempSync(join(tmpdir(), 'orca-domain-move-crash-api-'))
   crashBundle = join(crashRoot, 'api.cjs')
   crashScript = join(crashRoot, 'crash.cjs')
+  await buildCanonicalRunWorkers(crashRoot)
   buildSync({
     stdin: {
       contents:
@@ -177,11 +210,11 @@ const writers = new WeakSet()
 sqlite.DatabaseSync.prototype.exec = function(sql) {
   const writing = writers.has(this)
   const participant = writing ? this.prepare("SELECT value FROM profile_state_meta WHERE key = 'profile_id'").get().value : ''
-  if (writing && sql === 'COMMIT') barrier(participant + '-before-commit')
+  if (writing && published && sql === 'COMMIT') barrier(participant + '-before-commit')
   const result = exec.call(this, sql)
   if (sql === 'BEGIN IMMEDIATE') writers.add(this)
   if (sql === 'COMMIT' || sql === 'ROLLBACK') writers.delete(this)
-  if (writing && sql === 'COMMIT') barrier(participant + '-committed')
+  if (writing && published && sql === 'COMMIT') barrier(participant + '-committed')
   return result
 }
 let published = false
@@ -273,26 +306,32 @@ describe('profile domain transfers', () => {
           marker !== undefined
         )
         expect(settings.futureSetting).toEqual({ retained: true })
-        vi.useFakeTimers()
-        const loaded = new Store({
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+        const options = {
           dataFile: join(root, 'profiles', id, 'orca-data.json'),
-          profileStateAuthority: new ProfileStateSqliteAuthority(dbPath(id), id)
-        })
+          databaseFile: dbPath(id),
+          profileId: id
+        }
+        const { store: loaded } = await createLiveProfileStateStore(
+          options,
+          canonicalRunWorkerOptions(crashRoot)
+        )
         try {
           vi.advanceTimersByTime(5000)
+          vi.useRealTimers()
           await loaded.waitForPendingWrite()
           expect(JSON.parse(raw(id).json).settings).toMatchObject({
             uiLanguage: marker === true ? plugin : 'pt',
             uiLanguagePortugueseMigrationApplied: true
           })
         } finally {
-          await loaded.freezeWritesAsync()
           vi.useRealTimers()
+          await loaded.freezeWritesAsync()
         }
-        const reopened = new Store({
-          dataFile: join(root, 'profiles', id, 'orca-data.json'),
-          profileStateAuthority: new ProfileStateSqliteAuthority(dbPath(id), id)
-        })
+        const { store: reopened } = await createLiveProfileStateStore(
+          options,
+          canonicalRunWorkerOptions(crashRoot)
+        )
         try {
           expect(reopened.getSettings()).toMatchObject({
             uiLanguage: marker === true ? plugin : 'pt',
@@ -321,8 +360,17 @@ describe('profile domain transfers', () => {
   it.each(['copy', 'move'] as const)(
     '%s preserves the full normalized projection and unchanged physical rows',
     (mode) => {
-      const beforeSource = domainState.readProfileProjectTransferState('source', root).state
-      const beforeTarget = domainState.readProfileProjectTransferState('target', root).state
+      for (const id of mode === 'move' ? ['source', 'target'] : ['target']) {
+        domainState.initializeProfileProjectSurfaces(
+          id,
+          root,
+          domainState.readProfileProjectTransferState(id, root)
+        )
+      }
+      const source = domainState.readProfileProjectTransferState('source', root)
+      const target = domainState.readProfileProjectTransferState('target', root)
+      const beforeSource = source.state
+      const beforeTarget = target.state
       const physicalBefore = withDatabase('target', (db) =>
         db
           .prepare(
@@ -340,9 +388,13 @@ describe('profile domain transfers', () => {
         targetRepo,
         includeSessions: mode === 'move'
       })
-      expect(afterTarget).toEqual(
-        JSON.parse(JSON.stringify(applyPayloadToTarget(beforeTarget, payload)))
+      const targetChanges = prepareProfileProjectDomainChanges(
+        target.revision!,
+        target.documents!,
+        applyPayloadToTarget(beforeTarget, payload)
       )
+      expect(afterTarget).toEqual(domainAfterImage(beforeTarget, targetChanges))
+      expect(afterTarget.repos).toContainEqual(targetRepo)
       expect(afterTarget.settings.opencodeSessionCookie).toBe('enc:v1:sealed-inactive')
       expect(
         withDatabase('target', (db) =>
@@ -353,12 +405,18 @@ describe('profile domain transfers', () => {
             .all()
         )
       ).toEqual(physicalBefore)
-      expect(raw('target').revision).toBe(2)
-      expect(raw('source').revision).toBe(mode === 'move' ? 2 : 1)
+      expect(raw('target').revision).toBe(target.revision! + 1)
+      expect(raw('source').revision).toBe(source.revision! + (mode === 'move' ? 1 : 0))
       if (mode === 'move') {
-        expect(JSON.parse(raw('source').json)).toEqual(
-          JSON.parse(JSON.stringify(removeSourceRepo(beforeSource, repo.id)))
+        const sourceChanges = prepareProfileProjectDomainChanges(
+          source.revision!,
+          source.documents!,
+          removeSourceRepo(beforeSource, repo.id)
         )
+        expect(JSON.parse(raw('source').json)).toEqual(
+          domainAfterImage(beforeSource, sourceChanges)
+        )
+        expect(JSON.parse(raw('source').json).repos).toEqual([])
       }
     }
   )
@@ -582,6 +640,15 @@ describe('profile domain transfers', () => {
     ...(process.platform === 'win32' ? [] : ['cleanup-durable'])
   ]
   it.each(crashStages)('recovers exact state after actual SIGKILL at %s', async (stage) => {
+    for (const id of ['source', 'target']) {
+      domainState.initializeProfileProjectSurfaces(
+        id,
+        root,
+        domainState.readProfileProjectTransferState(id, root)
+      )
+    }
+    const sourceRevision = raw('source').revision
+    const targetRevision = raw('target').revision
     const sourceBefore = raw('source').json
     const targetBefore = raw('target').json
     const { sourceAfter, targetAfter } = preparedMove()
@@ -615,8 +682,8 @@ describe('profile domain transfers', () => {
     expect(JSON.parse(raw('target').json)).toEqual(
       targetCommitted ? JSON.parse(JSON.stringify(targetAfter)) : JSON.parse(targetBefore)
     )
-    expect(raw('source').revision).toBe(targetCommitted ? 2 : 1)
-    expect(raw('target').revision).toBe(targetCommitted ? 2 : 1)
+    expect(raw('source').revision).toBe(sourceRevision + (targetCommitted ? 1 : 0))
+    expect(raw('target').revision).toBe(targetRevision + (targetCommitted ? 1 : 0))
     expect(recoverPendingProfileProjectMoves(root)).toBe(0)
   })
 })

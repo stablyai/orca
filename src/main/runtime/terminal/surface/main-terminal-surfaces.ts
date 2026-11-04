@@ -25,7 +25,10 @@ import {
 export type MainTerminalSurfacesHost = {
   store: () => Pick<
     RuntimeStore,
-    'getWorkspaceSessionHostIds' | 'getSettings' | 'workspaceSurfacesInitialized'
+    | 'getWorkspaceSessionHostIds'
+    | 'getSettings'
+    | 'workspaceSurfacesInitialized'
+    | 'readWorkspaceSurfaces'
   > | null
   /** Main's one layout projection. */
   reads: () => WorkspaceLayoutReads
@@ -78,23 +81,27 @@ class MainSurfacePublisher {
     this.lastWindowGraph = { windowId, graph }
     this.installed = this.index.surfaces()
     const composed = composeMainTerminalSurfaces(graph, this.installed, this.host.registered)
+    const nativeMembers = this.currentNativeMembers()
     return graph.mobileSessionTabs
       ? {
           ...composed,
-          mobileSessionTabs: graph.mobileSessionTabs.map((rows) => this.withMainRows(rows))
+          mobileSessionTabs: graph.mobileSessionTabs.map((rows) =>
+            this.withMainRows(rows, nativeMembers)
+          )
         }
       : composed
   }
 
   /** A workspace main owns publishes main's terminal and editor rows; any other, the window's. */
   private withMainRows(
-    published: RuntimeMobileSessionTabsSnapshot
+    published: RuntimeMobileSessionTabsSnapshot,
+    nativeMembers: ReadonlySet<string>
   ): RuntimeMobileSessionTabsSnapshot {
     const projected = this.index.lastSessionTabsOf(published.worktree)
     return projected
       ? ORCA_LAYOUT_OWNER_IS_MAIN
         ? withMainSessionTabRows(published, projected, this.host.exited)
-        : withCanonicalSessionSurfaces(published, projected, this.host.exited)
+        : withCanonicalSessionSurfaces(published, projected, this.host.exited, nativeMembers)
       : published
   }
 
@@ -107,6 +114,7 @@ class MainSurfacePublisher {
   /** Merge main's new rows/names/order into held rows; close paths own drops, and added terminals still pass exit filters. */
   private mergeIntoHeldRows(): void {
     this.index.surfaces()
+    const nativeMembers = this.currentNativeMembers()
     for (const [worktreeId, held] of this.host.heldRows()) {
       const projected = this.index.lastSessionTabsOf(held.worktree)
       if (!projected) {
@@ -117,7 +125,7 @@ class MainSurfacePublisher {
             live: this.host.live,
             keepUnlisted: true
           })
-        : withCanonicalSessionSurfaces(held, projected, this.host.exited)
+        : withCanonicalSessionSurfaces(held, projected, this.host.exited, nativeMembers)
       const heldIds = new Set(held.tabs.map((row) => row.id))
       const next = merged.tabs.some((row) => row.type === 'terminal' && !heldIds.has(row.id))
         ? this.host.fenceExited(merged)
@@ -126,6 +134,21 @@ class MainSurfacePublisher {
         this.host.replaceHeldRows(worktreeId, next)
       }
     }
+  }
+
+  private currentNativeMembers(): ReadonlySet<string> {
+    const store = this.host.store()
+    const members = new Set<string>()
+    for (const hostId of store?.getWorkspaceSessionHostIds?.() ?? []) {
+      for (const surface of store?.readWorkspaceSurfaces?.(hostId) ?? []) {
+        if (surface.content?.kind === 'agent-session') {
+          members.add(
+            JSON.stringify([surface.workspaceId, surface.hostTabId, surface.content.sessionId])
+          )
+        }
+      }
+    }
+    return members
   }
 
   /** The pane main's layout binds a terminal to, read fresh; null when no pane main owns holds it. */

@@ -1,4 +1,15 @@
 import {
+  surfaceCommandAdmissionCanExecute,
+  refusedSurfaceCommandAdmission,
+  captureWorkspaceSurfaceAdmission
+} from './surface-command-admission'
+import { executeWorkspaceSurfaceJournalUnit } from './workspace-surface-journal-unit'
+import type { SurfaceKey } from '../../../shared/workspace-surfaces/surface-content'
+import type {
+  SurfaceStorageRead,
+  SurfaceStorageReadResult
+} from '../../../shared/workspace-surfaces/surface-storage-read'
+import {
   readDeregisteredWorkspaceSurfaces,
   pruneDeregisteredTerminalSurfacesSync
 } from './deregistered-surface-retirement'
@@ -32,6 +43,10 @@ import {
   publishCommittedSurfaceCommand,
   readSurfaceRuntimeSession
 } from './surface-committed-publication'
+import {
+  releaseSurfaceAdmissions,
+  surfaceAdmissionRegistry
+} from '../../workspace-surfaces/surface-admission-capture'
 
 const workspaceSurfaceCommandsContext = Symbol('WorkspaceSurfaceCommands')
 type WorkspaceSurfaceCommandsContext = {
@@ -79,6 +94,28 @@ export class WorkspaceSurfaceCommands {
     )
   }
 
+  captureWorkspaceSurfaceAdmission(command: SurfaceStorageCommand): void {
+    captureWorkspaceSurfaceAdmission(this[workspaceSurfaceCommandsContext].runtime, command)
+  }
+
+  private invalidateCommittedAdmissions(results: readonly SurfaceStorageResult[]): void {
+    const reader = this[workspaceSurfaceCommandsContext].runtime.workspaceSurfaces
+    if (reader) {
+      const registry = surfaceAdmissionRegistry(reader)
+      for (const result of results) {
+        registry.invalidate(result.changes?.invalidated ?? [])
+      }
+    }
+  }
+
+  private admissionCanExecute(command: SurfaceStorageMutation): Promise<boolean> {
+    return surfaceCommandAdmissionCanExecute(this[workspaceSurfaceCommandsContext].runtime, command)
+  }
+
+  private refusedAdmission(command: SurfaceStorageMutation): SurfaceStorageResult {
+    return refusedSurfaceCommandAdmission(this[workspaceSurfaceCommandsContext].runtime, command)
+  }
+
   /** Capture before the first launch await; absence cannot later become a successor's authority. */
   captureWorkspaceSurfaceRun(
     pane: { worktreeId: string; tabId: string; leafId: string },
@@ -88,14 +125,8 @@ export class WorkspaceSurfaceCommands {
     if (!reader?.initialized(hostId)) {
       return undefined
     }
-    const surface = reader
-      .all(hostId)
-      .find(
-        (candidate) =>
-          candidate.workspaceId === pane.worktreeId &&
-          candidate.content?.kind === 'terminal' &&
-          (candidate.hostTabId === pane.tabId || candidate.content.entityId === pane.tabId)
-      )
+    const key = { hostId, workspaceId: pane.worktreeId, hostTabId: pane.tabId }
+    const surface = reader.terminal?.(key) ?? reader.read(key)
     return surface ? runTargetOf(surface, pane.leafId) : null
   }
 
@@ -133,47 +164,64 @@ export class WorkspaceSurfaceCommands {
       }
       await writeToDiskAsync(writes)
       const commands = prepare()
-      if (commands.length === 0) {
-        committed?.([])
+      try {
+        for (const command of commands) {
+          this.captureWorkspaceSurfaceAdmission(command)
+        }
+        for (const command of commands) {
+          if (!(await this.admissionCanExecute(command))) {
+            return commands.map((entry) => this.refusedAdmission(entry))
+          }
+        }
+        if (commands.length === 0) {
+          committed?.([])
+          if (committed) {
+            await writeToDiskAsync(writes)
+          }
+          return []
+        }
+        const before = commands.map((command) => {
+          const hostId = normalizeExecutionHostId(command.hostId)
+          if (!hostId) {
+            throw new Error('Workspace surface command has an invalid host')
+          }
+          return { hostId, session: structuredClone(readSurfaceRuntimeSession(runtime, hostId)) }
+        })
+        const generation = runtime.writeGeneration
+        const results = await authority.executeSurfaceTransaction(commands)
+        this.invalidateCommittedAdmissions(results)
+        const failures: unknown[] = []
+        for (const [index, result] of results.entries()) {
+          const captured = before[index]!
+          try {
+            publishCommittedSurfaceCommand(
+              runtime,
+              captured.hostId,
+              commands[index]!,
+              captured.session,
+              generation,
+              result
+            )
+          } catch (error) {
+            failures.push(error)
+          }
+        }
+        if (failures.length) {
+          throw new AggregateError(failures, 'Committed surface publication failed')
+        }
+        committed?.(results)
         if (committed) {
           await writeToDiskAsync(writes)
         }
-        return []
+        return results
+      } finally {
+        releaseSurfaceAdmissions(commands)
       }
-      const before = commands.map((command) => {
-        const hostId = normalizeExecutionHostId(command.hostId)
-        if (!hostId) {
-          throw new Error('Workspace surface command has an invalid host')
-        }
-        return { hostId, session: structuredClone(readSurfaceRuntimeSession(runtime, hostId)) }
-      })
-      const generation = runtime.writeGeneration
-      const results = await authority.executeSurfaceTransaction(commands)
-      const failures: unknown[] = []
-      for (const [index, result] of results.entries()) {
-        const captured = before[index]!
-        try {
-          publishCommittedSurfaceCommand(
-            runtime,
-            captured.hostId,
-            commands[index]!,
-            captured.session,
-            generation,
-            result
-          )
-        } catch (error) {
-          failures.push(error)
-        }
-      }
-      if (failures.length) {
-        throw new AggregateError(failures, 'Committed surface publication failed')
-      }
-      committed?.(results)
-      if (committed) {
-        await writeToDiskAsync(writes)
-      }
-      return results
     })
+  }
+
+  readWorkspaceSurfaceFromCatalog(key: SurfaceKey) {
+    return this[workspaceSurfaceCommandsContext].runtime.workspaceSurfaces?.read(key) ?? null
   }
 
   readWorkspaceSurfaces(hostId: ExecutionHostId = 'local') {
@@ -212,57 +260,34 @@ export class WorkspaceSurfaceCommands {
     afterCommitted?: (result: SurfaceJointResult) => void
   ): Promise<SurfaceJointResult> {
     const { runtime, writes } = this[workspaceSurfaceCommandsContext]
+    return executeWorkspaceSurfaceJournalUnit(
+      runtime,
+      writes,
+      {
+        capture: (command) => this.captureWorkspaceSurfaceAdmission(command),
+        canExecute: (command) => this.admissionCanExecute(command),
+        invalidate: (results) => this.invalidateCommittedAdmissions(results)
+      },
+      transaction,
+      effects,
+      committed,
+      admit,
+      afterCommitted
+    )
+  }
+
+  /** Ordered observation does not flush presentation or publish a new session. */
+  readWorkspaceSurface(request: SurfaceStorageRead): Promise<SurfaceStorageReadResult> {
+    const { runtime, writes } = this[workspaceSurfaceCommandsContext]
     if (runtime.writesFrozen || runtime.quitFlushStarted || runtime.profileMaintenancePending) {
-      return Promise.reject(new Error('Cannot mutate finalized profile persistence'))
+      return Promise.reject(new Error('Cannot read finalized profile persistence'))
     }
     return enqueuePrimaryStateOperation(writes, async () => {
       const authority = runtime.profileStateAuthority
-      if (!authority?.executeSurfaceJournalUnit) {
-        throw new Error('Native membership requires its profile storage owner')
+      if (!authority?.readSurface) {
+        throw new Error('Surface reads require their profile storage owner')
       }
-      await writeToDiskAsync(writes)
-      admit?.()
-      const before = transaction.commands.map((command) => {
-        const hostId = normalizeExecutionHostId(command.hostId)
-        if (!hostId) {
-          throw new Error('Workspace surface command has an invalid host')
-        }
-        return { hostId, session: structuredClone(readSurfaceRuntimeSession(runtime, hostId)) }
-      })
-      const generation = runtime.writeGeneration
-      const result = await authority.executeSurfaceJournalUnit(transaction, effects)
-      const publish = (notify?: (callback: () => void) => void) => {
-        const failures: unknown[] = []
-        for (const [index, surface] of result.surfaces.entries()) {
-          const captured = before[index]!
-          try {
-            publishCommittedSurfaceCommand(
-              runtime,
-              captured.hostId,
-              transaction.commands[index]!,
-              captured.session,
-              generation,
-              surface,
-              notify
-            )
-          } catch (error) {
-            failures.push(error)
-          }
-        }
-        if (failures.length) {
-          throw new AggregateError(failures, 'Committed native surface publication failed')
-        }
-      }
-      if (committed) {
-        await committed(result, publish)
-      } else {
-        publish()
-      }
-      afterCommitted?.(result)
-      if (afterCommitted) {
-        await writeToDiskAsync(writes)
-      }
-      return result
+      return authority.readSurface(request)
     })
   }
 
@@ -272,6 +297,7 @@ export class WorkspaceSurfaceCommands {
     if (runtime.writesFrozen || runtime.quitFlushStarted || runtime.profileMaintenancePending) {
       return Promise.reject(new Error('Cannot mutate finalized profile persistence'))
     }
+    this.captureWorkspaceSurfaceAdmission(command)
     return enqueuePrimaryStateOperation(writes, async () => {
       const authority = runtime.profileStateAuthority
       if (!authority?.executeSurfaceCommand) {
@@ -282,11 +308,15 @@ export class WorkspaceSurfaceCommands {
         throw new Error('Workspace surface command has an invalid host')
       }
       await writeToDiskAsync(writes)
+      if (command.type !== 'query' && !(await this.admissionCanExecute(command))) {
+        return this.refusedAdmission(command)
+      }
       const before = structuredClone(readSurfaceRuntimeSession(runtime, hostId))
       const generation = runtime.writeGeneration
       const result = await authority.executeSurfaceCommand(command)
+      this.invalidateCommittedAdmissions([result])
       publishCommittedSurfaceCommand(runtime, hostId, command, before, generation, result)
       return result
-    })
+    }).finally(() => releaseSurfaceAdmissions([command]))
   }
 }

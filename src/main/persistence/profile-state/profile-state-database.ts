@@ -1,5 +1,8 @@
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
-import { hasProfileStateAuthorityMarker } from './profile-state-authority-marker'
+import {
+  hasProfileStateAuthorityMarker,
+  ensureProfileStateAuthorityMarker
+} from './profile-state-authority-marker'
 import Database, { isSqliteAvailable } from '../../sqlite/sync-database'
 import { migrateAutomationRunsStorage } from './profile-state-automation-runs-migration'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
@@ -54,6 +57,21 @@ export function openWritableProfileStateDatabase(
     )
   }
   return opened
+}
+
+/** Keep marker failures from leaking a writable bootstrap handle. */
+export function openMarkedWritableProfileStateDatabase(
+  databasePath: string,
+  profileId: string
+): OpenProfileStateDatabase {
+  const opened = openWritableProfileStateDatabase(databasePath, profileId)
+  try {
+    ensureProfileStateAuthorityMarker(databasePath)
+    return opened
+  } catch (error) {
+    opened.db.close()
+    throw error
+  }
 }
 
 /** Validate schema before journal/DDL setup so unknown or malformed databases remain untouched. */

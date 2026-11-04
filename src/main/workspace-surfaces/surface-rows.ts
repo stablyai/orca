@@ -3,6 +3,7 @@ import type { SurfaceKey, WorkspaceSurface } from '../../shared/workspace-surfac
 import { workspaceSurfaceSchema } from '../../shared/workspace-surfaces/surface-schema'
 import { reconcileSurfaceAllocations } from './surface-allocation-rows'
 import { releaseSurfaceIdentities, writeSurfaceLeafIdentities } from './surface-identities'
+import { recordSurfaceHost, recordSurfaceWrite } from './surface-transaction-changes'
 
 export function parseJson(value: unknown): unknown {
   if (typeof value !== 'string') {
@@ -50,7 +51,9 @@ export function advanceDomain(db: Database.Database, hostId: string): number {
   db.prepare(
     'UPDATE main.workspace_surface_domains SET revision = revision + 1 WHERE host_id = ?'
   ).run(hostId)
-  return domainRevision(db, hostId)
+  const revision = domainRevision(db, hostId)
+  recordSurfaceHost(db, hostId, true, revision)
+  return revision
 }
 
 export function writeSurface(db: Database.Database, input: WorkspaceSurface): void {
@@ -66,6 +69,7 @@ export function writeSurface(db: Database.Database, input: WorkspaceSurface): vo
     sessionId
   )
   writeSurfaceLeafIdentities(db, surface)
+  recordSurfaceWrite(db, surface)
 }
 
 export function writeChanges(db: Database.Database, changes: readonly WorkspaceSurface[]): void {

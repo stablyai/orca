@@ -1,7 +1,13 @@
 import { journalSqlFailure } from '../../native-chat/agent-session-journal/journal-sql-protocol'
 import { JournalUnitUpload } from '../../native-chat/agent-session-journal/journal-unit-upload'
 import { journalResultPackets } from '../../native-chat/agent-session-journal/journal-unit-transfer'
-import type { ProfileStateWriterJournalPackets } from './profile-state-writer-protocol'
+import {
+  type ProfileStateWriterJournalPackets,
+  isProfileStateWriterInitialization,
+  isProfileStateWriterRequest,
+  type ProfileStateWriterRequest,
+  type ProfileStateWriterResponse
+} from './profile-state-writer-protocol'
 import { parentPort, workerData } from 'node:worker_threads'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
@@ -9,12 +15,6 @@ import {
   encodeProfileStateWriterError,
   ProfileStateWriterError
 } from './profile-state-writer-errors'
-import {
-  isProfileStateWriterInitialization,
-  isProfileStateWriterRequest,
-  type ProfileStateWriterRequest,
-  type ProfileStateWriterResponse
-} from './profile-state-writer-protocol'
 
 if (!parentPort) {
   throw new Error('Profile state writer requires a worker thread')
@@ -44,6 +44,7 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
     throw new Error('Profile state writer is not initialized')
   }
   let exportedRevision: number | null | undefined
+  let surfaceRead: Extract<ProfileStateWriterResponse, { ok: true }>['surfaceRead']
   let surfaceResult: Extract<ProfileStateWriterResponse, { ok: true }>['surfaceResult']
   let surfaceResults: Extract<ProfileStateWriterResponse, { ok: true }>['surfaceResults']
   switch (request.command) {
@@ -67,6 +68,9 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
     }
     case 'write-surfaces':
       surfaceResults = authority.executeSurfaceTransaction(request.surfaces)
+      break
+    case 'read-surface':
+      surfaceRead = authority.readSurface(request.read)
       break
     case 'write-surface':
       surfaceResult = authority.executeSurfaceCommand(request.surface)
@@ -110,6 +114,8 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
     id: request.id,
     ok: true,
     revision: authority.revision,
+    surfaceInvalidations: authority.takeSurfaceInvalidations(),
+    ...(surfaceRead === undefined ? {} : { surfaceRead }),
     ...(surfaceResult === undefined ? {} : { surfaceResult }),
     ...(surfaceResults === undefined ? {} : { surfaceResults }),
     ...(exportedRevision === undefined ? {} : { exportedRevision })

@@ -65,6 +65,7 @@ export function reconcileSurfaceNativeMembership(
     db
       .prepare('SELECT 1 FROM surface_chat.agent_session_store_meta WHERE key = ?')
       .get('session_tabs_recorded') !== undefined
+  const seenSessions = new Set<string>()
   const actual = db
     .prepare('SELECT tab_id, session_id FROM surface_chat.agent_session_tabs ORDER BY position')
     .all()
@@ -79,28 +80,40 @@ export function reconcileSurfaceNativeMembership(
       }
       return { tabId: row.tab_id, sessionId: row.session_id }
     })
+    .filter((row) => {
+      if (seenSessions.has(row.sessionId)) {
+        return false
+      }
+      seenSessions.add(row.sessionId)
+      return true
+    })
   if (!recorded) {
+    const sessions = new Set(actual.map((row) => row.sessionId))
     for (const tabs of Object.values(session.unifiedTabs ?? {})) {
       for (const tab of tabs) {
-        if (
-          tab.contentType === 'agent-session' &&
-          !actual.some((row) => row.sessionId === tab.entityId)
-        ) {
+        if (tab.contentType === 'agent-session' && !sessions.has(tab.entityId)) {
           actual.push({ tabId: tab.id, sessionId: tab.entityId })
+          sessions.add(tab.entityId)
         }
       }
     }
   }
   const previous = repository.all(hostId)
+  const previousByKey = new Map(previous.map((surface) => [rowKey(surface), surface]))
+  const previousByTab = new Map(previous.map((surface) => [surface.hostTabId, surface]))
+  const actualTabs = new Set(actual.map((row) => JSON.stringify([row.tabId, row.sessionId])))
+  const baselineTabs = new Set(
+    baseline?.tabs.map((row) => JSON.stringify([row.tabId, row.sessionId]))
+  )
   const retired = (baseline?.surfaces ?? []).flatMap((before) => {
     const content = before.content
     if (
       content?.kind !== 'agent-session' ||
-      actual.some((row) => row.tabId === before.hostTabId && row.sessionId === content.sessionId)
+      actualTabs.has(JSON.stringify([before.hostTabId, content.sessionId]))
     ) {
       return []
     }
-    const current = previous.find((row) => rowKey(row) === rowKey(before))
+    const current = previousByKey.get(rowKey(before))
     return current?.content?.kind === 'agent-session' && current.occurrence === before.occurrence
       ? [{ ...current, content: null, occurrence: mintId(), revision: current.revision + 1 }]
       : []
@@ -108,6 +121,25 @@ export function reconcileSurfaceNativeMembership(
   if (retired.length) {
     writeChanges(db, retired)
   }
+  const heldByKey = new Map(previousByKey)
+  for (const surface of retired) {
+    heldByKey.set(rowKey(surface), surface)
+  }
+  const held = [...heldByKey.values()]
+  const bySession = new Map(
+    held.flatMap((surface) =>
+      surface.content?.kind === 'agent-session'
+        ? [[surface.content.sessionId, surface] as const]
+        : []
+    )
+  )
+  const workspacesByTab = new Map(
+    Object.entries(session.unifiedTabs ?? {}).flatMap(([workspace, tabs]) =>
+      tabs.map((tab) => [tab.id, workspace] as const)
+    )
+  )
+  const incoming: WorkspaceSurface[] = []
+  const replaced = new Set<WorkspaceSurface>()
   for (const row of actual) {
     const saved = db
       .prepare('SELECT record_json FROM surface_chat.agent_session_records WHERE session_id = ?')
@@ -116,10 +148,8 @@ export function reconcileSurfaceNativeMembership(
     if (!record || record.location.executionHostId !== hostId) {
       unresolved.push(row)
       const workspaceId =
-        previous.find((surface) => surface.hostTabId === row.tabId)?.workspaceId ??
-        Object.entries(session.unifiedTabs ?? {}).find(([, tabs]) =>
-          tabs.some((tab) => tab.id === row.tabId)
-        )?.[0] ??
+        previousByTab.get(row.tabId)?.workspaceId ??
+        workspacesByTab.get(row.tabId) ??
         'unresolved-native-reference'
       retainSurfaceReference(host, {
         workspaceId,
@@ -133,18 +163,12 @@ export function reconcileSurfaceNativeMembership(
       })
       continue
     }
-    const held = repository.all(hostId)
-    const current = held.find(
-      (surface) =>
-        surface.content?.kind === 'agent-session' && surface.content.sessionId === row.sessionId
-    )
-    const was = baseline?.tabs.some(
-      (tab) => tab.tabId === row.tabId && tab.sessionId === row.sessionId
-    )
+    const current = bySession.get(row.sessionId)
+    const was = baselineTabs.has(JSON.stringify([row.tabId, row.sessionId]))
     if (current && (was || current.hostTabId === row.tabId)) {
       continue
     }
-    const candidate: WorkspaceSurface = {
+    incoming.push({
       hostId,
       workspaceId: record.location.workspaceId,
       hostTabId: row.tabId,
@@ -152,20 +176,25 @@ export function reconcileSurfaceNativeMembership(
       revision: 1,
       createdAt: record.createdAt,
       content: { kind: 'agent-session', sessionId: row.sessionId, agent: record.provider }
+    })
+    if (current) {
+      replaced.add(current)
     }
+  }
+  if (incoming.length) {
     const reserved = Object.values(session.unifiedTabs ?? {}).flatMap((tabs) =>
       tabs
         .filter((tab) => tab.contentType !== 'terminal' && tab.contentType !== 'agent-session')
         .map((tab) => tab.id)
     )
-    const [imported] = reserveImportedSurfaceIdentities(
-      [candidate],
-      held.filter((surface) => surface !== current),
+    const imported = reserveImportedSurfaceIdentities(
+      incoming,
+      held.filter((surface) => !replaced.has(surface)),
       reserved,
       host,
       mintId
     )
-    writeChanges(db, withRetiredChatViews(db, [imported!], mintId))
+    writeChanges(db, withRetiredChatViews(db, imported, mintId))
   }
   if (retired.length || actual.length > 0 || host.chatInitialization !== 'verified') {
     advanceDomain(db, hostId)

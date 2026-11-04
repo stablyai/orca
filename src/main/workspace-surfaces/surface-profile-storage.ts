@@ -1,9 +1,8 @@
+import { readSurfaceProfileSnapshot } from './surface-profile-cache'
 import { createHash } from 'node:crypto'
 import type Database from '../sqlite/sync-database'
 import {
-  WORKSPACE_SURFACE_DOMAIN,
   emptySurfaceHostDomain,
-  emptySurfaceProfileDomain,
   surfaceCommandReceiptSchema,
   surfaceProfileDomainSchema,
   surfaceProjectionSchema,
@@ -14,14 +13,10 @@ import { surfaceCommandOutcomeSchema } from '../../shared/workspace-surfaces/sur
 import { ensureWorkspaceSurfaceTables } from './surface-tables'
 import { parseJson, parseSurface, writeSurface } from './surface-rows'
 import { writeAllocation } from './surface-allocation-rows'
+import type { SurfaceTransactionChanges } from './surface-transaction-changes'
 
 export function readSurfaceProfileDomain(db: Database.Database): SurfaceProfileDomain {
-  const row = db
-    .prepare('SELECT payload FROM main.profile_state_documents WHERE domain = ?')
-    .get(WORKSPACE_SURFACE_DOMAIN)
-  return row
-    ? surfaceProfileDomainSchema.parse(parseJson(row.payload))
-    : emptySurfaceProfileDomain()
+  return structuredClone(readSurfaceProfileSnapshot(db).domain)
 }
 
 export function surfaceDomainFingerprint(payload: string): string {
@@ -85,9 +80,45 @@ export function restoreSurfaceIndices(
 /** Reducer changes become durable only when the owner co-writes this carrier and compatibility output. */
 export function captureSurfaceProfileDomain(
   db: Database.Database,
-  previous: SurfaceProfileDomain
+  previous: SurfaceProfileDomain,
+  changes?: SurfaceTransactionChanges
 ): SurfaceProfileDomain {
   requireTransaction(db)
+  if (changes) {
+    const domain = { ...previous, hosts: { ...previous.hosts } }
+    const affected = new Set([
+      ...changes.hosts.keys(),
+      ...changes.surfaces.keys(),
+      ...changes.allocations.keys(),
+      ...changes.receipts.keys(),
+      ...changes.baselines.keys()
+    ])
+    for (const hostId of affected) {
+      const before = previous.hosts[hostId] ?? emptySurfaceHostDomain()
+      const host = { ...before, ...changes.hosts.get(hostId) }
+      host.surfaces = applyRows(before.surfaces, changes.surfaces.get(hostId), (surface) =>
+        JSON.stringify([surface.workspaceId, surface.hostTabId])
+      )
+      host.allocations = applyRows(
+        before.allocations,
+        changes.allocations.get(hostId),
+        (allocation) => allocation.allocationId
+      )
+      host.receipts = applyRows(before.receipts, changes.receipts.get(hostId), (receipt) =>
+        JSON.stringify([receipt.callerId, receipt.commandId])
+      )
+      host.terminalBaselines = { ...before.terminalBaselines }
+      for (const [workspaceId, baseline] of changes.baselines.get(hostId) ?? []) {
+        if (baseline) {
+          host.terminalBaselines[workspaceId] = baseline
+        } else {
+          delete host.terminalBaselines[workspaceId]
+        }
+      }
+      domain.hosts[hostId] = host
+    }
+    return domain
+  }
   const domain = structuredClone(previous)
   for (const row of db
     .prepare('SELECT host_id, initialized, revision FROM main.workspace_surface_domains')
@@ -132,6 +163,32 @@ export function captureSurfaceProfileDomain(
     domain.hosts[hostId] = host
   }
   return surfaceProfileDomainSchema.parse(domain)
+}
+
+function applyRows<T>(
+  before: T[],
+  changes: ReadonlyMap<string, T | null> | undefined,
+  key: (row: T) => string
+): T[] {
+  if (!changes?.size) {
+    return before
+  }
+  const rows: T[] = []
+  const retained = new Set<string>()
+  for (const old of before) {
+    const id = key(old)
+    const value = changes.has(id) ? changes.get(id) : old
+    if (value) {
+      rows.push(value)
+    }
+    retained.add(id)
+  }
+  for (const [id, value] of changes) {
+    if (!retained.has(id) && value) {
+      rows.push(value)
+    }
+  }
+  return rows
 }
 
 export function markSurfaceIndices(db: Database.Database, fingerprint: string): void {

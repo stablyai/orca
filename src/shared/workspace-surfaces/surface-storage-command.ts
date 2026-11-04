@@ -1,3 +1,4 @@
+import type { SurfaceKey, WorkspaceSurface } from './surface-content'
 import type {
   SurfaceExecutionProvenance,
   SurfaceExecutorIdentity
@@ -68,6 +69,9 @@ export type SurfaceHostSnapshot = Pick<
 
 export type SurfaceStorageResult = {
   hostId: string
+  /** Empty for durable resource-only changes; no visible session/catalog publication. */
+  changedWorkspaces?: readonly string[]
+  changes?: SurfaceCommittedChanges
   host: SurfaceHostSnapshot
   session: WorkspaceSessionState
   allocations: readonly SurfaceAllocation[]
@@ -75,3 +79,10 @@ export type SurfaceStorageResult = {
 }
 
 export type SurfaceStorageMutation = Exclude<SurfaceStorageCommand, { type: 'query' }>
+
+/** Actual committed row changes, rather than the full-host snapshot used for bootstrap readers. */
+export type SurfaceCommittedChanges = {
+  upserted: readonly WorkspaceSurface[]
+  removed: readonly SurfaceKey[]
+  invalidated?: readonly SurfaceKey[]
+}

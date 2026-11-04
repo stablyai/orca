@@ -11,7 +11,10 @@ import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycl
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 import { getHistorySessionDirName } from '../../daemon/history-paths'
-import { readProfileProjectTransferState } from '../../orca-profiles/profile-project-domain-state'
+import {
+  initializeProfileProjectSurfaces,
+  readProfileProjectTransferState
+} from '../../orca-profiles/profile-project-domain-state'
 import { getOrcaProfileStateDatabaseFile } from '../../orca-profiles/profile-storage-paths'
 import { openProfileStateDatabase } from '../../persistence/profile-state/profile-state-database'
 import { importProfileStateJson } from '../../persistence/profile-state/profile-state-documents'
@@ -218,6 +221,29 @@ function chatRows(): unknown[] {
     db.close()
   }
 }
+
+it('commits an initialized canonical workspace rewrite with matching compatibility output and replay', () => {
+  const state = profileState()
+  state.workspaceSession.tabsByWorktree[OLD_ID]![0]!.ptyId = null
+  seedProfile(state)
+  initializeProfileProjectSurfaces(PROFILE, root, readProfileProjectTransferState(PROFILE, root))
+  const before = readProfile().workspaceSurfaces!.hosts.local!
+  expect(before.surfaces).toHaveLength(1)
+  const original = before.surfaces[0]!
+  journal()
+  journalWrites.failPhase = 'profile-rewritten'
+  expect(run([])).toMatchObject([{ outcome: 'resuming', store: 'journal' }])
+  const rewritten = readProfile()
+  const moved = rewritten.workspaceSurfaces!.hosts.local!.surfaces[0]!
+  expect(moved).toEqual({ ...original, workspaceId: NEW_ID })
+  expect(rewritten.workspaceSession.tabsByWorktree[OLD_ID]).toBeUndefined()
+  expect(rewritten.workspaceSession.tabsByWorktree[NEW_ID]).toHaveLength(1)
+  expect(rewritten.workspaceSession.activeWorktreeId).toBe(NEW_ID)
+  journalWrites.failPhase = null
+  expect(run([])).toMatchObject([{ outcome: 'converted' }])
+  expect(readProfile().workspaceSurfaces).toEqual(rewritten.workspaceSurfaces)
+  expect(readProfile().workspaceSession).toEqual(rewritten.workspaceSession)
+})
 
 describe('runWslDriveUncConversionsAtStartup', () => {
   it('rewrites the profile and every outside store, then drops the journal', () => {

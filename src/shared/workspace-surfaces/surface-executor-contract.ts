@@ -64,9 +64,9 @@ export type SurfaceExecutorResult = z.infer<typeof surfaceExecutorResultSchema>
 
 export function surfaceExecutorKey(admission: SurfaceExecutorAdmission): string {
   return JSON.stringify([
-    admission.scope.databasePath,
-    admission.scope.profileId,
+    admission.executorId,
     admission.hostId,
-    admission.allocationId
+    admission.allocationId,
+    admission.resourceId
   ])
 }

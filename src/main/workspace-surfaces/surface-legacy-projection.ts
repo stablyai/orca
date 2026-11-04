@@ -4,6 +4,7 @@ import { stableJson } from '../../shared/workspace-layout/workspace-layout-load-
 import type { WorkspaceSurface } from '../../shared/workspace-surfaces/surface-content'
 import type { SurfaceProjection } from '../../shared/workspace-surfaces/surface-profile-domain'
 import { domainRevision } from './surface-rows'
+import { recordSurfaceBaseline } from './surface-transaction-changes'
 
 export type { SurfaceProjection } from '../../shared/workspace-surfaces/surface-profile-domain'
 
@@ -42,10 +43,11 @@ export function seedSurfaceProjectionBaseline(
     fingerprint: surfaceProjectionFingerprint(surfaces),
     surfaces: [...surfaces]
   }
-  db.prepare(`INSERT OR IGNORE INTO main.workspace_surface_projections
-    (host_id, workspace_id, baseline_json) VALUES (?, ?, ?)`).run(
-    hostId,
-    workspaceId,
-    JSON.stringify(baseline)
-  )
+  const result = db
+    .prepare(`INSERT OR IGNORE INTO main.workspace_surface_projections
+    (host_id, workspace_id, baseline_json) VALUES (?, ?, ?)`)
+    .run(hostId, workspaceId, JSON.stringify(baseline))
+  if (result.changes) {
+    recordSurfaceBaseline(db, hostId, workspaceId, baseline)
+  }
 }

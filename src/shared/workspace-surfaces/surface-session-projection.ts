@@ -1,3 +1,4 @@
+import type { SurfaceSessionProjectionCache } from './surface-session-projection-cache'
 import type { ExecutionHostId } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../workspace-layout/workspace-layout-load'
@@ -25,34 +26,50 @@ export function projectSurfaceSession(
   session: WorkspaceSessionState,
   surfaces: readonly WorkspaceSurface[],
   chatVerified = true,
-  unresolvedNativeSessionIds: ReadonlySet<string> = new Set()
+  unresolvedNativeSessionIds: ReadonlySet<string> = new Set(),
+  shownNativeSessionIds: ReadonlySet<string> = new Set(),
+  projectionCache?: SurfaceSessionProjectionCache
 ): WorkspaceSessionState {
   const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
   const byWorkspace = new Map<string, WorkspaceSurface[]>()
-  for (const surface of surfaces) {
+  for (const surface of projectionCache ? [] : surfaces) {
     if (surface.hostId === hostId) {
       const rows = byWorkspace.get(surface.workspaceId) ?? []
       rows.push(surface)
       byWorkspace.set(surface.workspaceId, rows)
     }
   }
-  const scopes = new Set([...Object.keys(loaded.layout.workspaces), ...byWorkspace.keys()])
+  const scopes = new Set([
+    ...Object.keys(loaded.layout.workspaces),
+    ...(projectionCache?.workspaceIds() ?? byWorkspace.keys())
+  ])
   for (const workspaceId of scopes) {
-    loaded.layout.workspaces[workspaceId] = projectSurfaceWorkspace(
-      workspaceId,
-      loaded.layout.workspaces[workspaceId],
-      byWorkspace.get(workspaceId) ?? [],
-      chatVerified,
-      unresolvedNativeSessionIds
-    )
+    loaded.layout.workspaces[workspaceId] = projectionCache
+      ? projectionCache.project(
+          workspaceId,
+          loaded.layout.workspaces[workspaceId],
+          chatVerified,
+          unresolvedNativeSessionIds,
+          shownNativeSessionIds
+        )
+      : projectSurfaceWorkspace(
+          workspaceId,
+          loaded.layout.workspaces[workspaceId],
+          byWorkspace.get(workspaceId) ?? [],
+          chatVerified,
+          unresolvedNativeSessionIds,
+          shownNativeSessionIds
+        )
   }
-  const activeEntities = new Set(
-    surfaces.flatMap((surface) =>
-      surface.hostId === hostId && surface.content?.kind === 'terminal'
-        ? [surface.content.entityId]
-        : []
+  const activeEntities =
+    projectionCache?.terminalEntityIds ??
+    new Set(
+      surfaces.flatMap((surface) =>
+        surface.hostId === hostId && surface.content?.kind === 'terminal'
+          ? [surface.content.entityId]
+          : []
+      )
     )
-  )
   const removed = new Set(
     Object.values(session.tabsByWorktree).flatMap((tabs) =>
       tabs.filter((tab) => !activeEntities.has(tab.id)).map((tab) => tab.id)

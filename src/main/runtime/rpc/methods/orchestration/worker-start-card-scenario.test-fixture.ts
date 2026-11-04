@@ -57,9 +57,9 @@ export async function verifyWorkerStartCardScenario(input: {
     current.host.appendAgentStart(destination, card.body, card.observedAt + 20)
   ])
   expect(
-    await (
-      await current.host.journalSnapshot(COORD)
-    ).items.filter((item) => item.body.kind === 'agent-start')
+    (await current.host.journalSnapshot(COORD)).items.filter(
+      (item) => item.body.kind === 'agent-start'
+    )
   ).toEqual(cards)
   expect(projectStructuredAgentStartItem(card)).toMatchObject({
     role: 'system',
@@ -73,9 +73,7 @@ export async function verifyWorkerStartCardScenario(input: {
   // Full task survives removal of the orchestration rows it came from.
   db.resetAll()
   expect(
-    await (
-      await current.host.journalSnapshot(COORD)
-    ).items.find((item) => item.itemId === card.itemId)
+    (await current.host.journalSnapshot(COORD)).items.find((item) => item.itemId === card.itemId)
   ).toEqual(card)
   if (scenario === 'success') {
     const context = await current.host.continuationContext({
@@ -163,8 +161,6 @@ export async function verifyWorkerStartCardScenario(input: {
   }
   await current.host.appendAgentStart(destination, card.body, card.observedAt + 30)
   expect(
-    await (
-      await current.host.journalSnapshot(COORD)
-    ).items.some((item) => item.itemId === card.itemId)
+    (await current.host.journalSnapshot(COORD)).items.some((item) => item.itemId === card.itemId)
   ).toBe(false)
 }

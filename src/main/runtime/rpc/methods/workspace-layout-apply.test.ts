@@ -12,7 +12,7 @@ import { LAYOUT_APPLY_METHODS } from './workspace-layout'
 import { ALL_RPC_METHODS } from './index'
 import { partialRuntimeStore, type PartialRuntimeStore } from '../../runtime-store-partial-fixture'
 
-// Pin a window-owned build even under `ORCA_LAYOUT_OWNER=main`, so the default registry omits layout commands.
+// Canonical content commands work without enabling the separate main-owned layout views.
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 const frozen = vi.hoisted(() => ({ workspaces: new Set<string>() }))
@@ -82,11 +82,13 @@ afterEach(() => {
 })
 
 describe('layout.apply', () => {
-  it('is not registered in a window-owned build, and never advertised or open to phones', () => {
+  it('registers canonical content commands without advertising main-owned views or opening them to phones', () => {
     const names = ALL_RPC_METHODS.map((method) => method.name)
-    for (const name of ['layout.apply', 'layout.reopenHeldPanes', 'layout.reportView']) {
-      expect(names, name).not.toContain(name)
+    for (const name of ['layout.apply', 'layout.reopenHeldPanes']) {
+      expect(names, name).toContain(name)
+      expect(MOBILE_RPC_METHOD_ALLOWLIST.has(name)).toBe(false)
     }
+    expect(names).not.toContain('layout.reportView')
     expect(RUNTIME_CAPABILITIES.some((capability) => capability.startsWith('layout'))).toBe(false)
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('layout.apply')).toBe(false)
   })

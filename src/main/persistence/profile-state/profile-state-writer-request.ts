@@ -79,3 +79,14 @@ export function createProfileStateWriterRequest(
     clearSlowWarning
   }
 }
+
+export type ProfileStateWriterConnectionOptions = {
+  workerPath?: string
+  /** One diagnostic warning; delay alone never fails the request. */
+  slowWarningMs?: number
+  onFailure?: (error: Error) => void
+  onSaveDelayChanged?: (delayed: boolean) => void
+  reportInitializationFailure?: boolean
+  /** Monotonic clock; replace in tests to model stalled main loops. */
+  clock?: () => number
+}

@@ -1,12 +1,16 @@
-import { awaitProfileStateWriterExit } from './profile-state-writer-exit'
-import type { JournalResultPacket } from '../../native-chat/agent-session-journal/journal-unit-transfer'
-import { resolveProfileStateWriterWorkerPath } from './profile-state-writer-worker-path'
 import {
+  type ProfileStateWriterConnectionOptions,
   createProfileStateWriterRequest,
   isExpectedProfileStateWriterSuccess,
   type PendingProfileStateWriterRequest,
   type SuccessfulProfileStateWriterResponse
 } from './profile-state-writer-request'
+export type { ProfileStateWriterConnectionOptions }
+import type { SurfaceKey } from '../../../shared/workspace-surfaces/surface-content'
+import { awaitProfileStateWriterExit } from './profile-state-writer-exit'
+import type { JournalResultPacket } from '../../native-chat/agent-session-journal/journal-unit-transfer'
+import { resolveProfileStateWriterWorkerPath } from './profile-state-writer-worker-path'
+
 import {
   decodeProfileStateWriterError,
   ProfileStateWriterError
@@ -21,19 +25,16 @@ import { recordProfileStateWriterFault } from './profile-state-writer-diagnostic
 import { PROFILE_STATE_WRITER_SLOW_WARNING_MS } from './profile-state-writer-slow-warning'
 import { ProfileStateWriterThread } from './profile-state-writer-thread'
 
-export type ProfileStateWriterConnectionOptions = {
-  workerPath?: string
-  /** One diagnostic warning; delay alone never fails the request. */
-  slowWarningMs?: number
-  onFailure?: (error: Error) => void
-  onSaveDelayChanged?: (delayed: boolean) => void
-  reportInitializationFailure?: boolean
-  /** Monotonic clock; replace in tests to model stalled main loops. */
-  clock?: () => number
-}
-
 /** Store coalesces snapshots; this connection admits one materialized command. */
 export class ProfileStateWriterConnection {
+  private surfaceInvalidations: readonly SurfaceKey[] = []
+
+  takeSurfaceInvalidations(): readonly SurfaceKey[] {
+    const keys = this.surfaceInvalidations
+    this.surfaceInvalidations = []
+    return keys
+  }
+
   readonly ready: Promise<void>
   private thread: ProfileStateWriterThread | undefined
   private active: PendingProfileStateWriterRequest | undefined
@@ -268,6 +269,7 @@ export class ProfileStateWriterConnection {
     if (pending.command === 'close') {
       this.closeAcknowledged = true
     }
+    this.surfaceInvalidations = value.surfaceInvalidations ?? []
     this.latestRevision = value.revision
     this.settle(value)
   }

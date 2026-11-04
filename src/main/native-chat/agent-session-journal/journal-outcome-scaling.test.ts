@@ -3,7 +3,7 @@ import {
   retireTestOutcomeGeneration,
   seedTestOutcomeSweepPopulation
 } from './journal-native-fixture-test-support'
-import { restoreJournalAsync } from './journal-async-open'
+import { restoreJournalAsync, readJournalRowsAfterCursorAsync } from './journal-async-open'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -22,7 +22,7 @@ import {
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
-import { readJournalRowsAfterCursorAsync } from './journal-async-open'
+
 import { MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS, type JournalRow } from './journal-row-schema'
 import { JournalOutcomeSweeper, sweepJournalOutcomePage } from './journal-outcome-cleanup'
 import { JOURNAL_NEWEST_OUTCOME_SQL } from './journal-outcome-table'

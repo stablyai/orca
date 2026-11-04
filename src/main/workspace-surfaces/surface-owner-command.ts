@@ -1,3 +1,15 @@
+import { querySurfaceOwner, assertSurfaceHost, nativeContent } from './surface-owner-read'
+import {
+  reclaimEmptySurfaces,
+  committedSurfaceChanges,
+  resourceOnlySurfaceHosts,
+  cloneCommandSurfaceHosts,
+  trackSurfaceTransaction,
+  type SurfaceTransactionChanges
+} from './surface-transaction-changes'
+import { attachSurfaceEvidenceReader } from './surface-cold-evidence'
+import { readSurfaceProfileSnapshot, stageSurfaceProjections } from './surface-profile-cache'
+import { SurfaceSessionProjectionCache } from '../../shared/workspace-surfaces/surface-session-projection-cache'
 import { surfacePaneProfileReplacements } from './surface-pane-profile-records'
 import { SurfaceBatchRefusal, assertSurfaceBatchAccepted } from './surface-batch-refusal'
 import { applyJournalPersistenceEffect } from '../native-chat/agent-session-journal/journal-persistence-unit'
@@ -12,7 +24,6 @@ import {
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import type Database from '../sqlite/sync-database'
-import { normalizeExecutionHostId } from '../../shared/execution-host'
 import {
   projectSurfaceSession,
   unresolvedSurfaceNativeSessionIds
@@ -28,7 +39,6 @@ import { WorkspaceSurfaceRepository } from './surface-repository'
 import {
   captureSurfaceProfileDomain,
   markSurfaceIndices,
-  readSurfaceProfileDomain,
   restoreSurfaceIndices,
   surfaceDomainFingerprint
 } from './surface-profile-storage'
@@ -38,11 +48,6 @@ import {
   readSurfaceHostSession,
   surfaceSessionBatchReplacements
 } from './surface-host-profile-session'
-import { withProfileStateReadSnapshot } from '../persistence/profile-state/profile-state-read-snapshot'
-import {
-  readProfileStateRevision,
-  ProfileStateRevisionConflictError
-} from '../persistence/profile-state/profile-state-documents'
 
 /** One transaction body serves bootstrap and the live profile worker. */
 export function executeSurfaceOwnerCommand(
@@ -52,7 +57,7 @@ export function executeSurfaceOwnerCommand(
   mintId: () => string = randomUUID,
   now: () => number = Date.now
 ): { revision: number; result: SurfaceStorageResult } {
-  assertHost(command.hostId)
+  assertSurfaceHost(command.hostId)
   if (command.type === 'query') {
     return querySurfaceOwner(db, expectedRevision, command)
   }
@@ -103,9 +108,44 @@ export function applySurfaceOwnerCommandsInTransaction(
     throw new Error('Surface transaction body requires its admitted transaction')
   }
 
-  const previous = readSurfaceProfileDomain(db)
-  let next = structuredClone(previous)
-  restoreSurfaceIndices(db, next, surfaceDomainFingerprint(JSON.stringify(next)))
+  const root = readSurfaceProfileSnapshot(db)
+  const previous = root.domain
+  const next: SurfaceProfileDomain = { ...previous, hosts: { ...previous.hosts } }
+  cloneCommandSurfaceHosts(previous, next, commands)
+  restoreSurfaceIndices(
+    db,
+    next,
+    root.contentHash ?? surfaceDomainFingerprint(JSON.stringify(next))
+  )
+  return trackSurfaceTransaction(db, (changes) =>
+    applyTrackedSurfaceCommands(
+      db,
+      expectedRevision,
+      commands,
+      mintId,
+      now,
+      native,
+      effects,
+      root,
+      next,
+      changes
+    )
+  )
+}
+
+function applyTrackedSurfaceCommands(
+  db: Database.Database,
+  expectedRevision: number,
+  commands: readonly Exclude<SurfaceStorageCommand, { type: 'query' }>[],
+  mintId: () => string,
+  now: () => number,
+  native: boolean,
+  effects: readonly JournalPersistenceEffect[],
+  root: ReturnType<typeof readSurfaceProfileSnapshot>,
+  next: SurfaceProfileDomain,
+  transactionChanges: SurfaceTransactionChanges
+): { revision: number; results: SurfaceStorageResult[]; values: JournalEffectResult[] } {
+  const previous = root.domain
   const repository = new WorkspaceSurfaceRepository(
     { db, readOnly: false, transaction: (run) => run(db) },
     mintId,
@@ -114,11 +154,12 @@ export function applySurfaceOwnerCommandsInTransaction(
   const sessions = new Map<string, SurfaceStorageResult['session']>()
   const unresolvedNative = new Map<string, { tabId: string; sessionId: string }[]>()
   if (native) {
-    for (const hostId of new Set(commands.map((command) => assertHost(command.hostId)))) {
+    for (const hostId of new Set(commands.map((command) => assertSurfaceHost(command.hostId)))) {
       const host = next.hosts[hostId]
       if (!host?.terminalInitialized) {
         throw new Error('Terminal surfaces must initialize before native membership')
       }
+      attachSurfaceEvidenceReader(db, hostId, host)
       unresolvedNative.set(
         hostId,
         reconcileSurfaceNativeMembership(
@@ -131,11 +172,11 @@ export function applySurfaceOwnerCommandsInTransaction(
         )
       )
     }
-    next = captureSurfaceProfileDomain(db, next)
+    next = captureSurfaceProfileDomain(db, next, transactionChanges)
   }
   const values = effects.map((effect) => applyJournalPersistenceEffect(db, effect, 'surface_chat'))
   const applied = commands.map((command) => {
-    const hostId = assertHost(command.hostId)
+    const hostId = assertSurfaceHost(command.hostId)
     const result = applySurfaceStorageCommand(
       db,
       repository,
@@ -144,25 +185,34 @@ export function applySurfaceOwnerCommandsInTransaction(
       sessions.get(hostId) ?? readSurfaceHostSession(db, hostId),
       command,
       mintId,
-      now
+      now,
+      native
     )
     sessions.set(hostId, result.session)
     return { hostId, outcome: result.outcome }
   })
   assertSurfaceBatchAccepted(applied)
-  next = captureSurfaceProfileDomain(db, next)
+  reclaimEmptySurfaces(db, root.domain, transactionChanges)
+  next = captureSurfaceProfileDomain(db, next, transactionChanges)
   if (native) {
     writeSurfaceNativeMemberships(
       db,
-      [...sessions.keys()].map((hostId) => [assertHost(hostId), next.hosts[hostId]!] as const),
+      [...sessions.keys()].map(
+        (hostId) => [assertSurfaceHost(hostId), next.hosts[hostId]!] as const
+      ),
       mintId,
       unresolvedNative
     )
   }
+  const resourceOnlyHosts = resourceOnlySurfaceHosts(commands, sessions.keys(), previous, next)
+  const projections = new Map(root.projections)
   for (const [hostId, session] of sessions) {
     const host = next.hosts[hostId]
     if (!host?.terminalInitialized) {
       throw new Error('Surface host must be initialized before accepting commands')
+    }
+    if (resourceOnlyHosts.has(hostId)) {
+      continue
     }
     // Native membership requires the attached journal's common commit, never this terminal-only path.
     if (
@@ -171,30 +221,68 @@ export function applySurfaceOwnerCommandsInTransaction(
     ) {
       throw new Error('Native surface membership requires its journal transaction')
     }
+    const projection = new SurfaceSessionProjectionCache(
+      host.surfaces,
+      root.projections.get(hostId)
+    )
+    projections.set(hostId, projection)
     sessions.set(
       hostId,
       projectSurfaceSession(
-        assertHost(hostId),
+        assertSurfaceHost(hostId),
         session,
         host.surfaces,
         host.chatInitialization === 'verified',
-        unresolvedSurfaceNativeSessionIds(host.surfaces, host.chatBaseline?.tabs)
+        unresolvedSurfaceNativeSessionIds(host.surfaces, host.chatBaseline?.tabs),
+        new Set(
+          commands.flatMap((command) => {
+            if (command.hostId !== hostId) {
+              return []
+            }
+            if (command.type === 'show-native') {
+              return [command.sessionId]
+            }
+            return command.type === 'replace' && command.request.content?.kind === 'agent-session'
+              ? [command.request.content.sessionId]
+              : []
+          })
+        ),
+        projection
       )
     )
-    updateTerminalBaselines(db, next, hostId, mintId)
+    updateTerminalBaselines(
+      db,
+      next,
+      hostId,
+      mintId,
+      commands.some((command) => command.hostId === hostId && command.type === 'initialize')
+        ? undefined
+        : new Set(
+            [...(transactionChanges.surfaces.get(hostId)?.keys() ?? [])].map((key) =>
+              String(JSON.parse(key)[0])
+            )
+          )
+    )
   }
+  const changes = committedSurfaceChanges(sessions.keys(), transactionChanges)
   const written = writeProfileStateDomainsInTransaction(
     db,
     {
       expectedRevision,
       replacements: [
-        ...surfaceSessionBatchReplacements(db, sessions),
+        ...surfaceSessionBatchReplacements(
+          db,
+          new Map([...sessions].filter(([hostId]) => !resourceOnlyHosts.has(hostId)))
+        ),
         ...surfacePaneProfileReplacements(db, commands, applied)
       ]
     },
-    next
+    next,
+    false,
+    transactionChanges
   )
-  markSurfaceIndices(db, surfaceDomainFingerprint(JSON.stringify(next)))
+  stageSurfaceProjections(db, projections)
+  markSurfaceIndices(db, readSurfaceProfileSnapshot(db).contentHash!)
   return {
     revision: written.revision,
     values,
@@ -202,6 +290,8 @@ export function applySurfaceOwnerCommandsInTransaction(
       const host = next.hosts[hostId]!
       return {
         hostId,
+        changes: changes.get(hostId)!,
+        ...(resourceOnlyHosts.has(hostId) ? { changedWorkspaces: [] } : {}),
         host: {
           terminalInitialized: host.terminalInitialized,
           chatInitialization: host.chatInitialization,
@@ -215,66 +305,4 @@ export function applySurfaceOwnerCommandsInTransaction(
       }
     })
   }
-}
-
-function assertHost(hostId: string) {
-  const normalized = normalizeExecutionHostId(hostId)
-  if (!normalized || normalized !== hostId) {
-    throw new Error('Surface command host identity is invalid')
-  }
-  return normalized
-}
-
-function querySurfaceOwner(
-  db: Database.Database,
-  expectedRevision: number,
-  command: Extract<SurfaceStorageCommand, { type: 'query' }>
-): { revision: number; result: SurfaceStorageResult } {
-  return withProfileStateReadSnapshot(db, () => {
-    const revision = readProfileStateRevision(db)
-    if (revision !== expectedRevision) {
-      throw new ProfileStateRevisionConflictError(expectedRevision, revision)
-    }
-    const host = readSurfaceProfileDomain(db).hosts[command.hostId]
-    if (!host?.terminalInitialized) {
-      throw new Error('Surface host must be initialized before querying commands')
-    }
-    const receipt =
-      command.command &&
-      host.receipts.find(
-        (entry) =>
-          entry.callerId === command.command!.callerId &&
-          entry.commandId === command.command!.commandId
-      )
-    return {
-      revision,
-      result: {
-        hostId: command.hostId,
-        host: {
-          terminalInitialized: host.terminalInitialized,
-          chatInitialization: host.chatInitialization,
-          revision: host.revision,
-          surfaces: host.surfaces,
-          nativeTabs: host.chatBaseline?.tabs
-        },
-        session: projectSurfaceSession(
-          normalizeExecutionHostId(command.hostId)!,
-          readSurfaceHostSession(db, command.hostId),
-          host.surfaces,
-          host.chatInitialization === 'verified',
-          unresolvedSurfaceNativeSessionIds(host.surfaces, host.chatBaseline?.tabs)
-        ),
-        allocations: host.allocations,
-        // Missing bounded evidence is unknown, never proof of rejection after a lost reply.
-        outcome: receipt?.outcome ?? null
-      }
-    }
-  })
-}
-
-function nativeContent(domain: SurfaceProfileDomain, hostId: string): unknown {
-  return (
-    domain.hosts[hostId]?.surfaces.filter((surface) => surface.content?.kind === 'agent-session') ??
-    []
-  )
 }

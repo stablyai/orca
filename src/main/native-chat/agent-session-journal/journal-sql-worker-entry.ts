@@ -1,11 +1,11 @@
 import { compactJournalOutcomePage } from './journal-native-compaction'
 import { sweepJournalRetiredPage } from './journal-native-retired-page'
-import { journalPragmaNumber } from './journal-database'
+import { journalPragmaNumber, openJournalDatabase } from './journal-database'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
 import Database from '../../sqlite/sync-database'
-import { openJournalDatabase } from './journal-database'
+
 import { AgentSessionJournalError } from './journal-write-guards'
 import { JournalNativeReads } from './journal-sql-read'
 import { applyJournalPersistenceEffect } from './journal-persistence-unit'

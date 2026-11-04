@@ -1,3 +1,9 @@
+import {
+  prepareSurfaceEvidenceDocuments,
+  surfaceDocumentMappingBuckets
+} from '../workspace-surfaces/surface-cold-evidence'
+import { registerSurfaceMappingReader } from '../workspace-surfaces/surface-migration-identities'
+import { surfaceMappingPrefix } from '../../shared/workspace-surfaces/surface-evidence-document'
 import { hashProfileStateJson } from '../persistence/profile-state/profile-state-documents'
 import {
   isRecord,
@@ -6,6 +12,17 @@ import {
 import { prepareProfileStateDomainMutation } from '../persistence/profile-state/profile-state-domain-write-validation'
 import type { ProfileStateDomainMutation } from '../persistence/profile-state/profile-state-domain-writes'
 import type { PersistedState } from '../../shared/persisted-state-types'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { normalizeExecutionHostId } from '../../shared/execution-host'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import {
+  WORKSPACE_SURFACE_DOMAIN,
+  surfaceProfileDomainSchema
+} from '../../shared/workspace-surfaces/surface-profile-domain'
+import {
+  projectSurfaceSession,
+  unresolvedSurfaceNativeSessionIds
+} from '../../shared/workspace-surfaces/surface-session-projection'
 
 export type ProfileProjectDomainDigest = { domain: string; hash: string }
 
@@ -35,6 +52,7 @@ export function prepareProfileProjectDomainChanges(
   documents: readonly ProfileStateParsedDocument[],
   state: PersistedState | Readonly<Record<string, unknown>>
 ): ProfileProjectDomainChanges {
+  state = projectProfileProjectSurfaceState(state)
   const originals = new Map(documents.map((document) => [document.domain, document]))
   const replacements: ProfileProjectDomainChanges['replacements'] = []
   for (const [domain, value] of Object.entries(state)) {
@@ -64,6 +82,68 @@ export function prepareProfileProjectDomainChanges(
     afterHash: profileProjectDomainFingerprint(applyDomainDigests(before, replacements)),
     replacements
   }
+}
+
+/** Offline owners hash the same compatibility after-image the admitted transaction will save. */
+function projectProfileProjectSurfaceState(
+  state: PersistedState | Readonly<Record<string, unknown>>
+): Readonly<Record<string, unknown>> {
+  const value = state[WORKSPACE_SURFACE_DOMAIN]
+  if (!value) {
+    return state
+  }
+  const domain = surfaceProfileDomainSchema.parse(value)
+  const next: Record<string, unknown> = { ...state, [WORKSPACE_SURFACE_DOMAIN]: domain }
+  if (
+    Object.values(domain.hosts).some(
+      (host) => host.identityMappings.length || host.retainedReferences.length
+    )
+  ) {
+    const buckets = surfaceDocumentMappingBuckets(state)
+    const mutations = prepareSurfaceEvidenceDocuments(domain, (hostId, host) =>
+      registerSurfaceMappingReader(
+        host,
+        (workspaceId, kind, previousId) =>
+          buckets.get(surfaceMappingPrefix(hostId, workspaceId, kind, previousId)) ?? {
+            entries: [],
+            nextSequence: 0
+          }
+      )
+    )
+    for (const mutation of mutations) {
+      next[mutation.domain] = JSON.parse(mutation.payload!)
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the offline owner supplies normalized session documents; retain their unmodeled fields rather than schema-stripping the transfer after-image.
+  let remote = state.workspaceSessionsByHostId as Record<string, WorkspaceSessionState> | undefined
+  for (const [hostId, host] of Object.entries(domain.hosts)) {
+    if (!host.terminalInitialized) {
+      continue
+    }
+    const normalized = normalizeExecutionHostId(hostId)
+    if (!normalized) {
+      throw new Error('Profile surface host identity is invalid')
+    }
+    const session =
+      hostId === 'local'
+        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this is the normalized local session from the admitted offline snapshot; projection must preserve its unknown fields verbatim.
+          (state.workspaceSession as WorkspaceSessionState | undefined)
+        : remote?.[hostId]
+    const projected = projectSurfaceSession(
+      normalized,
+      session ?? getDefaultWorkspaceSession(),
+      host.surfaces,
+      host.chatInitialization === 'verified',
+      unresolvedSurfaceNativeSessionIds(host.surfaces, host.chatBaseline?.tabs)
+    )
+    if (hostId === 'local') {
+      next.workspaceSession = projected
+    } else {
+      remote = { ...remote, [hostId]: projected }
+      next.workspaceSessionsByHostId = remote
+    }
+  }
+  return next
 }
 
 function applyDomainDigests(

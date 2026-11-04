@@ -28,7 +28,8 @@ export function seedWorkspaceSurfaces(
   session: WorkspaceSessionState,
   chats: readonly LegacySurfaceChat[],
   mintId: () => string = randomUUID,
-  evidence: SurfaceMigrationEvidence = { retainedReferences: [], identityMappings: [] }
+  evidence: SurfaceMigrationEvidence = { retainedReferences: [], identityMappings: [] },
+  retainNativePresentation = true
 ): WorkspaceSurface[] {
   const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
   const surfaces: WorkspaceSurface[] = []
@@ -90,7 +91,7 @@ export function seedWorkspaceSurfaces(
   }
   for (const [workspaceId, tabs] of Object.entries(session.unifiedTabs ?? {})) {
     for (const tab of tabs) {
-      if (tab.contentType === 'agent-session') {
+      if (retainNativePresentation && tab.contentType === 'agent-session') {
         retainSurfaceReference(evidence, {
           workspaceId,
           kind: 'agent-session',

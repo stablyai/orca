@@ -1,10 +1,13 @@
+import type { SurfaceSessionProjectionCache } from '../../shared/workspace-surfaces/surface-session-projection-cache'
+import { extractSurfaceEvidenceDocuments } from './surface-cold-evidence'
+import { isSurfaceEvidenceDomain } from '../../shared/workspace-surfaces/surface-evidence-document'
+import { readSurfaceProfileSnapshot } from './surface-profile-cache'
 import type Database from '../sqlite/sync-database'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import {
   WORKSPACE_SURFACE_DOMAIN,
-  surfaceProfileDomainSchema,
   type SurfaceProfileDomain
 } from '../../shared/workspace-surfaces/surface-profile-domain'
 import {
@@ -12,14 +15,17 @@ import {
   unresolvedSurfaceNativeSessionIds
 } from '../../shared/workspace-surfaces/surface-session-projection'
 import type { ProfileStateDomainMutation } from '../persistence/profile-state/profile-state-domain-writes'
-import { parseJson } from './surface-rows'
 
 /** Presentation saves cannot replace the owner document or undo a committed content command. */
 export function protectSurfaceProfileSave(
   db: Database.Database,
   mutations: readonly ProfileStateDomainMutation[],
-  committed?: SurfaceProfileDomain
+  committed?: SurfaceProfileDomain,
+  projectCommitted = true
 ): ProfileStateDomainMutation[] {
+  mutations = mutations.filter(
+    (mutation) => !isSurfaceEvidenceDomain(mutation.domain) || committed !== undefined
+  )
   if (
     !committed &&
     !mutations.some((mutation) =>
@@ -30,21 +36,31 @@ export function protectSurfaceProfileSave(
   ) {
     return [...mutations]
   }
-  const existing = db
-    .prepare('SELECT payload FROM main.profile_state_documents WHERE domain = ?')
-    .get(WORKSPACE_SURFACE_DOMAIN)
-  const domain =
-    committed ??
-    (existing ? surfaceProfileDomainSchema.parse(parseJson(existing.payload)) : undefined)
+  const root = committed ? undefined : readSurfaceProfileSnapshot(db)
+  let domain = committed ?? (root?.payload ? root.domain : undefined)
   if (!domain) {
     return [...mutations]
   }
   const output = mutations.filter((mutation) => mutation.domain !== WORKSPACE_SURFACE_DOMAIN)
-  if (committed) {
-    output.push({ domain: WORKSPACE_SURFACE_DOMAIN, payload: JSON.stringify(committed) })
+  const hasHotEvidence = Object.values(domain.hosts).some(
+    (host) => host.retainedReferences.length || host.identityMappings.length
+  )
+  if (hasHotEvidence) {
+    if (!committed) {
+      domain = {
+        ...domain,
+        hosts: Object.fromEntries(
+          Object.entries(domain.hosts).map(([id, host]) => [id, { ...host }])
+        )
+      }
+    }
+    output.push(...extractSurfaceEvidenceDocuments(db, domain))
+  }
+  if (committed || hasHotEvidence) {
+    output.push({ domain: WORKSPACE_SURFACE_DOMAIN, payload: JSON.stringify(domain) })
   }
   const domains = new Set(output.map((mutation) => mutation.domain))
-  if (committed) {
+  if (committed && projectCommitted) {
     if (domain.hosts.local?.terminalInitialized && !domains.has('workspaceSession')) {
       output.push({ domain: 'workspaceSession', payload: readPayload(db, 'workspaceSession') })
     }
@@ -60,11 +76,30 @@ export function protectSurfaceProfileSave(
       })
     }
   }
+  if (committed && !projectCommitted) {
+    return output
+  }
+  const localEvidence = sessionValue(
+    readPayload(db, 'workspaceSession')
+  ).closedTerminalTabTombstonesByTabId
+  const remoteEvidencePayload = readPayload(db, 'workspaceSessionsByHostId')
+  const remoteEvidence: Record<string, WorkspaceSessionState> =
+    remoteEvidencePayload === null ? {} : JSON.parse(remoteEvidencePayload)
   return output.map((mutation) => {
     if (mutation.domain === 'workspaceSession' && domain.hosts.local?.terminalInitialized) {
       return {
         ...mutation,
-        payload: JSON.stringify(project(domain, 'local', sessionValue(mutation.payload)))
+        payload: JSON.stringify(
+          project(
+            domain,
+            'local',
+            {
+              ...sessionValue(mutation.payload),
+              closedTerminalTabTombstonesByTabId: localEvidence
+            },
+            root?.projections.get('local')
+          )
+        )
       }
     }
     if (
@@ -77,7 +112,16 @@ export function protectSurfaceProfileSave(
       mutation.payload === null ? {} : JSON.parse(mutation.payload)
     for (const [hostId, host] of Object.entries(domain.hosts)) {
       if (hostId !== 'local' && host.terminalInitialized) {
-        sessions[hostId] = project(domain, hostId, sessions[hostId] ?? getDefaultWorkspaceSession())
+        sessions[hostId] = project(
+          domain,
+          hostId,
+          {
+            ...(sessions[hostId] ?? getDefaultWorkspaceSession()),
+            closedTerminalTabTombstonesByTabId:
+              remoteEvidence[hostId]?.closedTerminalTabTombstonesByTabId
+          },
+          root?.projections.get(hostId)
+        )
       }
     }
     return { ...mutation, payload: JSON.stringify(sessions) }
@@ -87,7 +131,8 @@ export function protectSurfaceProfileSave(
 function project(
   domain: SurfaceProfileDomain,
   hostId: string,
-  session: WorkspaceSessionState
+  session: WorkspaceSessionState,
+  cache?: SurfaceSessionProjectionCache
 ): WorkspaceSessionState {
   const normalized = normalizeExecutionHostId(hostId)
   if (!normalized) {
@@ -99,7 +144,9 @@ function project(
     session,
     host.surfaces,
     host.chatInitialization === 'verified',
-    unresolvedSurfaceNativeSessionIds(host.surfaces, host.chatBaseline?.tabs)
+    unresolvedSurfaceNativeSessionIds(host.surfaces, host.chatBaseline?.tabs),
+    new Set(),
+    cache
   )
 }
 

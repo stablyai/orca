@@ -6,6 +6,7 @@ import {
   type SurfaceAllocation
 } from '../../shared/workspace-surfaces/surface-allocation'
 import type { WorkspaceSurface } from '../../shared/workspace-surfaces/surface-content'
+import { recordSurfaceAllocation } from './surface-transaction-changes'
 
 export function readAllocation(
   db: Database.Database,
@@ -41,6 +42,18 @@ export function writeAllocation(db: Database.Database, input: SurfaceAllocation)
     target.leafId,
     JSON.stringify(allocation)
   )
+  recordSurfaceAllocation(db, target.hostId, allocation.allocationId, allocation)
+}
+
+export function removeAllocation(
+  db: Database.Database,
+  hostId: string,
+  allocationId: string
+): void {
+  db.prepare(
+    'DELETE FROM main.workspace_surface_allocations WHERE host_id = ? AND allocation_id = ?'
+  ).run(hostId, allocationId)
+  recordSurfaceAllocation(db, hostId, allocationId, null)
 }
 
 /** A move transfers the obligation; removal/restart retires only the departed exact run. */

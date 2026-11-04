@@ -2,13 +2,15 @@ import type {
   JournalPersistenceEffect,
   JournalEffectResult
 } from '../native-chat/agent-session-journal/journal-persistence-plan'
-import type { SurfaceStorageResult } from '../../shared/workspace-surfaces/surface-storage-command'
+import type {
+  SurfaceStorageResult,
+  SurfaceStorageMutation
+} from '../../shared/workspace-surfaces/surface-storage-command'
 import type Database from '../sqlite/sync-database'
 import { admitSurfaceNativeJournal } from './surface-native-journal-admission'
 import { configureSqliteRollbackDurability } from '../sqlite/rollback-durability'
 import { withProfileStateWriteTransaction } from '../persistence/profile-state/profile-state-write-transaction'
 import { applySurfaceOwnerCommandsInTransaction } from './surface-owner-command'
-import type { SurfaceStorageMutation } from '../../shared/workspace-surfaces/surface-storage-command'
 
 export type SurfaceJointTransaction = {
   journalPath: string
@@ -54,8 +56,9 @@ export function executeSurfaceJointTransaction(
         result.results.some(
           (entry) =>
             entry.outcome &&
-            'status' in Object(entry.outcome) &&
-            (entry.outcome as { status?: string }).status === 'conflict'
+            typeof entry.outcome === 'object' &&
+            'status' in entry.outcome &&
+            entry.outcome.status === 'conflict'
         )
       ) {
         throw new Error('Native surface target changed before commit')

@@ -7,18 +7,61 @@ export type SurfaceMigrationEvidence = Pick<
   'retainedReferences' | 'identityMappings'
 >
 
+type Mapping = SurfaceHostDomain['identityMappings'][number]
+export type SurfaceMappingBucket = { entries: Mapping[]; nextSequence: number }
+const readers = new WeakMap<
+  SurfaceMigrationEvidence,
+  (workspaceId: string, kind: Mapping['kind'], previousId: string) => SurfaceMappingBucket
+>()
+export function registerSurfaceMappingReader(
+  evidence: SurfaceMigrationEvidence,
+  read: (workspaceId: string, kind: Mapping['kind'], previousId: string) => SurfaceMappingBucket
+): void {
+  readers.set(evidence, read)
+}
+export function readSurfaceMappings(
+  evidence: SurfaceMigrationEvidence,
+  workspaceId: string,
+  kind: Mapping['kind'],
+  previousId: string
+): Mapping[] {
+  return readSurfaceMappingBucket(evidence, workspaceId, kind, previousId).entries
+}
+
+export function readSurfaceMappingBucket(
+  evidence: SurfaceMigrationEvidence,
+  workspaceId: string,
+  kind: Mapping['kind'],
+  previousId: string
+): SurfaceMappingBucket {
+  return readers.get(evidence)?.(workspaceId, kind, previousId) ?? { entries: [], nextSequence: 0 }
+}
+
 /** Imported identities never displace an already committed resource or conversation. */
 export function reserveImportedSurfaceIdentities(
   incoming: readonly WorkspaceSurface[],
   held: readonly WorkspaceSurface[],
   reservedTabIds: readonly string[],
   evidence: SurfaceMigrationEvidence,
-  mintId: () => string
+  mintId: () => string,
+  preservePhysicalResources = false
 ): WorkspaceSurface[] {
   const tabs = new Set(reservedTabIds)
   const entities = new Set<string>()
   const leaves = new Set<string>()
   const resources = new Set<string>()
+  const mappings = new Map<
+    string,
+    { entries: typeof evidence.identityMappings; next: number; loaded?: boolean }
+  >()
+  const mappingKey = (workspaceId: string, kind: string, previousId: string): string =>
+    JSON.stringify([workspaceId, kind, previousId])
+  for (const entry of evidence.identityMappings) {
+    const key = mappingKey(entry.workspaceId, entry.kind, entry.previousId)
+    const bucket = mappings.get(key) ?? { entries: [], next: 0 }
+    bucket.entries.push(entry)
+    mappings.set(key, bucket)
+  }
   const reserve = (surface: WorkspaceSurface): void => {
     if (surface.content) {
       tabs.add(surface.hostTabId)
@@ -42,13 +85,25 @@ export function reserveImportedSurfaceIdentities(
       used: Set<string>
     ): string => {
       let currentId = previousId
-      const mapped = evidence.identityMappings.find(
-        (entry) =>
-          entry.workspaceId === surface.workspaceId &&
-          entry.kind === kind &&
-          entry.previousId === previousId &&
-          !used.has(entry.currentId)
-      )
+      const key = mappingKey(surface.workspaceId, kind, previousId)
+      const bucket = mappings.get(key) ?? { entries: [], next: 0, loaded: false }
+      if (used.has(currentId) && !bucket.loaded) {
+        const cold = readSurfaceMappings(evidence, surface.workspaceId, kind, previousId)
+        const known = new Set(cold.map((entry) => JSON.stringify(entry)))
+        bucket.entries = [
+          ...cold,
+          ...bucket.entries.filter((entry) => !known.has(JSON.stringify(entry)))
+        ]
+        bucket.loaded = true
+      }
+      mappings.set(key, bucket)
+      while (
+        bucket.next < bucket.entries.length &&
+        used.has(bucket.entries[bucket.next]!.currentId)
+      ) {
+        bucket.next++
+      }
+      const mapped = bucket.entries[bucket.next]
       if (used.has(currentId) && mapped) {
         currentId = mapped.currentId
       }
@@ -57,12 +112,15 @@ export function reserveImportedSurfaceIdentities(
       }
       used.add(currentId)
       if (currentId !== previousId && currentId !== mapped?.currentId) {
-        evidence.identityMappings.push({
+        const entry = {
           workspaceId: surface.workspaceId,
           kind,
           previousId,
           currentId
-        })
+        }
+        evidence.identityMappings.push(entry)
+        bucket.entries.push(entry)
+        mappings.set(key, bucket)
       }
       return currentId
     }
@@ -75,7 +133,7 @@ export function reserveImportedSurfaceIdentities(
         Object.entries(content.leaves).map(([id, leaf]) => {
           const nextId = rename('leaf', id, leaves)
           renamed.set(id, nextId)
-          if (leaf.facts.ptyId && resources.has(leaf.facts.ptyId)) {
+          if (!preservePhysicalResources && leaf.facts.ptyId && resources.has(leaf.facts.ptyId)) {
             retainSurfaceReference(evidence, {
               workspaceId: input.workspaceId,
               kind: 'pane',

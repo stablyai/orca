@@ -1,3 +1,4 @@
+import { releaseSurfaceAdmissions } from '../../workspace-surfaces/surface-admission-capture'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import type { SessionHostPartitionOperations } from '../loading-store/session-host-partitions'
 import type { WorkspaceSurfaceCommands } from '../loading-store/workspace-surface-commands'
@@ -59,53 +60,69 @@ export async function moveCanonicalTerminalLeaf(
         }
       }
     )
-  const captured = new Map(
-    initial.sessions
-      .filter(({ hostId }) => reader.initialized(hostId))
-      .map(({ hostId }) => [hostId, capture(hostId)])
-  )
-  for (const hostId of legacyCopies.keys()) {
-    await surfaces.executeWorkspaceSurfaceCommand({ type: 'initialize', hostId })
+  const captured = new Map<
+    (typeof initial.sessions)[number]['hostId'],
+    ReturnType<typeof capture>
+  >()
+  const retainedCapture = (hostId: (typeof initial.sessions)[number]['hostId']) => {
+    let command = captured.get(hostId)
+    if (!command) {
+      command = capture(hostId)
+      captured.set(hostId, command)
+    }
+    return command
   }
-  let result: TerminalLeafMoveResult = { status: 'not_held' }
-  const committed = await surfaces.executeWorkspaceSurfaceTransaction(() => {
-    const planned = planTerminalLeafMove(partitions(), request)
-    result = planned.result
-    if (result.status !== 'moved') {
-      return []
-    }
-    if (
-      planned.sessions.length !== initial.sessions.length ||
-      planned.sessions.some(
-        ({ hostId }) =>
-          !captured.has(hostId) &&
-          (!legacyCopies.has(hostId) ||
-            !isSamePersistedTerminalTabCopy(
-              legacyCopies.get(hostId) ?? null,
-              capturePersistedTerminalTabCopy(
-                sessions.getWorkspaceSession(hostId),
-                request.worktreeId,
-                request.sourceTabId
-              )
-            ))
-      )
-    ) {
-      result = { status: 'refused', reason: 'pty_mismatch' }
-      return []
-    }
-    return planned.sessions.map(({ hostId }) => ({
-      ...(captured.get(hostId) ?? capture(hostId)),
-      session: sessions.getWorkspaceSession(hostId)
-    }))
-  })
-  for (const entry of committed) {
-    const outcome = surfaceLayoutOutcome(entry.outcome)
-    if (!outcome.ok) {
-      return {
-        status: 'refused',
-        reason: outcome.code === 'last_pane' ? 'last_pane' : 'pty_mismatch'
+  try {
+    for (const { hostId } of initial.sessions) {
+      if (reader.initialized(hostId)) {
+        retainedCapture(hostId)
       }
     }
+    for (const hostId of legacyCopies.keys()) {
+      await surfaces.executeWorkspaceSurfaceCommand({ type: 'initialize', hostId })
+    }
+    let result: TerminalLeafMoveResult = { status: 'not_held' }
+    const committed = await surfaces.executeWorkspaceSurfaceTransaction(() => {
+      const planned = planTerminalLeafMove(partitions(), request)
+      result = planned.result
+      if (result.status !== 'moved') {
+        return []
+      }
+      if (
+        planned.sessions.length !== initial.sessions.length ||
+        planned.sessions.some(
+          ({ hostId }) =>
+            !captured.has(hostId) &&
+            (!legacyCopies.has(hostId) ||
+              !isSamePersistedTerminalTabCopy(
+                legacyCopies.get(hostId) ?? null,
+                capturePersistedTerminalTabCopy(
+                  sessions.getWorkspaceSession(hostId),
+                  request.worktreeId,
+                  request.sourceTabId
+                )
+              ))
+        )
+      ) {
+        result = { status: 'refused', reason: 'pty_mismatch' }
+        return []
+      }
+      return planned.sessions.map(({ hostId }) => ({
+        ...retainedCapture(hostId),
+        session: sessions.getWorkspaceSession(hostId)
+      }))
+    })
+    for (const entry of committed) {
+      const outcome = surfaceLayoutOutcome(entry.outcome)
+      if (!outcome.ok) {
+        return {
+          status: 'refused',
+          reason: outcome.code === 'last_pane' ? 'last_pane' : 'pty_mismatch'
+        }
+      }
+    }
+    return result
+  } finally {
+    releaseSurfaceAdmissions([...captured.values()])
   }
-  return result
 }

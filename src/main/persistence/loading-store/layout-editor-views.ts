@@ -9,13 +9,16 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { LayoutEditorView } from '../../../shared/workspace-layout/layout-editor-view'
 import type { WorkspaceLayoutModel } from '../../../shared/workspace-layout/workspace-layout-model'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { StoreRuntimeState } from './store-runtime-state'
+import type { PersistedState } from '../../../shared/persisted-state-types'
 
 export type PartitionEditorViews = Readonly<
   Record<string, Readonly<Record<string, LayoutEditorView>>>
 >
 
-type ViewsRuntime = Pick<StoreRuntimeState, 'layoutEditorViews'>
+type ViewsRuntime = { layoutEditorViews: Map<ExecutionHostId, PartitionEditorViews> }
+type SessionRuntime = {
+  state: Pick<PersistedState, 'workspaceSession' | 'workspaceSessionsByHostId'>
+}
 
 /** Window-owned builds retain no main-process views. */
 export function partitionEditorViewsOf(
@@ -51,9 +54,7 @@ export function keepPartitionEditorViews(
 }
 
 /** Follow moved/rekeyed tabs and drop removed ones; preserve untouched identity for pending rollbacks. */
-export function refileEditorViews(
-  runtime: Pick<StoreRuntimeState, 'layoutEditorViews' | 'state'>
-): void {
+export function refileEditorViews(runtime: ViewsRuntime & SessionRuntime): void {
   if (runtime.layoutEditorViews.size === 0) {
     return
   }
@@ -104,7 +105,7 @@ export function refileEditorViews(
 }
 
 function sessionOf(
-  runtime: Pick<StoreRuntimeState, 'state'>,
+  runtime: SessionRuntime,
   hostId: ExecutionHostId
 ): WorkspaceSessionState | undefined {
   return hostId === LOCAL_EXECUTION_HOST_ID
@@ -125,7 +126,7 @@ function holdsEditorTab(
 }
 
 function placesHolding(
-  runtime: Pick<StoreRuntimeState, 'state'>,
+  runtime: SessionRuntime,
   tabId: string
 ): { hostId: ExecutionHostId; key: string }[] {
   const hostIds = new Set<ExecutionHostId>([

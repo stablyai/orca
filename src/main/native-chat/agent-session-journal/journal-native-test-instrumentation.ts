@@ -1,4 +1,4 @@
-import { Worker } from 'node:worker_threads'
+import { Worker, setEnvironmentData } from 'node:worker_threads'
 import { vi } from 'vitest'
 import { journalDatabasePath } from './journal-host-database'
 import type { JournalHostDatabase } from './journal-host-database'
@@ -13,7 +13,16 @@ const testClose = testSqlite.DatabaseSync.prototype.close;
 const testOn = testPort.on.bind(testPort);
 const testPost = testPort.postMessage.bind(testPort);
 let testFailures = [];
+let testHold = require('node:worker_threads').workerData.reader ? undefined : require('node:worker_threads').getEnvironmentData('journal-test-hold:' + require('node:worker_threads').workerData.filename);
 function testFail(sql) {
+  if (testHold?.sql === sql) {
+    const gate = new Int32Array(testHold.buffer);
+    if (Atomics.compareExchange(gate, 0, 0, 1) === 0) {
+      Atomics.notify(gate, 0);
+      Atomics.wait(gate, 0, 1, 30000);
+      if (Atomics.load(gate, 0) !== 2) throw new Error('native SQL test hold was not released');
+    }
+  }
   const index = testFailures.findIndex((failure) => failure.sql === sql && (!failure.visibility || testPrepare.call(this, "SELECT value FROM agent_session_store_meta WHERE key='session_tabs_recorded'").get()));
   if (index !== -1) throw new Error(testFailures.splice(index, 1)[0].message);
 }
@@ -89,7 +98,8 @@ testSqlite.DatabaseSync.prototype.close = function() {
 testPort.on = function(event, listener) {
   return testOn(event, event === 'message' ? (message) => {
     if (message?.type === 'journal-test-control') {
-      testFailures = message.failures;
+      testFailures = message.failures ?? testFailures;
+      testHold = message.hold ?? testHold;
       testPost({ type: 'journal-test-controlled', id: message.id });
       return;
     }
@@ -133,6 +143,39 @@ export function failNativeJournalStatements(
   database: JournalHostDatabase,
   failures: readonly { sql: string; message: string; visibility?: boolean }[]
 ): Promise<void> {
+  return controlNativeJournal(database, { failures })
+}
+
+/** Hold the real worker at a native SQL call, including a replacement owner's startup query. */
+export async function holdNativeJournalSql(
+  database: JournalHostDatabase,
+  sql: string,
+  reopened = false
+): Promise<{ entered: Promise<void>; release: () => void }> {
+  const buffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
+  const gate = new Int32Array(buffer)
+  const key = `journal-test-hold:${journalDatabasePath(database.stateDirectory)}`
+  if (reopened) {
+    setEnvironmentData(key, { sql, buffer })
+  } else {
+    await controlNativeJournal(database, { hold: { sql, buffer } })
+  }
+  const arrival = Atomics.waitAsync(gate, 0, 0, 30_000)
+  return {
+    entered: Promise.resolve(arrival.value).then(() => {
+      if (Atomics.load(gate, 0) !== 1) {
+        throw new Error('native SQL test hold was not reached')
+      }
+    }),
+    release: () => {
+      setEnvironmentData(key, undefined)
+      Atomics.store(gate, 0, 2)
+      Atomics.notify(gate, 0)
+    }
+  }
+}
+
+function controlNativeJournal(database: JournalHostDatabase, control: object): Promise<void> {
   const worker = database['storage'].writer['worker']
   const id = --nextControl
   return new Promise((resolve, reject) => {
@@ -154,7 +197,7 @@ export function failNativeJournalStatements(
     worker.on('message', received)
     worker.on('exit', exited)
     try {
-      worker.postMessage({ type: 'journal-test-control', id, failures })
+      worker.postMessage({ type: 'journal-test-control', id, ...control })
     } catch (error) {
       cleanup()
       reject(error)

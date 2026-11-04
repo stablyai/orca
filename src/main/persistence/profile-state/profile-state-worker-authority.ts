@@ -1,3 +1,9 @@
+export type { ProfileStateWorkerAuthorityOptions } from './profile-state-writer-idle-stop'
+import type { SurfaceKey } from '../../../shared/workspace-surfaces/surface-content'
+import type {
+  SurfaceStorageRead,
+  SurfaceStorageReadResult
+} from '../../../shared/workspace-surfaces/surface-storage-read'
 import type { JournalPersistenceEffect } from '../../native-chat/agent-session-journal/journal-persistence-plan'
 import type { SurfaceJointTransaction } from '../../workspace-surfaces/surface-joint-transaction'
 import { profileStateMaintenance } from './profile-state-maintenance'
@@ -5,7 +11,8 @@ import {
   closeIdleProfileStateWriter,
   requireStoppedProfileRevision,
   finishProfileStateWriterClose,
-  ProfileStateWriterIdleStop
+  ProfileStateWriterIdleStop,
+  type ProfileStateWorkerAuthorityOptions
 } from './profile-state-writer-idle-stop'
 import type { AutomationRun } from '../../../shared/automations-types'
 import type {
@@ -34,15 +41,6 @@ import {
 } from './profile-state-writer-reopen-policy'
 import { closedProfileStateWriterError } from './profile-state-writer-errors'
 
-export type ProfileStateWorkerAuthorityOptions = {
-  workerPath?: string
-  backupWorkerPath?: string
-  onFailure?: (error: Error) => void
-  onSaveDelayChanged?: (delayed: boolean) => void
-  /** Close the writer thread after this long without a command; the next one reopens it (~22 ms). */
-  writerIdleStopMs?: number
-}
-
 /** Main owns backup scheduling; the worker owns every live SQL command while it runs. */
 export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   readonly asynchronous = true
@@ -66,7 +64,11 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       this.stopIdleWriter()
     )
     this.writer = new ProfileStateWriteWorkerClient(initialization, options)
-    this.backups = this.createBackups()
+    this.backups = createProfileStateWorkerBackupRotation(
+      this.initialization.databasePath,
+      this.initialization.profileId,
+      this.options.backupWorkerPath
+    )
     this.scheduleIdleStopAfterReady()
   }
 
@@ -115,19 +117,19 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     await this.run((writer) => writer.assertCurrentRevision())
   }
 
+  readSurface(request: SurfaceStorageRead): Promise<SurfaceStorageReadResult> {
+    return this.run((writer) => writer.readSurface(request))
+  }
+
   executeSurfaceCommand(command: SurfaceStorageCommand): Promise<SurfaceStorageResult> {
     return this.run((writer) => writer.executeSurfaceCommand(command))
   }
 
-  executeSurfaceTransaction(
-    commands: readonly SurfaceStorageMutation[]
-  ): Promise<SurfaceStorageResult[]> {
+  executeSurfaceTransaction(commands: readonly SurfaceStorageMutation[]) {
     return this.run((writer) => writer.executeSurfaceTransaction(commands))
   }
 
-  executeSurfaceJointTransaction(
-    transaction: SurfaceJointTransaction
-  ): Promise<SurfaceStorageResult[]> {
+  executeSurfaceJointTransaction(transaction: SurfaceJointTransaction) {
     return this.run((writer) => writer.executeSurfaceJointTransaction(transaction))
   }
 
@@ -138,27 +140,38 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     return this.run((writer) => writer.executeSurfaceJournalUnit(transaction, effects))
   }
 
-  async writeSerializedDomains(
-    replacements: readonly ProfileStateDomainReplacement[]
-  ): Promise<void> {
-    await this.run((writer) => writer.writeSerializedDomains(replacements))
+  private surfaceInvalidations: readonly SurfaceKey[] = []
+
+  takeSurfaceInvalidations(): readonly SurfaceKey[] {
+    const keys = this.surfaceInvalidations
+    this.surfaceInvalidations = []
+    return keys
   }
 
-  async writeSerializedAutomationRuns(
+  private writeSnapshot(command: (writer: ProfileStateWriteWorkerClient) => Promise<unknown>) {
+    return this.run(async (writer) => {
+      await command(writer)
+      this.surfaceInvalidations = writer.takeSurfaceInvalidations()
+    })
+  }
+
+  writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]) {
+    return this.writeSnapshot((writer) => writer.writeSerializedDomains(replacements))
+  }
+
+  writeSerializedAutomationRuns(
     replacements: readonly ProfileStateDomainReplacement[],
     runs: readonly AutomationRun[]
-  ): Promise<void> {
-    await this.run((writer) => writer.writeSerializedAutomationRuns(replacements, runs))
+  ) {
+    return this.writeSnapshot((writer) => writer.writeSerializedAutomationRuns(replacements, runs))
   }
 
-  async writeCompleteSerializedDomains(
-    replacements: readonly ProfileStateDomainReplacement[]
-  ): Promise<void> {
-    await this.run((writer) => writer.writeCompleteSerializedDomains(replacements))
+  writeCompleteSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]) {
+    return this.writeSnapshot((writer) => writer.writeCompleteSerializedDomains(replacements))
   }
 
-  async writeSerializedState(payload: Buffer): Promise<void> {
-    await this.run((writer) => writer.writeSerializedState(payload))
+  writeSerializedState(payload: Buffer): Promise<void> {
+    return this.writeSnapshot((writer) => writer.writeSerializedState(payload))
   }
 
   writeJsonExport(targetPath: string): Promise<number> {
@@ -187,7 +200,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   close(): Promise<void> {
     this.idleStop.cancel()
     this.writer?.stopAdmission()
-    this.closing ??= this.finishClose()
+    this.closing ??= finishProfileStateWriterClose(this.backups, this.stopping, () => this.writer)
     return this.closing
   }
 
@@ -206,7 +219,11 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
         { ...this.initialization, revision },
         { ...this.options, reportInitializationFailure: true }
       )
-      this.backups = this.createBackups()
+      this.backups = createProfileStateWorkerBackupRotation(
+        this.initialization.databasePath,
+        this.initialization.profileId,
+        this.options.backupWorkerPath
+      )
       this.closing = undefined
       this.scheduleIdleStopAfterReady()
       try {
@@ -221,25 +238,8 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
 
   async quarantineDatabase(quarantineRoot?: string, reason?: string) {
     await this.close()
-    return quarantineProfileStateDatabase(
-      this.initialization.databasePath,
-      this.initialization.profileId,
-      quarantineRoot,
-      reason
-    )
-  }
-
-  private async finishClose(): Promise<void> {
-    await finishProfileStateWriterClose(this.backups, this.stopping, () => this.writer)
-  }
-
-  private createBackups(): ProfileStateBackupRotation {
     const { databasePath, profileId } = this.initialization
-    return createProfileStateWorkerBackupRotation(
-      databasePath,
-      profileId,
-      this.options.backupWorkerPath
-    )
+    return quarantineProfileStateDatabase(databasePath, profileId, quarantineRoot, reason)
   }
 
   private run<T>(command: (writer: ProfileStateWriteWorkerClient) => Promise<T>): Promise<T> {

@@ -1,3 +1,4 @@
+import type { SurfaceKey } from '../../../shared/workspace-surfaces/surface-content'
 import type Database from '../../sqlite/sync-database'
 import type { ProfileStateDomainReplacement } from '../loading-store/profile-state-authority'
 import { writeProfileStateDomains } from './profile-state-domain-writes'
@@ -11,7 +12,8 @@ import { buildCompleteDocumentReplacements } from './profile-state-complete-repl
 export function writeCompleteProfileStateDomains(
   openDb: () => Database.Database,
   expectedRevision: number | undefined,
-  replacements: readonly ProfileStateDomainReplacement[]
+  replacements: readonly ProfileStateDomainReplacement[],
+  committedSurfaces?: (keys: readonly SurfaceKey[]) => void
 ): number {
   if (!Array.isArray(replacements) || replacements.length > 0) {
     validateProfileStateDomainTransaction({
@@ -35,8 +37,10 @@ export function writeCompleteProfileStateDomains(
       expectedRevision: expectedRevision
     })
   }
-  return writeProfileStateDomains(db, {
+  const result = writeProfileStateDomains(db, {
     expectedRevision: expectedRevision ?? currentRevision,
     replacements: complete
-  }).revision
+  })
+  committedSurfaces?.(result.surfaceInvalidations ?? [])
+  return result.revision
 }

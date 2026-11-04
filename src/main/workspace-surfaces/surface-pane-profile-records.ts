@@ -4,7 +4,7 @@ import type {
   SurfaceStorageCommand,
   SurfaceStorageResult
 } from '../../shared/workspace-surfaces/surface-storage-command'
-import { rekeyPaneProfileRecords } from '../persistence/terminal-topology/terminal-leaf-move'
+import { rekeyPaneProfileRecords } from '../../shared/terminal-pane-profile-records'
 
 type PaneProfileRecords = Partial<Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>>
 
@@ -58,8 +58,10 @@ export function surfacePaneProfileReplacements(
   const changed = new Set<keyof PaneProfileRecords>()
   for (const [index, command] of commands.entries()) {
     const rekeyed = rekeySurfacePaneProfileRecords(state, command, results[index]?.outcome ?? null)
-    for (const key of Object.keys(rekeyed) as (keyof PaneProfileRecords)[]) {
-      changed.add(key)
+    for (const key of ['ui', 'sshRemotePtyLeases'] as const) {
+      if (Object.hasOwn(rekeyed, key)) {
+        changed.add(key)
+      }
     }
     Object.assign(state, rekeyed)
   }

@@ -26,11 +26,27 @@ export function publishCommittedSurfaceCommand(
   result: SurfaceStorageResult,
   notify: (publish: () => void) => void = (publish) => publish()
 ): void {
+  if (result.changedWorkspaces?.length === 0) {
+    notify(() => {
+      for (const listener of runtime.workspaceSurfaceCommitListeners) {
+        try {
+          listener(result)
+        } catch {
+          /* Recovery cannot uncommit a command. */
+        }
+      }
+    })
+    return
+  }
   const catalog =
     runtime.workspaceSurfaces instanceof SurfaceCatalog
       ? runtime.workspaceSurfaces
       : new SurfaceCatalog(emptySurfaceProfileDomain())
-  catalog.adoptCommittedHost(result.hostId, result.host)
+  if (result.changes) {
+    catalog.adoptCommittedChanges(result.hostId, result.host, result.changes)
+  } else {
+    catalog.adoptCommittedHost(result.hostId, result.host)
+  }
   runtime.workspaceSurfaces = catalog
   const current = readSurfaceRuntimeSession(runtime, hostId)
   const presentation = patchStoredSession(
@@ -43,7 +59,9 @@ export function publishCommittedSurfaceCommand(
     presentation,
     result.host.surfaces,
     result.host.chatInitialization === 'verified',
-    catalog.unresolvedNativeSessionIds(hostId)
+    catalog.unresolvedNativeSessionIds(hostId),
+    new Set(),
+    catalog.projectionCache(hostId)
   )
   Object.assign(
     runtime.state,

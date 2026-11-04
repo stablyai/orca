@@ -1,6 +1,6 @@
 import { collectDeregisteredRepoIds } from '../tracking-repos/deregistered-repo-residue'
 import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import {
   orphanSurfaceRetirements,
@@ -47,15 +47,22 @@ export function pruneDeregisteredTerminalSurfacesSync(
   }
   writes.flushOrThrow()
   const generation = runtime.writeGeneration
+  const host = (id: string) => {
+    const parsed = parseExecutionHostId(id)?.id
+    if (!parsed) {
+      throw new Error('Invalid surface host')
+    }
+    return parsed
+  }
   const before = commands.map((command) =>
-    structuredClone(readSurfaceRuntimeSession(runtime, command.hostId as ExecutionHostId))
+    structuredClone(readSurfaceRuntimeSession(runtime, host(command.hostId)))
   )
   const results = authority.executeSurfaceTransaction(commands)
   assertOrphanRetirementsAccepted(results)
   for (const [index, result] of results.entries()) {
     publishCommittedSurfaceCommand(
       runtime,
-      result.hostId as ExecutionHostId,
+      host(result.hostId),
       commands[index]!,
       before[index]!,
       generation,

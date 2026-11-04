@@ -1,4 +1,4 @@
-import { completedSurfaceCreation } from './surface-executor-completion'
+import { cancelSurfaceExecution } from './surface-executor-completion'
 import { isDeepStrictEqual } from 'node:util'
 import { readSurfaceExecutionProvenance } from './surface-execution-provenance'
 import type {
@@ -84,8 +84,10 @@ export class SurfaceRunExecutor {
     const previous = this.executions.get(key)
     if (previous) {
       this.sameResource(previous, admission)
+      await this.assertRunAuthority(admission)
       await previous.cancelIntent
       await previous.completion
+      await this.assertRunAuthority(admission)
       if (
         !previous.resource &&
         previous.disposition?.kind === 'no-fork' &&
@@ -128,7 +130,6 @@ export class SurfaceRunExecutor {
         throw new Error('terminal_executor_domain_changed')
       }
       const intent = await this.deps.read(admission)
-      await execution.cancelIntent
       assertAllowed()
       const bound =
         intent.kind === 'bound'
@@ -156,7 +157,6 @@ export class SurfaceRunExecutor {
         throw new Error('terminal_pane_owner_changed')
       }
       execution.resource = structuredClone(result.resource)
-      await execution.cancelIntent
       assertAllowed()
       return result.value
     } finally {
@@ -191,6 +191,22 @@ export class SurfaceRunExecutor {
     if (admission.executorId !== this.executorId) {
       return this.result(admission, { kind: 'unverifiable' })
     }
+    const intent = await this.deps.read(admission)
+    const resource =
+      intent.kind === 'bound'
+        ? intent.resource
+        : intent.kind === 'allocation' && intent.allocation.decision === 'committed'
+          ? intent.allocation.resource
+          : null
+    const accepted =
+      decision.decision === 'committed'
+        ? resource && sameResource(resource, decision.resource) && this.deps.owns(resource)
+        : intent.kind === 'allocation' &&
+          intent.allocation.decision === 'aborting' &&
+          intent.allocation.executorId === this.executorId
+    if (!accepted) {
+      return this.result(admission, { kind: 'unverifiable' })
+    }
     const key = surfaceExecutorKey(admission)
     let execution = this.executions.get(key)
     if (execution) {
@@ -210,70 +226,65 @@ export class SurfaceRunExecutor {
     const current = execution
     if (decision.decision === 'committed') {
       await current.cancelIntent
-      const intent = await this.deps.read(admission)
-      const resource =
-        intent.kind === 'bound'
-          ? intent.resource
-          : intent.kind === 'allocation' && intent.allocation.decision === 'committed'
-            ? intent.allocation.resource
+      const latest = await this.deps.read(admission)
+      const bound =
+        latest.kind === 'bound'
+          ? latest.resource
+          : latest.kind === 'allocation' && latest.allocation.decision === 'committed'
+            ? latest.allocation.resource
             : null
       if (
-        !resource ||
-        !sameResource(resource, decision.resource) ||
-        !this.deps.owns(resource) ||
+        !bound ||
+        !sameResource(bound, decision.resource) ||
+        !this.deps.owns(bound) ||
         current.canceled ||
         current.cancellation.signal.aborted
       ) {
         return this.result(admission, { kind: 'unverifiable' })
       }
-      current.resource = resource
+      current.resource = bound
       current.adopted = true
-      return this.result(admission, { kind: 'adopted', resource })
+      return this.result(admission, { kind: 'adopted', resource: bound })
     }
     if (current.canceled) {
       return this.result(admission, { kind: 'canceled' })
     }
-    current.cancelIntent ??= this.deps
-      .read(admission)
-      .then((intent) => {
-        const accepted =
-          intent.kind === 'allocation' &&
-          intent.allocation.decision === 'aborting' &&
-          intent.allocation.executorId === this.executorId
-        if (accepted && !current.registered) {
-          current.disposition = { kind: 'no-fork' }
+    if (!current.registered) {
+      current.disposition = { kind: 'no-fork' }
+    }
+    current.cancellation.abort(new Error('terminal_run_canceled'))
+    current.cancelIntent ??= cancelSurfaceExecution(current, decision.resource, this.deps).then(
+      (canceled) => {
+        if (canceled) {
+          this.wake(current.admission)
         }
-        if (accepted) {
-          current.cancellation.abort(new Error('terminal_run_canceled'))
-        }
-        return accepted
-      })
-      .catch(() => false)
+        return canceled
+      }
+    )
     if (!(await current.cancelIntent)) {
       current.cancelIntent = undefined
       return this.result(admission, { kind: 'unverifiable' })
     }
-    await current.completion
-    const resource = current.resource ?? decision.resource
-    if (resource) {
-      if (!this.deps.owns(resource) || !(await this.deps.stop(resource))) {
-        // A retained exact physical completion can prove an exit after the host removed its live index.
-        if (!(await completedSurfaceCreation(current.disposition))) {
-          return this.result(admission, { kind: 'unverifiable' })
-        }
-      }
-    } else if (!(await completedSurfaceCreation(current.disposition))) {
-      return this.result(admission, { kind: 'unverifiable' })
-    }
-    current.canceled = true
-    this.wake(admission)
     return this.result(admission, { kind: 'canceled' })
+  }
+
+  private async assertRunAuthority(admission: SurfaceExecutorAdmission): Promise<void> {
+    const intent = await this.deps.read(admission)
+    if (
+      intent.kind !== 'bound' &&
+      !(intent.kind === 'allocation' && intent.allocation.decision !== 'aborting')
+    ) {
+      throw new Error('terminal_pane_owner_changed')
+    }
   }
 
   /** The owner's acknowledged absence is safe to forget because no later create can pass admission. */
   async release(admission: SurfaceExecutorAdmission): Promise<void> {
     const key = surfaceExecutorKey(admission)
     const execution = this.executions.get(key)
+    if (execution) {
+      this.sameResource(execution, admission)
+    }
     if (!execution?.canceled) {
       return
     }

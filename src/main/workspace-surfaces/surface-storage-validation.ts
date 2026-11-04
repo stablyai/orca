@@ -1,3 +1,8 @@
+import type {
+  SurfaceStorageRead,
+  SurfaceStorageReadResult
+} from '../../shared/workspace-surfaces/surface-storage-read'
+import { surfaceCommandReceiptSchema } from '../../shared/workspace-surfaces/surface-profile-domain'
 import {
   surfaceExecutionProvenanceSchema,
   surfaceExecutorIdentitySchema
@@ -206,6 +211,14 @@ const allocationOutcome = z.discriminatedUnion('status', [
 ])
 const result = z.object({
   hostId: id,
+  changes: z
+    .object({
+      upserted: z.array(workspaceSurfaceSchema),
+      removed: z.array(z.object({ hostId: id, workspaceId: id, hostTabId: id })),
+      invalidated: z.array(z.object({ hostId: id, workspaceId: id, hostTabId: id })).optional()
+    })
+    .optional(),
+  changedWorkspaces: z.array(id).optional(),
   host: z.object({
     terminalInitialized: z.boolean(),
     chatInitialization: z.enum(['unknown', 'verified']),
@@ -230,4 +243,33 @@ export function isSurfaceStorageCommand(value: unknown): value is SurfaceStorage
 
 export function isSurfaceStorageResult(value: unknown): value is SurfaceStorageResult {
   return result.safeParse(value).success
+}
+
+const storageRead = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('run'), hostId: id, target: surfaceRunTargetSchema }),
+  z.object({ type: z.literal('receipt'), hostId: id, callerId: id, commandId: id })
+])
+const storageReadStamp = {
+  profileRevision: z.int().nonnegative(),
+  rootRevision: z.int().nonnegative(),
+  rootHash: z.string().nullable()
+}
+const storageReadResult = z.discriminatedUnion('type', [
+  z.object({
+    ...storageReadStamp,
+    type: z.literal('run'),
+    surface: workspaceSurfaceSchema.nullable(),
+    allocation: surfaceAllocationSchema.nullable()
+  }),
+  z.object({
+    ...storageReadStamp,
+    type: z.literal('receipt'),
+    receipt: surfaceCommandReceiptSchema.nullable()
+  })
+])
+export function isSurfaceStorageRead(value: unknown): value is SurfaceStorageRead {
+  return storageRead.safeParse(value).success
+}
+export function isSurfaceStorageReadResult(value: unknown): value is SurfaceStorageReadResult {
+  return storageReadResult.safeParse(value).success
 }

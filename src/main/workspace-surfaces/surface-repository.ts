@@ -18,6 +18,7 @@ import { readSurface, readWorkspace, writeSurface } from './surface-rows'
 import { applySurfaceLayout } from './surface-layout-command'
 import { moveSurfaceContent, replaceSurfaceContent } from './surface-content-command'
 import { runSurfaceCommand } from './surface-command-receipts'
+import { recordSurfaceHost } from './surface-transaction-changes'
 
 /** Every decision reads the shared transaction; there is no independent content cache or queue. */
 export class WorkspaceSurfaceRepository {
@@ -83,6 +84,7 @@ export class WorkspaceSurfaceRepository {
       db.prepare(
         'INSERT INTO main.workspace_surface_domains(host_id, initialized, revision) VALUES (?, 1, 1)'
       ).run(hostId)
+      recordSurfaceHost(db, hostId, true, 1)
       for (const workspaceId of new Set([
         ...workspaceIds,
         ...surfaces.map((surface) => surface.workspaceId)
@@ -101,13 +103,21 @@ export class WorkspaceSurfaceRepository {
   applyLayout(
     request: SurfaceLayoutRequest,
     view: SurfaceLayoutView,
-    present?: (model: WorkspaceLayoutModel) => void
+    present?: (model: WorkspaceLayoutModel) => void,
+    rawClosed?: (tabId: string, workspaceId: string) => boolean
   ): SurfaceCommandOutcome {
     let model: WorkspaceLayoutModel | undefined
     const outcome = this.command(request, request, (db) =>
-      applySurfaceLayout(db, request, view, this.mintId, (next) => {
-        model = next
-      })
+      applySurfaceLayout(
+        db,
+        request,
+        view,
+        this.mintId,
+        (next) => {
+          model = next
+        },
+        rawClosed
+      )
     )
     if (outcome.status === 'accepted' && model) {
       present?.(model)
@@ -115,10 +125,14 @@ export class WorkspaceSurfaceRepository {
     return outcome
   }
 
-  replaceContent(request: SurfaceContentReplacement): SurfaceCommandOutcome {
-    return this.command(request, request, (db) =>
-      replaceSurfaceContent(db, request, this.mintId, this.now)
-    )
+  replaceContent(request: SurfaceContentReplacement, applied?: () => void): SurfaceCommandOutcome {
+    return this.command(request, request, (db) => {
+      const outcome = replaceSurfaceContent(db, request, this.mintId, this.now)
+      if (outcome.status === 'accepted') {
+        applied?.()
+      }
+      return outcome
+    })
   }
 
   move(request: SurfaceMoveRequest): SurfaceCommandOutcome {

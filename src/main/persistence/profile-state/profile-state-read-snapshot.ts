@@ -1,3 +1,4 @@
+import { finishSurfaceProfileCache } from '../../workspace-surfaces/surface-profile-cache'
 import type Database from '../../sqlite/sync-database'
 
 export class ProfileStateReadRollbackError extends Error {
@@ -22,9 +23,13 @@ export function withProfileStateReadSnapshot<T>(db: Database.Database, read: () 
     const result = read()
     if (ownsTransaction) {
       db.exec('COMMIT')
+      finishSurfaceProfileCache(db, true)
     }
     return result
   } catch (error) {
+    if (ownsTransaction) {
+      finishSurfaceProfileCache(db, false)
+    }
     if (ownsTransaction && db.isTransaction) {
       try {
         db.exec('ROLLBACK')

@@ -1,13 +1,24 @@
+import { attachSurfaceEvidenceReader } from './surface-cold-evidence'
+import { readSurfaceMappings } from './surface-migration-identities'
+import { WorkspaceSurfaceRepository } from './surface-repository'
+import { seedTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { randomUUID } from 'node:crypto'
 import { existsSync, linkSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { build } from 'esbuild'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import Database from '../sqlite/sync-database'
-import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
-import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  type JournalHostDatabase,
+  journalDatabasePath
+} from '../native-chat/agent-session-journal/journal-host-database'
+
 import { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { readSurfaceProfileDomain } from './surface-profile-storage'
@@ -211,7 +222,7 @@ it('rolls back canonical retirement, receipt, profile output and native index to
   repaired.close()
   const [closed] = joint([close])
   expect(closed.outcome).toMatchObject({ status: 'accepted' })
-  expect(readHost().surfaces.find((row) => row.hostTabId === 'chat-tab')?.content).toBeNull()
+  expect(readHost().surfaces.find((row) => row.hostTabId === 'chat-tab')).toBeUndefined()
 })
 
 it('preserves a live terminal when an older native index creates a colliding visible tab identity', async () => {
@@ -239,7 +250,16 @@ it('preserves a live terminal when an older native index creates a colliding vis
   const chat = host.surfaces.find((row) => row.content?.kind === 'agent-session')!
   expect(chat.hostTabId).not.toBe(terminal.hostTabId)
   expect(chat.content).toEqual({ kind: 'agent-session', sessionId, agent: 'codex' })
-  expect(host.identityMappings).toContainEqual({
+  const profile = openWritableProfileStateDatabase(databasePath, 'joint-test')
+  let mappings
+  try {
+    attachSurfaceEvidenceReader(profile.db, 'local', host)
+    mappings = readSurfaceMappings(host, workspaceId, 'host-tab', 'chat-tab')
+  } finally {
+    profile.db.close()
+  }
+  expect(host.identityMappings).toEqual([])
+  expect(mappings).toContainEqual({
     workspaceId,
     kind: 'host-tab',
     previousId: 'chat-tab',
@@ -398,8 +418,8 @@ it('writes one native projection for a joint local chat close and SSH terminal c
     expect(
       reopened
         .executeSurfaceCommand({ type: 'query', hostId: 'local' })
-        .host.surfaces.find((row) => row.hostTabId === 'chat-tab')?.content
-    ).toBeNull()
+        .host.surfaces.find((row) => row.hostTabId === 'chat-tab')
+    ).toBeUndefined()
     expect(
       reopened.executeSurfaceCommand({ type: 'query', hostId: 'ssh:remote' }).host.surfaces
     ).toContainEqual(
@@ -460,4 +480,80 @@ it('streams native effects into the common commit and rolls them back with a rej
   } finally {
     saved.close()
   }
+})
+
+it.each([20, 200])(
+  'bounds native catalog reads for %i chats on unchanged initialization and one close',
+  async (count) => {
+    const records = Array.from({ length: count }, (_, index) =>
+      agentSessionRecordFixture({
+        sessionId: `chat-${index.toString(16).padStart(8, '0')}`,
+        location: { executionHostId: 'local', workspaceId, workspaceKind: 'folder' }
+      })
+    )
+    await seedTestAgentSessionRecordStore(directory, {
+      records,
+      sessionTabs: records.map((record, index) => ({
+        sessionId: record.sessionId,
+        tabId: `chat-${index}`
+      }))
+    })
+    await closeTestJournalHostDatabase(directory)
+    joint()
+    let reads = 0
+    let decoded = 0
+    const original = WorkspaceSurfaceRepository.prototype.all
+    const spy = vi.spyOn(WorkspaceSurfaceRepository.prototype, 'all').mockImplementation(function (
+      this: WorkspaceSurfaceRepository,
+      hostId
+    ) {
+      const result = original.call(this, hostId)
+      reads++
+      decoded += result.length
+      return result
+    })
+    try {
+      const [unchanged] = joint()
+      expect(
+        unchanged.host.surfaces.filter((row) => row.content?.kind === 'agent-session')
+      ).toHaveLength(count)
+      expect(reads).toBeGreaterThan(0)
+      expect(reads).toBeLessThanOrEqual(8)
+      expect(decoded).toBeGreaterThanOrEqual(count)
+      expect(decoded).toBeLessThanOrEqual(8 * count)
+      reads = 0
+      decoded = 0
+      const [closed] = joint([closeRequest('scaling-close')])
+      expect(
+        closed.host.surfaces.filter((row) => row.content?.kind === 'agent-session')
+      ).toHaveLength(count - 1)
+      expect(reads).toBeGreaterThan(0)
+      expect(reads).toBeLessThanOrEqual(8)
+      expect(decoded).toBeGreaterThanOrEqual(count)
+      expect(decoded).toBeLessThanOrEqual(8 * count)
+    } finally {
+      spy.mockRestore()
+    }
+  }
+)
+
+it('accepts the first recorded native row for a duplicate conversation and keeps later joint actions usable', async () => {
+  await oldIndex(true)
+  const fixture = new Database(journalDatabasePath(directory))
+  try {
+    fixture
+      .prepare('INSERT INTO agent_session_tabs(tab_id, session_id, position) VALUES (?, ?, ?)')
+      .run('duplicate-tab', sessionId, 100)
+  } finally {
+    fixture.close()
+  }
+  expect(() => joint()).not.toThrow()
+  const native = readHost().surfaces.filter((surface) => surface.content?.kind === 'agent-session')
+  expect(native).toEqual([
+    expect.objectContaining({
+      hostTabId: 'chat-tab',
+      content: { kind: 'agent-session', sessionId, agent: 'codex' }
+    })
+  ])
+  expect(() => joint()).not.toThrow()
 })

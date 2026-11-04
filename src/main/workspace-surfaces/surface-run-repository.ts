@@ -13,7 +13,7 @@ import {
   type SurfaceResource,
   type SurfaceRunTarget
 } from '../../shared/workspace-surfaces/surface-allocation'
-import { readAllocation, writeAllocation } from './surface-allocation-rows'
+import { readAllocation, writeAllocation, removeAllocation } from './surface-allocation-rows'
 import { conflictingSurfaceIdentity } from './surface-identities'
 
 export class SurfaceRunRepository {
@@ -188,9 +188,7 @@ export class SurfaceRunRepository {
           return false
         }
       }
-      db.prepare(
-        'DELETE FROM main.workspace_surface_allocations WHERE host_id = ? AND allocation_id = ?'
-      ).run(acknowledgment.hostId, acknowledgment.allocationId)
+      removeAllocation(db, acknowledgment.hostId, acknowledgment.allocationId)
       return true
     })
   }

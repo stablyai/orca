@@ -47,10 +47,11 @@ it('reconnects pending surface work with zero published PTYs and releases its tr
     )
     release()
     release()
-    expect(
-      (adapter as unknown as { surfaceRecoveryInterests: Set<symbol> }).surfaceRecoveryInterests
-        .size
-    ).toBe(0)
+    const interests: unknown = Reflect.get(adapter, 'surfaceRecoveryInterests')
+    if (!(interests instanceof Set)) {
+      throw new Error('Missing recovery interest set')
+    }
+    expect(interests.size).toBe(0)
   } finally {
     release()
     stopWake()

@@ -12,6 +12,7 @@ import type { SurfaceStorageCommand } from '../../shared/workspace-surfaces/surf
 import { surfaceLayoutTargetRequirements } from './surface-layout-targets'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { normalizeSurfaceLayoutCommand } from './surface-layout-aliases'
+import { captureSurfaceAdmission } from './surface-admission-capture'
 
 /** Capture occurrences before dispatch; unrelated presentation revisions cannot refuse a pane action. */
 export function captureSurfaceLayoutCommand(
@@ -19,9 +20,15 @@ export function captureSurfaceLayoutCommand(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState,
   input: LayoutCommand,
-  live: Pick<LayoutContext, 'isStarting' | 'isBindingLive' | 'retiresBinding'> = {}
+  live: Pick<LayoutContext, 'isStarting' | 'isBindingLive' | 'retiresBinding'> = {},
+  closeEvidence?: readonly WorkspaceSessionState[]
 ): Extract<SurfaceStorageCommand, { type: 'layout' }> {
-  const surfaces = reader.all(hostId)
+  const surfaces = reader.workspace
+    ? [
+        ...reader.workspace(hostId, input.workspace),
+        ...(input.type === 'moveTabToWorkspace' ? reader.workspace(hostId, input.toWorkspace) : [])
+      ]
+    : reader.all(hostId)
   const command = normalizeSurfaceLayoutCommand(input, surfaces)
   const { required, leaves } = surfaceLayoutTargetRequirements(
     command,
@@ -40,7 +47,7 @@ export function captureSurfaceLayoutCommand(
     }
     seen.add(encoded)
     const surface = reader.read({ hostId, ...key })
-    const expected = surface ? { occurrence: surface.occurrence } : null
+    const expected = surface?.content ? { occurrence: surface.occurrence } : null
     const paneTargets = leaves.filter(
       (leaf) => leaf.hostTabId === key.hostTabId && key.workspaceId === command.workspace
     )
@@ -68,7 +75,7 @@ export function captureSurfaceLayoutCommand(
         }))
       : []
   )
-  return {
+  const captured: Extract<SurfaceStorageCommand, { type: 'layout' }> = {
     type: 'layout',
     hostId,
     session,
@@ -101,4 +108,6 @@ export function captureSurfaceLayoutCommand(
       })
     }
   }
+  captureSurfaceAdmission(reader, captured, closeEvidence)
+  return captured
 }

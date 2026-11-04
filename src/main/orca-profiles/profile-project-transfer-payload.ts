@@ -1,5 +1,13 @@
+import {
+  extractProjectColdEvidence,
+  mergeProjectColdEvidence
+} from './profile-project-cold-evidence'
 import { randomUUID } from 'node:crypto'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceKey } from '../../shared/folder-workspace-types'
@@ -20,6 +28,8 @@ import {
 } from './profile-project-session-transfer'
 import { collectTransferWorktreeIds } from './profile-project-transfer-worktree-ids'
 import { rekeyWorktreeId, rekeyWorkspaceKey } from './profile-project-worktree-identity'
+import { extractProjectSurfaces, mergeProjectSurfaces } from './profile-project-surface-transfer'
+import { remapProjectSurfacePresentation } from './profile-project-surface-presentation'
 
 export type TransferPayload = {
   repo: Repo
@@ -32,6 +42,8 @@ export type TransferPayload = {
   workspaceLineageByChildKey: PersistedState['workspaceLineageByChildKey']
   workspaceSession?: PersistedState['workspaceSession']
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, PersistedState['workspaceSession']>>
+  workspaceSurfaces?: PersistedState['workspaceSurfaces']
+  surfaceEvidence?: Record<string, unknown>
   sshTargets: SshTarget[]
   targetProjectId: string | null
 }
@@ -171,6 +183,12 @@ export function createTransferPayload(args: {
     ),
     ...(includeSessions
       ? {
+          surfaceEvidence: extractProjectColdEvidence(sourceState, oldRepoId, newRepoId),
+          workspaceSurfaces: extractProjectSurfaces(
+            sourceState.workspaceSurfaces,
+            oldRepoId,
+            newRepoId
+          ),
           workspaceSession: extractSessionForTransfer(
             sourceState.workspaceSession,
             oldRepoId,
@@ -194,8 +212,29 @@ export function applyPayloadToTarget(
   targetState: TransferProfileState,
   payload: TransferPayload
 ): TransferProfileState {
+  const surfaceEvidence = mergeProjectColdEvidence(targetState, payload.surfaceEvidence ?? {})
+  const canonical =
+    payload.workspaceSurfaces &&
+    mergeProjectSurfaces(
+      targetState.workspaceSurfaces,
+      payload.workspaceSurfaces,
+      (hostId) =>
+        Object.values(
+          (hostId === 'local'
+            ? targetState.workspaceSession
+            : targetState.workspaceSessionsByHostId?.[requireSurfaceHostId(hostId)]
+          )?.unifiedTabs ?? {}
+        ).flatMap((tabs) => tabs.map((tab) => tab.id)),
+      { ...targetState, ...surfaceEvidence }
+    )
+  const incoming = (hostId: ExecutionHostId, session: PersistedState['workspaceSession']) =>
+    canonical
+      ? remapProjectSurfacePresentation(session, hostId, canonical.identities.get(hostId) ?? [])
+      : session
   const next: TransferProfileState = {
     ...targetState,
+    ...surfaceEvidence,
+    ...(canonical ? { workspaceSurfaces: canonical.domain } : {}),
     repos: [...targetState.repos, payload.repo],
     sparsePresetsByRepo: {
       ...targetState.sparsePresetsByRepo,
@@ -221,13 +260,17 @@ export function applyPayloadToTarget(
   if (payload.workspaceSession) {
     next.workspaceSession = mergeWorkspaceSessions(
       targetState.workspaceSession,
-      payload.workspaceSession
+      incoming('local', payload.workspaceSession)
     )
   }
   if (payload.workspaceSessionsByHostId) {
     next.workspaceSessionsByHostId = mergeHostWorkspaceSessions(
       targetState.workspaceSessionsByHostId,
-      payload.workspaceSessionsByHostId
+      Object.fromEntries(
+        Object.entries(payload.workspaceSessionsByHostId).flatMap(([hostId, session]) =>
+          session ? [[hostId, incoming(requireSurfaceHostId(hostId), session)]] : []
+        )
+      )
     )
   }
   return rebuildRepoBackedProjectState(next)
@@ -236,4 +279,12 @@ export function applyPayloadToTarget(
 function mergeSshTargets(existing: SshTarget[], incoming: SshTarget[]): SshTarget[] {
   const existingIds = new Set(existing.map((target) => target.id))
   return [...existing, ...incoming.filter((target) => !existingIds.has(target.id))]
+}
+
+function requireSurfaceHostId(value: string): ExecutionHostId {
+  const hostId = normalizeExecutionHostId(value)
+  if (!hostId) {
+    throw new Error('Profile surface host identity is invalid')
+  }
+  return hostId
 }

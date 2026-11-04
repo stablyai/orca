@@ -51,12 +51,22 @@ describe.skipIf(process.platform === 'win32')(
       let exit: ((event: { exitCode: number }) => void) | undefined
       const pane = {
         pid: 12,
-        onExit: vi.fn((listener) => {
+        cols: 80,
+        rows: 24,
+        process: 'wsl.exe',
+        handleFlowControl: false,
+        onData: () => ({ dispose() {} }),
+        resize() {},
+        clear() {},
+        write() {},
+        pause() {},
+        resume() {},
+        onExit: vi.fn((listener: Parameters<IPty['onExit']>[0]) => {
           exit = listener
           return { dispose() {} }
         }),
         kill: vi.fn(() => exit?.({ exitCode: 0 }))
-      } as unknown as IPty
+      } satisfies IPty
       nodePty.spawn.mockReturnValue(pane)
       const spawn = await loadLocalPtyRuntimeSpawn()
       const allowed = vi.fn()

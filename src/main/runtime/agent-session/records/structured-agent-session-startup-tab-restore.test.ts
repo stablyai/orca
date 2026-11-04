@@ -17,10 +17,11 @@ import {
   closeTestJournalHostDatabases,
   insertTestJournalRowJson,
   openTestJournalHostDatabase,
-  SAVED_BY_NEWER_ORCA
+  SAVED_BY_NEWER_ORCA,
+  publishTestJournalEpoch
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import * as journalFactory from '../../../native-chat/agent-session-journal/journal-store-factory'
-import { publishTestJournalEpoch } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+
 import { createQueuedRigProvider } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { createStructuredSessionObservationClock } from '../../../native-chat/agent-session-wire/structured-agent-session-observation-clock.test-fixture'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'

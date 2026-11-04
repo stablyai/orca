@@ -7,10 +7,9 @@ import {
 import {
   runLeafOf,
   runTargetOf,
-  boundSurfaceRunAllocation,
   type SurfaceAllocation
 } from '../../shared/workspace-surfaces/surface-allocation'
-import { readAllocation, writeAllocation } from './surface-allocation-rows'
+import { readAllocation, writeAllocation, removeAllocation } from './surface-allocation-rows'
 import { advanceDomain, readSurface, writeChanges } from './surface-rows'
 
 /** The authenticated replacement observes its own kernel; it never acknowledges as the departed executor. */
@@ -21,9 +20,7 @@ export function retireSurfaceRunAfterKernelChange(
   mintId: () => string
 ): boolean {
   const surface = readSurface(db, subject.target)
-  const allocation =
-    readAllocation(db, subject.target.hostId, subject.allocationId) ??
-    (surface ? boundSurfaceRunAllocation(surface, subject.target.leafId) : null)
+  const allocation = readAllocation(db, subject.target.hostId, subject.allocationId)
   if (
     !allocation ||
     !isDeepStrictEqual(allocation, subject) ||
@@ -68,8 +65,6 @@ export function retireSurfaceRunAfterKernelChange(
     })
     advanceDomain(db, subject.target.hostId)
   }
-  db.prepare(
-    'DELETE FROM main.workspace_surface_allocations WHERE host_id = ? AND allocation_id = ?'
-  ).run(subject.target.hostId, subject.allocationId)
+  removeAllocation(db, subject.target.hostId, subject.allocationId)
   return true
 }

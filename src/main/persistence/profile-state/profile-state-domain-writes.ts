@@ -1,3 +1,8 @@
+import { isSurfaceEvidenceDomain } from '../../../shared/workspace-surfaces/surface-evidence-document'
+import { trackSurfaceTransaction } from '../../workspace-surfaces/surface-transaction-changes'
+import type { SurfaceKey } from '../../../shared/workspace-surfaces/surface-content'
+import { stageSurfaceProfileCache } from '../../workspace-surfaces/surface-profile-cache'
+import { WORKSPACE_SURFACE_DOMAIN } from '../../../shared/workspace-surfaces/surface-profile-domain'
 import { admitSurfaceCatalogImports } from '../../workspace-surfaces/surface-catalog-import'
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
 import type Database from '../../sqlite/sync-database'
@@ -25,6 +30,7 @@ import {
 } from './profile-state-domain-write-validation'
 import type { SurfaceProfileDomain } from '../../../shared/workspace-surfaces/surface-profile-domain'
 import { protectSurfaceProfileSave } from '../../workspace-surfaces/surface-profile-save'
+import type { SurfaceTransactionChanges } from '../../workspace-surfaces/surface-transaction-changes'
 
 export { ProfileStateRevisionConflictError } from './profile-state-documents'
 
@@ -55,6 +61,7 @@ export type ProfileStateDomainWriteResult = {
 
 export type ProfileStateDomainTransactionResult = ProfileStateDomainWriteResult & {
   changedDomains: readonly string[]
+  surfaceInvalidations?: readonly SurfaceKey[]
 }
 
 /** BEGIN IMMEDIATE fences stale writers; only this domain changes, and null deletes its row. */
@@ -85,37 +92,51 @@ export function writeProfileStateDomains(
 
   const prepared = transaction.replacements.map(prepareProfileStateDomainMutation)
 
-  return withProfileStateWriteTransaction(db, () => {
-    const surfaceCommit = admitSurfaceCatalogImports(db, prepared)
-    return writePreparedProfileStateDomains(
-      db,
-      transaction,
-      protectSurfaceProfileSave(db, prepared, surfaceCommit).map(
-        (mutation) =>
-          prepared.find((prior) => prior === mutation) ??
-          prepareProfileStateDomainMutation(mutation)
+  return withProfileStateWriteTransaction(db, () =>
+    trackSurfaceTransaction(db, (changes) => {
+      const surfaceCommit = admitSurfaceCatalogImports(db, prepared)
+      const committed = writePreparedProfileStateDomains(
+        db,
+        transaction,
+        protectSurfaceProfileSave(db, prepared, surfaceCommit).map(
+          (mutation) =>
+            prepared.find((prior) => prior === mutation) ??
+            prepareProfileStateDomainMutation(mutation)
+        )
       )
-    )
-  })
+      return { ...committed, surfaceInvalidations: [...changes.invalidated.values()] }
+    })
+  )
 }
 
 /** Canonical commands and attached compatibility writes share the admitted owner's transaction. */
 export function writeProfileStateDomainsInTransaction(
   db: Database.Database,
   transaction: ProfileStateDomainTransaction,
-  surfaceCommit?: SurfaceProfileDomain
+  surfaceCommit?: SurfaceProfileDomain,
+  projectSurfaceCommit = true,
+  surfaceChanges?: SurfaceTransactionChanges
 ): ProfileStateDomainTransactionResult {
   if (!db.isTransaction) {
     throw new Error('Profile state domain write requires an active transaction')
   }
-  validateProfileStateDomainTransaction(transaction)
-  return writePreparedProfileStateDomains(
+  const prepared = protectSurfaceProfileSave(
     db,
-    transaction,
-    protectSurfaceProfileSave(db, transaction.replacements, surfaceCommit).map(
-      prepareProfileStateDomainMutation
-    )
-  )
+    transaction.replacements,
+    surfaceCommit,
+    projectSurfaceCommit
+  ).map(prepareProfileStateDomainMutation)
+  validateProfileStateDomainTransaction({ ...transaction, replacements: prepared })
+  const result = writePreparedProfileStateDomains(db, transaction, prepared)
+  if (surfaceCommit) {
+    const payload = prepared.find(
+      (mutation) => mutation.domain === WORKSPACE_SURFACE_DOMAIN
+    )?.payload
+    if (payload) {
+      stageSurfaceProfileCache(db, surfaceCommit, payload, surfaceChanges)
+    }
+  }
+  return result
 }
 
 function writePreparedProfileStateDomains(
@@ -163,6 +184,14 @@ function writePreparedProfileStateDomains(
         }
         continue
       }
+    }
+    if (
+      isSurfaceEvidenceDomain(mutation.domain) &&
+      existingRow &&
+      mutation.payload !== null &&
+      existingRow.payload !== mutation.payload
+    ) {
+      throw new Error('Conflicting surface evidence document')
     }
     const unchanged =
       (mutation.payload === null && existingRow === undefined) ||

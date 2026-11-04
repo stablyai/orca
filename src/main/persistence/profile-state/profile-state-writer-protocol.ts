@@ -1,3 +1,14 @@
+import type { SurfaceKey } from '../../../shared/workspace-surfaces/surface-content'
+import type {
+  SurfaceStorageRead,
+  SurfaceStorageReadResult
+} from '../../../shared/workspace-surfaces/surface-storage-read'
+import {
+  isSurfaceStorageRead,
+  isSurfaceStorageReadResult,
+  isSurfaceStorageCommand,
+  isSurfaceStorageResult
+} from '../../workspace-surfaces/surface-storage-validation'
 import type { JournalSqlFailure } from '../../native-chat/agent-session-journal/journal-sql-protocol'
 import type {
   JournalUnitPacket,
@@ -11,10 +22,6 @@ import type {
   SurfaceStorageMutation,
   SurfaceStorageResult
 } from '../../../shared/workspace-surfaces/surface-storage-command'
-import {
-  isSurfaceStorageCommand,
-  isSurfaceStorageResult
-} from '../../workspace-surfaces/surface-storage-validation'
 
 export type ProfileStateWriterInitialization = {
   databasePath: string
@@ -26,6 +33,7 @@ export type ProfileStateWriterJournalPackets = { id: number; journalPackets: Jou
 
 export type ProfileStateWriterCommand =
   | { command: 'stage-surface-journal'; packets: readonly JournalUnitPacket[] | null }
+  | { command: 'read-surface'; read: SurfaceStorageRead }
   | { command: 'write-surface'; surface: SurfaceStorageCommand }
   | { command: 'write-surfaces'; surfaces: readonly SurfaceStorageMutation[] }
   | { command: 'write-surface-joint'; transaction: SurfaceJointTransaction }
@@ -61,6 +69,8 @@ export type ProfileStateWriterResponse =
       ok: true
       revision: number
       exportedRevision?: number | null
+      surfaceInvalidations?: readonly SurfaceKey[]
+      surfaceRead?: SurfaceStorageReadResult
       surfaceResult?: SurfaceStorageResult
       surfaceResults?: SurfaceStorageResult[]
     }
@@ -120,6 +130,8 @@ export function isProfileStateWriterRequest(value: unknown): value is ProfileSta
           (surface: unknown) => isSurfaceStorageCommand(surface) && surface.type !== 'query'
         )
       )
+    case 'read-surface':
+      return isSurfaceStorageRead(value.read)
     case 'write-surface':
       return isSurfaceStorageCommand(value.surface)
     case 'write-state':
@@ -173,6 +185,16 @@ export function isProfileStateWriterResponse(value: unknown): value is ProfileSt
   }
   return value.ok === true
     ? isProfileStateRevision(value.revision) &&
+        (value.surfaceRead === undefined || isSurfaceStorageReadResult(value.surfaceRead)) &&
+        (value.surfaceInvalidations === undefined ||
+          (Array.isArray(value.surfaceInvalidations) &&
+            value.surfaceInvalidations.every(
+              (key) =>
+                isRecord(key) &&
+                typeof key.hostId === 'string' &&
+                typeof key.workspaceId === 'string' &&
+                typeof key.hostTabId === 'string'
+            ))) &&
         (value.surfaceResult === undefined || isSurfaceStorageResult(value.surfaceResult)) &&
         (value.surfaceResults === undefined ||
           (Array.isArray(value.surfaceResults) &&

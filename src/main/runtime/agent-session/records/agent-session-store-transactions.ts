@@ -4,19 +4,23 @@ import { AgentSessionTabTable } from '../agent-session-tab-table'
 import { freezeRows } from './agent-session-store-row-freeze'
 import { stageAgentSessionMembership } from './agent-session-store-membership-plan'
 import type { SurfaceStorageMutation } from '../../../../shared/workspace-surfaces/surface-storage-command'
-import { changesAgentSenderIdentity } from '../../agent-session-sender-identity-revision'
-import { clearSuccessor } from '../../agent-session-sender-identity-revision'
+import {
+  changesAgentSenderIdentity,
+  clearSuccessor
+} from '../../agent-session-sender-identity-revision'
+
 import { AgentSessionRecordLineage } from '../../agent-session-record-lineage'
-import { listAgentSessionConversations } from './agent-session-store-state'
+import {
+  listAgentSessionConversations,
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from './agent-session-store-state'
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/journal-row-writer'
 import { journalOpenRefusalError } from '../../../native-chat/agent-session-journal/journal-open-failure'
 import { AgentSessionJournalError } from '../../../native-chat/agent-session-journal/journal-write-guards'
-import {
-  requireWritableAgentSessionRecord,
-  type AgentSessionStoreState
-} from './agent-session-store-state'
+
 import type { CommandReceiptScope } from '../../../native-chat/agent-session-journal/command-receipt-schema'
 import {
   agentSessionRuntimeIncarnation,

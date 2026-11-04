@@ -157,9 +157,10 @@ export function readAcceptedProfileStateSnapshot(
 
 export function readAcceptedProfileStateParsedSnapshot(
   db: Database.Database,
-  rawJson: string
+  rawJson: string,
+  options: { excludeSurfaceEvidence?: boolean } = {}
 ): ProfileStateParsedSnapshot | undefined {
-  return readAcceptedSnapshot(db, rawJson, () => readProfileStateParsedSnapshot(db))
+  return readAcceptedSnapshot(db, rawJson, () => readProfileStateParsedSnapshot(db, options))
 }
 
 function readAcceptedSnapshot<T extends { revision: number }>(
@@ -180,12 +181,16 @@ function readAcceptedSnapshot<T extends { revision: number }>(
 }
 
 /** Transfer validated values without another whole-profile serialization. */
-export function readProfileStateParsedSnapshot(db: Database.Database): ProfileStateParsedSnapshot {
+export function readProfileStateParsedSnapshot(
+  db: Database.Database,
+  options: { excludeSurfaceEvidence?: boolean } = {}
+): ProfileStateParsedSnapshot {
   return withProfileStateReadSnapshot(db, () => {
     const revision = readProfileStateRevision(db)
     const documents = readProfileStateDocuments(db, {
       profileRevision: revision,
-      representation: 'parsed'
+      representation: 'parsed',
+      ...options
     })
     return {
       revision,

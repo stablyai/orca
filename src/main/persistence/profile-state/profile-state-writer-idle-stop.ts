@@ -1,3 +1,4 @@
+import type { ProfileStateWriterConnectionOptions } from './profile-state-writer-request'
 /** An idle timeout releases the native writer; it never times out an admitted command. */
 export class ProfileStateWriterIdleStop {
   private timer: ReturnType<typeof setTimeout> | undefined
@@ -71,4 +72,10 @@ export function requireStoppedProfileRevision(revision: number | undefined): num
     throw new Error('Profile state writer stopped without an acknowledged revision')
   }
   return revision
+}
+
+export type ProfileStateWorkerAuthorityOptions = ProfileStateWriterConnectionOptions & {
+  backupWorkerPath?: string
+  /** Close the writer thread after this long without a command; the next one reopens it (~22 ms). */
+  writerIdleStopMs?: number
 }

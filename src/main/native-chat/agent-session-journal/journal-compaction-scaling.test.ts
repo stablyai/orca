@@ -1,18 +1,18 @@
 import { mutateTestJournalFixture } from './journal-drained-fixture-test-support'
-import { onTestFinished } from 'vitest'
+import { onTestFinished, afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   observeNativeJournalSql,
   failNextNativeJournalStatement
 } from './journal-native-test-instrumentation'
 import { setTestUnsupportedJournalRows } from './journal-native-fixture-test-support'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, type JournalHostDatabase } from './journal-host-database'
 import { restoreJournalAsync } from './journal-async-open'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+
 import Database from '../../sqlite/sync-database'
-import type { JournalHostDatabase } from './journal-host-database'
+
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase,

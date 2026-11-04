@@ -217,8 +217,22 @@ export function withMainSessionTabRows(
 export function withCanonicalSessionSurfaces(
   published: RuntimeMobileSessionTabsSnapshot,
   projected: MainSessionTabRows,
-  exited: (ptyId: string) => boolean
+  exited: (ptyId: string) => boolean,
+  nativeMembers: ReadonlySet<string> = new Set()
 ): RuntimeMobileSessionTabsSnapshot {
+  const listed = new Set(projected.tabs.map((row) => row.id))
+  projected = {
+    ...projected,
+    tabs: [
+      ...projected.tabs,
+      ...published.tabs.filter(
+        (row) =>
+          row.type === 'agent-session' &&
+          !listed.has(row.id) &&
+          nativeMembers.has(JSON.stringify([published.worktree, row.id, row.sessionId]))
+      )
+    ]
+  }
   const surface = (row: Row): boolean => row.type === 'terminal' || row.type === 'agent-session'
   const canonical = new Map(projected.tabs.filter(surface).map((row) => [row.id, row]))
   const publishedIds = new Set(published.tabs.map((row) => row.id))
@@ -230,7 +244,7 @@ export function withCanonicalSessionSurfaces(
       const current = canonical.get(row.id)
       return current ? [current] : []
     }),
-    ...projected.tabs.filter((row) => surface(row) && !publishedIds.has(row.id))
+    ...projected.tabs.filter((row) => row.type === 'terminal' && !publishedIds.has(row.id))
   ]
   const valid = new Set(tabs.map(orderIdOf))
   const groups = (published.tabGroups ?? []).map((group) => ({

@@ -9,12 +9,17 @@ export function projectSurfaceWorkspace(
   view: WorkspaceLayout | undefined,
   surfaces: readonly WorkspaceSurface[],
   chatVerified = true,
-  unresolvedNativeSessionIds: ReadonlySet<string> = new Set()
+  unresolvedNativeSessionIds: ReadonlySet<string> = new Set(),
+  shownNativeSessionIds: ReadonlySet<string> = new Set()
 ): WorkspaceLayout {
   const views = new Map(view?.tabs.map((tab) => [tab.id, tab]))
   const authoritative = new Set(
     surfaces
-      .filter((surface) => surface.workspaceId === workspaceId)
+      .filter(
+        (surface) =>
+          surface.workspaceId === workspaceId &&
+          (chatVerified || surface.content?.kind !== 'agent-session')
+      )
       .map((surface) => surface.hostTabId)
   )
   const tabs: LayoutTab[] = (view?.tabs ?? []).filter(
@@ -33,7 +38,13 @@ export function projectSurfaceWorkspace(
     }
   }
   for (const surface of surfaces) {
-    if (surface.workspaceId !== workspaceId || surface.content === null) {
+    if (
+      surface.workspaceId !== workspaceId ||
+      surface.content === null ||
+      (surface.content.kind === 'agent-session' &&
+        (!chatVerified ||
+          (!views.has(surface.hostTabId) && !shownNativeSessionIds.has(surface.content.sessionId))))
+    ) {
       continue
     }
     const open: WorkspaceSurface & { content: SurfaceContent } = {

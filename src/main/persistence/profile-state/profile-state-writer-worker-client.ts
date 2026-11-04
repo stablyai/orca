@@ -1,4 +1,8 @@
 import type {
+  SurfaceStorageRead,
+  SurfaceStorageReadResult
+} from '../../../shared/workspace-surfaces/surface-storage-read'
+import type {
   JournalPersistenceEffect,
   JournalEffectResult
 } from '../../native-chat/agent-session-journal/journal-persistence-plan'
@@ -23,6 +27,15 @@ export {
 export type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
 
 export class ProfileStateWriteWorkerClient extends ProfileStateWriterConnection {
+  readSurface(read: SurfaceStorageRead): Promise<SurfaceStorageReadResult> {
+    return this.dispatch({ command: 'read-surface', read }).then((response) => {
+      if (!response.surfaceRead) {
+        throw new Error('Profile state writer omitted surface read')
+      }
+      return response.surfaceRead
+    })
+  }
+
   executeSurfaceCommand(surface: SurfaceStorageCommand): Promise<SurfaceStorageResult> {
     return this.dispatch({ command: 'write-surface', surface }).then((response) => {
       if (!response.surfaceResult) {

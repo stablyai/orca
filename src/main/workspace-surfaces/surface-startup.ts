@@ -8,11 +8,11 @@ import type { ProfileStateSqliteAuthority } from '../persistence/profile-state/p
 export function initializeProfileWorkspaceSurfaces(
   initial: ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority>
 ): ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority> {
-  const state = initial.takeParsedState
+  const state: Record<string, unknown> | undefined = initial.takeParsedState
     ? initial.takeParsedState()
     : initial.serializedState === undefined
       ? undefined
-      : (JSON.parse(initial.serializedState) as Record<string, unknown>)
+      : JSON.parse(initial.serializedState)
   // Preserve fresh-profile detection until Store has created the initial user defaults.
   if (state === undefined) {
     return {
