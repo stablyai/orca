@@ -2,11 +2,11 @@
 // Unknown machine/boot ownership must preserve slots too.
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { ORCAD_RUNTIMES_DIRNAME } from '../../shared/orcad-artifacts'
 import { nodeRuntimeAsset } from '../../shared/node-runtime-pin'
 import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
 import { orcadPeerPidIsJudgeableHere } from './orcad-lock-holder-locality'
 import { materializedOrcadArtifactVersions } from './orcad-artifact-materializer'
+import { orcadArtifactSlotVersion } from './orcad-artifact-slot-name'
 import { isProcessAlive } from '../daemon/endpoint/identity/daemon-process-inspection'
 import {
   defaultOrcadSlotPeerJudge,
@@ -17,15 +17,13 @@ import {
 /** In-use slot plus two others, or the newest three when none is in use. */
 const ORCAD_ARTIFACT_CACHE_KEEP = 3
 
-const REPAIR_SUFFIX = /\.repair-\d+$/u
-
 type OrcadArtifactCachePruneOptions = {
   keep?: number
   inUseVersions?: ReadonlySet<string>
 }
 
 /** Evict old version slots per target, keeping the in-use version and the newest others.
- *  The shared `runtimes/` directory is not a slot and is never evicted. */
+ *  Only names that parse as slots are candidates: `runtimes/` and staging dirs are never evicted (#38181). */
 export async function pruneOrcadArtifactCache(
   cacheRoot: string,
   options: OrcadArtifactCachePruneOptions = {}
@@ -40,20 +38,20 @@ export async function pruneOrcadArtifactCache(
     }
     const targetRoot = join(cacheRoot, target)
     const slots = await Promise.all(
-      // Dot entries are staging directories another process may be filling right now, and
-      // `runtimes/` is the Node runtime shared across Orca versions beside the slots (#38181).
-      (await listNames(targetRoot))
-        .filter((name) => !name.startsWith('.') && name !== ORCAD_RUNTIMES_DIRNAME)
-        .map(async (name) => ({ name, mtimeMs: await mtimeOf(join(targetRoot, name)) }))
+      (await listNames(targetRoot)).flatMap((name) => {
+        const version = orcadArtifactSlotVersion(name)
+        return version
+          ? [mtimeOf(join(targetRoot, name)).then((mtimeMs) => ({ name, version, mtimeMs }))]
+          : []
+      })
     )
     const present = slots.filter(
-      (slot): slot is { name: string; mtimeMs: number } => slot.mtimeMs !== null
+      (slot): slot is { name: string; version: string; mtimeMs: number } => slot.mtimeMs !== null
     )
-    const isInUse = (name: string): boolean => inUse.has(name.replace(REPAIR_SUFFIX, ''))
     // The in-use version consumes one keep slot; otherwise retain the newest keep versions.
-    const othersToKeep = present.some((slot) => isInUse(slot.name)) ? keep - 1 : keep
+    const othersToKeep = present.some((slot) => inUse.has(slot.version)) ? keep - 1 : keep
     const others = present
-      .filter((slot) => !isInUse(slot.name))
+      .filter((slot) => !inUse.has(slot.version))
       .sort((left, right) => right.mtimeMs - left.mtimeMs)
     for (const [index, slot] of others.entries()) {
       if (index < othersToKeep) {
@@ -87,7 +85,7 @@ export function pruneDesktopOrcadArtifactCache(
     inUseVersions: new Set([
       ...materializedOrcadArtifactVersions(),
       ...(live ? [live] : []),
-      ...daemonSlots.map((slot) => slot.replace(REPAIR_SUFFIX, '')),
+      ...daemonSlots.flatMap((slot) => orcadArtifactSlotVersion(slot) ?? []),
       ...alsoInUse
     ])
   })
