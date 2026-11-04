@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
+import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import {
   _resetTerminalViewAttributesForTest,
@@ -10,7 +10,7 @@ import {
   setTerminalViewerColorsListener
 } from '../../../runtime/terminal-view-attribute-store'
 
-import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import {
   _resetColorQueryReplyColorsForTest,
   getLocalPtyProvider,

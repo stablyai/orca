@@ -5,6 +5,7 @@ import {
 import { revealStructuredAgentSession } from './structured-agent-session-reveal'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { StructuredAttentionRead } from '../../../shared/agent-session/agent-session-attention'
 import * as providerSupport from './structured-agent-session-provider-support'
 import type {
   StructuredAgentSessionHostDeps,
@@ -55,6 +56,33 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
   const journalOf = async (id: string) => (await context().conversation(id)).journal
   return {
     readModelCatalog,
+    attentionReads: {
+      workspace: async (
+        location: AgentSessionExecutionLocation
+      ): Promise<(StructuredAttentionRead & { scope: AgentSessionExecutionLocation })[]> => {
+        const { deps, sessions } = context()
+        const reads = await Promise.all(
+          deps.store.workspaceAttentionReads(location).map(async (read) => {
+            const journal = sessions.get(read.sessionId)?.journal
+            try {
+              return journal
+                ? { ...read, observedCursor: await journal.readInOrder(journal.cursor) }
+                : read
+            } catch (error) {
+              deps.logger.warn('capturing a workspace attention boundary failed', {
+                scope: 'workspace-attention-read',
+                sessionId: read.sessionId,
+                error
+              })
+              return null
+            }
+          })
+        )
+        return reads.flatMap((read) => (read ? [read] : []))
+      },
+      sessionLocation: (id: string): AgentSessionExecutionLocation | null =>
+        context().deps.store.getConversation(id)?.location ?? null
+    },
     queuedSendAnswer: async (id: string, messageId: string) =>
       queuedSendAnswer(await journalOf(id), messageId),
     sendAnswer: async (id: string, messageId: string) =>

@@ -16,7 +16,7 @@ import {
   TerminalStreamOpcode,
   encodeTerminalStreamFrame,
   encodeTerminalStreamText
-} from '../../shared/terminal-stream-protocol'
+} from '../../shared/terminal/stream/terminal-stream-protocol'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { generateKeyPair } from '../../shared/e2ee-crypto'

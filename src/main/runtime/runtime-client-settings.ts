@@ -8,7 +8,7 @@ import { TASK_PROVIDERS } from '../../shared/task-providers'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
-} from '../../shared/terminal-quick-commands'
+} from '../../shared/terminal/quick-commands/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeSourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../shared/source-control/listing/source-control-group-order'
@@ -18,7 +18,7 @@ import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/nativ
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 import { nativeChatQueueFollowUps } from '../../shared/native-chat/input/native-chat-follow-up-behavior'
-import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
