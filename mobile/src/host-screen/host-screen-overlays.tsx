@@ -1,10 +1,11 @@
 import { openExternalLink } from '../platform/external-link'
 import { Pressable, Text, View } from 'react-native'
-import { Moon, Pin, PinOff } from 'lucide-react-native'
+import { FolderPlus, Moon, Pin, PinOff, Plus } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { useWorkspaceServer } from '../transport/workspace-server'
-import { ActionSheetContent } from '../components/ActionSheetModal'
+import { ActionSheetContent, ActionSheetModal } from '../components/ActionSheetModal'
+import { AddProjectModal } from '../components/AddProjectModal'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { ConfirmModal } from '../components/ConfirmModal'
@@ -212,9 +213,41 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         onCancel={() => state.setConfirmRemoveHost(false)}
       />
 
+      {/* The + button's two-choice sheet, mirroring the desktop + area's two buttons.
+          closeBeforePress: iOS drops a second native modal presented while this one is
+          still dismissing, so both rows fire only after the sheet unmounted. */}
+      <ActionSheetModal
+        visible={state.showPlusActionSheet}
+        actions={[
+          {
+            label: 'New workspace',
+            icon: Plus,
+            closeBeforePress: true,
+            onPress: actions.openNewWorktreeModal
+          },
+          {
+            label: 'Add project',
+            icon: FolderPlus,
+            closeBeforePress: true,
+            onPress: actions.openAddProject
+          }
+        ]}
+        onClose={() => state.setShowPlusActionSheet(false)}
+      />
+
+      <AddProjectModal
+        visible={state.showAddProject}
+        client={client}
+        onProjectAdded={(repo) => void actions.handleProjectAdded(repo)}
+        onClose={() => state.setShowAddProject(false)}
+      />
+
       <NewWorktreeModalController
         visible={state.showNewWorktree}
         client={client}
+        // Pass the preselection only while a manual open is pending — a route-driven
+        // opening must keep the last-visited default rather than a stale handoff repo.
+        preselectedRepo={state.showNewWorktree ? state.newWorktreePreselectedRepo : null}
         hostCapabilities={hostCapabilities}
         hostId={hostId}
         hostLabelById={state.hostLabelById}

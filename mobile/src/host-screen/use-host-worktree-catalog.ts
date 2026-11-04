@@ -113,22 +113,25 @@ export function useHostWorktreeCatalog(args: {
     [hostCapabilities]
   )
 
-  // A re-read asked for during a flight: that flight may predate the change that asked.
-  const fetchWorktreesQueuedRef = useRef(false)
   const fetchWorktrees = useCallback(
-    async (options: { allowDuringModal?: boolean; queueIfInFlight?: boolean } = {}) => {
+    async (options: {
+      allowDuringModal?: boolean
+      /** Superseded by awaiting the shared in-flight request; still accepted for refresh callers. */
+      queueIfInFlight?: boolean
+    } = {}): Promise<Worktree[] | undefined> => {
       if (!client || connState !== 'connected' || !hostId) {
-        return
+        return undefined
       }
       if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
-        return
+        return undefined
       }
-      // Coalesce overlapping polls so slow remote hosts cannot accumulate worktree.ps requests.
-      if (fetchWorktreesInFlightRef.current) {
-        fetchWorktreesQueuedRef.current ||= options.queueIfInFlight === true
-        return
+      // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests during
+      // polling; a concurrent caller awaits the shared in-flight request instead of returning
+      // empty-handed (the Add project handoff depends on getting the refreshed list back).
+      const inFlight = fetchWorktreesInFlightRef.current
+      if (inFlight) {
+        return inFlight
       }
-      fetchWorktreesInFlightRef.current = true
       const requestClient = client
       const requestHostId = hostId
       void fetchServerRows(requestClient)
@@ -149,31 +152,36 @@ export function useHostWorktreeCatalog(args: {
       const dropFirstPage = () =>
         setWorktrees((current) => (current === firstPageRef.current ? [] : current))
 
-      try {
-        const fetched = await worktreeCatalogRef.current
-          .fetch(requestClient, requestHostId)
-          .finally(() => {
-            fullSettled = true
-          })
-        if (clientRef.current !== requestClient || hostId !== requestHostId) {
-          return
-        }
-        if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
-          return
-        }
-        // Report catalog failure rather than zero workspaces so broken remote hosts remain diagnosable (STA-3123).
-        if (fetched.kind === 'request_failed') {
-          setCatalogError(fetched.code)
-          dropFirstPage()
-          return
-        }
-        if (fetched.pending.admission.kind === 'invalid') {
-          setCatalogError('invalid_response')
-          dropFirstPage()
-        }
-        // Even unchanged replies reassert host truth over optimistic local edits.
-        const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
-        if (confirmed) {
+      const request = (async (): Promise<Worktree[] | undefined> => {
+        try {
+          const fetched = await worktreeCatalogRef.current
+            .fetch(requestClient, requestHostId)
+            .finally(() => {
+              fullSettled = true
+            })
+          if (clientRef.current !== requestClient || hostId !== requestHostId) {
+            return undefined
+          }
+          if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
+            return undefined
+          }
+          // Why (STA-3123): a failed catalog request must not pass for "0 workspaces";
+          // surface it so a broken remote host is diagnosable instead of looking empty.
+          if (fetched.kind === 'request_failed') {
+            setCatalogError(fetched.code)
+            dropFirstPage()
+            return undefined
+          }
+          if (fetched.pending.admission.kind === 'invalid') {
+            setCatalogError('invalid_response')
+            dropFirstPage()
+          }
+          // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
+          // host truth over optimistic local edits regardless of payload size.
+          const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
+          if (!confirmed) {
+            return undefined
+          }
           // Confirmed rows may keep the first page's array; a later failed poll must not clear them.
           firstPageRef.current = null
           setCatalogError(null)
@@ -215,22 +223,23 @@ export function useHostWorktreeCatalog(args: {
               return serverPinned
             })
           }
+          return confirmed
+        } catch (error) {
+          if (clientRef.current === requestClient && hostId === requestHostId) {
+            // Distinguish refused host payloads from connectivity failures; this code is shown verbatim (STA-3123).
+            setCatalogError(
+              error instanceof RpcIncompatibleReplyError ? 'invalid_response' : 'network_error'
+            )
+            dropFirstPage()
+          }
+          return undefined
         }
-      } catch (error) {
-        if (clientRef.current === requestClient && hostId === requestHostId) {
-          // Distinguish refused host payloads from connectivity failures; this code is shown verbatim (STA-3123).
-          setCatalogError(
-            error instanceof RpcIncompatibleReplyError ? 'invalid_response' : 'network_error'
-          )
-          dropFirstPage()
-        }
+      })()
+      fetchWorktreesInFlightRef.current = request
+      try {
+        return await request
       } finally {
-        fetchWorktreesInFlightRef.current = false
-        if (fetchWorktreesQueuedRef.current) {
-          fetchWorktreesQueuedRef.current = false
-          // The latest render's fetch, without this flight's modal override: the client may have changed.
-          void fetchWorktreesRef.current({ queueIfInFlight: true })
-        }
+        fetchWorktreesInFlightRef.current = null
       }
     },
     [client, connState, hostId, fetchServerRows]

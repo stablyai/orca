@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readdir, rm, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import {
@@ -7,6 +8,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import { resolveDefaultCreateProjectParent } from '../../shared/git/repo-default-locations'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
@@ -139,7 +141,7 @@ export class RuntimeRepositoryRegistrationController {
   }
 
   async create(
-    parentPath: string,
+    parentPath: string | undefined,
     name: string,
     kind: 'git' | 'folder' = 'git'
   ): Promise<
@@ -147,7 +149,6 @@ export class RuntimeRepositoryRegistrationController {
   > {
     const store = this.requireStore()
     const trimmedName = name.trim()
-    const trimmedParentPath = parentPath.trim()
     const repoKind: 'git' | 'folder' = kind === 'folder' ? 'folder' : 'git'
     if (!trimmedName) {
       return repoCreateFailure('nameEmpty')
@@ -155,6 +156,15 @@ export class RuntimeRepositoryRegistrationController {
     if (/[\\/]/.test(trimmedName) || trimmedName === '.' || trimmedName === '..') {
       return repoCreateFailure('nameInvalid')
     }
+    // Why: mobile callers cannot type host paths; an absent parent resolves to
+    // the same default policy the desktop create flow uses.
+    const trimmedParentPath = (
+      (parentPath ?? '').trim() ||
+      resolveDefaultCreateProjectParent({
+        settings: store.getSettings(),
+        home: homedir()
+      })
+    ).trim()
     if (!trimmedParentPath) {
       return repoCreateFailure('parentRequired')
     }

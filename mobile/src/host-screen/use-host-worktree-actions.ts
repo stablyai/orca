@@ -1,6 +1,8 @@
 import { useCallback } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
+import { REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import type { MobileWorkspaceRepo } from '../components/new-worktree-modal-types'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
 import { holdSessionLeave } from '../session/session-leave-guard'
 import { savePinnedIds } from '../storage/preferences'
@@ -26,7 +28,7 @@ export function useHostWorktreeActions(args: {
   client: RpcClient | null
   connState: ConnectionState
   embedded: boolean
-  fetchWorktrees: (options?: { allowDuringModal?: boolean }) => Promise<void>
+  fetchWorktrees: (options?: { allowDuringModal?: boolean }) => Promise<Worktree[] | undefined>
   forgetHostClient: ReturnType<typeof useForgetHostClient>
   hostCapabilities: readonly string[]
   hostId: string | undefined
@@ -54,9 +56,12 @@ export function useHostWorktreeActions(args: {
     setOptimisticActiveWorktreeIdentity,
     setPinnedIds,
     serverWorkspaces,
+    setNewWorktreePreselectedRepo,
     setNewWorktreeVisible,
     setServerNotice,
     setServerWorkspaces,
+    setShowAddProject,
+    setShowPlusActionSheet,
     setSleptIds,
     setWorktrees,
     worktrees
@@ -76,13 +81,36 @@ export function useHostWorktreeActions(args: {
   }, [router])
 
   const openNewWorktreeModal = useCallback(
-    () => setNewWorktreeVisible(true),
-    [setNewWorktreeVisible]
+    (preselectedRepo?: MobileWorkspaceRepo) => {
+      // Why: state, not the imperative ref — upstream's modal is now controlled by
+      // visible, so the preselection rides the same state that mounts it.
+      setNewWorktreePreselectedRepo(preselectedRepo ?? null)
+      setNewWorktreeVisible(true)
+    },
+    [setNewWorktreePreselectedRepo, setNewWorktreeVisible]
   )
   const closeNewWorktreeModal = useCallback(
     () => setNewWorktreeVisible(false),
     [setNewWorktreeVisible]
   )
+
+  // Why: hosts without the add-project capability never list it, so the + goes straight
+  // to the create form there — a one-row sheet would be an extra tap for nothing.
+  const addProjectSupported = hostCapabilities.includes(REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY)
+
+  const openPlusActionSheet = useCallback(() => {
+    if (addProjectSupported) {
+      setShowPlusActionSheet(true)
+      return
+    }
+    openNewWorktreeModal()
+  }, [addProjectSupported, openNewWorktreeModal, setShowPlusActionSheet])
+
+  const openAddProject = useCallback(() => {
+    if (addProjectSupported) {
+      setShowAddProject(true)
+    }
+  }, [addProjectSupported, setShowAddProject])
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
@@ -258,6 +286,22 @@ export function useHostWorktreeActions(args: {
     ]
   )
 
+  // Desktop parity for the standalone Add project: the handoff lands on the added repo's
+  // default checkout (main worktree), never a create-workspace form. A catalog with no main
+  // row for the repo leaves the user on the list, which by then shows the new project.
+  const handleProjectAdded = useCallback(
+    async (repo: MobileWorkspaceRepo) => {
+      const confirmed = await fetchWorktrees({ allowDuringModal: true })
+      const defaultCheckout = confirmed?.find(
+        (worktree) => worktree.repoId === repo.id && worktree.isMainWorktree
+      )
+      if (defaultCheckout) {
+        openWorktreeSession(defaultCheckout)
+      }
+    },
+    [fetchWorktrees, openWorktreeSession]
+  )
+
   const openFloatingWorkspace = useCallback(() => {
     // The floating sentinel has no worktree record to activate; tabs.list hydrates its host-owned tabs.
     navigateFromHostList(floatingWorkspaceSessionPath(hostId))
@@ -265,12 +309,15 @@ export function useHostWorktreeActions(args: {
 
   return {
     ...worktreeDelete,
+    handleProjectAdded,
     handleRemoveHost,
     leaveHost,
     navigateFromHostList,
+    openAddProject,
     openFloatingWorkspace,
     openNewWorktreeModal,
     closeNewWorktreeModal,
+    openPlusActionSheet,
     openWorktreeSession,
     putWorktreeToSleep,
     togglePin

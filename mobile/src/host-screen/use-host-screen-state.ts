@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
 import { getCachedWorktrees } from '../cache/worktree-cache'
+import type { MobileWorkspaceRepo } from '../components/new-worktree-modal-types'
 import { storedHostDescriptor, type HostStoredDescriptor } from './host-stored-identity'
 import type { RpcClient } from '../transport/rpc-client'
 import type { HostProfile } from '../transport/types'
@@ -21,8 +22,11 @@ export function useHostScreenState(
     hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
   )
   const clientRef = useRef<RpcClient | null>(null)
-  const fetchWorktreesInFlightRef = useRef(false)
-  // Use a ref: React may discard memoized values and silently reset the owned snapshot token.
+  // The in-flight worktree.ps request: concurrent fetchWorktrees callers await it rather
+  // than each returning empty-handed (the Add project handoff needs the refreshed list).
+  const fetchWorktreesInFlightRef = useRef<Promise<Worktree[] | undefined> | null>(null)
+  // Why: useRef, not useMemo — React may discard memoized values, which would silently
+  // reset the snapshot token this object exists to own.
   const worktreeCatalogRef = useRef(new WorktreeCatalogSnapshotClient())
   const fetchRepoMetadataInFlightRef = useRef(new WeakSet<RpcClient>())
   const fetchRepoMetadataPendingRef = useRef(new WeakSet<RpcClient>())
@@ -73,6 +77,14 @@ export function useHostScreenState(
     newWorktreeModalVisibleRef.current = visible
     setShowNewWorktree(visible)
   }, [])
+  // The Add project handoff's repo: upserted and preselected in the create form on the
+  // same open; cleared when the sheet closes or opens without one.
+  const [newWorktreePreselectedRepo, setNewWorktreePreselectedRepo] =
+    useState<MobileWorkspaceRepo | null>(null)
+  // The + button's two-choice sheet (New workspace / Add project), and the Add project
+  // sheet it opens — both plain drawer state, no route action behind them in v1.
+  const [showPlusActionSheet, setShowPlusActionSheet] = useState(false)
+  const [showAddProject, setShowAddProject] = useState(false)
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [showPinnedInGroups, setShowPinnedInGroups] = useState(false)
@@ -125,15 +137,21 @@ export function useHostScreenState(
     setServedProjectSections,
     setDesktopRepos,
     setNewWorktreeVisible,
+    setNewWorktreePreselectedRepo,
     setSearch,
     setServerNotice,
     setServerWorkspaces,
+    setShowAddProject,
+    setShowPlusActionSheet,
     setShowWorkspaceOptions,
     setShowPinnedInGroups,
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
+    newWorktreePreselectedRepo,
+    showAddProject,
     showNewWorktree,
+    showPlusActionSheet,
     showWorkspaceOptions,
     showPinnedInGroups,
     setView,

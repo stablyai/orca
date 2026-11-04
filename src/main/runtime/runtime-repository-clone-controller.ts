@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
 import { mkdir } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import { resolveDefaultCloneDestination } from '../../shared/git/repo-default-locations'
 import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
@@ -38,17 +40,15 @@ export class RuntimeRepositoryCloneController {
 
   async clone(
     url: string,
-    destination: string,
+    destination: string | undefined,
     executionHostId?: ExecutionHostId | null
   ): Promise<Repo> {
-    if (!this.deps.getStore()) {
+    const store = this.deps.getStore()
+    if (!store) {
       throw new Error('runtime_unavailable')
     }
     const trimmedUrl = url.trim()
-    const trimmedDestination = destination.trim()
-    if (!trimmedDestination) {
-      throw new Error('Clone destination is required')
-    }
+    const trimmedDestination = (destination ?? '').trim() || this.defaultDestination(store)
     const clonePath = deriveValidatedClonePath({ url: trimmedUrl, destination: trimmedDestination })
     await refuseWslHostWindowsDrivePath(trimmedDestination)
     const clonePathKey = getClonePathComparisonKey(clonePath)
@@ -79,6 +79,12 @@ export class RuntimeRepositoryCloneController {
         this.inFlightByPath.delete(clonePathKey)
       }
     }
+  }
+
+  // Why: mobile callers cannot type host paths; an absent destination resolves to
+  // the same default policy the desktop Add Repo clone flow uses.
+  private defaultDestination(store: RuntimeStore): string {
+    return resolveDefaultCloneDestination({ settings: store.getSettings(), home: homedir() })
   }
 
   private async cloneAfterPathLock(

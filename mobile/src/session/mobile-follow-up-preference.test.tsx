@@ -265,7 +265,7 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
 it('existing phone workspace event reader ignores additive preference snapshot and events', async () => {
   const { startHostWorktreeRefresh } = await import('../worktree/host-worktree-refresh')
   const host = connection()
-  const fetchWorktrees = vi.fn(async () => {}),
+  const fetchWorktrees = vi.fn(async () => undefined),
     fetchRepoMetadata = vi.fn(async () => {}),
     syncViewSettings = vi.fn(async () => {})
   const stop = startHostWorktreeRefresh({

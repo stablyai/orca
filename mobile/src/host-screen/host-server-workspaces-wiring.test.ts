@@ -128,7 +128,7 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
     rows: Worktree[]
     hostContextOf: WorktreeHostContextOf
     state?: ReturnType<typeof useHostScreenState>
-    fetch?: () => Promise<void>
+    fetch?: () => Promise<Worktree[] | undefined>
     actions?: ReturnType<typeof useHostWorktreeActions>
   } = { rows: [], hostContextOf: NO_WORKTREE_HOST_CONTEXT }
   function Probe(): null {
@@ -177,7 +177,7 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
   const poll = async (): Promise<void> => {
     await act(async () => {
       await held.fetch?.()
-      await vi.waitFor(() => expect(held.state?.fetchWorktreesInFlightRef.current).toBe(false))
+      await vi.waitFor(() => expect(held.state?.fetchWorktreesInFlightRef.current).toBe(null))
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
   }

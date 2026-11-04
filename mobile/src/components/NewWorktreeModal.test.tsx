@@ -64,6 +64,7 @@ import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mob
 import { MOBILE_RELAY_HOSTS_LIST_METHOD } from '../../../src/shared/mobile-relay-hosts-contract'
 import { NewWorktreeModal } from './NewWorktreeModal'
 import { NewWorktreeModalController } from './NewWorktreeModalController'
+import { NewWorktreeFormSheet } from './NewWorktreeFormSheet'
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const RelayedOptionsSchema = z.object({ envelope: z.object({ executionHost: z.string() }) })
@@ -765,5 +766,54 @@ describe('NewWorktreeModal project targets', () => {
 
     expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual(['', ''])
     expect(sendRequest.mock.calls.filter(([method]) => method === 'repo.list')).toHaveLength(2)
+  })
+
+  it('upserts and selects a repo the phone just added over the list default', async () => {
+    setCachedRepos('host-added', repos)
+    const added = {
+      id: 'repo-added',
+      displayName: 'fresh-clone',
+      path: '/srv/fresh-clone',
+      kind: 'git' as const
+    }
+    // Why repo.list never answers: the cached rows already offer a default selection, so
+    // only the preselection can be what selected the added repo this early.
+    const sendRequest = vi.fn().mockImplementation((method: string) => {
+      if (method === 'status.get') {
+        return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
+      }
+      return new Promise(() => {})
+    })
+    // Why onStateChange: upstream's create-capability hook subscribes on mount; it never
+    // fires here, which is exactly the always-connected world this test assumes.
+    const client = {
+      sendRequest,
+      onStateChange: () => () => {},
+      getLastConnectedAt: () => 0,
+      getGeneration: () => 0,
+      getState: () => 'connected'
+    } as unknown as RpcClient
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client,
+          hostId: 'host-added',
+          preselectedRepo: added,
+          openExternalUrl: () => {},
+          onCreated: () => {},
+          onClose: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+
+    const sheet = renderer.root.findAll((node) => node.type === NewWorktreeFormSheet)[0]!
+    expect(sheet.props.project).toEqual(expect.objectContaining({ label: 'fresh-clone' }))
+    expect(pickerItems(renderer, 'Project')).toEqual([
+      expect.objectContaining({ label: 'orca' }),
+      expect.objectContaining({ label: 'fresh-clone' })
+    ])
   })
 })

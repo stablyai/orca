@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
+import type { Worktree } from '../worktree/workspace-list-types'
 
 // The desktop's server-list feed loads react-native; its timer never runs without a subscriber.
 vi.mock('react-native', () => ({ AppState: {} }))
@@ -48,7 +49,11 @@ async function mountCatalog(options: { deferFirstPage?: boolean } = {}) {
       settleFull = (response) => (response instanceof Error ? reject(response) : resolve(response))
     })
   })
-  const seen: { worktreeIds: string[]; loaded: boolean; fetch: () => Promise<void> } = {
+  const seen: {
+    worktreeIds: string[]
+    loaded: boolean
+    fetch: () => Promise<Worktree[] | undefined>
+  } = {
     worktreeIds: [],
     loaded: false,
     fetch: async () => {}
@@ -87,7 +92,7 @@ async function mountCatalog(options: { deferFirstPage?: boolean } = {}) {
 describe('the first page of a host catalog', () => {
   it('draws the first rows while the full catalog arrives, then the full catalog', async () => {
     const { seen, settleFull, unmount } = await mountCatalog()
-    let fetching: Promise<void> = Promise.resolve()
+    let fetching: Promise<Worktree[] | undefined> = Promise.resolve(undefined)
     await act(async () => {
       fetching = seen.fetch()
     })
@@ -103,7 +108,7 @@ describe('the first page of a host catalog', () => {
 
   it('does not leave the first page looking like the whole host when the full read fails', async () => {
     const { seen, settleFull, unmount } = await mountCatalog()
-    let fetching: Promise<void> = Promise.resolve()
+    let fetching: Promise<Worktree[] | undefined> = Promise.resolve(undefined)
     await act(async () => {
       fetching = seen.fetch()
     })
@@ -118,7 +123,7 @@ describe('the first page of a host catalog', () => {
 
   it('keeps a confirmed list that equals the first page through a later failed poll', async () => {
     const { seen, settleFull, unmount } = await mountCatalog()
-    let fetching: Promise<void> = Promise.resolve()
+    let fetching: Promise<Worktree[] | undefined> = Promise.resolve(undefined)
     await act(async () => {
       fetching = seen.fetch()
     })
@@ -141,7 +146,7 @@ describe('the first page of a host catalog', () => {
     const { seen, settleFull, settleFirstPage, unmount } = await mountCatalog({
       deferFirstPage: true
     })
-    let fetching: Promise<void> = Promise.resolve()
+    let fetching: Promise<Worktree[] | undefined> = Promise.resolve(undefined)
     await act(async () => {
       fetching = seen.fetch()
     })

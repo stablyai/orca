@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
+import type { Worktree } from '../worktree/workspace-list-types'
 
 // The desktop's server-list feed loads react-native; its timer never runs without a subscriber.
 vi.mock('react-native', () => ({ AppState: {} }))
@@ -35,8 +36,10 @@ async function fetchWith(fail: boolean) {
     }
     return response
   })
-  let current: { state: ReturnType<typeof useHostScreenState>; fetch: () => Promise<void> } | null =
-    null
+  let current: {
+    state: ReturnType<typeof useHostScreenState>
+    fetch: () => Promise<Worktree[] | undefined>
+  } | null = null
   function Probe(): null {
     const state = useHostScreenState('host-1')
     state.clientRef.current = client
@@ -66,7 +69,9 @@ async function fetchWith(fail: boolean) {
       return current
     }
     act(() => get().state.setActionError('Could not delete workspace.'))
-    await act(async () => get().fetch())
+    await act(async () => {
+      await get().fetch()
+    })
     expect(client.sendRequest).toHaveBeenCalledWith('worktree.ps', expect.anything())
     return {
       actionError: get().state.actionError,

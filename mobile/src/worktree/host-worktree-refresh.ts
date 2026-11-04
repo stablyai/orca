@@ -1,6 +1,7 @@
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
 import type { RpcClient } from '../transport/rpc-client'
 import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-connection'
+import type { Worktree } from './workspace-list-sections'
 
 const WORKTREE_REFRESH_MS = 3000
 
@@ -15,7 +16,7 @@ type HostAppState = {
 
 type HostWorktreeRefreshArgs = {
   client: Pick<RpcClient, 'subscribe'>
-  fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<void>
+  fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<Worktree[] | undefined>
   fetchRepoMetadata: (options?: RepoRefreshOptions) => Promise<void>
   /** Re-reads the Workspace options the phone shares with the desktop; `resend` retries unanswered changes. */
   syncViewSettings: (options?: { resend?: boolean }) => Promise<void>
