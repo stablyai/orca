@@ -219,6 +219,7 @@ export const AccountsSnapshotSchema = z
 
 export type RateLimitWindow = z.infer<typeof RateLimitWindowSchema>
 export type ProviderRateLimits = z.infer<typeof ProviderRateLimitsSchema>
+export type AccountProviderRateLimits = z.infer<typeof AccountProviderRateLimitsSchema>
 export type InactiveAccountUsage = z.infer<typeof InactiveAccountUsageSchema>
 export type RateLimitRuntimeTarget = z.infer<typeof RateLimitRuntimeTargetSchema>
 export type ClaudeAccountSummary = z.infer<typeof ClaudeAccountSummarySchema>

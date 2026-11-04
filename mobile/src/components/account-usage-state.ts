@@ -15,6 +15,7 @@ export {
   decodeAccountsSnapshot,
   ProviderRateLimitsSchema,
   RateLimitRuntimeTargetSchema,
+  type AccountProviderRateLimits,
   type AccountsSnapshot,
   type ClaudeAccountSummary,
   type CodexAccountSummary,
