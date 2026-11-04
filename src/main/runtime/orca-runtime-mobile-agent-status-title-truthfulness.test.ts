@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { projectSessionTabAgentStatus } from './rpc/methods/session-tab-agent-status-projection'
 
 vi.mock('electron', () => ({

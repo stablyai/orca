@@ -103,7 +103,7 @@ import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { runCliChatResume } from './cli-chat-resume-run'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import {
   clearWebSessionFocusIntent,

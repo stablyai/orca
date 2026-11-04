@@ -1,8 +1,9 @@
 /** Execute accepted Codex/Claude account restarts for unmounted local panes so input cannot stay blocked until reveal. */
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { AppState } from '@/store'
-import { useAppStore } from '@/store'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { LocatedCodexPane } from './located-codex-pane'
+
+import { type AppState, useAppStore } from '@/store'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import {
@@ -18,7 +19,7 @@ import {
   hasCachedWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { ptyDataHandlers } from './pty-dispatcher'
-import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
 import { restartPaneOwner } from './codex-restart-main-pane'
 import {
@@ -113,13 +114,6 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
       onSettled?.()
     }
   }
-}
-
-type LocatedCodexPane = {
-  worktreeId: string
-  tab: TerminalTab
-  leafId: string | null
-  generation: number
 }
 
 function locateCodexPane(state: AppState, ptyId: string): LocatedCodexPane | null {

@@ -15,6 +15,14 @@ export type JournalDraftAccess = {
   defer: (apply: () => void) => void
 }
 
+// Read overlays expose ordinary values; transaction drafts always supply isolation access.
+const plainAccess: JournalDraftAccess = {
+  wrap: (value) => value,
+  assign: () => undefined,
+  finish: (value) => value,
+  defer: () => undefined
+}
+
 export class JournalDraftMap<K, V> extends Map<K, V> {
   private readonly writes = new Map<K, V>()
   private readonly removed = new Set<K>()
@@ -25,9 +33,9 @@ export class JournalDraftMap<K, V> extends Map<K, V> {
 
   constructor(
     private readonly source: Map<K, V>,
-    private readonly access: JournalDraftAccess,
-    private readonly changed: () => void,
-    readonly path: string
+    private readonly access: JournalDraftAccess = plainAccess,
+    private readonly changed: () => void = () => undefined,
+    readonly path: string = ''
   ) {
     super()
   }
@@ -166,9 +174,9 @@ export class JournalDraftSet<T> extends Set<T> {
 
   constructor(
     private readonly source: Set<T>,
-    private readonly access: JournalDraftAccess,
-    private readonly changed: () => void,
-    readonly path: string
+    private readonly access: JournalDraftAccess = plainAccess,
+    private readonly changed: () => void = () => undefined,
+    readonly path: string = ''
   ) {
     super()
   }

@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { isStablePaneId } from '../../shared/stable-pane-id'
+import { isStablePaneId } from '../../shared/workspace-layout/stable-pane-id'
 import { agentHookServer } from '../agent-hooks/server'
 import { isValidPaneKey } from '../agent-hooks/server/server-status-identity'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../agent-hooks/migration-unsupported-pty-state'

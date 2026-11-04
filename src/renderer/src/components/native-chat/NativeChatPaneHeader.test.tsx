@@ -6,7 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
-import * as historyRequest from '../right-sidebar/ai-vault-panel-session-list-request'
+import * as historyRequest from '../right-sidebar/ai-vault/scanning/ai-vault-panel-session-list-request'
 
 const mocks = vi.hoisted(() => ({ launch: vi.fn(), resume: vi.fn(), close: vi.fn() }))
 vi.mock('@/store', async () => {

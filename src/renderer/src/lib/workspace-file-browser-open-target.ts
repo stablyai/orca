@@ -1,4 +1,4 @@
-import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
+import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing/markdown-internal-links'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
 import { isTwinWorkspace } from '@/lib/resolve-owner'

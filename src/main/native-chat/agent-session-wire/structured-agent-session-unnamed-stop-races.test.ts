@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { publishCodexTurnLifecycle } from '../../codex/codex-structured-journal-translation-turns'
+import { publishCodexTurnLifecycle } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import {
   adapterFor,
   fakeCodex,
   THREAD_ID as CODEX_THREAD
-} from '../../codex/codex-structured-session-adapter-fixture'
-import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
-import { settledWithin } from '../../codex/codex-structured-dispatch-test-support'
-import { CODEX_TURN_OPEN_WAIT_MS } from '../../codex/codex-structured-turn-open-wait'
-import type * as CodexTurnOpenWait from '../../codex/codex-structured-turn-open-wait'
-import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
+import { codexTurnLifecycleFake } from '../../codex/structured/journal/codex-turn-lifecycle-fake'
+import { settledWithin } from '../../codex/structured/turns/codex-structured-dispatch-test-support'
+import { CODEX_TURN_OPEN_WAIT_MS } from '../../codex/structured/turns/codex-structured-turn-open-wait'
+import type * as CodexTurnOpenWait from '../../codex/structured/turns/codex-structured-turn-open-wait'
+import type { CodexStructuredSessionAdapter } from '../../codex/structured/session-lifecycle/codex-structured-session-adapter'
 import {
   createRestTestRig,
   REST_TEST_CALLER as CALLER,
@@ -38,7 +38,7 @@ const openWaits = vi.hoisted(() => {
   } = { turnIds: [], ended: [], began: null, releaseAll: null }
   return state
 })
-vi.mock('../../codex/codex-structured-turn-open-wait', async (importOriginal) => {
+vi.mock('../../codex/structured/turns/codex-structured-turn-open-wait', async (importOriginal) => {
   const actual = await importOriginal<typeof CodexTurnOpenWait>()
   return {
     ...actual,

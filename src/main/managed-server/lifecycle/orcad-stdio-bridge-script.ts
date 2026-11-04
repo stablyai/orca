@@ -1,5 +1,5 @@
 // Sentinels skip noisy login profiles; base64 framing prevents PowerShell text decoding from corrupting bytes.
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { orcadPosixNodeRuntimeGlobs } from '../install/orcad-node-runtime-globs'
 
 export type OrcadStdioBridgeMode = 'raw' | 'base64'

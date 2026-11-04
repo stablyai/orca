@@ -18,7 +18,7 @@ vi.mock('./editor-shortcuts', () => ({
 
 import { CUSTOM_EDITOR_FLUSH_TIMEOUT_MS } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import PluginCustomEditorFrame from './PluginCustomEditorFrame'
-import { runAfterEditorFramesFlush, flushEditorFrames } from './editor-pending-flush'
+import { runAfterEditorFramesFlush, flushEditorFrames } from './save/flush/editor-pending-flush'
 
 const FILE_ID = '/repo/diagram.excalidraw'
 const READY = { orca: 1, kind: 'evt', event: 'ready', payload: { protocol: 1 } }

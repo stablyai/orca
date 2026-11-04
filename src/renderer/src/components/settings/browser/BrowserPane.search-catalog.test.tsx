@@ -39,7 +39,7 @@ vi.mock('@/store/index', () => ({
     })
 }))
 vi.mock('@/components/terminal-pane/pane-helpers', () => ({ isMacUserAgent: () => false }))
-vi.mock('../../sidebar/sidebar-host-options', () => ({
+vi.mock('../../sidebar/worktree-list/controls/sidebar-host-options', () => ({
   buildSidebarHostOptions: () => fake.hostOptions
 }))
 vi.mock('./BrowserHomePageSetting', () => ({

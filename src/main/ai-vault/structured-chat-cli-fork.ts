@@ -1,7 +1,7 @@
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import { getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { codexDatedRolloutRelativePath } from '../codex/codex-session-resume-home'
+import { getSystemCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
+import { codexDatedRolloutRelativePath } from '../codex/history/resume/codex-session-resume-home'
 import {
   agentForksConversations,
   agentForksThroughChat

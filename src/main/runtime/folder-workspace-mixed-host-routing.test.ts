@@ -8,7 +8,7 @@ import {
   ROUTING_REPOS
 } from '../../shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import type { ProjectGroup } from '../../shared/project-group-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { LayoutApplyOutcome } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { localDesktopSession } from '../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import {

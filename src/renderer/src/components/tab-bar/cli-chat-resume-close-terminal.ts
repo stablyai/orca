@@ -4,11 +4,11 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { collectTabPtyIds } from '../terminal/running-terminal-close-guard'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { toHostSessionPaneKey } from '../../../../shared/terminal-surface-id'
+import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   captureTerminalSurfaceIdentity,
   isRetainedTerminalSurfaceIdentity
-} from '../../../../shared/terminal-tab-close'
+} from '../../../../shared/workspace-layout/terminal-tab-close'
 import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalWait

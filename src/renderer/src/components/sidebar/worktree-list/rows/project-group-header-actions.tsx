@@ -14,7 +14,7 @@ import { getFolderWorkspacePathStatusDescription } from '@/lib/folder-workspace-
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { REPO_HEADER_ACTION_BUTTON_CLASS } from '../../repo-header-action-button-class'
+import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,

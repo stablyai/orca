@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { visitOrcadMigrationSessionEntities } from './orcad-destination-workspace-session'
 import { worktreeLabel } from './orcad-source-workspace-session-eligibility'
 

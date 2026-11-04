@@ -36,11 +36,11 @@ vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', async (i
 import { useAppStore } from '@/store'
 import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
+import { submitFolderWorkspaceCreate } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit'
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'

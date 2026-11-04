@@ -1,7 +1,7 @@
 // STA-6224: a user's close the paired host never received must be sent again, not dropped.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import '../../../shared/paired-terminal-tab-close-intent'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
+import '../../../shared/workspace-layout/paired-terminal-tab-close-intent'
 
 import {
   holdWebSessionCloseForReplay,

@@ -680,9 +680,9 @@ it.each([5, 50])(
   'isolates actual Customize labels from unrelated publications for %s mounted forms',
   async (rows) => {
     const { mountSourceDialog } =
-      await import('../../right-sidebar/source-control-action-dialog.test-fixture')
+      await import('../../right-sidebar/source-control/panel/source-control-action-dialog.test-fixture')
     const { SourceControlAgentActionDialog } =
-      await import('../../right-sidebar/SourceControlAgentActionDialog')
+      await import('../../right-sidebar/source-control/ai/SourceControlAgentActionDialog')
     const inventory = await import('../../agent/use-agent-launch-picker-inventory')
     const inner = vi.spyOn(inventory, 'useAgentLaunchPickerInventory')
     const sources = vi.spyOn(sourceProjection, 'sourceControlPickerDraft')

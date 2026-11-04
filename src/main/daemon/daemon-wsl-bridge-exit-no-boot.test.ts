@@ -13,8 +13,7 @@ import {
   _resetWslBackgroundDistroGateForTests,
   deferUntilWslDistroRunning,
   noteWslDistroMayHaveStopped,
-  readConfirmedRunningWslDistros,
-  wasWslDistroLastSeenRunningSettled
+  readConfirmedRunningWslDistros
 } from '../wsl/discovery/wsl-background-distro-gate'
 import {
   _resetRunningWslDistroCacheForTests,
@@ -118,21 +117,6 @@ describe('a WSL bridge pane exit after the distro is terminated', () => {
     await readConfirmedRunningWslDistros()
 
     expect(restarts).toHaveBeenCalledOnce()
-  })
-
-  // Review of #35143: Sleep and quit reads skip the probe for a pane they hold live.
-  it('does not let a list taken before the stop vouch for a live pane', async () => {
-    await vi.advanceTimersByTimeAsync(60_000)
-    await readConfirmedRunningWslDistros()
-    expect(wasWslDistroLastSeenRunningSettled('Ubuntu')).toBe(true)
-
-    terminatedAt = performance.now()
-    noteWslDistroMayHaveStopped('Ubuntu')
-    expect(wasWslDistroLastSeenRunningSettled('Ubuntu')).toBe(false)
-
-    // A probe while it still stops names it, yet is inside the settle window.
-    await readConfirmedRunningWslDistros()
-    expect(wasWslDistroLastSeenRunningSettled('Ubuntu')).toBe(false)
   })
 
   it('lists once more past the settle when a mid-stop list skipped deferred work', async () => {

@@ -9,7 +9,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contra
 import { projectStructuredAgentSessionStatusSummary } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { AgentHookServer, _internals } from '../../agent-hooks/server'
 import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
-import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
+import { createCodexJournalTranslator } from '../../codex/structured/journal/codex-structured-journal-translation'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import {
   subagentJournalBody,

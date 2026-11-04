@@ -14,7 +14,7 @@ import {
   codexHomeSessionsDir,
   uniqueDirs
 } from '../ai-vault/session-scanner-roots'
-import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir

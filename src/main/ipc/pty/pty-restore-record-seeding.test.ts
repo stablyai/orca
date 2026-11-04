@@ -10,7 +10,7 @@ import {
 } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeResolvedWorktreeCache } from '../../runtime/runtime-resolved-worktree-cache'
@@ -61,10 +61,10 @@ vi.mock('../../memory/pty-registry', () =>
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../../codex/codex-pane-account-registry', () =>
+vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
