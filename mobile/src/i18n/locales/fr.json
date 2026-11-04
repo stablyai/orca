@@ -232,7 +232,18 @@
       "selectText": "Sélectionner le texte"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Fermer l'image"
+      "closeImage": "Fermer l'image",
+      "imageActions": "Actions sur l'image",
+      "copyImage": "Copier l'image",
+      "saveImage": "Enregistrer l'image",
+      "share": "Partager…",
+      "imageCopied": "Image copiée",
+      "imageSaved": "Image enregistrée",
+      "copyFailed": "Impossible de copier l'image",
+      "saveFailed": "Impossible d'enregistrer l'image",
+      "shareFailed": "Impossible de partager l'image",
+      "photosAccessDenied": "Autorisez Orca à ajouter des photos dans Réglages",
+      "imageTooLarge": "Cette image est trop volumineuse"
     },
     "nativeChatProse": {
       "attachedImage": "Image jointe",

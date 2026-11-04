@@ -228,7 +228,18 @@
       "selectText": "Metni seç"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Görseli kapat"
+      "closeImage": "Görseli kapat",
+      "imageActions": "Görsel işlemleri",
+      "copyImage": "Görseli kopyala",
+      "saveImage": "Görseli kaydet",
+      "share": "Paylaş…",
+      "imageCopied": "Görsel kopyalandı",
+      "imageSaved": "Görsel kaydedildi",
+      "copyFailed": "Görsel kopyalanamadı",
+      "saveFailed": "Görsel kaydedilemedi",
+      "shareFailed": "Görsel paylaşılamadı",
+      "photosAccessDenied": "Ayarlar'da Orca'nın fotoğraf eklemesine izin verin",
+      "imageTooLarge": "Bu görsel çok büyük"
     },
     "nativeChatProse": {
       "attachedImage": "Ekli görsel",

@@ -1,0 +1,67 @@
+import { useMemo } from 'react'
+import { readRasterImageDataUri } from '../../../src/shared/image-data-uri'
+import type { BridgeImageRunParams } from '../mobile-web-shell/bridge/bridge-image-verbs'
+import {
+  NativeVerbError,
+  useNativeVerbs,
+  type NativeVerbs
+} from '../mobile-web-shell/bridge/use-native-verbs'
+import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../session/mobile-clipboard-image-upload-chunk'
+import {
+  ImageActionRefusedError,
+  type ImageAction,
+  type ImageActions
+} from './image-actions-contract'
+
+// Whole four-character groups per chunk keep each one canonical base64 and its byte offset exact.
+async function stageInChunks(verbs: NativeVerbs, base64: string): Promise<number> {
+  const chunkChars = MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+  for (let start = 0; start < base64.length; start += chunkChars) {
+    await verbs.stageImage((start / 4) * 3, base64.slice(start, start + chunkChars))
+  }
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
+  return (base64.length / 4) * 3 - padding
+}
+
+function refusal(error: unknown): unknown {
+  if (!(error instanceof NativeVerbError)) {
+    return error
+  }
+  if (error.reason === 'native_image_permission_denied') {
+    return new ImageActionRefusedError('photos-access-denied', error.message)
+  }
+  return error.reason === 'native_media_too_large'
+    ? new ImageActionRefusedError('too-large', error.message)
+    : error
+}
+
+// The page holds host and inline images as base64 data URIs and stages them; the shell downloads web images itself.
+function imageAction(verbs: NativeVerbs, uri: string): ImageAction | null {
+  const data = readRasterImageDataUri(uri)
+  if (!data && !/^https:/i.test(uri)) {
+    return null
+  }
+  return async (operation) => {
+    try {
+      const source: BridgeImageRunParams['source'] = data
+        ? {
+            kind: 'staged',
+            mime: data.mimeType,
+            byteLength: await stageInChunks(verbs, data.base64)
+          }
+        : { kind: 'url', url: uri }
+      await verbs.runImageAction({ operation, source })
+    } catch (error) {
+      throw refusal(error)
+    }
+  }
+}
+
+// Older shells lack native.image, so callers get null and offer no image actions.
+export function useImageActions(): ImageActions | null {
+  const verbs = useNativeVerbs()
+  return useMemo(
+    () => (verbs.canActOnImages ? { forImage: (uri) => imageAction(verbs, uri) } : null),
+    [verbs]
+  )
+}

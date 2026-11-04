@@ -14,11 +14,14 @@ const EXTENSION_BY_MIME: Readonly<Record<string, string>> = {
   'image/heic': 'heic'
 }
 
-export function mobilePickedFileFallbackName(mime: string, index: number): string {
+export function mobileFileExtensionForMime(mime: string): string {
   const base = mime.split(';')[0]!.trim().toLowerCase()
-  const known = EXTENSION_BY_MIME[base]
   const subtype = base.split('/')[1] ?? ''
-  const extension = known ?? (/^[a-z0-9]{1,8}$/.test(subtype) ? subtype : '')
+  return EXTENSION_BY_MIME[base] ?? (/^[a-z0-9]{1,8}$/.test(subtype) ? subtype : '')
+}
+
+export function mobilePickedFileFallbackName(mime: string, index: number): string {
+  const extension = mobileFileExtensionForMime(mime)
   return extension ? `attachment-${index}.${extension}` : `attachment-${index}`
 }
 

@@ -3100,7 +3100,18 @@
       "prompt": "Ask anything, @ to mention files, / for commands"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Close image"
+      "closeImage": "Close image",
+      "imageActions": "Image actions",
+      "copyImage": "Copy image",
+      "saveImage": "Save image",
+      "share": "Share…",
+      "imageCopied": "Image copied",
+      "imageSaved": "Image saved",
+      "copyFailed": "Couldn't copy image",
+      "saveFailed": "Couldn't save image",
+      "shareFailed": "Couldn't share image",
+      "photosAccessDenied": "Allow Orca to add photos in Settings",
+      "imageTooLarge": "This image is too large"
     },
     "nativeChatVisual": {
       "defaultTitle": "Visualization",

@@ -232,7 +232,18 @@
       "selectText": "Selecionar texto"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Fechar imagem"
+      "closeImage": "Fechar imagem",
+      "imageActions": "Ações da imagem",
+      "copyImage": "Copiar imagem",
+      "saveImage": "Salvar imagem",
+      "share": "Compartilhar…",
+      "imageCopied": "Imagem copiada",
+      "imageSaved": "Imagem salva",
+      "copyFailed": "Não foi possível copiar a imagem",
+      "saveFailed": "Não foi possível salvar a imagem",
+      "shareFailed": "Não foi possível compartilhar a imagem",
+      "photosAccessDenied": "Permita que o Orca adicione fotos em Ajustes",
+      "imageTooLarge": "Esta imagem é grande demais"
     },
     "nativeChatProse": {
       "attachedImage": "Imagem anexada",

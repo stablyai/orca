@@ -10,10 +10,13 @@ import type { PanZoomSize } from '../../../../../src/shared/pan-zoom-view'
 import { MobilePanZoomImage } from '../../../components/MobilePanZoomImage'
 import { REDUCED_MOTION_FADE_MS, SHEET_CURVE } from '../../../components/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../platform/use-reduced-motion'
+import { MobileImageViewerActions } from './MobileImageViewerActions'
 
 const VIEWER_EASING = Easing.bezier(...SHEET_CURVE)
 const VIEWER_OPEN_MS = 250
 const VIEWER_CLOSE_MS = 200
+// Page Pressables ignore hitSlop, so each round button is itself the 44pt target.
+const BUTTON_SIZE = 44
 
 /** Full-screen pinch, drag and double-tap zoom for chat and Markdown images, and Mermaid diagrams. */
 export function MobileNativeChatImageViewer({
@@ -53,6 +56,17 @@ export function MobileNativeChatImageViewer({
         >
           <X size={22} color={colors.textPrimary} strokeWidth={2} />
         </Pressable>
+        <MobileImageViewerActions
+          uri={uri}
+          buttonStyle={[
+            styles.close,
+            {
+              top: insets.top + spacing.sm,
+              right: insets.right + spacing.lg + BUTTON_SIZE + spacing.sm
+            }
+          ]}
+          toastInset={insets.bottom}
+        />
       </Animated.View>
     </Modal>
   )
@@ -105,11 +119,10 @@ const styles = themedStyleSheet(() => ({
   stage: {
     flex: 1
   },
-  // Page Pressables ignore hitSlop, so the button itself is the 44pt target.
   close: {
     position: 'absolute',
-    width: 44,
-    height: 44,
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.pill,

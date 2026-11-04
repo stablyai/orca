@@ -228,7 +228,18 @@
       "selectText": "選取文字"
     },
     "nativeChatImageViewer": {
-      "closeImage": "關閉圖片"
+      "closeImage": "關閉圖片",
+      "imageActions": "影像動作",
+      "copyImage": "拷貝影像",
+      "saveImage": "儲存影像",
+      "share": "分享⋯",
+      "imageCopied": "已拷貝影像",
+      "imageSaved": "已儲存影像",
+      "copyFailed": "無法拷貝影像",
+      "saveFailed": "無法儲存影像",
+      "shareFailed": "無法分享影像",
+      "photosAccessDenied": "請在「設定」中允許 Orca 加入照片",
+      "imageTooLarge": "影像過大"
     },
     "nativeChatProse": {
       "attachedImage": "附加的圖片",
