@@ -9,11 +9,12 @@ import type {
 } from '../../../../src/shared/github/comment-types'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
-import { formatPrCommentRelativeTime } from '../../../../src/shared/pr-comment-time'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 
 export type PRCommentRepoSlug = { owner: string; repo: string; host?: string }
@@ -41,6 +42,49 @@ const REACTION_EMOJI: Record<GitHubReactionContent, string> = {
   hooray: '🎉',
   rocket: '🚀',
   eyes: '👀'
+}
+
+function commentRelativeTime(iso: string, now: number, t: Translate): string {
+  const timestamp = Date.parse(iso)
+  if (Number.isNaN(timestamp)) {
+    return ''
+  }
+  const delta = now - timestamp
+  if (delta < 60_000) {
+    return t('pullRequest.commentCard.justNow', 'just now')
+  }
+  const minutes = Math.floor(delta / 60_000)
+  if (minutes < 60) {
+    const count = minutes
+    return count === 1
+      ? t('pullRequest.commentCard.minutesAgo_one', '{{count}}m ago', { count })
+      : t('pullRequest.commentCard.minutesAgo_other', '{{count}}m ago', { count })
+  }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    const count = hours
+    return count === 1
+      ? t('pullRequest.commentCard.hoursAgo_one', '{{count}}h ago', { count })
+      : t('pullRequest.commentCard.hoursAgo_other', '{{count}}h ago', { count })
+  }
+  const days = Math.floor(hours / 24)
+  if (days < 30) {
+    const count = days
+    return count === 1
+      ? t('pullRequest.commentCard.daysAgo_one', '{{count}}d ago', { count })
+      : t('pullRequest.commentCard.daysAgo_other', '{{count}}d ago', { count })
+  }
+  const months = Math.floor(days / 30)
+  if (months < 12) {
+    const count = months
+    return count === 1
+      ? t('pullRequest.commentCard.monthsAgo_one', '{{count}}mo ago', { count })
+      : t('pullRequest.commentCard.monthsAgo_other', '{{count}}mo ago', { count })
+  }
+  const count = Math.floor(months / 12)
+  return count === 1
+    ? t('pullRequest.commentCard.yearsAgo_one', '{{count}}y ago', { count })
+    : t('pullRequest.commentCard.yearsAgo_other', '{{count}}y ago', { count })
 }
 
 function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
@@ -74,6 +118,7 @@ export const PRCommentCard = memo(function PRCommentCard({
   now: number
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [replyOpen, setReplyOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -126,7 +171,7 @@ export const PRCommentCard = memo(function PRCommentCard({
         >
           {comment.author}
         </Text>
-        <Text style={styles.time}>· {formatPrCommentRelativeTime(comment.createdAt, now)}</Text>
+        <Text style={styles.time}>· {commentRelativeTime(comment.createdAt, now, t)}</Text>
         {fileLabel ? (
           <Text style={styles.path} numberOfLines={1}>
             {fileLabel}
@@ -134,7 +179,9 @@ export const PRCommentCard = memo(function PRCommentCard({
         ) : null}
         {comment.isResolved ? (
           <View style={styles.resolvedChip}>
-            <Text style={styles.resolvedChipText}>resolved</Text>
+            <Text style={styles.resolvedChipText}>
+              {t('pullRequest.commentCard.resolved', 'resolved')}
+            </Text>
           </View>
         ) : null}
         {comment.url ? (
@@ -143,7 +190,7 @@ export const PRCommentCard = memo(function PRCommentCard({
             onPress={() => openExternalLink(comment.url)}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Open comment on GitHub"
+            accessibilityLabel={t('pullRequest.commentCard.openOnGitHub', 'Open comment on GitHub')}
           >
             <ExternalLink size={14} color={colors.textSecondary} strokeWidth={2.2} />
           </Pressable>
@@ -152,8 +199,8 @@ export const PRCommentCard = memo(function PRCommentCard({
       {editOpen && actions ? (
         <View style={styles.composer}>
           <PRCommentComposer
-            placeholder="Edit comment…"
-            submitLabel="Save"
+            placeholder={t('pullRequest.commentCard.editPlaceholder', 'Edit comment…')}
+            submitLabel={t('common.save', 'Save')}
             submitting={editBusy}
             initialBody={comment.body}
             onSubmit={submitEdit}
@@ -175,10 +222,12 @@ export const PRCommentCard = memo(function PRCommentCard({
             disabled={replyBusy}
             hitSlop={6}
             accessibilityRole="button"
-            accessibilityLabel="Reply to comment"
+            accessibilityLabel={t('pullRequest.commentCard.replyToComment', 'Reply to comment')}
           >
             <CornerDownRight size={13} color={colors.textSecondary} strokeWidth={2.2} />
-            <Text style={styles.actionButtonText}>Reply</Text>
+            <Text style={styles.actionButtonText}>
+              {t('pullRequest.commentCard.reply', 'Reply')}
+            </Text>
           </Pressable>
           {canMutate ? (
             <Pressable
@@ -191,10 +240,10 @@ export const PRCommentCard = memo(function PRCommentCard({
               disabled={editBusy}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel="Edit comment"
+              accessibilityLabel={t('pullRequest.commentCard.editComment', 'Edit comment')}
             >
               <Pencil size={13} color={colors.textSecondary} strokeWidth={2.2} />
-              <Text style={styles.actionButtonText}>Edit</Text>
+              <Text style={styles.actionButtonText}>{t('common.edit', 'Edit')}</Text>
             </Pressable>
           ) : null}
           {canMutate ? (
@@ -204,10 +253,12 @@ export const PRCommentCard = memo(function PRCommentCard({
               disabled={deleteBusy}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel="Delete comment"
+              accessibilityLabel={t('pullRequest.commentCard.deleteComment', 'Delete comment')}
             >
               <Trash2 size={13} color={colors.textSecondary} strokeWidth={2.2} />
-              <Text style={styles.actionButtonText}>{deleteBusy ? '…' : 'Delete'}</Text>
+              <Text style={styles.actionButtonText}>
+                {deleteBusy ? '…' : t('common.delete', 'Delete')}
+              </Text>
             </Pressable>
           ) : null}
           {canResolve ? (
@@ -217,7 +268,11 @@ export const PRCommentCard = memo(function PRCommentCard({
               disabled={resolveBusy}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel={comment.isResolved ? 'Unresolve thread' : 'Resolve thread'}
+              accessibilityLabel={
+                comment.isResolved
+                  ? t('pullRequest.commentCard.unresolveThread', 'Unresolve thread')
+                  : t('pullRequest.commentCard.resolveThread', 'Resolve thread')
+              }
             >
               {comment.isResolved ? (
                 <Undo2 size={13} color={colors.textSecondary} strokeWidth={2.2} />
@@ -225,7 +280,11 @@ export const PRCommentCard = memo(function PRCommentCard({
                 <Check size={13} color={colors.textSecondary} strokeWidth={2.2} />
               )}
               <Text style={styles.actionButtonText}>
-                {resolveBusy ? '…' : comment.isResolved ? 'Unresolve' : 'Resolve'}
+                {resolveBusy
+                  ? '…'
+                  : comment.isResolved
+                    ? t('pullRequest.commentCard.unresolve', 'Unresolve')
+                    : t('pullRequest.commentCard.resolve', 'Resolve')}
               </Text>
             </Pressable>
           ) : null}
@@ -234,8 +293,8 @@ export const PRCommentCard = memo(function PRCommentCard({
       {replyOpen && !editOpen && actions ? (
         <View style={styles.composer}>
           <PRCommentComposer
-            placeholder="Write a reply…"
-            submitLabel="Reply"
+            placeholder={t('pullRequest.commentCard.replyPlaceholder', 'Write a reply…')}
+            submitLabel={t('pullRequest.commentCard.reply', 'Reply')}
             submitting={replyBusy}
             onSubmit={submitReply}
             onCancel={() => setReplyOpen(false)}
@@ -246,9 +305,12 @@ export const PRCommentCard = memo(function PRCommentCard({
       {actions ? (
         <ConfirmModal
           visible={confirmDelete}
-          title="Delete comment?"
-          message="This permanently deletes the comment on GitHub."
-          confirmLabel="Delete"
+          title={t('pullRequest.commentCard.deleteConfirmTitle', 'Delete comment?')}
+          message={t(
+            'pullRequest.commentCard.deleteConfirmMessage',
+            'This permanently deletes the comment on GitHub.'
+          )}
+          confirmLabel={t('common.delete', 'Delete')}
           destructive
           onConfirm={() => void actions.deleteComment(comment.id)}
           onCancel={() => setConfirmDelete(false)}

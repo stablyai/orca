@@ -68,10 +68,10 @@ export function TaskPageLinearIssueList({
             errors={linearProjectIssuesResult.errors}
             hasMore={showLinearEmptyFilteredLoadMore}
             count={linearProjectIssuesResult.items.length}
-            label={translate('auto.components.TaskPage.67662ade50', 'project issues')}
+            kind="projectIssues"
             onLoadMore={handleLinearEmptyFilteredLoadMore}
             loading={activeLinearIssueLoading}
-            loadMoreLabel="Fetch more"
+            loadMoreLabel={translate('taskProviders.linear.fetchMore', 'Fetch more')}
           />
           {showLinearIssuePagination ? (
             <div className="flex-none border-t border-border/50 bg-muted/50">
@@ -90,10 +90,10 @@ export function TaskPageLinearIssueList({
             errors={linearCustomViewIssuesResult.errors}
             hasMore={showLinearEmptyFilteredLoadMore}
             count={linearCustomViewIssuesResult.items.length}
-            label={translate('auto.components.TaskPage.be8cf68d9f', 'view issues')}
+            kind="viewIssues"
             onLoadMore={handleLinearEmptyFilteredLoadMore}
             loading={activeLinearIssueLoading}
-            loadMoreLabel="Fetch more"
+            loadMoreLabel={translate('taskProviders.linear.fetchMore', 'Fetch more')}
           />
           {showLinearIssuePagination ? (
             <div className="flex-none border-t border-border/50 bg-muted/50">
@@ -111,10 +111,10 @@ export function TaskPageLinearIssueList({
           <LinearCollectionNotice
             hasMore={showLinearEmptyFilteredLoadMore}
             count={linearIssues.length}
-            label={translate('auto.components.TaskPage.d1e243795c', 'issues')}
+            kind="issues"
             onLoadMore={handleLinearEmptyFilteredLoadMore}
             loading={activeLinearIssueLoading}
-            loadMoreLabel="Fetch more"
+            loadMoreLabel={translate('taskProviders.linear.fetchMore', 'Fetch more')}
           />
           {showLinearIssuePagination ? (
             <div className="flex-none border-t border-border/50 bg-muted/50">

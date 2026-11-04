@@ -231,9 +231,13 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
     // Takeover must never fire from the onData fallback below: it mixes in auto-replies.
     reportWorkerTerminalUserInput(session.cacheKey, session.runtimeEnvironmentId)
   }
-  session.userInputActivityDisposable = subscribeToTerminalUserInput(
-    session.pane.terminal,
-    session.recordRealUserTerminalInput
+  // Why: xterm fires onUserInput before onData, so publishing here made the key wait on every store subscriber before reaching the PTY.
+  session.userInputActivityDisposable = subscribeToTerminalUserInput(session.pane.terminal, () =>
+    queueMicrotask(() => {
+      if (!session.disposed) {
+        session.recordRealUserTerminalInput()
+      }
+    })
   )
   session.recordTerminalInputForHibernationFallback = (): void => {
     if (session.userInputActivityDisposable === null) {

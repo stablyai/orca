@@ -129,6 +129,8 @@ function show(caller: BrowserExtensionCaller, id: string, entry: Shown): void {
       : {})
   })
   notification.on('click', () => {
+    shownFor(caller).delete(id)
+    detach(entry, false)
     noteBrowserExtensionUserGesture(caller.session, caller.extension.id)
     emit(caller, 'onClicked', [id])
   })

@@ -94,6 +94,9 @@ it.each([10, 100])(
         )
       )
     })
+    const accepted = vi.fn()
+    const disposeAccepted = store.getState().subscribeAgentStatusChanges(accepted)
+    const previous = store.getState().agentStatusByPaneKey['tab:leaf']
     const notifications = vi.fn()
     const unsubscribe = store.subscribe(notifications)
     const pending = countQueue(
@@ -132,6 +135,9 @@ it.each([10, 100])(
     copied = 0
     try {
       clear({ paneKey: 'tab:leaf', refusedResume: refused })
+      expect(accepted).toHaveBeenCalledExactlyOnceWith([
+        { paneKey: 'tab:leaf', previous, current: undefined }
+      ])
       const removed = size / 2
       // Reverse splice shifts 1+…+m surviving entries in EACH queue, besides one predicate read per row.
       expect([reads, writes]).toEqual([3 * size + removed * (removed + 1), removed * (removed + 1)])
@@ -148,6 +154,7 @@ it.each([10, 100])(
       expect(copied).toBe(0)
     } finally {
       unsubs.forEach((dispose) => dispose())
+      disposeAccepted()
       unsubscribe()
       onClear.mockRestore()
     }

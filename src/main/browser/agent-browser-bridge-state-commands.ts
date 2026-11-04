@@ -16,6 +16,13 @@ import { BrowserError } from './cdp-bridge'
 import { parseShellArgs, stripAgentBrowserTargetArgs } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeInteractionCommands } from './agent-browser-bridge-interaction-commands'
 import { sendGuestCdpCommand } from './guest-cdp-command'
+import {
+  toBrowserConsoleResult,
+  toBrowserNetworkLogResult,
+  type AgentBrowserConsoleOutput,
+  type AgentBrowserNetworkOutput
+} from './agent-browser-log-entries'
+import { touchEmulationParams } from './guest-touch-emulation'
 
 export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridgeInteractionCommands {
   async cookieGet(
@@ -104,6 +111,11 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
         deviceScaleFactor: scale,
         mobile
       })
+      await sendGuestCdpCommand(
+        wc,
+        'Emulation.setTouchEmulationEnabled',
+        touchEmulationParams(mobile)
+      )
       // Metrics-only resize can leave the compositor at its old size and crop remote screencasts.
       await sendGuestCdpCommand(wc, 'Emulation.setVisibleSize', { width, height }).catch(() => {})
 
@@ -222,25 +234,31 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
   }
 
   async consoleLog(
-    _limit?: number,
+    limit?: number,
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserConsoleResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['console'])) as BrowserConsoleResult
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's `console --json` data has this shape.
+      const output = (await this.execAgentBrowser(sessionName, [
+        'console'
+      ])) as AgentBrowserConsoleOutput
+      return toBrowserConsoleResult(output, limit)
     })
   }
 
   async networkLog(
-    _limit?: number,
+    limit?: number,
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserNetworkLogResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, [
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's `network requests --json` data has this shape.
+      const output = (await this.execAgentBrowser(sessionName, [
         'network',
         'requests'
-      ])) as BrowserNetworkLogResult
+      ])) as AgentBrowserNetworkOutput
+      return toBrowserNetworkLogResult(output, limit)
     })
   }
 

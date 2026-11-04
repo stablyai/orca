@@ -62,6 +62,8 @@ export type PtySpawnIpcArgs = {
   placement?: unknown
   // Accept declared restore intent only through isRestoreSpawnIntent.
   spawnIntent?: unknown
+  // Only `true` counts: a window restore no user act asked for.
+  wslPassiveRestore?: unknown
   // Validate untyped launch input through AgentLaunch.safeParse.
   agentLaunch?: unknown
   // Main validates renderer telemetry; retain unknown input types at the IPC boundary.
@@ -118,7 +120,8 @@ export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
   assertWorkspaceAcceptsNewPty: (
     worktreeId: string | undefined,
     sessionId?: string,
-    cwd?: string
+    cwd?: string,
+    passiveWslRestore?: boolean
   ) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,

@@ -6,7 +6,7 @@ import { projectSessionTabAgentStatus } from './session-tab-agent-status-project
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
 import { projectSessionTabFileHosts } from './session-tab-file-host-projection'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
-import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { createSessionTabsTabDeltaEncoder } from '../../../../shared/session-tabs-tab-delta'
 
 type SessionTabsInventory = {
@@ -236,7 +236,7 @@ export async function subscribeSessionTabsInventory(
   let collected: Awaited<ReturnType<typeof collectSessionTabsInventory>> | undefined
   try {
     // Register before restore so unsubscribe/socket close can find the stream during its awaits.
-    const restoring = restoreStructuredTabsIfSupported(context)
+    const restoring = prepareStructuredTabsIfSupported(context)
     if (restoring) {
       await restoring
       if (closed) {

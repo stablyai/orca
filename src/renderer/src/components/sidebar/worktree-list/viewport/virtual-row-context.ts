@@ -117,7 +117,6 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       getLineageToggleHandler: args.getLineageToggleHandler,
       onSelectionGesture: props.onSelectionGesture,
       onWorktreeCardClick: props.onWorktreeCardClick,
-      activateOnPress: !props.workspaceBoardOpen,
       onContextMenuSelect: props.onContextMenuSelect,
       onImmediateActivate: primaryActive.handleImmediateWorktreeRowActivate,
       onRowClickCapture: args.onRowClickCapture,
@@ -142,7 +141,6 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
       onSelectionGesture: props.onSelectionGesture,
       onContextMenuSelect: props.onContextMenuSelect,
-      activateOnPress: !props.workspaceBoardOpen,
       onImmediateActivate: primaryActive.handleImmediateWorktreeRowActivate,
       onRowClickCapture: args.onRowClickCapture,
       onRowPointerDown: args.onRowPointerDown

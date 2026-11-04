@@ -1,6 +1,7 @@
 import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
 import { Keyboard } from 'react-native'
+import { translate } from '../i18n/mobile-i18n'
 import { triggerError } from '../platform/haptics'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { sendTerminalLiveAccessoryRawBytes } from '../terminal/terminal-live-accessory-raw-send'
@@ -151,22 +152,34 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     }
   }
 
-  async function handleAccessoryKey(input: ReturnType<typeof createTerminalLiveAccessoryInput>) {
-    if (!client || !activeHandle || !canSend) {
-      return
+  async function handleAccessoryKey(
+    input: ReturnType<typeof createTerminalLiveAccessoryInput>,
+    targetHandle = activeHandle,
+    isDeliveryTargetCurrent: () => boolean = () => true
+  ): Promise<boolean> {
+    if (
+      !client ||
+      !targetHandle ||
+      targetHandle !== activeHandle ||
+      !canSend ||
+      !isDeliveryTargetCurrent()
+    ) {
+      return false
     }
-    const targetHandle = activeHandle
     // Encode first so the live-input commit sees the bytes the PTY will receive.
     const encoded = {
       ...input,
       bytes: encodeTerminalKeyForModes(input.bytes, ptyModesRef.current.get(targetHandle))
     }
     const accessoryCommit = await handleLiveInputAccessoryBytes(encoded)
-    if (accessoryCommit.kind !== 'allow-raw') {
-      return
+    if (!isDeliveryTargetCurrent() || clientRef.current !== client) {
+      return false
     }
-    await sendTerminalLiveAccessoryRawBytes({
-      client: clientRef.current,
+    if (accessoryCommit.kind !== 'allow-raw') {
+      return accessoryCommit.kind === 'handled'
+    }
+    return sendTerminalLiveAccessoryRawBytes({
+      client,
       targetHandle,
       activeHandle: activeHandleRef.current,
       activeSessionTabType: activeSessionTabTypeRef.current,
@@ -187,7 +200,13 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
       if (!isTerminalLiveInputWithinByteLimit(text)) {
         triggerError()
-        showToast('Input too large (max 256 KiB)', 1500)
+        showToast(
+          translate(
+            'session.useSessionTerminalSendActions.inputTooLarge',
+            'Input too large (max 256 KiB)'
+          ),
+          1500
+        )
         return false
       }
       const rpc = clientRef.current

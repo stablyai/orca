@@ -260,8 +260,12 @@ describe('useMobileStructuredAgentOptions fast mode', () => {
     await act(async () => {
       outcome = await harness.current().setStructuredOption('fastMode', true)
     })
-    expect(outcome).toBe(false)
-    expect(calls).toEqual([])
+    expect(outcome).toBe(true)
+    expect(calls).toEqual([
+      expect.objectContaining({
+        fields: expect.objectContaining({ key: 'fastMode', value: 'true' })
+      })
+    ])
     await harness.unmount()
   })
 
@@ -720,4 +724,31 @@ describe('useMobileStructuredAgentOptions after a lost pick reply', () => {
     expect(harness.current().pendingOptionId).toBeNull()
     await harness.unmount()
   })
+})
+
+it('refuses a typed literal at an unresolved fence and accepts it when that fence is ready with no menu', async () => {
+  const pending = deferred<AgentSessionOptionsResult>()
+  let reads = 0
+  const client = optionsClient(() =>
+    ++reads === 1 ? Promise.resolve({ models: [], current: {} }) : pending.promise
+  )
+  const { calls, mutate } = recordingMutate(async () =>
+    accepted({ key: 'model', value: 'literal', options: { model: 'literal' } }, true)
+  )
+  const view = await mountOptions({ ...BASE, client: client.client, mutate })
+  await view.rerender({ fence: 2 })
+  let result = true
+  await act(async () => {
+    result = await view.current().setStructuredOption('model', 'literal')
+  })
+  expect(result).toBe(false)
+  expect(calls).toHaveLength(0)
+  await act(async () => pending.resolve({ models: [], current: {} }))
+  await settle()
+  await act(async () => {
+    result = await view.current().setStructuredOption('model', 'literal')
+  })
+  expect(result).toBe(true)
+  expect(calls).toHaveLength(1)
+  await view.unmount()
 })

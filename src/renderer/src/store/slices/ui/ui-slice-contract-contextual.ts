@@ -125,6 +125,8 @@ export type UISliceContextual = {
   dismissStatusBarCompactChangeNotice: () => void
   usageEmptyStateDismissed: boolean
   dismissUsageEmptyState: () => void
+  pluginsAlphaNoticeDismissed: boolean
+  dismissPluginsAlphaNotice: () => void
   codexTerminalServerIsolationNoticeSeen: boolean
   markCodexTerminalServerIsolationNoticeSeen: () => void
   codexSharedSettingsNoticeSeen: boolean

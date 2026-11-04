@@ -105,6 +105,7 @@ async function liveOwner(
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: options.resumeLeafUuid === undefined ? 'resumed-at' : options.resumeLeafUuid,
       resumesTranscript: options.resumesTranscript ?? true,
+      cliFlag: async () => 'supported' as const,
       continuesChain: true
     }),
     onEvent: (event) => events.push(event),
@@ -330,7 +331,7 @@ describe('Claude durable resume point at turn end', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only getRecord from its store.
       store: { getRecord: () => store.record } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
-      resolveCommand: () => '/usr/local/bin/claude',
+      resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
       resolveAuthPolicy: () => ({ account: 'system' })
     })
     const launch = await resolve({

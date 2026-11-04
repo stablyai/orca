@@ -37,6 +37,7 @@ const { registerNotificationsNamespace, resolveNotificationIconPath } =
   await import('./notifications')
 const { getBrowserExtensionNamespace } = await import('../browser-extension-namespace-registry')
 const { emitBrowserExtensionEvent } = await import('../browser-extension-api-host')
+const { noteBrowserExtensionUserGesture } = await import('./permissions')
 registerNotificationsNamespace()
 
 const extension = { id: 'a'.repeat(32), path: join('/ext', 'root') }
@@ -82,6 +83,38 @@ function invoke(caller: BrowserExtensionCaller, method: string, args: unknown[] 
 const options = { type: 'basic', title: 'Notification', message: 'Retire with its extension' }
 
 describe('notification extension ownership', () => {
+  it('retires an activated notification while preserving click delivery and its successor', () => {
+    const { caller } = notificationCaller('clicked')
+    const sibling = { ...caller, extension: { ...caller.extension, id: 'b'.repeat(32) } }
+    invoke(caller, 'create', ['clicked', options])
+    invoke(sibling, 'create', ['sibling', options])
+    const clicked = mocks.notifications[0]
+
+    clicked.emit('click')
+
+    expect(emitBrowserExtensionEvent).toHaveBeenCalledExactlyOnceWith(
+      { session: caller.session, extensionId: caller.extension.id },
+      'notifications',
+      'onClicked',
+      ['clicked']
+    )
+    expect(noteBrowserExtensionUserGesture).toHaveBeenCalledExactlyOnceWith(
+      caller.session,
+      caller.extension.id
+    )
+    expect(invoke(caller, 'getAll')).toEqual({})
+    expect(invoke(caller, 'clear', ['clicked'])).toBe(false)
+    expect(invoke(sibling, 'getAll')).toEqual({ sibling: true })
+    expect(clicked.close).not.toHaveBeenCalled()
+    expect(clicked.eventNames()).toEqual([])
+
+    invoke(caller, 'create', ['clicked', options])
+    clicked.emit('click')
+    clicked.emit('close', {})
+    expect(invoke(caller, 'getAll')).toEqual({ clicked: true })
+    expect(emitBrowserExtensionEvent).toHaveBeenCalledTimes(1)
+  })
+
   it.each(['create', 'update'])(
     'forgets a failed native %s without reporting a dismissal',
     (method) => {

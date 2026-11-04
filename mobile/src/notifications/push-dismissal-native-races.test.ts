@@ -1,7 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { nativePushDismissal } from './native-push-dismissal'
-import { rememberPushDismissal, wasPushDismissed } from './push-dismissal-watermarks'
+import {
+  rememberPushDismissal,
+  rememberPushDismissals,
+  wasPushDismissed
+} from './push-dismissal-watermarks'
 import { foregroundNotificationBehavior } from './push-receive'
 import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
 
@@ -70,6 +74,17 @@ it('uses only native storage for iOS dismissal reads and writes', async () => {
   expect(await wasPushDismissed(payload)).toBe(true)
   expect(await wasPushDismissed({ ...payload, notificationSeq: 22 })).toBe(false)
   expect(await wasPushDismissed({ ...payload, notificationEpoch: 'new-epoch' })).toBe(false)
+  expect(AsyncStorage.getItem).not.toHaveBeenCalled()
+  expect(AsyncStorage.setItem).not.toHaveBeenCalled()
+})
+
+it('keeps a batch in the native ledger and joins it before checking dismissal', async () => {
+  const other = { ...fence, notificationId: 'second' }
+  const pending = rememberPushDismissals([fence, other])
+  const secondDismissed = wasPushDismissed(other)
+  await pending
+  expect(await secondDismissed).toBe(true)
+  expect(await wasPushDismissed({ ...other, notificationSeq: 22 })).toBe(false)
   expect(AsyncStorage.getItem).not.toHaveBeenCalled()
   expect(AsyncStorage.setItem).not.toHaveBeenCalled()
 })

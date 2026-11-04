@@ -268,9 +268,9 @@
 1 src/renderer/src/store/repos/runtime-repo-catalog-actions.ts
 16 src/renderer/src/store/slices/browser/browser-cookie-import-actions.ts
 1 src/renderer/src/store/slices/browser/browser-host-actions.ts
-7 src/renderer/src/store/slices/browser/browser-host-state.ts
-14 src/renderer/src/store/slices/browser/browser-profile-import-actions.ts
-13 src/renderer/src/store/slices/browser/browser-profile-list-actions.ts
+6 src/renderer/src/store/slices/browser/browser-host-state.ts
+13 src/renderer/src/store/slices/browser/browser-profile-import-actions.ts
+8 src/renderer/src/store/slices/browser/browser-profile-list-actions.ts
 4 src/renderer/src/store/slices/browser/browser-tab-actions.ts
 1 src/renderer/src/store/slices/browser/create-browser-slice.ts
 1 src/renderer/src/store/slices/browser/paired-browser-tab-creator.ts

@@ -70,11 +70,12 @@ export class RuntimeBrowserCapture {
   }
 
   async browserEval(
-    params: { expression: string } & BrowserCommandTargetParams
+    params: { expression: string } & BrowserCommandTargetParams,
+    signal?: AbortSignal
   ): Promise<BrowserEvalResult> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
     return this.targets
       .requireAgentBrowserBridge()
-      .evaluate(params.expression, target.worktreeId, target.browserPageId)
+      .evaluate(params.expression, target.worktreeId, target.browserPageId, signal)
   }
 }

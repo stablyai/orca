@@ -82,6 +82,16 @@ describe('AgentTerminalDialog', () => {
     )
   })
 
+  it.each([
+    ['interrupted', 'Interrupted'],
+    ['failed', 'Failed'],
+    ['unconfirmed', 'Couldn’t confirm']
+  ] as const)('keeps an acknowledged %s verdict in the terminal header', (verdict, label) => {
+    const statusCard = { ...card({ dotState: 'done', bucket: 'idle', unseen: false }), verdict }
+    render(<AgentTerminalPanel card={statusCard} onOpenChange={() => {}} onReveal={() => {}} />)
+    expect(screen.getByText(new RegExp(label))).toBeInTheDocument()
+  })
+
   it('passes null when the card carries no profile, so the preview routes by client OS', () => {
     render(<AgentTerminalDialog card={card()} onOpenChange={() => {}} onReveal={() => {}} />)
 

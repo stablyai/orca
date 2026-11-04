@@ -237,6 +237,7 @@ describe('WslHookRelayManager', () => {
       listDistros: async () => ['Ubuntu'],
       isDistroRunning: vi.fn(async () => true),
       deferUntilRunning: vi.fn(),
+      blockedForExec: vi.fn(async () => null),
       spawnRelay: vi.fn(() => fakeChild()),
       runInstall: vi.fn(async () => ({ code: 0, stderr: '' })),
       waitForSentinel: vi.fn(async () => guestTransport()),
@@ -260,6 +261,16 @@ describe('WslHookRelayManager', () => {
     }
     return { manager: new WslHookRelayManager(deps), deps }
   }
+
+  it('starts no relay for a stopped distro outside a user act (a passive restore, E9)', async () => {
+    const { manager, deps } = createManager({
+      blockedForExec: vi.fn(async () => ({ distro: 'Ubuntu', state: 'stopped' as const }))
+    })
+    await manager.ensureForDistro('Ubuntu', codexHome)
+    expect(deps.blockedForExec).toHaveBeenCalledWith('Ubuntu')
+    expect(deps.spawnRelay).not.toHaveBeenCalled()
+    expect(manager.getGuestEndpointFilePath('Ubuntu')).toBeNull()
+  })
 
   it('starts one relay per distro, installs hooks, exposes the guest endpoint path, and forwards envelopes', async () => {
     const { manager, deps } = createManager({})

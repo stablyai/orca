@@ -15,7 +15,7 @@ const store = createLaunchFunnelStore()
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => null }))
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
+vi.mock('../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
@@ -99,7 +99,7 @@ describe('agent launch caller arguments and permission bypass', () => {
       agentArgs: null
     })
 
-    expect(queuedStartupCommand(store)).toBe('codex')
+    expect(queuedStartupCommand(store)).toBe("codex '-c' 'disable_paste_burst=true'")
     expect(queuedStartupPayload(store)?.agentArgsOverride).toBeNull()
   })
 
@@ -114,7 +114,9 @@ describe('agent launch caller arguments and permission bypass', () => {
       agentArgs: '--model per-launch'
     })
 
-    expect(queuedStartupCommand(store)).toBe("codex '--model' 'per-launch'")
+    expect(queuedStartupCommand(store)).toBe(
+      "codex '-c' 'disable_paste_burst=true' '--model' 'per-launch'"
+    )
   })
 
   // Composer picks seed structured creates only; terminal fallbacks must not receive them (launch-structured-agent-session tests).
@@ -149,7 +151,7 @@ describe('agent launch caller arguments and permission bypass', () => {
       const command = queuedStartupCommand(store)
       expect(command).not.toContain("'-m'")
       expect(command).not.toContain('model_reasoning_effort')
-      expect(command).toBe(`codex '${expectedArgs}'`)
+      expect(command).toBe(`codex '-c' 'disable_paste_burst=true' '${expectedArgs}'`)
     }
   )
 })

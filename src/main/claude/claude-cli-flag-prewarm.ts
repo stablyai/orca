@@ -36,7 +36,7 @@ export async function prewarmClaudeCliFlags(
     }
     const env = claudeProbeEnv(sources)
     for (const cwd of folders) {
-      deps.cliFlags.prewarm({ command: sources.command, cwd, env })
+      deps.cliFlags.prewarm({ command: sources.command, prefixArgs: sources.prefixArgs, cwd, env })
     }
   } catch {
     // A launch probes for itself; this only saves it the wait.

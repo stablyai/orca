@@ -16,7 +16,11 @@ export function getDeleteBody(repoCount: number): string {
   return translate(
     'auto.components.multiRepo.delete.body',
     'This removes {{count}} worktrees and the workspace folder if it is empty. Branches that are fully merged are deleted; branches with unmerged commits are kept.',
-    { count: repoCount }
+    {
+      count: repoCount,
+      defaultValue_one:
+        'This removes {{count}} worktree and the workspace folder if it is empty. Branches that are fully merged are deleted; branches with unmerged commits are kept.'
+    }
   )
 }
 
@@ -49,7 +53,7 @@ export function getDeleteButtonLabel(
   return translate(
     'auto.components.multiRepo.delete.confirm',
     'Delete workspace and {{count}} worktrees',
-    { count: repoCount }
+    { count: repoCount, defaultValue_one: 'Delete workspace and {{count}} worktree' }
   )
 }
 
@@ -92,7 +96,8 @@ export function getRowRiskText(row: DeleteRow): string | null {
   } else if (row.dirtyCount > 0) {
     parts.push(
       translate('auto.components.multiRepo.delete.dirty', '{{count}} uncommitted files', {
-        count: row.dirtyCount
+        count: row.dirtyCount,
+        defaultValue_one: '{{count}} uncommitted file'
       })
     )
   }
@@ -105,7 +110,11 @@ export function getRowRiskText(row: DeleteRow): string | null {
       translate(
         'auto.components.multiRepo.delete.unpublished',
         '{{count}} unpublished commits on {{branch}}',
-        { count: row.unpublishedCommitCount, branch: row.branchName }
+        {
+          count: row.unpublishedCommitCount,
+          branch: row.branchName,
+          defaultValue_one: '{{count}} unpublished commit on {{branch}}'
+        }
       )
     )
   }

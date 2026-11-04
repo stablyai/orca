@@ -11,10 +11,27 @@ const HTTP_FRAGMENT_PATTERN = /^[^\s"'!*(){}|\\^<>`│┃║╎╏┆┇┊┋]*
 const VERTICAL_LAYOUT_FRAME_PATTERN = /[│┃║╎╏┆┇┊┋|]/
 const NON_LAYOUT_SUFFIX_PATTERN = /[^\s│┃║╎╏┆┇┊┋|]/
 const HARD_WRAP_CONTINUATION_SUFFIX_PATTERN = /[/?&=#%+:-]$/
+const LAYOUT_SUFFIX_CHAR_PATTERN = /[\s│┃║╎╏┆┇┊┋|]/
 const MIN_HARD_WRAPPED_HTTP_ROWS = 3
 const MIN_HARD_WRAP_FILL_RATIO = 0.8
 
 type TranslatedLine = ReturnType<typeof translateLineWithColumns>
+
+// Continuation rows end in frame + prefix + URL fragment + layout-only suffix with a right frame.
+function canBeFramedContinuationRow(text: string): boolean {
+  let contentEnd = text.length
+  let hasRightFrame = false
+  while (contentEnd > 0 && LAYOUT_SUFFIX_CHAR_PATTERN.test(text[contentEnd - 1]!)) {
+    hasRightFrame ||= VERTICAL_LAYOUT_FRAME_PATTERN.test(text[contentEnd - 1]!)
+    contentEnd--
+  }
+  return (
+    hasRightFrame &&
+    contentEnd > 0 &&
+    Boolean(HTTP_FRAGMENT_PATTERN.exec(text[contentEnd - 1]!)?.[0]) &&
+    VERTICAL_LAYOUT_FRAME_PATTERN.test(text.slice(0, contentEnd))
+  )
+}
 
 function findFrameIndexBefore(text: string, beforeIndex: number): number {
   for (let index = beforeIndex - 1; index >= 0; index--) {
@@ -188,6 +205,12 @@ export function buildHardWrappedHttpLogicalLineCandidates(
     const candidate = buildCandidateFromStart(buffer, startY, currentY, translatedLines)
     if (candidate) {
       candidates.push(candidate)
+    }
+    // Earlier starts must continue through this row; stop at borders, prose, and blank rows.
+    const rowText =
+      translatedLines.get(startY)?.text ?? buffer.getLine(startY)?.translateToString(false)
+    if (rowText === undefined || !canBeFramedContinuationRow(rowText)) {
+      break
     }
   }
   return candidates.sort(

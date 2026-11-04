@@ -1,7 +1,9 @@
 import {
   closeClaudeSession,
+  claudeCloseReport,
   claudeAcquisitionCleanupError
 } from '../claude-structured-session-close'
+import { AgentSessionAcquisitionExitUnprovenError } from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeAcquisitionRegistry,
   ClaudeSession,
@@ -18,6 +20,8 @@ export async function releaseClaudeAcquisition(input: {
   onExitProven?: (sessionId: string, exit: ClaudeSessionExit) => Promise<void>
   persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle']
   onEvent?: ClaudeStructuredSessionAdapterDeps['onEvent']
+  logger?: ClaudeStructuredSessionAdapterDeps['logger']
+  settledExitErrors?: Map<string, Error>
 }): Promise<boolean> {
   const exit = input.exits.get(input.sessionId)
   if (!exit || input.sessions.has(input.sessionId) || input.acquisitions.get(input.sessionId)) {
@@ -26,11 +30,21 @@ export async function releaseClaudeAcquisition(input: {
   const firstProof = exit.closePromise ? await exit.closePromise : false
   // Retry tree verification on the same connection after an unproven close.
   const retriedProof = firstProof || (await exit.connection.close())
-  if (retriedProof) {
-    await input.onExitProven?.(input.sessionId, exit)
+  const report = claudeCloseReport(exit.connection, retriedProof, exit.error)
+  if (retriedProof || (report && !(report instanceof AgentSessionAcquisitionExitUnprovenError))) {
+    try {
+      await input.onExitProven?.(input.sessionId, exit)
+    } catch (error) {
+      throw claudeAcquisitionCleanupError(exit.connection, error)
+    }
     // Retain unproven exits for retries; observed root exits are removed by their own settlement.
-    input.exits.delete(input.sessionId)
+    if (input.exits.get(input.sessionId) === exit) {
+      input.exits.delete(input.sessionId)
+    }
+    if (report) {
+      throw report
+    }
     return true
   }
-  throw claudeAcquisitionCleanupError(exit.connection, exit.error)
+  throw report
 }

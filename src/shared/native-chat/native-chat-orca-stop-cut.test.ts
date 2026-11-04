@@ -5,7 +5,7 @@ import { readAgentSessionOrcaStop } from '../agent-session-orca-stop'
 import { agentJournalItemKey } from '../agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../agent-turn-outcome'
-import { withNativeChatCutTurnNotices } from '../native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from './transcript/native-chat-cut-turn-notice'
 import {
   latestNativeChatOrcaStopCut,
   orcaShutdownRowClientMessageId

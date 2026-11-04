@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { readFileSync, rmSync } from 'node:fs'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { setActiveSink } from '../observability/tracer'
 import type { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
@@ -88,11 +89,21 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
       rows: 24,
       cwd: WSL_CWD,
       env: { ORCA_PANE_KEY: PANE_KEY },
-      sessionId: 'repo::/repo@@spawned'
+      sessionId: 'repo::/home/jin/private-repo@@spawned'
     })
 
     const info = vi.spyOn(console, 'info').mockImplementation(() => {})
-    await adapter.shutdown(id, { immediate: true, keepHistory: true })
+    const spans: unknown[] = []
+    setActiveSink({
+      push: (span) => spans.push(span),
+      flush: () => {},
+      close: () => {}
+    })
+    try {
+      await adapter.shutdown(id, { immediate: true, keepHistory: true })
+    } finally {
+      setActiveSink(null)
+    }
 
     expect(readRows).toHaveBeenCalledWith('Ubuntu', expect.any(Number), { running: true })
     expect(checkpointCwd(id)).toBe(`${WSL_CWD}\\deep\\er`)
@@ -101,10 +112,29 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
       .filter((line) => line.includes('Sleep folder'))
     // One line per Sleep, naming the branch, what the distro returned and whether a folder came back.
     expect(lines).toHaveLength(1)
-    expect(lines[0]).toContain(`[history] Sleep folder for ${id}: wsl probe (budget `)
+    expect(lines[0]).toContain(`[history] Sleep folder for …@@spawned: wsl probe (budget `)
     expect(lines[0]).toContain(
       `rows 2, shells 1), distro Ubuntu, pane ${PANE_KEY}, live true, folder found in `
     )
+    // verify-18 (b): a packaged build keeps no console, so the same line goes to the local trace.
+    expect(spans).toContainEqual(
+      expect.objectContaining({
+        name: 'wsl.sleep-folder',
+        attributes: expect.objectContaining({
+          line: lines[0].replace(', distro Ubuntu', ''),
+          probe: 'wsl',
+          rows: 2,
+          shells: 1,
+          timedOut: false,
+          folderFound: true
+        })
+      })
+    )
+    // The trace persists, so it names neither the worktree path in the session id nor the distro.
+    const persisted = JSON.stringify(spans)
+    for (const segment of ['home', 'jin', 'private-repo', 'Ubuntu']) {
+      expect(persisted).not.toContain(segment)
+    }
   })
 
   // awin verify-9: panes cd'd before a relaunch and slept before the window reopened them
@@ -229,6 +259,27 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
     await adapter.shutdown(id, { immediate: true, keepHistory: true })
 
     expect(checkpointCwd(id)).toBe(WSL_CWD)
+  })
+
+  // verify-18 (e): `cd deep`, then the distro was terminated: no Sleep read ran, and the restore
+  // reopened at the root. The bridge shell's OSC 7 now carries the folder into every checkpoint.
+  it('checkpoints the folder the shell last reported, with no read of the distro', async () => {
+    readRows.mockResolvedValue(null)
+    adapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir() })
+    const { id } = await adapter.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: WSL_CWD,
+      env: { ORCA_PANE_KEY: PANE_KEY },
+      sessionId: 'repo::/repo@@reported'
+    })
+    lastSubprocess._simulateData(
+      '$ cd "deep er"\r\n\x1b]7;file:///home/jin/repo/deep%20er/d%C3%A9j%C3%A0\x07$ '
+    )
+
+    await adapter.shutdown(id, { immediate: true, keepHistory: true })
+
+    expect(checkpointCwd(id)).toBe(`${WSL_CWD}\\deep er\\déjà`)
   })
 
   it('never reads a distro for a pane that is not a WSL pane', async () => {

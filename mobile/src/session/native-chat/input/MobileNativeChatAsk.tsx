@@ -14,10 +14,13 @@ import {
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { TEXT_INPUT_FONT_SIZE } from '../../../platform/text-input-font-size'
 import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
 import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
+import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
 
 type Props = {
   prompt: AskPrompt
@@ -31,7 +34,13 @@ type Props = {
   freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
 }
 
-const CONFIRM_LABEL = { submit: 'Submit', next: 'Next', skip: 'Skip' } as const
+function confirmLabels(t: Translate) {
+  return {
+    submit: t('chat.ask.submit', 'Submit'),
+    next: t('chat.ask.next', 'Next'),
+    skip: t('chat.ask.skip', 'Skip')
+  }
+}
 
 // Sentinel index for the free-text "Other…" row (never a real option index).
 const OTHER = -1
@@ -45,6 +54,8 @@ export function MobileNativeChatAsk({
   freeTextInputs
 }: Props): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
+  const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() =>
@@ -53,6 +64,12 @@ export function MobileNativeChatAsk({
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
   const autoAdvance = useMobileNativeChatAskAutoAdvance()
+  // Open each step at its question and end the last step's edit, so no typing lands out of view.
+  const showStep = (next: (current: number) => number): void => {
+    inputRef.current?.blur()
+    scrollRef.current?.scrollTo({ y: 0, animated: false })
+    setIndex(next)
+  }
 
   // A question with no options is answered by typing alone.
   const typesOnly = (qi: number): boolean =>
@@ -121,7 +138,7 @@ export function MobileNativeChatAsk({
     if (isLast) {
       await submit(sel)
     } else {
-      setIndex((i) => Math.min(i + 1, total - 1))
+      showStep((i) => Math.min(i + 1, total - 1))
     }
   }
 
@@ -172,11 +189,11 @@ export function MobileNativeChatAsk({
               disabled={submitting}
               onPress={() => {
                 autoAdvance.cancel()
-                setIndex(i)
+                showStep(() => i)
               }}
             >
               <Text style={[styles.tabText, i === index && styles.tabTextActive]} numberOfLines={1}>
-                {qq.header || `Step ${i + 1}`}
+                {qq.header || t('chat.ask.step', 'Step {{step}}', { step: i + 1 })}
               </Text>
               {isAnswered(i) ? (
                 <Check size={11} color={colors.statusGreen} strokeWidth={3} />
@@ -186,7 +203,12 @@ export function MobileNativeChatAsk({
         </ScrollView>
       ) : null}
 
-      <ScrollView style={styles.scroll} keyboardShouldPersistTaps="always">
+      <ScrollView
+        ref={scrollRef}
+        onLayout={onViewportLayout}
+        style={styles.scroll}
+        keyboardShouldPersistTaps="always"
+      >
         <View style={styles.questionRow}>
           <Text style={styles.questionText}>{q.question}</Text>
           <MobileNativeChatCardHeaderAction
@@ -213,7 +235,7 @@ export function MobileNativeChatAsk({
         ))}
         {otherAllowed && !typesOnly(index) ? (
           <MobileNativeChatAskOptionRow
-            label="Other…"
+            label={t('chat.ask.other', 'Other…')}
             selected={otherSelected}
             multi={q.multiSelect}
             disabled={submitting}
@@ -222,10 +244,14 @@ export function MobileNativeChatAsk({
         ) : null}
         {otherSelected || typesOnly(index) ? (
           <TextInput
+            ref={inputRef}
+            onFocus={revealReply}
             style={styles.input}
             value={otherText[index]}
             onChangeText={(v) => setOther(index, v)}
-            placeholder={freeTextInput?.placeholder ?? 'Type your answer'}
+            placeholder={
+              freeTextInput?.placeholder ?? t('chat.ask.answerPlaceholder', 'Type your answer')
+            }
             placeholderTextColor={colors.textMuted}
             // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
             multiline={freeTextInput ? freeTextInput.multiline === true : true}
@@ -241,7 +267,7 @@ export function MobileNativeChatAsk({
           disabled={submitting}
           hitSlop={8}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
         </Pressable>
         {total > 1 ? (
           <Text style={styles.progress}>
@@ -254,7 +280,7 @@ export function MobileNativeChatAsk({
           disabled={submitting}
         >
           <Text style={[styles.nextText, !currentAnswered && styles.nextSkipText]}>
-            {CONFIRM_LABEL[askConfirmLabel(currentAnswered, isLast)]}
+            {confirmLabels(t)[askConfirmLabel(currentAnswered, isLast)]}
           </Text>
         </Pressable>
       </View>
@@ -264,7 +290,8 @@ export function MobileNativeChatAsk({
 
 const styles = themedStyleSheet(() => ({
   card: {
-    maxHeight: 380,
+    flexShrink: 1,
+    minHeight: 0,
     backgroundColor: colors.bgPanel,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle

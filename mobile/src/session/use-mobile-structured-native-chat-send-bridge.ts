@@ -62,7 +62,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       // Accepted messages remain host-owned; restore commands whose reply was lost.
       if (outcome === 'rejected' || (outcome === 'unknown' && isHostCommand)) {
         restoreRejectedDraft(origin, text)
-        restoreMobileNativeChatPickedSkills(origin.draftKey, skills)
+        restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
       }
       return outcome
     },

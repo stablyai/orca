@@ -55,6 +55,9 @@ export const COMPUTER_METHODS = [
     handler: async (params) => {
       const { openComputerUsePermissions } =
         await import('../../../computer/macos-computer-use-permissions')
+      const { computerUsePermissionStatusGate } =
+        await import('../../../computer/macos-computer-use-permission-status-gate')
+      computerUsePermissionStatusGate.invalidate()
       return openComputerUsePermissions(params.id)
     }
   }),
@@ -63,9 +66,9 @@ export const COMPUTER_METHODS = [
     permission: 'workspace',
     params: ComputerPermissionsStatusParams,
     handler: async () => {
-      const { getComputerUsePermissionStatus } =
-        await import('../../../computer/macos-computer-use-permissions')
-      return getComputerUsePermissionStatus()
+      const { computerUsePermissionStatusGate } =
+        await import('../../../computer/macos-computer-use-permission-status-gate')
+      return computerUsePermissionStatusGate.read()
     }
   }),
   defineMethod({

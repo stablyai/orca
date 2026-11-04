@@ -4,6 +4,7 @@ import { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
 import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
 import {
   agentDisplayLabel,
+  agentStateLabel,
   agentDotState,
   agentRowTimeAt,
   formatTimeAgo
@@ -51,6 +52,15 @@ describe('agentDotState', () => {
     expect(agentDisplayLabel(row({ state: 'done', ...mainAgentDone('unconfirmed') }), 0)).toBe(
       'Couldn’t confirm'
     )
+    for (const [outcome, label] of [
+      ['cancellation', 'Interrupted'],
+      ['interruption', 'Failed'],
+      ['failure', 'Failed']
+    ] as const) {
+      expect(
+        agentStateLabel(agentDotState(row({ state: 'done', ...mainAgentDone(outcome) }), 0))
+      ).toBe(label)
+    }
   })
 
   it('decays a stale active state to idle, matching desktop', () => {

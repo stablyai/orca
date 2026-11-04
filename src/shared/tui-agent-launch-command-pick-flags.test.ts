@@ -28,7 +28,7 @@ describe('one copy of each chat-picked flag', () => {
         .split(' ')
         .map((token) => `'${token}'`)
         .join(' ')
-      expect(result.command).toBe(`codex ${expectedArgs}`)
+      expect(result.command).toBe(`codex '-c' 'disable_paste_burst=true' ${expectedArgs}`)
       expect(result.appliedSessionOptions).toEqual({})
     }
   )
@@ -51,7 +51,7 @@ describe('one copy of each chat-picked flag', () => {
 
   it.each([
     ['claude', 'opus', '--model=haiku', "claude '--model=haiku'"],
-    ['codex', 'gpt-5.5', '-mo3', "codex '-mo3'"]
+    ['codex', 'gpt-5.5', '-mo3', "codex '-c' 'disable_paste_burst=true' '-mo3'"]
   ] as const)(
     'sends one model flag for %s with a configured %s',
     (agent, model, agentArgs, command) => {
@@ -101,7 +101,9 @@ describe('one copy of each chat-picked flag', () => {
       sessionOptions: { model: 'gpt-5.5', effort: 'high' },
       agentArgs: '-c model_reasoning_effort=low'
     })
-    expect(result.command).toBe("codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=low'")
+    expect(result.command).toBe(
+      "codex '-c' 'disable_paste_burst=true' '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=low'"
+    )
     expect(result.appliedSessionOptions).toEqual({ model: 'gpt-5.5' })
   })
 })

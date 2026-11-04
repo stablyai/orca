@@ -93,11 +93,6 @@ import {
   subscribeStructuredAgentLaunchStatus
 } from './agent-session/launch/structured-agent-session-launch-registry'
 import { markStructuredAgentSessionLaunchPublished } from './agent-session/launch/structured-agent-session-launch-publication'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
-import {
-  applyStructuredAgentSessionModelCatalog,
-  createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
 
 const WORKTREE_ID = 'wt-1'
 const SESSION_ID = 'session-1'
@@ -262,38 +257,31 @@ describe('picks made while a chat launches', () => {
     expect(mutations().map((mutation) => mutation.value)).toEqual(['gpt-picked', 'gpt-repicked'])
   })
 
-  it('drops a held Fast the picked model does not offer: neither sent nor remembered', async () => {
+  it('sends held Fast with the picked model even when its catalog omits that tier', async () => {
     const created = deferred<{ sessionId: string; fence: number }>()
     mocks.launch.mockReturnValue(created.promise)
     const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-tier' })
-    const picker = applyStructuredAgentSessionModelCatalog(
-      createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
-      CODEX_SESSION_OPTION_CATALOG,
-      {
-        origin: 'probe',
-        fetchedAt: 1,
-        models: [
-          {
-            id: 'gpt-5.5',
-            label: 'GPT-5.5',
-            isDefault: true,
-            efforts: [],
-            serviceTiers: [{ value: 'priority', label: 'Fast' }]
-          },
-          { id: 'gpt-nofast', label: 'No Fast', isDefault: false, efforts: [] }
-        ]
-      },
-      { newLaunch: true }
-    )
     const tierPick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'serviceTier', 'priority')
-    holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-nofast', picker)
-    await expect(tierPick).resolves.toEqual({ kind: 'superseded' })
+    holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-nofast')
+    expect(getStructuredAgentSessionLaunchSelection(SESSION_ID)?.held).toEqual({
+      model: 'gpt-nofast',
+      serviceTier: 'priority'
+    })
     created.resolve({ sessionId: SESSION_ID, fence: 3 })
     await settle()
     setOptionReplies[0]!.resolve(ACCEPTED)
+    await settle()
+    setOptionReplies[1]!.resolve({ ok: true, value: { options: { serviceTier: 'priority' } } })
     await launch.launchResult
 
-    expect(mutations().map(({ key, value }) => [key, value])).toEqual([['model', 'gpt-nofast']])
+    await expect(tierPick).resolves.toEqual({
+      kind: 'accepted',
+      options: { serviceTier: 'priority' }
+    })
+    expect(mutations().map(({ key, value }) => [key, value])).toEqual([
+      ['model', 'gpt-nofast'],
+      ['serviceTier', 'priority']
+    ])
   })
 
   it('reports a refused pick to its picker and publishes all the same', async () => {

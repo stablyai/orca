@@ -174,7 +174,10 @@ export function updateNativeChatComposerDraft(
     text,
     ...(Object.keys(pastedTextFiles).length ? { pastedTextFiles } : {}),
     ...(document ? { document } : {}),
-    images: [...images],
+    // Why: an unchanged row keeps its identity, so typing does not re-render every image consumer.
+    images: sameNativeChatComposerDraftImages(images, current.images)
+      ? current.images
+      : [...images],
     savedAt: nextSavedAt(),
     ...(owner ? { owner } : {}),
     ...(unsavedText === undefined ? {} : { unsavedText })

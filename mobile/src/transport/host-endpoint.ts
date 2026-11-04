@@ -1,3 +1,5 @@
+import { hostEndpointCopy } from './host-endpoint-copy'
+
 // Normalize Edit Host input to a websocket authority without requiring re-pairing.
 
 export type NormalizeHostEndpointResult =
@@ -97,7 +99,7 @@ export function normalizeHostEndpoint(
 ): NormalizeHostEndpointResult {
   const trimmed = input.trim()
   if (!trimmed) {
-    return { ok: false, error: 'Enter a host address.' }
+    return { ok: false, error: hostEndpointCopy.addressRequired() }
   }
 
   const fallbackPort = resolveFallbackPort(options?.fallbackPort)
@@ -124,53 +126,53 @@ function resolveFallbackPort(value: string | number | undefined): string {
 function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostEndpointResult {
   const explicitPort = resolveWebsocketUrlPort(input)
   if (explicitPort.kind === 'invalid') {
-    return { ok: false, error: 'Port must be 1–65535.' }
+    return { ok: false, error: hostEndpointCopy.invalidPort() }
   }
   const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//.exec(input)?.[1]?.toLowerCase()
   if (scheme !== 'ws' && scheme !== 'wss') {
-    return { ok: false, error: 'Use ws:// or wss:// (or host:port).' }
+    return { ok: false, error: hostEndpointCopy.invalidScheme() }
   }
 
   const rawAuthority = parseRawSchemeAuthority(input)
   if (rawAuthority.hasUserInfo) {
-    return { ok: false, error: 'Not a valid address.' }
+    return { ok: false, error: hostEndpointCopy.invalidAddress() }
   }
   if (rawAuthority.hasPathOrQuery) {
-    return { ok: false, error: 'Host must not include a path or query.' }
+    return { ok: false, error: hostEndpointCopy.pathOrQueryNotAllowed() }
   }
   if (
     rawAuthority.hostname &&
     validateNumericIpv4Candidate(normalizeRawNumericIpv4Candidate(rawAuthority.hostname))
   ) {
-    return { ok: false, error: 'Not a valid hostname.' }
+    return { ok: false, error: hostEndpointCopy.invalidHostname() }
   }
 
   let url: URL
   try {
     url = new URL(input)
   } catch {
-    return { ok: false, error: 'Not a valid address.' }
+    return { ok: false, error: hostEndpointCopy.invalidAddress() }
   }
 
   if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
-    return { ok: false, error: 'Use ws:// or wss:// (or host:port).' }
+    return { ok: false, error: hostEndpointCopy.invalidScheme() }
   }
   if (!url.hostname) {
-    return { ok: false, error: 'Missing hostname.' }
+    return { ok: false, error: hostEndpointCopy.hostnameRequired() }
   }
 
   // Reject path/query/userinfo instead of silently stripping address typos.
   if (url.username || url.password) {
-    return { ok: false, error: 'Not a valid address.' }
+    return { ok: false, error: hostEndpointCopy.invalidAddress() }
   }
   if ((url.pathname && url.pathname !== '/') || url.search || url.hash) {
-    return { ok: false, error: 'Host must not include a path or query.' }
+    return { ok: false, error: hostEndpointCopy.pathOrQueryNotAllowed() }
   }
 
   const hostname = unwrapHostname(url.hostname)
   // Reject legacy IPv4 aliases that WHATWG URL would rewrite to a different address.
   if (rawAuthority.hostname && isCanonicalIpv4(hostname) && rawAuthority.hostname !== hostname) {
-    return { ok: false, error: 'Not a valid hostname.' }
+    return { ok: false, error: hostEndpointCopy.invalidHostname() }
   }
   const hostError = validateHostname(hostname)
   if (hostError) {
@@ -180,7 +182,7 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
   // Preserve explicit default ports; URL.port would otherwise replace them with fallbackPort.
   const resolvedPort = resolveWebsocketUrlPort(input, url)
   if (resolvedPort.kind === 'invalid') {
-    return { ok: false, error: 'Port must be 1–65535.' }
+    return { ok: false, error: hostEndpointCopy.invalidPort() }
   }
   const port = resolvedPort.kind === 'valid' ? resolvedPort.port : fallbackPort
 
@@ -226,14 +228,14 @@ function normalizeHostPort(
   if (input.startsWith('[')) {
     const close = input.indexOf(']')
     if (close <= 1) {
-      return { ok: false, error: 'Not a valid address.' }
+      return { ok: false, error: hostEndpointCopy.invalidAddress() }
     }
     host = input.slice(1, close)
     const rest = input.slice(close + 1)
     if (rest.startsWith(':')) {
       port = rest.slice(1)
     } else if (rest.length > 0) {
-      return { ok: false, error: 'Not a valid address.' }
+      return { ok: false, error: hostEndpointCopy.invalidAddress() }
     }
   } else {
     const firstColon = input.indexOf(':')
@@ -248,7 +250,7 @@ function normalizeHostPort(
 
   host = host.trim()
   if (!host) {
-    return { ok: false, error: 'Missing hostname.' }
+    return { ok: false, error: hostEndpointCopy.hostnameRequired() }
   }
 
   // Validate bare hosts too; URL-only delimiters must never become hostname bytes.
@@ -260,7 +262,7 @@ function normalizeHostPort(
   if (port !== undefined) {
     port = port.trim()
     if (!isValidPort(port)) {
-      return { ok: false, error: 'Port must be 1–65535.' }
+      return { ok: false, error: hostEndpointCopy.invalidPort() }
     }
   }
 
@@ -274,10 +276,10 @@ function formatHostForUrl(host: string): string {
 
 function validateHostname(host: string): string | null {
   if (!host) {
-    return 'Missing hostname.'
+    return hostEndpointCopy.hostnameRequired()
   }
   if (/[\s/?#@[\]]/.test(host)) {
-    return 'Not a valid hostname.'
+    return hostEndpointCopy.invalidHostname()
   }
   const numericIpv4Error = validateNumericIpv4Candidate(host)
   if (numericIpv4Error) {
@@ -286,12 +288,12 @@ function validateHostname(host: string): string | null {
   if (host.includes(':')) {
     // Use the WebSocket URL parser to reject malformed IPv6 that a hex/colon regex accepts.
     if (!/^[0-9a-fA-F:]+$/.test(host)) {
-      return 'Not a valid hostname.'
+      return hostEndpointCopy.invalidHostname()
     }
     try {
       new URL(`ws://[${host}]:${DEFAULT_PORT}`)
     } catch {
-      return 'Not a valid hostname.'
+      return hostEndpointCopy.invalidHostname()
     }
     return null
   }
@@ -300,7 +302,7 @@ function validateHostname(host: string): string | null {
       host
     )
   ) {
-    return 'Not a valid hostname.'
+    return hostEndpointCopy.invalidHostname()
   }
   return null
 }
@@ -310,7 +312,7 @@ function validateNumericIpv4Candidate(host: string): string | null {
     return null
   }
   if (!isCanonicalIpv4(host)) {
-    return 'Not a valid hostname.'
+    return hostEndpointCopy.invalidHostname()
   }
   return null
 }

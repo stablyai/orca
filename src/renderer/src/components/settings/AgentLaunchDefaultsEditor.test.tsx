@@ -16,14 +16,16 @@ it.each(['', '--default'])(
           defaultArgs={defaultArgs}
           argsOverride=""
           onSaveArgs={vi.fn()}
-          permissionChip={
+          choiceChips={
             withChip
-              ? {
-                  label: 'Claude',
-                  flag: '--permission-mode default',
-                  removeRecipe: () => null,
-                  onRemove: vi.fn()
-                }
+              ? [
+                  {
+                    key: 'permissionMode',
+                    label: 'Claude',
+                    flag: '--permission-mode default',
+                    onRemove: (text) => text
+                  }
+                ]
               : undefined
           }
         />

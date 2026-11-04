@@ -6,7 +6,7 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 vi.mock('../store', () => ({
   useAppStore: {
     setState: vi.fn(),
-    getState: vi.fn(() => ({})),
+    getState: vi.fn(() => ({ updateAgentStatusState: vi.fn() })),
     subscribe: vi.fn(() => () => {})
   }
 }))

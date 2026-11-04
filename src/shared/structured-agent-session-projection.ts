@@ -11,7 +11,7 @@ import {
   type AgentJournalRenderItem,
   type AgentJournalSubmission
 } from './agent-session-journal-types'
-import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
+import type { AgentTurnOutcome } from './agent-turn-outcome'
 import { agentJournalToolCallLifecycle } from './agent-journal-tool-call-lifecycle'
 import { agentJournalLinkageFields } from './agent-session-journal-producer'
 import { structuredAgentSessionStatusBlock } from './structured-agent-session-status-block'
@@ -41,6 +41,7 @@ import { structuredAgentSessionStatusStartedAt } from './structured-agent-sessio
 import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
 import type { StructuredAgentSessionWorkScope } from './structured-agent-session-main-agent-working'
 import { agentSessionCurrentContextRows } from './agent-session-context-clear'
+import { nativeChatStatusTurnOutcome } from './native-chat/native-chat-orca-stop-cut'
 
 // Keep existing live-turn/unanswered-send consumers on one import path.
 export {
@@ -304,9 +305,7 @@ export function projectStructuredAgentSessionStatusState(
   const latestRequest = latestStructuredAgentSessionRequest(items, submissions)
   // Only idle sessions report a finished-request verdict.
   const request = status === 'idle' ? latestRequest : null
-  const turnOutcome = request
-    ? agentTurnVerdict({ state: request.turnState, outcome: request.outcome })
-    : null
+  const turnOutcome = nativeChatStatusTurnOutcome(request, items, submissions)
   const statusStartedAt = structuredAgentSessionStatusStartedAt(
     status,
     items,

@@ -5,6 +5,7 @@ import { pipeline } from 'node:stream/promises'
 import type { IncomingMessage } from 'node:http'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { EmulatorError } from '../emulator-errors'
+import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
 import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
 import { SCRCPY_SERVER_VERSION } from './scrcpy-server-deploy'
 
@@ -53,14 +54,14 @@ async function downloadScrcpyServerJar(path: string): Promise<string> {
     rmSync(path, { force: true })
     emulatorProbeError('scrcpy.jar.download.fail', error, { url: DOWNLOAD_URL })
     const detail = error instanceof Error ? error.message : 'unknown error'
-    throw new EmulatorError('emulator_helper_failed', `Could not download scrcpy server: ${detail}`)
+    throw new EmulatorError(
+      'emulator_helper_failed',
+      emulatorFailureText('scrcpyDownloadFailed', { detail })
+    )
   }
   if (!isScrcpyServerJarReady()) {
     rmSync(path, { force: true })
-    throw new EmulatorError(
-      'emulator_helper_failed',
-      'Downloaded scrcpy server was invalid or truncated.'
-    )
+    throw new EmulatorError('emulator_helper_failed', emulatorFailureText('scrcpyServerInvalid'))
   }
   emulatorProbe('scrcpy.jar.download.ok', { dest: path, bytes: statSync(path).size })
   return path

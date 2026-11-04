@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   BottomDrawer,
   View,
@@ -28,7 +29,7 @@ export function renderMobileTasksLinearViewPicker(model: ConnectionPresentationM
   return (
     <PickerModal
       visible={taskUiReady && showLinearViewPicker}
-      title="Linear View"
+      title={translate('tasks.listDisplayPickers.linearViewTitle', 'Linear View')}
       options={LINEAR_VIEW_OPTIONS}
       selected={linearViewMode}
       onSelect={setLinearViewMode}
@@ -48,7 +49,7 @@ export function renderMobileTasksLinearGroupPicker(model: ConnectionPresentation
   return (
     <PickerModal
       visible={taskUiReady && showLinearGroupPicker}
-      title="Group Linear Issues"
+      title={translate('tasks.listDisplayPickers.linearGroupTitle', 'Group Linear Issues')}
       options={LINEAR_GROUP_OPTIONS}
       selected={linearGroupBy}
       onSelect={setLinearGroupBy}
@@ -68,7 +69,7 @@ export function renderMobileTasksLinearOrderPicker(model: ConnectionPresentation
   return (
     <PickerModal
       visible={taskUiReady && showLinearOrderPicker}
-      title="Order Linear Issues"
+      title={translate('tasks.listDisplayPickers.linearOrderTitle', 'Order Linear Issues')}
       options={LINEAR_ORDER_OPTIONS}
       selected={linearOrderBy}
       onSelect={setLinearOrderBy}
@@ -92,7 +93,9 @@ export function renderMobileTasksLinearDisplayPicker(model: ConnectionPresentati
       onClose={() => setShowLinearDisplayPicker(false)}
     >
       <View style={styles.sheetHeader}>
-        <Text style={styles.sheetTitle}>Display Properties</Text>
+        <Text style={styles.sheetTitle}>
+          {translate('tasks.listDisplayPickers.displayPropertiesTitle', 'Display Properties')}
+        </Text>
       </View>
       <View style={styles.repoPickerGroup}>
         {LINEAR_DISPLAY_OPTIONS.map((property, index) => {
@@ -135,7 +138,7 @@ export function renderMobileTasksSortPicker(model: ConnectionPresentationModel) 
   return (
     <PickerModal
       visible={taskUiReady && showSortPicker}
-      title="Sort Tasks"
+      title={translate('tasks.listDisplayPickers.sortTasksTitle', 'Sort Tasks')}
       options={SORT_OPTIONS}
       selected={taskSort}
       onSelect={setTaskSort}

@@ -2,6 +2,7 @@ import { MultiRepoWorkspaceError } from '../../../shared/multi-repo-workspace'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { WorktreeLineageResolution } from '../runtime-worktree-lineage-resolution'
 import type { RuntimeStore } from '../runtime-store-contract'
+import { recordCreatedWorktreeLineage } from '../runtime-worktree-lineage-recording'
 
 /** A worktree is locked iff some multi-repo member points at it; the record is the single source of truth. */
 export function findMultiRepoMemberOwner(
@@ -62,4 +63,12 @@ export function withoutMultiRepoParent(
       }
     ]
   }
+}
+
+export function recordLineageOutsideMultiRepoParent(
+  store: RuntimeStore | null,
+  worktree: Parameters<typeof recordCreatedWorktreeLineage>[1],
+  resolution: WorktreeLineageResolution
+): ReturnType<typeof recordCreatedWorktreeLineage> {
+  return recordCreatedWorktreeLineage(store, worktree, withoutMultiRepoParent(store, resolution))
 }

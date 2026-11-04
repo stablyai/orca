@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionStatusPublisher } from '../../native-chat/agent-session-wire/structured-agent-session-status-ownership'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import {
@@ -23,9 +24,47 @@ import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 
 export abstract class AgentHookServerIngestStructured extends AgentHookServerIngestTerminal {
+  withSavedStructuredStatusGroup(
+    visit: (sink: StructuredAgentSessionStatusPublisher) => void
+  ): void {
+    let pendingAt: number | undefined
+    const defer = (mutate: (notify: () => void) => void): void => {
+      const before = this.statusChangeNotificationVersion
+      mutate(() => {
+        // Reentrant live notifications already include this committed saved mutation.
+        if (before === this.statusChangeNotificationVersion) {
+          pendingAt = before
+        }
+      })
+    }
+    const flush = (): void => {
+      const pending = pendingAt
+      pendingAt = undefined
+      if (pending !== undefined && pending === this.statusChangeNotificationVersion) {
+        this.notifyStatusChangeListeners()
+      }
+    }
+    try {
+      visit({
+        publish: (summary, subject) =>
+          defer((notify) => this.ingestStructuredStatus(summary, subject, notify)),
+        forget: (subject) => defer((notify) => this.dropStructuredStatus(subject, notify))
+      })
+    } catch (error) {
+      try {
+        flush()
+      } catch {
+        /* Preserve the original visit failure. */
+      }
+      throw error
+    }
+    flush()
+  }
+
   ingestStructuredStatus(
     summary: AgentSessionStatusSummary,
-    subject: AgentStatusStructuredSessionSubject
+    subject: AgentStatusStructuredSessionSubject,
+    notify = () => this.notifyStatusChangeListeners()
   ): void {
     const parsed = parseAgentStatusSubject(subject)
     if (
@@ -39,7 +78,7 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       throw new Error('Structured status does not match its trusted owner subject')
     }
     if (!summary.status) {
-      this.dropStructuredStatus(parsed)
+      this.dropStructuredStatus(parsed, notify)
       return
     }
     const previous = this.canonicalStatusStore.getParent(parsed)
@@ -126,12 +165,15 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     }
     const after = structuredStatusLegacyEvent(committed)
     this.commitStatusRowMutation(priorStatus && structuredStatusLegacyEvent(priorStatus), after)
-    this.notifyStatusChangeListeners()
+    notify()
     this.emitEnrichedStatus(after)
   }
 
   /** Only the owning feed can forget a structured row; pane cleanup cannot. */
-  dropStructuredStatus(subject: AgentStatusStructuredSessionSubject): void {
+  dropStructuredStatus(
+    subject: AgentStatusStructuredSessionSubject,
+    notify = () => this.notifyStatusChangeListeners()
+  ): void {
     const parsed = parseAgentStatusSubject(subject)
     if (!parsed || parsed.kind !== 'structured-session') {
       throw new Error('Structured status removal requires its exact owner subject')
@@ -155,7 +197,7 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
         this.canonicalSubjectsByPane.delete(previous.status.paneKey)
       }
       this.commitStatusRowMutation(structuredStatusLegacyEvent(previous.status), undefined)
-      this.notifyStatusChangeListeners()
+      notify()
       this.emitStatusDropped(previous.status.paneKey)
     }
   }

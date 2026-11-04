@@ -93,6 +93,7 @@ export type TerminalWebViewProps = {
   textScale?: number
   // Only initially shown views build pre-ready engines, limiting WebGL context use.
   shownAtMount?: boolean
+  interactionActive?: boolean
   onWebReady?: () => void
   onEngineError?: (message: string) => void
 } & TerminalSelectionEvents

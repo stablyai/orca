@@ -46,7 +46,8 @@ export function buildLocalPtySpawnEnvironment(args: {
     cwd: plan.cwd,
     shellPath: plan.shellPath,
     isWsl: plan.isWslShell,
-    wslDistro: plan.launchWslDistro
+    wslDistro: plan.launchWslDistro,
+    wslPassiveRestore: spawn.wslPassiveRestore === true
   })
 }
 

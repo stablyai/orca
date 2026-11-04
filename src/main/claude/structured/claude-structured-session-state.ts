@@ -1,4 +1,5 @@
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { ClaudeCliFlagCheck, ClaudeCliFlagFact } from '../claude-cli-flag-support'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
@@ -66,6 +67,7 @@ export type ClaudeStructuredSessionEvent =
       sessionId: string
       reason: string
       failure?: SubmissionRejectionFact
+      deathEvidenceKind?: 'kill-delivered'
       /** Present for first-hand child exits so the host can fence recovery. */
       cause?: 'unexpected-exit' | 'requested-close'
       fence?: number
@@ -173,6 +175,7 @@ export type ClaudeSession = {
   fastModeReportedMutation?: number
   fastModeState?: AgentSessionFastModeState
   fastModeDisabledReason?: string
+  fastModeDisabledMutation?: number
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
@@ -180,15 +183,15 @@ export type ClaudeSession = {
   confirmedOptions: Set<string>
   /** Inputs carried by launch or accepted controls, independent of provider reports. */
   appliedInputOptions: Map<string, string>
-  /** The model the child was launched with, as `--model`; null when it runs the CLI's own. */
-  launchedModel: string | null
   /** What Orca put on this process's command line, and the first root init's answer; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
   firstRootInit?: { permissionMode: string | null }
-  /** A launched model the CLI answered `model_not_found` for; reported until a new pick. */
-  retiredModel?: string
   /** Fast was omitted from launch settings and must be applied before message input. */
   fastModeAtStart: boolean
+  /** Rechecks this child's CLI support; absent where the launch had no flag support to ask. */
+  cliFlag?: ClaudeCliFlagCheck
+  /** Whether the CLI answers live effort and Fast changes; `unknown` ones are rechecked, then tried. */
+  flagSettingsControl?: ClaudeCliFlagFact
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker
@@ -198,6 +201,7 @@ export type ClaudeSession = {
   /** Monotonic fence advanced when a dispatch starts, including unresolved dispatches. */
   dispatchSequence: number
   /** Fences overlapping option writes so a late completion cannot restore stale state. */
+  settingsObservation?: { pending: boolean }
   optionMutationSequence: number
   /** Latest resume point written at a turn end; close and exit persist after it settles. */
   resumePointWrite?: { leafUuid: string; settled: Promise<void> }
@@ -349,15 +353,6 @@ export async function cancelClaudeAcquisitionAttempt(
     exitProven: () => attempt.exitProven,
     finished: attempt.finished
   })
-}
-
-export type ClaudeSessionAcquisitionInput = {
-  input: SessionAdapter.StructuredAgentSessionAcquireInput
-  deps: ClaudeStructuredSessionAdapterDeps
-  sessions: Map<string, ClaudeSession>
-  acquisitions: ClaudeAcquisitionRegistry
-  exits: Map<string, ClaudeSessionExit>
-  callbacks: ClaudeAcquireCallbacks
 }
 
 export type ClaudeAcquireCallbacks = {

@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => {
       }
     >(),
     repos: [] as { id: string; displayName: string; connectionId?: string }[],
+    sshTargetLabels: new Map<string, string>(),
+    sshConnectionStates: new Map<string, { status: string }>(),
     worktreeLineageById: {},
     allWorktrees: () => Array.from(state.worktreeMap.values()),
     clearWorktreeDeleteState: vi.fn((worktreeId: string) => {
@@ -150,6 +152,8 @@ describe('delete worktree flow', () => {
     mocks.state.gitStatusByWorktree = {}
     mocks.state.worktreeLineageById = {}
     mocks.state.repos = []
+    mocks.state.sshTargetLabels = new Map()
+    mocks.state.sshConnectionStates = new Map()
     mocks.state.openFiles = []
     vi.mocked(toast.error).mockClear()
     vi.mocked(toast.info).mockClear()
@@ -713,6 +717,23 @@ describe('delete worktree flow', () => {
       displayName: 'provisioned orca',
       hostId: 'ssh:runtime-ssh-one'
     })
+  })
+
+  // #34677: a connected SSH target does not make this app's main able to delete there.
+  it('offers only Remove from Orca for a workspace on a connected SSH target', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([{ id: 'repo-1::/srv/wt', displayName: 'wt', hostId: 'ssh:builder' }])
+    mocks.state.repos = [{ id: 'repo-1', displayName: 'remote', connectionId: 'builder' }]
+    mocks.state.sshTargetLabels = new Map([['builder', 'Builder']])
+    mocks.state.sshConnectionStates = new Map([['builder', { status: 'connected' }]])
+
+    runWorktreeDelete('repo-1::/srv/wt')
+
+    expect(mocks.state.openModal).toHaveBeenCalledWith(
+      'forget-ssh-workspace',
+      expect.objectContaining({ resolution: { kind: 'saved', targetId: 'builder' } })
+    )
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
   })
 
   it('can force confirmation for a single eligible delete', () => {

@@ -1,5 +1,6 @@
-import { applyAppend, replaceList } from '../../../../src/shared/native-chat-merge'
-import type { NativeChatMerger } from '../../../../src/shared/native-chat-merge'
+import { applyAppend, replaceList } from '../../../../src/shared/native-chat/native-chat-merge'
+import { translate } from '../../i18n/mobile-i18n'
+import type { NativeChatMerger } from '../../../../src/shared/native-chat/native-chat-merge'
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
@@ -70,11 +71,20 @@ export function applyMobileNativeChatStreamFrame(args: {
 }): AppliedMobileNativeChatFrame {
   const { merger, frame, limit, replaceSnapshot } = args
   if (frame.type === 'error') {
-    return { kind: 'error', error: frame.message ?? frame.error ?? 'Transcript stream failed' }
+    return {
+      kind: 'error',
+      error:
+        frame.message ??
+        frame.error ??
+        translate('chat.streamFrame.streamFailed', 'Transcript stream failed')
+    }
   }
   // The subscription owns its token, so an unsolicited end means its feed died.
   if (frame.type === 'end') {
-    return { kind: 'error', error: 'Transcript stream ended' }
+    return {
+      kind: 'error',
+      error: translate('chat.streamFrame.streamEnded', 'Transcript stream ended')
+    }
   }
   if (frame.type !== 'snapshot' && frame.type !== 'replacement' && frame.type !== 'appended') {
     return { kind: 'ignored' }

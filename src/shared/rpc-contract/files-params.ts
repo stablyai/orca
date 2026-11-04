@@ -19,6 +19,8 @@ export const FilePathSearch = WorktreeSelector.extend({
   mode: z.literal('quick-open').optional()
 })
 
+export const ChatImageRead = WorktreeSelector.extend({ path: z.string().min(1).max(4096) })
+
 export const ResolveTerminalPath = WorktreeSelector.extend({
   pathText: z
     .unknown()
@@ -90,14 +92,18 @@ export const ServerDirectoryBrowse = z.object({
     .pipe(z.string())
 })
 
-export const FileReadChunk = FileOpen.extend({
+const FileChunkRange = {
   offset: z.number().int().nonnegative(),
   length: z
     .number()
     .int()
     .positive()
     .max(512 * 1024)
-})
+}
+
+export const FileReadChunk = FileOpen.extend(FileChunkRange)
+
+export const DocPreviewFileReadChunk = DocPreviewFileRead.extend(FileChunkRange)
 
 export const FileSearch = WorktreeSelector.extend({
   query: z

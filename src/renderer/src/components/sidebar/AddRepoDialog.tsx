@@ -16,21 +16,18 @@ import { AddRepoHostSelectorSlot } from './AddRepoHostSelectorSlot'
 import { useAddRepoNestedReviewController } from './useAddRepoNestedReviewController'
 import {
   useAddRepoHostedController,
-  type AddRepoDialogHostedController
+  type AddRepoDialogProps
 } from './use-add-repo-hosted-controller'
 import { routeAddRepoBrowse } from './add-repo-browse-authority'
 import { useAddRepoWslHostPaths } from './use-add-repo-wsl-host-paths'
 import { useAddRepoDialogModalPaths } from './use-add-repo-dialog-modal-paths'
 import { useAddRepoWindowsDriveRefusal } from './use-add-repo-windows-drive-refusal'
 
-export default React.memo(function AddRepoDialog({
-  hosted
-}: {
-  hosted?: AddRepoDialogHostedController
-}) {
+export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps) {
   const isOpen = useAppStore((s) => (hosted ? hosted.open : s.activeModal === 'add-repo'))
   const modalPaths = useAddRepoDialogModalPaths(Boolean(hosted))
   const addRepoPath = useAppStore((s) => s.addRepoPath)
+  const openModal = useAppStore((s) => s.openModal)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
   const importNestedRepos = useAppStore((s) => s.importNestedRepos)
@@ -169,6 +166,7 @@ export default React.memo(function AddRepoDialog({
     droppedLocalPath: modalPaths.droppedLocalPath,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     addRepoPath,
+    openModal,
     closeModal: closeForFolderHandoff,
     fetchWorktrees,
     scanNestedRepos,

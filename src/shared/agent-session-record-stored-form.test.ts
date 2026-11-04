@@ -421,3 +421,29 @@ describe('a chat whose saved conversation could not be restored', () => {
     expect(decodePersistedAgentSessionProviderHandleChain(stored)).toBeNull()
   })
 })
+
+it.each([
+  null,
+  'open',
+  {},
+  { state: 'open', at: -1 },
+  { state: 'settled', at: 10, outcome: 'newer' },
+  { state: 'open', at: 10, prompt: 'p'.repeat(281) }
+])('ignores malformed optional last-turn metadata: %j', (lastTurn) => {
+  const stored = { ...encodeAgentSessionRecord(agentSessionRecordFixture()), lastTurn }
+  expect(isPersistedAgentSessionRecord(stored)).toBe(true)
+  expect(decodePersistedAgentSessionRecord(stored).record.lastTurn).toBeUndefined()
+})
+
+it('preserves the saved turn and unknown JSON through a record transition', () => {
+  const stored = {
+    ...encodeAgentSessionRecord(agentSessionRecordFixture()),
+    lastTurn: { state: 'settled', outcome: 'success', at: 10 },
+    laterField: 'keep'
+  }
+  const record = decodePersistedAgentSessionRecord(stored).record
+  expect(encodeAgentSessionRecord({ ...record, updatedAt: 20 })).toMatchObject({
+    lastTurn: stored.lastTurn,
+    laterField: 'keep'
+  })
+})

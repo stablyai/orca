@@ -204,7 +204,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       {
         store: this.store,
         resolveRepo: (selector) => this.resolveRepoSelector(selector),
-        resolveWorktree: (selector) => this.resolveWorktreeSelector(selector)
+        resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector)
       },
       worktreeId,
       repoId

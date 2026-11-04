@@ -12,8 +12,9 @@ import type {
 import type { ProviderDiagnostic } from '../../../shared/agent-session-failure'
 
 export type AgentSessionCloseEvidence = {
-  root: 'live' | 'unverifiable' | 'exited'
-  workload: 'live' | 'unverifiable' | 'exited'
+  root?: 'live' | 'unverifiable' | 'exited'
+  workload?: 'live' | 'unverifiable' | 'exited'
+  deathEvidenceKind?: 'kill-delivered'
 }
 export type AgentSessionCloseObserver = (evidence: AgentSessionCloseEvidence | undefined) => void
 
@@ -24,6 +25,7 @@ export type AgentSessionStopOutcome = {
   interrupt: 'accepted' | 'not-needed' | 'unconfirmed'
   root: 'exited' | 'unproven'
   workload: 'exited' | 'unproven'
+  deathEvidenceKind?: 'kill-delivered'
   errors: unknown[]
 }
 

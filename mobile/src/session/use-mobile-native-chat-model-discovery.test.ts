@@ -58,7 +58,7 @@ const listed = {
 }
 
 describe('mobile OMP model discovery and picker choices', () => {
-  it('queries the execution workspace and untracks a hook model the configured list lacks', async () => {
+  it('queries the execution workspace and retains the reported current model', async () => {
     const sendRequest = vi.fn(async () => reply(listed))
     await mount({ sendRequest })
     expect(sendRequest).toHaveBeenCalledWith(
@@ -69,10 +69,14 @@ describe('mobile OMP model discovery and picker choices', () => {
       },
       undefined
     )
-    // As on desktop: an authoritative list retires models it omits, even one the hook reported.
+    // Discovery retires future launch defaults, not the live chat's reported model.
     expect(modelChoices()).toEqual({
       type: 'select',
-      choices: [expect.objectContaining({ value: 'provider/new', label: 'New model' })]
+      currentValue: reportedModel,
+      choices: [
+        expect.objectContaining({ value: 'provider/new', label: 'New model' }),
+        { value: reportedModel, label: reportedModel }
+      ]
     })
   })
   it('makes discovered choices selectable only after the live extension advertises support', async () => {

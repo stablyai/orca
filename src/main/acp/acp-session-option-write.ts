@@ -14,17 +14,13 @@ export function writeAcpSessionOption(
     return Promise.reject(abortSignalReason(signal))
   }
   const revision = ++options.writeRevision
-  options.currentProof.delete(bound.key)
-  if (bound.key === 'model') {
-    options.currentProof.delete('effort')
-  }
+  options.invalidateInput(bound.key)
   const adopt = (apply: () => void): void => {
     if (options.writeRevision !== revision) {
       throw new Error(`${agent} option write was superseded`)
     }
     apply()
-    options.currentProof.add(bound.key)
-    options.applied.set(bound.key, bound.value)
+    options.appliedInput.set(bound.key, write.method === 'config' ? write.value : write.modelId)
   }
   const applied =
     write.method === 'config'

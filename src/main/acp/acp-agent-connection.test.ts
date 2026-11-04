@@ -1,3 +1,4 @@
+import { AcpLaunchGate } from './acp-launch-gate'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
@@ -19,6 +20,10 @@ const teardown = vi.hoisted(() =>
 vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: teardown
 }))
+
+const actual = await vi.importActual<{
+  terminateProviderProcessTree: typeof terminateProviderProcessTree
+}>('../provider-process/provider-process-teardown')
 
 const opened: { connection: AcpAgentConnection; exit: () => void }[] = []
 const grace =
@@ -386,3 +391,78 @@ it('closes a recognized stdout prompt over 16 MiB without inventing a signed-out
   await vi.waitFor(() => expect(connection.closed).toBe(true))
   expect(answered).toHaveBeenCalledTimes(1)
 })
+
+it.each([true, false])(
+  'runs setup through the retained launch gate with initial kill delivery=%s',
+  async (initialDelivery) => {
+    vi.useFakeTimers()
+    const { connection, child } = fixture({}, { exitOnEnd: false })
+    let permitted = initialDelivery
+    let writerGone = false
+    const deliver = () => {
+      if (!permitted || writerGone) {
+        throw Object.assign(new Error('writer group unavailable'), { code: 'ESRCH' })
+      }
+      writerGone = true
+    }
+    teardown.mockImplementation((held, deps) =>
+      actual.terminateProviderProcessTree(held, {
+        ...deps,
+        captureDescendants: async () => ({
+          rootPgid: null,
+          capturedAtMs: 1,
+          descendants: [
+            {
+              pid: child.pid! + 1,
+              ppid: child.pid!,
+              pgid: child.pid! + 1,
+              startedAt: 'Mon Jan 1 00:00:00 2026'
+            }
+          ]
+        }),
+        terminateDescendants: async () => 'unverifiable',
+        signalProcessGroup: deliver,
+        signalProcess: () => {},
+        terminateWindowsTree: async () => {
+          try {
+            deliver()
+            return true
+          } catch {
+            return false
+          }
+        }
+      })
+    )
+    const gate = new AcpLaunchGate('Antigravity')
+    gate.retain(connection)
+    const first = connection.close()
+    await vi.advanceTimersByTimeAsync(grace + 1000)
+    expect(await first).toBe(initialDelivery)
+    const work = vi.fn(async () => 'setup completed')
+    if (!initialDelivery) {
+      const denied = expect(gate.run(async () => {}, work)).rejects.toThrow('could not be stopped')
+      await vi.advanceTimersByTimeAsync(grace + 1000)
+      await denied
+      expect(work).not.toHaveBeenCalled()
+      permitted = true
+      const retry = gate.run(async () => {}, work)
+      await vi.advanceTimersByTimeAsync(grace + 1000)
+      await expect(retry).resolves.toBe('setup completed')
+    } else {
+      await expect(gate.run(async () => {}, work)).resolves.toBe('setup completed')
+    }
+    expect(work).toHaveBeenCalledOnce()
+    const attempts = initialDelivery ? 1 : 3
+    expect(teardown).toHaveBeenCalledTimes(attempts)
+    await expect(gate.run(async () => {}, work)).resolves.toBe('setup completed')
+    expect(work).toHaveBeenCalledTimes(2)
+    expect(teardown).toHaveBeenCalledTimes(attempts)
+    const next = gate.enter(undefined)
+    expect(next.signal.aborted).toBe(false)
+    next.leave()
+    expect(connection.lastCloseResult).toMatchObject({
+      root: 'live',
+      killDelivered: true
+    })
+  }
+)

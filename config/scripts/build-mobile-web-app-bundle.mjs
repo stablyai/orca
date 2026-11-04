@@ -381,6 +381,20 @@ export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } 
   }
 }
 
+// One lazily imported chunk per UI language; the page fetches only the active one after init.
+const LOCALE_CATALOG_INPUT = /(^|\/)src\/i18n\/locales\/[^/]+\.json$/
+
+function localeCatalogOutputs(metafile) {
+  return new Set(
+    Object.entries(metafile.outputs)
+      .filter(([, output]) => {
+        const inputs = Object.keys(output.inputs ?? {})
+        return inputs.length > 0 && inputs.every((input) => LOCALE_CATALOG_INPUT.test(input))
+      })
+      .map(([output]) => basename(output))
+  )
+}
+
 export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const routes = await collectMobileWebAppRoutes(appDir)
   await assertRoutesCarryNoSynchronousExports(routes)
@@ -402,10 +416,12 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const chunks = others.filter(({ emittedName }) => isScriptOutput(emittedName)).sort(byName)
   const images = others.filter(({ emittedName }) => !isScriptOutput(emittedName)).sort(byName)
   const closure = entryStaticClosure(result.metafile, entryOutputPath)
+  const catalogOutputs = localeCatalogOutputs(result.metafile)
   return {
     script: entry.bytes,
     chunks,
     images,
+    catalogChunks: chunks.filter(({ emittedName }) => catalogOutputs.has(emittedName)),
     // Count final renamed bytes; metafile sizes predate longer hashes but still identify static imports.
     entryStaticBytes: [...closure].reduce(
       (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
@@ -447,7 +463,7 @@ export async function buildMobileWebAppBundle({
   const [
     desktopVersion,
     protocolWindow,
-    { script, chunks, images, entryStaticBytes, routeChunks, routeKeys },
+    { script, chunks, images, catalogChunks, entryStaticBytes, routeChunks, routeKeys },
     scrollbarStyle
   ] = await Promise.all([
     readDesktopVersion(),
@@ -497,9 +513,12 @@ export async function buildMobileWebAppBundle({
     routeKeys,
     entryStaticBytes,
     // The entry counts: it is a chunk the browser fetches, and the budget is about how many.
-    chunkCount: chunks.length + 1,
+    // Locale catalogs are counted separately against their own allowance.
+    chunkCount: chunks.length - catalogChunks.length + 1,
     // Everything the routes import that is not a script, which is the rest of the asset budget.
-    imageCount: images.length
+    imageCount: images.length,
+    catalogChunkCount: catalogChunks.length,
+    catalogBytes: catalogChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0)
   }
 }
 

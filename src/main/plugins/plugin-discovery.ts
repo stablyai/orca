@@ -1,25 +1,28 @@
-import { readdir } from 'node:fs/promises'
+import { readdir, realpath } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { join } from 'node:path'
-import { PLUGIN_CONTENT_HASH_PATTERN } from '../../shared/plugins/plugin-install-lockfile'
+import { PLUGIN_CONTENT_HASH_PATTERN } from '../../shared/plugins/installation/plugin-install-lockfile'
 import {
   PLUGIN_MANIFEST_FILENAME,
   isQualifiedPluginKey,
+  parseHostPluginManifest,
   parsePluginManifest,
   qualifiedPluginKey,
   satisfiesOrcaEngineRange,
   type PluginManifest
-} from '../../shared/plugins/plugin-manifest'
+} from '../../shared/plugins/manifest/plugin-manifest'
+import { pluginManifestCompatibilityError } from '../../shared/plugins/manifest/plugin-manifest-compatibility'
 import {
   fingerprintPluginConsent,
-  hasInstructionalPluginContributions
-} from '../../shared/plugins/plugin-consent-fingerprint'
+  hasDeclarativePluginContributions,
+  requiresPluginContentApproval
+} from '../../shared/plugins/approval/plugin-consent-fingerprint'
 import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
 import { readPluginManifestText } from './plugin-manifest-file'
-import { readPluginCurrentPointer } from './plugin-current-pointer'
+import { readPluginCurrentPointer } from './installation/plugin-current-pointer'
 import { hashPluginTree } from './plugin-content-hash'
 
-export { PLUGIN_CURRENT_POINTER_FILENAME } from './plugin-current-pointer'
+export { PLUGIN_CURRENT_POINTER_FILENAME } from './installation/plugin-current-pointer'
 
 const INSTALLED_PLUGIN_DISCOVERY_CONCURRENCY = 8
 
@@ -31,7 +34,7 @@ export type ValidDiscoveredPlugin = {
   manifest: PluginManifest
   /** Fingerprint of the capabilities and trusted-worker execution tier. */
   consentFingerprint: string
-  /** Immutable tree identity included in consent for instructional packs. */
+  /** Immutable tree identity included in consent for declarative packs. */
   consentContentHash?: string | null
   /** Null for mutable dev trees. */
   contentHash: string | null
@@ -90,9 +93,11 @@ async function readManifestDir(
       isDev
     }
   }
-  const parsed = parsePluginManifest(raw)
+  // Why strict for dev trees: they are the author's working copy, so authoring errors belong there.
+  const parsed = isDev ? parsePluginManifest(raw) : parseHostPluginManifest(raw)
   if (!parsed.ok) {
-    return { rootDir, error: `invalid manifest: ${parsed.error}`, isDev }
+    const incompatible = pluginManifestCompatibilityError(raw, hostVersion)
+    return { rootDir, error: incompatible ?? `invalid manifest: ${parsed.error}`, isDev }
   }
   const manifest = parsed.manifest
   const pluginKey = qualifiedPluginKey(manifest)
@@ -114,10 +119,12 @@ async function readManifestDir(
     }
   }
   let consentContentIdentity: string | undefined
-  if (installedContentHash && hasInstructionalPluginContributions(manifest)) {
+  if (installedContentHash && requiresPluginContentApproval(manifest)) {
     consentContentIdentity = installedContentHash
   }
-  if (isDev && hasInstructionalPluginContributions(manifest)) {
+  // Why dev trees bind only instructions: dev code is the author's working copy, and
+  // binding it would re-prompt on every save.
+  if (isDev && hasDeclarativePluginContributions(manifest)) {
     const treeHash = await hashPluginTree(rootDir)
     if (!treeHash.ok) {
       return { pluginKey, rootDir, error: treeHash.error, isDev }
@@ -128,11 +135,25 @@ async function readManifestDir(
     pluginKey,
     rootDir,
     manifest,
-    consentFingerprint: fingerprintPluginConsent(manifest, consentContentIdentity),
+    consentFingerprint: fingerprintPluginConsent(
+      manifest,
+      isDev
+        ? await devFolderConsentIdentity(rootDir, consentContentIdentity)
+        : consentContentIdentity
+    ),
     consentContentHash: consentContentIdentity ?? null,
     contentHash: null,
     isDev
   }
+}
+
+/** Why the folder: otherwise approving one dev folder approves any other claiming the same key. */
+export async function devFolderConsentIdentity(
+  rootDir: string,
+  contentIdentity?: string
+): Promise<string> {
+  const folder = await realpath(rootDir).catch(() => rootDir)
+  return `dev-folder:${folder}\0${contentIdentity ?? ''}`
 }
 
 async function readInstalledPlugin(

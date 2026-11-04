@@ -95,7 +95,7 @@ export function TaskPageLinearCustomViewProjects({
         errors={linearCustomViewProjectsResult.errors}
         hasMore={linearCustomViewProjectsResult.hasMore}
         count={linearCustomViewProjectsResult.items.length}
-        label={translate('auto.components.TaskPage.b39fe6511d', 'projects')}
+        kind="projects"
       />
     </div>
   )

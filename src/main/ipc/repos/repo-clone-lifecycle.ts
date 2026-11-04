@@ -157,6 +157,8 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
               ['clone', '--progress', '--', args.url, clonePath],
               {
                 cwd: args.destination,
+                // Host Git on purpose: the clone makes a new repo no project owns, even inside one.
+                hostGit: true,
                 admissionTier: 'interactive',
                 // Suppress Windows Git Credential Manager OAuth windows during noninteractive cloning (#7652).
                 env: promptGuardGitEnv(),

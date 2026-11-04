@@ -21,6 +21,7 @@ import {
   workspaceAgentIconId
 } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
+import { translate } from '../i18n/mobile-i18n'
 
 export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresentationModel) {
   const {
@@ -60,7 +61,9 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
       {workspaceCreateDraft ? (
         <View>
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Create Workspace</Text>
+            <Text style={styles.sheetTitle}>
+              {translate('tasks.workspaceCreateDrawer.title', 'Create Workspace')}
+            </Text>
             <Text style={styles.sheetSubtitle} numberOfLines={2}>
               {workspaceCreateDraft.item.title}
             </Text>
@@ -68,7 +71,9 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
 
           <View style={styles.workspaceCreateForm}>
             <View style={styles.workspaceCreateField}>
-              <Text style={styles.workspaceCreateLabel}>Repository</Text>
+              <Text style={styles.workspaceCreateLabel}>
+                {translate('tasks.workspaceCreateDrawer.repository', 'Repository')}
+              </Text>
               <Pressable
                 style={styles.fieldButton}
                 disabled={!workspaceCreateCanPickRepo}
@@ -91,7 +96,11 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                   ]}
                   numberOfLines={1}
                 >
-                  {workspaceCreateTargetRepo?.displayName ?? 'Select a repository'}
+                  {workspaceCreateTargetRepo?.displayName ??
+                    translate(
+                      'tasks.workspaceCreateDrawer.selectRepository',
+                      'Select a repository'
+                    )}
                 </Text>
                 {workspaceCreateCanPickRepo ? (
                   <ChevronDown size={14} color={colors.textMuted} />
@@ -101,7 +110,9 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
 
             {workspaceCreateTargetConnectionId ? (
               <View style={styles.workspaceCreateField}>
-                <Text style={styles.workspaceCreateLabel}>SSH Connection</Text>
+                <Text style={styles.workspaceCreateLabel}>
+                  {translate('tasks.workspaceCreateDrawer.sshConnection', 'SSH Connection')}
+                </Text>
                 <View style={styles.sshConnectCard}>
                   <View style={styles.sshStatusRow}>
                     <View
@@ -116,7 +127,11 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                     />
                     <View style={styles.sshStatusCopy}>
                       <Text style={styles.sshStatusTitle} numberOfLines={1}>
-                        {workspaceCreateTargetRepo?.displayName ?? 'Remote repository'}
+                        {workspaceCreateTargetRepo?.displayName ??
+                          translate(
+                            'tasks.workspaceCreateDrawer.remoteRepository',
+                            'Remote repository'
+                          )}
                       </Text>
                       <Text style={styles.detailMuted}>
                         {workspaceSshStatusLabel(workspaceCreateSshStatus)}
@@ -134,7 +149,9 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                         onPress={() => void connectWorkspaceSshRepo()}
                       >
                         <Text style={styles.inlineSaveText}>
-                          {workspaceCreateSshConnectInProgress ? 'Connecting...' : 'Connect'}
+                          {workspaceCreateSshConnectInProgress
+                            ? translate('tasks.workspaceCreateDrawer.connecting', 'Connecting...')
+                            : translate('tasks.workspaceCreateDrawer.connect', 'Connect')}
                         </Text>
                       </Pressable>
                     )}
@@ -148,7 +165,10 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
 
             <View style={styles.workspaceCreateField}>
               <Text style={styles.workspaceCreateLabel}>
-                Workspace Name <Text style={styles.workspaceCreateLabelHint}>[Optional]</Text>
+                {translate('tasks.workspaceCreateDrawer.workspaceName', 'Workspace Name')}{' '}
+                <Text style={styles.workspaceCreateLabelHint}>
+                  {translate('tasks.workspaceCreateDrawer.optional', '[Optional]')}
+                </Text>
               </Text>
               <MobileWorkspaceNameInput
                 style={styles.input}
@@ -160,7 +180,9 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
             </View>
 
             <View style={styles.workspaceCreateField}>
-              <Text style={styles.workspaceCreateLabel}>Agent</Text>
+              <Text style={styles.workspaceCreateLabel}>
+                {translate('tasks.workspaceCreateDrawer.agent', 'Agent')}
+              </Text>
               <Pressable
                 style={[
                   styles.fieldButton,
@@ -172,9 +194,15 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                 <MobileAgentIcon agentId={workspaceAgentIconId(resolvedWorkspaceAgent)} size={16} />
                 <Text style={styles.fieldButtonText} numberOfLines={1}>
                   {workspaceCreateRequiresSshConnection
-                    ? 'Connect repository first'
+                    ? translate(
+                        'tasks.workspaceCreateDrawer.connectFirst',
+                        'Connect repository first'
+                      )
                     : workspaceAgentDetectionPending
-                      ? 'Detecting agents...'
+                      ? translate(
+                          'tasks.workspaceCreateDrawer.detectingAgents',
+                          'Detecting agents...'
+                        )
                       : workspaceAgentLabel(resolvedWorkspaceAgent)}
                 </Text>
                 <ChevronDown size={14} color={colors.textMuted} />
@@ -185,7 +213,9 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
               style={styles.workspaceAdvancedToggle}
               onPress={() => setShowWorkspaceAdvanced((current) => !current)}
             >
-              <Text style={styles.workspaceAdvancedText}>Advanced</Text>
+              <Text style={styles.workspaceAdvancedText}>
+                {translate('tasks.workspaceCreateDrawer.advanced', 'Advanced')}
+              </Text>
               {showWorkspaceAdvanced ? (
                 <ChevronUp size={14} color={colors.textSecondary} />
               ) : (
@@ -195,7 +225,9 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
 
             {showWorkspaceAdvanced ? (
               <View style={styles.workspaceCreateField}>
-                <Text style={styles.workspaceCreateLabel}>Start from</Text>
+                <Text style={styles.workspaceCreateLabel}>
+                  {translate('tasks.workspaceCreateDrawer.startFrom', 'Start from')}
+                </Text>
                 <Pressable
                   style={styles.fieldButton}
                   onPress={() => {
@@ -205,13 +237,16 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                 >
                   <GitBranch size={14} color={colors.textMuted} />
                   <Text style={styles.fieldButtonText} numberOfLines={1}>
-                    {workspaceBaseBranch?.refName ?? 'Default branch'}
+                    {workspaceBaseBranch?.refName ??
+                      translate('tasks.workspaceCreateDrawer.defaultBranch', 'Default branch')}
                   </Text>
                   <ChevronDown size={14} color={colors.textMuted} />
                 </Pressable>
                 {workspaceBaseBranch ? (
                   <Text style={styles.detailMuted} numberOfLines={1}>
-                    Create from {workspaceBaseBranch.refName}
+                    {translate('tasks.workspaceCreateDrawer.createFrom', 'Create from {{branch}}', {
+                      branch: workspaceBaseBranch.refName
+                    })}
                   </Text>
                 ) : null}
               </View>
@@ -221,8 +256,14 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
           {workspaceCreateTargetRepo ? null : (
             <Text style={styles.detailError}>
               {workspaceCreateDraft.item.provider === 'linear'
-                ? 'Add a Git repository before creating a Linear workspace.'
-                : 'Repository not found.'}
+                ? translate(
+                    'tasks.workspaceCreateDrawer.addRepository',
+                    'Add a Git repository before creating a Linear workspace.'
+                  )
+                : translate(
+                    'tasks.workspaceCreateDrawer.repositoryNotFound',
+                    'Repository not found.'
+                  )}
             </Text>
           )}
 
@@ -265,10 +306,16 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
               ) : (
                 <Text style={styles.createButtonText}>
                   {workspaceAgentDetectionPending
-                    ? 'Detecting agents...'
+                    ? translate(
+                        'tasks.workspaceCreateDrawer.detectingAgents',
+                        'Detecting agents...'
+                      )
                     : workspaceCreateRequiresSshConnection
-                      ? 'Connect Repository'
-                      : 'Create Workspace'}
+                      ? translate(
+                          'tasks.workspaceCreateDrawer.connectRepository',
+                          'Connect Repository'
+                        )
+                      : translate('tasks.workspaceCreateDrawer.title', 'Create Workspace')}
                 </Text>
               )}
             </Pressable>
@@ -292,7 +339,7 @@ export function renderMobileTasksWorkspaceCreateRepoPicker(model: ConnectionPres
   return (
     <PickerModal
       visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceCreateRepoPicker}
-      title="Repository"
+      title={translate('tasks.workspaceCreateDrawer.repository', 'Repository')}
       options={workspaceRepoOptions}
       selected={workspaceCreateTargetRepo?.id ?? ''}
       onSelect={(repoId) => {
@@ -321,7 +368,7 @@ export function renderMobileTasksWorkspaceAgentPicker(model: ConnectionPresentat
   return (
     <PickerModal
       visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceAgentPicker}
-      title="Agent"
+      title={translate('tasks.workspaceCreateDrawer.agent', 'Agent')}
       options={workspaceAgentOptions}
       selected={resolvedWorkspaceAgent}
       onSelect={(agent) => {

@@ -10,15 +10,15 @@ import {
   useMobileNativeChatConversationState,
   type MobileNativeChatConversation
 } from '../../use-mobile-native-chat-conversation-state'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { MobileNativeChatImageSource } from '../visual/mobile-native-chat-image-preview'
 
 export function MobileNativeChatRowOverlaysHost({
   conversation,
-  imageClient,
+  imageSource,
   children
 }: {
   conversation: MobileNativeChatConversation
-  imageClient?: RpcClient
+  imageSource?: MobileNativeChatImageSource
   children?: React.ReactNode
 }): React.JSX.Element {
   // Keep pressed message text with its conversation so streaming cannot rewrite an open sheet.
@@ -30,9 +30,9 @@ export function MobileNativeChatRowOverlaysHost({
     () => ({
       openImage: (image: MobileNativeChatViewedImage) => setShown({ image }),
       openActions: (actionsFor: NativeChatMessage) => setShown({ actionsFor }),
-      imageClient
+      imageSource
     }),
-    [setShown, imageClient]
+    [setShown, imageSource]
   )
   // Memoize overlay callbacks so streamed words cannot rebuild them.
   const opened = useMemo(() => {

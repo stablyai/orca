@@ -102,11 +102,13 @@ function automationUsageText(summary: AutomationUsageSummary | undefined): strin
 
 function usageAmountText(summary: AutomationUsageSummary): string {
   return translate(
-    'auto.components.automations.AutomationsPage.runUsageSummary',
+    'auto.components.automations.AutomationsPage.runUsageSummaryTokens',
     '{{cost}} est. · {{tokens}} tokens',
     {
+      count: summary.totalTokens,
       cost: formatAutomationCost(summary.estimatedCostUsd),
-      tokens: formatAutomationTokens(summary.totalTokens)
+      tokens: formatAutomationTokens(summary.totalTokens),
+      defaultValue_one: '{{cost}} est. · {{tokens}} token'
     }
   )
 }

@@ -128,6 +128,22 @@ describe('releasing moved projects here', () => {
     expect(window.reloads).toBe(1)
   })
 
+  it("refuses before the host's terminals stop when a newer move lands while automations stop", async () => {
+    const stopHostCopies = vi.fn(async () => 'stopped' as const)
+    const restore = vi.fn(async () => {})
+    const result = await releaseWslMovedProjectHere('/user-data', { repoId: 'r2' }, [], () => ({
+      stopHostCopies,
+      stopHostAutomations: async () => {
+        // Another move of the distro journaled after the undo's first check.
+        journal.chain.push(move('m3', 'r3'))
+        return { outcome: 'stopped' as const, restore, applyHere: () => () => {} }
+      }
+    }))
+    expect(result).toMatchObject({ released: false, reason: 'superseded' })
+    expect(stopHostCopies).not.toHaveBeenCalled()
+    expect(restore).toHaveBeenCalledOnce()
+  })
+
   // R39: removed here but kept running for another Orca, so only re-adding the host reaches it.
   it('says a removed host kept for another Orca needs re-adding, not just connecting', async () => {
     host.listed = false

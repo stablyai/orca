@@ -15,8 +15,10 @@ type RuntimeFileCommandName =
   | 'readFileExplorerDir'
   | 'watchFileExplorer'
   | 'readFileExplorerPreview'
+  | 'readChatImagePreview'
   | 'readFileExplorerChunk'
   | 'readDocPreviewFile'
+  | 'readDocPreviewChunk'
   | 'writeFileExplorerFile'
   | 'writeFileExplorerFileBase64'
   | 'writeFileExplorerFileBase64Chunk'
@@ -24,6 +26,7 @@ type RuntimeFileCommandName =
   | 'createFileExplorerDir'
   | 'createFileExplorerDirNoClobber'
   | 'commitFileExplorerUpload'
+  | 'replaceFileExplorerFileWithUpload'
   | 'renameFileExplorerPath'
   | 'copyFileExplorerPath'
   | 'deleteFileExplorerPath'
@@ -55,8 +58,10 @@ export function installRuntimeFileCommandSurface(
     readFileExplorerDir: commands.readFileExplorerDir.bind(commands),
     watchFileExplorer: commands.watchFileExplorer.bind(commands),
     readFileExplorerPreview: commands.readFileExplorerPreview.bind(commands),
+    readChatImagePreview: commands.readChatImagePreview.bind(commands),
     readFileExplorerChunk: commands.readFileExplorerChunk.bind(commands),
     readDocPreviewFile: commands.readDocPreviewFile.bind(commands),
+    readDocPreviewChunk: commands.readDocPreviewChunk.bind(commands),
     writeFileExplorerFile: commands.writeFileExplorerFile.bind(commands),
     writeFileExplorerFileBase64: commands.writeFileExplorerFileBase64.bind(commands),
     writeFileExplorerFileBase64Chunk: commands.writeFileExplorerFileBase64Chunk.bind(commands),
@@ -64,6 +69,7 @@ export function installRuntimeFileCommandSurface(
     createFileExplorerDir: commands.createFileExplorerDir.bind(commands),
     createFileExplorerDirNoClobber: commands.createFileExplorerDirNoClobber.bind(commands),
     commitFileExplorerUpload: commands.commitFileExplorerUpload.bind(commands),
+    replaceFileExplorerFileWithUpload: commands.replaceFileExplorerFileWithUpload.bind(commands),
     renameFileExplorerPath: commands.renameFileExplorerPath.bind(commands),
     copyFileExplorerPath: commands.copyFileExplorerPath.bind(commands),
     deleteFileExplorerPath: commands.deleteFileExplorerPath.bind(commands),

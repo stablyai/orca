@@ -115,9 +115,9 @@ describe('MobileNativeChatComposer', () => {
     )
   }
 
-  it('uses ordinary append semantics through the registered focused dictation destination', async () => {
+  it('appends dictation until a selection is read, then replaces the selection it started on', async () => {
     const scope = 'dictation-ordinary'
-    setMobileNativeChatDraftText(scope, '/compact')
+    setMobileNativeChatDraftText(scope, 'Ok')
     function Registered() {
       const value = useMobileNativeChatDraft(scope)
       return createElement(MobileNativeChatComposer, {
@@ -133,14 +133,22 @@ describe('MobileNativeChatComposer', () => {
       renderer = create(createElement(Registered))
     })
     const input = () => findByHostType(renderer!.root, 'TextInput')
+    const say = (text: string) =>
+      act(() => void captureMobileNativeChatTextDestination()!.insert(text))
+    const select = (start: number, end: number) =>
+      input().props.onSelectionChange({ nativeEvent: { selection: { start, end }, text: 'Ok hi' } })
     act(() => input().props.onFocus())
-    const insert = captureMobileNativeChatTextDestination()!
+    say('hi')
+    act(() => select(3, 5))
+    const destination = captureMobileNativeChatTextDestination()!
+    // A tap elsewhere while talking doesn't move where the words land.
     act(() => {
-      insert('hello')
-      insert('hello')
-      insert(' there ')
+      select(0, 0)
+      destination.insert('there')
     })
-    expect(input().props.value).toBe('/compact hello hello  there ')
+    expect(input().props.value).toBe('Ok there')
+    say('now')
+    expect(input().props.value).toBe('Ok there now')
   })
 
   it('reports an accepted send without owning route-scoped draft cleanup', async () => {

@@ -26,4 +26,11 @@ describe('WSL hosts preload API', () => {
     expect(getWslHostsApi({}, 'darwin', argv)).toBeUndefined()
     expect(getWslHostsApi({}, 'win32', [])).toBeUndefined()
   })
+
+  it('is absent behind an open gate a remote policy blocked, unless main stamped serve-only', () => {
+    const env = { ORCA_INTERNAL_WSL_HOSTS: '1' }
+    const blocked = '--orca-wsl-hosts-policy-blocked'
+    expect(getWslHostsApi(env, 'win32', [blocked])).toBeUndefined()
+    expect(getWslHostsApi(env, 'win32', [blocked, '--orca-wsl-hosts-serve-only'])).toBeDefined()
+  })
 })

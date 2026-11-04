@@ -30,7 +30,6 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
     reportedModelMutation: 0,
     confirmedOptions: new Set(),
     appliedInputOptions: new Map(),
-    launchedModel: null,
     fastModeAtStart: false,
     capabilities: [],
     events: undefined,

@@ -14,7 +14,7 @@ const MODEL_ROW = {
 }
 
 describe('codex model catalog probe', () => {
-  it.each([`"${process.execPath}"`, ''])(
+  it.each([`"${process.execPath}"`, '', `"${process.execPath}" run -- codex`])(
     'lists with the session executable for Command %j',
     async (command) => {
       const resolveEnvironment = async (): Promise<NodeJS.ProcessEnv> => ({
@@ -55,6 +55,9 @@ describe('codex model catalog probe', () => {
       })
       expect(invocations).toHaveLength(1)
       expect(invocations[0]!.cliPath).toBe(sessionInvocation.command)
+      expect(invocations[0]!.args.slice(0, sessionInvocation.prefixArgs.length)).toEqual(
+        sessionInvocation.prefixArgs
+      )
       expect(invocations[0]!.env).toEqual({
         PATH: '/resolved/bin',
         HOME: '/homes/user',
@@ -82,7 +85,7 @@ describe('codex model catalog probe', () => {
     const configReadFailures: unknown[] = []
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: '/bin' }),
-      resolveCommand: () => '/bin/codex',
+      resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
       // Keep the real request timeout while checking the production budget below.
       runSession: (invocation, body) =>
         runCodexAppServerSession(
@@ -128,7 +131,7 @@ describe('codex model catalog probe', () => {
   it('refuses an empty listing rather than reporting it as a catalog', async () => {
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: '/bin' }),
-      resolveCommand: () => '/bin/codex',
+      resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
       runSession: async (_invocation, body) =>
         body({ request: async () => ({ data: [], nextCursor: null }), notify: () => {} })
     })
@@ -137,7 +140,7 @@ describe('codex model catalog probe', () => {
     )
   })
 
-  it.each(['npx codex', 'codex --profile work', '/missing/codex', './codex'])(
+  it.each(['launcher $SECRET codex', 'FOO=1 codex', '/missing/codex', './codex'])(
     'lists nothing, and never probes the stock CLI, for Command %s',
     async (command) => {
       const runSession = vi.fn()
@@ -163,7 +166,7 @@ describe('Codex catalog availability', () => {
   function withAccount(account: unknown) {
     return createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       // Isolate account classification from the real ~/.codex/auth.json.
       resolveAccountKind: (home) => (home === '/homes/system' ? 'system' : 'managed'),
       runSession: async (_invocation, body) =>
@@ -218,7 +221,7 @@ describe('Codex catalog availability', () => {
   it('omits unknown account context from a positive signed-out fact', async () => {
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       runSession: async (_invocation, body) =>
         body({
           request: async (method) =>
@@ -237,7 +240,7 @@ describe('Codex catalog availability', () => {
     const methods: string[] = []
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       runSession: async (_invocation, body) =>
         body({
           request: async (method) => {
@@ -259,7 +262,7 @@ describe('Codex catalog availability', () => {
   it('a signed-out verdict wins over a model listing that failed', async () => {
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       runSession: async (_invocation, body) =>
         body({
           request: async (method) => {
@@ -278,7 +281,7 @@ describe('Codex catalog availability', () => {
   it.each(['ENOENT', 'EACCES'])('classifies only missing executable errors: %s', async (code) => {
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       runSession: async () => {
         throw Object.assign(new Error('spawn failed'), { code, path: 'codex' })
       }
@@ -295,7 +298,7 @@ describe('Codex catalog probe reads the home a launch would', () => {
     const order: string[] = []
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       prepareHome: (prepared) => order.push(`prepare ${prepared}`),
       runSession: async (_invocation, body) => {
         order.push('spawn')
@@ -317,7 +320,7 @@ it('keeps unknown or unsupported configuration incomplete and observes genuine e
   for (const config of [undefined, [], { model: 42 }, {}]) {
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: '/bin' }),
-      resolveCommand: () => '/bin/codex',
+      resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
       runSession: async (_invocation, body) =>
         body({
           notify: () => {},

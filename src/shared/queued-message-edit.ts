@@ -10,12 +10,15 @@ import {
 } from './structured-agent-session-send-mutation'
 import { MAX_SKILL_REFS } from './rpc-contract/structured-agent-session-message-params'
 import { MAX_BLOCKS, MAX_PROMPT_BYTES } from './rpc-contract/structured-agent-session-params'
-import { imageReferenceInsertion, imageReferenceToken } from './native-chat-image-reference'
+import {
+  imageReferenceInsertion,
+  imageReferenceToken
+} from './native-chat/native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences,
   stripSentImagePromptMarkers
-} from './native-chat-image-transcript-markers'
+} from './native-chat/transcript/native-chat-image-transcript-markers'
 
 export type QueuedMessageImageBlock = Extract<
   AgentJournalMessageItem['blocks'][number],

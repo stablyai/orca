@@ -21,6 +21,7 @@ import {
 } from './editor-save-disk-precondition'
 import { createEditorRestartSaveHandlers } from './editor-restart-save-handlers'
 import { createEditorExternalChangeTabReset } from './editor-external-change-tab-reset'
+import { hasEditorBytesDraft } from './editor-bytes-documents'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
@@ -52,10 +53,11 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
 
     flushPendingEditorBuffer(store.getState(), file.id)
     const draft = store.getState().editorDrafts[fileId]
-    if (draft !== undefined) {
+    // Bytes custom editors keep their edits outside editorDrafts; the queue writes those.
+    if (draft !== undefined || hasEditorBytesDraft(fileId)) {
       try {
         // Close only after a written result so refusals retain the tab and edits.
-        const result = await queueSave(file, draft)
+        const result = await queueSave(file, draft ?? '')
         if (result !== 'written') {
           onNotClosed?.(result === 'failed' ? 'not-saved' : result)
           return
@@ -89,13 +91,13 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       flushPendingEditorBuffer(store.getState(), file.id)
 
       const content = store.getState().editorDrafts[file.id] ?? detail.fallbackContent
-      if (content === undefined) {
+      if (content === undefined && !hasEditorBytesDraft(file.id)) {
         detail.resolve()
         return
       }
 
       const trigger = detail.overwrite ? 'overwrite' : detail.convertToUtf8 ? 'convert' : 'user'
-      const result = await queueSave(file, content, trigger)
+      const result = await queueSave(file, content ?? '', trigger)
       if (result !== 'written') {
         detail.reject(
           result === 'blocked-stale'

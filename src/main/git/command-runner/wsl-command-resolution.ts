@@ -208,3 +208,23 @@ function withWslProcessGroupTermination(
     termination
   }
 }
+
+/** Prefix only the opt-in preparation; retain the resolver's original guest argv intact. */
+export function withWslPreparation(
+  command: ResolvedCommand,
+  preparation: { script: string; args: string[] }
+): ResolvedCommand {
+  const execIndex = command.args.indexOf('--exec')
+  return {
+    ...command,
+    args: [
+      ...command.args.slice(0, execIndex + 1),
+      '/bin/sh',
+      '-c',
+      preparation.script,
+      'orca-generation',
+      ...preparation.args,
+      ...command.args.slice(execIndex + 1)
+    ]
+  }
+}

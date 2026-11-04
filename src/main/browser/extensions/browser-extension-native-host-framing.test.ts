@@ -56,6 +56,16 @@ describe('native host message framing', () => {
     expect(messages).toEqual(['1', '{"a":2}', '"three"'])
   })
 
+  it('keeps a partial remainder after coalesced messages intact across pushes', () => {
+    const { reader, messages } = collect()
+    const tail = frame('{"t":"🦈"}')
+    for (const cut of [2, 7]) {
+      reader.push(Buffer.concat([frame('1'), frame('2'), tail.subarray(0, cut)]))
+      reader.push(tail.subarray(cut))
+    }
+    expect(messages).toEqual(['1', '2', '{"t":"🦈"}', '1', '2', '{"t":"🦈"}'])
+  })
+
   it('takes a message of exactly 1 MB and refuses one byte more without waiting for it', () => {
     const exact = collect()
     const body = `"${'x'.repeat(MAX_NATIVE_HOST_MESSAGE_BYTES - 2)}"`

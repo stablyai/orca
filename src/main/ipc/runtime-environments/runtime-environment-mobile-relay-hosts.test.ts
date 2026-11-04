@@ -5,7 +5,16 @@ const mocks = vi.hoisted(() => {
   const snapshots: Record<string, unknown>[] = []
   const sshTargets: { id: string; label: string }[] = []
   const sshStates = new Map<string, Record<string, unknown>>()
-  return { environments, snapshots, sshTargets, sshStates, resolveManaged: vi.fn(), call: vi.fn() }
+  return {
+    environments,
+    snapshots,
+    sshTargets,
+    sshStates,
+    resolveManaged: vi.fn(),
+    call: vi.fn(),
+    wslGateOpen: false,
+    wslReach: new Map<string, string>()
+  }
 })
 
 vi.mock('electron', () => ({ app: { getPath: () => '/user-data' } }))
@@ -31,6 +40,22 @@ vi.mock('./runtime-environment-request-connections', () => ({
 vi.mock('./runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.call
 }))
+vi.mock('../../wsl/wsl-host-gate', () => ({ wslHostsGateOpen: () => mocks.wslGateOpen }))
+vi.mock('../../wsl/wsl-host-service-instance', () => ({
+  getWslHostPhoneGate: () => ({
+    // Every recorded host, as the gate lists them; one not set is unavailable.
+    reachAll: () => new Map([['wsl:ubuntu', mocks.wslReach.get('wsl:ubuntu') ?? 'unavailable']])
+  })
+}))
+
+const NO_WSL_START = { wslStart: 'never' }
+const WSL_HOST = {
+  id: 'wsl:ubuntu',
+  name: 'Ubuntu (WSL)',
+  createdAt: 2,
+  runtimeId: null,
+  orcadDeployment: { kind: 'wsl', distro: 'Ubuntu', localPort: 42000, remotePort: 6768 }
+}
 
 import {
   createRuntimeEnvironmentMobileRelayHosts,
@@ -49,23 +74,62 @@ describe('runtime environment mobile relay hosts', () => {
     })
     mocks.call.mockReset()
     mocks.snapshots = []
+    mocks.wslGateOpen = false
+    mocks.wslReach.clear()
   })
 
-  it('keeps WSL hosts away from phones: neither listed nor resolvable', async () => {
-    mocks.environments = [
-      { id: 'env-1', name: 'VM', createdAt: 1, runtimeId: null },
-      {
-        id: 'wsl:ubuntu',
-        name: 'Ubuntu (WSL)',
-        createdAt: 2,
-        runtimeId: null,
-        orcadDeployment: { kind: 'wsl', distro: 'Ubuntu', localPort: 42000, remotePort: 6768 }
-      }
-    ]
+  it('keeps WSL hosts away from phones while their internal gate is closed', async () => {
+    mocks.environments = [{ id: 'env-1', name: 'VM', createdAt: 1, runtimeId: null }, WSL_HOST]
     const hosts = createRuntimeEnvironmentMobileRelayHosts()
     expect(hosts.list().environments.map((environment) => environment.id)).toEqual(['env-1'])
     await expect(hosts.resolve('wsl:ubuntu')).resolves.toBeNull()
     expect(mocks.resolveManaged).not.toHaveBeenCalled()
+  })
+
+  it('relays a WSL host behind the gate, never starting its distro for a phone', async () => {
+    mocks.wslGateOpen = true
+    mocks.environments = [WSL_HOST]
+    mocks.resolveManaged.mockResolvedValue({ ...WSL_HOST, endpoint: 'ws://127.0.0.1:42000' })
+    const hosts = createRuntimeEnvironmentMobileRelayHosts()
+    expect(hosts.list().environments.map((environment) => environment.id)).toEqual(['wsl:ubuntu'])
+    await hosts.resolve('wsl:ubuntu')
+    expect(mocks.resolveManaged).toHaveBeenCalledWith('/user-data', 'wsl:ubuntu', NO_WSL_START)
+  })
+
+  it("counts a WSL host's last status only while the desktop holds it connected", () => {
+    mocks.wslGateOpen = true
+    mocks.environments = [{ ...WSL_HOST, pairingRevision: 3 }]
+    mocks.snapshots = [
+      {
+        environmentId: 'wsl:ubuntu',
+        pairingRevision: 3,
+        checkedAt: 5,
+        status: { runtimeId: 'r', capabilities: [] },
+        verification: 'verified',
+        transport: 'ready'
+      }
+    ]
+    const hosts = createRuntimeEnvironmentMobileRelayHosts()
+    expect([...hosts.list().statusByEnvironmentId.keys()]).toEqual([])
+    mocks.wslReach.set('wsl:ubuntu', 'ready')
+    expect([...hosts.list().statusByEnvironmentId.keys()]).toEqual(['wsl:ubuntu'])
+  })
+
+  it('marks a WSL host stopped only on a confirmed stop, and hides it while it may not run', () => {
+    mocks.wslGateOpen = true
+    mocks.environments = [WSL_HOST]
+    const hosts = createRuntimeEnvironmentMobileRelayHosts()
+    // Starting, reconnecting or unconfirmed: listed as not connected here, with no stop claimed.
+    expect(hosts.list().environments[0]).toMatchObject({ unavailableOnDesktop: true })
+    expect(hosts.list().environments[0]).not.toHaveProperty('stoppedOnDesktop')
+    mocks.wslReach.set('wsl:ubuntu', 'stopped')
+    expect(hosts.list().environments[0]).toMatchObject({ stoppedOnDesktop: true })
+    expect(hosts.list().environments[0]).not.toHaveProperty('unavailableOnDesktop')
+    mocks.wslReach.set('wsl:ubuntu', 'ready')
+    expect(hosts.list().environments[0]).not.toHaveProperty('unavailableOnDesktop')
+    // The Experimental switch is off: the gate alone does not list it.
+    mocks.wslReach.set('wsl:ubuntu', 'hidden')
+    expect(hosts.list().environments).toEqual([])
   })
 
   it('relays SSH-managed servers, with and without the persisted deployment kind', async () => {
@@ -86,7 +150,7 @@ describe('runtime environment mobile relay hosts', () => {
       'managed'
     ])
     await hosts.resolve('managed')
-    expect(mocks.resolveManaged).toHaveBeenCalledWith('/user-data', 'managed')
+    expect(mocks.resolveManaged).toHaveBeenCalledWith('/user-data', 'managed', NO_WSL_START)
   })
 
   it("lists configured servers with the desktop's own status, ignoring another pairing's snapshot", () => {
@@ -165,7 +229,7 @@ describe('runtime environment mobile relay hosts', () => {
       fence: '7\0runtime-a',
       pairing: { endpoint: 'ws://vm:6768' }
     })
-    expect(mocks.resolveManaged).toHaveBeenCalledWith('/user-data', 'env-1')
+    expect(mocks.resolveManaged).toHaveBeenCalledWith('/user-data', 'env-1', NO_WSL_START)
   })
 
   it('answers null for a name, an unknown id or a removed server, without resolving it', async () => {
@@ -190,7 +254,7 @@ describe('runtime environment mobile relay hosts', () => {
       undefined,
       undefined,
       undefined,
-      undefined
+      { preparation: NO_WSL_START }
     )
     // A bounded call refused by the transport once the server was re-paired or replaced.
     await hosts.call(
@@ -210,7 +274,7 @@ describe('runtime environment mobile relay hosts', () => {
       5_000,
       7,
       undefined,
-      { expectedEnvironmentRuntimeId: 'runtime-a' }
+      { preparation: NO_WSL_START, expectedEnvironmentRuntimeId: 'runtime-a' }
     )
 
     const retired: string[] = []

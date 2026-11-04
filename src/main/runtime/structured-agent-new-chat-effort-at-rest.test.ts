@@ -277,6 +277,7 @@ async function newChatFrames(
     await modelCatalog.read({ agent, waitForListing: true, workspacePath }),
     { newLaunch: true }
   )
+  await modelCatalog.prepareSaved({ agent, sessionId: record.sessionId, inSessionWorkspace: true })
   // Read before applying the answer: applying updates the state's option record in place.
   const firstPills = pills(first)
   const atRest = await readStructuredAgentSessionOptions(context, record.sessionId, {

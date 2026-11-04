@@ -297,7 +297,7 @@ describe('registerPtyHandlers', () => {
     })
     await handlers.get('pty:clearPendingPaneSerializer')!(null, { paneKey, gen })
   })
-  it('seeds restore records from a cold-restore payload including its checkpoint title', async () => {
+  it("seeds restore history from a cold-restore payload but not the dead process's title", async () => {
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({
         id: 'pty-cold-restore-records',
@@ -335,8 +335,7 @@ describe('registerPtyHandlers', () => {
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
     expect(runtime.seedTerminalRestoreTail).toHaveBeenCalledWith('pty-cold-restore-records', {
-      text: 'cold restored history\r\n',
-      lastTitle: 'checkpoint-title'
+      text: 'cold restored history\r\n'
     })
   })
   it('seeds restore records for a runtime-controller created terminal (headless reattach)', async () => {

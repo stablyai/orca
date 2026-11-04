@@ -13,6 +13,7 @@ export type AgentSessionRecordStoreLocation = {
   stateDirectory: string
   hostId: string
   logger: StructuredAgentSessionLogger
+  legacySessionTabIds: readonly string[]
 }
 
 export type OpenedAgentSessionRecordStore = {
@@ -70,7 +71,11 @@ async function openRecordStore(
   try {
     return {
       journalDatabase,
-      store: AgentSessionRecordStore.open({ journalDatabase, hostId: location.hostId })
+      store: AgentSessionRecordStore.open({
+        journalDatabase,
+        hostId: location.hostId,
+        legacySessionTabIds: location.legacySessionTabIds
+      })
     }
   } catch (error) {
     journalDatabase.close()

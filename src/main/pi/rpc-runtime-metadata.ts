@@ -28,13 +28,13 @@ export const PI_RPC_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
   supportsLocation: supportsSupervisedProviderChildLocation,
   launchCheck: {
     resolveLaunch: (env, commandSettings) => ({
-      command: resolvePiRpcCommand(env, commandSettings),
+      ...resolvePiRpcCommand(env, commandSettings),
       env
     }),
     minimumVersions: PI_RPC_MINIMUM_VERSIONS
   },
   chatProgram: {
-    resolve: (env, commandSettings) => ({ command: resolvePiRpcCommand(env, commandSettings), env })
+    resolve: (env, commandSettings) => ({ ...resolvePiRpcCommand(env, commandSettings), env })
   },
   resolveAccountHome: async ({ launchEnv }) =>
     agentSessionAccountHome(

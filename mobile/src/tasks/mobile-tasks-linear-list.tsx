@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   View,
   ActivityIndicator,
@@ -86,7 +87,13 @@ export function renderMobileTasksLinearList(
                     style={[styles.statusPillSelf, styles.linearStatePill]}
                     disabled={mutatingStatus}
                     accessibilityRole="button"
-                    accessibilityLabel={`Change status from ${issue.state.name}`}
+                    accessibilityLabel={translate(
+                      'tasks.linearList.changeStatusFrom',
+                      'Change status from {{status}}',
+                      {
+                        status: issue.state.name
+                      }
+                    )}
                     onPress={(event) => {
                       event.stopPropagation()
                       triggerMediumImpact()
@@ -175,7 +182,13 @@ export function renderMobileTasksLinearList(
                   style={[styles.statusPill, styles.linearStatePill]}
                   disabled={mutatingStatus}
                   accessibilityRole="button"
-                  accessibilityLabel={`Change status from ${issue.state.name}`}
+                  accessibilityLabel={translate(
+                    'tasks.linearList.changeStatusFrom',
+                    'Change status from {{status}}',
+                    {
+                      status: issue.state.name
+                    }
+                  )}
                   onPress={(event) => {
                     event.stopPropagation()
                     triggerMediumImpact()

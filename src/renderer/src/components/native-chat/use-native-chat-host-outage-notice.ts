@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { toast } from 'sonner'
 import { connectRuntimeHostAndReloadProjects } from '@/components/status-bar/runtime-environment-explicit-connect'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { NativeChatHostOutage } from './use-native-chat-host-outage'
 
@@ -67,19 +67,4 @@ export function useNativeChatHostOutageNotice(
         }
       : {})
   }
-}
-
-/** Start is the user acting on the host, so it may boot the distro; then the chat reconnects. */
-async function startWslHostAndReloadProjects(environmentId: string): Promise<boolean> {
-  try {
-    // A chat's Start must not quietly cancel a Remove the user started; that refusal says so.
-    await window.api.runtimeEnvironments.wslHosts?.connect({
-      environmentId,
-      withdrawPendingRemoval: false
-    })
-  } catch (error) {
-    toast.error(error instanceof Error ? error.message : String(error))
-    return false
-  }
-  return connectRuntimeHostAndReloadProjects(environmentId)
 }

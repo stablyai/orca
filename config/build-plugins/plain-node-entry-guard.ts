@@ -54,6 +54,7 @@ const WORKER_THREAD_ENTRY_NAMES = [
   'foreign-sqlite-reader-entry',
   'main-thread-hang-watchdog-entry',
   'port-scan-command-worker-entry',
+  'command-path-directory-worker-entry',
   'worker-thread-child-process-entry',
   'usage-scan-worker-entry',
   'workspace-space-scan-worker-entry',

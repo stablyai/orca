@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   openTabEntryWithOperations,
-  TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
+  getTabEntryAbsolutePathRemoteBlockedMessage,
   type TabEntryOperations
 } from './tab-create-entry-action'
 
@@ -348,7 +348,7 @@ describe('openTabEntryWithOperations', () => {
         query: '/tmp/notes.md',
         operations
       })
-    ).rejects.toThrow(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
+    ).rejects.toThrow(getTabEntryAbsolutePathRemoteBlockedMessage())
 
     expect(operations.statUserOpenedPath).not.toHaveBeenCalled()
     expect(operations.createRuntimePath).not.toHaveBeenCalled()
@@ -398,7 +398,7 @@ describe('openTabEntryWithOperations', () => {
       statUserOpenedPath: vi.fn(() => statResult),
       assertAbsolutePathAllowed: vi.fn(() => {
         if (!allowed) {
-          throw new Error(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
+          throw new Error(getTabEntryAbsolutePathRemoteBlockedMessage())
         }
       })
     })
@@ -410,9 +410,7 @@ describe('openTabEntryWithOperations', () => {
       operations
     })
     await vi.waitFor(() => expect(operations.statUserOpenedPath).toHaveBeenCalledTimes(1))
-    const rejection = expect(opening).rejects.toThrow(
-      TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE
-    )
+    const rejection = expect(opening).rejects.toThrow(getTabEntryAbsolutePathRemoteBlockedMessage())
     allowed = false
     releaseStat?.()
     await rejection

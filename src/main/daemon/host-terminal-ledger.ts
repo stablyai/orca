@@ -106,12 +106,12 @@ export class HostTerminalLedger {
   }
 
   /** `own` excludes the terminal being reserved; on false its previous share is restored. */
-  tryReserve(own: HostTerminalShare): boolean {
-    if (own.terminals + 1 > this.options.maxTerminals) {
+  tryReserve(own: HostTerminalShare, maximum = this.options.maxTerminals): boolean {
+    if (own.terminals + 1 > maximum) {
       return false
     }
     this.write({ ...own, terminals: own.terminals + 1 })
-    if (own.terminals + 1 + this.readOthers().terminals <= this.options.maxTerminals) {
+    if (own.terminals + 1 + this.readOthers().terminals <= maximum) {
       return true
     }
     this.write(own)

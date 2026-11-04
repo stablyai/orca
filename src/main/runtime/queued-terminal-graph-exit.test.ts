@@ -9,8 +9,8 @@ const FIRST = '10000000-0000-4000-8000-000000000003'
 const NEXT = '10000000-0000-4000-8000-000000000004'
 
 class ExitAuthorityRuntime extends OrcaRuntimeService {
-  override resolveWorktreeSelector(selector: string) {
-    return super.resolveWorktreeSelector(selector)
+  override resolveGitWorktreeSelector(selector: string) {
+    return super.resolveGitWorktreeSelector(selector)
   }
 
   override getResolvedWorktreeMap() {
@@ -113,7 +113,7 @@ describe('host exit authority over queued renderer graphs', () => {
       childWorktreeIds: [],
       lineage: null
     }
-    const resolve = vi.spyOn(runtime, 'resolveWorktreeSelector').mockResolvedValue(worktree)
+    const resolve = vi.spyOn(runtime, 'resolveGitWorktreeSelector').mockResolvedValue(worktree)
     const map = vi
       .spyOn(runtime, 'getResolvedWorktreeMap')
       .mockResolvedValue(new Map([[WORKTREE, worktree]]))

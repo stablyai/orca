@@ -1,3 +1,5 @@
+import { TerminalLimitSetting } from './TerminalLimitSetting'
+import type { SettingsHostScope } from './settings-host-scope'
 import { useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal-word-separator'
@@ -22,6 +24,7 @@ import { TerminalMacKeyboardSection } from './TerminalMacKeyboardSection'
 import { translate } from '@/i18n/i18n'
 
 type TerminalAdvancedSectionProps = {
+  hostScope?: SettingsHostScope
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   scrollbackMode: 'preset' | 'custom'
@@ -41,6 +44,7 @@ function toWordSeparatorSetting(draft: string): string | undefined {
 }
 
 export function TerminalAdvancedSection({
+  hostScope,
   settings,
   updateSettings,
   scrollbackMode,
@@ -193,6 +197,8 @@ export function TerminalAdvancedSection({
             }
           />
         </SearchableSetting>
+
+        {hostScope ? <TerminalLimitSetting scope={hostScope} /> : null}
 
         <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}

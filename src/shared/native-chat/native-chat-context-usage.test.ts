@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  deriveNativeChatContextUsage,
-  isNativeChatCompactionBoundary
-} from './native-chat-context-usage'
+import { deriveNativeChatContextUsage } from './native-chat-context-usage'
 import type { AgentSessionTokenUsage } from '../agent-session-context-usage'
 import type { NativeChatMessage } from '../native-chat-types'
 
@@ -89,17 +86,5 @@ describe('deriveNativeChatContextUsage', () => {
   it('is null before any response carried usage', () => {
     expect(deriveNativeChatContextUsage([], noWindow)).toBeNull()
     expect(deriveNativeChatContextUsage([assistant('zero', usage(0))], noWindow)).toBeNull()
-  })
-})
-
-describe('isNativeChatCompactionBoundary', () => {
-  it('matches only the compaction presentation', () => {
-    expect(isNativeChatCompactionBoundary(compaction)).toBe(true)
-    expect(
-      isNativeChatCompactionBoundary({
-        ...compaction,
-        blocks: [{ type: 'text', text: 'Context compacted' }]
-      })
-    ).toBe(false)
   })
 })

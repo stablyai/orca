@@ -9,6 +9,8 @@ export const inflightHostedReviewRequests = new Map<
   {
     promise: Promise<HostedReviewInfo | null>
     force: boolean
+    /** A poll's request is refused for a stopped WSL distro, so an explicit Refresh must not join it. */
+    wakeWslDistro: boolean
     currentHeadOid: string | null
     generation: number
     startedAt: number
@@ -172,18 +174,33 @@ export function _clearHostedReviewRequestGenerationsForTest(): void {
   hostedReviewRevalidationLanes.clear()
 }
 
+/** A forced request needs a forced flight; an explicit Refresh (wake) needs one that may start the WSL distro (E9). */
+export function canJoinHostedReviewFlight(
+  inflight: { force: boolean; wakeWslDistro: boolean },
+  options: { force?: boolean; wakeWslDistro?: boolean } | undefined
+): boolean {
+  return (!options?.force || inflight.force) && (!options?.wakeWslDistro || inflight.wakeWslDistro)
+}
+
 /** Records a freshly issued request in the in-flight map and supersedes any queued revalidation for its key. */
 export function registerInflightHostedReviewRequest(
   requestKey: string,
-  entry: {
+  {
+    options,
+    ...entry
+  }: {
     promise: Promise<HostedReviewInfo | null>
-    force: boolean
+    options: { force?: boolean; wakeWslDistro?: boolean } | undefined
     currentHeadOid: string | null
     generation: number
     startedAt: number
   }
 ): void {
-  inflightHostedReviewRequests.set(requestKey, entry)
+  inflightHostedReviewRequests.set(requestKey, {
+    ...entry,
+    force: options?.force === true,
+    wakeWslDistro: options?.wakeWslDistro === true
+  })
   supersedeHostedReviewRevalidation(requestKey, {
     promise: entry.promise,
     startedAt: entry.startedAt

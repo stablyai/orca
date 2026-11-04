@@ -154,25 +154,76 @@ describe('readDocPreviewFile — paired runtime owner', () => {
     })
   })
 
-  it('refuses an over-cap text read instead of serving partial bytes', async () => {
-    mocks.callRuntimeEnvironment.mockResolvedValue({
-      ok: false,
-      error: { code: 'runtime_error', message: 'file_too_large' }
-    })
+  function serveTooLargeForOneReply(file: Buffer, version = () => ({ mtimeMs: 1, ctimeMs: 1 })) {
+    mocks.callRuntimeEnvironment.mockImplementation(
+      async (_root, _env, method: string, params: { offset: number; length: number }) => {
+        if (method === 'files.readDocPreview') {
+          return { ok: false, error: { code: 'runtime_error', message: 'file_too_large' } }
+        }
+        const bytes = file.subarray(params.offset, params.offset + params.length)
+        return {
+          ok: true,
+          result: {
+            contentBase64: bytes.toString('base64'),
+            bytesRead: bytes.length,
+            eof: params.offset + bytes.length >= file.length,
+            size: file.length,
+            ...version()
+          }
+        }
+      }
+    )
+  }
+
+  it('reads a document too large for one reply by range under the same grant', async () => {
+    const html = Buffer.from(`<html>${'x'.repeat(1024 * 1024)}</html>`)
+    serveTooLargeForOneReply(html)
 
     const outcome = await readDocPreviewFile(runtimeGrant(), 'index.html')
 
-    expect(outcome).toMatchObject({ ok: false, status: 413 })
-    expect(outcome).not.toMatchObject({ ok: true })
+    expect(outcome).toEqual({ ok: true, bytes: html, contentType: 'text/html; charset=utf-8' })
+    expect(mocks.callRuntimeEnvironment).toHaveBeenCalledWith(
+      '/user-data',
+      'env-1',
+      'files.readDocPreviewChunk',
+      {
+        worktree: 'id:wt-1',
+        relativePath: 'docs/index.html',
+        entryRelativePath: 'docs/index.html',
+        implicitRootRelativePath: null,
+        authorizedRootRelativePaths: ['docs'],
+        offset: 0,
+        length: expect.any(Number)
+      },
+      15_000
+    )
   })
 
-  it('serves a read the host reports as complete', async () => {
-    mocks.callRuntimeEnvironment.mockResolvedValue({
-      ok: true,
-      result: { content: '<h1>all</h1>', isBinary: false }
-    })
+  it('refuses a document rewritten between ranges instead of splicing versions', async () => {
+    let mtimeMs = 0
+    serveTooLargeForOneReply(Buffer.alloc(1024 * 1024, 'x'), () => ({
+      mtimeMs: (mtimeMs += 1),
+      ctimeMs: 1
+    }))
 
-    expect(await readDocPreviewFile(runtimeGrant(), 'index.html')).toMatchObject({ ok: true })
+    expect(await readDocPreviewFile(runtimeGrant(), 'index.html')).toMatchObject({
+      ok: false,
+      status: 404
+    })
+  })
+
+  it('keeps the too-large refusal on a host without ranged preview reads', async () => {
+    mocks.callRuntimeEnvironment.mockImplementation(async (_root, _env, method: string) =>
+      method === 'files.readDocPreview'
+        ? { ok: false, error: { code: 'runtime_error', message: 'file_too_large' } }
+        : { ok: false, error: { code: 'method_not_found', message: `Unknown method: ${method}` } }
+    )
+
+    expect(await readDocPreviewFile(runtimeGrant(), 'index.html')).toMatchObject({
+      ok: false,
+      status: 413,
+      reason: 'too-large'
+    })
   })
 
   it('reports the host rejecting an over-cap binary as too large', async () => {

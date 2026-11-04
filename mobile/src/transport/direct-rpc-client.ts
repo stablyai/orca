@@ -170,6 +170,10 @@ export class DirectRpcClient implements RpcClient {
     return this.connectionState.addListener(listener)
   }
 
+  // The watchdog starts before capability negotiation, when a probe cannot be written yet.
+  readonly probeLivenessNow = (): void =>
+    void (this.getState() === 'connected' && this.liveness.probeCurrentDecisively())
+
   notifyForeground(_reason?: ForegroundNudgeReason): void {
     if (this.intentionallyClosed) {
       return

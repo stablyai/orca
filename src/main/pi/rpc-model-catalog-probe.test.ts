@@ -23,30 +23,34 @@ describe('Pi model catalog', () => {
     ])
   })
 
-  it('lists under the pinned account with the chat launch env, through the shared runner', async () => {
-    const runListing = vi.fn(async () => TABLE)
-    const probe = createPiModelCatalogProbe({
-      resolveEnvironment: async () => ({
-        PATH: '/usr/bin',
-        HOME: '/home/user',
-        ORCA_PANE_KEY: 'p'
-      }),
-      resolveCommand: () => '/opt/pi/bin/pi',
-      probeVersion: async () => ({ version: '0.84.0' }),
-      homePath: '/home/user',
-      runListing
-    })
-    const success = await probe({ variable: 'PI_CODING_AGENT_DIR', path: '/homes/pi-a' })
-    expect(success.models).toHaveLength(2)
-    expect(runListing).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: '/opt/pi/bin/pi',
-        args: ['--list-models'],
-        env: expect.objectContaining({ PI_CODING_AGENT_DIR: '/homes/pi-a' })
-      }),
-      { site: 'pi-model-catalog-probe' }
-    )
-  })
+  it.each(['', `"${process.execPath}" run -- pi`])(
+    'lists under the pinned account with the chat launch env, through the shared runner for Command %j',
+    async (command) => {
+      const runListing = vi.fn(async () => TABLE)
+      const probe = createPiModelCatalogProbe({
+        resolveEnvironment: async () => ({
+          PATH: '/usr/bin',
+          HOME: '/home/user',
+          ORCA_PANE_KEY: 'p'
+        }),
+        resolveCommandSettings: () => ({ agentCmdOverrides: { pi: command } }),
+        resolveCommand: () => '/opt/pi/bin/pi',
+        probeVersion: async () => ({ version: '0.84.0' }),
+        homePath: '/home/user',
+        runListing
+      })
+      const success = await probe({ variable: 'PI_CODING_AGENT_DIR', path: '/homes/pi-a' })
+      expect(success.models).toHaveLength(2)
+      expect(runListing).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: command ? process.execPath : '/opt/pi/bin/pi',
+          args: [...(command ? ['run', '--', 'pi'] : []), '--list-models'],
+          env: expect.objectContaining({ PI_CODING_AGENT_DIR: '/homes/pi-a' })
+        }),
+        { site: 'pi-model-catalog-probe' }
+      )
+    }
+  )
 
   it('lists nothing from a Pi that runs no structured chat', async () => {
     const runListing = vi.fn()

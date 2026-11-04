@@ -21,9 +21,10 @@ import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { AutomationService } from '../automations/service'
 import type { PluginService } from '../plugins/plugin-service'
-import type { PluginKillListService } from '../plugins/plugin-kill-list-service'
-import type { PluginMarketplaceService } from '../plugins/plugin-marketplace-service'
-import type { PluginMarketplaceInstaller } from '../plugins/plugin-marketplace-installer'
+import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
+import type { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
+import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
+import type { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import type { RelayBrokerStatus } from '../runtime/mobile-cloud-relay/relay-session-broker-contract'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
@@ -37,7 +38,7 @@ import type { createWindowsShellPathHydration } from './windows-shell-path-hydra
 import type { ServeOptions } from './main-process-serve'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
-import { SkillShareDeepLinkState } from './skill-share-deep-link-state'
+import { PluginInstallLinkState, SkillShareDeepLinkState } from './skill-share-deep-link-state'
 import { OsOpenedDocumentState } from './os-opened-documents'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
@@ -114,6 +115,8 @@ export const mainProcessState = {
   pluginKillListService: null as PluginKillListService | null,
   pluginMarketplaceService: null as PluginMarketplaceService | null,
   pluginMarketplaceInstaller: null as PluginMarketplaceInstaller | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
+  pluginAutoUpdater: null as PluginAutoUpdater | null,
   keybindings: null as KeybindingService | null,
   // Timed reload flags cannot leak to later loads; recovery did-finish-load must preserve live PTYs (#5787).
   expectedRendererReload: createWebContentsTimedFlag(),
@@ -123,6 +126,7 @@ export const mainProcessState = {
   // Why: a confirmed Quit Completely can open the window; its renderer pulls this one-shot on mount.
   pendingQuitAndStopAllSessions: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
+  pluginInstallLinks: new PluginInstallLinkState(),
   // Buffer OS Open With before any renderer listener exists.
   osOpenedDocuments: new OsOpenedDocumentState(),
   // Window existence does not prove listener readiness; only the renderer pull does, otherwise pushes silently vanish.

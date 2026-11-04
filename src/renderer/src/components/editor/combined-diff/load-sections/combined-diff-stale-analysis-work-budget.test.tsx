@@ -71,23 +71,24 @@ function replacementViewer(viewStateKey: string): Viewer {
 function useViewer(props: Viewer) {
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
-  const [, setGeneration] = useState(0)
+  const [generation, setGeneration] = useState(0)
   const [, setSideBySide] = useState(false)
   const registry = useCombinedDiffSectionLoadRegistry(sections)
   const restore = useCombinedDiffViewRestore({
     entrySet: props.entrySet,
+    file: props.file,
     gitStatusEntries: [],
     registry,
     setGeneration,
     setSectionHeights,
     setSections,
     setSideBySide,
-    viewStateKey: props.viewStateKey,
-    worktreeId: props.file.worktreeId
+    viewStateKey: props.viewStateKey
   })
   const loader = useCombinedDiffSectionLoader({
     entrySet: props.entrySet,
     file: props.file,
+    generation,
     registry,
     sectionCount: sections.length,
     setSectionHeights,
@@ -493,11 +494,12 @@ describe('combined diff live result compatibility', () => {
       hook.result.current.setSectionHeights({ 0: 640, 1: 80 })
     })
     const heights = hook.result.current.sectionHeights
+    hook.result.current.registry.renderedIndicesRef.current.add(0)
     hook.result.current.registry.loadedIndicesRef.current.delete(0)
     hook.result.current.loader.loadSection(0)
     await flushLoads()
     await settle(unchanged, structuredClone(legacy))
-    expect(hook.result.current.sections).toBe(current)
+    expect(hook.result.current.sections[0]).toBe(current[0])
     expect(hook.result.current.sectionHeights).toBe(heights)
     hook.result.current.registry.loadedIndicesRef.current.delete(0)
     hook.result.current.loader.loadSection(0)

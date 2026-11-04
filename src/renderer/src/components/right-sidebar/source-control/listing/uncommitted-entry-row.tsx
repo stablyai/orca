@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { ActionButton } from './action-button'
 import { ConflictBadge } from './conflict-badge'
@@ -24,8 +25,8 @@ import {
   SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS,
   SOURCE_CONTROL_TREE_FILE_PADDING_PX,
   SOURCE_CONTROL_TREE_INDENT_PX,
-  SUBMODULE_WORKTREE_ONLY_LABEL,
-  SUBMODULE_WORKTREE_ONLY_TOOLTIP
+  getSubmoduleWorktreeOnlyLabel,
+  getSubmoduleWorktreeOnlyTooltip
 } from './row-layout'
 import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
 
@@ -69,6 +70,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   // When set, the row is a dirty submodule: clicking toggles lazy expansion instead of opening an uninformative gitlink diff.
   submoduleExpansion?: { isExpanded: boolean; onToggle: () => void }
 }): React.JSX.Element {
+  useUiLanguageRevision()
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -172,9 +174,9 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             // Parent Git stages gitlinks, not nested dirtiness; make that boundary visible.
             <div
               className="truncate text-[11px] text-muted-foreground"
-              title={SUBMODULE_WORKTREE_ONLY_TOOLTIP}
+              title={getSubmoduleWorktreeOnlyTooltip()}
             >
-              {SUBMODULE_WORKTREE_ONLY_LABEL}
+              {getSubmoduleWorktreeOnlyLabel()}
             </div>
           )}
         </div>

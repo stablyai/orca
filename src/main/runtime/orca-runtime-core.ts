@@ -26,6 +26,7 @@ export type RuntimeWorktreeScanCache = {
   generation: number
   runtimeKey: string
   result: RuntimeWorktreeScanResult
+  listing?: RuntimeWorktreeScanResult
   expiresAt: number
   adminFingerprint: string | null
   scannedAt: number

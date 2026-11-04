@@ -208,7 +208,7 @@ describe('TerminalContextMenu', () => {
 
   it('uses nominal primary toggle labels, including default and unbound', () => {
     for (const [bindings, label] of [
-      [undefined, 'Ctrl+Shift+J'],
+      [undefined, 'Ctrl+⇧+J'],
       [['Mod+Alt+Y', 'Mod+Alt+K'], 'Ctrl+Alt+Y'],
       [[], null]
     ] as const) {
@@ -236,11 +236,11 @@ describe('TerminalContextMenu', () => {
 
     renderMenu({ keybindings })
 
-    expect(shortcuts.list).toContain('Ctrl+Shift+C')
-    expect(shortcuts.list).toContain('Ctrl+Shift+A')
+    expect(shortcuts.list).toContain('Ctrl+⇧+C')
+    expect(shortcuts.list).toContain('Ctrl+⇧+A')
     expect(shortcuts.list).toContain('Ctrl+V')
-    expect(shortcuts.list).toContain('Ctrl+Shift+D')
-    expect(shortcuts.list).toContain('Alt+Shift+D')
+    expect(shortcuts.list).toContain('Ctrl+⇧+D')
+    expect(shortcuts.list).toContain('Alt+⇧+D')
     expect(shortcuts.list.some((shortcut) => shortcut.includes(','))).toBe(false)
   })
 

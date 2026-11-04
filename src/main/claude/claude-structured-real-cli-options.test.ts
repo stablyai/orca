@@ -90,6 +90,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI options', () =
                 ? claudeProviderHandleLeafUuid(launchIdentity.providerHandle)
                 : null,
             resumesTranscript: resumes,
+            cliFlag: async () => 'supported' as const,
             continuesChain: resumes
           }
         },

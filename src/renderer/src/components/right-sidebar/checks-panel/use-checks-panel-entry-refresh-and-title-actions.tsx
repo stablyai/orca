@@ -10,6 +10,7 @@ import type { ChecksPanelControllerState } from './use-checks-panel-controller-s
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import type { ChecksPanelPollingState } from './use-checks-panel-polling'
 import type { ChecksPanelReviewDataState } from './use-checks-panel-review-data'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 type ChecksPanelEntryRefreshAndTitleActionsInput = Pick<
   ChecksPanelContextState,
@@ -114,6 +115,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
           linkedAzureDevOpsPR,
           linkedGiteaPR
         })
+        // Entering the tab is a user act: it may start a stopped WSL distro (E9).
         if (activeGitLabReview) {
           void fetchGitLabDetails()
         }
@@ -121,7 +123,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       }
       enqueueGitHubPRRefresh(activeWorktreeId, 'active', 80)
       if (options.refreshChecks) {
-        void fetchChecks({ force: true })
+        void fetchChecks({ force: true, wakeWslDistro: true })
       }
       if (options.refreshComments) {
         void fetchComments({ force: true })
@@ -307,7 +309,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
           updates: { title: nextTitle }
         })
         if (!result.ok) {
-          toast.error(result.error)
+          toast.error(codeHostErrorText(result))
           return
         }
         await refreshHostedReviewAfterMutation()

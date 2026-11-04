@@ -9,6 +9,7 @@ import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-ch
 
 export type PiRpcLaunchOptions = {
   command: string
+  prefixArgs?: readonly string[]
   cwd: string
   fullAccess: boolean
   extraArgs?: readonly string[]
@@ -106,6 +107,7 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
     command: options.command,
     cwd: options.cwd,
     args: [
+      ...(options.prefixArgs ?? []),
       '--mode',
       'rpc',
       ...args,

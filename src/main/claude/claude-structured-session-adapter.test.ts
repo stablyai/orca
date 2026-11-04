@@ -185,6 +185,23 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     expect(resolveLaunch.mock.calls[0]?.[0].permissionMode).toBe('accept-edits')
   })
 
+  it('names a launch that could not be resolved on the host, keeping its error (#34795)', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+    vi.spyOn(adapter['deps'], 'resolveLaunch').mockRejectedValueOnce(
+      new Error('selector_not_found')
+    )
+
+    await expect(
+      adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    ).rejects.toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchPreparationFailed',
+      message: 'selector_not_found'
+    })
+    expect(claude.connections).toHaveLength(0)
+  })
+
   it('recovers a cancellable lifecycle when the replay arrives after dispatch returned', async () => {
     const claude = fakeClaude({ replayUuid: null })
     const events: ClaudeStructuredSessionEvent[] = []

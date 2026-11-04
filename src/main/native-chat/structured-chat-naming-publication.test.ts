@@ -45,6 +45,7 @@ it.each(['J', 'R', 'P', 'L', 'T', 'U', 'C'] as const)(
           () => ({ getSettings: () => getDefaultSettings('/isolated') }),
           {
             resolveWorkspace: async () => ({ path: '/fixture', executionHostId: 'local' }),
+            resolveNamingEnvironment: async () => ({}),
             getAgentEnvResolvers: () => undefined,
             workerTaskTitle: () => null,
             retitleOpenTab: runtime.refreshStructuredConversationTabTitle.bind(runtime)

@@ -477,6 +477,7 @@ describe('ACP startup that never answers', () => {
           })
           return {
             spec: GROK,
+            prefixArgs: [],
             command: '/opt/grok/bin/grok',
             args: [],
             cwd: '/workspace/project',

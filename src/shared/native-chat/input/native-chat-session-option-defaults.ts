@@ -143,8 +143,7 @@ export function applyNativeChatSessionOptionPicks(args: {
   return persisted
 }
 
-/** Applies one host-owned delta to the latest record. Returning null means the
- * authoritative model list found nothing to retire. */
+/** Applies user picks; null means the saved selection stays unchanged. */
 export function applyNativeChatSessionOptionSettingsMutation(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   mutation: NativeChatSessionOptionSettingsMutation
@@ -156,24 +155,8 @@ export function applyNativeChatSessionOptionSettingsMutation(
       picks: mutation.picks
     })
   }
-  const modelId = persisted?.[mutation.agent]?.model
-  if (!modelId || mutation.availableModelIds.includes(modelId)) {
-    return null
-  }
-  return clearNativeChatSessionOptionModel(persisted, mutation.agent)
-}
-
-/** Clear ids proven retired: stale launch flags pass through verbatim and Grok exits fatally. Retain model-scoped options for reselect. */
-export function clearNativeChatSessionOptionModel(
-  persisted: PersistedNativeChatSessionOptions | null | undefined,
-  agent: AgentType
-): PersistedNativeChatSessionOptions {
-  const currentAgent = persisted?.[agent]
-  if (!currentAgent?.model) {
-    return { ...persisted }
-  }
-  const { model: _dropped, ...rest } = currentAgent
-  return { ...persisted, [agent]: rest }
+  // Older clients still send catalog-based clearing; observations cannot change a saved pick.
+  return null
 }
 
 export function updateNativeChatSessionOptionDefaults(args: {

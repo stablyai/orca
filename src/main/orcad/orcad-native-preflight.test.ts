@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runOrcadNativePreflight } from './orcad-native-preflight'
+import { runOrcadNativePreflight, runOrcadNativePreflightVerdict } from './orcad-native-preflight'
 import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
 import {
   runtimeTerminalDegradation,
@@ -111,5 +111,26 @@ describe('runOrcadNativePreflight', () => {
       exit: vi.fn(() => undefined as never)
     })
     expect(toolchainHints).not.toHaveBeenCalled()
+  })
+})
+
+describe('runOrcadNativePreflightVerdict', () => {
+  it('skips the probe for a qualified slot and clears any stale degradation', () => {
+    setRuntimeTerminalUnavailableCause({ reason: 'load_failed', detail: 'old' })
+    const check = vi.fn(() => verdict({ status: 'blocked' }))
+
+    expect(runOrcadNativePreflightVerdict({ qualified: true, check })).toBe('ok')
+
+    expect(check).not.toHaveBeenCalled()
+    expect(runtimeTerminalDegradation()).toBeNull()
+  })
+
+  it('reports a degraded probe as such, so it cannot qualify the slot', () => {
+    expect(
+      runOrcadNativePreflightVerdict({
+        check: () => verdict({ status: 'degraded', reason: 'spawn_helper_missing' }),
+        warn: vi.fn()
+      })
+    ).toBe('degraded')
   })
 })

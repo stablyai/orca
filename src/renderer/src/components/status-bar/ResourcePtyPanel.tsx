@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { buildResourcePtyRows, groupResourcePtyRows } from './resource-pty-view-model'
 import { ResourcePtyList } from './ResourcePtyList'
 import type { useResourceSessionInventory } from './use-resource-session-inventory'
@@ -54,13 +54,12 @@ export function ResourcePtyPanel({
           {inventory.observedAt === null
             ? translate('resourceManager.pty.thisComputer', 'This computer')
             : translate(
-                sessions.length === 1
-                  ? 'resourceManager.pty.localOwnedCount_one'
-                  : 'resourceManager.pty.localOwnedCount_other',
-                sessions.length === 1
-                  ? '{{count}} Orca PTY on this computer'
-                  : '{{count}} Orca PTYs on this computer',
-                { count: sessions.length }
+                'resourceManager.pty.localOwnedCount',
+                '{{count}} Orca PTYs on this computer',
+                {
+                  count: sessions.length,
+                  defaultValue_one: '{{count}} Orca PTY on this computer'
+                }
               )}
           {inventory.observedAt !== null && unbound > 0 && (
             <span>
@@ -74,7 +73,7 @@ export function ResourcePtyPanel({
         {inventory.observedAt !== null && (
           <div className="text-xs text-muted-foreground">
             {translate('resourceManager.pty.observedTime', 'Last observed {{time}}', {
-              time: new Date(inventory.observedAt).toLocaleTimeString()
+              time: new Date(inventory.observedAt).toLocaleTimeString(getIntlLocale())
             })}
           </div>
         )}

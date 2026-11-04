@@ -4,11 +4,12 @@ import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
 import type * as TunnelIdentity from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 const mocks = vi.hoisted(() => ({
-  readRunning: vi.fn<() => Promise<WslRunningDistrosRead>>(),
+  readRunning: vi.fn<(distro: string) => Promise<WslRunningDistrosRead>>(),
   connect: vi.fn(),
   stopServer: vi.fn(async () => ({ stopped: true })),
   verify: vi.fn(),
   ready: vi.fn(() => false),
+  lastSeenRunning: vi.fn((_distro: string) => true),
   managerGet: vi.fn((): unknown => null),
   managerEnsure: vi.fn(),
   managerIsConnecting: vi.fn(() => false)
@@ -22,7 +23,10 @@ vi.mock('./wsl-orcad-connection', async (importOriginal) => ({
   }
 }))
 vi.mock('../wsl-background-distro-gate', () => ({
-  readConfirmedRunningWslDistros: mocks.readRunning,
+  // Settled per distro: a list taken while it stops still names it (E9).
+  readSettledConfirmedRunningWslDistros: mocks.readRunning,
+  wasWslDistroLastSeenRunningSettled: mocks.lastSeenRunning,
+  noteWslDistroMayHaveStopped: vi.fn(),
   listConfirmedRunningWslDistros: vi.fn(async () => [])
 }))
 vi.mock('../managed-server/lifecycle/orcad-managed-tunnel-identity', async (importOriginal) => ({
@@ -57,6 +61,7 @@ it('uses owned readiness without discovery and coalesces cold cleanup without wa
   await expect(passive).resolves.toBe(false)
   await expect(removal).resolves.toEqual({ stopped: true })
   expect(mocks.readRunning).toHaveBeenCalledTimes(1)
+  expect(mocks.readRunning).toHaveBeenCalledWith('Ubuntu')
   mocks.readRunning.mockResolvedValueOnce({ status: 'unavailable' })
   await expect(connector.stopServer('Ubuntu', 'wsl:ubuntu')).resolves.toMatchObject({
     stopped: false
@@ -68,6 +73,24 @@ it('uses owned readiness without discovery and coalesces cold cleanup without wa
   await expect(connector.stopServer('Ubuntu', 'wsl:ubuntu')).resolves.toEqual({ stopped: true })
   expect(mocks.connect).toHaveBeenCalledOnce()
   expect(mocks.stopServer).toHaveBeenCalledOnce()
+})
+
+it('a ready client never stands in for a running read once the distro may have stopped (E9)', async () => {
+  const connector = createWslHostConnector({
+    userDataPath: '/unused',
+    onChange: vi.fn(),
+    hasUserVisibleWork: () => false,
+    isKnownDistro: () => true,
+    runtime: { isReady: mocks.ready, call: vi.fn(), census: vi.fn() }
+  })
+  mocks.ready.mockReturnValue(true)
+  // Its control socket has not closed yet, but the last settled list no longer names it.
+  mocks.lastSeenRunning.mockReturnValueOnce(false).mockReturnValueOnce(false)
+  mocks.readRunning.mockReset().mockResolvedValue({ status: 'confirmed', distros: [] })
+  await expect(connector.reachability('Ubuntu', 'wsl:ubuntu')).resolves.toBe('stopped')
+  await expect(connector.isReachable('Ubuntu', 'wsl:ubuntu')).resolves.toBe(false)
+  expect(mocks.readRunning).toHaveBeenCalledWith('Ubuntu')
+  mocks.ready.mockReturnValue(false)
 })
 
 function joinFixture() {
@@ -120,6 +143,11 @@ it('a no-boot call joins a booting connect but stays no-boot itself (E9)', async
     'Ubuntu',
     expect.objectContaining({ requireRunning: expect.any(Function) })
   )
+  // That check is a settled read, so a distro still stopping counts as stopped.
+  const [, ensureOptions] = mocks.managerEnsure.mock.lastCall ?? []
+  mocks.readRunning.mockClear().mockResolvedValueOnce({ status: 'confirmed', distros: ['Ubuntu'] })
+  await expect(ensureOptions?.requireRunning('Ubuntu')).resolves.toBe(true)
+  expect(mocks.readRunning).toHaveBeenCalledWith('Ubuntu')
   finish()
   await first
 })

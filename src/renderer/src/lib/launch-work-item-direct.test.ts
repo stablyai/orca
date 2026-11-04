@@ -266,8 +266,10 @@ describe('launchWorkItemDirect', () => {
       }
     })
 
+    // Launching from the PR is a user act, so its base read may start a stopped WSL distro.
     expect(mocks.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo-1',
+      wakeWslDistro: true,
       prNumber: 6934,
       headRefName: 'feature/fix',
       baseRefName: 'main',

@@ -1,15 +1,9 @@
-import { selectWorktreeCreateBranchSeed } from '../worktree-create-branch-seed'
 import type { Repo } from '../../shared/repo-types'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type { getPRForBranch } from '../github/client'
-import {
-  computeWorktreePath,
-  ensurePathWithinWorkspace,
-  sanitizeWorktreeName,
-  type getWorktreePathSettings
-} from '../ipc/worktree-logic'
-import { computePlacedWorktreePath } from '../ipc/worktree-placed-path'
+import { sanitizeWorktreeName, type getWorktreePathSettings } from '../ipc/worktree-logic'
+import { resolveCandidateWorktreePath } from '../ipc/worktree-placed-path'
 import { resolveWorktreeCreateDisplayNameRequest } from '../ipc/worktree-display-name'
 import { getBranchConflictKind } from '../git/repo'
 import {
@@ -35,9 +29,12 @@ import {
 } from './runtime-worktree-create-git'
 import { runtimePathExists } from './runtime-worktree-filesystem'
 import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import type { WorktreeCreatePathClaim } from '../worktree-create-in-flight'
 import type { RuntimeStore } from './runtime-store-contract'
 import { PlacedWorktreePathOccupiedError } from './multi-repo-workspace/placed-worktree-path-occupied-error'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
+import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
+import { resolveLegacyRemoteBranch } from './runtime-local-worktree-create-legacy-branch'
 
 export type RuntimeLocalWorktreeCreateCandidate = {
   effectiveRequestedName: string
@@ -55,27 +52,24 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   settings: ReturnType<typeof getWorktreePathSettings> & {
     branchPrefix: string
     branchPrefixCustom?: string
-    autoRenameBranchFromWork?: boolean
   }
   worktreePathSettings: ReturnType<typeof getWorktreePathSettings>
   workspaceRoot: string
   username: string
   store?: RuntimeStore
   baseBranch: string
+  remoteTrackingBase?: RemoteTrackingBase | null
   localWorktreeGitOptions: { wslDistro?: string }
   hostedReviewExecutionContext?: HostedReviewExecutionOptions
+  pathClaim: WorktreeCreatePathClaim
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
-  const branchSeed = selectWorktreeCreateBranchSeed(
-    args.request,
-    args.settings.autoRenameBranchFromWork
-  )
   const sanitizedName = sanitizeWorktreeName(args.request.name)
   let effectiveRequestedName = args.request.name
   let effectiveSanitizedName = sanitizedName
   let branchName = ''
   let checkoutExistingBranch = false
   let selectedExistingLocalBranchName: string | null = null
-  let selectedRemoteBranchName: string | null = null
+  let selectedReuseBranchName: string | null = null
   let branchConflictKind: 'local' | 'remote' | null = null
   let worktreePath = ''
   let worktreePathResolved = false
@@ -94,12 +88,20 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
         )
       : null
   const isRetiredName = retiredNameRegistry ? createRetiredNameLookup(retiredNameRegistry) : null
-  if (
-    args.request.branchIntent === 'open-existing' &&
-    args.request.branchNameOverride &&
-    !args.request.pushTarget &&
-    getSelectedReviewBranch(args.request) === null
-  ) {
+  selectedReuseBranchName = await resolveLegacyRemoteBranch({ ...args, sanitizedName })
+  if (selectedReuseBranchName) {
+    branchName = selectedReuseBranchName
+  }
+  if (args.request.branchIntent === 'open-existing-v2') {
+    if (
+      !args.request.branchNameOverride ||
+      args.request.pushTarget ||
+      getSelectedReviewBranch(args.request)
+    ) {
+      throw new Error(
+        'Reuse branch requires an explicit branch selection without a review push target.'
+      )
+    }
     branchName = await resolveCreateBranchName(
       args.repo.path,
       args.request.branchNameOverride,
@@ -108,32 +110,47 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       args.username,
       args.localWorktreeGitOptions
     )
-    const conflict = await getBranchConflictKind(
+    checkoutExistingBranch = await canCheckoutExistingLocalBranch(
       args.repo.path,
       branchName,
       args.baseBranch,
-      args.localWorktreeGitOptions
+      args.localWorktreeGitOptions,
+      true
     )
-    if (conflict === null) {
-      selectedRemoteBranchName = branchName
+    if (!checkoutExistingBranch) {
+      if (args.remoteTrackingBase?.branch !== branchName) {
+        throw new Error(
+          `Branch "${branchName}" was not found locally. Select its remote branch again, or turn off Reuse branch.`
+        )
+      }
+      const conflict = await getBranchConflictKind(
+        args.repo.path,
+        branchName,
+        args.remoteTrackingBase.ref,
+        args.localWorktreeGitOptions
+      )
+      if (conflict) {
+        throw new WorktreeCreateCollisionError(
+          `Cannot reuse branch "${branchName}" because its name conflicts with an existing branch. Choose a different branch or turn off Reuse branch.`
+        )
+      }
     }
+    selectedReuseBranchName = branchName
   }
   const placement = args.request.placement
   const pathIsAvailable = async (): Promise<boolean> => {
-    // A placed member lives under its group root, which a per-project base path need not contain.
-    worktreePath = placement
-      ? ensurePathWithinWorkspace(
-          computePlacedWorktreePath(placement, args.workspaceRoot),
-          placement.parentDir
-        )
-      : ensurePathWithinWorkspace(
-          computeWorktreePath(effectiveSanitizedName, args.repo.path, args.worktreePathSettings),
-          args.workspaceRoot
-        )
+    worktreePath = resolveCandidateWorktreePath({
+      placement,
+      sanitizedName: effectiveSanitizedName,
+      repoPath: args.repo.path,
+      workspaceRoot: args.workspaceRoot,
+      worktreePathSettings: args.worktreePathSettings
+    })
     // Orca owns the path until background removal settles.
     return (
       !findPendingWorktreeRemovalConflict(args.repo.path, { worktreePath }) &&
-      !(await runtimePathExists(worktreePath))
+      !(await runtimePathExists(worktreePath)) &&
+      args.pathClaim.claim(worktreePath)
     )
   }
   // A placed member owns exactly one path and one branch; suffixed variants would drift from the persisted member.
@@ -155,7 +172,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       continue
     }
     attempts += 1
-    if (selectedRemoteBranchName) {
+    if (selectedReuseBranchName) {
       if (await pathIsAvailable()) {
         worktreePathResolved = true
         break
@@ -166,7 +183,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       args.repo.path,
       selectedExistingLocalBranchName ??
         getBranchNameOverrideCandidate(args.request.branchNameOverride, suffix),
-      branchSeed ? getWorktreeCreateCandidate(branchSeed, suffix) : effectiveSanitizedName,
+      effectiveSanitizedName,
       args.settings,
       args.username,
       args.localWorktreeGitOptions
@@ -183,15 +200,17 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
     const preferExistingBranch = Boolean(
       args.request.branchNameOverride || selectedExistingLocalBranchName
     )
-    checkoutExistingBranch = preferExistingBranch && (await tryExistingBranch())
+    const allowImplicitReuse = args.request.branchIntent !== 'create-new'
+    checkoutExistingBranch =
+      allowImplicitReuse && preferExistingBranch && (await tryExistingBranch())
     branchConflictKind = checkoutExistingBranch
       ? null
       : await getBranchConflictKind(
           args.repo.path,
           branchName,
-          args.baseBranch,
+          allowImplicitReuse ? args.baseBranch : undefined,
           args.localWorktreeGitOptions,
-          preferExistingBranch ? undefined : tryExistingBranch
+          allowImplicitReuse && !preferExistingBranch ? tryExistingBranch : undefined
         )
     if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
       selectedExistingLocalBranchName = branchName

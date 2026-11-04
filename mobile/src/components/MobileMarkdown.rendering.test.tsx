@@ -62,7 +62,7 @@ describe('MobileMarkdown rendering', () => {
     [
       'C1: nested lists keep their own markers and numbers',
       '1. **Frontend**\n   - React\n   - Vite\n2. Backend',
-      ['1.', 'Frontend', '-', 'React', '-', 'Vite', '2.', 'Backend']
+      ['1.', 'Frontend', '•', 'React', '•', 'Vite', '2.', 'Backend']
     ],
     [
       'C1: blank lines keep one list, and a list cut short keeps its numbers',
@@ -72,7 +72,7 @@ describe('MobileMarkdown rendering', () => {
     [
       'C1: a wrapped item stays one item',
       '- a long item\nwrapped at sixty\n- next',
-      ['-', 'a long item\nwrapped at sixty', '-', 'next']
+      ['•', 'a long item\nwrapped at sixty', '•', 'next']
     ],
     [
       'C1: a number starting a wrapped line is not a list',
@@ -87,17 +87,17 @@ describe('MobileMarkdown rendering', () => {
     [
       'C4: a fence with an unusual language tag',
       '```c++\nint x;\n```\nAfter.\n\n```ts title="a.ts"\nconst a = 1\n```',
-      ['c++', 'int x;', 'After.', 'ts', 'const a = 1']
+      ['c++', '1', 'int x;', 'After.', 'ts', '1', 'const a = 1']
     ],
     [
       'C5: tilde and four-backtick fences, with HTML inside left alone',
       '~~~html\n<div className="a"><span>Hi</span></div>\n~~~\n\n````md\n```js\nx\n```\n````',
-      ['html', '<div className="a"><span>Hi</span></div>', 'md', '```js\nx\n```']
+      ['html', '1', '<div className="a"><span>Hi</span></div>', 'md', '1\n2\n3', '```js\nx\n```']
     ],
     [
       'C6: a fence under a list step',
       '1. Install:\n   ```bash\n   pnpm i\n   ```\n2. Run',
-      ['1.', 'Install:', 'bash', 'pnpm i', '2.', 'Run']
+      ['1.', 'Install:', 'bash', '1', 'pnpm i', '2.', 'Run']
     ],
     [
       'C7: a table right under a sentence',
@@ -116,7 +116,7 @@ describe('MobileMarkdown rendering', () => {
     [
       'C18: blocks inside a quote',
       '> - a\n>\n> ```sh\n> ls\n> ```\n> > inner',
-      ['-', 'a', 'sh', 'ls', 'inner']
+      ['•', 'a', 'sh', '1', 'ls', 'inner']
     ],
     ['C19: underlined headings and closing hashes', 'Title\n=====\n\n## Sub ##', ['Title', 'Sub']],
     [
@@ -213,7 +213,7 @@ describe('MobileMarkdown tone', () => {
     const content = [
       '## Title',
       '> quoted',
-      '```ts\nconst a = 1\n```',
+      '```\nconst a = 1\n```',
       'Use `code` here.',
       '| Cell |\n| --- |\n| x |'
     ].join('\n\n')

@@ -137,7 +137,7 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
 }
 
 export function mergeFetchedWorktrees(
-  set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
+  _set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
   get: () => AppState,
   args: FencedWorktreeMergeArgs
 ): WorktreeListingMergeOutcome {
@@ -158,7 +158,7 @@ export function mergeFetchedWorktrees(
   const decision: { outcome: WorktreeListingMergeOutcome } = { outcome: 'not-current' }
   let authoritativelyRemovedIds: readonly string[] = []
   let authoritativelySeenIds: readonly string[] = []
-  set((s) => {
+  get().updateAgentStatusState((s, changedPaneKeys) => {
     // Check live applied catalog before any row/detection/purge merge so in-flight listings cannot undo newer create/remove replies.
     const refusal = worktreeListingRefusal(
       s,
@@ -212,7 +212,9 @@ export function mergeFetchedWorktrees(
       args.setup,
       matchOptions
     )
-    if (!args.refresh.result.authoritative && worktrees.length === 0 && currentForHost.length > 0) {
+    // Stored rows from a stopped WSL distro lack branch state the scanned rows already have.
+    const keepCurrent = worktrees.length === 0 || !!args.refresh.result.wslDistroStopped
+    if (!args.refresh.result.authoritative && keepCurrent && currentForHost.length > 0) {
       return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[args.repoId], mergedDetected)
         ? s
         : {
@@ -285,7 +287,8 @@ export function mergeFetchedWorktrees(
       ...(removedIds.length > 0
         ? buildWorktreePurgeState(
             s,
-            removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
+            removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId })),
+            changedPaneKeys
           )
         : {})
     }

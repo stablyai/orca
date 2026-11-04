@@ -59,7 +59,7 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionIdFromState: () => null
 }))
 
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
+vi.mock('../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 
@@ -169,10 +169,10 @@ describe('launchAgentInNewTab terminal tab activation', () => {
     expect(repoChoice.command).toContain("'-m' 'gpt-5.5'")
     expect(repoChoice.command?.match(/dangerously-bypass/g)).toHaveLength(1)
     expect(repoChoice.command).not.toContain('old')
-    // N1: a legacy override's own raw model beats the inherited choice on terminals only.
+    // Own repository Args select the whole model/effort group on both surfaces.
     const legacy = launch({ agentArgs: '--model mine' })
     expect(legacy.command).toContain("'--model' 'mine'")
     expect(legacy.command).not.toMatch(/gpt-5\.6-terra|model_reasoning_effort/)
-    expect(legacy.chat).toMatchObject({ model: 'gpt-5.6-terra', permissionMode: 'ask' })
+    expect(legacy.chat).toEqual({ permissionMode: 'ask' })
   })
 })

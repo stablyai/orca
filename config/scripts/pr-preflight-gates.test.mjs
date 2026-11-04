@@ -10,13 +10,13 @@ const preflight = workflow.jobs.preflight
 const steps = preflight.steps
 const compiler = steps.find((step) => step.id === 'typecheck')
 const compilerJoin = steps.findIndex((step) => step.wait === 'typecheck')
-const plan = steps.find((step) => step.id === 'unit-plan')
+const unitPlan = parse(readFileSync('.github/workflows/unit-plan.yml', 'utf8'))
 
 it('shares one setup and overlaps the compiler only after type-aware checks finish', () => {
   expect(workflow.jobs.static_analysis).toBeUndefined()
   expect(workflow.jobs.typecheck).toBeUndefined()
   expect(preflight.needs).toEqual(['code_paths'])
-  expect(preflight['runs-on']).toBe('blacksmith-8vcpu-ubuntu-2404')
+  expect(preflight['runs-on']).toBe('ubuntu-24.04-arm')
   const installs = steps.filter(
     (step) => step.uses === './.github/actions/install-node-dependencies'
   )
@@ -32,14 +32,6 @@ it('shares one setup and overlaps the compiler only after type-aware checks fini
   const bunSetup = steps.find((step) => step.name === 'Set up Bun for preflight checks')
   expect(bunSetup.with['bun-version-file']).toBe('config/.bun-version')
   expect(bunSetup.if).toBeUndefined()
-  expect(plan.background).toBe(true)
-  expect(plan.run.trim().split('\n')).toEqual([
-    'if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi',
-    'node config/scripts/ci-unit-plan.mjs'
-  ])
-  expect(plan.env.ORCA_UNIT_SELECTION_MODE).toContain('vars.ORCA_UNIT_SELECTION_MODE')
-  expect(plan.env.ORCA_UNIT_FULL_SHARD_COUNT).toBe("${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}")
-  expect(steps.indexOf(plan)).toBeLessThan(compilerJoin)
   expect(steps.indexOf(compiler)).toBeGreaterThan(
     steps.findIndex((step) => step.wait === 'changed-code-quality')
   )
@@ -83,22 +75,22 @@ it('keeps the Bun anti-slop scan aligned with the local audit', () => {
   expect(audit.run.trim().split('\n').at(-1)).toBe(localCommand)
 })
 
-it('requires physical preflight success before publishing shards and admitting consumers', () => {
-  const join = steps.findIndex((step) => step.wait === 'unit-plan')
-  const upload = steps.findIndex((step) => step.uses === 'actions/upload-artifact@v7')
-  expect(join).toBeGreaterThan(compilerJoin)
-  expect(upload).toBeGreaterThan(join)
-  expect(steps[upload]['continue-on-error']).toBeUndefined()
-  expect(steps[upload].with.name).toBe('unit-selection-attempt-${{ github.run_attempt }}')
-  expect(preflight.outputs.shards).toBe('${{ steps.unit-plan.outputs.shards }}')
-  expect(workflow.jobs.test.with.shards).toBe('${{ needs.preflight.outputs.shards }}')
-  for (const job of ['test', 'package', 'package_windows']) {
-    expect(workflow.jobs[job].needs).toEqual(['code_paths', 'preflight'])
+it('plans shards apart from preflight while verify still requires preflight', () => {
+  const plan = unitPlan.jobs.plan.steps.find((step) => step.id === 'plan')
+  expect(steps.some((step) => step.id === 'unit-plan')).toBe(false)
+  expect(preflight.outputs.shards).toBeUndefined()
+  expect(workflow.jobs.unit_plan.uses).toBe('./.github/workflows/unit-plan.yml')
+  expect(workflow.jobs.unit_plan.with.selection_mode).toContain('vars.ORCA_UNIT_SELECTION_MODE')
+  expect(plan.env.ORCA_UNIT_FULL_SHARD_COUNT).toBe("${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '12' }}")
+  expect(workflow.jobs.test.with.shards).toBe('${{ needs.unit_plan.outputs.shards }}')
+  expect(workflow.jobs.test.needs).toEqual(['code_paths', 'unit_plan'])
+  for (const job of ['package', 'package_windows', 'layout_oracle']) {
+    expect(workflow.jobs[job].needs).toEqual(['code_paths'])
   }
   for (const result of ['success', 'failure', 'cancelled', 'skipped']) {
     const admitted = runInNewContext(workflow.jobs.test.if, {
       cancelled: () => false,
-      needs: { code_paths: { result: 'success', outputs: { test: 'true' } }, preflight: { result } }
+      needs: { code_paths: { result: 'success', outputs: { test: 'true' } }, unit_plan: { result } }
     })
     expect(admitted, result).toBe(result === 'success')
   }

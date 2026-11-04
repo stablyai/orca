@@ -100,7 +100,13 @@ export function UpdateDownloadingContent({
       <div className="flex flex-col gap-2 mt-1">
         <Progress value={percent} className="h-1.5" />
         <p className="text-xs text-muted-foreground">
-          {translate('auto.components.UpdateCard.6e45bfa2e0', 'Downloading...')} {percent}%
+          {translate(
+            'auto.components.UpdateCard.downloadingPercent',
+            'Downloading... {{percent}}%',
+            {
+              percent
+            }
+          )}
         </p>
       </div>
     </div>

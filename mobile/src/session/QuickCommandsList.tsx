@@ -10,6 +10,7 @@ import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-co
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { supportsTerminalAgentQuickCommand } from '../terminal/quick-commands'
 import { QuickCommandRow } from './QuickCommandRow'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export const QUICK_COMMAND_SUPPORTED_AGENTS = MOBILE_AGENT_CATALOG.filter((entry) =>
   supportsTerminalAgentQuickCommand(entry.id)
@@ -47,6 +48,7 @@ export function QuickCommandsList({
   onAdd
 }: ListProps) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const hasVisible = repoCommands.length + globalCommands.length > 0
   // Why: keep an active filter clearable if a delete or paired desktop edit
   // leaves only one command while the sheet is open.
@@ -60,7 +62,10 @@ export function QuickCommandsList({
             style={styles.searchInput}
             value={query}
             onChangeText={onQueryChange}
-            placeholder="Search quick commands..."
+            placeholder={t(
+              'session.quickCommandsList.searchPlaceholder',
+              'Search quick commands...'
+            )}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -78,16 +83,20 @@ export function QuickCommandsList({
       ) : null}
 
       {!loading && totalCount === 0 ? (
-        <Text style={styles.empty}>No quick commands yet.</Text>
+        <Text style={styles.empty}>
+          {t('session.quickCommandsList.emptyState', 'No quick commands yet.')}
+        </Text>
       ) : null}
 
       {!loading && totalCount > 0 && !hasVisible ? (
-        <Text style={styles.empty}>No matching quick commands.</Text>
+        <Text style={styles.empty}>
+          {t('session.quickCommandsList.noMatches', 'No matching quick commands.')}
+        </Text>
       ) : null}
 
       {repoCommands.length > 0 ? (
         <QuickCommandGroup
-          label="This project"
+          label={t('session.quickCommandsList.projectGroup', 'This project')}
           commands={repoCommands}
           onLaunch={onLaunch}
           onEdit={onEdit}
@@ -98,7 +107,7 @@ export function QuickCommandsList({
 
       {globalCommands.length > 0 ? (
         <QuickCommandGroup
-          label="Global"
+          label={t('session.quickCommandsList.globalGroup', 'Global')}
           commands={globalCommands}
           onLaunch={onLaunch}
           onEdit={onEdit}
@@ -118,7 +127,9 @@ export function QuickCommandsList({
         accessibilityRole="button"
       >
         <Plus size={18} color={colors.textSecondary} />
-        <Text style={styles.addText}>New quick command</Text>
+        <Text style={styles.addText}>
+          {t('session.quickCommandsList.newCommand', 'New quick command')}
+        </Text>
       </Pressable>
     </View>
   )

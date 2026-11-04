@@ -49,7 +49,7 @@ export function forgetRefusedPaneResume(
   if (!identity) {
     return
   }
-  useAppStore.setState((current) => {
+  useAppStore.getState().updateAgentStatusState((current, changedPaneKeys) => {
     const live = current.agentStatusByPaneKey[paneKey]
     if (
       !live ||
@@ -60,6 +60,7 @@ export function forgetRefusedPaneResume(
       return current
     }
     const next = { ...current.agentStatusByPaneKey }
+    changedPaneKeys.add(paneKey)
     delete next[paneKey]
     return { agentStatusByPaneKey: next }
   })

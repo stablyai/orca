@@ -61,6 +61,7 @@ function realAdapter(
         providerSessionId,
         resumeLeafUuid: null,
         resumesTranscript: false,
+        cliFlag: async () => 'supported' as const,
         continuesChain: false
       }
     },

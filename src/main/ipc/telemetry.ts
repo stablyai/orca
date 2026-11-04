@@ -37,6 +37,7 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'ssh_host_server_legacy_relay_bridge',
   'wsl_move',
   'wsl_move_orchestrator',
+  'wsl_move_undo',
   'wsl_usage_snapshot'
 ])
 

@@ -249,19 +249,28 @@ describe('AgentsPane', () => {
     expect(markup).not.toContain('Couldn’t detect installed agents')
   })
 
-  it('keeps Windows runtime changes scoped to the local agent refresh', () => {
-    renderPane(
-      {
-        ...getDefaultSettings('/tmp'),
-        activeRuntimeEnvironmentId: 'env-1'
-      },
-      { wslSupportedPlatform: true, wslAvailable: true, wslDistros: ['Ubuntu'] }
-    )
+  it('keeps Windows runtime changes scoped to the local agent refresh', async () => {
+    // SSR reads Zustand’s initial snapshot, so patch/restore its local refresh action.
+    const initialState = useAppStore.getInitialState()
+    const priorRefresh = initialState.refreshDetectedAgents
+    const refreshLocal = vi.fn(async () => [])
+    initialState.refreshDetectedAgents = refreshLocal
+    try {
+      renderPane(
+        {
+          ...getDefaultSettings('/tmp'),
+          activeRuntimeEnvironmentId: 'env-1'
+        },
+        { wslSupportedPlatform: true, wslAvailable: true, wslDistros: ['Ubuntu'] }
+      )
+      await agentRuntimeSettingMock.lastRefresh?.()
+    } finally {
+      initialState.refreshDetectedAgents = priorRefresh
+    }
 
-    expect(agentRuntimeSettingMock.lastRefresh).toBe(
-      useAppStore.getInitialState().refreshDetectedAgents
-    )
-    expect(agentRuntimeSettingMock.lastRefresh).not.toBe(detectedAgentsMock.refresh)
+    // Choosing a runtime is a user act: its refresh may start that WSL distro.
+    expect(refreshLocal).toHaveBeenCalledWith(undefined, { wakeWslDistro: true })
+    expect(detectedAgentsMock.refresh).not.toHaveBeenCalled()
   })
 
   it('renders the keep-awake modes from settings', () => {

@@ -157,11 +157,12 @@ describe('a chat at rest keeps its worktree activatable', () => {
     expect(await activate()).toBe('structured')
   })
 
-  it('after an app restart restored it for reading', async () => {
+  it('after an app restart opens it for reading', async () => {
     await host.flushAllStreamedEvents()
     store = await openTestAgentSessionRecordStore(root)
     openHost()
-    await host.restoreReadableSessions()
+    await host.seedSessionTabs([SESSION])
+    await host.revealSession(SESSION)
     expect(host.hasSession(SESSION)).toBe(true)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',

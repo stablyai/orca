@@ -36,6 +36,8 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   carriesRpcEnvelope?: () => boolean
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void
+  // A caller that stopped hearing back asks for one decisive probe, so a silently dead socket ends in seconds.
+  probeLivenessNow?: () => void
   // Settle every pending request before returning; only the physical sender knows which reached the wire.
   // Reject written requests with markRpcDeliveryUnknown: the host may already have executed them.
   close: () => void

@@ -10,6 +10,7 @@ import {
   TerminalSquare
 } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
+import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 import { cn } from '@/lib/utils'
 import { FilePathCursorTooltip, FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
@@ -152,6 +153,12 @@ function getActionPresentation(
         <Globe className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-markdown' ? (
         <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'new-plugin-file' ? (
+        <PluginContributionIcon
+          url={option.option.pluginNewFile?.iconUrl}
+          fallback={FilePlus}
+          className="size-3.5 shrink-0"
+        />
       ) : option.option.kind === 'open-markdown' ? (
         <FileText className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-simulator' || option.option.kind === 'go-to-simulator' ? (

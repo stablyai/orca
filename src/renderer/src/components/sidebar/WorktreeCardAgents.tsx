@@ -27,6 +27,8 @@ import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constant
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
+import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { activateRetainedAgentRow } from './activate-retained-agent-row'
 import { selectAgentRowsUnread } from './worktree-card-agent-ack-inputs'
@@ -58,6 +60,7 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   agents: precomputedAgents,
   className
 }: Props) {
+  useUiLanguageRevision()
   const selectedAgents = useWorktreeAgentRows(worktreeId, precomputedAgents === undefined)
   const agents = precomputedAgents ?? selectedAgents
   if (agents.length === 0) {
@@ -78,6 +81,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   agents,
   className
 }: BodyProps) {
+  const languageRevision = useUiLanguageRevision()
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
@@ -112,6 +116,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const isAgentSendTargetModeActive = agentSendPopoverTargetMode !== null
   const sendTargetsByPaneKey = useMemo(() => {
     void agentStatusEpoch
+    void languageRevision
     if (!isAgentSendTargetModeActive) {
       return new Map<
         string,
@@ -124,15 +129,25 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         target.paneKey,
         agentSendPopoverTargetMode?.status === 'sending' &&
         agentSendPopoverTargetMode.sendingPaneKey === target.paneKey
-          ? { status: 'sending' as const, disabledReason: 'Sending...' }
+          ? {
+              status: 'sending' as const,
+              disabledReason: translate(
+                'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
+                'Sending...'
+              )
+            }
           : target.disabledReason
-            ? { status: target.status, disabledReason: target.disabledReason }
+            ? {
+                status: target.status,
+                disabledReason: agentSendDisabledReasonLabel(target.disabledReason)
+              }
             : { status: target.status }
       ])
     )
   }, [
     // Freshness timers advance this epoch without replacing the status map.
     agentStatusEpoch,
+    languageRevision,
     agentSendPopoverTargetMode?.sendingPaneKey,
     agentSendPopoverTargetMode?.status,
     isAgentSendTargetModeActive,
@@ -355,7 +370,10 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     const summaryAgents = hasLineage ? rootAgents : agents
     // Collapse compact multi-agent lists except when their rows are the send-target picker.
     const shouldUseSummaryRow = summaryAgents.length > 1 && !isAgentSendTargetModeActive
-    const subjectLabel = `${hasLineage ? rootAgents.length : agents.length} agents`
+    const subjectLabel = translate('sidebar.agentSummary.agentCount', '{{count}} agents', {
+      count: hasLineage ? rootAgents.length : agents.length,
+      defaultValue_one: '{{count}} agent'
+    })
 
     return (
       <div

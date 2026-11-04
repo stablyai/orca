@@ -2,19 +2,27 @@ import { cp, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import {
   isOfficialOrganizationGitSource,
-  isOfficialPluginIdentity,
+  hasOfficialPluginPublisher,
   pluginMarketplaceSchema
-} from '../../shared/plugins/plugin-marketplace'
+} from '../../shared/plugins/catalog/plugin-marketplace'
 import { bootstrapBundledPlugins, resolveBundledPluginRoot } from './plugin-bundled-bootstrap'
-import { inspectPluginInstallTree } from './plugin-install-staging'
+import { inspectPluginInstallTree } from './installation/plugin-install-staging'
 
 const launchRoot = join(process.cwd(), 'resources', 'plugins', 'launch')
 const temporaryRoots: string[] = []
 
 async function readJson(path: string): Promise<unknown> {
   return JSON.parse(await readFile(path, 'utf8'))
+}
+
+async function readBundledPluginKeys(): Promise<string[]> {
+  const index = z
+    .object({ plugins: z.array(z.object({ pluginKey: z.string() })) })
+    .parse(await readJson(join(launchRoot, 'bundled-plugins.json')))
+  return index.plugins.map((plugin) => plugin.pluginKey)
 }
 
 afterEach(async () => {
@@ -29,16 +37,15 @@ describe('Phase 1 launch plugin content', () => {
       await readJson(join(launchRoot, 'orca-marketplace.json'))
     )
     expect(marketplace.plugins.map((plugin) => plugin.id).sort()).toEqual([
-      'stablyai.orca-multipass-recipes',
-      'stablyai.orca-navigation-shortcuts',
-      'stablyai.orca-portuguese'
+      'stablyai.orca-multipass-recipes'
     ])
     expect(
       marketplace.plugins.filter(
         (plugin) =>
-          isOfficialPluginIdentity(plugin.id) && isOfficialOrganizationGitSource(plugin.source.url)
+          hasOfficialPluginPublisher(plugin.id) &&
+          isOfficialOrganizationGitSource(plugin.source.url)
       ).length
-    ).toBeGreaterThanOrEqual(2)
+    ).toBe(marketplace.plugins.length)
 
     const localPluginDirectories = (await readdir(launchRoot, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
@@ -62,17 +69,11 @@ describe('Phase 1 launch plugin content', () => {
         continue
       }
       const contributes = inspection.manifest.contributes
-      if (contributes.languagePacks.length > 0) {
-        contributionKinds.add('language')
-      }
       if (contributes.vmRecipes.length > 0) {
         contributionKinds.add('vm-recipe')
       }
-      if (contributes.commands.length > 0 && contributes.keybindings.length > 0) {
-        contributionKinds.add('command-keybinding')
-      }
     }
-    expect(contributionKinds).toEqual(new Set(['language', 'vm-recipe', 'command-keybinding']))
+    expect(contributionKinds).toEqual(new Set(['vm-recipe']))
   })
 
   it('publishes every bundled pack only when its release hash matches exact bytes', async () => {
@@ -86,8 +87,8 @@ describe('Phase 1 launch plugin content', () => {
     })
 
     expect(result.errors).toEqual([])
-    expect(result.installed.length).toBeGreaterThanOrEqual(1)
-    expect(result.installed.every(isOfficialPluginIdentity)).toBe(true)
+    expect(result.installed).toEqual(await readBundledPluginKeys())
+    expect(result.installed.every(hasOfficialPluginPublisher)).toBe(true)
   })
 
   it('boots release-indexed content from the packaged resources layout', async () => {
@@ -108,6 +109,6 @@ describe('Phase 1 launch plugin content', () => {
     })
 
     expect(result.errors).toEqual([])
-    expect(result.installed).toEqual(['stablyai.orca-navigation-shortcuts'])
+    expect(result.installed).toEqual(await readBundledPluginKeys())
   })
 })

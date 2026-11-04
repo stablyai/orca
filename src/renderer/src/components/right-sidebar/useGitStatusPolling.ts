@@ -5,6 +5,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
 import {
   hasInteractiveActiveGitStatusConsumer,
   shouldPollActiveGitStatus
@@ -109,8 +110,6 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     worktreePath
   })
 
-  // The first status after a workspace becomes active is a user act; later polls stay gated.
-  const wokenWorkspaceRef = useRef<string | null>(null)
   const runFetchStatus = useCallback(
     async (request: {
       reason: GitStatusRefreshReason
@@ -133,9 +132,9 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         if (!copy) {
           return
         }
-        const workspaceKey = `${activeWorktreeId}\0${worktreePath}`
-        const wakeWslDistro = wokenWorkspaceRef.current !== workspaceKey
-        wokenWorkspaceRef.current = workspaceKey
+        // Only the first status after the user's own switch here may start WSL (E9); polls, remounts
+        // and restores stay gated.
+        const wakeWslDistro = takeRecentWorkspaceSwitchWake(activeWorktreeId, 'git-status')
         await refreshGitStatusForWorktree({
           target: copy.transport,
           ownerHostId: copy.hostId,

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { View } from 'react-native'
 import { Platform } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { loadHosts } from '../transport/host-store'
 import {
   startDiagnosticFetchTimeout,
@@ -10,6 +11,7 @@ import { formatEndpoint, testHostReachability, unreachableHostDetail } from './h
 import type { CheckResult, DiagnosticStatus } from './troubleshoot-view'
 
 export function useTroubleshootDiagnostics() {
+  const t = useMobileTranslation()
   const [diagnosticStatus, setDiagnosticStatus] = useState<DiagnosticStatus>('idle')
   const [checks, setChecks] = useState<CheckResult[]>([])
   const abortRef = useRef(false)
@@ -43,11 +45,31 @@ export function useTroubleshootDiagnostics() {
       const hosts = await loadHosts()
       results.push(
         hosts.length > 0
-          ? { label: 'Paired hosts', status: 'pass', detail: `${hosts.length} paired` }
-          : { label: 'Paired hosts', status: 'fail', detail: 'None — scan a QR to pair' }
+          ? {
+              label: t('diagnostics.useTroubleshootDiagnostics.pairedHosts', 'Paired hosts'),
+              status: 'pass',
+              detail: t('diagnostics.useTroubleshootDiagnostics.pairedCount', '{{count}} paired', {
+                count: hosts.length
+              })
+            }
+          : {
+              label: t('diagnostics.useTroubleshootDiagnostics.pairedHosts', 'Paired hosts'),
+              status: 'fail',
+              detail: t(
+                'diagnostics.useTroubleshootDiagnostics.noPairedHosts',
+                'None — scan a QR to pair'
+              )
+            }
       )
     } catch {
-      results.push({ label: 'Paired hosts', status: 'warn', detail: 'Could not read host data' })
+      results.push({
+        label: t('diagnostics.useTroubleshootDiagnostics.pairedHosts', 'Paired hosts'),
+        status: 'warn',
+        detail: t(
+          'diagnostics.useTroubleshootDiagnostics.hostDataFailed',
+          'Could not read host data'
+        )
+      })
     }
 
     if (!isCurrentRun()) {
@@ -66,14 +88,29 @@ export function useTroubleshootDiagnostics() {
       }
       results.push(
         resp.ok
-          ? { label: 'Internet', status: 'pass', detail: 'Connected' }
-          : { label: 'Internet', status: 'warn', detail: 'Unexpected response' }
+          ? {
+              label: t('diagnostics.useTroubleshootDiagnostics.internet', 'Internet'),
+              status: 'pass',
+              detail: t('diagnostics.useTroubleshootDiagnostics.connected', 'Connected')
+            }
+          : {
+              label: t('diagnostics.useTroubleshootDiagnostics.internet', 'Internet'),
+              status: 'warn',
+              detail: t(
+                'diagnostics.useTroubleshootDiagnostics.unexpectedResponse',
+                'Unexpected response'
+              )
+            }
       )
     } catch {
       if (!isCurrentRun()) {
         return
       }
-      results.push({ label: 'Internet', status: 'fail', detail: 'No connection' })
+      results.push({
+        label: t('diagnostics.useTroubleshootDiagnostics.internet', 'Internet'),
+        status: 'fail',
+        detail: t('diagnostics.useTroubleshootDiagnostics.noConnection', 'No connection')
+      })
     } finally {
       internetCheck.dispose()
       if (activeInternetCheckRef.current === internetCheck) {
@@ -100,13 +137,19 @@ export function useTroubleshootDiagnostics() {
           label: host.name,
           status: reachable ? 'pass' : 'fail',
           detail: reachable
-            ? `Reachable at ${formatEndpoint(host.endpoint)}`
+            ? t('diagnostics.useTroubleshootDiagnostics.reachable', 'Reachable at {{endpoint}}', {
+                endpoint: formatEndpoint(host.endpoint)
+              })
             : unreachableHostDetail(host.endpoint)
         })
         setChecks([...results])
       }
     } catch {
-      results.push({ label: 'Hosts', status: 'warn', detail: 'Could not test' })
+      results.push({
+        label: t('diagnostics.useTroubleshootDiagnostics.hosts', 'Hosts'),
+        status: 'warn',
+        detail: t('diagnostics.useTroubleshootDiagnostics.hostTestFailed', 'Could not test')
+      })
     }
 
     if (!isCurrentRun()) {
@@ -114,14 +157,14 @@ export function useTroubleshootDiagnostics() {
     }
 
     results.push({
-      label: 'Platform',
+      label: t('diagnostics.useTroubleshootDiagnostics.platform', 'Platform'),
       status: 'pass',
       detail: `${Platform.OS} ${Platform.Version ?? ''}`
     })
 
     setChecks([...results])
     setDiagnosticStatus('done')
-  }, [])
+  }, [t])
 
   return { rootRef, diagnosticStatus, checks, runDiagnostics }
 }

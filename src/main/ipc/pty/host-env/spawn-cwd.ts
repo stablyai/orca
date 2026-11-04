@@ -8,7 +8,8 @@ import {
 } from '../../../../shared/terminal-startup-cwd'
 import {
   assertFolderWorkspacePathUsable,
-  getFolderWorkspacePathStatus
+  getFolderWorkspacePathStatus,
+  resolveFolderWorkspaceStatusPath
 } from '../../../project-groups/folder-workspace-path-status'
 import {
   isWslMoveCwdFenced,
@@ -18,6 +19,12 @@ import {
   WslMoveProjectFencedError
 } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { listLiveDaemonPtyIds } from '../../../daemon/daemon-provider-state'
+import { wslDistroHoldMessage } from '../../../../shared/wsl-distro-stopped-hold'
+import {
+  blockedWslDistroForPath,
+  runAsWslUserAct,
+  wslDistroForPath
+} from '../../../wsl/wsl-unc-access-gate'
 
 /**
  * A new PTY needs a workspace no WSL move is taking, and a folder that still exists. Reattaching to
@@ -29,15 +36,16 @@ export function assertWorkspaceAcceptsNewPty(
   store: Store | undefined,
   worktreeId: string | undefined,
   sessionId?: string,
-  cwd?: string
+  cwd?: string,
+  passiveWslRestore?: boolean
 ): Promise<void> | void {
   const fencedByCwd = !!cwd && isWslMoveCwdFenced(cwd)
   if (fencedByCwd || isWslMoveWorkspaceBlocked(store, worktreeId)) {
     return assertReattachesLiveSession(sessionId, worktreeId).then(() =>
-      assertFolderWorkspacePtyPathUsable(store, worktreeId)
+      assertFolderWorkspacePtyPathUsable(store, worktreeId, passiveWslRestore)
     )
   }
-  return assertFolderWorkspacePtyPathUsable(store, worktreeId)
+  return assertFolderWorkspacePtyPathUsable(store, worktreeId, passiveWslRestore)
 }
 
 /** Only a spawn on this machine starts in a folder a WSL move can be taking. */
@@ -64,16 +72,43 @@ async function assertReattachesLiveSession(
 
 export function assertFolderWorkspacePtyPathUsable(
   store: Store | undefined,
-  worktreeId: string | undefined
+  worktreeId: string | undefined,
+  passiveWslRestore = false
 ): Promise<void> | void {
   const workspaceScope = typeof worktreeId === 'string' ? parseWorkspaceKey(worktreeId) : null
   if (!store || workspaceScope?.type !== 'folder') {
     return
   }
-  return getFolderWorkspacePathStatus(store, {
+  const request = {
     scope: 'folder-workspace',
     folderWorkspaceId: workspaceScope.folderWorkspaceId
-  }).then(assertFolderWorkspacePathUsable)
+  } as const
+  return checkFolderWorkspacePtyPath(store, request, passiveWslRestore)
+}
+
+/**
+ * A spawn the user asked for may start the folder's stopped WSL distro (as before): its check runs
+ * as their act. A passive restore holds with Start instead, the same as a bridge pane's (E9).
+ */
+async function checkFolderWorkspacePtyPath(
+  store: Store,
+  request: { scope: 'folder-workspace'; folderWorkspaceId: string },
+  passiveWslRestore: boolean
+): Promise<void> {
+  const { folderPath } = resolveFolderWorkspaceStatusPath({ store, request })
+  if (passiveWslRestore) {
+    const blocked = await blockedWslDistroForPath(folderPath)
+    if (blocked) {
+      throw new Error(wslDistroHoldMessage(blocked.distro, blocked.state))
+    }
+    assertFolderWorkspacePathUsable(await getFolderWorkspacePathStatus(store, request))
+    return
+  }
+  assertFolderWorkspacePathUsable(
+    await runAsWslUserAct(wslDistroForPath(folderPath), () =>
+      getFolderWorkspacePathStatus(store, request)
+    )
+  )
 }
 
 export function resolvePtySpawnStartupCwd(

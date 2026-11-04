@@ -1,5 +1,4 @@
 import type { ClaudeAccountService } from '../claude-accounts/service'
-import { retireAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
 import { hasAppEnvironment } from '../../shared/app-environment'
 import { getManagedDataAccountService } from '../managed-data-accounts/service'
 import type {
@@ -26,10 +25,11 @@ import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-cre
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import {
-  hostAccountLaunchEnvFor,
   hostAccountsManagedByDesktopMessage,
   type HostAccountLaunchEnv
 } from '../../shared/host-account-launch-env'
+import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
+import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -60,9 +60,7 @@ export type CodexRateLimitResetRpcResult = {
 export class RuntimeAccountController {
   private services: RuntimeAccountServices | null = null
   private commitMessageAgentEnvironment: CommitMessageAgentEnvironmentResolvers | null = null
-  /** Pushed by the desktop that owns this host's accounts; held in memory, re-pushed on connect. */
-  private hostLaunchEnv: HostAccountLaunchEnv | null = null
-  private persistHostLaunchEnv: ((launchEnv: HostAccountLaunchEnv) => void) | null = null
+  private readonly hostAccounts = new HostAccountLaunchEnvState(() => this.services !== null)
 
   setServices(services: RuntimeAccountServices): void {
     this.services = services
@@ -73,59 +71,31 @@ export class RuntimeAccountController {
   }
 
   getCommitMessageAgentEnvironment(): CommitMessageAgentEnvironmentResolvers | undefined {
-    if (this.commitMessageAgentEnvironment) {
-      return this.commitMessageAgentEnvironment
-    }
-    const hostLaunchEnv = this.hostLaunchEnv
-    if (!hostLaunchEnv) {
-      return undefined
-    }
-    return {
-      prepareForCodexLaunch: () => hostLaunchEnv.terminal.CODEX_HOME ?? null,
-      prepareForClaudeLaunch: async () => ({
-        configDir: hostLaunchEnv.claude.CLAUDE_CONFIG_DIR ?? '',
-        envPatch: { ...hostLaunchEnv.claude },
-        provenance: 'desktop-host-launch-env'
-      })
-    }
+    return this.commitMessageAgentEnvironment ?? this.hostAccounts.commitMessageAgentEnvironment()
   }
 
   /** Refused where this host has account services of its own: they already decide every launch. */
   setHostLaunchEnv(launchEnv: HostAccountLaunchEnv): void {
-    if (this.services) {
-      throw new Error('This host manages its own provider accounts.')
-    }
-    const previous = this.hostLaunchEnv
-    this.hostLaunchEnv = launchEnv
-    if (JSON.stringify(previous) !== JSON.stringify(launchEnv)) {
-      retireAtRestCommandContext()
-    }
-    try {
-      this.persistHostLaunchEnv?.(launchEnv)
-    } catch (error) {
-      // Environment already applies; persistence failure loses it only on restart before the next push.
-      console.warn('[accounts] Could not save the host account env:', error)
-    }
+    this.hostAccounts.setHostLaunchEnv(launchEnv)
   }
 
   /** orcad's store: starts from the last pushed env, so launches before a reconnect keep it. */
   restoreHostLaunchEnv(
     saved: HostAccountLaunchEnv | null,
-    persist: (launchEnv: HostAccountLaunchEnv) => void
+    persist: (launchEnv: HostAccountLaunchEnv) => void,
+    options: { expectDesktopPush?: boolean; refreshClaudeProfile?: HostClaudeProfileRefresh } = {}
   ): void {
-    this.persistHostLaunchEnv = persist
-    if (saved && !this.services) {
-      const previous = this.hostLaunchEnv
-      this.hostLaunchEnv = saved
-      if (JSON.stringify(previous) !== JSON.stringify(saved)) {
-        retireAtRestCommandContext()
-      }
-    }
+    this.hostAccounts.restoreHostLaunchEnv(saved, persist, options)
+  }
+
+  /** Before a launch for `agent` this host starts: the first account push, then a Claude refresh. */
+  prepareHostAgentLaunch(agent: string | null | undefined): Promise<void> {
+    return this.hostAccounts.prepareHostAgentLaunch(agent)
   }
 
   /** The desktop-selected account env for a process `agent` starts here; empty when none. */
   hostLaunchEnvFor(agent: string | null | undefined): Readonly<Record<string, string>> {
-    return hostAccountLaunchEnvFor(this.hostLaunchEnv, agent)
+    return this.hostAccounts.hostLaunchEnvFor(agent)
   }
 
   /** Null where the desktop that owns this host's accounts polls usage instead (a WSL host). */
@@ -300,8 +270,8 @@ export class RuntimeAccountController {
   private requireServices(): RuntimeAccountServices {
     if (!this.services) {
       throw new Error(
-        this.hostLaunchEnv
-          ? hostAccountsManagedByDesktopMessage(this.hostLaunchEnv.wslDistro)
+        this.hostAccounts.current
+          ? hostAccountsManagedByDesktopMessage(this.hostAccounts.current.wslDistro)
           : 'Account services are not configured on this runtime'
       )
     }

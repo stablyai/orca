@@ -8,8 +8,6 @@ import { SourceControlAgentActionDialog } from '../SourceControlAgentActionDialo
 import { ChecksPanelUpdatedAtMetadata } from '../checks-panel-updated-at-metadata'
 import { getChecksPanelRefreshErrorBannerLine } from '../github-refresh-error-copy'
 import { resolveChecksPanelHostedReviewModifierDestination } from '../checks-panel-hosted-review-click-routing'
-import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control-launch-agent-selection'
-import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control-ai'
 import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
 import { getBrokenChecks } from '../../../../../shared/pr-checks-fix-prompt'
 import { PRTriageStrip } from './triage-strip'
@@ -291,35 +289,6 @@ export function ChecksPanelActiveContent({
         promptDelivery="submit-after-ready"
         launchPlatform={activeSourceControlLaunchPlatform}
         launchSource={agentComposerState?.launchSource ?? 'task_page'}
-        savedAgentId={
-          agentComposerState
-            ? readSourceControlLaunchRecipeAgentId(
-                resolveSourceControlActionRecipe({
-                  settings,
-                  repo,
-                  actionId: agentComposerState.actionId
-                })
-              )
-            : null
-        }
-        savedCommandInputTemplate={
-          agentComposerState
-            ? (resolveSourceControlActionRecipe({
-                settings,
-                repo,
-                actionId: agentComposerState.actionId
-              }).commandInputTemplate ?? null)
-            : null
-        }
-        savedAgentArgs={
-          agentComposerState
-            ? (resolveSourceControlActionRecipe({
-                settings,
-                repo,
-                actionId: agentComposerState.actionId
-              }).agentArgs ?? null)
-            : null
-        }
         onSaveAgentDefault={saveLaunchActionDefault}
         {...agentComposerState?.launchContext}
       />

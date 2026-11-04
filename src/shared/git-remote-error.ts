@@ -1,3 +1,4 @@
+import { stripAnsiEscapeSequences } from './ansi-escape-sequences'
 import { isPushHookFailure } from './source-control-push-failure'
 
 // Why: strip `user:password@` on any scheme, but a lone `user@` only on HTTP(S) — SSH's git@host user-info is required, so stripping breaks the URL.
@@ -6,10 +7,11 @@ const HTTPS_TOKEN_URL_PATTERN = /(https?:\/\/)[^\s/@:]+@/gi
 const SUBMODULE_PUSH_FAILURE_PATTERN = /Unable to push submodule ['"](.+?)['"]/i
 const SUBMODULE_PUSH_FAILURE_SENTINEL_PATTERN =
   /failed to push all needed submodules|Unable to push submodule/i
+const STALE_LEASE_REJECTION_PATTERN = /^[ \t]*![ \t]+\[rejected\][^\r\n]*\(stale info\)[ \t]*$/m
 const SUBMODULE_REMOTE_CHANGED_PATTERN =
   /non-fast-forward|fetch first|updates were rejected|remote contains work that you do not have/i
 const NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN =
-  /(?:^|:\s)((?:Submodule '[^'\n]+'|A submodule) (?:has remote changes\. Pull inside the submodule, then try again\.|could not be pushed\. Resolve the submodule push error, then try again\.))(?:$|\s)/i
+  /(?:^|:\s)((?:Submodule '([^'\n]+)'|A submodule) (?:(has remote changes)\. Pull inside the submodule, then try again\.|could not be pushed\. Resolve the submodule push error, then try again\.))(?:$|\s)/i
 const DIVERGENT_PULL_RECONCILIATION_PATTERN =
   /Need to specify how to reconcile divergent branches|divergent branches and need to specify how to reconcile them/i
 // Why: these args already pin a reconcile strategy; the merge fallback must not override an explicit choice like --ff-only.
@@ -22,24 +24,50 @@ export function stripCredentialsFromMessage(message: string): string {
   return message.replace(USERPASS_URL_PATTERN, '$1').replace(HTTPS_TOKEN_URL_PATTERN, '$1')
 }
 
-export function formatSubmodulePushFailureDetail(message: string): string | null {
+export type SubmodulePushFailure = {
+  submoduleName: string | null
+  remoteChanged: boolean
+  detail: string
+}
+
+// Why: the renderer rebuilds this classification as translated copy; detail stays English for main/CLI.
+export function classifySubmodulePushFailure(message: string): SubmodulePushFailure | null {
   const raw = stripCredentialsFromMessage(message)
   const trimmed = raw.trim()
   const normalizedMatch = trimmed.match(NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN)
   if (normalizedMatch) {
-    return normalizedMatch[1]
+    return {
+      submoduleName: normalizedMatch[2] ?? null,
+      remoteChanged: normalizedMatch[3] !== undefined,
+      detail: normalizedMatch[1]
+    }
   }
   if (!SUBMODULE_PUSH_FAILURE_SENTINEL_PATTERN.test(trimmed)) {
     return null
   }
 
   // Why: recursive push hides the actionable nested rejection behind a top-level "failed to push all needed submodules" line.
-  const submoduleName = trimmed.match(SUBMODULE_PUSH_FAILURE_PATTERN)?.[1]?.trim()
-  const subject = submoduleName ? `Submodule '${submoduleName}'` : 'A submodule'
-  if (SUBMODULE_REMOTE_CHANGED_PATTERN.test(trimmed)) {
-    return `${subject} has remote changes. Pull inside the submodule, then try again.`
+  const submoduleName = trimmed.match(SUBMODULE_PUSH_FAILURE_PATTERN)?.[1]?.trim() || null
+  const remoteChanged = SUBMODULE_REMOTE_CHANGED_PATTERN.test(trimmed)
+  return {
+    submoduleName,
+    remoteChanged,
+    detail: formatSubmodulePushFailureSentence(submoduleName, remoteChanged)
   }
-  return `${subject} could not be pushed. Resolve the submodule push error, then try again.`
+}
+
+export function formatSubmodulePushFailureSentence(
+  submoduleName: string | null,
+  remoteChanged: boolean
+): string {
+  const subject = submoduleName ? `Submodule '${submoduleName}'` : 'A submodule'
+  return remoteChanged
+    ? `${subject} has remote changes. Pull inside the submodule, then try again.`
+    : `${subject} could not be pushed. Resolve the submodule push error, then try again.`
+}
+
+export function formatSubmodulePushFailureDetail(message: string): string | null {
+  return classifySubmodulePushFailure(message)?.detail ?? null
 }
 
 function extractTailLine(message: string): string {
@@ -139,8 +167,11 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
     return 'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
   }
 
-  if (operation === 'push' && isPushHookFailure(raw)) {
-    // Why: pre-push hook output is the actionable part, printed before git's generic "failed to push some refs" tail line.
+  if (
+    operation === 'push' &&
+    (STALE_LEASE_REJECTION_PATTERN.test(stripAnsiEscapeSequences(raw)) || isPushHookFailure(raw))
+  ) {
+    // Lease rejection and pre-push hook details precede Git's generic "failed to push some refs" tail line.
     return raw.trim()
   }
 

@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 
 import { cp, rm } from 'node:fs/promises'
@@ -143,7 +144,7 @@ it('settles it when a read reaches the chat before the startup reconcile, then r
   await host.history({ sessionId: SESSION, direction: 'tail' })
   expect(await turnStates(host)).toEqual(['unverifiable'])
   await host.reconcileRestartLeases()
-  await host.restoreReadableSessions([SESSION])
+  await openTestChats(host, [SESSION])
 
   expect(await turnStates(host)).toEqual(['interrupted'])
   await host.flushAllStreamedEvents()

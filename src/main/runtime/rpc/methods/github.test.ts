@@ -111,7 +111,8 @@ describe('github RPC methods', () => {
       'repo-1',
       { owner: 'acme', repo: 'orca' },
       12,
-      'pr'
+      'pr',
+      { preview: false }
     )
     expect(response).toMatchObject({ ok: true, result: { number: 12, type: 'pr' } })
   })

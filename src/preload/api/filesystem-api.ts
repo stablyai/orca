@@ -1,6 +1,7 @@
 import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { RuntimeFileReadChunkResult } from '../../shared/runtime-types'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { PdfExportResult } from '../../shared/pdf-export-failure-copy'
 import type {
   DirEntry,
   FsChangedPayload,
@@ -20,6 +21,7 @@ import type {
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import type { LocalFileAccess } from '../../shared/local-file-access'
 import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
+import type { FileBytesWritePrecondition } from '../../shared/file-bytes-write'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
@@ -42,12 +44,7 @@ import type {
 } from '../../shared/native-file-drop-preparation'
 
 export type ExportApi = {
-  htmlToPdf: (args: {
-    html: string
-    title: string
-  }) => Promise<
-    { success: true; filePath: string } | { success: false; cancelled?: boolean; error?: string }
-  >
+  htmlToPdf: (args: { html: string; title: string }) => Promise<PdfExportResult>
 }
 
 export type FilesystemApi = {
@@ -138,6 +135,16 @@ export type FilesystemApi = {
         connectionId?: string
         access?: LocalFileAccess
         diskPrecondition?: FileWriteDiskPrecondition
+      } & SshMutationExpectation
+    ) => Promise<FileWriteResult>
+    /** Atomic replacement of a binary file; absent where only text saves are served. */
+    writeFileBytes?: (
+      args: {
+        filePath: string
+        bytes: Uint8Array
+        connectionId?: string
+        access?: LocalFileAccess
+        diskPrecondition: FileBytesWritePrecondition
       } & SshMutationExpectation
     ) => Promise<FileWriteResult>
     createFile: (

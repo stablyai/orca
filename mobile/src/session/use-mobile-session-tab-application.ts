@@ -5,7 +5,7 @@ import {
   withoutPendingHandle,
   withoutPendingTabId
 } from './pending-session-selection'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalRecordsByCurrentOrder,
@@ -26,9 +26,16 @@ import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
 import { withRememberedNativeChatIdentity } from './native-chat/mobile-native-chat-eligibility'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionTerminalListModel } from './use-mobile-session-terminal-list'
+import { pruneMobileNativeChatTabDrafts } from './native-chat/composer/mobile-native-chat-draft-store'
+import {
+  trackPhoneOwnedDraftTabs,
+  type DraftTabOwnership
+} from './native-chat/composer/mobile-native-chat-draft-tab-ownership'
 
 export function useMobileSessionTabApplication(scope: MobileSessionTerminalListModel) {
   const {
+    hostId,
+    worktreeId,
     setTerminals,
     terminalsRef,
     setSessionTabs,
@@ -57,6 +64,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     creatingTerminalRef,
     setCreating
   } = scope
+  const draftOwnershipRef = useRef<DraftTabOwnership | null>(null)
   const applySessionTabs = useCallback(
     (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
       const diagnostics = terminalDiagnosticsRef.current
@@ -96,6 +104,30 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       reconcileBufferedDraftsRef.current(currentSessionTabs, nextTabs, {
         retainMissingSurfaces: result.tabs.length === 0
       })
+      const phoneOwnedTabIds = trackPhoneOwnedDraftTabs(
+        draftOwnershipRef,
+        `${hostId}\0${worktreeId}`,
+        result.tabs,
+        currentSessionTabs
+      )
+      const selectionClaims = [
+        activeSessionTabIdRef.current,
+        pendingSelectionTabId(pendingSelectionRef.current)
+      ].filter((id): id is string => id !== null)
+      if (
+        result.tabs.length > 0 &&
+        confirmsMirroredTabSelection(result.publicationEpoch) &&
+        result.publicationEpoch !== 'none' &&
+        result.publicationEpoch !== 'none:client-navigation' &&
+        !result.clientHostedPagesUnreconciled &&
+        !result.agentSessionsUnverifiable
+      ) {
+        pruneMobileNativeChatTabDrafts(hostId, worktreeId, [
+          ...[...result.tabs, ...nextTabs].map((tab) => tab.id),
+          ...phoneOwnedTabIds,
+          ...selectionClaims
+        ])
+      }
       sessionTabsRef.current = nextTabs
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
       // Avoid identical snapshot state updates that would tear down and replay subscriptions.
@@ -238,7 +270,13 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
       return outcome
     },
-    [defaultTerminalHandlesToLiveInput, subscribeToTerminal, unsubscribeTerminal]
+    [
+      defaultTerminalHandlesToLiveInput,
+      hostId,
+      worktreeId,
+      subscribeToTerminal,
+      unsubscribeTerminal
+    ]
   )
   return {
     applySessionTabs

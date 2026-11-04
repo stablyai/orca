@@ -53,6 +53,7 @@ import { createPtyApi, createSshApi } from './preload-api/web-terminal-api'
 import { createWebUiApi } from './preload-api/web-ui-api'
 import { createUpdaterApi } from './preload-api/web-updater-api'
 import { createWebWorkspacePortsApi } from './preload-api/web-workspace-ports-api'
+import { createWebLinkPreviewApi } from './preload-api/web-link-preview-api'
 import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-session-api'
 import { createWorktreesApi } from './preload-api/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
@@ -70,6 +71,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     ...createWebStarNagApi(),
     ...createWebPlatformApi(),
     ...createWebWorkspacePortsApi(),
+    linkPreview: createWebLinkPreviewApi(),
     ...createWebOrcaProfilesApi(),
     ...createWebE2EApi(),
     ...createWebSettingsApi(),
@@ -154,6 +156,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onOrchestratorStatus: () => () => {},
       onOrchestratorSleptPanesRequest: () => () => {},
       answerOrchestratorSleptPanes: () => Promise.resolve()
+    },
+    // Desktop-only: a web client never converts this computer's projects.
+    wslDriveUnc: {
+      convert: () => Promise.resolve({ outcome: 'refused', blockers: [] }),
+      listPendingRendererRewrites: () => Promise.resolve([]),
+      recordStoreRewritten: () => Promise.resolve({ recorded: false, reason: 'gated-off' })
     },
     pwsh: {
       isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)

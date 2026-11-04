@@ -34,6 +34,7 @@ import {
 } from './hosted-review-cache-state'
 import { clearHostedReviewConflictingPrCache } from './hosted-review-pr-cache'
 import {
+  canJoinHostedReviewFlight,
   hostedReviewRequestKey,
   hostedReviewRequestGenerations as requestGenerations,
   inflightHostedReviewRequests,
@@ -266,6 +267,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           return review
         } catch (error) {
           // Transient timeout/rate-limit/git failures are not definitive misses: preserve last review and retry next visible poll instead of hiding for TTL.
+          // A stopped WSL distro's refusal (E9) also lands here; it is logged too, and the review kept.
           console.error('Failed to fetch hosted review:', error)
           const preserved = get().hostedReviewCache[cacheKey]
           // Never preserve merged review after worktree leaves its valid head/contained line.
@@ -286,7 +288,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
 
       registerInflightHostedReviewRequest(requestKey, {
         promise: request,
-        force: Boolean(options?.force),
+        options,
         currentHeadOid,
         generation,
         startedAt: requestStartedAt
@@ -308,7 +310,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       return cached.data
     }
 
-    if (joinableInflightRequest && (!options?.force || joinableInflightRequest.force)) {
+    if (joinableInflightRequest && canJoinHostedReviewFlight(joinableInflightRequest, options)) {
       return joinableInflightRequest.promise
     }
 

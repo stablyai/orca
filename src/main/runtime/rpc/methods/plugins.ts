@@ -1,12 +1,12 @@
 import { defineMethod, type RpcContext } from '../core'
-import type { PluginPanelEntry } from '../../../../shared/plugins/plugin-panel-bridge'
+import type { PluginFrameEntry } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { listPluginsForClients } from '../../../plugins/plugin-client-list'
-import type { PluginListEntry } from '../../../plugins/plugin-list-projection'
+import type { PluginHostListEntry } from '../../../../shared/plugins/plugin-list-entry'
 import type { PluginService } from '../../../plugins/plugin-service'
 import {
   pluginConsentRequestSchema,
   type PluginConsentRequest
-} from '../../../../shared/plugins/plugin-consent-request'
+} from '../../../../shared/plugins/approval/plugin-consent-request'
 import {
   PluginInvokeCommandParams,
   PluginReadPanelEntryParams,
@@ -42,7 +42,7 @@ function requirePluginService(): PluginService {
   return pluginServiceForRpc
 }
 
-async function listForRpc(): Promise<PluginListEntry[]> {
+async function listForRpc(): Promise<PluginHostListEntry[]> {
   return listPluginsForClients(requirePluginService())
 }
 
@@ -111,7 +111,7 @@ export const PLUGIN_METHODS = [
     name: 'plugins.readPanelEntry',
     permission: 'workspace',
     params: PluginReadPanelEntryParams,
-    handler: async (params, context): Promise<PluginPanelEntry | null> => {
+    handler: async (params, context): Promise<PluginFrameEntry | null> => {
       const service = requirePluginService()
       await service.whenReady()
       const ownerKey = bindRpcPanelOwner(service, context)

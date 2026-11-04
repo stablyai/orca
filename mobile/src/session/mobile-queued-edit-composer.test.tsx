@@ -122,6 +122,8 @@ describe('real phone inline composer from More through picker pruning and host b
             onError: error,
             onMicPress: undefined,
             micActive: false,
+            micStarting: false,
+            micProcessing: false,
             dictationMode: undefined,
             onMicPressIn: () => {},
             onMicPressOut: () => {}
@@ -446,8 +448,7 @@ describe('real phone inline composer from More through picker pruning and host b
       act(() => setMobileNativeChatDraftText('original-bottom', 'occupied'))
       act(() => field().props.onChangeText('B'))
       act(() => field().props.onFocus())
-      const dictate = captureMobileNativeChatTextDestination()!
-      expect(dictate).toBeTypeOf('function')
+      const dictate = captureMobileNativeChatTextDestination()!.insert
       const oldScope = state.hook!.queued.editor!.scopeKey
       const destination = mobileNativeChatDraftDestination(oldScope)
       let release = () => {}

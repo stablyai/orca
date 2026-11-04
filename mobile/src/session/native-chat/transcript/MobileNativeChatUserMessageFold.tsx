@@ -10,6 +10,7 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { CHAT_PROSE_SCALE } from './mobile-native-chat-message-styles'
 import type { useMobileNativeChatFullMessage } from '../../MobileNativeChatFullContent'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 
 const FOLDED_HEIGHT =
   NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES *
@@ -35,6 +36,7 @@ export function MobileNativeChatUserMessageFold({
   children: React.ReactNode
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const longText = useMemo(() => nativeChatUserMessageFolds(text), [text])
   const [height, setHeight] = useState<number | null>(null)
   const clip = FOLDED_HEIGHT * fontScale
@@ -64,10 +66,13 @@ export function MobileNativeChatUserMessageFold({
         >
           <Text style={styles.toggleText}>
             {open
-              ? 'Show less'
+              ? t('chat.nativeChatUserMessageFold.showLess', 'Show less')
               : recovery?.load === 'failed'
-                ? "Show full message — couldn't load, tap to retry"
-                : 'Show full message'}
+                ? t(
+                    'chat.nativeChatUserMessageFold.loadFailed',
+                    "Show full message — couldn't load, tap to retry"
+                  )
+                : t('chat.nativeChatUserMessageFold.showFullMessage', 'Show full message')}
           </Text>
         </Pressable>
       ) : null}

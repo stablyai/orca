@@ -70,6 +70,7 @@ it.each(['low', 'high', undefined])(
           }
         ).options
       ).toEqual({ model: 'sonnet', effort: 'high' })
+      claudeTurnEnds(claude.connections[0]!)
       await adapter.dispatch({
         sessionId: 'session-1',
         clientMessageId: 'again',
@@ -82,7 +83,7 @@ it.each(['low', 'high', undefined])(
           (call) =>
             call.subtype === 'apply_flag_settings' && JSON.stringify(call.params).includes('high')
         )
-      ).toHaveLength(1)
+      ).toHaveLength(2)
       expect(claude.connections[0]!.sent).toHaveLength(2)
     } finally {
       await adapter.closeAll()
@@ -131,7 +132,10 @@ it('retires earlier Fast routing when an effort read reports Fast off', async ()
     fastMode = false
     expect(await send('low')).toMatchObject({ state: 'admitted', ranOptions: { effort: 'low' } })
     claudeTurnEnds(claude.connections[0]!)
-    expect(await send('low')).toEqual({ state: 'admitted', ranOptions: { effort: 'low' } })
+    expect(await send('low')).toEqual({
+      state: 'admitted',
+      ranOptions: { model: 'sonnet', effort: 'low' }
+    })
   } finally {
     await adapter.closeAll()
   }

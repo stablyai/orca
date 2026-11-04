@@ -7,7 +7,8 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   finishAutomationWorkspaceProvenanceRequest,
   releaseAutomationWorkspaceProvenanceRequest,
-  resolveAutomationWorkspaceProvenance
+  resolveAutomationWorkspaceProvenance,
+  resolveClientAutomationWorkspaceProvenance
 } from '../../../automations/workspace-provenance'
 import type { AgentLaunchWorkspaceFactory } from '../../../agent-launch/agent-launch-surface-factories'
 import { combineLaunchWarnings } from '../../../agent-launch/agent-launch-warnings'
@@ -55,12 +56,18 @@ export function agentLaunchWorkspaceFactory(
       const params = create as WorktreeCreateParams
       const { runtime } = context
       const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
-      const automationProvenance = resolveAutomationWorkspaceProvenance({
-        authority: runtime,
-        repoSelector: params.repo,
-        repo,
-        request: params.automationProvenanceRequest
-      })
+      const automationProvenance =
+        resolveAutomationWorkspaceProvenance({
+          authority: runtime,
+          repoSelector: params.repo,
+          repo,
+          request: params.automationProvenanceRequest,
+          ignoreUnknownAutomation: true
+        }) ??
+        resolveClientAutomationWorkspaceProvenance({
+          authority: runtime,
+          provenance: params.clientAutomationProvenance
+        })
       // Reserved before creation so a retry can recover; a failed attempt has to release it.
       try {
         const result = await runtime.createManagedWorktree({

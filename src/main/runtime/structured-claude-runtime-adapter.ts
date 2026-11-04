@@ -1,6 +1,6 @@
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { resolveClaudeCommand } from '../codex-cli/command'
+import type { ClaudeEnvDeps } from '../claude/claude-structured-child-env'
 import { ClaudeStructuredSessionAdapter } from '../claude/claude-structured-session-adapter'
 import type {
   ClaudeStructuredSessionAdapterDeps,
@@ -29,7 +29,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   resolveAccountHome?: ClaudeAtRestCommandsDeps['resolveAccountHome']
   resolveLaunch: ClaudeStructuredSessionAdapterDeps['resolveLaunch']
   /** The binary and env the startup version prewarm asks, as a launch would. */
-  resolveClaudeCommand?: typeof resolveClaudeCommand
+  resolveClaudeCommand?: ClaudeEnvDeps['resolveCommand']
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
   /** The env a Claude child inherits before auth stripping; absent inherits Orca's own. */
   resolveClaudeInheritedEnv?: () => Promise<Record<string, string>>
@@ -65,6 +65,7 @@ export function structuredClaudeLifecycleEvent(
       reason: event.reason,
       ...(event.failure ? { failure: event.failure } : {}),
       cause: event.cause,
+      ...(event.deathEvidenceKind ? { deathEvidenceKind: event.deathEvidenceKind } : {}),
       fence: event.fence,
       acquisitionGeneration: event.acquisitionGeneration,
       // The instant the translator ended the open turn at; the host reads the exit's turn by it.
@@ -83,7 +84,7 @@ export function createStructuredClaudeRuntimeAdapter(
     void prewarmClaudeCliFlags({
       cliFlags: deps.claudeCliFlags,
       store,
-      resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
+      ...(deps.resolveClaudeCommand ? { resolveCommand: deps.resolveClaudeCommand } : {}),
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),
       ...(deps.resolveClaudeInheritedEnv
         ? { resolveInheritedEnv: deps.resolveClaudeInheritedEnv }
@@ -157,7 +158,11 @@ export function openClaudeConnectionOf(
           // Every argument passes through, so one the connection adds later still reaches the session.
           onExit: (...args) => {
             support.observeExit(
-              { command: launch.pathToClaudeCodeExecutable, cwd: launch.cwd },
+              {
+                command: launch.pathToClaudeCodeExecutable,
+                prefixArgs: launch.prefixArgs,
+                cwd: launch.cwd
+              },
               args[0]
             )
             handlers.onExit?.(...args)

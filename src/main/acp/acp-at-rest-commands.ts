@@ -162,6 +162,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               ...launch,
               env: { ...launch.env, ...skill?.env },
               args: [
+                ...invocation.prefixArgs,
                 ...spec.args({ fullAccess: false, pluginDir: skill?.pluginDir ?? null }),
                 ...listing.sessionFolderArgs(folder.path)
               ]

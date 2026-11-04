@@ -50,13 +50,14 @@ import { buildDocPreviewUrl, DOC_PREVIEW_PARTITION } from '../../shared/doc-prev
 
 function installOnFakeWindow(): {
   handlers: Record<string, (...args: never[]) => void>
-  webContents: { on: ReturnType<typeof vi.fn> }
+  webContents: { on: ReturnType<typeof vi.fn>; setWebRTCIPHandlingPolicy: ReturnType<typeof vi.fn> }
 } {
   const handlers: Record<string, (...args: never[]) => void> = {}
   const webContents = {
     on: vi.fn((event: string, handler: (...args: never[]) => void) => {
       handlers[event] = handler
-    })
+    }),
+    setWebRTCIPHandlingPolicy: vi.fn()
   }
   installMainWindowWebviewSecurity({ webContents } as never)
   return { handlers, webContents }
@@ -91,6 +92,7 @@ describe('main window webview security', () => {
     expect(preventDefault).toHaveBeenCalledOnce()
     expect(mocks.installNavigationPolicy).toHaveBeenCalledWith(webContents)
     expect(mocks.registerPluginGuard).toHaveBeenCalledWith(webContents)
+    expect(webContents.setWebRTCIPHandlingPolicy).toHaveBeenCalledWith('disable_non_proxied_udp')
   })
 
   it('removes renderer preload input and restores every hardened preference', () => {

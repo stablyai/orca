@@ -115,7 +115,7 @@ function closeHost(pages: RuntimeBrowserPageRegistry): RuntimeBrowserCommandHost
     getRuntimeBrowserPageRegistry: () => pages,
     getBrowserHostLeaseRegistry: () => ({ getPlacement: () => undefined }),
     resolveBrowserWorkspace: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
-    resolveWorktreeSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
+    resolveWorkspaceSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     retireRuntimeOwnedBrowserSessionTab: vi.fn(() => true)
   })
 }

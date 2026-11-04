@@ -123,6 +123,7 @@ describe('bridge client handshake', () => {
       safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
       keyboardInset: 0,
       colorScheme: 'dark',
+      uiLocale: null,
       host: null,
       storage: {},
       storageOversize: [],

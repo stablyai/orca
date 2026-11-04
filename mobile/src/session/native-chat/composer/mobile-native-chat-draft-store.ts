@@ -2,13 +2,17 @@ import { useSyncExternalStore, type SetStateAction } from 'react'
 import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session-journal-types'
 import {
   resetMobileNativeChatDraftInputsForTests,
+  closeMobileNativeChatEditInputs,
+  mobileNativeChatDraftDestination,
+  pruneMobileNativeChatTabInputs,
   pruneMobileNativeChatDraftSkills,
   readMobileNativeChatDraftInputs,
-  updateMobileNativeChatDraftInputs
+  updateMobileNativeChatDraftInputs,
+  type MobileNativeChatDraftDestination
 } from './mobile-native-chat-draft-inputs'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 
-// Text and its edit revision outlive the screen, including callbacks from an older mount.
+// Text and its edit revision outlive the screen while its tab remains open.
 // Picks behave like desktop chips: user edits drop skills the text stops naming and an origin that stops leading.
 type Draft = {
   text: string
@@ -42,10 +46,12 @@ export function recordMobileNativeChatSkillPick(
 
 // A rejected send's restored text gets back the files it named, even if newer edits dropped them.
 export function restoreMobileNativeChatPickedSkills(
-  draftKey: string,
+  target: string | MobileNativeChatDraftDestination,
   skills: readonly AgentJournalSkillRef[]
 ): void {
-  if (!drafts.has(draftKey) || skills.length === 0) {
+  const destination = typeof target === 'string' ? mobileNativeChatDraftDestination(target) : target
+  const draftKey = destination.scope
+  if (!destination.active || !drafts.has(draftKey) || skills.length === 0) {
     return
   }
   const paths = new Set(readMobileNativeChatDraftInputs(draftKey).skills.map((skill) => skill.path))
@@ -70,7 +76,16 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
-function writeDraft(draftKey: string, update: SetStateAction<string>, userEdit: boolean): void {
+function writeDraft(
+  target: string | MobileNativeChatDraftDestination,
+  update: SetStateAction<string>,
+  userEdit: boolean
+): void {
+  const destination = typeof target === 'string' ? mobileNativeChatDraftDestination(target) : target
+  if (!destination.active) {
+    return
+  }
+  const draftKey = destination.scope
   const current = drafts.get(draftKey)
   const text = current?.text ?? ''
   const next = typeof update === 'function' ? update(text) : update
@@ -97,7 +112,7 @@ function writeDraft(draftKey: string, update: SetStateAction<string>, userEdit: 
 }
 
 export function setMobileNativeChatDraftText(
-  draftKey: string,
+  draftKey: string | MobileNativeChatDraftDestination,
   update: SetStateAction<string>
 ): void {
   writeDraft(draftKey, update, false)
@@ -112,13 +127,51 @@ export function readMobileNativeChatDraftEditGeneration(draftKey: string): numbe
 }
 
 export function clearMobileNativeChatDraftForSend(
-  draftKey: string,
+  target: string | MobileNativeChatDraftDestination,
   editGeneration: number,
   text: string
 ): void {
+  const destination = typeof target === 'string' ? mobileNativeChatDraftDestination(target) : target
+  if (!destination.active) {
+    return
+  }
+  const draftKey = destination.scope
   const current = drafts.get(draftKey)
   if ((current?.editGeneration ?? 0) === editGeneration && (current?.text ?? '') === text) {
-    setMobileNativeChatDraftText(draftKey, '')
+    setMobileNativeChatDraftText(destination, '')
+  }
+}
+
+function retireTabText(scope: string): boolean {
+  const changed = drafts.delete(scope)
+  mobileNativeChatLaunchDraftSeeds.delete(scope)
+  return changed
+}
+
+function notifyDrafts(): void {
+  for (const listener of listeners) {
+    listener()
+  }
+}
+
+export function closeMobileNativeChatTabDraft(scope: string): void {
+  closeMobileNativeChatEditInputs(scope)
+  if (retireTabText(scope)) {
+    notifyDrafts()
+  }
+}
+
+export function pruneMobileNativeChatTabDrafts(
+  hostId: string,
+  worktreeId: string,
+  tabIds: readonly string[]
+): void {
+  let changed = false
+  for (const scope of pruneMobileNativeChatTabInputs(hostId, worktreeId, tabIds)) {
+    changed = retireTabText(scope) || changed
+  }
+  if (changed) {
+    notifyDrafts()
   }
 }
 

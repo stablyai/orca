@@ -11,6 +11,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import {
   createNativeChatImageOwnerSelector,
+  createNativeChatImageRuntimeContextSelector,
   resolveNativeChatImageRuntimeContext,
   resolveNativeChatImageRuntimeContextForOwner,
   selectNativeChatImageOwnerState,
@@ -92,6 +93,30 @@ describe('resolveNativeChatImageRuntimeContext', () => {
 
     expect(first.owner).toBe('wt-1')
     expect(shallow(second, first)).toBe(true)
+  })
+
+  it('keeps the selected context across rank and catalog-timestamp writes until its path moves', () => {
+    const storeState = state()
+    const select = createNativeChatImageRuntimeContextSelector('tab-1')
+    const first = select(storeState)
+    const worktree = storeState.worktreesByRepo.repo[0]
+    const ranked = {
+      ...storeState,
+      worktreesByRepo: { repo: [{ ...worktree, sortOrder: 9, isUnread: true }] },
+      runtimeEnvironments: [...storeState.runtimeEnvironments]
+    }
+
+    expect(first?.worktreePath).toBe('/repo/worktree')
+    expect(select(ranked)).toBe(first)
+
+    const moved = worktreeFixture('wt-1', '/repo/moved', { hostId: 'local' })
+    expect(
+      select({
+        ...ranked,
+        getKnownWorktreeById: () => moved,
+        worktreesByRepo: { repo: [moved] }
+      })?.worktreePath
+    ).toBe('/repo/moved')
   })
 
   it('reuses derived settings when owner inputs are unchanged', () => {

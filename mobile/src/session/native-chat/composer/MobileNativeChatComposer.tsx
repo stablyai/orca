@@ -1,22 +1,20 @@
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat-agent-profiles'
 import {
   recordMobileNativeChatSkillPick,
-  setMobileNativeChatDraftText,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
-import { appendBufferedDictation } from '../../../terminal/terminal-live-dictation-routing'
+import { useMobileNativeChatComposerDictation } from './use-mobile-native-chat-composer-dictation'
 import {
   focusMobileNativeChatTextDestination,
-  pruneMobileNativeChatDraftSkills,
-  registerMobileNativeChatTextDestination
+  pruneMobileNativeChatDraftSkills
 } from './mobile-native-chat-draft-inputs'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, type TextInput, Text, View } from 'react-native'
-import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
+import { ArrowUp, Plus } from 'lucide-react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { NATIVE_CHAT_COMPOSER_PLACEHOLDER } from '../../../../../src/shared/native-chat-turn-status'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatComposerMenu } from './MobileNativeChatComposerMenu'
 import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
 import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
@@ -31,10 +29,13 @@ import {
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
-import { keepHeldPressThroughLongPress } from '../../held-press-long-press'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
+import {
+  MobileNativeChatComposerMic,
+  type MobileNativeChatMicProps
+} from './MobileNativeChatComposerMic'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -49,8 +50,9 @@ export type MobileNativeChatStructuredComposer = {
   onRemoveFile: (id: string) => void
 }
 
-type Props = {
-  insertDictation?: (text: string) => boolean | void
+type Props = MobileNativeChatMicProps & {
+  // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
+  insertDictation?: (insert: (draft: string) => string) => boolean | void
   draftScopeKey?: string | null
   editSession?: { cancel: () => void; refuseCommand: (text: string) => boolean; locked: boolean }
   onPickSkill?: (skill: { name: string; path: string }) => void
@@ -71,11 +73,6 @@ type Props = {
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
-  onMicPress?: () => void
-  micActive?: boolean
-  dictationMode?: string
-  onMicPressIn?: () => void
-  onMicPressOut?: () => void
   disabled?: boolean
   /** Only Send is unavailable; typing, dictation and attachments still edit the draft. */
   sendDisabled?: boolean
@@ -110,32 +107,22 @@ export function MobileNativeChatComposer({
   isAttaching = false,
   onMicPress,
   micActive = false,
-  dictationMode = 'toggle',
+  micStarting,
+  micProcessing,
+  dictationMode,
   onMicPressIn,
   onMicPressOut,
   disabled = false,
   sendDisabled = false,
-  placeholder = NATIVE_CHAT_COMPOSER_PLACEHOLDER,
+  placeholder,
   filePaths = NO_FILE_PATHS,
   onNeedFiles,
   skillDiscovery,
   onNeedSkills,
   stop = null
 }: Props): React.JSX.Element {
-  useEffect(() => {
-    if (!draftScopeKey) {
-      return
-    }
-    return registerMobileNativeChatTextDestination(
-      draftScopeKey,
-      insertDictation ??
-        ((text) =>
-          setMobileNativeChatDraftText(draftScopeKey, (before) =>
-            appendBufferedDictation(before, text)
-          ))
-    )
-  }, [draftScopeKey, insertDictation])
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInput>(null)
   const fieldRef = inputRef ?? fallbackInputRef
   const [focused, setFocused] = useState(false)
@@ -178,6 +165,12 @@ export function MobileNativeChatComposer({
     onNeedSkills,
     onSlashMenuOpen: structured?.onSlashMenuOpen,
     focusField: () => fieldRef.current?.focus()
+  })
+  const dictation = useMobileNativeChatComposerDictation({
+    draftScopeKey,
+    value,
+    insertDictation,
+    placeCaret: menu.placeCaret
   })
   const sendingRef = useRef(false)
   const mountedRef = useRef(true)
@@ -254,7 +247,9 @@ export function MobileNativeChatComposer({
 
   // A terminal-backed chat has only photos to add, so its + opens the library at once.
   const attachPress = structured ? () => setAttachOpen(true) : onAttachImage
-  const attachLabel = structured ? 'Add to message' : 'Attach image'
+  const attachLabel = structured
+    ? t('chat.composer.addToMessage', 'Add to message')
+    : t('chat.composer.attachImage', 'Attach image')
 
   return (
     <View>
@@ -287,8 +282,15 @@ export function MobileNativeChatComposer({
             onBlur={() => setFocused(false)}
             // Controlled only transiently right after an autocomplete insert.
             selection={menu.pendingSelection ?? undefined}
-            onSelectionChange={(e) => menu.onSelectionChange(e.nativeEvent.selection)}
-            placeholder={placeholder}
+            dictationPreview={dictation.preview}
+            onSelectionChange={(e) => {
+              dictation.readSelection(e)
+              menu.onSelectionChange(e.nativeEvent.selection)
+            }}
+            placeholder={
+              placeholder ??
+              t('chat.composer.placeholder', 'Ask anything, @ to mention files, / for commands')
+            }
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accentBlue}
             multiline
@@ -330,44 +332,25 @@ export function MobileNativeChatComposer({
             ) : null}
             <View style={styles.actionSpacer} />
             {onMicPress ? (
-              <Pressable
-                accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
-                style={({ pressed }) => [styles.ghostButton, pressed && styles.pressed]}
-                // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
-                onPress={dictationMode === 'hold' ? undefined : onMicPress}
-                onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
-                onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
-                onLongPress={dictationMode === 'hold' ? keepHeldPressThroughLongPress : undefined}
-                disabled={disabled && !micActive}
-              >
-                {/* The icon swaps on press; as the page's touch target, its removal would send
-                    touchend to a detached node and lose the release. */}
-                {micActive ? (
-                  <Square
-                    pointerEvents="none"
-                    size={16}
-                    color={colors.statusRed}
-                    strokeWidth={2.4}
-                    fill={colors.statusRed}
-                  />
-                ) : (
-                  <Mic
-                    pointerEvents="none"
-                    size={19}
-                    color={colors.textSecondary}
-                    strokeWidth={2}
-                  />
-                )}
-              </Pressable>
+              <MobileNativeChatComposerMic
+                onMicPress={onMicPress}
+                micActive={micActive}
+                micStarting={micStarting}
+                micProcessing={micProcessing}
+                dictationMode={dictationMode}
+                onMicPressIn={onMicPressIn}
+                onMicPressOut={onMicPressOut}
+                disabled={disabled}
+              />
             ) : null}
             {editSession ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Cancel editing"
+                accessibilityLabel={t('chat.composer.cancelEditing', 'Cancel editing')}
                 style={styles.ghostButton}
                 onPress={editSession.cancel}
               >
-                <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+                <Text style={{ color: colors.textSecondary }}>{t('common.cancel', 'Cancel')}</Text>
               </Pressable>
             ) : null}
             {showsStop && stop ? (
@@ -375,7 +358,11 @@ export function MobileNativeChatComposer({
               <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
             ) : (
               <Pressable
-                accessibilityLabel={editSession ? 'Save edited message' : 'Send message'}
+                accessibilityLabel={
+                  editSession
+                    ? t('chat.composer.saveEditedMessage', 'Save edited message')
+                    : t('chat.composer.sendMessage', 'Send message')
+                }
                 style={({ pressed }) => [
                   styles.sendButton,
                   !canSend && styles.sendButtonDisabled,
@@ -385,7 +372,9 @@ export function MobileNativeChatComposer({
                 disabled={!canSend}
               >
                 {editSession ? (
-                  <Text style={{ color: canSend ? colors.bgBase : colors.textMuted }}>Save</Text>
+                  <Text style={{ color: canSend ? colors.bgBase : colors.textMuted }}>
+                    {t('common.save', 'Save')}
+                  </Text>
                 ) : (
                   <ArrowUp
                     size={19}

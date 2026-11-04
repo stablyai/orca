@@ -27,6 +27,7 @@ import {
   readDaemonBridgeSessions,
   type DaemonBridgeSessionVerdict
 } from './wsl-bridge-daemon-sessions'
+import { blockedWslDistroForExec } from '../wsl/wsl-background-exec-gate'
 
 // Concurrent wsl.exe spawns can trigger transient E_UNEXPECTED failures.
 export const WSL_RELAY_TRANSIENT_RETRY_DELAY_MS = 2_000
@@ -55,6 +56,8 @@ export type WslHookRelayManagerDeps = {
   /** Recovery must not boot a distro the user shut down. */
   isDistroRunning: typeof isWslDistroRunning
   deferUntilRunning: typeof deferUntilWslDistroRunning
+  /** Starting a relay runs wsl.exe; only a running distro, or a user act's, may get one (E9). */
+  blockedForExec: typeof blockedWslDistroForExec
   spawnRelay: typeof spawnWslRelayProcess
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
@@ -106,6 +109,7 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   listDistros: () => listWslDistrosAsync(),
   isDistroRunning: isWslDistroRunning,
   deferUntilRunning: deferUntilWslDistroRunning,
+  blockedForExec: blockedWslDistroForExec,
   spawnRelay: spawnWslRelayProcess,
   runInstall: runWslInstallProcess,
   waitForSentinel: waitForWslRelaySentinel,

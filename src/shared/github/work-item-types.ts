@@ -34,6 +34,8 @@ export type GitHubWorkItem = {
   additions?: number
   deletions?: number
   changedFiles?: number
+  /** Issue-only; older hosts omit it. */
+  commentCount?: number
   reviewDecision?: PRReviewDecision | null
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]

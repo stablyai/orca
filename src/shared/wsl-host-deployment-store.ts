@@ -22,6 +22,9 @@ const MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES = 256 * 1024
 export const WslHostPendingStopSchema = z.object({
   since: z.number().finite(),
   reason: z.string().max(4_096),
+  /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code; older builds drop it and show `reason`. */
+  reasonCode: z.string().max(128).optional(),
+  reasonParams: z.record(z.string(), z.union([z.string().max(4_096), z.number()])).optional(),
   verdict: z.enum(['live', 'unverifiable'])
 })
 

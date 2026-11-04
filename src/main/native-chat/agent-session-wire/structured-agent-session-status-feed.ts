@@ -1,9 +1,10 @@
-// Project host journals for all session lists, retaining settled rows across idle eviction and renderer reload.
+// Retain saved and live chat summaries across idle eviction and renderer reload.
 
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
+import { createSavedStructuredStatusGroup } from './structured-agent-session-saved-status'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkRecord } from '../../../shared/agent-status-child-work'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
@@ -11,6 +12,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import {
   structuredAgentSessionNamingSnapshot,
   notifyStructuredStatusObservers,
+  notifyStructuredStatusPublication,
   type StatusFeedSession,
   type StatusPublication,
   type StructuredAgentSessionStatusSubscriber,
@@ -18,6 +20,7 @@ import {
 } from './structured-agent-session-status-feed-deps'
 import {
   renamedStructuredStatusSummary,
+  releasedStructuredStatusSummary,
   retainedStructuredStatusSummaries,
   structuredAgentSessionStatusSummary
 } from './structured-agent-session-status-summary'
@@ -33,6 +36,7 @@ import {
 import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
 import {
   StructuredAgentSessionStatusOwnership,
+  type StructuredAgentSessionStatusPublisher,
   type CapturedChildWorkStops
 } from './structured-agent-session-status-ownership'
 
@@ -125,14 +129,7 @@ export class StructuredAgentSessionStatusFeed {
     if (!previous) {
       return
     }
-    const {
-      hostExecutionOwned: _hostExecutionOwned,
-      hostExecutionPhase: _hostExecutionPhase,
-      stopping: _stopping,
-      restartResume: _restartResume,
-      ...retained
-    } = previous
-    retained.runtimePermission = null
+    const retained = releasedStructuredStatusSummary(previous)
     this.published.set(sessionId, {
       summary: retained,
       firstInputSubmissionKey: publication?.firstInputSubmissionKey ?? null
@@ -163,6 +160,15 @@ export class StructuredAgentSessionStatusFeed {
 
   readPublished = (sessionId: string): AgentSessionStatusSummary | undefined =>
     this.published.get(sessionId)?.summary
+
+  /** Seed unopened lists and the phone sink without reactions or saved-status writes. */
+  publishSavedGroup = createSavedStructuredStatusGroup(
+    (id) => this.deps.sessions.has(id),
+    this.published,
+    this.sink.bind(this),
+    this.broadcast.bind(this),
+    () => this.deps.statusSink?.()
+  )
 
   /** Share per-commit projection with completion and steer-hold readers to avoid repeated snapshots. */
   journalProjection(
@@ -197,6 +203,7 @@ export class StructuredAgentSessionStatusFeed {
       namingFailure: this.deps.namingFailure?.(sessionId),
       now: this.deps.now
     })
+    notifyStructuredStatusPublication(this.deps, summary)
     const publication = this.published.get(sessionId)
     const previous = publication?.summary
     const summaryChanged = !previous || !structuredStatusSummariesEqual(previous, summary)
@@ -312,10 +319,11 @@ export class StructuredAgentSessionStatusFeed {
 
   private sink(
     summary: AgentSessionStatusSummary,
-    location?: StatusFeedSession['params']['location']
+    location?: StatusFeedSession['params']['location'],
+    publisher?: StructuredAgentSessionStatusPublisher
   ): void {
     try {
-      this.ownership.publish(summary, location)
+      this.ownership.publish(summary, location, publisher)
     } catch (error) {
       this.logFailure('status-sink-publish', 'status sink publish failed', summary.sessionId, error)
     }

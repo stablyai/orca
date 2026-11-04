@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n, setRendererPluginLanguagePacks } from '@/i18n/i18n'
 
-import { pluginLanguageResourceId } from '../../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 
 import {
   agentSessionWriteFailureText,
@@ -15,7 +15,23 @@ afterEach(async () => {
 
 describe('desktop words for a write that did not happen', () => {
   it('does not promise the old goal survived a refused replacement, including older translations', async () => {
-    for (const language of ['en', 'fr']) {
+    const id = 'plugin:example.older-french/fr' as const
+    const resourceLanguage = pluginLanguageResourceId(id)
+    setRendererPluginLanguagePacks([
+      {
+        id,
+        resourceLanguage,
+        pluginKey: 'example.older-french',
+        coverage: 100,
+        locale: 'fr',
+        catalog: {}
+      }
+    ])
+    for (const [language, expected] of [
+      ['en', "Couldn't finish changing the goal. Check the chat."],
+      ['fr', 'Impossible de terminer la modification de l’objectif. Consultez le chat.'],
+      [resourceLanguage, "Couldn't finish changing the goal. Check the chat."]
+    ]) {
       await i18n.changeLanguage(language)
       expect(
         agentSessionWriteFailureText(
@@ -26,7 +42,7 @@ describe('desktop words for a write that did not happen', () => {
           },
           'goal'
         )
-      ).toContain("Couldn't finish changing the goal. Check the chat.")
+      ).toContain(expected)
     }
   })
 
@@ -47,7 +63,8 @@ describe('desktop words for a write that did not happen', () => {
               }
             }
           }
-        }
+        },
+        coverage: 100
       }
     ])
     await i18n.changeLanguage(pluginLanguageResourceId(id))

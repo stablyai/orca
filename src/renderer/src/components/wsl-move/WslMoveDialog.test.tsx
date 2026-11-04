@@ -221,6 +221,7 @@ describe('result', () => {
     const codes: WslMoveRefusalCode[] = [
       'wsl_move_unavailable',
       'wsl_move_already_running',
+      'wsl_move_undo_running',
       'wsl_move_already_in_flight',
       'wsl_move_nothing_new',
       'wsl_move_host_unavailable',

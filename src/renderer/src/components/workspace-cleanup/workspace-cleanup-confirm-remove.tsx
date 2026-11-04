@@ -143,17 +143,15 @@ export function WorkspaceCleanupConfirmRemove({
           </div>
           {riskCount > 0 ? (
             <div className="text-xs text-destructive">
-              {riskCount === 1
-                ? translate(
-                    'components.workspace.cleanup.browse.forceDeleteProjectionOne',
-                    '{{count}} workspace currently shows risk and may need a force delete',
-                    { count: riskCount }
-                  )
-                : translate(
-                    'components.workspace.cleanup.browse.forceDeleteProjectionMany',
-                    '{{count}} workspaces currently show risk and may need a force delete',
-                    { count: riskCount }
-                  )}
+              {translate(
+                'components.workspace.cleanup.browse.forceDeleteRisk',
+                '{{count}} workspaces currently show risk and may need a force delete',
+                {
+                  count: riskCount,
+                  defaultValue_one:
+                    '{{count}} workspace currently shows risk and may need a force delete'
+                }
+              )}
             </div>
           ) : null}
         </div>
@@ -244,11 +242,9 @@ function ConfirmRemoveRow({
           value={hostLabel}
         />
         <span className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
-            'Last active'
-          )}{' '}
-          {formatWorkspaceCleanupRelativeTime(candidate.lastActivityAt, now)}
+          {translate('components.workspace.cleanup.browse.lastActive', 'Last active {{value0}}', {
+            value0: formatWorkspaceCleanupRelativeTime(candidate.lastActivityAt, now)
+          })}
         </span>
         {factStatuses.map((status) => (
           <StatusPill key={status.label} tone={status.tone}>

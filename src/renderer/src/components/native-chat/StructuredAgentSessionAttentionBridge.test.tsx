@@ -5,6 +5,8 @@
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentJournalTurnOutcome } from '../../../../shared/agent-session-journal-types'
+import { modelRefusalReadStates } from './structured-model-refusal.test-fixture'
+import { structuredAttentionReadObservation } from './structured-attention-read-observation'
 import type {
   AgentSessionStatusEvent,
   AgentSessionTurnCompletion,
@@ -313,14 +315,15 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     }
   )
 
-  it('keeps first-read semantics and rejects another target or session', async () => {
+  it('keeps first-read semantics and retires a viewed model refusal on its owning target', async () => {
     render(<StructuredAgentSessionAttentionBridge />)
     await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+    const { before, after } = modelRefusalReadStates()
     const read: StructuredSubjectRead = {
       sessionId: SESSION,
       target: { kind: 'local' },
-      observedCursor: { epoch: 'read-epoch', sequence: 1 },
-      observationKey: 'first-read'
+      observedCursor: before.cursor,
+      observationKey: structuredAttentionReadObservation(before)
     }
     const valid: AgentSubjectRead = { subjectKey: CHAT_SUBJECT, structured: read }
     const emit = (first: AgentSubjectRead): void => {
@@ -334,28 +337,32 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     })
     expect(mocks.acknowledgeAttention).not.toHaveBeenCalled()
     expect(dismissed).toEqual([])
-    act(() =>
-      emitAgentSubjectReads(
-        [CHAT_SUBJECT],
-        [
-          valid,
-          {
-            subjectKey: CHAT_SUBJECT,
-            structured: {
-              ...read,
-              observedCursor: { epoch: 'read-epoch', sequence: 99 },
-              observationKey: 'later-read'
-            }
-          }
-        ],
-        'explicit'
-      )
+    const later: AgentSubjectRead = {
+      ...valid,
+      structured: {
+        ...read,
+        observedCursor: after.cursor,
+        observationKey: structuredAttentionReadObservation(after)
+      }
+    }
+    act(() => emitAgentSubjectReads([CHAT_SUBJECT], [valid, later], 'explicit'))
+    expect(mocks.acknowledgeAttention).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'local' },
+      SESSION,
+      before.cursor
     )
-    expect(mocks.acknowledgeAttention).toHaveBeenCalledOnce()
-    expect(mocks.acknowledgeAttention).toHaveBeenCalledWith({ kind: 'local' }, SESSION, {
-      epoch: 'read-epoch',
-      sequence: 1
-    })
+    dismissed.length = 0
+    act(() => hostStream()(completionFrame(SESSION, 'failure')))
+    expect(onlyDispatch()).toMatchObject({ agentTurnOutcome: 'failure' })
+    expect(later.structured?.observationKey).not.toBe(read.observationKey)
+    act(() => emitAgentSubjectReads([CHAT_SUBJECT], [later]))
+    await waitFor(() => expect(mocks.acknowledgeAttention).toHaveBeenCalledTimes(2))
+    expect(mocks.acknowledgeAttention).toHaveBeenLastCalledWith(
+      { kind: 'local' },
+      SESSION,
+      after.cursor
+    )
+    expect(dismissed.flatMap(({ paneKeys }) => paneKeys ?? [])).toContain(CHAT_SUBJECT)
   })
 
   it('lights the unread indicators when the host reports a successful turn', async () => {

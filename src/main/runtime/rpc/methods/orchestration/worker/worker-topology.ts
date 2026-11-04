@@ -11,6 +11,8 @@ export type WorkerEffect = {
   action?: string
   role?: string
   id?: string
+  /** A created worktree's name, so the coordinator can tell the user where the worker runs. */
+  name?: string
   state?: string
   tabId?: string
   leafId?: string

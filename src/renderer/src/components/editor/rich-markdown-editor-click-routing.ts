@@ -243,22 +243,25 @@ function openShiftModifiedMarkdownLink({
     return
   }
   if (classified.kind === 'markdown') {
-    void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
-      if (!exists) {
-        toast.error(
-          translate(
-            'auto.components.editor.rich.markdown.editor.click.routing.2d5fb9335d',
-            'File not found: {{value0}}',
-            { value0: classified.relativePath }
+    // A click is a user act: it may start the link's stopped WSL distro.
+    void window.api.shell
+      .pathExists(classified.absolutePath, { wakeWslDistro: true })
+      .then((exists) => {
+        if (!exists) {
+          toast.error(
+            translate(
+              'auto.components.editor.rich.markdown.editor.click.routing.2d5fb9335d',
+              'File not found: {{value0}}',
+              { value0: classified.relativePath }
+            )
           )
+          return
+        }
+        void window.api.shell.openFileUri(
+          toFileUrlForOsEscape(classified.absolutePath),
+          LOCAL_EXECUTION_HOST_ID
         )
-        return
-      }
-      void window.api.shell.openFileUri(
-        toFileUrlForOsEscape(classified.absolutePath),
-        LOCAL_EXECUTION_HOST_ID
-      )
-    })
+      })
     return
   }
   void window.api.shell.openFileUri(classified.uri, LOCAL_EXECUTION_HOST_ID)

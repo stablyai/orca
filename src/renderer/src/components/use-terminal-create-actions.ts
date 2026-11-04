@@ -37,13 +37,16 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
         useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
       if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-        void createWebRuntimeSessionTerminal({
-          worktreeId: activeWorktreeId,
-          environmentId: runtimeEnvironmentId,
-          targetGroupId,
-          shell: shellOverride,
-          activate: true
-        })
+        void createWebRuntimeSessionTerminal(
+          {
+            worktreeId: activeWorktreeId,
+            environmentId: runtimeEnvironmentId,
+            targetGroupId,
+            shell: shellOverride,
+            activate: true
+          },
+          { userAct: true }
+        )
         return
       }
       if (!shellOverride && targetGroupId) {

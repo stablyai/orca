@@ -202,7 +202,7 @@ it('updates nominal toggle labels, including an unassigned binding', () => {
   vi.stubGlobal('navigator', { userAgent: 'Windows NT 10.0' })
   useAppStore.setState({ keybindings: {} })
   const view = render(<Harness onSwitchToTerminal={() => {}} />)
-  expect(view.container.textContent).toContain('Ctrl+Shift+J')
+  expect(view.container.textContent).toContain('Ctrl+⇧+J')
   act(() =>
     useAppStore.setState({
       keybindings: { 'terminal.toggleNativeChat': ['Mod+Alt+Y', 'Mod+Alt+K'] }

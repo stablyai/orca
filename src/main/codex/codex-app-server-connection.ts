@@ -39,7 +39,8 @@ async function connectCodexAppServer(
   })
   const { child } = managed
   const tree = createClaudeChildTreeReaper(child, {
-    exited: () => managed.rootVerdict === 'exited'
+    exited: () => managed.rootVerdict === 'exited',
+    supervised: managed.supervised
   })
 
   let nextRequestId = 1
@@ -197,7 +198,7 @@ async function connectCodexAppServer(
           handlers.onExit?.(terminalError ?? buildExitError(), { expected: closing })
         }
         dispatcher.failPending(new Error('codex app-server connection closed'))
-        return result.root === 'exited'
+        return result.root === 'exited' || result.killDelivered === true
       })
       .finally(() => {
         closesInFlight -= 1

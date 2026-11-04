@@ -1,5 +1,6 @@
 import { ArrowUpFromLine, X } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -9,13 +10,20 @@ export function AppUpdateCard(props: {
   onPress: () => void
   onDismiss: () => void
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
-  const title = `Orca ${props.version} is available`
+  const title = t('home.appUpdateCard.title', 'Orca {{version}} is available', {
+    version: props.version
+  })
   return (
     <View style={styles.card}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${title}, tap to update`}
+        accessibilityLabel={t(
+          'home.appUpdateCard.updateAccessibilityLabel',
+          'Orca {{version}} is available, tap to update',
+          { version: props.version }
+        )}
         style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}
         onPress={props.onPress}
       >
@@ -27,13 +35,17 @@ export function AppUpdateCard(props: {
             {title}
           </Text>
           <Text style={styles.subtitle} numberOfLines={1}>
-            Tap to update
+            {t('home.appUpdateCard.updateHint', 'Tap to update')}
           </Text>
         </View>
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Dismiss Orca ${props.version} update`}
+        accessibilityLabel={t(
+          'home.appUpdateCard.dismissAccessibilityLabel',
+          'Dismiss Orca {{version}} update',
+          { version: props.version }
+        )}
         hitSlop={8}
         style={({ pressed }) => [styles.dismissButton, pressed && styles.dismissPressed]}
         onPress={props.onDismiss}

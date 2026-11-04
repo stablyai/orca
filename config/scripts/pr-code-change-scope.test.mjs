@@ -619,15 +619,17 @@ describe('PR Checks skip wiring', () => {
     for (const jobName of expensiveJobs.filter(
       (jobName) => !['test', 'static_analysis', 'typecheck', 'orcad_browser'].includes(jobName)
     )) {
-      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths', 'preflight'])
+      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(
+        jobName.startsWith('package') ? ['code_paths'] : ['code_paths', 'preflight']
+      )
       expect(prWorkflow.jobs[jobName].if, jobName).toContain(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }
-    expect(prWorkflow.jobs.test.if).toContain("needs.preflight.result == 'success'")
+    expect(prWorkflow.jobs.test.if).toContain("needs.unit_plan.result == 'success'")
     expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
-    expect(prWorkflow.jobs.test.with.shards).toBe('${{ needs.preflight.outputs.shards }}')
-    expect(prWorkflow.jobs.unit_plan).toBeUndefined()
+    expect(prWorkflow.jobs.test.with.shards).toBe('${{ needs.unit_plan.outputs.shards }}')
+    expect(prWorkflow.jobs.unit_plan.if).toBe("needs.code_paths.outputs.test == 'true'")
     expect(prWorkflow.jobs.test_native_cache).toBeUndefined()
   })
 

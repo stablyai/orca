@@ -16,12 +16,16 @@ import {
   type ChildWorkLifetimeToken
 } from './structured-agent-session-open-child-work'
 
-export type StructuredAgentSessionStatusSink = {
+export type StructuredAgentSessionStatusPublisher = {
   publish: (
     summary: AgentSessionStatusSummary,
     subject: AgentStatusStructuredSessionSubject
   ) => void
   forget: (subject: AgentStatusStructuredSessionSubject) => void
+}
+
+export type StructuredAgentSessionStatusSink = StructuredAgentSessionStatusPublisher & {
+  withSavedStatusGroup?: (visit: (sink: StructuredAgentSessionStatusPublisher) => void) => void
   /** Address evidence by the parent row’s landed subject. */
   publishChildWork?: (
     subject: AgentStatusStructuredSessionSubject,
@@ -59,8 +63,11 @@ export class StructuredAgentSessionStatusOwnership {
     )
   }
 
-  publish(summary: AgentSessionStatusSummary, location?: AgentSessionExecutionLocation): void {
-    const sink = this.sink()
+  publish(
+    summary: AgentSessionStatusSummary,
+    location?: AgentSessionExecutionLocation,
+    sink: StructuredAgentSessionStatusPublisher | undefined = this.sink()
+  ): void {
     if (!sink || (!location && !this.subjects.has(summary.sessionId))) {
       return
     }

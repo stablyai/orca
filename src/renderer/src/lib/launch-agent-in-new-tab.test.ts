@@ -888,7 +888,8 @@ describe('launchAgentInNewTab', () => {
     expect(queuedStartups()).toContainEqual(
       expect.objectContaining({
         // Codex's update prompt would take the Enter that submits the pasted prompt (#18153).
-        command: "codex '-c' 'check_for_update_on_startup=false' '--model' 'gpt-5.5'"
+        command:
+          "codex '-c' 'check_for_update_on_startup=false' '-c' 'disable_paste_burst=true' '--model' 'gpt-5.5'"
       })
     )
   })

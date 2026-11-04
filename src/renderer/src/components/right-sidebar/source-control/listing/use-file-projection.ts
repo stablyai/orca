@@ -35,7 +35,8 @@ import {
 } from './submodule-expansion'
 import type { FlatEntry } from './use-selection'
 import type { GitStatusSourceControlTreeNode } from './directory-action-paths'
-import { SUBMODULE_EMPTY_LABEL, SUBMODULE_LOADING_LABEL } from './row-layout'
+import { getSubmoduleEmptyLabel, getSubmoduleLoadingLabel } from './row-layout'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 export type SourceControlFileProjection = {
   grouped: SourceControlEntryGroups
@@ -156,6 +157,7 @@ export function useSourceControlFileProjection({
     return roots
   }, [displaySections, sourceControlViewMode])
 
+  const languageRevision = useUiLanguageRevision()
   const visibleTreeRowsBySection = useMemo(() => {
     if (sourceControlViewMode !== 'tree') {
       return EMPTY_TREE_ROWS_BY_SECTION
@@ -166,18 +168,20 @@ export function useSourceControlFileProjection({
         flattenSourceControlTree(treeRootsBySection[section.id] ?? [], collapsedTreeDirs),
         expandedSubmoduleKeys,
         submoduleStatusByKey,
-        SUBMODULE_LOADING_LABEL,
-        SUBMODULE_EMPTY_LABEL
+        getSubmoduleLoadingLabel(),
+        getSubmoduleEmptyLabel()
       )
     }
     return rows
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- placeholder labels read the UI language.
   }, [
     collapsedTreeDirs,
     displaySections,
     treeRootsBySection,
     expandedSubmoduleKeys,
     sourceControlViewMode,
-    submoduleStatusByKey
+    submoduleStatusByKey,
+    languageRevision
   ])
 
   // List view needs the same lazy submodule expansion as tree view, spliced into the flat entry list.
@@ -191,12 +195,19 @@ export function useSourceControlFileProjection({
         section.items,
         expandedSubmoduleKeys,
         submoduleStatusByKey,
-        SUBMODULE_LOADING_LABEL,
-        SUBMODULE_EMPTY_LABEL
+        getSubmoduleLoadingLabel(),
+        getSubmoduleEmptyLabel()
       )
     }
     return rows
-  }, [displaySections, expandedSubmoduleKeys, sourceControlViewMode, submoduleStatusByKey])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- placeholder labels read the UI language.
+  }, [
+    displaySections,
+    expandedSubmoduleKeys,
+    sourceControlViewMode,
+    submoduleStatusByKey,
+    languageRevision
+  ])
 
   const branchTreeRoots = useMemo(
     () =>

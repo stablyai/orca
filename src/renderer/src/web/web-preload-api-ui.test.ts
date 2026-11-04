@@ -718,7 +718,10 @@ describe('web UI preload API', () => {
       skills: [{ name: 'computer-use', installed: true }],
       scannedAt: 123
     })
-    const permissionsStatus = await globals.window.api.computerUsePermissions.getStatus()
+    // Passive local callers pass background; the browser can't activate the host, so it must not reach RPC.
+    const permissionsStatus = await globals.window.api.computerUsePermissions.getStatus({
+      background: true
+    })
     expect(permissionsStatus.helperUnavailableReason).toBeNull()
     expect(permissionsStatus.permissions).toContainEqual({ id: 'accessibility', status: 'granted' })
     await expect(

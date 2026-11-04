@@ -39,25 +39,30 @@ const MAX_DIFF_HIGHLIGHT_LINES = 500
 const MAX_DIFF_HIGHLIGHT_SEGMENTS = 4_000
 const MAX_DIFF_LINE_HIGHLIGHT_SEGMENTS = 96
 
-const LANGUAGE_ALIASES: Record<string, string> = {
-  javascriptreact: 'javascript',
-  jsx: 'javascript',
-  typescriptreact: 'typescript',
-  tsx: 'typescript',
-  sh: 'bash',
-  shell: 'bash',
-  shellscript: 'bash',
-  zsh: 'bash',
-  fish: 'bash',
-  yml: 'yaml',
-  'cuda-cpp': 'cpp',
-  'glimmer-js': 'javascript',
-  'glimmer-ts': 'typescript'
-}
+// A Map, not an object: fence tags are agent text, and `constructor` must not resolve.
+const LANGUAGE_ALIASES = new Map([
+  ['javascriptreact', 'javascript'],
+  ['jsx', 'javascript'],
+  ['typescriptreact', 'typescript'],
+  ['tsx', 'typescript'],
+  ['sh', 'bash'],
+  ['shell', 'bash'],
+  ['shellscript', 'bash'],
+  ['zsh', 'bash'],
+  ['fish', 'bash'],
+  ['yml', 'yaml'],
+  ['cuda-cpp', 'cpp'],
+  ['glimmer-js', 'javascript'],
+  ['glimmer-ts', 'typescript'],
+  // lowlight has no dotenv grammar; ini covers KEY=value and # comments.
+  ['dotenv', 'ini'],
+  // HCL assignments, strings and comments use the bundled ini grammar on mobile.
+  ['hcl', 'ini']
+])
 
 export function resolveMobileSyntaxLanguage(filePath: string, preferredLanguage?: string): string {
   const detected = detectMobileFileLanguage(filePath, preferredLanguage)
-  const normalized = LANGUAGE_ALIASES[detected] ?? detected
+  const normalized = LANGUAGE_ALIASES.get(detected) ?? detected
   return lowlight.registered(normalized) ? normalized : 'plaintext'
 }
 
@@ -71,7 +76,7 @@ export function highlightMobileCode(
     return { segments: [{ text: '', kind: 'plain' }], highlighted: false }
   }
 
-  const normalizedLanguage = LANGUAGE_ALIASES[language] ?? language
+  const normalizedLanguage = LANGUAGE_ALIASES.get(language) ?? language
   if (!lowlight.registered(normalizedLanguage) || normalizedLanguage === 'plaintext') {
     return { segments: [{ text: code, kind: 'plain' }], highlighted: false }
   }

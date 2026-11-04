@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { ButtonKeyHint } from '@/components/ButtonKeyHint'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
+import { useChooseMultiRepoHost } from './MultiRepoComposerBranchHelper'
 
 type NewWorkspaceComposerFooterProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -18,6 +19,7 @@ type NewWorkspaceComposerFooterProps = Pick<
   | 'creating'
   | 'primaryActionLabel'
   | 'multiRepo'
+  | 'composerRef'
 > & {
   submitShortcutModifierLabel: string
   onChooseHost?: () => void
@@ -33,9 +35,11 @@ export function NewWorkspaceComposerFooter({
   creating,
   primaryActionLabel,
   multiRepo,
+  composerRef,
   onChooseHost,
   submitShortcutModifierLabel
 }: NewWorkspaceComposerFooterProps): React.JSX.Element {
+  const chooseHostInComposer = useChooseMultiRepoHost(composerRef)
   const multiActive = multiRepo?.active === true
   const shownError = multiActive ? multiRepo.createError : createError
   const shownCreating = multiActive ? multiRepo.creating : creating
@@ -53,7 +57,7 @@ export function NewWorkspaceComposerFooter({
               'Selected projects span more than one host. Pick a host to continue.'
             )}
           </p>
-          <Button type="button" variant="outline" size="xs" onClick={onChooseHost}>
+          <Button type="button" variant="outline" size="xs" onClick={onChooseHost ?? chooseHostInComposer}>
             {translate('auto.components.newWorkspace.multiRepo.chooseHost', 'Choose host')}
           </Button>
         </div>

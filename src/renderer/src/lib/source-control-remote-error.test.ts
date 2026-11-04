@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
+import { i18n } from '@/i18n/i18n'
+import es from '@/i18n/locales/es.json'
 import { resolveRemoteOperationErrorMessage } from './source-control-remote-error'
+
+const originalLanguage = i18n.language
+
+afterEach(async () => {
+  await i18n.changeLanguage(originalLanguage)
+})
 
 describe('source-control remote error formatting', () => {
   it('prefers fatal detail over an earlier remote detail for publish failures', () => {
@@ -62,6 +70,23 @@ describe('source-control remote error formatting', () => {
     )
     expect(resolveRemoteOperationErrorMessage(submoduleError, { isPush: true })).toBe(
       "Push failed. Submodule 'deps/lib' could not be pushed. Resolve the submodule push error, then try again."
+    )
+  })
+  it('translates classified sentences and passes unclassified errors through verbatim', async () => {
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage('es')
+    const submoduleError = new Error(
+      "Command failed: git push\nUnable to push submodule 'deps/lib'\nfatal: failed to push all needed submodules"
+    )
+
+    expect(resolveRemoteOperationErrorMessage(submoduleError, { isPush: true })).toBe(
+      es.sourceControl.remoteError.failedWithDetail.push.replace(
+        '{{detail}}',
+        es.sourceControl.remoteError.submodule.namedPushFailed.replace('{{name}}', 'deps/lib')
+      )
+    )
+    expect(resolveRemoteOperationErrorMessage(new Error('some new git failure'))).toBe(
+      'some new git failure'
     )
   })
 })

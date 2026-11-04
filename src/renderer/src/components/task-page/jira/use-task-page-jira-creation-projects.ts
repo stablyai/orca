@@ -1,5 +1,6 @@
 import { useJiraCreateAssignee } from '../../use-jira-create-assignee'
 import React, { useCallback, useEffect, useMemo } from 'react'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 import { filterJiraProjectPickerProjects } from '@/components/jira-project-picker-filter'
 import { isVisibleJiraCreateField } from '@/components/task-page/jira/task-page-jira-create-fields'
@@ -29,12 +30,14 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
     setNewJiraIssueTypeId
   } = model
   const includeJiraSiteNameInProjectLabel = selectedJiraSiteId === 'all'
+  const languageRevision = useUiLanguageRevision()
   const sortedAvailableJiraProjects = useMemo(
     () =>
       [...availableJiraProjects].sort((a, b) =>
         compareJiraProjectsByDisplayLabel(a, b, includeJiraSiteNameInProjectLabel)
       ),
-    [availableJiraProjects, includeJiraSiteNameInProjectLabel]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- the comparator collates in the UI language.
+    [availableJiraProjects, includeJiraSiteNameInProjectLabel, languageRevision]
   )
   const filteredNewJiraIssueProjects = useMemo(() => {
     return filterJiraProjectPickerProjects({

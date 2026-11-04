@@ -1,7 +1,15 @@
 import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachment-capabilities'
 
+export const WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY =
+  'worktree.rename-error-dismiss.v1' as const
+
 export const WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY =
   'worktree.open-existing-branch.v1' as const
+// Older hosts advertised V2 while still accepting the V1 wire value.
+export const WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY =
+  'worktree.open-existing-branch.v2' as const
+export const WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY =
+  'worktree.open-existing-branch.v2-request.v1' as const
 
 export const PROJECT_HOST_SETUP_RUNTIME_CAPABILITY = 'project-host-setup.v1' as const
 // Why: older hosts strip `hostId` from setup update/delete and act on the first same-id twin.
@@ -35,9 +43,15 @@ export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
 
 // Old hosts drop unknown params and RPC methods; gate every multi-repo create on this.
 export const MULTI_REPO_WORKSPACE_RUNTIME_CAPABILITY = 'multi-repo-workspace.v1' as const
+// Hosts that record another owner's verified automation run on the workspaces it creates there.
+export const WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY =
+  'worktree.create.client-automation-provenance.v1' as const
 
 export const WORKTREE_RUNTIME_CAPABILITIES = [
+  WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
+  WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
+  WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
@@ -51,5 +65,6 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
-  MULTI_REPO_WORKSPACE_RUNTIME_CAPABILITY
+  MULTI_REPO_WORKSPACE_RUNTIME_CAPABILITY,
+  WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY
 ] as const

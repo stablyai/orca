@@ -200,7 +200,10 @@ export async function readAndConfirmRuntimeIssueCommand(
 ): Promise<ConfirmedRuntimeIssueCommand> {
   let result: IssueCommandReadResult
   try {
-    result = await readRuntimeIssueCommand(hookRepoOwnerHostId(state, repoId, hostId), repoId)
+    // Creating a workspace is a user act: it may start the repo's stopped WSL distro.
+    result = await readRuntimeIssueCommand(hookRepoOwnerHostId(state, repoId, hostId), repoId, {
+      wakeWslDistro: true
+    })
   } catch {
     result = {
       status: 'error',
@@ -236,9 +239,11 @@ export async function ensureHooksConfirmed(
     try {
       if (scriptKind === 'issueCommand') {
         // Only shared orca.yaml needs repo trust; user-owned overrides do not. Pass hostId to disambiguate same-ID repos, as checkRuntimeHooks does.
+        // A launch is a user act: it may start the repo's stopped WSL distro.
         const result = await readRuntimeIssueCommand(
           hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
-          repoId
+          repoId,
+          { wakeWslDistro: true }
         )
         if (result.source === 'local') {
           return 'run'

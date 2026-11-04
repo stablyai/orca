@@ -65,7 +65,7 @@ describe('Linear project view surfaces', () => {
         ]}
         hasMore
         count={50}
-        label="projects"
+        kind="projects"
         onLoadMore={onLoadMore}
       />
     )

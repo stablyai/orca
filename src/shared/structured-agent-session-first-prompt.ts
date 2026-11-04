@@ -2,7 +2,7 @@ import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { isStructuredAgentSessionCommandEntry } from './structured-agent-session-command-entry'
 import { sliceAtCodeUnitLimit } from './surrogate-safe-text-slice'
-import { stripSentImagePromptMarkers } from './native-chat-image-transcript-markers'
+import { stripSentImagePromptMarkers } from './native-chat/transcript/native-chat-image-transcript-markers'
 
 export const STRUCTURED_CHAT_NAME_PROMPT_LIMIT = 4000
 

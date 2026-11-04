@@ -182,7 +182,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
       providerSession: { key: 'session_id', id: SESSION_ID }
     })
 
-    expect(build().command).toBe('codex')
+    expect(build().command).toBe("codex '-c' 'disable_paste_burst=true'")
   })
   it('does not resume another agent’s sleeping session when Codex has no session yet', () => {
     seedAgentStatus({ agentType: 'codex' })

@@ -2,6 +2,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   terminalAutoRestoreFitSchema,
+  terminalBufferClearedSchema,
   terminalSendAcceptedSchema,
   terminalViewportUpdatedSchema,
   terminalWriteUnreadReplySchema
@@ -60,13 +61,13 @@ export const workerTerminalTakeoverReport = bindDeferredRpcOperation(
   })
 )
 
-// Preserve legacy clear semantics: fulfilled replies report success; only transport rejection reaches failure copy.
+/** A clear is successful only when the host confirms its buffer was cleared. */
 export const terminalBufferClear = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'terminal.clear-buffer-or-skip',
+    name: 'terminal.clear-buffer',
     method: 'terminal.clearBuffer',
-    acceptance: 'success-result-or-skip',
+    acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('terminal-buffer-cleared', terminalWriteUnreadReplySchema)
+    read: rpcResultVariant('terminal-buffer-cleared', terminalBufferClearedSchema)
   })
 )

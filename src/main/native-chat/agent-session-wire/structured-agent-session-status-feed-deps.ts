@@ -42,6 +42,7 @@ export type StructuredAgentSessionStatusFeedDeps = {
     summary: AgentSessionStatusSummary,
     options: StructuredAgentSessionStatusObserverOptions
   ) => void
+  onPublished?: (summary: AgentSessionStatusSummary) => void
   /** Resolve after host field initialization; read child records from the sink holding their parent row. */
   statusSink?: () => StructuredAgentSessionStatusSink | undefined
   /** Republish changed child records; producer identifies their write path. */
@@ -104,6 +105,21 @@ export function notifyStructuredStatusObservers(
   } catch (error) {
     deps.logger.warn('status observer failed', {
       scope: 'status-observer',
+      sessionId: summary.sessionId,
+      error
+    })
+  }
+}
+
+export function notifyStructuredStatusPublication(
+  deps: StructuredAgentSessionStatusFeedDeps,
+  summary: AgentSessionStatusSummary
+): void {
+  try {
+    deps.onPublished?.(summary)
+  } catch (error) {
+    deps.logger.warn('saving chat status failed', {
+      scope: 'saved-status',
       sessionId: summary.sessionId,
       error
     })

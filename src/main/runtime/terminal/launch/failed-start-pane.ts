@@ -170,7 +170,9 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
       ...opts,
       ...pane,
       presentation: 'background',
-      keepPaneOnStartFailure: true
+      keepPaneOnStartFailure: true,
+      // The window's own new tab: a user act, as New Terminal is for a window spawn.
+      wslUserAct: true
     })
   }
 

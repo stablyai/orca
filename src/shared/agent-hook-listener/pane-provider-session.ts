@@ -6,6 +6,7 @@ import {
   type AgentProviderSessionMetadata
 } from '../agent-session-resume'
 import type { HookListenerState } from './listener-state'
+import { isGrokSubagentEvent } from './providers/grok-tool-fields'
 import { withHermesPaneSessionId } from './providers/hermes-events'
 import { readString } from './tool-input-preview'
 
@@ -18,6 +19,11 @@ export function readPaneProviderSession(
 ): AgentProviderSessionMetadata | null {
   if (source === 'codex' && readString(hookPayload, 'agent_id')) {
     return null
+  }
+  if (source === 'grok' && isGrokSubagentEvent(hookPayload)) {
+    // A Grok child's session id is its own; the only child row it emits restates the pane's session.
+    const previous = state.lastStatusByPaneKey.get(paneKey)
+    return previous?.source === 'grok' ? (previous.providerSession ?? null) : null
   }
   const providerSession = extractAgentProviderSession(
     source,

@@ -293,10 +293,31 @@ vi.mock('../repo-worktree-resolution-scan', () => ({
 }))
 
 // Fake-win32 runtime tests have no wsl.exe: treat every distro as running unless a test says otherwise.
-vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof WslUncAccessGateModule>()),
-  blockedWslDistroForPath: vi.fn(async () => null)
-}))
+vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => {
+  const actual = await importOriginal<typeof WslUncAccessGateModule>()
+  const blockedWslDistroForPath = vi.fn<typeof actual.blockedWslDistroForPath>(async () => null)
+  return {
+    ...actual,
+    blockedWslDistroForPath,
+    // The real guard asks its own module's check, which this mock can't reach; ask the mocked one.
+    guardWslUncPathAccess: vi.fn(
+      async <T>(
+        path: string,
+        access: () => Promise<T>,
+        options: { wake?: boolean; wslDistro?: string | null } = {}
+      ): Promise<T> => {
+        const blocked = options.wake ? null : await blockedWslDistroForPath(path, options.wslDistro)
+        if (blocked?.state === 'stopped') {
+          throw new actual.WslDistroStoppedError(blocked.distro)
+        }
+        if (blocked) {
+          throw new actual.WslDistroUnverifiableError(blocked.distro)
+        }
+        return access()
+      }
+    )
+  }
+})
 
 vi.mock('../../terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock

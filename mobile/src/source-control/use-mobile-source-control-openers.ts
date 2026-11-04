@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, type MutableRefObject } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRendererUnavailableReply } from '../transport/renderer-unavailable-reply'
@@ -87,7 +88,9 @@ export function useMobileSourceControlOpeners(params: Params) {
         if (!mountedRef.current) {
           return
         }
-        setActionError('Waiting for desktop...')
+        setActionError(
+          translate('sourceControl.openers.waitingForDesktop', 'Waiting for desktop...')
+        )
         return
       }
       openingPathRef.current = entry.path
@@ -127,7 +130,12 @@ export function useMobileSourceControlOpeners(params: Params) {
             sourceFileDiffOpenRun.interpret(diffReply)
           }
         } catch (error) {
-          throw new Error(refusedRpcMessageOrFallback(error, 'Unable to open diff'))
+          throw new Error(
+            refusedRpcMessageOrFallback(
+              error,
+              translate('sourceControl.openers.openDiffFailed', 'Unable to open diff')
+            )
+          )
         }
         if (!mountedRef.current) {
           return
@@ -145,7 +153,12 @@ export function useMobileSourceControlOpeners(params: Params) {
           return
         }
         if (revealResult === 'timeout') {
-          throw new Error("The file opened, but its tab isn't ready yet. Try again.")
+          throw new Error(
+            translate(
+              'sourceControl.openers.tabNotReady',
+              "The file opened, but its tab isn't ready yet. Try again."
+            )
+          )
         }
         triggerSelection()
         // Embedded panels dismiss their dock; route panels pop back to the activated diff, with Back as the unwired-dock fallback.
@@ -159,7 +172,11 @@ export function useMobileSourceControlOpeners(params: Params) {
           return
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Unable to open diff')
+        setActionError(
+          err instanceof Error
+            ? err.message
+            : translate('sourceControl.openers.openDiffFailed', 'Unable to open diff')
+        )
       } finally {
         if (openingPathRef.current === entry.path) {
           openingPathRef.current = null

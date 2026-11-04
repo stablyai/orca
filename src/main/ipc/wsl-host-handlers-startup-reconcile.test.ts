@@ -58,7 +58,9 @@ vi.mock('../wsl/wsl-host-service-instance', () => ({
   getWslHostService: () => instance.service,
   setWslHostService: (service: unknown) => {
     instance.service = service
-  }
+  },
+  // The phone's gate is built beside the service; startup order is all this suite checks.
+  setWslHostPhoneGate: () => {}
 }))
 
 import { registerWslHostHandlers } from './wsl-host-handlers'

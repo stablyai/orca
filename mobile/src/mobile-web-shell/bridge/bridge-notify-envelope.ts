@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from './bridge-haptics-notify'
+import { BRIDGE_LIVENESS_PROBE_NOTIFY_FIELDS } from './bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from './bridge-page-location'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
@@ -79,6 +80,7 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     error: BridgeErrorCaptureSchema
   }),
   z.object({ v: versionSchema, ...BRIDGE_HAPTICS_NOTIFY_FIELDS }),
+  z.object({ v: versionSchema, ...BRIDGE_LIVENESS_PROBE_NOTIFY_FIELDS }),
   // Allow only the shell-provided one-shot param; its holder ignores a clear naming an older value (ruling 34).
   z.object({
     v: versionSchema,

@@ -83,7 +83,7 @@ export function LinearIssueWorkspaceHeader({
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={() => void copyLinearIssueText(issue.url, 'URL')}
+              onClick={() => void copyLinearIssueText(issue.url, 'url')}
               aria-label={translate(
                 'auto.components.LinearIssueWorkspace.97c19a84f1',
                 'Copy Linear URL'

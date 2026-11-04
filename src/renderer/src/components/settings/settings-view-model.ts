@@ -117,13 +117,16 @@ export function buildSettingsViewModel(
     model.activeSectionId === 'shortcuts' && model.settingsSearchQuery.trim() === ''
   const isFocusedSetupGuidePane =
     model.activeSectionId === 'setup-guide' && model.settingsSearchQuery.trim() === ''
+  // Why no query check: search still shows only the active section.
+  const isWidePluginsPane = model.activeSectionId === 'plugins'
 
   return {
     generalNavGroups,
     repoNavSections,
     isSectionMounted,
     isFocusedShortcutsPane,
-    isFocusedSetupGuidePane
+    isFocusedSetupGuidePane,
+    isWidePluginsPane
   }
 }
 

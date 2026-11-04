@@ -24,7 +24,11 @@ function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
     return { browserPageId: browserPageId! }
   })
   const registered = () => new Map(livePages.map((pageId, index) => [pageId, index + 1]))
-  runtime.setOffscreenBrowserBackend({ createTab, closeTab: vi.fn(async () => {}) })
+  runtime.setOffscreenBrowserBackend({
+    createTab,
+    closeTab: vi.fn(async () => {}),
+    ownsTab: () => true
+  })
   runtime.setAgentBrowserBridge(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only tabList from the bridge on these paths.
     {
@@ -319,6 +323,18 @@ describe('a saved browser tab on a host with no window', () => {
       'No browser tab open in this worktree'
     )
     expect(createTab).not.toHaveBeenCalled()
+  })
+
+  it('tells a window wake whether a saved tab could mount', () => {
+    const saved = restartedServe().runtime['serveBrowserTabs']
+    const none = restartedServe(makeWorkspaceSessionWithHeadlessTerminal()).runtime[
+      'serveBrowserTabs'
+    ]
+
+    expect(saved.hasStartable(TEST_WORKTREE_ID)).toBe(true)
+    expect(saved.hasStartable(undefined)).toBe(true)
+    expect(none.hasStartable(TEST_WORKTREE_ID)).toBe(false)
+    expect(none.hasStartable(undefined)).toBe(false)
   })
 
   it('reports no tab when no worktree is named and no page runs, as a window does', async () => {

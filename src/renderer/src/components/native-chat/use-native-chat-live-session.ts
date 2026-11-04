@@ -8,7 +8,7 @@ import {
   applyAppend,
   createNativeChatMerger,
   replaceList
-} from '../../../../shared/native-chat-merge'
+} from '../../../../shared/native-chat/native-chat-merge'
 import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
 import {
   hasMoreNativeChatHistory,

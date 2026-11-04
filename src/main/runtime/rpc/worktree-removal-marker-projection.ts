@@ -19,6 +19,14 @@ export function readsWorktreeRemovalMarker(
   )
 }
 
+// Wait for clients showing removing or asking for the outcome; older clients get acceptance and hide the row.
+export function waitsForWorktreeRemoval(
+  context: Pick<RpcContext, 'clientCapabilities'>,
+  params: { waitForBackgroundRemoval?: boolean }
+): boolean {
+  return readsWorktreeRemovalMarker(context) || params.waitForBackgroundRemoval === true
+}
+
 export function projectWorktreeListRemovals<
   T extends RuntimeWorktreeListResult | DetectedWorktreeListResult
 >(

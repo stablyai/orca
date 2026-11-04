@@ -1,7 +1,9 @@
 /** Bridge WSL bash lacks OSC 7; read its shell folder before Sleep so wake avoids the spawn folder. Failures retain the old fallback. */
 import { toWindowsWslUncPath } from '../../shared/wsl-paths'
+import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import { paneShells, readWslGuestPaneProcesses } from '../wsl/wsl-guest-pane-processes'
 import { teardownReadBudgetMs } from './daemon-request-deadline'
+import { logWslPaneDiagnostic } from './daemon-wsl-diagnostic-log'
 
 // Reserve teardown time for the final checkpoint and kill when a distro does not answer.
 const READ_BUDGET_MS = 3_000
@@ -90,11 +92,45 @@ export async function readDaemonWslQuitCwds(
 export function describeSleepFolderRead(
   sessionId: string,
   read: DaemonWslSleepCwdRead | { cwd: string | null },
-  pane: { wslDistro?: string; paneKey?: string; live: boolean; elapsedMs: number }
+  pane: { wslDistro?: string; paneKey?: string; live: boolean; elapsedMs: number },
+  opts: { withDistro: boolean } = { withDistro: true }
 ): string {
   const probe =
     'rows' in read
       ? `wsl probe (budget ${read.budgetMs}ms, rows ${read.rows ?? 'none'}${read.timedOut ? ' timed out' : ''}, shells ${read.shells ?? 'none'})`
       : 'live probe'
-  return `[history] Sleep folder for ${sessionId}: ${probe}, distro ${pane.wslDistro ?? 'unknown'}, pane ${pane.paneKey ?? 'unknown'}, live ${pane.live}, folder ${read.cwd ? 'found' : 'not found'} in ${pane.elapsedMs}ms`
+  // The session id embeds the worktree path; the distro name can be personal (trace only).
+  const distro = opts.withDistro ? `, distro ${pane.wslDistro ?? 'unknown'}` : ''
+  return `[history] Sleep folder for ${redactPtyIdForDiagnostics(sessionId)}: ${probe}${distro}, pane ${pane.paneKey ?? 'unknown'}, live ${pane.live}, folder ${read.cwd ? 'found' : 'not found'} in ${pane.elapsedMs}ms`
+}
+
+export function logSleepFolderRead(
+  sessionId: string,
+  read: DaemonWslSleepCwdRead | { cwd: string | null },
+  pane: { wslDistro?: string; paneKey?: string; live: boolean; elapsedMs: number }
+): void {
+  logWslPaneDiagnostic(
+    'wsl.sleep-folder',
+    {
+      console: describeSleepFolderRead(sessionId, read, pane),
+      trace: describeSleepFolderRead(sessionId, read, pane, { withDistro: false })
+    },
+    sleepFolderAttributes(read, pane)
+  )
+}
+
+/** The same facts as the line, as fields a trace reader can filter on. */
+function sleepFolderAttributes(
+  read: DaemonWslSleepCwdRead | { cwd: string | null },
+  pane: { live: boolean; elapsedMs: number }
+): Record<string, string | number | boolean | null> {
+  return {
+    probe: 'rows' in read ? 'wsl' : 'live',
+    live: pane.live,
+    folderFound: read.cwd !== null,
+    elapsedMs: pane.elapsedMs,
+    ...('rows' in read
+      ? { rows: read.rows, shells: read.shells, timedOut: read.timedOut, budgetMs: read.budgetMs }
+      : {})
+  }
 }

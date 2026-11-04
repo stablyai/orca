@@ -385,7 +385,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       const active = frame(2, 'inProgress')
       const last = frame(3, 'completed')
       const { rerender, container } = render(transcript([first]))
-      const toggle = screen.getByRole('button', { name: 'Tasks 0 of 1 tasks completed' })
+      const toggle = screen.getByRole('button', { name: 'Tasks 0 of 1 task completed' })
       const viewport = container.querySelector('.overflow-y-auto')!
       expect(viewport.contains(toggle)).toBe(false)
       fireEvent.click(toggle)
@@ -397,13 +397,13 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       rerender(transcript([last]))
       expect(
         within(
-          screen.getByRole('button', { name: 'Tasks 1 of 1 tasks completed' }).parentElement!
+          screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' }).parentElement!
         ).getByText('Verify')
       ).toHaveClass('line-through')
       expect(screen.getAllByText('Keep verification visible')).toHaveLength(2)
       rerender(transcript([first, active, last]))
       expect(screen.getAllByText('Verify')).toHaveLength(2)
-      expect(screen.getByRole('button', { name: 'Tasks 1 of 1 tasks completed' })).toBe(toggle)
+      expect(screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' })).toBe(toggle)
       expect(screen.getByText('Started Verify')).toBeInTheDocument()
       expect(screen.queryByText('notification:turn/plan/updated')).toBeNull()
       expect(projectNativeChatTaskListFrames([last])[0]).toBe(
@@ -427,11 +427,11 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         ]
       }
       render(transcript([tool, frame(3, 'completed')]))
-      fireEvent.click(screen.getByRole('button', { name: 'Tasks 1 of 1 tasks completed' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' }))
       expect(screen.getAllByText('Verify')).toHaveLength(2)
       expect(
         within(
-          screen.getByRole('button', { name: 'Tasks 1 of 1 tasks completed' }).parentElement!
+          screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' }).parentElement!
         ).getByText('Verify')
       ).toHaveClass('line-through')
     })
@@ -469,7 +469,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       expect(screen.queryByText('notification:future/event')).toBeNull()
       expect(screen.getByText('codex · notification:future/failure')).toBeInTheDocument()
       expect(
-        screen.getByRole('button', { name: 'Tasks 0 of 1 tasks completed' })
+        screen.getByRole('button', { name: 'Tasks 0 of 1 task completed' })
       ).toBeInTheDocument()
     })
 
@@ -486,7 +486,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       }
       render(transcript([frame(1, 'pending'), command]))
       expect(
-        screen.getByRole('button', { name: 'Tasks 0 of 1 tasks completed' })
+        screen.getByRole('button', { name: 'Tasks 0 of 1 task completed' })
       ).toBeInTheDocument()
       openToolRunMembers()
       expect(screen.getByText('Verification failed', { selector: 'pre' })).toHaveClass(

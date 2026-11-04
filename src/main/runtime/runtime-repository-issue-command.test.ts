@@ -41,7 +41,7 @@ describe('SSH issue command', () => {
   })
 
   it('drops a write instead of writing this machine', async () => {
-    const write = vi.spyOn(issueCommandFile, 'writeIssueCommand')
+    const write = vi.spyOn(issueCommandFile, 'writeIssueCommandUnlessWslStopped')
     await expect(commands.write(repo.id, 'command')).resolves.toEqual({ ok: true })
     expect(write).not.toHaveBeenCalled()
     expect(mocks.localCheck).not.toHaveBeenCalled()
@@ -94,7 +94,9 @@ describe('local issue command runtime routing', () => {
       badgeColor: '#000',
       addedAt: 0
     }
-    const write = vi.spyOn(issueCommandFile, 'writeIssueCommand').mockResolvedValue(undefined)
+    const write = vi
+      .spyOn(issueCommandFile, 'writeIssueCommandUnlessWslStopped')
+      .mockResolvedValue(undefined)
     const getLocalGitArgs = vi.fn((): [{ wslDistro: string }] => [{ wslDistro: 'Ubuntu' }])
     try {
       const commands = new RuntimeRepositoryIssueCommand({
@@ -106,7 +108,7 @@ describe('local issue command runtime routing', () => {
       expect(typeof options).toBe('function')
       expect(typeof options === 'function' ? options() : options).toEqual({ wslDistro: 'Ubuntu' })
       expect(getLocalGitArgs).toHaveBeenCalledWith(repo)
-      expect(write).toHaveBeenCalledExactlyOnceWith(repo.path, 'command', expect.any(Function))
+      expect(write).toHaveBeenCalledExactlyOnceWith(repo.path, 'command', expect.any(Function), {})
     } finally {
       write.mockRestore()
     }

@@ -222,7 +222,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
             state={gitHistoryState}
             collapsed={collapsedSections.has('history')}
             onToggle={() => toggleSection('history')}
-            onRefresh={() => void refreshGitHistory()}
+            onRefresh={() => void refreshGitHistory({ wakeWslDistro: true })}
             onOpenCommit={(item) => void openHistoryCommitDiff(item)}
             onLoadCommitFiles={loadCommitFiles}
             onOpenCommitFile={openCommitFile}

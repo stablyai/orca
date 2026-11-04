@@ -185,10 +185,10 @@ describe('RepositorySourceControlAiActionRows', () => {
       expect(ensure).toHaveBeenCalledTimes(2)
       expect(detectAgents).toHaveBeenCalledTimes(1)
       for (const card of cards) {
-        expect(card.textContent).not.toContain('Model')
+        expect(card.textContent).toContain('Model')
         expect(card.textContent).toContain('Permissions')
         expect(card.textContent).toContain('Ask')
-        expect(card.querySelector('button[aria-label="saved"]')).toBeNull()
+        expect(card.querySelector('button[aria-label="saved"]')).not.toBeNull()
         const controls = Array.from(
           card.querySelectorAll<HTMLButtonElement>(
             'button[role="combobox"].min-w-0, button[aria-haspopup="menu"]'
@@ -209,8 +209,8 @@ describe('RepositorySourceControlAiActionRows', () => {
         )
         expect(controls.length).toBeGreaterThan(0)
         expect(controls.every((control) => !control.disabled)).toBe(true)
-        expect(card.textContent).not.toContain('Model')
-        expect(card.textContent).not.toContain('Effort')
+        expect(card.textContent).toContain('Model')
+        expect(card.textContent?.includes('Reasoning effort')).toBe(agent === 'codex')
         expect(card.textContent).toContain('Permissions')
         expect(
           card.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')?.value
@@ -268,7 +268,7 @@ describe('dropRepoLegacyInstructionForAction', () => {
 })
 
 it.each(['', '--model raw'])(
-  'a repository surface edit saves the complete target and keeps its arguments (%s)',
+  'a repository agent/surface edit keeps its owned Arguments group without pinning global choices (%s)',
   (agentArgs) => {
     const settings = useAppStore.getState().settings!
     const launchPreferences = {
@@ -293,16 +293,17 @@ it.each(['', '--model raw'])(
     expect(edited.actionOverrides?.fixChecks).toMatchObject({
       agentId: 'codex',
       agentArgs,
-      launchPreferences,
       surface: 'terminal'
     })
+    expect(edited.actionOverrides?.fixChecks?.launchPreferences).toBeUndefined()
     const payload = toSourceControlAiRepoUpdate(edited).sourceControlAi
     const replay = resolveSourceControlActionRecipe({
       settings: sourceSettings,
       repo: { sourceControlAi: payload ?? undefined },
       actionId: 'fixChecks'
     })
-    expect(replay).toMatchObject({ agentArgs, surface: 'terminal', launchPreferences })
+    expect(replay).toMatchObject({ agentArgs, surface: 'terminal' })
+    expect(replay.launchPreferences).toBeUndefined()
     expect(replay.launchPreferencesYieldToAgentArgs).toBeUndefined()
     const changedAgent = withRepoAiActionAgent(edited, sourceSettings, 'fixChecks', 'claude', {
       surface: 'chat'
@@ -431,7 +432,9 @@ it.each([1, 10])(
       fireEvent.click(view.getByRole('menuitemradio', { name: /^Ask/ }))
       expect(edit).toHaveBeenCalledWith(
         'fixCommitFailure',
-        expect.objectContaining({ agentId: 'codex' })
+        expect.objectContaining({ agentId: 'codex' }),
+        undefined,
+        null
       )
       expect(gets()).toHaveLength(1)
       view.rerender(tree(1))

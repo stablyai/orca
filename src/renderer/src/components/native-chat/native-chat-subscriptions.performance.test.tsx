@@ -15,7 +15,8 @@ import {
   nativeChatFanoutWorkspace as workspace,
   terminalTabFixture
 } from './native-chat-workspace-test-fixtures'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
+import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import type * as StructuredClient from '@/runtime/structured-agent-session-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
@@ -259,6 +260,15 @@ function measureImageSubscriptions(scale: number) {
   expect(data.work).toEqual(emptyWork())
   expect(renders - baseline).toBe(0)
 
+  // Rank patches and host timestamp refreshes replace owner inputs without moving any chat.
+  act(() =>
+    useAppStore.setState({
+      worktreesByRepo: { unrelated: [] },
+      runtimeEnvironments: [...useAppStore.getState().runtimeEnvironments]
+    })
+  )
+  expect(renders - baseline).toBe(0)
+
   const destination = data.moveLastChat()
   expect(contexts.get(`chat-${data.mounted - 1}`)).toMatchObject({
     worktreeId: destination,
@@ -499,6 +509,64 @@ describe('native chat store subscription performance', () => {
       }
     }
     console.info('native-chat-subscription-work', JSON.stringify(results))
+  })
+
+  it('resolves only the pinned chat per write when the bridge publishes every floating pin at N and 10N', () => {
+    const results: { mounted: number; rowReads: number; bound: number }[] = []
+    for (const scale of [1, 10]) {
+      const mounted = 57 * scale
+      const work = { rows: 0 }
+      const chatIds = Array.from({ length: mounted }, (_, index) => `floating-chat-${index}`)
+      const rows = chatIds.map((chatId, index) =>
+        countRow(
+          agentSessionTabFixture(chatId, FLOATING_TERMINAL_WORKTREE_ID, {
+            entityId: `session-${index}`
+          }),
+          () => work.rows++
+        )
+      )
+      useAppStore.setState({
+        ...useAppStore.getInitialState(),
+        settings: getDefaultSettings('/test-home'),
+        floatingWorkspacePath: '/floating-setting',
+        runtimeEnvironmentCatalogHydrated: true,
+        tabsByWorktree: {},
+        unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: rows },
+        structuredSessionLaunchDirectoryByTabId: {}
+      })
+      const paths = new Map<string, (string | null | undefined)[]>()
+      let renders = 0
+      function Probe({ chatId }: { chatId: string }) {
+        paths.set(chatId, [
+          useNativeChatImageRuntimeContext(chatId)?.worktreePath,
+          useNativeChatFileLinkContext(chatId)?.worktreePath
+        ])
+        renders += 1
+        return null
+      }
+      const view = render(chatIds.map((chatId) => <Probe key={chatId} chatId={chatId} />))
+      expect([...paths.values()].every(([image, link]) => !image && !link)).toBe(true)
+      const baseline = renders
+      work.rows = 0
+      // One status snapshot publishes each pin as its own store write before React renders.
+      act(() => {
+        const { setStructuredSessionLaunchDirectory } = useAppStore.getState()
+        chatIds.forEach((chatId, index) =>
+          setStructuredSessionLaunchDirectory(chatId, `session-${index}`, `/pinned/${index}`)
+        )
+      })
+      chatIds.forEach((chatId, index) =>
+        expect(paths.get(chatId)).toEqual([`/pinned/${index}`, `/pinned/${index}`])
+      )
+      expect(renders - baseline).toBe(mounted)
+      // Each write may scan the floating list up to its own chat three times (image resolves the
+      // directory twice, file links once); a shared-map dependency rescans every chat per write: N³.
+      const bound = (3 * mounted * (mounted + 1)) / 2
+      expect(work.rows).toBeLessThanOrEqual(bound)
+      results.push({ mounted, rowReads: work.rows, bound })
+      view.unmount()
+    }
+    console.info('native-chat-floating-pin-work', JSON.stringify(results))
   })
 
   it('bounds dense ordinary-workspace image work on mount and own-list rename/replace at N and 10N', () => {

@@ -102,31 +102,61 @@ export function nativeChatTurnDrawOrder(
       firstRow.set(turnKey, index)
     }
   })
-  const movedAfter = new Map<number, number[]>()
-  const moved = new Set<number>()
+  const moved = new Map<number, number>()
+  const waiting = new Set<number>()
+  const waitingByTurn = new Map<string, number[]>()
+  let lastContentRow = -1
+  const finish = (index: number): void => {
+    if (waiting.delete(index) && lastContentRow > index) {
+      moved.set(index, lastContentRow)
+    }
+  }
   for (const [index, message] of messages.entries()) {
-    if (!opensTurn(index)) {
+    if (opensTurn(index)) {
+      waiting.add(index)
+      const turn = waitingByTurn.get(message.id)
+      if (turn) {
+        turn.push(index)
+      } else {
+        waitingByTurn.set(message.id, [index])
+      }
       continue
     }
-    let after = -1
-    for (let row = index + 1; row < messages.length; row += 1) {
-      const turnKey = turnKeys[row]
-      if (turnKey === undefined || opensTurn(row)) {
-        continue
-      }
-      // Its own turn's rows, or a later turn's, end the earlier turns' rows it waited behind.
-      if (turnKey === message.id || (firstRow.get(turnKey) ?? row) > index) {
+    const turnKey = turnKeys[index]
+    if (turnKey === undefined) {
+      continue
+    }
+    const first = firstRow.get(turnKey) ?? index
+    for (const openerIndex of waiting) {
+      if (openerIndex >= first) {
         break
       }
-      after = row
+      finish(openerIndex)
     }
-    if (after !== -1) {
-      moved.add(index)
-      movedAfter.set(after, [...(movedAfter.get(after) ?? []), index])
+    for (const openerIndex of waitingByTurn.get(turnKey) ?? []) {
+      finish(openerIndex)
     }
+    waitingByTurn.delete(turnKey)
+    lastContentRow = index
+  }
+  for (const index of waiting) {
+    finish(index)
   }
   if (moved.size === 0) {
     return null
+  }
+  const movedAfter = new Map<number, number[]>()
+  for (let index = 0; index < messages.length; index += 1) {
+    const after = moved.get(index)
+    if (after === undefined) {
+      continue
+    }
+    const indexes = movedAfter.get(after)
+    if (indexes) {
+      indexes.push(index)
+    } else {
+      movedAfter.set(after, [index])
+    }
   }
   return messages.flatMap((_, index) => [
     ...(moved.has(index) ? [] : [index]),

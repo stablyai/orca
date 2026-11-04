@@ -276,13 +276,14 @@ export function AgentPermissionMenu({
   )
 }
 
-export function AgentPermissionArgsChip({
+function AgentArgsChoiceChip({
   label,
   flag,
   onRemove,
   disabled,
   chipRef,
-  buttonRef
+  buttonRef,
+  choiceKey
 }: {
   label: string
   flag: string
@@ -290,13 +291,14 @@ export function AgentPermissionArgsChip({
   disabled?: boolean
   chipRef?: Ref<HTMLSpanElement>
   buttonRef?: Ref<HTMLButtonElement>
+  choiceKey: string
 }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
           ref={chipRef}
-          className="relative z-10 -mb-5 flex h-5 w-fit max-w-[60%] items-center gap-1 rounded bg-muted px-1.5 font-mono text-xs leading-5 text-foreground/80 focus-within:ring-2 focus-within:ring-ring"
+          className="flex h-5 min-w-0 max-w-full items-center gap-1 rounded bg-muted px-1.5 font-mono text-xs leading-5 text-foreground/80 focus-within:ring-2 focus-within:ring-ring"
         >
           <span className="truncate">{flag}</span>
           <button
@@ -318,11 +320,15 @@ export function AgentPermissionArgsChip({
                 }
               }
             }}
-            aria-label={translate(
-              'settings.agents.permissionChipRemove',
-              "Remove {{flag}} and use {{agent}}'s own settings",
-              { flag, agent: label }
-            )}
+            aria-label={
+              choiceKey !== 'permissionMode'
+                ? translate('settings.agents.choiceChipRemove', 'Remove {{flag}}', { flag })
+                : translate(
+                    'settings.agents.permissionChipRemove',
+                    "Remove {{flag}} and use {{agent}}'s own settings",
+                    { flag, agent: label }
+                  )
+            }
             className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
           >
             <X className="size-3" />
@@ -330,12 +336,63 @@ export function AgentPermissionArgsChip({
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        {translate(
-          'settings.agents.permissionChipTooltip',
-          'Added by Permissions. Remove it to use {{agent}}’s own settings.',
-          { agent: label }
-        )}
+        {choiceKey !== 'permissionMode'
+          ? translate(
+              'settings.agents.choiceChipTooltip',
+              'Added by {{choice}}. Remove it to use the default.',
+              {
+                choice:
+                  choiceKey === 'model'
+                    ? translate('settings.sourceControl.actionModel.model', 'Model')
+                    : translate('settings.sourceControl.actionModel.effort', 'Effort')
+              }
+            )
+          : translate(
+              'settings.agents.permissionChipTooltip',
+              'Added by Permissions. Remove it to use {{agent}}’s own settings.',
+              { agent: label }
+            )}
       </TooltipContent>
     </Tooltip>
+  )
+}
+
+export type AgentArgsChoice = {
+  key: string
+  label: string
+  flag: string
+  onRemove: (text: string) => string
+}
+
+export function AgentArgsChoiceChips({
+  chips,
+  disabled,
+  chipRef,
+  buttonRef,
+  onRemove
+}: {
+  chips: readonly AgentArgsChoice[]
+  disabled?: boolean
+  chipRef?: Ref<HTMLSpanElement>
+  buttonRef?: Ref<HTMLButtonElement>
+  onRemove: (chip: AgentArgsChoice) => void
+}): React.JSX.Element {
+  return (
+    <span
+      ref={chipRef}
+      className="relative z-10 -mb-5 flex h-5 w-fit max-w-full items-center gap-1"
+    >
+      {chips.map((chip, index) => (
+        <AgentArgsChoiceChip
+          key={chip.key}
+          choiceKey={chip.key}
+          label={chip.label}
+          flag={chip.flag}
+          disabled={disabled}
+          buttonRef={index === chips.length - 1 ? buttonRef : undefined}
+          onRemove={() => onRemove(chip)}
+        />
+      ))}
+    </span>
   )
 }

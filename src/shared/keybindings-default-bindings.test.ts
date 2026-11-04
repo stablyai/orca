@@ -53,7 +53,7 @@ describe('keybindings', () => {
       'Mod+Shift+A'
     ])
     expect(formatKeybindingList(['Mod+Shift+A'], 'darwin')).toBe('⌘⇧A')
-    expect(formatKeybindingList(['Mod+Shift+A'], 'linux')).toBe('Ctrl+Shift+A')
+    expect(formatKeybindingList(['Mod+Shift+A'], 'linux')).toBe('Ctrl+⇧+A')
 
     const macChord = {
       key: 'a',

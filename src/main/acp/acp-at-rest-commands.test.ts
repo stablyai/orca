@@ -42,29 +42,45 @@ afterEach(async () => {
 })
 
 it('observes pre-initialize reports, validates session identity and keeps the latest explicit empty', async () => {
-  const { catalog, children, workspacePath } = await rig((child) => {
-    child.agent.on('initialize', (frame) => {
-      child.agent.notify('session/update', { sessionId: 'wrong', update: capture.enabled })
-      child.agent.notify('session/update', {
-        sessionId: DISCOVERY_SESSION,
-        update: capture.enabled
+  const { catalog, children, workspacePath } = await rig(
+    (child) => {
+      child.agent.on('initialize', (frame) => {
+        child.agent.notify('session/update', { sessionId: 'wrong', update: capture.enabled })
+        child.agent.notify('session/update', {
+          sessionId: DISCOVERY_SESSION,
+          update: capture.enabled
+        })
+        child.agent.notify('session/update', {
+          sessionId: DISCOVERY_SESSION,
+          update: { sessionUpdate: 'available_commands_update', availableCommands: [] }
+        })
+        child.agent.reply(frame, { protocolVersion: 1, agentCapabilities: {} })
       })
-      child.agent.notify('session/update', {
-        sessionId: DISCOVERY_SESSION,
-        update: { sessionUpdate: 'available_commands_update', availableCommands: [] }
+      child.agent.on('session/new', (frame) =>
+        child.agent.reply(frame, { sessionId: DISCOVERY_SESSION })
+      )
+    },
+    {
+      resolveCommandSettings: () => ({
+        agentCmdOverrides: { omp: `"${process.execPath}" run -- omp` }
       })
-      child.agent.reply(frame, { protocolVersion: 1, agentCapabilities: {} })
-    })
-    child.agent.on('session/new', (frame) =>
-      child.agent.reply(frame, { sessionId: DISCOVERY_SESSION })
-    )
-  })
+    }
+  )
   expect(await catalog.settled(ompRecord(), 1_000)).toEqual([])
   await catalog.closeAll()
   expect(children[0]!.launch).toMatchObject({
-    command: '/configured/omp',
+    command: process.execPath,
     cwd: workspacePath('workspace-1'),
-    args: ['acp', '--plugin-dir', '/installed/plugin', '--session-dir', expect.any(String)],
+    args: [
+      'run',
+      '--',
+      'omp',
+      'acp',
+      '--plugin-dir',
+      '/installed/plugin',
+      '--session-dir',
+      expect.any(String)
+    ],
     env: { PI_CODING_AGENT_DIR: '/accounts/omp', OMP_PROFILE: 'configured' },
     envToDelete: expect.arrayContaining([
       'ORCA_CHAT_SCRATCH_DIR',

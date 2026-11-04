@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
-const execFileMock = vi.hoisted(() => vi.fn())
+const { runProcessMock, blockedForExecMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn(),
+  blockedForExecMock: vi.fn(async (): Promise<{ distro: string; state: string } | null> => null)
+}))
 
-vi.mock('node:child_process', () => ({
-  execFile: execFileMock
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
+vi.mock('../wsl/wsl-background-exec-gate', () => ({
+  blockedWslDistroForExec: blockedForExecMock
 }))
 
 import {
@@ -18,8 +23,32 @@ function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { value: platform, configurable: true })
 }
 
+type PendingRun = { spec: { program: string; args: string[] }; resolve: (r: ProcessResult) => void }
+const pending: PendingRun[] = []
+
+function exited(stdout: string, code = 0): ProcessResult {
+  return { code, signal: null, stdout, stderr: '', timedOut: false }
+}
+
+async function spawned(count: number): Promise<void> {
+  await vi.waitFor(() => expect(pending).toHaveLength(count))
+}
+
+/** Answers the `index`th wsl.exe run and lets its settlement land. */
+async function answer(index: number, result: ProcessResult): Promise<void> {
+  pending[index].resolve(result)
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 beforeEach(() => {
-  execFileMock.mockReset()
+  pending.length = 0
+  runProcessMock.mockReset()
+  runProcessMock.mockImplementation(
+    (spec: PendingRun['spec']) =>
+      new Promise<ProcessResult>((resolve) => pending.push({ spec, resolve }))
+  )
+  blockedForExecMock.mockReset()
+  blockedForExecMock.mockResolvedValue(null)
   _internals.resetWslCanonicalPathCache()
 })
 
@@ -28,23 +57,18 @@ afterEach(() => {
 })
 
 describe('canonicalizeWslLinuxPath', () => {
-  it('bounds successful canonical path entries', () => {
+  it('bounds successful canonical path entries', async () => {
     setPlatform('win32')
-    execFileMock.mockImplementation(
-      (
-        _file: string,
-        _args: string[],
-        _options: unknown,
-        callback: (error: null, stdout: string) => void
-      ) => callback(null, '/home/canonical\n')
-    )
+    runProcessMock.mockImplementation(async () => exited('/home/canonical\n'))
 
     for (let index = 0; index < MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES + 4; index += 1) {
       _internals.canonicalizeWslLinuxPath('Ubuntu', `/home/path-${index}`)
     }
 
-    expect(_internals.getWslCanonicalPathCacheSizeForTests()).toBe(
-      MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES
+    await vi.waitFor(() =>
+      expect(_internals.getWslCanonicalPathCacheSizeForTests()).toBe(
+        MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES
+      )
     )
   })
 
@@ -59,44 +83,63 @@ describe('canonicalizeWslLinuxPath', () => {
     expect(plan?.trustConfigPath).toBe('/hooks.json')
   })
 
-  it('returns the path unchanged off Windows without spawning wsl.exe', () => {
+  it('returns the path unchanged off Windows without spawning wsl.exe', async () => {
     setPlatform('linux')
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alice')).toBe('/home/alice')
-    expect(execFileMock).not.toHaveBeenCalled()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(runProcessMock).not.toHaveBeenCalled()
   })
 
-  it('never blocks: returns null and schedules an async resolution on first call', () => {
+  it('never blocks: returns null and schedules an async resolution through process-host', async () => {
     setPlatform('win32')
     const result = _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
 
     expect(result).toBeNull()
-    expect(execFileMock).toHaveBeenCalledTimes(1)
-    const [file, args] = execFileMock.mock.calls[0]
-    expect(file).toBe('wsl.exe')
-    expect(args).toEqual([
-      '-d',
-      'Ubuntu',
-      '--exec',
-      'sh',
-      '-c',
-      `if [ ! -d "$1" ]; then printf '%s\\n' '__ORCA_WSL_PATH_MISSING__'; exit 0; fi; readlink -f -- "$1"`,
-      'sh',
-      '/home/alias'
-    ])
+    await spawned(1)
+    expect(pending[0].spec).toMatchObject({
+      program: 'wsl.exe',
+      timeoutMs: 5000,
+      args: [
+        '-d',
+        'Ubuntu',
+        '--exec',
+        'sh',
+        '-c',
+        `if [ ! -d "$1" ]; then printf '%s\\n' '__ORCA_WSL_PATH_MISSING__'; exit 0; fi; readlink -f -- "$1"`,
+        'sh',
+        '/home/alias'
+      ]
+    })
   })
 
-  it('returns the cached path while revalidating it asynchronously', () => {
+  it('does not start a stopped distro to probe its Codex home, and keeps the known identity (E9)', async () => {
+    setPlatform('win32')
+    _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
+    await spawned(1)
+    await answer(0, exited('/home/alice\n'))
+
+    blockedForExecMock.mockResolvedValue({ distro: 'Ubuntu', state: 'stopped' })
+    const settled = vi.fn()
+    expect(
+      _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias', '/home/alias', settled)
+    ).toBe('/home/alice')
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith({ status: 'unavailable' }))
+    expect(blockedForExecMock).toHaveBeenCalledWith('Ubuntu')
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
+    expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBe('/home/alice')
+  })
+
+  it('returns the cached path while revalidating it asynchronously', async () => {
     setPlatform('win32')
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBeNull()
-
-    const callback = execFileMock.mock.calls[0][3] as (error: Error | null, stdout: string) => void
-    callback(null, '/home/alice\n')
+    await spawned(1)
+    await answer(0, exited('/home/alice\n'))
 
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBe('/home/alice')
-    expect(execFileMock).toHaveBeenCalledTimes(2)
+    await spawned(2)
   })
 
-  it('resolves a custom automount root and notifies the first launch', () => {
+  it('resolves a custom automount root and notifies the first launch', async () => {
     setPlatform('win32')
     const settled = vi.fn()
     const windowsPath = 'D:\\orca\\codex-runtime-home\\home'
@@ -110,110 +153,96 @@ describe('canonicalizeWslLinuxPath', () => {
       )
     ).toBeNull()
 
-    const [file, args, options, callback] = execFileMock.mock.calls[0]
-    expect(file).toBe('wsl.exe')
-    expect(args).toEqual([
-      '-d',
-      'Ubuntu',
-      '--exec',
-      'sh',
-      '-c',
-      `resolved=$(wslpath -a -u "$1") || exit; if [ ! -d "$resolved" ]; then printf '%s\\n' '__ORCA_WSL_PATH_MISSING__'; exit 0; fi; readlink -f -- "$resolved"`,
-      'sh',
-      windowsPath
-    ])
-    expect(options).toMatchObject({ timeout: 5000, windowsHide: true })
+    await spawned(1)
+    expect(pending[0].spec).toMatchObject({
+      program: 'wsl.exe',
+      timeoutMs: 5000,
+      args: [
+        '-d',
+        'Ubuntu',
+        '--exec',
+        'sh',
+        '-c',
+        `resolved=$(wslpath -a -u "$1") || exit; if [ ! -d "$resolved" ]; then printf '%s\\n' '__ORCA_WSL_PATH_MISSING__'; exit 0; fi; readlink -f -- "$resolved"`,
+        'sh',
+        windowsPath
+      ]
+    })
 
-    callback(null, '/windows/d/orca/codex-runtime-home/home\n')
+    await answer(0, exited('/windows/d/orca/codex-runtime-home/home\n'))
     expect(settled).toHaveBeenCalledWith({
       status: 'resolved',
       canonicalPath: '/windows/d/orca/codex-runtime-home/home'
     })
   })
 
-  it('does not spawn a second subprocess while one is in flight', () => {
+  it('does not spawn a second subprocess while one is in flight', async () => {
     setPlatform('win32')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
 
-    expect(execFileMock).toHaveBeenCalledTimes(1)
+    await spawned(1)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
   })
 
-  it('retries after a failed resolution rather than caching the failure', () => {
+  it('retries after a failed resolution rather than caching the failure', async () => {
     setPlatform('win32')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
-    const callback = execFileMock.mock.calls[0][3] as (error: Error | null, stdout: string) => void
-    callback(new Error('wsl unreachable'), '')
+    await spawned(1)
+    await answer(0, exited('', 1))
 
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBeNull()
-    expect(execFileMock).toHaveBeenCalledTimes(2)
+    await spawned(2)
   })
 
-  it('keeps the last known-good cache when revalidation later fails', () => {
+  it('keeps the last known-good cache when revalidation later fails', async () => {
     setPlatform('win32')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
-    const firstCallback = execFileMock.mock.calls[0][3] as (
-      error: Error | null,
-      stdout: string
-    ) => void
-    firstCallback(null, '/home/alice\n')
+    await spawned(1)
+    await answer(0, exited('/home/alice\n'))
 
     const settled = vi.fn()
     expect(
       _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias', '/home/alias', settled)
     ).toBe('/home/alice')
-    const secondCallback = execFileMock.mock.calls[1][3] as (
-      error: Error | null,
-      stdout: string
-    ) => void
-    secondCallback(new Error('path disappeared'), '')
+    await spawned(2)
+    await answer(1, exited('', 1))
 
     // Transport failure cannot invalidate a known-good custom-automount identity.
     expect(settled).toHaveBeenCalledWith({ status: 'unavailable' })
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBe('/home/alice')
   })
 
-  it('drops the cached identity when WSL confirms the path is missing', () => {
+  it('drops the cached identity when WSL confirms the path is missing', async () => {
     setPlatform('win32')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
-    const firstCallback = execFileMock.mock.calls[0][3] as (
-      error: Error | null,
-      stdout: string
-    ) => void
-    firstCallback(null, '/home/alice\n')
+    await spawned(1)
+    await answer(0, exited('/home/alice\n'))
 
     const settled = vi.fn()
     expect(
       _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias', '/home/alias', settled)
     ).toBe('/home/alice')
-    const secondCallback = execFileMock.mock.calls[1][3] as (
-      error: Error | null,
-      stdout: string
-    ) => void
-    secondCallback(null, '__ORCA_WSL_PATH_MISSING__\n')
+    await spawned(2)
+    await answer(1, exited('__ORCA_WSL_PATH_MISSING__\n'))
 
     expect(settled).toHaveBeenCalledWith({ status: 'missing' })
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBeNull()
   })
 
-  it('replaces a cached path when its canonical identity changes', () => {
+  it('replaces a cached path when its canonical identity changes', async () => {
     setPlatform('win32')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
-    const firstCallback = execFileMock.mock.calls[0][3] as (
-      error: Error | null,
-      stdout: string
-    ) => void
-    firstCallback(null, '/home/alice-old\n')
+    await spawned(1)
+    await answer(0, exited('/home/alice-old\n'))
 
     const settled = vi.fn()
     expect(
       _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias', '/home/alias', settled)
     ).toBe('/home/alice-old')
-    const secondCallback = execFileMock.mock.calls[1][3] as (
-      error: Error | null,
-      stdout: string
-    ) => void
-    secondCallback(null, '/home/alice-new\n')
+    await spawned(2)
+    await answer(1, exited('/home/alice-new\n'))
 
     expect(settled).toHaveBeenCalledWith({
       status: 'resolved',
@@ -222,11 +251,11 @@ describe('canonicalizeWslLinuxPath', () => {
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBe('/home/alice-new')
   })
 
-  it('ignores non-absolute readlink output', () => {
+  it('ignores non-absolute readlink output', async () => {
     setPlatform('win32')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
-    const callback = execFileMock.mock.calls[0][3] as (error: Error | null, stdout: string) => void
-    callback(null, 'readlink: missing operand\n')
+    await spawned(1)
+    await answer(0, exited('readlink: missing operand\n'))
 
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBeNull()
   })

@@ -10,12 +10,20 @@ import {
   type MobileWebBundleProbeState
 } from './use-mobile-web-bundle-probe'
 import type { HostProfile } from '../transport/types'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
-function buttonLabel(state: MobileWebBundleProbeState, awaitingHost: boolean): string {
+function buttonLabel(
+  state: MobileWebBundleProbeState,
+  awaitingHost: boolean,
+  t: Translate
+): string {
   if (state.status !== 'running') {
-    return 'Fetch mobile web bundle'
+    return t('diagnostics.mobileWebBundleProbeRow.fetchBundle', 'Fetch mobile web bundle')
   }
-  return awaitingHost ? 'Connecting…' : 'Fetching bundle…'
+  return awaitingHost
+    ? t('diagnostics.mobileWebBundleProbeRow.connecting', 'Connecting…')
+    : t('diagnostics.mobileWebBundleProbeRow.fetching', 'Fetching bundle…')
 }
 
 function ProbeLine({ label, detail, failed }: { label: string; detail: string; failed?: boolean }) {
@@ -30,27 +38,46 @@ function ProbeLine({ label, detail, failed }: { label: string; detail: string; f
 
 function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; hostName: string }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   if (state.status === 'idle' || state.status === 'running') {
     return null
   }
   if (state.status === 'failed') {
     return (
       <View style={styles.section}>
-        <ProbeLine label="Bundle" detail={state.detail} failed />
+        <ProbeLine
+          label={t('diagnostics.mobileWebBundleProbeRow.bundle', 'Bundle')}
+          detail={state.detail}
+          failed
+        />
       </View>
     )
   }
   return (
     <View style={styles.section}>
-      <ProbeLine label="Host" detail={hostName} />
+      <ProbeLine label={t('diagnostics.mobileWebBundleProbeRow.host', 'Host')} detail={hostName} />
       <View style={styles.separator} />
-      <ProbeLine label="Build" detail={state.buildId.slice(0, 12)} />
+      <ProbeLine
+        label={t('diagnostics.mobileWebBundleProbeRow.build', 'Build')}
+        detail={state.buildId.slice(0, 12)}
+      />
       <View style={styles.separator} />
-      <ProbeLine label="Assets" detail={`${state.assetCount}`} />
+      <ProbeLine
+        label={t('diagnostics.mobileWebBundleProbeRow.assets', 'Assets')}
+        detail={`${state.assetCount}`}
+      />
       <View style={styles.separator} />
-      <ProbeLine label="Bytes" detail={`${state.totalBytes}`} />
+      <ProbeLine
+        label={t('diagnostics.mobileWebBundleProbeRow.bytes', 'Bytes')}
+        detail={`${state.totalBytes}`}
+      />
       <View style={styles.separator} />
-      <ProbeLine label="Elapsed" detail={`${state.elapsedMs} ms`} />
+      <ProbeLine
+        label={t('diagnostics.mobileWebBundleProbeRow.elapsed', 'Elapsed')}
+        detail={t('diagnostics.mobileWebBundleProbeRow.elapsedMilliseconds', '{{elapsedMs}} ms', {
+          elapsedMs: state.elapsedMs
+        })}
+      />
     </View>
   )
 }
@@ -59,6 +86,7 @@ function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; ho
 // Troubleshoot has no selected host, so probe the first paired host and name it explicitly.
 export function MobileWebBundleProbeRow() {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [hosts, setHosts] = useState<readonly HostProfile[]>([])
   useEffect(() => {
     let stale = false
@@ -91,9 +119,14 @@ export function MobileWebBundleProbeRow() {
         ) : (
           <Package size={16} color={colors.textPrimary} />
         )}
-        <Text style={styles.diagnosticButtonLabel}>{buttonLabel(state, awaitingHost)}</Text>
+        <Text style={styles.diagnosticButtonLabel}>{buttonLabel(state, awaitingHost, t)}</Text>
       </Pressable>
-      <ProbeResult state={state} hostName={host?.name ?? 'unknown host'} />
+      <ProbeResult
+        state={state}
+        hostName={
+          host?.name ?? t('diagnostics.mobileWebBundleProbeRow.unknownHost', 'unknown host')
+        }
+      />
     </View>
   )
 }

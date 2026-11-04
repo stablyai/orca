@@ -11,8 +11,8 @@ import type {
   JiraProjectStatusOrder,
   JiraPriority
 } from '../../../shared/jira/jira-types'
-import type { TaskPageJiraLoadError } from '@/components/task-page-jira-load-state'
-import type { TaskPageJiraJqlRejection } from '@/components/task-page-jira-search'
+import type { TaskPageJiraLoadError } from '@/components/task-page/jira/task-page-jira-load-state'
+import type { TaskPageJiraJqlRejection } from '@/components/task-page/jira/task-page-jira-search'
 import type { JiraPresetId } from '@/components/task-page/task-page-localized-options'
 import type {
   JiraIssueSortColumn,

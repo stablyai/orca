@@ -1,41 +1,6 @@
-// Seed legacy restored chats in one transaction: a partial index would read complete on next launch and lose the remaining tabs.
-
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { Tab } from '../../../shared/tab-types'
 import type { ChatTabChange } from './agent-session-tab-layout'
 import { savedSessionId } from '../saved-structured-agent-session-restoration'
-
-type TabIndexHost = Pick<
-  StructuredAgentSessionHost,
-  'getPersistedVisibleSessionTabIndex' | 'showSessionTabs'
->
-
-/** Best-effort: the tabs publish either way, and an index still absent is seeded again next launch. */
-export async function seedStructuredAgentSessionTabIndex(
-  host: (Partial<TabIndexHost> & Pick<StructuredAgentSessionHost, 'deps'>) | null | undefined,
-  targets: readonly string[],
-  restored: readonly string[]
-): Promise<void> {
-  if (!host?.getPersistedVisibleSessionTabIndex || !host.showSessionTabs) {
-    return
-  }
-  const index = host.getPersistedVisibleSessionTabIndex()
-  const listed = new Set(index.present ? index.sessionIds : [])
-  const opened = new Set(restored)
-  // In the restore's own order, so the seeded tabs keep the order the profile gave them.
-  const unlisted = [...new Set([...targets, ...restored])].filter(
-    (sessionId) => opened.has(sessionId) && !listed.has(sessionId)
-  )
-  if (unlisted.length > 0) {
-    await host.showSessionTabs(unlisted).catch((error: unknown) =>
-      host.deps.logger.warn('recording restored chat tabs failed', {
-        scope: 'tab-index-seed',
-        sessionIds: unlisted,
-        error
-      })
-    )
-  }
-}
 
 /** Match windowless saved tabs to the index: add legacy missing tabs and remove closed leftovers only while both records exist. */
 export function chatTabChangesMatchingIndex(

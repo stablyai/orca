@@ -303,6 +303,53 @@ describe('getPRForBranch', () => {
     })
   })
 
+  // GitHub serves a renamed repository under its old name, but reports the new name in the PR.
+  function primeRenamedOriginBranchLookup(headRepoName: string): void {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'old-widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 44,
+          title: 'Renamed repository lookup',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/44',
+          updated_at: '2026-10-28T00:00:00Z',
+          draft: false,
+          mergeable: true,
+          head: {
+            ref: 'feature/test',
+            sha: 'renamed-head-oid',
+            repo: { name: headRepoName, owner: { login: 'acme' } }
+          },
+          base: { ref: 'main', sha: 'renamed-base-oid' }
+        }
+      ])
+    })
+  }
+
+  it('keeps a same-repository PR when origin still uses the pre-rename URL', async () => {
+    primeRenamedOriginBranchLookup('widgets')
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      [
+        'api',
+        'repos/acme/old-widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1',
+        '--include'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr).toMatchObject({ number: 44, url: 'https://github.com/acme/widgets/pull/44' })
+  })
+
+  it('still rejects a cross-repository head when origin uses the pre-rename URL', async () => {
+    primeRenamedOriginBranchLookup('other-widgets')
+
+    expect(await getPRForBranch('/repo-root', 'feature/test')).toBeNull()
+  })
+
   it('returns null for empty branch (e.g. during rebase with detached HEAD)', async () => {
     const pr = await getPRForBranch('/repo-root', '')
     expect(pr).toBeNull()

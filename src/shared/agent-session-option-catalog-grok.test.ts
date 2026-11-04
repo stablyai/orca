@@ -78,7 +78,7 @@ describe('grok launch args', () => {
   })
 
   it('emits only -m for a persisted model the seed does not carry', () => {
-    // Unknown IDs fatally fail grok launch; authoritative discovery must retire them via clearNativeChatSessionOptionModel before static-seed launch resolution.
+    // A remembered model remains the launch selection even when discovery no longer lists it.
     expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-build' })).toEqual({
       args: ['-m', 'grok-build'],
       appliedValues: { model: 'grok-build' }

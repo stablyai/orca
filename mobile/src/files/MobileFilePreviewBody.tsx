@@ -10,6 +10,7 @@ import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
   preview: MobileFilePreviewResult
@@ -32,6 +33,7 @@ type Props = {
 
 export function MobileFilePreviewBody({ preview, ...options }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   if (preview.status === 'loading') {
     return (
       <View style={styles.state}>
@@ -48,7 +50,7 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       <EditablePreviewSource {...options} />
     ) : (
       <View style={styles.state}>
-        <Text style={styles.stateText}>Empty file</Text>
+        <Text style={styles.stateText}>{t('files.filePreviewBody.emptyFile', 'Empty file')}</Text>
       </View>
     )
   }
@@ -76,7 +78,9 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
             style={[styles.image, { width: options.imageWidth, height: options.imageHeight }]}
             resizeMode="contain"
             onError={options.onImageError}
-            accessibilityLabel={`${options.title} image`}
+            accessibilityLabel={t('files.filePreviewBody.imageLabel', '{{title}} image', {
+              title: options.title
+            })}
           />
         </ScrollView>
       </View>

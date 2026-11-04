@@ -1,7 +1,7 @@
+import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
 import type { PrioritySemaphore } from '../../../shared/priority-semaphore'
 import { startSpan } from '../../observability/tracer'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
 import {
   AgentModelCatalogListingStoppedError,
   type AgentModelCatalogFailures
@@ -18,8 +18,6 @@ import type {
 } from './agent-model-catalog-discovery'
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
 
-export type AgentModelCatalogLister = AgentModelCatalogSessionAccess | AgentModelCatalogProbe
-
 /** Pin listings to the spawned child's account so later selections cannot receive its results. */
 export type AgentModelCatalogSessionAccess = {
   store: AgentModelCatalogStore
@@ -27,97 +25,96 @@ export type AgentModelCatalogSessionAccess = {
   accountHomePath: string
 }
 
-export type InFlightListings = Map<AgentModelCatalogLister, Promise<AgentModelCatalogEntry | null>>
+export type InFlightListing = {
+  agent: string
+  current?: () => boolean
+  promise: Promise<AgentModelCatalogEntry | null>
+  finish: (entry: AgentModelCatalogEntry | null) => void
+  cleanup: () => void
+}
 
-type CatalogSuccessWriter = (
+/** Only the exact owner may detach a flight and release its waiters. */
+export function retireAgentModelCatalogListing(
+  refreshes: Map<string, InFlightListing>,
+  listingWaiters: AgentModelCatalogListingWaiters,
   fingerprint: string,
-  agent: string,
-  success: AgentModelCatalogSuccess,
-  source: AgentModelCatalogSource,
-  order: number
-) => AgentModelCatalogEntry | null
+  expected: InFlightListing
+): void {
+  if (refreshes.get(fingerprint) !== expected) {
+    return
+  }
+  refreshes.delete(fingerprint)
+  expected.cleanup()
+  expected.finish(null)
+  listingWaiters.notify(fingerprint)
+}
 
 export function refreshAgentModelCatalogListing(input: {
   fingerprint: string
   agent: string
-  lister: AgentModelCatalogLister
   listModels: () => Promise<AgentModelCatalogSuccess>
-  refreshes: Map<string, InFlightListings>
-  entries: ReadonlyMap<string, AgentModelCatalogEntry>
-  latestWrittenOrder: Map<string, number>
+  current?: () => boolean
+  signal?: AbortSignal
+  refreshes: Map<string, InFlightListing>
   failures: AgentModelCatalogFailures
   listingWaiters: AgentModelCatalogListingWaiters
-  nextListingOrder: () => number
-  entryFromSuccess: (
+  writeSuccess: (
     fingerprint: string,
     agent: string,
     success: AgentModelCatalogSuccess,
     source: AgentModelCatalogSource
   ) => AgentModelCatalogEntry | null
-  writeSuccess: CatalogSuccessWriter
-  recordFailure: (fingerprint: string, detail: string, agent?: string) => void
 }): Promise<AgentModelCatalogEntry | null> {
-  const { fingerprint, agent, lister, listModels } = input
-  const listers: InFlightListings = input.refreshes.get(fingerprint) ?? new Map()
-  const inFlight = independentAgentModelCatalog(agent)
-    ? listers.values().next().value
-    : listers.get(lister)
-  if (inFlight) {
-    return inFlight
+  const { fingerprint, agent, listModels, signal } = input
+  const existing = input.refreshes.get(fingerprint)
+  if (existing) {
+    return existing.promise
   }
-  const settle = (): void => {
-    listers.delete(lister)
-    if (listers.size === 0 && input.refreshes.get(fingerprint) === listers) {
-      input.refreshes.delete(fingerprint)
-      input.latestWrittenOrder.delete(fingerprint)
-    }
-    input.listingWaiters.notify(fingerprint)
+  const result = Promise.withResolvers<AgentModelCatalogEntry | null>()
+  const flight: InFlightListing = {
+    agent,
+    current: input.current,
+    promise: result.promise,
+    finish: result.resolve,
+    cleanup: () => signal?.removeEventListener('abort', retire)
   }
-  const order = input.nextListingOrder()
-  // Trace timing/outcome without exposing listing contents.
-  const span = startSpan('agentModelCatalog.discovery', {
-    attributes: { agent, lister: typeof lister === 'function' ? 'probe' : 'session' }
-  })
-  const run = listModels().then(
-    (success) => {
-      span.setAttribute('models', success.models.length)
+  const retire = (): void =>
+    retireAgentModelCatalogListing(input.refreshes, input.listingWaiters, fingerprint, flight)
+  const current = (): boolean =>
+    input.refreshes.get(fingerprint) === flight && !signal?.aborted && flight.current?.() !== false
+  input.refreshes.set(fingerprint, flight)
+  signal?.addEventListener('abort', retire, { once: true })
+  if (signal?.aborted) {
+    retire()
+  }
+  const span = startSpan('agentModelCatalog.discovery', { attributes: { agent, lister: 'probe' } })
+  void Promise.resolve().then(async () => {
+    try {
+      if (!current()) {
+        span.end()
+        return
+      }
+      const success = await listModels()
+      if (current()) {
+        span.setAttribute('models', success.models.length)
+        flight.finish(input.writeSuccess(fingerprint, agent, success, 'discovery'))
+      }
       span.end()
-      // Superseded callers receive their results without overwriting newer discovery.
-      const superseded =
-        (input.latestWrittenOrder.get(fingerprint) ?? 0) > order && input.entries.has(fingerprint)
-      if (superseded && success.origin === 'probe') {
-        input.failures.listed(fingerprint, agent, success.origin, success.unavailable)
-      }
-      const entry = superseded
-        ? input.entryFromSuccess(fingerprint, agent, success, 'discovery')
-        : input.writeSuccess(fingerprint, agent, success, 'discovery', order)
-      settle()
-      return entry
-    },
-    (error: unknown) => {
+    } catch (error) {
       span.fail(error instanceof Error ? error : String(error))
-      if (typeof lister === 'function') {
-        if (!(error instanceof AgentModelCatalogListingStoppedError)) {
-          input.failures.probeFailed(fingerprint, agent, error)
-        }
-      } else {
-        input.recordFailure(
-          fingerprint,
-          error instanceof Error ? error.message : String(error),
-          agent
-        )
+      if (current() && !(error instanceof AgentModelCatalogListingStoppedError)) {
+        input.failures.probeFailed(fingerprint, agent, error)
       }
-      settle()
-      return null
+    } finally {
+      retire()
     }
-  )
-  listers.set(lister, run)
-  input.refreshes.set(fingerprint, listers)
-  return run
+  })
+  return flight.promise
 }
 
 export function scopedAgentModelCatalogLister(input: {
   legacy?: boolean
+  operation?: StructuredAgentResolutionOperation
   canList: () => boolean
   admission: PrioritySemaphore
   signal: AbortSignal
@@ -143,7 +140,11 @@ export function scopedAgentModelCatalogLister(input: {
       if (!probe || !probeHome) {
         throw new AgentModelCatalogListingStoppedError('catalog scope unavailable')
       }
-      return await probe(probeHome, { signal: attemptSignal, workspacePath })
+      return await probe(probeHome, {
+        signal: attemptSignal,
+        workspacePath,
+        operation: input.operation
+      })
     } catch (error) {
       throw signal.aborted ? new AgentModelCatalogListingStoppedError(String(error)) : error
     } finally {
@@ -151,12 +152,4 @@ export function scopedAgentModelCatalogLister(input: {
       release()
     }
   }
-}
-
-export function agentModelCatalogProbeLister(signal: AbortSignal) {
-  return (probe: AgentModelCatalogProbe, home: AgentSessionAccountHome, workspacePath?: string) =>
-    (): Promise<AgentModelCatalogSuccess> =>
-      probe(home, { signal, workspacePath }).catch((error: unknown) => {
-        throw signal.aborted ? new AgentModelCatalogListingStoppedError(String(error)) : error
-      })
 }

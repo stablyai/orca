@@ -235,18 +235,15 @@ describeRender(
           {
             holdMs: 1500,
             read: () =>
-              page.evaluate(() => ({
-                sent: globalThis.__orcaHeldPressProbe.sent(),
-                repeats: globalThis.__orcaHeldPressProbe.repeats()
-              }))
+              page.evaluate(() => ({ repeats: globalThis.__orcaHeldPressProbe.repeats() }))
           }
         )
+        // The repeat controller owns the first send, so the press must not send on its own.
         expect(midHold).toEqual({
           selectable: false,
-          sent: ['\x1b[A'],
           repeats: [{ kind: 'start', bytes: '\x1b[A' }]
         })
-        expect(afterRelease.sent).toEqual(['\x1b[A'])
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual([])
         expect(afterRelease.repeats).toEqual([{ kind: 'start', bytes: '\x1b[A' }, { kind: 'stop' }])
         expect(errors).toEqual([])
         await page.close()

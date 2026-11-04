@@ -12,10 +12,7 @@ import type {
 } from '../../../../shared/automation-owner-ref'
 import { createAutomationHostCache } from './automation-host-cache'
 import { createAutomationHostQueryController } from './automation-host-cache-controller'
-import {
-  AUTOMATION_ORPHAN_ENTRY_LABEL,
-  buildAutomationHostCatalog
-} from './automation-host-catalog'
+import { automationOrphanEntryLabel, buildAutomationHostCatalog } from './automation-host-catalog'
 import { resetAutomationHostCatalogGenerationsForTests } from './automation-host-catalog-generation'
 import {
   automationAuthorityCatalogKey,
@@ -172,7 +169,7 @@ describe('an old runtime answering with one unscoped list', () => {
     expect(
       orphanEntry?.label,
       'the orphan entry never materialised, so the old runtime shows zero automations'
-    ).toBe(AUTOMATION_ORPHAN_ENTRY_LABEL)
+    ).toBe(automationOrphanEntryLabel())
     expect(second.hydration.orphanSettledAuthorityKeys.has(RUNTIME_AUTHORITY_KEY)).toBe(true)
 
     await controller.applyCatalog(second)

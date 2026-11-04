@@ -168,8 +168,11 @@ describe('registerPetHandlers', () => {
     })
     showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [bundleDir] })
 
-    await expect(getHandler('pet:importPetBundle')({ sender: {} })).rejects.toThrow(
-      'declares 1 frame durations but 2 frames'
-    )
+    await expect(getHandler('pet:importPetBundle')({ sender: {} })).resolves.toEqual({
+      ok: false,
+      error: 'Animation "idle" declares 1 frame durations but 2 frames.',
+      errorCode: 'animationDurationMismatch',
+      errorParams: { name: 'idle', durations: 1, frames: 2 }
+    })
   })
 })

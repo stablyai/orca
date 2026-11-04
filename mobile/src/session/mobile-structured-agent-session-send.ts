@@ -8,10 +8,8 @@ import {
   type StructuredAgentSessionAttachment
 } from '../../../src/shared/structured-agent-session-send-mutation'
 import { structuredAgentSessionBlocksTooLarge } from '../../../src/shared/rpc-contract/structured-agent-session-message-params'
-import {
-  AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS,
-  agentSessionWriteNoticeEnglish
-} from '../../../src/shared/agent-session-refusal-notice'
+import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../src/shared/agent-session-refusal-notice'
+import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import {
@@ -46,7 +44,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   const body = structuredAgentSessionSendBody(input.text, input.attachments, input.skills)
   // The host refuses it unexplained, so say why here and keep the draft.
   if (structuredAgentSessionBlocksTooLarge(body.blocks)) {
-    input.onError(agentSessionWriteNoticeEnglish(AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS))
+    input.onError(mobileAgentSessionWriteNoticeText(AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS))
     return 'rejected'
   }
   // Use one operation id per Send action so separate taps cannot replay each other.

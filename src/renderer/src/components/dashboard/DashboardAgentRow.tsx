@@ -33,13 +33,17 @@ import {
   agentChildRowMessageLine,
   agentChildRowNoUpdateLabel
 } from '@/components/agent-child-row-text'
+import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
   if (delta < 60_000) {
-    return 'just now'
+    return translate('auto.components.dashboard.DashboardAgentRow.justNow', 'just now')
   }
-  return `${formatCompactDuration(delta)} ago`
+  return translate('auto.components.dashboard.DashboardAgentRow.timeAgo', '{{duration}} ago', {
+    duration: formatCompactDuration(delta)
+  })
 }
 
 // A child row's silence is the model's, on the clock its compact row and the strip read.
@@ -107,6 +111,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   sendTargetDisabledReason,
   onSendTargetClick
 }: Props) {
+  useUiLanguageRevision()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
@@ -179,9 +184,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const participatesInLineage = isLineageChild || lineageChildCount > 0
   const identityTitle =
     lineageChildCount > 0
-      ? `${formatAgentTypeLabel(agent.agentType)} - dispatched ${lineageChildCount} ${
-          lineageChildCount === 1 ? 'agent' : 'agents'
-        }`
+      ? translate(
+          'auto.components.dashboard.DashboardAgentRow.dispatchedAgents',
+          '{{agentType}} - dispatched {{count}} agents',
+          {
+            agentType: formatAgentTypeLabel(agent.agentType),
+            count: lineageChildCount,
+            defaultValue_one: '{{agentType}} - dispatched {{count}} agent'
+          }
+        )
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Surface failed main-agent outcomes even while subagents continue running.
   const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
@@ -198,10 +209,18 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const relativeTimestamp = noUpdateLabel ?? doneTimeAgo ?? startedTimeAgo
   const tsParts: string[] = noUpdateLabel ? [noUpdateLabel] : []
   if (startedTimeAgo !== null) {
-    tsParts.push(`started ${startedTimeAgo}`)
+    tsParts.push(
+      translate('auto.components.dashboard.DashboardAgentRow.startedAgo', 'started {{time}}', {
+        time: startedTimeAgo
+      })
+    )
   }
   if (doneTimeAgo !== null) {
-    tsParts.push(`done ${doneTimeAgo}`)
+    tsParts.push(
+      translate('auto.components.dashboard.DashboardAgentRow.doneAgo', 'done {{time}}', {
+        time: doneTimeAgo
+      })
+    )
   }
 
   const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts

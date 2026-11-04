@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const browserMocks = vi.hoisted(() => ({
   appGetPathMock: vi.fn(() => '/downloads'),
-  appPrependOnceListenerMock: vi.fn(),
+  appPrependListenerMock: vi.fn(),
   shellOpenExternalMock: vi.fn(),
   browserWindowFromWebContentsMock: vi.fn(),
   menuBuildFromTemplateMock: vi.fn(),
@@ -18,7 +18,7 @@ const browserMocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: {
-    prependOnceListener: browserMocks.appPrependOnceListenerMock,
+    prependListener: browserMocks.appPrependListenerMock,
     off: vi.fn(),
     getPath: browserMocks.appGetPathMock
   },
@@ -42,7 +42,7 @@ import {
 } from './browser-manager-test-harness'
 
 const {
-  appPrependOnceListenerMock,
+  appPrependListenerMock,
   guestOnMock,
   guestSetWindowOpenHandlerMock,
   webContentsFromIdMock,
@@ -123,7 +123,7 @@ describe('tab-shaped OAuth opens without an opener', () => {
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
     resetBrowserManagerState()
-    appPrependOnceListenerMock.mockReset()
+    appPrependListenerMock.mockReset()
     rendererSendMock.mockReset()
     openPopupWithOriginBarMock.mockReturnValue({
       contentWebContents: popupContents(null),
@@ -198,7 +198,7 @@ describe('tab-shaped OAuth opens without an opener', () => {
     })
     expect(response).toMatchObject({ action: 'allow' })
     const onWindowCreated: (event: unknown, window: unknown) => void =
-      appPrependOnceListenerMock.mock.calls.at(-1)?.[1]
+      appPrependListenerMock.mock.calls.at(-1)?.[1]
     const nativeWindow = {
       webContents: popupContents(null),
       isDestroyed: vi.fn(() => false),

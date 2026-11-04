@@ -1,5 +1,6 @@
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { localizeStructuredComposerOutcome } from './structured-composer-command-error-text'
 import { useStructuredAgentAcceptsImages } from '@/runtime/use-host-structured-agent'
 import type {
   NativeChatOptionPickerRequest,
@@ -90,7 +91,7 @@ export function useNativeChatStructuredComposerTransport(args: {
           conversationCommands: controller.conversationCommands,
           runConversationCommand: controller.runConversationCommand,
           ...(setThreadGoalObjective ? { setThreadGoalObjective } : {})
-        }),
+        }).then(localizeStructuredComposerOutcome),
       ...(setThreadGoalObjective ? { threadGoal: { setObjective: setThreadGoalObjective } } : {}),
       sendOut: controller.sendOut || starting,
       ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),

@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import { isBrokenCheck } from '../../../src/shared/pr-checks-fix-prompt'
 import {
   View,
@@ -26,6 +27,12 @@ import {
 } from './mobile-tasks-item-review-sections'
 import { renderMobileTasksItemFieldEditors } from './mobile-tasks-item-field-editors'
 import { JiraDetailMeta } from '../components/JiraDetailMeta'
+
+function pipelineJobsSummary(count: number): string {
+  return count === 1
+    ? translate('tasks.itemDetailContent.pipelineJobs_one', '{{count}} jobs', { count })
+    : translate('tasks.itemDetailContent.pipelineJobs_other', '{{count}} jobs', { count })
+}
 
 export function renderMobileTasksItemDetailContent(model: ConnectionPresentationModel) {
   const {
@@ -63,22 +70,30 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
     <>
       <View style={styles.detailMetaGrid}>
         <View style={styles.detailMetaItem}>
-          <Text style={styles.detailMetaLabel}>Type</Text>
+          <Text style={styles.detailMetaLabel}>
+            {translate('tasks.itemDetailContent.type', 'Type')}
+          </Text>
           <Text style={styles.detailMetaValue}>{taskKindLabel(actionItem)}</Text>
         </View>
         <View style={styles.detailMetaItem}>
-          <Text style={styles.detailMetaLabel}>Status</Text>
+          <Text style={styles.detailMetaLabel}>
+            {translate('tasks.itemDetailContent.status', 'Status')}
+          </Text>
           <Text style={styles.detailMetaValue}>{actionItem.status}</Text>
         </View>
         {detailPayload.provider === 'linear' && detailPayload.assignee ? (
           <View style={styles.detailMetaItem}>
-            <Text style={styles.detailMetaLabel}>Assignee</Text>
+            <Text style={styles.detailMetaLabel}>
+              {translate('tasks.itemDetailContent.assignee', 'Assignee')}
+            </Text>
             <Text style={styles.detailMetaValue}>{detailPayload.assignee}</Text>
           </View>
         ) : null}
         {detailPayload.provider === 'linear' && detailPayload.project ? (
           <View style={styles.detailMetaItem}>
-            <Text style={styles.detailMetaLabel}>Project</Text>
+            <Text style={styles.detailMetaLabel}>
+              {translate('tasks.itemDetailContent.project', 'Project')}
+            </Text>
             <Text style={styles.detailMetaValue}>{detailPayload.project.name}</Text>
           </View>
         ) : null}
@@ -92,7 +107,9 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
         {(detailPayload.provider === 'github' || detailPayload.provider === 'gitlab') &&
         detailPayload.assignees.length > 0 ? (
           <View style={styles.detailMetaItem}>
-            <Text style={styles.detailMetaLabel}>Assignees</Text>
+            <Text style={styles.detailMetaLabel}>
+              {translate('tasks.itemDetailContent.assignees', 'Assignees')}
+            </Text>
             <Text style={styles.detailMetaValue}>{detailPayload.assignees.join(', ')}</Text>
           </View>
         ) : null}
@@ -109,7 +126,9 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
       ) : null}
 
       <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>Description</Text>
+        <Text style={styles.detailSectionTitle}>
+          {translate('tasks.itemDetailContent.description', 'Description')}
+        </Text>
         {renderMobileTasksItemBodyEditor(model)}
       </View>
 
@@ -123,33 +142,41 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
       actionItem.source.type === 'pr' ? (
         <View style={styles.detailSection}>
           <View style={styles.detailSectionHeader}>
-            <Text style={styles.detailSectionTitle}>Checks</Text>
+            <Text style={styles.detailSectionTitle}>
+              {translate('tasks.itemDetailContent.checks', 'Checks')}
+            </Text>
             <View style={styles.inlineActionRow}>
               <Pressable
                 style={styles.inlineSaveButtonCompact}
                 disabled={mutatingStatus}
                 onPress={() => void refreshGitHubChecks(actionItem)}
               >
-                <Text style={styles.inlineSaveText}>Refresh</Text>
+                <Text style={styles.inlineSaveText}>{translate('common.refresh', 'Refresh')}</Text>
               </Pressable>
               <Pressable
                 style={styles.inlineSaveButtonCompact}
                 disabled={mutatingStatus || !detailPayload.checks.some(isBrokenCheck)}
                 onPress={() => void rerunGitHubChecks(actionItem, true)}
               >
-                <Text style={styles.inlineSaveText}>Rerun failed</Text>
+                <Text style={styles.inlineSaveText}>
+                  {translate('tasks.itemDetailContent.rerunFailed', 'Rerun failed')}
+                </Text>
               </Pressable>
               <Pressable
                 style={styles.inlineSaveButtonCompact}
                 disabled={mutatingStatus || detailPayload.checks.length === 0}
                 onPress={() => void rerunGitHubChecks(actionItem, false)}
               >
-                <Text style={styles.inlineSaveText}>Rerun all</Text>
+                <Text style={styles.inlineSaveText}>
+                  {translate('tasks.itemDetailContent.rerunAll', 'Rerun all')}
+                </Text>
               </Pressable>
             </View>
           </View>
           {detailPayload.checks.length === 0 ? (
-            <Text style={styles.detailMuted}>No checks found.</Text>
+            <Text style={styles.detailMuted}>
+              {translate('tasks.itemDetailContent.noChecks', 'No checks found.')}
+            </Text>
           ) : (
             detailPayload.checks.map((check) => (
               <Pressable
@@ -180,15 +207,19 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
       actionItem.source.type === 'mr' ? (
         <View style={styles.detailSection}>
           <View style={styles.detailSectionHeader}>
-            <Text style={styles.detailSectionTitle}>Pipeline</Text>
+            <Text style={styles.detailSectionTitle}>
+              {translate('tasks.itemDetailContent.pipeline', 'Pipeline')}
+            </Text>
             <Text style={styles.detailSectionMeta}>
               {detailPayload.pipelineJobs.length
-                ? `${detailPayload.pipelineJobs.length} jobs`
-                : 'None'}
+                ? pipelineJobsSummary(detailPayload.pipelineJobs.length)
+                : translate('tasks.itemDetailContent.none', 'None')}
             </Text>
           </View>
           {detailPayload.pipelineJobs.length === 0 ? (
-            <Text style={styles.detailMuted}>No pipeline runs for this MR.</Text>
+            <Text style={styles.detailMuted}>
+              {translate('tasks.itemDetailContent.noPipelineRuns', 'No pipeline runs for this MR.')}
+            </Text>
           ) : (
             detailPayload.pipelineJobs.map((job) => {
               const duration = formatDurationSeconds(job.duration)
@@ -228,11 +259,17 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
       actionItem.provider === 'linear' ? (
         <View style={styles.detailSection}>
           <View style={styles.detailSectionHeader}>
-            <Text style={styles.detailSectionTitle}>Sub-issues</Text>
-            <Text style={styles.detailSectionMeta}>{detailPayload.children.length || 'None'}</Text>
+            <Text style={styles.detailSectionTitle}>
+              {translate('tasks.itemDetailContent.subIssues', 'Sub-issues')}
+            </Text>
+            <Text style={styles.detailSectionMeta}>
+              {detailPayload.children.length || translate('tasks.itemDetailContent.none', 'None')}
+            </Text>
           </View>
           {detailPayload.children.length === 0 ? (
-            <Text style={styles.detailMuted}>No sub-issues.</Text>
+            <Text style={styles.detailMuted}>
+              {translate('tasks.itemDetailContent.noSubIssues', 'No sub-issues.')}
+            </Text>
           ) : (
             detailPayload.children.map((child) => (
               <Pressable
@@ -244,7 +281,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                 <Text style={styles.detailLine}>
                   {child.identifier} · {child.title}
                 </Text>
-                <Text style={styles.detailSectionMeta}>Open</Text>
+                <Text style={styles.detailSectionMeta}>{translate('common.open', 'Open')}</Text>
               </Pressable>
             ))
           )}
@@ -252,7 +289,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
             style={[styles.input, styles.stackedInput]}
             value={linearSubIssueTitle}
             onChangeText={setLinearSubIssueTitle}
-            placeholder="Sub-issue title"
+            placeholder={translate('tasks.itemDetailContent.subIssueTitle', 'Sub-issue title')}
             placeholderTextColor={colors.textMuted}
           />
           <Pressable
@@ -260,20 +297,26 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
             disabled={mutatingStatus || linearSubIssueTitle.trim().length === 0}
             onPress={() => void createLinearSubIssue(actionItem)}
           >
-            <Text style={styles.inlineSaveText}>Add sub-issue</Text>
+            <Text style={styles.inlineSaveText}>
+              {translate('tasks.itemDetailContent.addSubIssue', 'Add sub-issue')}
+            </Text>
           </Pressable>
         </View>
       ) : null}
 
       <View style={styles.detailSection}>
         <View style={styles.detailSectionHeader}>
-          <Text style={styles.detailSectionTitle}>Discussion</Text>
+          <Text style={styles.detailSectionTitle}>
+            {translate('tasks.itemDetailContent.discussion', 'Discussion')}
+          </Text>
           <Text style={styles.detailSectionMeta}>
             {discussionSummary(detailPayload.comments.length)}
           </Text>
         </View>
         {detailPayload.comments.length === 0 ? (
-          <Text style={styles.detailMuted}>No comments.</Text>
+          <Text style={styles.detailMuted}>
+            {translate('tasks.itemDetailContent.noComments', 'No comments.')}
+          </Text>
         ) : (
           detailCommentGroups.map(renderDetailCommentGroup)
         )}

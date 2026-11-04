@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, FolderKanban, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -56,7 +57,7 @@ export function LinearIssueProjectSelector({
           if (mountedRef.current && requestId === searchRequestIdRef.current) {
             toast.error(
               error instanceof Error
-                ? error.message
+                ? taskProviderErrorText(error.message)
                 : translate(
                     'auto.components.LinearIssueWorkspace.38b80780c2',
                     'Failed to load projects'
@@ -94,12 +95,12 @@ export function LinearIssueProjectSelector({
           )
           setOpen(false)
         } else {
-          toast.error(result.error)
+          toast.error(taskProviderErrorMessage(result))
         }
       } catch (error) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? taskProviderErrorText(error.message)
             : translate(
                 'auto.components.LinearIssueWorkspace.8b5b593053',
                 'Failed to update project'

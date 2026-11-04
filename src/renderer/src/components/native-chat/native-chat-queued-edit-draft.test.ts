@@ -4,7 +4,7 @@ import { promptTextContent } from './native-chat-prompt-document-text'
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
-import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
+import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
 import {
   nativeChatPastedTextOperations,
   nativeChatPastedTextToken

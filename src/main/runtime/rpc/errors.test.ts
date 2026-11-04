@@ -43,6 +43,39 @@ describe('mapRuntimeError', () => {
     })
   })
 
+  it.each([
+    [
+      'terminal_held_wsl_distro_stopped:Ubuntu',
+      'stopped',
+      "The WSL distro Ubuntu is stopped, so Orca didn't start this terminal. Start the distro, then try again."
+    ],
+    [
+      'terminal_held_wsl_distro_unverifiable:Ubuntu',
+      'unverifiable',
+      "Orca couldn't check whether the WSL distro Ubuntu is running, so it didn't start this terminal. Start the distro, then try again."
+    ]
+  ])(
+    'keeps runtime_error for a held terminal (%s) with a readable message',
+    (raw, state, message) => {
+      expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(raw))).toMatchObject({
+        ok: false,
+        error: {
+          code: 'runtime_error',
+          message,
+          data: { wslDistroHold: { distro: 'Ubuntu', state } }
+        }
+      })
+    }
+  )
+
+  it('maps SSH and other errors exactly as before', () => {
+    for (const raw of ['ssh_connection_lost', 'Terminal not found', 'spawn exploded']) {
+      const mapped = mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(raw))
+      expect(mapped).toMatchObject({ ok: false, error: { code: 'runtime_error', message: raw } })
+      expect(mapped.ok === false ? mapped.error.data : undefined).toBeUndefined()
+    }
+  })
+
   it('names a deferred fork with its own code and reason', () => {
     expect(
       mapRuntimeError(

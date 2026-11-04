@@ -1,3 +1,4 @@
+import { mobileNativeChatDraftDestination } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,6 +13,7 @@ import {
 
 const ORIGIN: MobileNativeChatSendOrigin = {
   draftKey: 'draft',
+  draftDestination: mobileNativeChatDraftDestination('draft'),
   draftEditGeneration: 0,
   pendingKey: 'pending',
   normalizedText: 'command',

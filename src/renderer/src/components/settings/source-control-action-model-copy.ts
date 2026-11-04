@@ -6,6 +6,7 @@ import type { SourceControlActionLaunchPreferences } from '../../../../shared/so
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   sourceControlActionOptions,
+  sourceControlActionSelectedPreferences,
   sourceControlActionPermissionModeRoute
 } from '../../../../shared/source-control-action-launch-preferences'
 import { translate } from '@/i18n/i18n'
@@ -18,19 +19,21 @@ export function describeSourceControlActionModel(
   agent: TuiAgent,
   preferences: SourceControlActionLaunchPreferences
 ): string {
+  preferences = sourceControlActionSelectedPreferences(
+    { launchPreferences: preferences },
+    agent
+  ) ?? { agentId: agent }
   const { model: modelId, permissionMode } = preferences
   const catalog = getAgentSessionOptionCatalog(agent) ?? { models: [], modelApply: {} }
-  const labels = modelId
-    ? [
-        findCatalogModel(catalog, modelId)?.label ?? modelId,
-        ...sourceControlActionOptions(agent, modelId).flatMap(({ option }) => {
-          const value = preferences.options?.[option.id]
-          return value && option.kind.type === 'select'
-            ? [option.kind.choices.find((choice) => choice.value === value)?.label ?? value]
-            : []
-        })
-      ]
-    : []
+  const labels = [
+    ...(modelId ? [findCatalogModel(catalog, modelId)?.label ?? modelId] : []),
+    ...sourceControlActionOptions(agent, modelId ?? '').flatMap(({ option }) => {
+      const value = preferences.options?.[option.id]
+      return value && option.kind.type === 'select'
+        ? [option.kind.choices.find((choice) => choice.value === value)?.label ?? value]
+        : []
+    })
+  ]
   if (!permissionMode) {
     return translate(
       'settings.sourceControl.actionModel.savedModel',

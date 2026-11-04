@@ -11,7 +11,8 @@ import type {
 } from '../../../shared/agent-session-wire'
 import {
   CLAUDE_AT_REST_COMMANDS_TTL_MS,
-  ClaudeAtRestCommandCatalog
+  ClaudeAtRestCommandCatalog,
+  type ClaudeAtRestCommandsDeps
 } from '../../claude/claude-at-rest-commands'
 import { createClaudeCommandCatalogProbe } from '../../claude/claude-command-catalog-probe'
 import type { runAgentModelCatalogListing } from '../agent-model-catalog/agent-model-catalog-probe-runner'
@@ -73,15 +74,17 @@ function adapter(catalog: ClaudeAtRestCommandCatalog): StructuredAgentSessionAda
   }
 }
 
+// Isolate discovery to test folders; a large real home otherwise outlasts the menu wait.
+const discoverWithoutUserHome: ClaudeAtRestCommandsDeps['discover'] = async (args) => {
+  const { discoverSkills } = await import('../../skills/discovery')
+  return discoverSkills({ ...args, homeDir: join(directory, 'home'), refresh: true })
+}
+
 function catalogFor(workspacePath: string): ClaudeAtRestCommandCatalog {
   return new ClaudeAtRestCommandCatalog({
     resolveWorkspacePath: async () => workspacePath,
     now: () => clock,
-    // Isolate discovery to test folders, excluding the user’s home.
-    discover: async (args) => {
-      const { discoverSkills } = await import('../../skills/discovery')
-      return discoverSkills({ ...args, homeDir: join(directory, 'home'), refresh: true })
-    }
+    discover: discoverWithoutUserHome
   })
 }
 
@@ -171,7 +174,7 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
     })}\n`
     let answer: string | Promise<string> = failed
     const probe = createClaudeCommandCatalogProbe({
-      resolveCommand: () => 'claude',
+      resolveCommand: () => ({ command: 'launcher', prefixArgs: ['run', '--', 'claude'] }),
       resolveInheritedEnv: async () => ({ PATH: '/bin' }),
       resolveAuthPolicy: () => ({ account: 'system' }),
       runListing: async (...call) => {
@@ -182,7 +185,8 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
     const catalog = new ClaudeAtRestCommandCatalog({
       resolveWorkspacePath: async () => workspace,
       now: () => clock,
-      probe
+      probe,
+      discover: discoverWithoutUserHome
     })
     const record = () => store.getRecord(SESSION)!
     const commandNames = () => namesOf(catalog.read(record()) ?? null, 'command')
@@ -214,7 +218,12 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
         kind: 'command',
         description: 'Set a goal'
       })
-      expect(asked[0]?.[0]).toMatchObject({ cwd: workspace })
+      expect(asked[0]?.[0]).toMatchObject({
+        command: 'launcher',
+        cwd: workspace
+      })
+      expect(asked[0]?.[0].args.slice(0, 3)).toEqual(['run', '--', 'claude'])
+      expect(asked[0]?.[0].stdin).toContain('orca-command-discovery')
       expect(asked[0]?.[1].inheritedEnv?.CLAUDE_CONFIG_DIR).toBe(account)
       // Failed refresh must retain the provider list over folder fallback.
       answer = failed
@@ -259,7 +268,7 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
     }
     const asked: unknown[][] = []
     const probe = createClaudeCommandCatalogProbe({
-      resolveCommand: () => 'claude',
+      resolveCommand: () => ({ command: 'claude', prefixArgs: [] }),
       resolveInheritedEnv: () => block('environment', { PATH: '/bin' }),
       resolveAuthPolicy: () => ({ account: 'system' }),
       runListing: async (...call) => {
@@ -291,7 +300,7 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
       resolveWorkspacePath: () => block('workspace', workspace),
       resolveEnvironment: () => block('environment', { PATH: '/bin' }),
       resolveLaunchArgs: () => block('arguments', []),
-      resolveCommand: () => '/bin/codex',
+      resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
       runSession: async (invocation, body) => {
         asked.push([invocation])
         return body({

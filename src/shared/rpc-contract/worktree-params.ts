@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
+import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automation-workspace-provenance'
 import { isTuiAgent } from '../tui-agent-config'
 import type { TuiAgent } from '../tui-agent'
 import {
@@ -43,6 +44,21 @@ export const AutomationWorkspaceProvenanceRequest = z.object({
   automationRunId: z.string(),
   dispatchToken: z.string(),
   createRequestId: z.string()
+})
+
+// A label for another owner's run: the host records it only for automations it does not hold, and stamps createdAt.
+const ProvenanceId = z.string().min(1).max(256)
+const ProvenanceSnapshot = z.string().max(CLIENT_PROVENANCE_SNAPSHOT_MAX)
+export const ClientAutomationWorkspaceProvenance = z.object({
+  automationId: ProvenanceId,
+  automationNameSnapshot: ProvenanceSnapshot,
+  automationRunId: ProvenanceId,
+  automationRunTitleSnapshot: ProvenanceSnapshot,
+  executionTargetType: z.enum(['local', 'ssh']),
+  executionTargetId: z.string().max(256),
+  projectId: z.string().max(256),
+  repoId: z.string().max(256).optional(),
+  hostId: OptionalExecutionHostId
 })
 
 // Descriptive provenance grants no authority; the host stamps createdAt to avoid client-clock sort skew.
@@ -121,6 +137,7 @@ export function assertLinkedWorkItemSourceContextMatch(
 export const WorktreeSet = WorktreeSelector.extend({
   // Empty clears to branch/folder fallback; OptionalString would drop remote clears and restore the old name.
   displayName: OptionalPlainString,
+  firstAgentMessageRenameError: z.null().optional(),
   // Preserve empty comment updates instead of coercing them to absent.
   comment: OptionalPlainString,
   linkedIssue: TriStateLinkedIssue,
@@ -161,6 +178,8 @@ export const WorktreeSet = WorktreeSelector.extend({
     .optional(),
   // Older clients may send unsupported review shapes alongside unrelated metadata edits.
   diffComments: z.array(DiffCommentSchema).optional().catch(undefined),
+  // The list the writer started from; the host applies only its changes so other devices' notes survive.
+  diffCommentsBase: z.array(DiffCommentSchema).optional().catch(undefined),
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
   parentWorktree: OptionalString,
   noParent: OptionalBoolean
@@ -181,7 +200,9 @@ export const WorktreeRemove = WorktreeSelector.extend({
   allowUnverifiedPtyStop: OptionalBoolean,
   runHooks: OptionalBoolean,
   // Waive failed-hook refusal explicitly and record it; independent of force and whether hooks run (#19334).
-  allowFailedArchiveHook: OptionalBoolean
+  allowFailedArchiveHook: OptionalBoolean,
+  // Reply with Git's outcome instead of on acceptance; older hosts strip it and answer `removing: true` (#35135).
+  waitForBackgroundRemoval: OptionalBoolean
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
@@ -207,7 +228,9 @@ export const WorktreeResolvePrBase = z.object({
     .pipe(z.number().int().positive('Missing PR number')),
   headRefName: OptionalString,
   baseRefName: OptionalString,
-  isCrossRepository: OptionalBoolean
+  isCrossRepository: OptionalBoolean,
+  /** The user creating or launching from the PR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
 })
 
 export const WorktreeResolveMrBase = z.object({
@@ -221,5 +244,7 @@ export const WorktreeResolveMrBase = z.object({
     .pipe(z.number().int().positive('Missing MR number')),
   sourceBranch: OptionalString,
   targetBranch: OptionalString,
-  isCrossRepository: OptionalBoolean
+  isCrossRepository: OptionalBoolean,
+  /** The user creating from the MR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
 })

@@ -2,6 +2,7 @@ import { Activity } from 'lucide-react-native'
 import { Animated, View } from 'react-native'
 import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -27,6 +28,7 @@ export function AgentSpinner({
   status: WorktreeStatus
   workingMode?: AgentWorkingMode
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const monitoring =
     status === 'monitoring' || (status === 'working' && workingMode === 'monitoring')
@@ -37,7 +39,10 @@ export function AgentSpinner({
 
   if (monitoring) {
     return (
-      <View style={styles.wrapper} accessibilityLabel="Monitoring background tasks">
+      <View
+        style={styles.wrapper}
+        accessibilityLabel={t('components.agentSpinner.monitoring', 'Monitoring background tasks')}
+      >
         <Activity size={12} color={palette.working} />
       </View>
     )
@@ -45,7 +50,10 @@ export function AgentSpinner({
 
   if (status === 'unconfirmed') {
     return (
-      <View style={styles.wrapper} accessibilityLabel="Couldn’t confirm">
+      <View
+        style={styles.wrapper}
+        accessibilityLabel={t('components.agentSpinner.unconfirmed', 'Couldn’t confirm')}
+      >
         <View style={styles.dashedRing} />
       </View>
     )

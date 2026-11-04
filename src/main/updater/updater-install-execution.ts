@@ -10,16 +10,13 @@ import { getMacUpdateRunningInstances } from '../macos-update-running-instances'
 import { commitServeSupervisorPark } from './serve-supervisor-install-park'
 import { armUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { getLinuxPackageType } from '../linux-update-package-type'
-import { LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE } from '../linux-package-downloaded-status'
+import { updaterCodedMessage } from '../../shared/updater-failure-copy'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
 import { UpdaterMacInstallPreflight } from './updater-mac-install-preflight'
 import { prepareThisProcessShipItStaging } from './shipit-leftover-recovery'
 import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from './updater-state'
-import { isAnyWslMoveRunning } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
-
-export const WSL_MOVE_INSTALL_HELD_MESSAGE =
-  'A project is moving to its WSL host. Install the update once the move finishes.'
+import { wslMoveInstallHold } from './updater-wsl-move-install-hold'
 
 export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight {
   protected async performQuitAndInstall(): Promise<void> {
@@ -57,20 +54,18 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
       this.sendToMainWindow('updater:quitAndInstallAborted')
       this.sendInstallFailureStatus({
         state: 'error',
-        message: LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE,
+        ...updaterCodedMessage('linuxPackageMarkerUnusable'),
         ...(pendingVersion ? { version: pendingVersion } : {})
       })
       return
     }
-    if (isAnyWslMoveRunning()) {
-      // Quitting would interrupt the move; it recovers, but the projects stay read-only until then.
-      recordUpdaterLifecycle('quit_and_install_held_for_wsl_move', {
-        version: pendingVersion || null
-      })
+    const wslHold = wslMoveInstallHold()
+    if (wslHold) {
+      recordUpdaterLifecycle(wslHold.lifecycleEvent, { version: pendingVersion || null })
       this.sendToMainWindow('updater:quitAndInstallAborted')
       this.sendInstallFailureStatus({
         state: 'error',
-        message: WSL_MOVE_INSTALL_HELD_MESSAGE,
+        message: wslHold.message,
         retryAction: 'install',
         ...(pendingVersion ? { version: pendingVersion } : {})
       })

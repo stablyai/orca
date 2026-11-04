@@ -1,7 +1,7 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
-import { promptMarkersToImageReferences } from '../../../../shared/native-chat-image-transcript-markers'
+import { promptMarkersToImageReferences } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 
 export function structuredAgentSessionMessageText(body: AgentJournalMessageItem): string {
   return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')

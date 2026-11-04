@@ -105,6 +105,7 @@ describe('MobileNativeChatQueuedMessages', () => {
   let renderer: ReactTestRenderer | null = null
 
   afterEach(() => {
+    vi.restoreAllMocks()
     act(() => renderer?.unmount())
     renderer = null
   })
@@ -134,6 +135,12 @@ describe('MobileNativeChatQueuedMessages', () => {
     return Object.assign({}, ...[style].flat())
   }
 
+  function control(mounted: ReactTestRenderer, label: string, index = 0) {
+    return mounted.root.findAll(
+      (node) => typeof node.type === 'string' && node.props.accessibilityLabel === label
+    )[index]!
+  }
+
   function sheet(mounted: ReactTestRenderer) {
     return mounted.root.find((node) => String(node.type) === 'ActionSheetModal')
   }
@@ -148,9 +155,7 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(child.props.editor).toBe(editor)
     expect(child.props.attribution).toBe('From Alex')
     expect(mounted.root.findAllByProps({ testID: 'queued-card-row' })).toHaveLength(2)
-    expect(mounted.root.findByProps({ accessibilityLabel: 'More actions' }).props.disabled).toBe(
-      true
-    )
+    expect(control(mounted, 'More actions').props.disabled).toBe(true)
   })
 
   it('projects image-only and mixed queue blocks into the ordinary card line and edit boundary', async () => {
@@ -301,7 +306,7 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(caption.parent?.parent).toBe(returnedRow)
     expect(returnedRow!.children.indexOf(caption.parent!)).toBe(1)
     expect(nodeTypes(waitingRow!)).not.toContain('AlertCircle')
-    const toggle = () => mounted.root.findByProps({ accessibilityLabel: 'Queued messages' })
+    const toggle = () => control(mounted, 'Queued messages')
     await act(async () => toggle().props.onPress())
     expect(mounted.root.findAllByProps({ testID: 'queued-card-row' })).toHaveLength(0)
     expect(texts(mounted)).toContain(`· ${reason}`)
@@ -327,11 +332,9 @@ describe('MobileNativeChatQueuedMessages', () => {
       ],
       onSend: vi.fn(async () => true)
     })
-    expect(mounted.root.findByProps({ accessibilityLabel: 'Send this message' })).toBeTruthy()
-    expect(
-      mounted.root.findByProps({ accessibilityLabel: 'Submit without interrupting the model' })
-    ).toBeTruthy()
-    expect(mounted.root.findByProps({ accessibilityLabel: 'Send this message again' })).toBeTruthy()
+    expect(control(mounted, 'Send this message')).toBeTruthy()
+    expect(control(mounted, 'Submit without interrupting the model')).toBeTruthy()
+    expect(control(mounted, 'Send this message again')).toBeTruthy()
     expect(texts(mounted).filter((text) => text === 'Send' || text === 'Steer')).toEqual([
       'Send',
       'Steer',
@@ -340,7 +343,7 @@ describe('MobileNativeChatQueuedMessages', () => {
     const rows = mounted.root.findAllByProps({ testID: 'queued-card-row' })
     expect(nodeTypes(rows[0]!)).toContain('Send')
     expect(nodeTypes(rows[1]!)).toContain('CornerDownRight')
-    const toggle = () => mounted.root.findByProps({ accessibilityLabel: 'Queued messages' })
+    const toggle = () => control(mounted, 'Queued messages')
     await act(async () => toggle().props.onPress())
     expect(texts(mounted)).toContain("· Couldn't send — tap Send to retry")
     await act(async () => toggle().props.onPress())
@@ -359,9 +362,7 @@ describe('MobileNativeChatQueuedMessages', () => {
       onSend
     })
     expect(texts(mounted).filter((text) => text === 'Send' || text === 'Steer')).toEqual(['Send'])
-    await act(async () => {
-      mounted.root.findByProps({ accessibilityLabel: 'Send this message' }).props.onPress()
-    })
+    await act(async () => control(mounted, 'Send this message').props.onPress())
     expect(onSend).toHaveBeenCalledWith('idle')
     expect(mounted.root.findAllByProps({ accessibilityLabel: 'More actions' })).toHaveLength(0)
     expect(
@@ -378,15 +379,9 @@ describe('MobileNativeChatQueuedMessages', () => {
       onResume,
       onDelete
     })
-    await act(async () => {
-      mounted.root
-        .findByProps({ accessibilityLabel: 'Resume sending the queued messages' })
-        .props.onPress()
-    })
+    await act(async () => control(mounted, 'Resume sending the queued messages').props.onPress())
     expect(onResume).toHaveBeenCalledOnce()
-    await act(async () => {
-      mounted.root.findByProps({ accessibilityLabel: 'Delete this queued message' }).props.onPress()
-    })
+    await act(async () => control(mounted, 'Delete this queued message').props.onPress())
     expect(onDelete).toHaveBeenCalledWith('compact')
   })
 
@@ -399,12 +394,10 @@ describe('MobileNativeChatQueuedMessages', () => {
       onDelete,
       steerHeld: true
     })
-    const steer = mounted.root.findByProps({
-      accessibilityLabel: 'Submit without interrupting the model'
-    })
+    const steer = control(mounted, 'Submit without interrupting the model')
     expect(steer.props.disabled).toBe(true)
     expect(steer.props.accessibilityState).toEqual({ disabled: true })
-    const trash = mounted.root.findByProps({ accessibilityLabel: 'Delete this queued message' })
+    const trash = control(mounted, 'Delete this queued message')
     await act(async () => trash.props.onPress())
     expect(onDelete).toHaveBeenCalledWith('w')
   })
@@ -450,9 +443,7 @@ describe('MobileNativeChatQueuedMessages', () => {
       cards: [card({ messageId: 'returned-1', state: 'returned', needsAttention: true })],
       onEdit
     })
-    await act(async () =>
-      mounted.root.findByProps({ accessibilityLabel: 'More actions' }).props.onPress()
-    )
+    await act(async () => control(mounted, 'More actions').props.onPress())
     const actions: ActionSheetAction[] = sheet(mounted).props.actions
     await act(async () => actions[0]!.onPress())
     expect(onEdit).toHaveBeenCalledWith('returned-1')
@@ -485,21 +476,17 @@ describe('MobileNativeChatQueuedMessages', () => {
     const onSend = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)))
     const onDelete = vi.fn(async () => true)
     const mounted = await mount({ cards: [card({ messageId: 'w' })], onSend, onDelete })
-    const button = (label: string) =>
-      mounted.root.find(
-        (node) => typeof node.type === 'string' && node.props.accessibilityLabel === label
-      )
     // Tap all actions before disabled state renders to expose same-frame duplication.
     await act(async () => {
-      button('Submit without interrupting the model').props.onPress()
-      button('Submit without interrupting the model').props.onPress()
-      button('Delete this queued message').props.onPress()
+      control(mounted, 'Submit without interrupting the model').props.onPress()
+      control(mounted, 'Submit without interrupting the model').props.onPress()
+      control(mounted, 'Delete this queued message').props.onPress()
     })
     expect(onSend).toHaveBeenCalledTimes(1)
     expect(onDelete).not.toHaveBeenCalled()
-    expect(button('More actions').props.disabled).toBe(true)
+    expect(control(mounted, 'More actions').props.disabled).toBe(true)
     await act(async () => answer(true))
-    expect(button('Submit without interrupting the model').props.disabled).toBe(false)
+    expect(control(mounted, 'Submit without interrupting the model').props.disabled).toBe(false)
   })
 
   describe('a paused queue', () => {
@@ -536,48 +523,74 @@ describe('MobileNativeChatQueuedMessages', () => {
       expect(empty.toJSON()).toBeNull()
     })
 
-    it('Clear all captures card ids while Resume and Steer stay available', async () => {
-      const release = Promise.withResolvers<boolean>()
-      const onClearAll = vi.fn(() => release.promise)
+    it.each([100, 1000])('keeps pending work linear at %i cards', async (size) => {
+      let counting = false
+      let reads = 0
+      let memberships = 0
+      const ids = Array.from({ length: size }, (_, index) => `perf-card-${index}`)
+      const cards = ids.map((messageId) =>
+        Object.defineProperty(card({ messageId }), 'messageId', {
+          get: () => {
+            reads += Number(counting)
+            return messageId
+          }
+        })
+      )
+      const has = Set.prototype.has
+      const membership = vi.spyOn(Set.prototype, 'has')
+      membership.mockImplementation(function (this: Set<unknown>, key: unknown) {
+        if (counting && typeof key === 'string' && key.startsWith('perf-card-')) {
+          memberships++
+        }
+        return has.call(this, key)
+      })
+      const send = Promise.withResolvers<boolean>()
+      const clear = Promise.withResolvers<boolean>()
+      const onClearAll = vi.fn(() => clear.promise)
       const onResume = vi.fn(async () => true)
-      const onSend = vi.fn(async () => true)
+      const onSend = vi.fn(() => send.promise)
       const mounted = await mountPaused({
-        cards: [waiting, card({ messageId: 'b' }), card({ messageId: 'c' })],
+        cards,
         pause: { reason: 'stopped' },
         onClearAll,
         onResume,
         onSend
       })
-      await act(async () =>
-        mounted.root
-          .findByProps({ accessibilityLabel: 'Delete every queued message' })
-          .props.onPress()
-      )
-      expect(onClearAll).toHaveBeenCalledExactlyOnceWith(['waiting-1', 'b', 'c'])
-      expect(
-        mounted.root.findByProps({ accessibilityLabel: 'Delete every queued message' }).props
-          .disabled
-      ).toBe(true)
-      const resume = mounted.root.findByProps({
-        accessibilityLabel: 'Resume sending the queued messages'
+      const labels = ['Delete every queued message', 'Resume sending the queued messages']
+      const steer = 'Submit without interrupting the model'
+      const trigger = async (action: () => void) => {
+        counting = true
+        await act(async () => action())
+        counting = false
+      }
+      // The last card forces the complete conflict scan; admission and settlement each rerender.
+      await trigger(() => control(mounted, steer, size - 1).props.onPress())
+      expect(onSend).toHaveBeenCalledExactlyOnceWith(ids.at(-1))
+      expect(control(mounted, labels[0]!).props.disabled).toBe(true)
+      await trigger(() => send.resolve(false))
+      // Same frame, before disabled state renders: the shared admission check refuses the rest.
+      await trigger(() => {
+        control(mounted, labels[0]!).props.onPress()
+        control(mounted, labels[1]!).props.onPress()
+        control(mounted, steer).props.onPress()
       })
-      const steer = mounted.root.findAllByProps({
-        accessibilityLabel: 'Submit without interrupting the model'
-      })[0]
-      expect(resume.props.disabled).toBe(false)
-      expect(steer.props.disabled).toBe(false)
-      await act(async () => {
-        resume.props.onPress()
-        steer.props.onPress()
-      })
-      expect(onResume).toHaveBeenCalledOnce()
-      expect(onSend).toHaveBeenCalledOnce()
-      await act(async () => release.resolve(true))
+      expect(onClearAll).toHaveBeenCalledExactlyOnceWith(ids)
+      expect([onResume.mock.calls.length, onSend.mock.calls.length]).toEqual([0, 1])
+      const greyed = () => [...labels, steer].map((label) => control(mounted, label).props.disabled)
+      expect(greyed()).toEqual([true, true, true])
+      await trigger(() => clear.resolve(false))
+      expect(greyed()).toEqual([false, false, false])
+      // Four pending/settled renders plus admission: fixed linear budgets, independent of N.
+      expect(reads).toBeGreaterThanOrEqual(4 * size)
+      expect(reads).toBeLessThanOrEqual(36 * size)
+      expect(memberships).toBeGreaterThanOrEqual(size)
+      expect(memberships).toBeLessThanOrEqual(18 * size)
+      console.info('queue operation counts', { cards: size, reads, memberships })
     })
 
     it('the chevron folds only the cards; the header and its actions stay', async () => {
       const mounted = await mountPaused({ pause: { reason: 'stopped' } })
-      const toggle = () => mounted.root.findByProps({ accessibilityLabel: 'Queued messages' })
+      const toggle = () => control(mounted, 'Queued messages')
       expect(toggle().props.accessibilityState).toEqual({ expanded: true })
       await act(async () => toggle().props.onPress())
       expect(toggle().props.accessibilityState).toEqual({ expanded: false })
@@ -586,10 +599,10 @@ describe('MobileNativeChatQueuedMessages', () => {
     })
 
     function resumeButton(mounted: ReactTestRenderer) {
-      return mounted.root.findByProps({ accessibilityLabel: 'Resume sending the queued messages' })
+      return control(mounted, 'Resume sending the queued messages')
     }
 
-    it('Resume asks the host to lift the pause once, however fast it is tapped twice', async () => {
+    it('Resume admits one press at a time and releases a lost answer for retry', async () => {
       let answer: (resumed: boolean) => void = () => undefined
       const onResume = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)))
       const mounted = await mountPaused({ pause: { reason: 'stopped' }, onResume })
@@ -597,15 +610,7 @@ describe('MobileNativeChatQueuedMessages', () => {
         resumeButton(mounted).props.onPress()
         resumeButton(mounted).props.onPress()
       })
-      expect(onResume).toHaveBeenCalledTimes(1)
-      await act(async () => answer(true))
-    })
-
-    it('re-enables Resume when its answer is lost, so it can be tried again', async () => {
-      let answer: (resumed: boolean) => void = () => undefined
-      const onResume = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)))
-      const mounted = await mountPaused({ pause: { reason: 'stopped' }, onResume })
-      await act(async () => resumeButton(mounted).props.onPress())
+      expect(onResume).toHaveBeenCalledOnce()
       expect(resumeButton(mounted).props.disabled).toBe(true)
       await act(async () => answer(false))
       expect(resumeButton(mounted).props.disabled).toBe(false)
@@ -650,7 +655,7 @@ describe('MobileNativeChatQueuedMessages', () => {
         })
         const header = mounted.root.findByProps({ testID: 'queued-header' })
         for (const label of ['Delete every queued message', 'Resume sending the queued messages']) {
-          const button = mounted.root.findByProps({ accessibilityLabel: label })
+          const button = control(mounted, label)
           expect(header.findAll((node) => node === button)).toHaveLength(0)
         }
       } finally {
@@ -661,9 +666,7 @@ describe('MobileNativeChatQueuedMessages', () => {
     it('keeps Steer on its cards: one card can still go beside the paused rest', async () => {
       const onSend = vi.fn(async () => true)
       const mounted = await mountPaused({ pause: { reason: 'stopped' }, onSend })
-      const steer = mounted.root.findByProps({
-        accessibilityLabel: 'Submit without interrupting the model'
-      })
+      const steer = control(mounted, 'Submit without interrupting the model')
       expect(texts(mounted)).toContain('Steer')
       expect(texts(mounted)).not.toContain('Send')
       await act(async () => steer.props.onPress())

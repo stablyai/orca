@@ -170,6 +170,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       false,
       undefined,
       {
+        // A resume the user asked for (a vault or external-conversation reopen).
+        wslUserAct: true,
         command: resume.command,
         env: resume.env,
         startupCommandDelivery: resume.startupCommandDelivery,

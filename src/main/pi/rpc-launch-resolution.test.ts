@@ -102,6 +102,7 @@ describe('Pi host launch resolution', () => {
     })
     expect(probeVersion).toHaveBeenCalledWith({
       program: '/host/bin/pi',
+      prefixArgs: [],
       cwd: h.workspace,
       env: { PATH: '/host/bin', HOME: '/host/home', PI_CODING_AGENT_DIR: '/host/account' }
     })

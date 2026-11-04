@@ -59,6 +59,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI rewind', () =>
             providerSessionId,
             resumeLeafUuid: null,
             resumesTranscript: false,
+            cliFlag: async () => 'supported' as const,
             continuesChain: false
           }),
           onEvent: (event: ClaudeStructuredSessionEvent) => {

@@ -13,6 +13,10 @@ import { AgentModelCatalogListingStoppedError } from '../native-chat/agent-model
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 
+const PREFIX = ['run', '--', 'agent']
+const launcherSettings = (agent: string) => ({
+  agentCmdOverrides: { [agent]: `"${process.execPath}" ${PREFIX.join(' ')}` }
+})
 const GROK = acpLaunchSpecFor('grok')!
 // Bypass the app's managed-account service for this fixture.
 const OPENCODE: AcpLaunchSpec = {
@@ -165,6 +169,7 @@ function scriptedOpenCode2(canDelete: boolean): {
 describe('ACP model catalog probes', () => {
   it('lists Grok from initialize alone, under its pinned account, and closes the child', async () => {
     const { agent, deps, launches, closed } = scriptedGrok({ modelState: MODEL_STATE })
+    deps.resolveCommandSettings = () => launcherSettings('grok')
     const success = await createAcpModelCatalogProbe(GROK, deps)(GROK_HOME)
     expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize'])
     expect(agent.frames[0]!.params).toMatchObject({
@@ -172,8 +177,8 @@ describe('ACP model catalog probes', () => {
     })
     expect(launches).toEqual([
       expect.objectContaining({
-        command: '/opt/grok/bin/grok',
-        args: ['agent', 'stdio'],
+        command: process.execPath,
+        args: [...PREFIX, 'agent', 'stdio'],
         env: expect.objectContaining({ GROK_HOME: '/homes/grok-a', XAI_API_KEY: 'from-settings' })
       })
     ])
@@ -227,7 +232,7 @@ describe('ACP model catalog probes', () => {
     const probe = createAcpModelCatalogProbe(OPENCODE, {
       resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
       dataDirectory: '/orca-data',
-      resolveCommand: () => '/opt/opencode/bin/opencode',
+      resolveCommandSettings: () => launcherSettings('opencode'),
       probeVersion: async () => ({ version: '1.18.35' }),
       homePath: '/home/user',
       runListing,
@@ -240,8 +245,8 @@ describe('ACP model catalog probes', () => {
     expect(connect).not.toHaveBeenCalled()
     expect(runListing).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: '/opt/opencode/bin/opencode',
-        args: ['models', '--verbose'],
+        command: process.execPath,
+        args: [...PREFIX, 'models', '--verbose'],
         cwd: '/work/project',
         env: expect.objectContaining({ OPENCODE_CLIENT: 'acp' })
       }),
@@ -254,6 +259,7 @@ describe('ACP model catalog probes', () => {
 
   it('lists OpenCode 2.x from a session it opens and deletes, with no listing command', async () => {
     const { agent, deps, launches } = scriptedOpenCode2(true)
+    deps.resolveCommandSettings = () => launcherSettings('opencode')
     const success = await createAcpModelCatalogProbe(OPENCODE, deps)(
       { kind: 'opencode', locator: { kind: 'unmanaged' } },
       { workspacePath: '/work/project' }
@@ -266,7 +272,9 @@ describe('ACP model catalog probes', () => {
     // In the asking chat's folder, so OpenCode records no project the person never opened.
     expect(agent.frames[1]!.params).toMatchObject({ cwd: '/work/project' })
     expect(agent.frames[2]!.params).toEqual({ sessionId: 'probe-session' })
-    expect(launches).toEqual([expect.objectContaining({ args: ['acp'] })])
+    expect(launches).toEqual([
+      expect.objectContaining({ command: process.execPath, args: [...PREFIX, 'acp'] })
+    ])
     expect(deps.runListing).not.toHaveBeenCalled()
     expect(success.models.map((model) => [model.id, model.label])).toEqual([
       ['opencode/big-pickle', 'Big Pickle'],

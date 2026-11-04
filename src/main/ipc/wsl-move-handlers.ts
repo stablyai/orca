@@ -28,6 +28,7 @@ import {
 import type { WslMoveDriverDeps } from '../persistence/moving-wsl-projects/wsl-move-driver-ports'
 import { listUnfinishedWslMoves } from '../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
 import { runTrackedWslMove } from '../telemetry/wsl-move-telemetry'
+import { runTrackedWslMoveUndo } from '../telemetry/wsl-move-undo-telemetry'
 import { isAnyWslMoveRunning } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
 import { wslHostsGateOpen, wslHostsServing } from '../wsl/wsl-host-gate'
 import type { WslMoveUndoPorts } from './wsl-move-undo-wiring'
@@ -171,13 +172,14 @@ function registerWslMoveUseHereHandler(
       }
       const ref =
         request.kind === 'repo' ? { repoId: request.id } : { folderWorkspaceId: request.id }
-      return releaseWslMovedProjectHere(
-        getUserDataPath(),
-        ref,
+      const unsavedWorkspaceIds =
         'unsavedWorkspaceIds' in request && Array.isArray(request.unsavedWorkspaceIds)
           ? request.unsavedWorkspaceIds.filter((id): id is string => typeof id === 'string')
-          : [],
-        createUndoPorts
+          : []
+      return runTrackedWslMoveUndo(
+        () => performance.now(),
+        () =>
+          releaseWslMovedProjectHere(getUserDataPath(), ref, unsavedWorkspaceIds, createUndoPorts)
       )
     }
   )

@@ -81,10 +81,17 @@ export async function createQueuedMessageTestRig(
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
     })
   let host = makeHost()
-  const firstAttach = hostTestAttachParams(
-    null,
-    options.location ? { location: options.location } : {}
-  )
+  const firstAttach = hostTestAttachParams(null, {
+    ...(options.location ? { location: options.location } : {}),
+    ...(options.agent === 'claude'
+      ? ({
+          provider: 'claude',
+          agent: 'claude',
+          providerHandle: { kind: 'claude', sessionId: THREAD, leafUuid: null },
+          accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/private-fixture/claude' }
+        } as const)
+      : {})
+  })
   expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
 
   function envelope(

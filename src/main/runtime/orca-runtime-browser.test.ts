@@ -96,8 +96,9 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
           ]
         }))
       } as unknown as AgentBrowserBridge)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host fake; these tests reach only the methods it defines.
   return {
-    resolveWorktreeSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
+    resolveWorkspaceSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAuthoritativeWindow: vi.fn(),
@@ -218,6 +219,28 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     expect(send).toHaveBeenCalledWith('browser:activateView', {})
     expect(waitForWorktreeTabRegistrationMock).toHaveBeenCalledWith(undefined)
     expect(bridge.tabList).toHaveBeenCalledWith(undefined)
+  })
+
+  it('lists no tabs without waking the window when no saved tab could mount', async () => {
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map()),
+      tabList: vi.fn(() => ({ tabs: [] }))
+    } as unknown as AgentBrowserBridge
+    const host = createHost({
+      getAgentBrowserBridge: () => bridge,
+      serveBrowserTabs: {
+        opened: vi.fn(),
+        start: vi.fn(async () => false),
+        hasStartable: () => false
+      }
+    })
+    const commands = new RuntimeBrowserCommands(host)
+
+    await expect(commands.browserTabList({ worktree: 'id:wt-1' })).resolves.toEqual({ tabs: [] })
+
+    expect(host.getAuthoritativeWindow).not.toHaveBeenCalled()
+    expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
   })
 
   it('creates the first explicit-worktree browser tab without waiting for an existing registration', async () => {
@@ -733,7 +756,11 @@ describe('RuntimeBrowserCommands headless offscreen routing', () => {
       createHost({
         getAgentBrowserBridge: () => bridge,
         getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab, closeTab: vi.fn() }))
+        getOffscreenBrowserBackend: vi.fn(() => ({
+          createTab,
+          closeTab: vi.fn(),
+          ownsTab: () => true
+        }))
       })
     )
 

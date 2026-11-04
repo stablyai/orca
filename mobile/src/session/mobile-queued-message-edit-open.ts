@@ -7,7 +7,10 @@ import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-
 import { createUuidV4 } from '../../../src/shared/uuid-v4'
 import { startMobileQueuedEditLease } from './mobile-queued-message-edit-lease'
 import { mobileQueuedEditValueKey } from './mobile-queued-message-edit-value'
-import { readMobileNativeChatDraftInputs } from './native-chat/composer/mobile-native-chat-draft-inputs'
+import {
+  mobileNativeChatDraftDestination,
+  readMobileNativeChatDraftInputs
+} from './native-chat/composer/mobile-native-chat-draft-inputs'
 import {
   seedMobileQueuedEditInputs,
   type MobileQueuedEditDraft as Edit,
@@ -42,7 +45,9 @@ export function createMobileQueuedEdit(
       cards: args.cards
     },
     scopeKey,
-    destination: args.composerScopeKey ?? null,
+    destination: args.composerScopeKey
+      ? mobileNativeChatDraftDestination(args.composerScopeKey)
+      : null,
     handBackText: args.appendComposerText,
     messageId,
     body: message.body,

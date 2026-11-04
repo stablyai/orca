@@ -65,6 +65,7 @@ const useAppStoreMock = vi.fn(
 )
 
 vi.mock('react', async () => await stubHeadlessReact())
+vi.mock('@/store/plugin-new-files', () => ({ usePluginNewFiles: () => [] }))
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
 // The headless React stub has no dispatcher for the hook each tab row subscribes to language changes with.
 vi.mock('react-i18next', async () => ({

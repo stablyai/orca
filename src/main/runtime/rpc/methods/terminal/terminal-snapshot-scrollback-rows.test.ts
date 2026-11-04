@@ -69,3 +69,14 @@ describe('SnapshotStart scrollbackRows', () => {
     expect('scrollbackRows' in buildSnapshotFrameMeta(base)).toBe(false)
   })
 })
+
+describe('snapshot frame title', () => {
+  const base = { kind: 'scrollback' as const, cols: 80, rows: 24, data: '' }
+
+  it("carries the image's title only with the seq that orders it", () => {
+    expect(buildSnapshotFrameMeta({ ...base, seq: 7, lastTitle: 'Claude' }).lastTitle).toBe(
+      'Claude'
+    )
+    expect('lastTitle' in buildSnapshotFrameMeta({ ...base, lastTitle: 'Claude' })).toBe(false)
+  })
+})

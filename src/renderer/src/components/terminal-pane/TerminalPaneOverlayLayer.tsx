@@ -7,6 +7,7 @@ import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
 } from '../activity/activity-terminal-portal'
+import type { HiddenTerminalPrewarm } from './terminal-pane-types'
 import { shouldMountBackgroundWorktreeTab } from '../terminal/background-terminal-worktree-mount'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
@@ -33,6 +34,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   coldParkTerminalPanes = false,
   isForceParked = false,
   shouldMeasureHiddenWorktree = false,
+  hiddenTerminalPrewarm = null,
   activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
   backgroundMountTabIds = null,
   activationDeferredMountTabIds = null,
@@ -45,6 +47,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   /** Retention-budget force-park keeps eviction-exempt tabs mounted. */
   isForceParked?: boolean
   shouldMeasureHiddenWorktree?: boolean
+  /** Hover intent: lay out (and later render) group-visible terminals while hidden. */
+  hiddenTerminalPrewarm?: HiddenTerminalPrewarm | null
   activityTerminalPortals?: ActivityTerminalPortalTarget[]
   /** Targeted mounts connect only these terminal tabs. */
   backgroundMountTabIds?: ReadonlySet<string> | null
@@ -166,6 +170,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             isWorktreeActive={isWorktreeActive}
             isVisible={isVisible}
             isActive={isActive}
+            hiddenPrewarm={assignment?.isActiveInGroup === true ? hiddenTerminalPrewarm : null}
             dimmed={groups.length > 1 && isVisible && !isActive}
             activityTerminalPortal={activityTerminalPortal}
             onFocusOwningGroup={focusOwningGroup}

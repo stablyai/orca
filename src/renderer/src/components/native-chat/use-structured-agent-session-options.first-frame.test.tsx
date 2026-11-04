@@ -314,7 +314,7 @@ describe('a new chat picker’s first frame', () => {
     unmount()
   })
 
-  it('never paints a saved pick the host list does not name', async () => {
+  it('keeps a saved pick visible when the host list omits it', async () => {
     catalogAnswers(() => Promise.resolve(CODEX_LIST))
     await preloadHostModelCatalogSnapshots(LOCAL_TARGET, ['codex'])
     const { frames, unmount } = renderNewChat({
@@ -322,7 +322,12 @@ describe('a new chat picker’s first frame', () => {
       seedOptions: { model: 'gpt-retired' }
     })
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-    expect(frames.every((frame) => frame.model === null && !frame.usable)).toBe(true)
+    expect(frames.length).toBeGreaterThan(0)
+    expect(
+      frames.every(
+        (frame) => frame.model === 'gpt-retired' && frame.label === 'gpt-retired' && frame.usable
+      )
+    ).toBe(true)
     unmount()
   })
 
@@ -349,4 +354,50 @@ describe('a new chat picker’s first frame', () => {
     expect(local.frames[0]).toEqual(PLACEHOLDER)
     local.unmount()
   })
+})
+
+it('refuses typed literals while the current fence awaits options, then accepts with an empty catalog', async () => {
+  const pending = deferred<AgentSessionOptionsResult>()
+  let reads = 0
+  mocks.call.mockImplementation((_target: unknown, method: string) =>
+    method === 'agentSession.options'
+      ? ++reads === 1
+        ? Promise.resolve({ models: [], current: {} })
+        : pending.promise
+      : Promise.resolve({ origin: 'unknown' })
+  )
+  const mutate = vi.fn().mockResolvedValue({
+    status: 'accepted',
+    sameFence: true,
+    value: { key: 'model', value: 'literal', options: { model: 'literal' } }
+  })
+  const view = renderHook(
+    ({ fence }) =>
+      useStructuredAgentSessionOptions({
+        agent: 'codex',
+        sessionId: 'locked-chat',
+        target: LOCAL_TARGET,
+        transportEnabled: true,
+        isVisible: true,
+        providerVisible: true,
+        fence,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate
+      }),
+    { initialProps: { fence: 1 } }
+  )
+  await waitFor(() => expect(reads).toBe(1))
+  view.rerender({ fence: 2 })
+  await waitFor(() => expect(reads).toBe(2))
+  await act(async () =>
+    expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(false)
+  )
+  expect(mutate).not.toHaveBeenCalled()
+  await act(async () => pending.resolve({ models: [], current: {} }))
+  await act(async () =>
+    expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(true)
+  )
+  expect(mutate).toHaveBeenCalledTimes(1)
+  view.unmount()
 })

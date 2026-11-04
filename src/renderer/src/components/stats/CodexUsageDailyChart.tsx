@@ -1,6 +1,6 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import type { CodexUsageDailyPoint } from '../../../../shared/codex-usage-types'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 function formatTokens(value: number): string {
   if (value >= 1_000_000) {
@@ -9,7 +9,7 @@ function formatTokens(value: number): string {
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
-  return value.toLocaleString()
+  return value.toLocaleString(getIntlLocale())
 }
 
 function getMaxDailyTotal(daily: CodexUsageDailyPoint[]): number {
@@ -97,7 +97,7 @@ export function CodexUsageDailyChart({ daily }: CodexUsageDailyChartProps): Reac
                               <div className="text-xs">
                                 <div>{entry.day}</div>
                                 <div>
-                                  {segment.label}: {segment.value.toLocaleString()}{' '}
+                                  {segment.label}: {segment.value.toLocaleString(getIntlLocale())}{' '}
                                   {translate(
                                     'auto.components.stats.CodexUsageDailyChart.e4bdcf0071',
                                     'tokens'

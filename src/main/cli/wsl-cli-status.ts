@@ -127,6 +127,19 @@ export function unreachableWslCliStatus(distro: string): CliInstallStatus {
   )
 }
 
+/** A background status read found the distro stopped (E9); Settings' refresh is a user act that starts it. */
+export function notRunningWslCliStatus(
+  distro: string,
+  state: 'stopped' | 'unverifiable'
+): CliInstallStatus {
+  return unsupportedWslCliStatus(
+    'wsl_unreachable',
+    state === 'stopped'
+      ? `WSL (${distro}) is not running. Refresh to start it and check the CLI.`
+      : `WSL didn't say whether ${distro} is running. Refresh to try again.`
+  )
+}
+
 export async function resolveReadyWslCliState(args: {
   platform: NodeJS.Platform
   distro: string | null

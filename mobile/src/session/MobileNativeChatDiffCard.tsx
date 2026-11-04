@@ -2,10 +2,7 @@ import { useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { ChevronRight, FileMinus2, FilePen, FilePlus2 } from 'lucide-react-native'
-import {
-  NATIVE_CHAT_DIFF_CARD_COPY,
-  nativeChatEditFilePatchText
-} from '../../../src/shared/native-chat/tools/native-chat-edit-cards'
+import { nativeChatEditFilePatchText } from '../../../src/shared/native-chat/tools/native-chat-edit-cards'
 import {
   nativeChatEditFileBaseName,
   nativeChatEditGutterChars,
@@ -13,7 +10,9 @@ import {
   type NativeChatEditFile,
   type NativeChatEditLine
 } from '../../../src/shared/native-chat/tools/native-chat-edit-model'
-import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../src/shared/native-chat/tools/native-chat-tool-line-label'
+import { nativeChatToolRowVerbCopy } from './native-chat/transcript/native-chat-tool-row-verb-copy'
+import { nativeChatDiffCardCopy } from './native-chat-diff-card-copy'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -40,9 +39,10 @@ function DiffRow({
   type: ReturnType<typeof toolType>['code']
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   if (line.kind === 'gap') {
     return (
-      <Text style={[styles.diffGap, type]} accessibilityLabel={NATIVE_CHAT_DIFF_CARD_COPY.diffGap}>
+      <Text style={[styles.diffGap, type]} accessibilityLabel={nativeChatDiffCardCopy(t).diffGap}>
         ⋯
       </Text>
     )
@@ -142,6 +142,9 @@ export function MobileNativeChatDiffCard({
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
+  const copy = nativeChatDiffCardCopy(t)
+  const verbs = nativeChatToolRowVerbCopy(t)
   const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const hasBody = file.lines.length > 0
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
@@ -161,9 +164,7 @@ export function MobileNativeChatDiffCard({
           <View style={[styles.iconSlot, { width: iconSize }]}>
             <VerbIcon kind={file.changeKind} size={iconSize} />
           </View>
-          <Text style={[styles.lineWord, type.row]}>
-            {NATIVE_CHAT_TOOL_ROW_VERB_COPY[file.changeKind]}
-          </Text>
+          <Text style={[styles.lineWord, type.row]}>{verbs[file.changeKind]}</Text>
           {file.oldPath ? (
             <>
               <Text
@@ -193,9 +194,7 @@ export function MobileNativeChatDiffCard({
             ) : null}
           </Text>
           {file.truncated ? (
-            <Text style={[styles.lineMeta, type.meta]}>
-              {NATIVE_CHAT_DIFF_CARD_COPY.diffTruncated}
-            </Text>
+            <Text style={[styles.lineMeta, type.meta]}>{copy.diffTruncated}</Text>
           ) : null}
           {hasBody ? (
             <View style={expanded ? styles.caretOpen : undefined}>
@@ -203,10 +202,7 @@ export function MobileNativeChatDiffCard({
             </View>
           ) : null}
         </Pressable>
-        <MobileSourceCopyButton
-          text={copyText}
-          accessibilityLabel={NATIVE_CHAT_DIFF_CARD_COPY.copyDiff}
-        />
+        <MobileSourceCopyButton text={copyText} accessibilityLabel={copy.copyDiff} />
       </View>
       {hasBody && expanded ? (
         <DiffCardRows

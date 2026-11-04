@@ -1,87 +1,160 @@
-import {
-  agentModelCatalogProbeLister,
-  scopedAgentModelCatalogLister
-} from './agent-model-catalog-lister'
-import { prewarmAgentModelCatalog, newChatCatalogKey } from './agent-model-catalog-prewarm'
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
-import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
-import {
-  agentModelCatalogResultFromEntry,
-  retainedAgentModelCatalogModels
-} from './agent-model-catalog-entry'
-import type { AgentModelCatalogEntry } from './agent-model-catalog-store'
+import { createAgentModelCatalogLiveListings } from './agent-model-catalog-live-listings'
+import { scopedAgentModelCatalogLister } from './agent-model-catalog-lister'
+import { prewarmAgentModelCatalog, newChatCatalogKey } from './agent-model-catalog-prewarm'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
 import {
   catalogFolder,
-  createAgentModelCatalogLiveListingRecorder,
   sessionWorkspacePath,
-  type AgentModelCatalogRecord,
-  workspaceKeepsListedDefault
+  projectAgentModelCatalogDefault
 } from './agent-model-catalog-workspace'
 
 import type {
   AgentModelCatalogServiceDeps,
-  AgentModelCatalogService
+  AgentModelCatalogService,
+  AgentModelCatalogReadParams
 } from './agent-model-catalog-service-contract'
 export type { AgentModelCatalogServiceDeps, AgentModelCatalogService }
 import { resolveAgentModelCatalogScope } from './agent-model-catalog-scope'
 import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { onAtRestCommandContextRetired } from '../agent-session-wire/at-rest-command-context'
+import {
+  createAgentModelCatalogSnapshot,
+  agentModelCatalogRequestKey,
+  agentModelCatalogReleasedOwner,
+  agentModelCatalogScopeIdentity,
+  retireAgentModelCatalogRequests,
+  agentModelCatalogMemoryBinding,
+  expireAgentModelCatalogBoundFailure,
+  agentModelCatalogSessionPeek,
+  type AgentModelCatalogBinding
+} from './agent-model-catalog-snapshot'
 import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import {
+  AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
+  runAgentModelCatalogOperation,
+  waitForAgentModelCatalogRead
+} from './agent-model-catalog-listing-waiters'
 
-/** Keep picker discovery outside session queues and key it to the launched/selected account.
- * Probe unavailability persists until another probe answers, independently of live model listings. */
 export function createAgentModelCatalogService(
   deps: AgentModelCatalogServiceDeps
 ): AgentModelCatalogService {
   const lifetime = new AbortController()
   const admission = new PrioritySemaphore(2)
-  const sessionKeys = new Map<string, string>()
-  // Reads await configured-default recording so they reflect the reporting chat's resolution.
-  const recordingDefaults = new Map<string, Promise<void>>()
-  const listWith = agentModelCatalogProbeLister(lifetime.signal)
-  // Serialize folder-scoped writes across asynchronous folder lookups.
-  const liveWrites = new Map<string, Promise<void>>()
-  const sessionCatalogKey = async (record: AgentModelCatalogRecord): Promise<string> =>
-    agentModelCatalogFingerprintForRecord(
-      record,
-      await catalogFolder(deps, record.provider, undefined, record)
-    )
-  const saveLiveListing = createAgentModelCatalogLiveListingRecorder(deps, recordingDefaults)
-  return {
-    peek(sessionId, verifiedOnly) {
-      const key = sessionKeys.get(sessionId)
-      const entry = key ? deps.store.get(key) : null
-      return entry && (!verifiedOnly || deps.store.verified(entry)) ? entry : null
-    },
-    providerStarted(record) {
-      const key = sessionKeys.get(record.sessionId)
-      if (key) {
-        deps.store.expireFailure(key)
-      }
-      if (!deps.listsInChatFolder?.has(record.provider)) {
-        deps.store.expireFailure(agentModelCatalogFingerprintForRecord(record))
+
+  type Claim = Pick<AgentModelCatalogBinding, 'identity' | 'params' | 'current'> & {
+    controller: AbortController
+    promise: Promise<void>
+    ready: Promise<void>
+  }
+  const bindings = new Map<string, AgentModelCatalogBinding>()
+  const claims = new Map<string, Claim>()
+  const requestKey = agentModelCatalogRequestKey.bind(null, deps)
+  const capture = agentModelCatalogScopeIdentity.bind(null, deps)
+  const retireContext = (workspaceId?: string, sources = true): void => {
+    if (sources) {
+      live.retireContext(workspaceId)
+    }
+    retireAgentModelCatalogRequests(deps, bindings, claims, workspaceId)
+  }
+  const live = createAgentModelCatalogLiveListings(deps, lifetime.signal)
+  const unbindRetirement = onAtRestCommandContextRetired((workspaceId) =>
+    retireContext(workspaceId, workspaceId !== undefined)
+  )
+  const memoryBinding = (params: AgentModelCatalogReadParams) =>
+    agentModelCatalogMemoryBinding(deps, params, bindings, capture)
+  const snapshot = createAgentModelCatalogSnapshot(
+    deps,
+    memoryBinding,
+    (params, bound) =>
+      bound
+        ? claims.has(requestKey(params))
+        : claims.get(requestKey(params))?.identity === capture(params),
+    () => lifetime.signal.aborted
+  )
+
+  const resolve = (params: AgentModelCatalogReadParams): Promise<void> => {
+    const deadline = params.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
+    const remaining = deadline - Date.now()
+    if (lifetime.signal.aborted || remaining <= 0) {
+      return Promise.resolve()
+    }
+    const bindingKey = requestKey(params)
+    const key = params.savedOnly ? `${bindingKey}:saved` : bindingKey
+    let identity = capture(params)
+    const workspaceIdentity = params.workspace?.identity()
+    let coldWorkspace = params.workspace !== undefined && workspaceIdentity === null
+    const retirement = deps.store.retirementRevision(params.agent)
+    const previous = claims.get(key)
+    if (previous?.identity === identity) {
+      return previous.promise
+    }
+    previous?.controller.abort()
+    const controller = new AbortController()
+    const ready = Promise.withResolvers<void>()
+    const valid = (): boolean =>
+      Date.now() < deadline &&
+      !controller.signal.aborted &&
+      !lifetime.signal.aborted &&
+      deps.store.retirementRevision(params.agent) === retirement &&
+      requestKey(params) === bindingKey &&
+      (coldWorkspace || capture(params) === identity)
+    const current = (): boolean => valid() && claims.get(key)?.controller === controller
+    const run = async (): Promise<void> => {
+      if (!current()) {
         return
       }
-      void sessionCatalogKey(record)
-        .then((fingerprint) => {
-          if (deps.getRecord(record.sessionId)?.lease.runtimeFence === record.lease.runtimeFence) {
-            deps.store.expireFailure(fingerprint)
-          }
-        })
-        .catch(() => {})
-    },
-    async read(params) {
       const record = params.sessionId ? deps.getConversation(params.sessionId) : undefined
       const savedOnly = params.savedOnly || !!(record && !deps.getRecord(record.sessionId))
       const scoped =
         record && record.provider === params.agent && deps.drivesRecord(record) ? record : undefined
-      const workspacePath = params.inSessionWorkspace
-        ? record
-          ? await sessionWorkspacePath(deps, record)
-          : null
-        : params.workspacePath
+      if (record && !scoped) {
+        return
+      }
+      let workspacePath: string | null | undefined
+      if (params.workspace) {
+        const resolved = await params.workspace.resolve().catch(() => undefined)
+        if (!current() || resolved === undefined) {
+          return
+        }
+        if (resolved !== null && typeof resolved === 'object') {
+          if (
+            resolved.identity === null ||
+            params.workspace.identity() !== resolved.identity ||
+            (!coldWorkspace && workspaceIdentity !== resolved.identity)
+          ) {
+            return
+          }
+          identity = capture(params)
+          const claim = claims.get(key)
+          if (claim?.controller !== controller) {
+            return
+          }
+          claim.identity = identity
+          workspacePath = resolved.path
+        } else {
+          workspacePath = resolved
+        }
+        coldWorkspace = false
+      } else {
+        workspacePath =
+          params.inSessionWorkspace ||
+          (record &&
+            params.workspacePath === undefined &&
+            !params.legacy &&
+            deps.agentReadsProjectModelConfig?.(params.agent) === true)
+            ? record
+              ? await sessionWorkspacePath(deps, record)
+              : null
+            : params.workspacePath
+      }
+      if (!current()) {
+        return
+      }
       const folder = await catalogFolder(deps, params.agent, workspacePath, scoped)
+      if (!current()) {
+        return
+      }
       let fingerprint: string
       let probeHome: AgentSessionAccountHome | null
       if (scoped) {
@@ -93,201 +166,139 @@ export function createAgentModelCatalogService(
             : null
       } else {
         const key = await newChatCatalogKey(deps, params.agent, folder)
-        if (!key) {
-          return { origin: 'unknown' }
+        if (!current() || !key) {
+          return
         }
         fingerprint = key.fingerprint
         probeHome = key.accountHome
       }
       const scope = await resolveAgentModelCatalogScope(
         deps,
-        { ...params, savedOnly },
+        { ...params, workspacePath, savedOnly },
         scoped,
         fingerprint,
-        probeHome
+        probeHome,
+        current,
+        { deadline, current, signal: controller.signal }
       )
-      if (!scope) {
-        return { origin: 'unknown' }
+      if (!current() || !scope) {
+        return
       }
       const { base, exact, resolved, cwd } = scope
       fingerprint = scope.fingerprint
-      if (scoped && exact) {
-        if (sessionKeys.size >= 256 && !sessionKeys.has(scoped.sessionId)) {
-          const oldest = sessionKeys.keys().next().value
-          if (oldest !== undefined) {
-            sessionKeys.delete(oldest)
-          }
-        }
-        sessionKeys.set(scoped.sessionId, fingerprint)
+      let bindingCurrent = true
+      const bound: AgentModelCatalogBinding = {
+        identity,
+        params,
+        current: () =>
+          bindingCurrent &&
+          !lifetime.signal.aborted &&
+          deps.store.retirementRevision(params.agent) === retirement,
+        workspaceId: record?.location.workspaceId,
+        cancel: () => {
+          bindingCurrent = false
+          controller.abort()
+        },
+        fingerprint,
+        base,
+        exact,
+        folder,
+        cwd,
+        workspacePath,
+        keepDefault:
+          workspacePath === undefined ||
+          (workspacePath === null && independentAgentModelCatalog(params.agent))
       }
-      const accountHomePath =
-        probeHome && isLegacyAgentSessionAccountHome(probeHome) ? probeHome.path : null
-      await Promise.all(liveWrites.values())
-      await recordingDefaults.get(fingerprint)
-      let entry = deps.store.get(fingerprint)
+      bindings.set(bindingKey, bound)
+      while (bindings.size > 256) {
+        const oldest = bindings.keys().next().value
+        if (oldest !== undefined) {
+          bindings.delete(oldest)
+        }
+      }
+      bound.projecting = projectAgentModelCatalogDefault(
+        deps,
+        params.agent,
+        bound,
+        probeHome,
+        () => valid() && bindings.get(bindingKey) === bound
+      )
+      if (savedOnly) {
+        await bound.projecting
+        return
+      }
+      if (!exact && agentModelCatalogReleasedOwner(scoped)) {
+        return
+      }
       const probe = deps.probes?.[params.agent]
+      const signal = AbortSignal.any([lifetime.signal, controller.signal])
       const list = scopedAgentModelCatalogLister({
         legacy: params.legacy,
+        operation: { deadline, current, signal },
         canList: () => !record || !!deps.getRecord(record.sessionId),
         admission,
-        signal: lifetime.signal,
+        signal,
         resolved,
         probe,
         probeHome,
         workspacePath: cwd ?? folder
       })
-      const answer = async (
-        listed: AgentModelCatalogEntry | null,
-        extra: { listingInProgress?: true } = {}
-      ): Promise<AgentSessionModelCatalogResult> => {
-        if (
-          params.verifiedOnly &&
-          (!listed ||
-            (independentAgentModelCatalog(params.agent) &&
-              (!exact || !deps.store.verified(listed))))
-        ) {
-          return { origin: 'unknown' }
-        }
-        const display = listed ?? (exact && !params.verifiedOnly ? deps.store.get(base) : null)
-        const independent = independentAgentModelCatalog(params.agent)
-        const accountFallback =
-          independent &&
-          scoped &&
-          params.savedOnly &&
-          params.workspacePath === null &&
-          !params.inSessionWorkspace
-        const result = display
-          ? agentModelCatalogResultFromEntry(
-              display,
-              independent &&
-                !params.legacyOptionsDisplay &&
-                (!deps.store.verified(display) || (!exact && !params.legacy))
-                ? false
-                : exact && listed !== null && deps.store.verified(listed)
-                  ? true
-                  : await workspaceKeepsListedDefault(
-                      deps,
-                      params.agent,
-                      accountFallback ? undefined : workspacePath,
-                      accountHomePath
-                    ),
-              deps.listingNamesConfiguredModel?.has(params.agent) === true,
-              !independent || (exact && listed !== null && deps.store.verified(listed))
-            )
-          : null
-        const holdsEverywhere =
-          result?.listingNamesConfiguredModel === true &&
-          deps.agentReadsProjectModelConfig?.(params.agent) === false
-        return {
-          ...(result ?? { origin: 'unknown' }),
-          ...extra,
-          ...(holdsEverywhere ? { defaultHoldsInEveryWorkspace: true as const } : {}),
-          ...(result && (folder !== undefined || exact)
-            ? { modelsDifferByWorkspace: true as const }
-            : {}),
-          ...(!params.savedOnly &&
-          !params.verifiedOnly &&
-          deps.store.isListing(fingerprint) &&
-          (independent || !listed)
-            ? { listingInProgress: true as const }
-            : {}),
-          ...(deps.store.failure(fingerprint)?.unavailable
-            ? { unavailable: deps.store.failure(fingerprint)?.unavailable }
-            : {})
-        }
+      if (probe && probeHome && deps.store.probeDue(fingerprint)) {
+        void deps.store.refresh(fingerprint, params.agent, list, current, signal)
       }
-      // Observed process exit suppresses background relaunch; explicit new chats may discover.
-      if (
-        savedOnly ||
-        (scoped && !deps.getRecord(scoped.sessionId)) ||
-        (!exact &&
-          scoped?.ownerObservation.claimStatus === 'released' &&
-          scoped.ownerObservation.deathEvidence)
-      ) {
-        return answer(entry)
+      // Demand owns ingestion until settlement, even when its caller only needs the snapshot.
+      ready.resolve()
+      const pending = deps.store.pendingListing(fingerprint, true, true)
+      if (pending) {
+        await pending
       }
-      if (probe && probeHome && !lifetime.signal.aborted && deps.store.heldReasonDue(fingerprint)) {
-        void deps.store.refresh(fingerprint, params.agent, probe, list)
-        if (!params.waitForListing) {
-          return answer(entry, { listingInProgress: true })
-        }
-        await deps.store.pendingListing(fingerprint, true, params.legacy)
-        return answer(deps.store.get(fingerprint))
+    }
+    const promise = runAgentModelCatalogOperation(run, remaining, controller, () => {
+      ready.resolve()
+      if (claims.get(key)?.controller === controller) {
+        claims.delete(key)
       }
-      let listing =
-        !entry && probeHome ? deps.store.pendingListing(fingerprint, false, params.legacy) : null
-      if (probe && probeHome && !lifetime.signal.aborted) {
-        if (entry && deps.store.shouldRefresh(fingerprint)) {
-          void deps.store.refresh(fingerprint, params.agent, probe, list)
-        } else if (!entry && !listing && deps.store.shouldRefresh(fingerprint)) {
-          void deps.store.refresh(fingerprint, params.agent, probe, list)
-          listing = deps.store.pendingListing(fingerprint, false, params.legacy)
-        }
+    })
+    claims.set(key, { identity, controller, promise, ready: ready.promise, params, current })
+    return promise
+  }
+  return {
+    snapshot,
+    demand: (params) => (params.savedOnly ? Promise.resolve() : resolve(params)),
+    async prepareSaved(params) {
+      if (!memoryBinding(params)) {
+        await resolve({ ...params, savedOnly: true })
       }
-      if (
-        entry &&
-        independentAgentModelCatalog(params.agent) &&
-        deps.store.isListing(fingerprint)
-      ) {
-        if (!params.waitForListing) {
-          return answer(entry)
-        }
-        await deps.store.pendingListing(fingerprint, true, params.legacy)
-        return answer(deps.store.get(fingerprint))
-      }
-      if (!entry) {
-        if (!listing) {
-          return answer(null)
-        }
-        if (!params.waitForListing) {
-          return answer(null)
-        }
-        const listed = await listing
-        entry = deps.store.get(fingerprint) ?? listed
-      }
-      return answer(entry)
+      return snapshot({ ...params, savedOnly: true })
     },
-    async retainedLiveModelIds(sessionId, listing) {
-      const record = deps.getConversation(sessionId)
-      const entry =
-        record && deps.drivesRecord(record)
-          ? deps.store.get(await sessionCatalogKey(record))
-          : undefined
-      return retainedAgentModelCatalogModels(entry, listing).map((model) => model.id)
+    captureSource: live.captureSource,
+    retireContext,
+    peek: agentModelCatalogSessionPeek(deps, memoryBinding),
+    providerStarted(record, source) {
+      expireAgentModelCatalogBoundFailure(deps, bindings, record, source)
+      live.providerStarted(record, source)
     },
-    recordLiveListing(sessionId, listing) {
-      const record = deps.getRecord(sessionId)
-      if (!record || !deps.drivesRecord(record) || independentAgentModelCatalog(record.provider)) {
-        return
+    async read(params) {
+      if (!params.savedOnly && params.waitForListing) {
+        const deadline = params.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
+        await waitForAgentModelCatalogRead({
+          params: { ...params, deadline },
+          store: deps.store,
+          resolve,
+          claim: () => claims.get(requestKey(params)),
+          binding: () => bindings.get(requestKey(params))
+        })
       }
-      if (!deps.listsInChatFolder?.has(record.provider)) {
-        saveLiveListing(record, listing, agentModelCatalogFingerprintForRecord(record))
-        return
-      }
-      // Serialize reports so a slow folder lookup cannot overwrite a newer listing.
-      const writing = (liveWrites.get(sessionId) ?? Promise.resolve())
-        .then(async () => {
-          const fingerprint = await sessionCatalogKey(record)
-          if (deps.getRecord(sessionId)?.lease.runtimeFence === record.lease.runtimeFence) {
-            saveLiveListing(record, listing, fingerprint)
-          }
-        })
-        .catch((error: unknown) => {
-          console.warn('[agent-model-catalog] could not save a chat model list:', error)
-        })
-        .finally(() => {
-          if (liveWrites.get(sessionId) === writing) {
-            liveWrites.delete(sessionId)
-          }
-        })
-      liveWrites.set(sessionId, writing)
+      return snapshot(params)
     },
+    recordLiveListing: live.recordLiveListing,
     async prewarm() {
-      await prewarmAgentModelCatalog(deps, lifetime.signal, (params) => this.read(params), listWith)
+      await prewarmAgentModelCatalog(deps, lifetime.signal, (params) => this.read(params))
     },
     stop() {
       lifetime.abort()
-      sessionKeys.clear()
+      unbindRetirement()
+      retireContext()
       deps.store.clearPartialAttempts()
     }
   }

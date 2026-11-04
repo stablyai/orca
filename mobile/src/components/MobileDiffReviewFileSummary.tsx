@@ -3,13 +3,11 @@ import { ArrowDown, ArrowUp } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
 import { STATUS_LABELS } from '../../../src/shared/git-status-labels'
-import {
-  mobileReviewCountLabel,
-  mobileReviewScopeLabel,
-  type ReviewDiffState
-} from '../session/mobile-diff-review-screen-model'
+import type { ReviewDiffState } from '../session/mobile-diff-review-screen-model'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 
 type Props = {
@@ -40,6 +38,22 @@ function statusColor(status: MobileDiffReviewQueueItem['status']): string {
   }
 }
 
+function fileScopeLabel(t: Translate, item: MobileDiffReviewQueueItem): string {
+  if (item.oldPath) {
+    const options = { oldPath: item.oldPath }
+    return item.scope === 'branch'
+      ? t('components.diffReviewFileSummary.branchFrom', 'Branch from {{oldPath}}', options)
+      : item.scope === 'staged'
+        ? t('components.diffReviewFileSummary.stagedFrom', 'Staged from {{oldPath}}', options)
+        : t('components.diffReviewFileSummary.unstagedFrom', 'Unstaged from {{oldPath}}', options)
+  }
+  return item.scope === 'branch'
+    ? t('components.diffReviewFileSummary.branch', 'Branch')
+    : item.scope === 'staged'
+      ? t('components.diffReviewFileSummary.staged', 'Staged')
+      : t('components.diffReviewFileSummary.unstaged', 'Unstaged')
+}
+
 export function MobileDiffReviewFileSummary({
   currentIndex,
   diffState,
@@ -51,6 +65,8 @@ export function MobileDiffReviewFileSummary({
   onJumpHunk
 }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
+  const count = item.noteCount
   const hunkDisabled = diffState.kind !== 'ready' || diffState.hunks.length === 0
   const badgeColor = statusColor(item.status)
   return (
@@ -66,8 +82,7 @@ export function MobileDiffReviewFileSummary({
             {item.filePath}
           </Text>
           <Text style={styles.fileMeta} numberOfLines={1}>
-            {mobileReviewScopeLabel(item)}
-            {item.oldPath ? ` from ${item.oldPath}` : ''}
+            {fileScopeLabel(t, item)}
           </Text>
         </View>
       </View>
@@ -75,15 +90,29 @@ export function MobileDiffReviewFileSummary({
         <Text style={styles.fileMeta}>
           {currentIndex + 1}/{filteredCount}
         </Text>
-        {item.isReviewed ? <Text style={styles.reviewedPill}>Reviewed</Text> : null}
-        {item.changedSinceReview ? <Text style={styles.stalePill}>Changed</Text> : null}
+        {item.isReviewed ? (
+          <Text style={styles.reviewedPill}>
+            {t('components.diffReviewFileSummary.reviewed', 'Reviewed')}
+          </Text>
+        ) : null}
+        {item.changedSinceReview ? (
+          <Text style={styles.stalePill}>
+            {t('components.diffReviewFileSummary.changed', 'Changed')}
+          </Text>
+        ) : null}
         {item.noteCount > 0 ? (
           <Text style={styles.fileMeta}>
-            {mobileReviewCountLabel(item.noteCount, 'note', 'notes')}
+            {count === 1
+              ? t('components.diffReviewFileSummary.notes_one', '{{count}} note', { count })
+              : t('components.diffReviewFileSummary.notes_other', '{{count}} notes', { count })}
           </Text>
         ) : null}
         {item.staleNoteCount > 0 ? (
-          <Text style={styles.staleText}>{item.staleNoteCount} stale</Text>
+          <Text style={styles.staleText}>
+            {t('components.diffReviewFileSummary.staleCount', '{{count}} stale', {
+              count: item.staleNoteCount
+            })}
+          </Text>
         ) : null}
       </View>
       {fileNotes.length > 0 ? (
@@ -94,12 +123,19 @@ export function MobileDiffReviewFileSummary({
               style={({ pressed }) => [styles.fileNote, pressed && styles.fileNotePressed]}
               onPress={() => onEditNote(note)}
               accessibilityRole="button"
-              accessibilityLabel="Edit file note"
+              accessibilityLabel={t(
+                'components.diffReviewFileSummary.editFileNote',
+                'Edit file note'
+              )}
             >
               <Text style={styles.fileNoteText} numberOfLines={2}>
                 {note.body}
               </Text>
-              {staleCommentIds.has(note.id) ? <Text style={styles.staleText}>Stale</Text> : null}
+              {staleCommentIds.has(note.id) ? (
+                <Text style={styles.staleText}>
+                  {t('components.diffReviewFileSummary.stale', 'Stale')}
+                </Text>
+              ) : null}
             </Pressable>
           ))}
         </View>
@@ -110,20 +146,24 @@ export function MobileDiffReviewFileSummary({
           disabled={hunkDisabled}
           onPress={() => onJumpHunk('previous')}
           accessibilityRole="button"
-          accessibilityLabel="Previous hunk"
+          accessibilityLabel={t('components.diffReviewFileSummary.previousHunk', 'Previous hunk')}
         >
           <ArrowUp size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.hunkButtonText}>Hunk</Text>
+          <Text style={styles.hunkButtonText}>
+            {t('components.diffReviewFileSummary.hunk', 'Hunk')}
+          </Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.hunkButton, pressed && styles.hunkButtonPressed]}
           disabled={hunkDisabled}
           onPress={() => onJumpHunk('next')}
           accessibilityRole="button"
-          accessibilityLabel="Next hunk"
+          accessibilityLabel={t('components.diffReviewFileSummary.nextHunk', 'Next hunk')}
         >
           <ArrowDown size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.hunkButtonText}>Hunk</Text>
+          <Text style={styles.hunkButtonText}>
+            {t('components.diffReviewFileSummary.hunk', 'Hunk')}
+          </Text>
         </Pressable>
       </View>
     </View>

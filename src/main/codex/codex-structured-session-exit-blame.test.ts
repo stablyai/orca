@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
+import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 
 function sink(overrides: Partial<StructuredAgentSessionEventSink> = {}) {
   return { appendItem: vi.fn(), appendTombstone: vi.fn(), publish: vi.fn(), ...overrides }
@@ -45,6 +46,33 @@ describe('what a started Codex session says ended it', () => {
     ).toBe(
       'Codex stopped while this response was in progress. You can continue in this conversation.'
     )
+  })
+
+  it('says the CLI was not found when the supervisor could not spawn it during acquisition', async () => {
+    const codex = fakeCodex({
+      'thread/start': () => {
+        const spawnFailure = withMissingProviderExecutable(
+          new Error('codex app-server connection ended (code 127): spawn codex ENOENT')
+        )
+        codex.connections[0]?.handlers.onExit?.(spawnFailure)
+        throw spawnFailure
+      }
+    })
+    const emitted: CodexStructuredSessionEvent[] = []
+    const adapter = adapterFor(codex, {}, emitted)
+
+    await expect(
+      acquireReadyCodexForTest(adapter, {
+        identity: identityFor('session-1'),
+        fence: 7,
+        spawnToken: 's',
+        events: sink()
+      })
+    ).rejects.toThrow('spawn codex ENOENT')
+
+    expect(emitted.filter((event) => event.type === 'ended')).toMatchObject([
+      { cause: 'unexpected-exit', failure: { kind: 'cliMissing' } }
+    ])
   })
 
   it('blames Orca when a journal sink failure makes Orca close the child', async () => {

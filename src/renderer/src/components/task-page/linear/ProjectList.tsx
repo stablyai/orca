@@ -56,7 +56,7 @@ export function TaskPageLinearProjectList({
         errors={linearProjectsResult.errors}
         hasMore={linearProjectsResult.hasMore}
         count={linearProjectsResult.items.length}
-        label={translate('auto.components.TaskPage.b39fe6511d', 'projects')}
+        kind="projects"
       />
     </div>
   )

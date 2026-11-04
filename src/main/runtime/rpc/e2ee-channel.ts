@@ -188,7 +188,12 @@ export class E2EEChannel {
   private handleHello(raw: string): void {
     let hello: Record<string, unknown>
     try {
-      hello = parseRemoteRuntimeJsonText(raw) as Record<string, unknown>
+      const parsed = parseRemoteRuntimeJsonText(raw)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        this.onError(4001, 'Invalid handshake message')
+        return
+      }
+      hello = { ...parsed }
     } catch {
       this.onError(4001, 'Invalid handshake message')
       return

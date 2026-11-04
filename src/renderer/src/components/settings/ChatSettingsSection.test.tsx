@@ -123,6 +123,15 @@ describe('Chat settings page', () => {
 
   it('retains the unsaved naming draft when search no longer matches Chat', () => {
     const { element, rerender, container } = renderChat(true, true, true)
+    const naming = container.querySelector('#chat-names')
+    if (!naming) {
+      throw new Error('Chat naming section is missing')
+    }
+    const advanced = naming.querySelector('button[aria-expanded]')
+    if (!advanced) {
+      throw new Error('Advanced control is missing')
+    }
+    fireEvent.click(advanced)
     const template = screen.getByText('Command template').nextElementSibling
     if (!(template instanceof HTMLTextAreaElement)) {
       throw new Error('Command template textarea is missing')

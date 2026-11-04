@@ -117,5 +117,40 @@
     "text": "fontFamily",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/worktree-palette-evidence.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Workspace comment",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/worktree-palette-evidence.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Created by automation",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/worktree-palette-evidence.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Linked task",
+    "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/lib/worktree-palette-evidence.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Linked issue",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/worktree-palette-evidence.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Listening port",
+    "dynamic": false,
+    "count": 1
   }
 ]

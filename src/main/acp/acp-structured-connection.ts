@@ -23,7 +23,7 @@ export type AcpStructuredConnection = Pick<
   | 'resumeReading'
   | 'close'
   | 'processTreeUnproven'
->
+> & { readonly lastCloseResult?: AcpAgentConnection['lastCloseResult'] }
 
 export type ConnectAcpAgent<Connection = AcpStructuredConnection> = (
   launch: ProviderProcessLaunch,

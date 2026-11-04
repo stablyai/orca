@@ -30,7 +30,7 @@ function ActionRow({
   const isMac = navigator.userAgent.includes('Mac')
   const keys =
     shortcut === 'alternate'
-      ? [isMac ? '⇧' : 'Shift', isMac ? '⌘' : 'Ctrl', 'Click']
+      ? ['⇧', isMac ? '⌘' : 'Ctrl', 'Click']
       : shortcut === 'primary'
         ? [isMac ? '⌘' : 'Ctrl', 'Click']
         : null

@@ -27,7 +27,7 @@ import {
   formatRelativeTime
 } from '../task-page-source-context'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { GHAssigneesCell } from './AssigneesCell'
@@ -82,7 +82,23 @@ export function TaskPageGitHubRows({
             <span
               // Avoid a pill fill that would stack with the row hover tint.
               className="inline-flex items-center gap-1 rounded-md border border-border/40 px-1.5 py-0.5 text-muted-foreground"
-              aria-label={`${item.type === 'pr' ? (isTaskPageGitHubDraftPR(item) ? 'Draft pull request' : 'Pull request') : 'Issue'} #${item.number}`}
+              aria-label={
+                item.type === 'pr'
+                  ? isTaskPageGitHubDraftPR(item)
+                    ? translate(
+                        'auto.components.TaskPage.draftPullRequestNumber',
+                        'Draft pull request #{{number}}',
+                        { number: item.number }
+                      )
+                    : translate(
+                        'auto.components.TaskPage.pullRequestNumber',
+                        'Pull request #{{number}}',
+                        { number: item.number }
+                      )
+                  : translate('auto.components.TaskPage.issueNumber', 'Issue #{{number}}', {
+                      number: item.number
+                    })
+              }
             >
               {item.type === 'pr' ? (
                 isTaskPageGitHubDraftPR(item) ? (
@@ -248,7 +264,7 @@ export function TaskPageGitHubRows({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {new Date(item.updatedAt).toLocaleString()}
+                  {new Date(item.updatedAt).toLocaleString(getIntlLocale())}
                 </TooltipContent>
               </Tooltip>
 

@@ -38,6 +38,24 @@ __orca_osc133_preexec() {
   # Declare explicitly to avoid warn_create_global output above every command.
   builtin typeset -g __orca_in_command=1
 }
+__orca_wsl_cwd_report() {
+  builtin emulate -L zsh
+  builtin setopt no_multibyte
+  [[ -n ${WSL_DISTRO_NAME:-} ]] || return 0
+  if [[ $PWD != ${__orca_wsl_cwd_reported-} ]]; then
+    builtin typeset -g __orca_wsl_cwd_reported=$PWD
+    local __orca_e= __orca_c __orca_i
+    for (( __orca_i = 1; __orca_i <= $#PWD; __orca_i++ )); do
+      __orca_c=$PWD[__orca_i]
+      case $__orca_c in
+        ([A-Za-z0-9/._~-]) __orca_e+=$__orca_c ;;
+        (*) builtin printf -v __orca_c '%d' "'$__orca_c"; builtin printf -v __orca_c '%%%02X' $(( __orca_c & 255 )); __orca_e+=$__orca_c ;;
+      esac
+    done
+    builtin typeset -g __orca_wsl_cwd_encoded=$__orca_e
+  fi
+  builtin printf '\033]7;file://%s\007' "${__orca_wsl_cwd_encoded-}"
+}
 __orca_deferred_line_init() {
   builtin emulate -L zsh
   if [[ "${CONTEXT-}" != start ]]; then
@@ -98,6 +116,10 @@ __orca_deferred_init() {
     preexec_functions=(__orca_osc133_preexec ${preexec_functions[@]})
   else
     precmd_functions=(${precmd_functions:#__orca_deferred_init})
+  fi
+  if [[ -n ${WSL_DISTRO_NAME:-} ]]; then
+    (( ${precmd_functions[(Ie)__orca_wsl_cwd_report]} )) || precmd_functions+=(__orca_wsl_cwd_report)
+    __orca_wsl_cwd_report
   fi
   if [ -n "${ORCA_WSL_CLI_DIR:-}" ]; then
     if [ -x "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" ]; then

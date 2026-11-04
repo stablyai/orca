@@ -80,6 +80,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI targeted stop'
           providerSessionId,
           resumeLeafUuid: null,
           resumesTranscript: false,
+          cliFlag: async () => 'supported' as const,
           continuesChain: false
         }),
         onEvent: (event) => events.push(event),

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
@@ -54,7 +55,12 @@ export function useMobileNativeChatStop(args: {
   return useCallback(() => {
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
-      onSendError('Stop not sent (terminal not ready)')
+      onSendError(
+        translate(
+          'session.useNativeChatStop.terminalNotReady',
+          'Stop not sent (terminal not ready)'
+        )
+      )
       return Promise.resolve(false)
     }
     cancelPending()
@@ -81,7 +87,14 @@ export function useMobileNativeChatStop(args: {
         return
       }
       // Lost-ack/cutover Escape may have stopped work; report uncertainty instead of inviting a second key.
-      onSendError(sawUnknown ? 'Stop unconfirmed — check chat before retrying' : 'Stop not sent')
+      onSendError(
+        sawUnknown
+          ? translate(
+              'session.useNativeChatStop.stopUnconfirmed',
+              'Stop unconfirmed — check chat before retrying'
+            )
+          : translate('session.useNativeChatStop.stopNotSent', 'Stop not sent')
+      )
     }
     const sendEscape = (): void => {
       const activeRoute = activeRouteRef.current

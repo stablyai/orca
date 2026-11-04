@@ -143,7 +143,12 @@ describe('agent-implemented commands pass through to the agent', () => {
         agent: 'codex',
         setThreadGoalObjective
       })
-    ).toEqual({ handled: true, accepted: false, error: 'Describe the goal after /goal.' })
+    ).toEqual({
+      handled: true,
+      accepted: false,
+      error: 'Describe the goal after /goal.',
+      errorCode: 'goalObjectiveMissing'
+    })
     expect(setThreadGoalObjective).not.toHaveBeenCalled()
   })
 

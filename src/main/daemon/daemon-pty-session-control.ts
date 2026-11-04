@@ -8,7 +8,7 @@ import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
 import { readDaemonLiveSleepCwd } from './daemon-live-sleep-cwd'
 import type { ColdRestoreInfo } from './history-reader'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
-import { describeSleepFolderRead, readDaemonWslSleepCwdWithFacts } from './daemon-wsl-sleep-cwd'
+import { logSleepFolderRead, readDaemonWslSleepCwdWithFacts } from './daemon-wsl-sleep-cwd'
 import * as unlistedSession from './daemon-unlisted-session'
 import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
@@ -153,14 +153,13 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
           : { cwd: live ? await readDaemonLiveSleepCwd(this.client, id, opts.deadlineMs) : null }
       const sleepCwd = read.cwd
       // Device runs need to see why a WSL pane woke at its spawn folder (awin 5e).
-      console.info(
-        describeSleepFolderRead(id, read, {
-          wslDistro: sleepWslDistro,
-          paneKey: sleepPaneKey,
-          live,
-          elapsedMs: Date.now() - startedAt
-        })
-      )
+      const sleepFolder = {
+        wslDistro: sleepWslDistro,
+        paneKey: sleepPaneKey,
+        live,
+        elapsedMs: Date.now() - startedAt
+      }
+      logSleepFolderRead(id, read, sleepFolder)
       const committed = await this.runExclusiveCheckpoint(
         async () => {
           // Set inside: a caller past its deadline leaves this checkpoint running without it.

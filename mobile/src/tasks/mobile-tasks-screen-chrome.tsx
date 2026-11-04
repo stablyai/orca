@@ -13,13 +13,16 @@ import { MobileTasksHostSubtitle } from './mobile-tasks-host-subtitle'
 import { styles } from './mobile-tasks-legacy-styles'
 import { renderMobileTasksProviderControls } from './mobile-tasks-provider-controls'
 import { renderMobileTasksSearchControl } from './mobile-tasks-search-control'
+import { translate } from '../i18n/mobile-i18n'
 
-const REFRESH_LABELS = {
-  github: 'Refresh GitHub work',
-  gitlab: 'Refresh GitLab work items',
-  linear: 'Refresh Linear',
-  jira: 'Refresh Jira issues'
-} as const
+function refreshLabels() {
+  return {
+    github: translate('tasks.screenChrome.refreshGitHub', 'Refresh GitHub work'),
+    gitlab: translate('tasks.screenChrome.refreshGitLab', 'Refresh GitLab work items'),
+    linear: translate('tasks.screenChrome.refreshLinear', 'Refresh Linear'),
+    jira: translate('tasks.screenChrome.refreshJira', 'Refresh Jira issues')
+  }
+}
 
 export function renderMobileTasksChrome(model: ConnectionPresentationModel) {
   const { setTaskCopyFeedbackRootRef } = model
@@ -65,14 +68,14 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
         onPress={() => router.back()}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel="Back"
+        accessibilityLabel={translate('common.back', 'Back')}
       >
         <ChevronLeft size={22} color={colors.textPrimary} />
       </Pressable>
       <View style={styles.titleWrap}>
         <View style={styles.titleLine}>
           <StatusDot state={connState} verdict={headerVerdict} />
-          <Text style={styles.title}>Tasks</Text>
+          <Text style={styles.title}>{translate('tasks.screenChrome.title', 'Tasks')}</Text>
         </View>
         <MobileTasksHostSubtitle hostId={hostId} />
       </View>
@@ -81,7 +84,7 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
         disabled={!taskUiReady || loading || refreshing || githubProjectLoading}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={REFRESH_LABELS[provider]}
+        accessibilityLabel={refreshLabels()[provider]}
         onPress={() => {
           if (!taskUiReady) {
             return
@@ -103,10 +106,10 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
           accessibilityRole="button"
           accessibilityLabel={
             provider === 'github'
-              ? 'New GitHub issue'
+              ? translate('tasks.screenChrome.newGitHubIssue', 'New GitHub issue')
               : linearConnected
-                ? 'New Linear issue'
-                : 'Connect Linear'
+                ? translate('tasks.screenChrome.newLinearIssue', 'New Linear issue')
+                : translate('tasks.screenChrome.connectLinear', 'Connect Linear')
           }
           onPress={() => {
             if (!taskUiReady) {

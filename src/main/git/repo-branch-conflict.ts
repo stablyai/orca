@@ -69,18 +69,20 @@ async function hasCaseFoldedLocalConflict(
     ['for-each-ref', '--format=%(refname)', 'refs/heads/'],
     options
   )
-  const foldRef = (name: string) =>
-    name.normalize('NFD').toLowerCase().toUpperCase().normalize('NFD')
-  const foldedRef = foldRef(ref)
+  const foldedRef = foldGitRefNameCase(ref)
   for (const existingRef of stdout.split(/\r?\n/).filter(Boolean)) {
     if (!existingRef.startsWith('refs/heads/') || !isSafeGitRefName(existingRef)) {
       throw new Error('Cannot verify branch-name case conflicts.')
     }
-    if (foldRef(existingRef) === foldedRef) {
+    if (foldGitRefNameCase(existingRef) === foldedRef) {
       return true
     }
   }
   return false
+}
+
+export function foldGitRefNameCase(name: string): string {
+  return name.normalize('NFD').toLowerCase().toUpperCase().normalize('NFD')
 }
 
 function buildRemoteBranchConflictRefs(

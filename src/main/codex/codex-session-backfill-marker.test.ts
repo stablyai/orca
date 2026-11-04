@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   captureCodexSessionBackfillMarkerGeneration,
   hasCompletedCodexSessionBackfillMarker,
+  markCodexSessionBackfillMarkerNeedsFullScan,
   markCodexSessionBackfillMarkerPending,
   readCodexSessionBackfillBaseline,
   writeCodexSessionBackfillMarker
@@ -243,5 +244,25 @@ describe('codex session backfill marker', () => {
 
     expect(readMarker()).toMatchObject({ coverage: 'bounded', pendingScanDates: [TODAY] })
     expect(hasCompletedCodexSessionBackfillMarker(markerPath, WINDOWS_ROOT)).toBe(false)
+  })
+
+  it('a full-scan demand outlives later launches and only a full pass clears it', () => {
+    writeFullBaseline(WINDOWS_ROOT)
+    markCodexSessionBackfillMarkerNeedsFullScan(markerPath)
+
+    expect(readCodexSessionBackfillBaseline(markerPath, WINDOWS_ROOT)).toBeNull()
+    expect(markCodexSessionBackfillMarkerPending(markerPath, WINDOWS_ROOT, [LAUNCH_DATE])).toBe(
+      true
+    )
+    writeFullBaseline(WINDOWS_ROOT)
+    expect(readCodexSessionBackfillBaseline(markerPath, WINDOWS_ROOT)).toEqual({
+      pendingScanDates: []
+    })
+  })
+
+  it('a full-scan demand without a marker writes nothing', () => {
+    markCodexSessionBackfillMarkerNeedsFullScan(markerPath)
+
+    expect(() => readMarker()).toThrow()
   })
 })

@@ -1,3 +1,4 @@
+import { StructuredAgentSessionSavedStatus } from './structured-agent-session-saved-status'
 import { StructuredAgentSessionRequestFailures } from './structured-agent-session-request-failures'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { AT_REST_COMMANDS_READ_BUDGET_MS } from './at-rest-command-catalog'
@@ -20,7 +21,10 @@ import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-
 import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
 import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
-import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed'
+import type {
+  StructuredAgentSessionStatusFeed,
+  StructuredAgentSessionStatusSubscriber
+} from './structured-agent-session-status-feed'
 import type { CapturedChildWorkStops } from './structured-agent-session-status-ownership'
 import { createStructuredAgentSessionHostStatusFeed } from './structured-agent-session-host-status-feed'
 import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
@@ -33,6 +37,7 @@ export class StructuredAgentSessionClientDelivery {
   readonly subscribers: AgentSessionSubscribers
   readonly waitForSendSettlement: StructuredAgentSessionSendSettlement['wait']
   private stopAtRestCommandUpdates: () => void = () => undefined
+  private readonly savedStatus
   private readonly statusFeed
   private readonly turnCompletionFeed
   readonly requestFailures
@@ -63,7 +68,9 @@ export class StructuredAgentSessionClientDelivery {
           sessions.get(sessionId)?.journal
         )
     })
+    this.savedStatus = new StructuredAgentSessionSavedStatus(deps)
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({
+      onPublished: this.savedStatus.observe,
       sessions,
       starting,
       now,
@@ -124,6 +131,12 @@ export class StructuredAgentSessionClientDelivery {
       : adapter.atRestCommands?.read(record)
     return adapter.readCommands?.(sessionId) ?? commands
   }
+
+  drainStatusWrites = (): Promise<void> => this.savedStatus.drain()
+
+  publishSavedStatusGroup = (
+    visit: Parameters<StructuredAgentSessionStatusFeed['publishSavedGroup']>[0]
+  ): void => this.statusFeed.publishSavedGroup(visit)
 
   publishStatus = (sessionId: string): void => this.statusFeed.publish(sessionId)
 
@@ -239,7 +252,8 @@ export class StructuredAgentSessionClientDelivery {
     this.turnCompletionFeed.forget(sessionId)
   }
 
-  closeAll(): void {
+  async closeAll(): Promise<void> {
+    await this.drainStatusWrites()
     this.requestFailures.clear()
     this.stopAtRestCommandUpdates()
     this.sendSettlement.closeAll()

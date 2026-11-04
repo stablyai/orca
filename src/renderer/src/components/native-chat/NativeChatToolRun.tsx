@@ -158,11 +158,10 @@ export function NativeChatToolRun({
   const fallbackLabel =
     fallbackKey === 'result'
       ? translate('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
-      : fallbackKey === 'countOne'
-        ? translate('components.native-chat.tool.countOne', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne)
-        : translate('components.native-chat.tool.countN', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countN, {
-            value0: callCount
-          })
+      : translate('components.native-chat.tool.callCount', '{{count}} tool calls', {
+          count: callCount,
+          defaultValue_one: '{{count}} tool call'
+        })
 
   // Standalone rosters/tasks have no tool calls for a header to summarize.
   if (blocks.length === 0) {
