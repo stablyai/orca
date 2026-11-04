@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../shared/terminal-exit-cause'
+import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
 const mockSubscribeToPtyData = vi.fn()
 const mockSubscribeToPtyExit = vi.fn()

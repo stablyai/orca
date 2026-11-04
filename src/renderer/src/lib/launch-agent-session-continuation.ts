@@ -11,7 +11,7 @@ import {
 import { agentChoicePending } from './host-chat-program'
 import { worktreeLaunchWorkspace } from './agent-launch-route-input'
 import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
-import type { LaunchSource } from '../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../shared/telemetry-property-schemas'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   adoptAgentSessionLaunchVerdict,
@@ -181,7 +181,7 @@ export async function launchAgentSessionContinuation({
   if (result.promptDeliveryResult) {
     void result.promptDeliveryResult
       .then((delivery) => {
-        if (!delivery.delivered && !delivery.failureNotified) {
+        if (!delivery.delivered && !delivery.failureNotified && !delivery.unconfirmed) {
           notifyDeliveryFailed(label, prompt)
         }
       })

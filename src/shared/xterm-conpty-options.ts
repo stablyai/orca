@@ -1,4 +1,4 @@
-import type { PtyOwnerBackend } from './pty-owner-backend'
+import type { PtyOwnerBackend } from './terminal/pty/lifecycle/pty-owner-backend'
 
 /** xterm `windowsPty` for a ConPTY-backed terminal, shared by the window and the daemon's emulator. */
 export type XtermConptyOptions = { backend: 'conpty'; buildNumber?: number }

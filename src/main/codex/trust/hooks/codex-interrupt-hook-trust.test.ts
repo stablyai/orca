@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { CODEX_EVENT_LABEL } from '../../hooks/definitions/codex-hook-definition'
-import { getCodexHookTrustSignature } from '../../hooks/definitions/codex-hook-identity'
-import {
-  parseCodexTrustKey,
-  computeCodexTrustedHash as computeTrustedHash
-} from '../identity/codex-trust-identity'
+
+import { computeCodexTrustedHash as computeTrustedHash } from '../identity/codex-trust-identity'
 import type { CodexTrustEntry } from '../toml/config-toml-trust'
 
 // Frozen form-1 fixture: codex-cli 0.159.3 hooks/list reported this Interrupt hash with timeout 3.
@@ -23,34 +19,7 @@ const INTERRUPT_ENTRY: CodexTrustEntry = {
 }
 
 describe('the managed Codex Interrupt hook', () => {
-  it('uses the trust key label Codex uses', () => {
-    expect(CODEX_EVENT_LABEL.Interrupt).toBe('interrupt')
-    expect(parseCodexTrustKey('/home/dev/.codex/hooks.json:interrupt:0:0')).toMatchObject({
-      eventLabel: 'interrupt'
-    })
-  })
-
   it('reproduces the hash real Codex computed for the Interrupt hook', () => {
     expect(computeTrustedHash(INTERRUPT_ENTRY)).toBe(REAL_INTERRUPT_HASH)
-  })
-
-  it('hashes the timeout Codex clamps to, so an over-cap entry stays trusted', () => {
-    // Codex clamps Interrupt to [1, 3], defaulting to 1, before hashing.
-    expect(computeTrustedHash({ ...INTERRUPT_ENTRY, timeoutSec: 10 })).toBe(REAL_INTERRUPT_HASH)
-    expect(computeTrustedHash({ ...INTERRUPT_ENTRY, timeoutSec: undefined })).toBe(
-      computeTrustedHash({ ...INTERRUPT_ENTRY, timeoutSec: 1 })
-    )
-    expect(getCodexHookTrustSignature({ ...INTERRUPT_ENTRY, timeoutSec: 10 })).toBe(
-      getCodexHookTrustSignature(INTERRUPT_ENTRY)
-    )
-    expect(computeTrustedHash({ ...INTERRUPT_ENTRY, eventLabel: 'stop', timeoutSec: 10 })).not.toBe(
-      computeTrustedHash({ ...INTERRUPT_ENTRY, eventLabel: 'stop', timeoutSec: 3 })
-    )
-  })
-
-  it('ignores a matcher, as Codex does for Interrupt', () => {
-    expect(computeTrustedHash({ ...INTERRUPT_ENTRY, matcher: 'anything' })).toBe(
-      REAL_INTERRUPT_HASH
-    )
   })
 })

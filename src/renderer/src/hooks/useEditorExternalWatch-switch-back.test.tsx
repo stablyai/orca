@@ -47,12 +47,12 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undef
 
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { useEditorExternalWatch } from './useEditorExternalWatch'
-import { attachRestoredTabConflictScan } from '@/components/editor/editor-restored-tab-conflict-scan'
+import { attachRestoredTabConflictScan } from '@/components/editor/external-changes/editor-restored-tab-conflict-scan'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import {
   isAutosaveSuspendedForFile,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT
-} from '@/components/editor/editor-autosave'
+} from '@/components/editor/autosave/editor-autosave'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from './worktree-file-change-event'
 import {
   claimCombinedDiffView,

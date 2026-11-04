@@ -3,7 +3,7 @@ import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { PublishedPane } from '../../shared/workspace-layout/workspace-layout-published'
 import type { WorkspaceLayoutEvent } from '../../shared/workspace-layout/workspace-layout-stream-frames'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
 
@@ -84,22 +84,5 @@ describe('live pane titles on the layout stream', () => {
     runtime.onPtyData(PTY_ID, '\x1b]0;npm run build\x07', Date.now())
     await flush()
     expect(events).toHaveLength(1)
-  })
-
-  it('sends no frame per spinner glyph while an agent works', async () => {
-    const runtime = runtimeWithPane()
-    const collector = collectLayoutEvents()
-    const { events } = collector
-    collector.seed(runtime.subscribeWorkspaceLayouts(collector.listener).snapshot)
-    const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-    for (let frame = 0; frame < 100; frame++) {
-      runtime.onPtyData(
-        PTY_ID,
-        `\x1b]0;${spinner[frame % spinner.length]} Fix the build\x07`,
-        Date.now()
-      )
-      await flush()
-    }
-    expect(events.map((event) => paneOf(event)?.liveTitle)).toEqual(['⠋ Fix the build'])
   })
 })

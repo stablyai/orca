@@ -2,7 +2,7 @@ import { OrcaRuntimeWithRecordAgentPromptLifecycleState } from '../output/termin
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
-import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
+import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 import { type DriverState, addListenerToMap } from '../../orca-runtime-core'
 import { notifyRuntimeListeners } from '../../runtime-async-boundaries'

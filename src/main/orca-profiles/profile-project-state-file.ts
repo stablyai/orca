@@ -10,7 +10,7 @@ import { carryProjectStateThroughIdentityChange } from '../../shared/project-ide
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Project, ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { SparsePreset } from '../../shared/worktree/create-types'
 import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
 import { normalizeCrossStoreLineageByChildKey } from '../../shared/worktree/cross-store-lineage-records'

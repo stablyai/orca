@@ -6,8 +6,8 @@ import { getDefaultWorkspaceSession } from '../../shared/constants'
 import {
   CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS,
   MAX_CLOSED_TERMINAL_TAB_TOMBSTONES
-} from '../../shared/closed-terminal-tab-tombstones'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { Store } from '../persistence/loading-store/store'
 import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'

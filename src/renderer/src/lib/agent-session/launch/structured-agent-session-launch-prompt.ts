@@ -15,19 +15,9 @@ import { noteStructuredAgentSessionFence } from '@/components/native-chat/struct
 import { publishStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-pending-sends'
 import { agentSessionWriteNoticeText } from '@/components/native-chat/agent-session-write-notice-text'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
 
-export type StructuredPromptDeliveryResult = {
-  delivered: boolean
-  failureNotified: boolean
-  /** Not sent, and waiting in the new chat's composer, which now owns the text. */
-  inComposer?: true
-  /** An admitted recipient took ownership before it was explicitly discarded. */
-  recipientOwned?: true
-  /** Nobody could confirm it went: the host may hold it. */
-  unconfirmed?: true
-  /** Another send of the chat held its one slot, so this one never went. */
-  busy?: true
-}
+export type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
 
 type StagedDelivery = Omit<StructuredPromptDeliveryResult, 'inComposer' | 'failureNotified'> & {
   inComposer: boolean
@@ -47,8 +37,6 @@ export type StructuredLaunchPromptOptions = {
   promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void
 }
-
-type LaunchReceipt = StructuredAgentLaunchReceipt
 
 /** Share one staged-text send across launch callers; reserve the chat send slot at click so typed messages cannot overtake it before create. */
 export type StagedStructuredLaunchPrompt = {
@@ -102,7 +90,7 @@ export function stageStructuredLaunchPrompt(
   void prompt.slot?.outcome.then((outcome) => {
     const result: StagedDelivery = {
       delivered: outcome === 'recorded',
-      inComposer: !prompt.callerKeepsText && (outcome === 'returned' || outcome === 'unconfirmed'),
+      inComposer: !prompt.callerKeepsText && outcome === 'returned',
       ...(outcome === 'unconfirmed' ? { unconfirmed: true } : {})
     }
     if (!prompt.delivery) {
@@ -180,8 +168,7 @@ export function prepareStructuredLaunchPromptForCreate(
         unstage(prompt)
         return {
           delivered: outcome === 'recorded',
-          inComposer:
-            !prompt.callerKeepsText && (outcome === 'returned' || outcome === 'unconfirmed'),
+          inComposer: !prompt.callerKeepsText && outcome === 'returned',
           ...(outcome === 'unconfirmed' ? { unconfirmed: true as const } : {})
         }
       })
@@ -191,6 +178,12 @@ export function prepareStructuredLaunchPromptForCreate(
       })
   void prompt.delivery.then(prompt.settleCreate)
   return sent?.message
+}
+
+/** Final create admission marks issue only while the original send operation still exists. */
+export function issueStructuredLaunchPromptForCreate(sessionId: string): boolean {
+  const prompt = [...(staged.get(sessionId) ?? [])].find((candidate) => candidate.createOwned)
+  return prompt?.createSend?.issue() ?? false
 }
 
 export function hasStagedStructuredLaunchPrompt(sessionId: string): boolean {
@@ -222,7 +215,7 @@ function handBackStagedPrompt(prompt: StagedStructuredLaunchPrompt): boolean {
 
 function sendStagedPrompt(
   prompt: StagedStructuredLaunchPrompt,
-  receipt: LaunchReceipt,
+  receipt: StructuredAgentLaunchReceipt,
   target: RuntimeClientTarget
 ): Promise<StagedDelivery> {
   prompt.delivery ??= (async () => {
@@ -239,8 +232,7 @@ function sendStagedPrompt(
       const outcome = await sent.outcome
       return {
         delivered: outcome === 'recorded',
-        inComposer:
-          !prompt.callerKeepsText && (outcome === 'returned' || outcome === 'unconfirmed'),
+        inComposer: !prompt.callerKeepsText && outcome === 'returned',
         ...(outcome === 'unconfirmed' ? { unconfirmed: true as const } : {})
       }
     } finally {
@@ -251,7 +243,7 @@ function sendStagedPrompt(
 }
 
 export function settleStructuredAgentLaunchPrompt(args: {
-  launchResult: Promise<LaunchReceipt>
+  launchResult: Promise<StructuredAgentLaunchReceipt>
   target: RuntimeClientTarget
   options: StructuredLaunchPromptOptions
   stagedPrompt: StagedStructuredLaunchPrompt | null
@@ -294,6 +286,11 @@ export function settleStructuredAgentLaunchPrompt(args: {
             ? { kind: 'refused', failure: agentSessionThrownFailure(error, error.code) }
             : { kind: 'unconfirmed' }
         )
+        return prompt.whenCreateSettled.then(({ inComposer, ...outcome }) => ({
+          ...outcome,
+          failureNotified: error instanceof StructuredAgentSessionCreateRefusalError,
+          ...(inComposer ? { inComposer: true as const } : {})
+        }))
       }
       // The launch did not submit: its text waits in the chat's composer for the person's own Send.
       if (prompt && !prompt.discarded && !prompt.delivery) {

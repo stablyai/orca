@@ -1,5 +1,3 @@
-// Drive the real host/journal/adapter with fake Codex: interrupt answers precede turn/completed, so Stop settlement must prevent a transient failed turn.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,6 +32,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
+// Drive the real host/journal/adapter with fake Codex: interrupt answers precede turn/completed, so Stop settlement must prevent a transient failed turn.
 
 const CALLER = { callerKey: 'codex-interrupt-order-test' }
 const MODEL = {
@@ -137,7 +136,12 @@ async function expectInterruptedThroughout(): Promise<void> {
 
 async function owesWork(): Promise<boolean> {
   const snapshot = await host.journalSnapshot(SESSION)
-  return owesStructuredAgentSessionWork(snapshot.items, snapshot.submissions, fence)
+  return owesStructuredAgentSessionWork(
+    snapshot.items,
+    snapshot.submissions,
+    fence,
+    host.currentWork(SESSION)?.scope
+  )
 }
 
 beforeEach(async () => {

@@ -5,7 +5,7 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   getProviderSessionClaimKey,
   activationTreatsNoteAsFinished,

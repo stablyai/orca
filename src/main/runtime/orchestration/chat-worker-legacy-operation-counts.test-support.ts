@@ -1,8 +1,8 @@
 import { vi } from 'vitest'
+import { JournalInputCardIndex } from '../../native-chat/agent-session-journal/journal-input-card-index'
 import * as legacy from '../../native-chat/agent-session-journal/journal-queue-import'
 import * as fold from '../../native-chat/agent-session-journal/journal-queue-fold'
 import * as stored from '../../native-chat/agent-session-journal/queued-message-stored-row'
-import { JournalInputCardIndex } from '../../native-chat/agent-session-journal/journal-input-card-index'
 
 export const emptyLegacyCounts = () => ({
   decodedRows: 0,
@@ -87,11 +87,7 @@ function countMap<T>(array: readonly T[], visit: () => void) {
   })
 }
 
-function countFlatMap<T>(
-  array: readonly T[],
-  visit: () => void,
-  result?: (values: readonly unknown[]) => void
-) {
+function countFlatMap<T>(array: readonly T[], visit: () => void) {
   const flatMap = array.flatMap.bind(array)
   Object.defineProperty(array, 'flatMap', {
     configurable: true,
@@ -103,7 +99,6 @@ function countFlatMap<T>(
         visit()
         return callback.call(this, value, index, source)
       }, thisArg)
-      result?.(values)
       return values
     }
   })
@@ -225,24 +220,14 @@ export function countLegacyFailureDisplay() {
         this['read'] = () => {
           const rows = read()
           countMap(rows, () => counts[phase].sourceIdEntries++)
-          countFlatMap(
-            rows,
-            () => counts[phase].ownerClassifications++,
-            (cards) => {
-              if (classifying) {
-                countFlatMap(cards, () => {
-                  if (classifying) {
-                    counts[phase].handoffVisits++
-                  }
-                })
-                countMap(cards, () => {
-                  if (classifying) {
-                    counts[phase].identityEntries++
-                  }
-                })
-              }
+          countIteration(rows, () => {
+            if (classifying) {
+              counts[phase].ownerClassifications++
+              counts[phase].handoffVisits++
+              counts[phase].identityEntries++
             }
-          )
+          })
+          countFlatMap(rows, () => counts[phase].ownerClassifications++)
           return rows
         }
       }

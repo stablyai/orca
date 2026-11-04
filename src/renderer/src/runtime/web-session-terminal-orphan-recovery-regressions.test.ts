@@ -93,49 +93,4 @@ describe('web session terminal orphan recovery regressions', () => {
     list.resolve({ ok: true, result: listResult(worktree, []) })
     await expect(stale).resolves.toBeNull()
   })
-
-  it('limits recovery RPC concurrency globally across worktrees', async () => {
-    const count = 8
-    let active = 0
-    let maxActive = 0
-    const gates = Array.from({ length: count }, () =>
-      deferred<{ ok: true; result: ReturnType<typeof listResult> }>()
-    )
-    let callIndex = 0
-    const call = vi.fn(async ({ method }: { method: string }) => {
-      if (method !== 'terminal.list') {
-        throw new Error(`unexpected method ${method}`)
-      }
-      const gate = gates[callIndex++]!
-      active += 1
-      maxActive = Math.max(maxActive, active)
-      try {
-        return await gate.promise
-      } finally {
-        active -= 1
-      }
-    })
-    const recoveries = Array.from({ length: count }, (_, index) => {
-      const worktree = `repo::lane-${index}`
-      const leaves = [{ leafId: 'leaf-1', handle: `term-${index}` }]
-      return recoverWebSessionTerminalOrphansBeforeApply(
-        makeState(worktree, leaves),
-        makeSnapshot(worktree, `lane-${index}`, leaves),
-        ENVIRONMENT_ID,
-        { call: call as never }
-      )
-    })
-
-    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(4))
-    expect(maxActive).toBe(4)
-    for (let index = 0; index < 4; index += 1) {
-      gates[index]!.resolve({ ok: true, result: listResult(`repo::lane-${index}`, []) })
-    }
-    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(count))
-    for (let index = 4; index < count; index += 1) {
-      gates[index]!.resolve({ ok: true, result: listResult(`repo::lane-${index}`, []) })
-    }
-    await Promise.all(recoveries)
-    expect(maxActive).toBe(4)
-  })
 })

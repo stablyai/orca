@@ -30,7 +30,7 @@ import {
   ANTIGRAVITY_PRE_TOOL_USE_DECISION,
   type AntigravityEvent
 } from './hook-events'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { HOOK_PARENT_CAPTURE } from '../agent-hooks/hook-process-capture'
 import { getManagedScript, getWindowsWrapperScript } from './hook-script'
 import {

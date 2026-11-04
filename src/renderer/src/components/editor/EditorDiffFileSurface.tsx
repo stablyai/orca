@@ -4,9 +4,9 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import { getDiffContentSignature } from './diff/sections/diff-content-signature'
 import { DiffViewer, ImageDiffViewer, MarkdownPreview } from './editor-lazy-views'
-import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
-import { MarkdownPreviewSizeGate } from './MarkdownPreviewSizeGate'
-import type { useMarkdownDocuments } from './useMarkdownDocuments'
+import { ExternalFileChangeBanner } from './external-changes/ExternalFileChangeBanner'
+import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
+import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 
 type MarkdownDocumentsController = ReturnType<typeof useMarkdownDocuments>
 

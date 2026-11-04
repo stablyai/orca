@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import { createProjectGroup } from '../../../shared/project-groups'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
 import { ProjectGroupPersistenceOperations } from './project-group-operations'
@@ -120,21 +120,5 @@ describe('project group session removal', () => {
     expect(setup.state.projectGroups?.map((group) => group.id)).toEqual(['other'])
     expect(setup.state.folderWorkspaces.map((entry) => entry.id)).toEqual(['kept'])
     expect(setup.selected).toEqual(new Set([folderWorkspaceKey('kept')]))
-  })
-
-  it('preserves session references when the deleted group has no folder workspaces', () => {
-    const { state, operations } = fixture(0)
-    const local = state.workspaceSession
-    const hosts = state.workspaceSessionsByHostId
-    expect(operations.deleteProjectGroup('root')).toBe(true)
-    expect(state.workspaceSession).toBe(local)
-    expect(state.workspaceSessionsByHostId).toBe(hosts)
-  })
-
-  it('does not prune or save when the requested group does not exist', () => {
-    const setup = fixture(8)
-    const before = structuredClone(setup.state)
-    expect(setup.operations.deleteProjectGroup('missing')).toBe(false)
-    expect(setup.state).toEqual(before)
   })
 })

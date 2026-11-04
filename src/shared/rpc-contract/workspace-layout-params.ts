@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isTerminalLeafId } from '../stable-pane-id'
+import { isTerminalLeafId } from '../workspace-layout/stable-pane-id'
 import { SleepCommand, StartPaneCommand, WakeCommand } from './workspace-layout-sleep-wake-params'
 import { RenameTabsCommand } from './workspace-layout-rename-tabs-params'
 import { EditorFileRecord, EditorViewRecord } from './workspace-layout-editor-file-params'

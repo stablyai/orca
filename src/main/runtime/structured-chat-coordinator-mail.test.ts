@@ -1,6 +1,8 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 
 import { describe, expect, it, vi } from 'vitest'
+import { dispatch as dispatchCommand } from '../../cli/dispatch'
+import { orchestrationTestContext } from '../../cli/handlers/orchestration-handler-test-context'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
@@ -371,7 +373,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect((await userTexts(COORDINATOR)).filter(isWholeMail)).toHaveLength(1)
   })
 
-  it('queues a report that arrives mid-turn as a card the next turn takes, with who it is from', async () => {
+  it('steers a report into the running turn once, with who it is from', async () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     expect(await sendUserMessage(COORDINATOR, 'go')).toMatchObject({ ok: true })
@@ -391,28 +393,84 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
     await finishWorker(taskId)
 
-    // Queued like a person's message sent mid-turn: never steered into the running turn.
-    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
-    const [card] = await queuedCardTexts()
-    expect(isWholeMail(card!)).toBe(true)
-    expect(chat.steers).toHaveLength(0)
-    // The chat holds it, so check still shows it until the agent is handed it.
-    expect(unread(`run:${runId}`)).toHaveLength(1)
-
-    notify('turn/completed', { turn: { id: 'turn-1' } })
-    await host.flushStreamedEvents(COORDINATOR)
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
-    expect(turnText(chat.turns[1]!)).toBe(card)
+    await vi.waitFor(() => expect(chat.steers).toHaveLength(1), WAIT)
+    expect(isWholeMail(turnText(chat.steers[0]!))).toBe(true)
+    expect(await queuedCardTexts()).toEqual([])
+    expect(chat.turns).toHaveLength(1)
+    runtime.deliverPendingMessagesForHandle(`run:${runId}`)
+    await observationClock.edgesAnswered(runtime, WAIT)
+    expect(chat.steers).toHaveLength(1)
     const sent = (await host.journalSnapshot(COORDINATOR)).items.find(
       (item) => item.body.kind === 'message' && item.body.from
     )
     expect(sent?.body).toMatchObject({
       from: { kind: 'agent', orchestration: { message: 'mail-notice', mailbox: `run:${runId}` } }
     })
-    await settleTurn(COORDINATOR, 1)
-    runtime.onStructuredSessionStatusForMail({ sessionId: COORDINATOR, status: 'idle' })
+    notify('item/completed', {
+      item: {
+        type: 'userMessage',
+        id: 'echo-mail',
+        clientId: chat.steers[0]!.clientUserMessageId,
+        content: [{ type: 'text', text: chat.steers[0]!.text }]
+      }
+    })
+    await host.flushStreamedEvents(COORDINATOR)
     await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
-    expect(chat.steers).toHaveLength(0)
+    expect(chat.steers).toHaveLength(1)
+  })
+
+  it('delivers the real send command into a busy peer once across a CLI retry', async () => {
+    const chat = await openChat(COORDINATOR)
+    await openChat(PEER_CHAT)
+    await sendUserMessage(COORDINATOR, 'working')
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    chat.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
+    chat.handlers.onNotification?.('item/completed', {
+      item: {
+        type: 'userMessage',
+        id: 'echo-working',
+        clientId: chat.turns[0]!.clientUserMessageId,
+        content: [{ type: 'text', text: 'working' }]
+      }
+    })
+    await host.flushStreamedEvents(COORDINATOR)
+    const transport = vi.fn(
+      async (
+        method: string,
+        params: Record<string, unknown>,
+        options?: { orchestrationRequestId?: string }
+      ) => {
+        const response = await dispatcher.dispatch({
+          ...request(method, params, { sessionId: PEER_CHAT }),
+          ...(options?.orchestrationRequestId
+            ? { orchestrationRequestId: options.orchestrationRequestId }
+            : {})
+        })
+        if (!response.ok) {
+          throw new Error(JSON.stringify(response))
+        }
+        return response
+      }
+    )
+    const ctx = orchestrationTestContext(
+      transport,
+      new Map([
+        ['from', `orca_session_id:${PEER_CHAT}`],
+        ['to', `orca_session_id:${COORDINATOR}`],
+        ['subject', 'Need your decision'],
+        ['body', 'Worker question'],
+        ['retry-request', '25d73135-2415-489b-96fa-a232854333d0']
+      ]),
+      true
+    )
+    await dispatchCommand(['orchestration', 'send'], ctx)
+    await vi.waitFor(() => expect(chat.steers).toHaveLength(1), WAIT)
+    expect(turnText(chat.steers[0]!)).toContain('Worker question')
+    await dispatchCommand(['orchestration', 'send'], ctx)
+    await observationClock.edgesAnswered(runtime, WAIT)
+    expect(chat.steers).toHaveLength(1)
+    expect(chat.turns).toHaveLength(1)
+    expect(await queuedCardTexts()).toEqual([])
   })
 
   it('deletes the waiting card when a check takes its report first', async () => {
