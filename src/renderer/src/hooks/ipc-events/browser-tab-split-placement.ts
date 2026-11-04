@@ -47,3 +47,23 @@ export function browserTabSplitTarget(
   // Why unfocused: the agent that asked keeps keyboard focus; the page still paints in the new pane.
   return { sourceGroupId, splitDirection: direction, activate: false }
 }
+
+// A browser pane beside the caller takes the new page as a tab, so repeated split opens don't stack panes.
+export function existingBrowserPaneGroupId(
+  state: Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree'>,
+  worktreeId: string,
+  fromTabId: string | undefined,
+  activeBrowserGroupId: string | undefined
+): string | undefined {
+  const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const groups = state.groupsByWorktree[worktreeId] ?? []
+  const callerGroupId = fromTabId ? tabs.find(isCallerTab(fromTabId))?.groupId : undefined
+  const isOtherLivePane = (groupId: string | undefined): groupId is string =>
+    groupId !== undefined &&
+    groupId !== callerGroupId &&
+    groups.some((group) => group.id === groupId)
+  if (isOtherLivePane(activeBrowserGroupId)) {
+    return activeBrowserGroupId
+  }
+  return tabs.find((tab) => tab.contentType === 'browser' && isOtherLivePane(tab.groupId))?.groupId
+}
