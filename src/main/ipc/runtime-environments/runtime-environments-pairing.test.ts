@@ -1,4 +1,4 @@
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   getRuntimeEnvironmentStatusSnapshots,
   resetRuntimeEnvironmentStatusOwners
@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import * as environmentStore from '../../../shared/runtime-environment-store'
+import * as environmentStore from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 
 const {
@@ -103,6 +103,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     updateSettings: ReturnType<typeof vi.fn>
     removeWorkspaceSessionHost: ReturnType<typeof vi.fn>
     setRemoteLayoutSnapshot: ReturnType<typeof vi.fn>
+    setHostRepoCatalogSnapshot: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -112,6 +113,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
       removeWorkspaceSessionHost: vi.fn(),
       setRemoteLayoutSnapshot: vi.fn(),
+      setHostRepoCatalogSnapshot: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })
@@ -221,6 +223,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       `runtime:${encodeURIComponent(added.environment.id)}`
     )
     expect(store.setRemoteLayoutSnapshot).toHaveBeenCalledWith(added.environment.id, null, 'now')
+    expect(store.setHostRepoCatalogSnapshot).toHaveBeenCalledWith(added.environment.id, null)
     expect(JSON.stringify(removed)).not.toContain('device-token')
     expect(await list(null, undefined)).toEqual([])
   })

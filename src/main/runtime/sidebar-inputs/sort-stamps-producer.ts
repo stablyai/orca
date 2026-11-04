@@ -1,6 +1,9 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import type { AgentPhase, AgentTransition } from '../../../shared/agent-transitions'
+import type {
+  AgentPhase,
+  AgentTransition
+} from '../../../shared/agent-status/lifecycle/agent-transitions'
 import {
   classifySortStampEvent,
   enterAgentPaneState,
@@ -9,7 +12,7 @@ import {
   type AgentPaneState,
   type SortStampEvent
 } from '../../../shared/sidebar-list/sort-stamps'
-import type { TerminalSideEffectBatch } from '../../../shared/terminal-side-effect-facts'
+import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import {
   agentPaneWorkspace,
   sameAgentPaneWorkspace,

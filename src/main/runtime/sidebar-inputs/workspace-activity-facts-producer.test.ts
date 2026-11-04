@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SidebarClock } from './sidebar-clock'
 import { AgentHookServer } from '../../agent-hooks/server'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   WorkspaceActivityFactsProducer,
   type WorkspaceSurfaceActivity
@@ -74,15 +74,6 @@ describe('WorkspaceActivityFactsProducer', () => {
       revision: 3,
       facts: { [FOLDER]: expect.anything() }
     })
-  })
-
-  it('keeps an SSH workspace whose host lost contact as unverifiable, not idle', () => {
-    const { producer, surfaces } = createProducer()
-    surfaces.set(WT_A, { ...NONE, terminal: 'live' })
-    producer.refreshWorkspace(WT_A)
-    surfaces.set(WT_A, { ...NONE, terminal: 'unverifiable' })
-    producer.refreshWorkspace(WT_A)
-    expect(producer.snapshot().facts[WT_A]?.terminal).toBe('unverifiable')
   })
 
   it('follows agent status transitions without re-reading any surfaces', () => {

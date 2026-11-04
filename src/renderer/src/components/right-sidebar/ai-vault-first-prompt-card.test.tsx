@@ -3,8 +3,8 @@ import { StrictMode } from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FirstPromptCard } from './ai-vault-first-prompt-card'
-import { sessionPromptPreview } from './ai-vault-session-display'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { sessionPromptPreview } from '../../../../shared/ai-vault/session-display/ai-vault-session-display'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 const session = {
   id: 'local:claude:s1:/repo/session.jsonl',

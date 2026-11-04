@@ -7,7 +7,7 @@ import { useAiVaultPanelSessions } from './ai-vault-session-filters'
 import {
   deriveAiVaultScopeSessionPaths,
   deriveAiVaultWorkspaceScopePaths
-} from '../../../../shared/ai-vault-scope-paths'
+} from '../../../../shared/ai-vault/scanning/ai-vault-scope-paths'
 import { countAiVaultViewAdjustments } from './ai-vault-view-defaults'
 import {
   buildAiVaultProjectContext,
@@ -41,8 +41,9 @@ import { AiVaultPanelSearch } from './AiVaultPanelSearch'
 import { useAiVaultPanelSessionResume } from './use-ai-vault-panel-session-resume'
 import { AiVaultScanProgressStrip } from './AiVaultScanProgressStrip'
 import { useAiVaultScanProgress } from './ai-vault-scan-progress-store'
-import { aiVaultLocalScanKey } from '../../../../shared/ai-vault-local-scan-key'
+import { aiVaultLocalScanKey } from '../../../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import { useAiVaultPanelWorkspace } from './use-ai-vault-panel-workspace'
+import { useAiVaultPanelQuery } from './use-ai-vault-panel-query'
 import {
   aiVaultPanelKeyboardRootProps,
   type AiVaultSessionListKeyboard
@@ -82,7 +83,6 @@ export default function AiVaultPanel({
   const settings = useAppStore((s) => s.settings)
   const agentCmdOverrides = settings?.agentCmdOverrides
   const paneActions = useAiVaultOriginalPaneActions()
-  const [query, setQuery] = useState(initialQuery)
   const [focusSearchRequestId, setFocusSearchRequestId] = useState(0)
   const listKeyboardRef = useRef<AiVaultSessionListKeyboard>(null)
   const keyboardRows = onSessionOpened !== undefined
@@ -124,10 +124,16 @@ export default function AiVaultPanel({
     [activeRepo, activeWorktree, allWorktrees, projectHostSetupProjection, repos]
   )
   const activeProjectKey = projectScopeContext.activeProjectKey
-  const { scope, handleScopeChange, collapsedGroups, toggleGroup } = useAiVaultPanelScope({
-    activeProjectKey,
-    activeWorktreePath,
-    local: workspace !== undefined
+  const { scope, preferredScope, handleScopeChange, collapsedGroups, toggleGroup } =
+    useAiVaultPanelScope({
+      activeProjectKey,
+      activeWorktreePath,
+      local: workspace !== undefined
+    })
+  const [query, setQuery] = useAiVaultPanelQuery(initialQuery, {
+    preferredScope,
+    activeWorktreeId,
+    activeProjectKey
   })
   const projectLabelByKey = projectScopeContext.projectLabelByKey
   // Sent to the scanner so scoped views surface sessions older than the global cap.

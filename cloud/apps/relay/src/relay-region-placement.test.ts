@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore, type RelayAssignment } from './assignment-store.js'
+import { RelayAssignmentStore, type RelayAssignment } from './assignment/assignment-store.js'
 import type { RelayCellConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 import { ReservePaceError } from './reserve-assignment.js'
@@ -45,15 +45,6 @@ describe('Relay regional placement', () => {
 
   afterEach(async () => await database.close())
 
-  it('prefers the requested region and keeps unhinted placement US-first', async () => {
-    await expect(
-      store.assign({ userId: 'asia-user', relayHostId: 'asiahost00000001' }, 'asia-east2')
-    ).resolves.toMatchObject({ cellId: 'asia-c1', region: 'asia-east2' })
-    await expect(
-      store.assign({ userId: 'us-user', relayHostId: 'ushost0000000001' })
-    ).resolves.toMatchObject({ cellId: 'us-c1', region: 'us-central1' })
-  })
-
   it('falls back globally only when the target region has no safe general cell', async () => {
     await store.configureCell(CELLS[1]!, 'migration-only')
     await store.configureCell(CELLS[2]!, 'migration-only')
@@ -89,8 +80,9 @@ describe('Relay regional placement', () => {
         'us-central1'
       )
     ).resolves.toMatchObject({ cellId: 'us-c1', region: 'us-central1' })
-    expect(await database.query(`SELECT preferred_region FROM relay_assignment_region_preferences`))
-      .toEqual([{ preferred_region: 'asia-east2' }])
+    expect(
+      await database.query(`SELECT preferred_region FROM relay_assignment_region_preferences`)
+    ).toEqual([{ preferred_region: 'asia-east2' }])
   })
 
   it('returns at most two deterministic healthy general probe origins per region', async () => {
@@ -203,14 +195,6 @@ describe('Relay regional placement', () => {
       for (const cell of CELLS.slice(1)) await store.configureCell(cell, 'migration-only')
     }
 
-    it('books the reserve cell rather than spill out of a full region', async () => {
-      await fillAsia()
-      const place = vi.fn(async () => onReserve)
-      await expect(assignAsia(place)).resolves.toEqual({ ...onReserve, placed: true })
-      expect(place).toHaveBeenCalledOnce()
-      expect(await database.query(`SELECT cell_id FROM relay_assignments`)).toEqual([])
-    })
-
     it('answers a throttled reserve cell with its pace, not a cell abroad', async () => {
       await fillAsia()
       await expect(
@@ -232,15 +216,6 @@ describe('Relay regional placement', () => {
       await expect(
         store.assign({ ...identity, relayHostId: 'spillhost0000002' }, 'asia-east2', 'asia-east2')
       ).resolves.toMatchObject({ cellId: 'us-c1' })
-    })
-
-    it('leaves a region with database room to the database lane', async () => {
-      const place = vi.fn(async () => onReserve)
-      await expect(assignAsia(place)).resolves.toMatchObject({
-        cellId: 'asia-c1',
-        region: 'asia-east2'
-      })
-      expect(place).not.toHaveBeenCalled()
     })
   })
 

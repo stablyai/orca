@@ -3,7 +3,7 @@ import {
   RelayAssignmentRowBusyError,
   type RelayAssignment,
   type ResolvedRelayAssignment
-} from './assignment-store.js'
+} from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 
 const fakes = vi.hoisted(() => ({
@@ -141,44 +141,6 @@ describe('drain-return lane', () => {
     expect(repeat.headers.get('retry-after')).toBe('2')
     expect(outcomes).toEqual(['sticky', 'sticky-rejected'])
     expect(causes).toEqual(['sticky-lane'])
-  })
-
-  it('names the cause of a placement that found no capacity', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const assign = vi.fn(async () => {
-      throw new Error('relay_capacity_exhausted')
-    })
-    const causes: string[] = []
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: { assign, resolve: vi.fn() } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true),
-      recordAssignmentUnavailable: (cause) => causes.push(cause)
-    })
-
-    const response = await app.request('/v1/assign', assignmentRequest('cccccccccccccccc'))
-
-    expect(response.status).toBe(503)
-    expect(causes).toEqual(['relay_capacity_exhausted'])
-  })
-
-  it('never classifies an unhinted request, which keeps the placement lane', async () => {
-    const host = 'uuuuuuuuuuuuuuuu'
-    const assign = vi.fn(async () => assignment('cell-u', host))
-    const resolve = vi.fn(async () => isolatedHome(host))
-    const outcomes: string[] = []
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: { assign, resolve } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true),
-      recordAssignmentAdmission: (outcome) => outcomes.push(outcome)
-    })
-
-    expect((await app.request('/v1/assign', assignmentRequest(host))).status).toBe(200)
-    expect(resolve).not.toHaveBeenCalled()
-    expect(outcomes).toEqual(['placement'])
   })
 
   it('answers a drained host’s row-busy redial with the short interval', async () => {

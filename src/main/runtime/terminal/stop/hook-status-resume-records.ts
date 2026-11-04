@@ -7,13 +7,13 @@ import {
   statusRetainsResumableIdentity,
   type ResumeRecordStatus,
   type ResumeRecordTab
-} from '../../../../shared/agent-resume-record-from-status'
+} from '../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 import {
   normalizeAgentProviderSession,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session-resume'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import type { CommandOf } from '../../../../shared/workspace-layout/workspace-layout-command-types'

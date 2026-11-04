@@ -15,10 +15,10 @@ import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import { createCodexComposerReadyScanner } from '../../shared/codex-composer-ready-scanner'
-import { createTerminalEscapeScanner } from '../../shared/terminal-escape-scanner'
+import { createTerminalEscapeScanner } from '../../shared/terminal/protocol/escape/terminal-escape-scanner'
 import { promisify } from 'node:util'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CodexListedHook } from './codex-app-server-client'
+import type { CodexListedHook } from './app-server/codex-app-server-client'
 import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,

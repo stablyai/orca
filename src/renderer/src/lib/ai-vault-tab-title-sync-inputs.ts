@@ -1,5 +1,5 @@
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
-import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { isAiVaultTitleAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'

@@ -9,7 +9,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_AFTER_BYTE_GAP,
   buildKittyKeyboardRestore
-} from '../../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   discardTerminalOutput,
   writeTerminalOutput
@@ -33,6 +33,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession): void {
   // Abandonment discards bytes the mirror already scanned; restore its Kitty flags into xterm after grounding.
   session.writeAbandonedRestoreGap = function (): void {
+    session.resumeEscapeGap.noteGroundingWrite(session.idleCursorReset.parserEscape)
     session.writePtyOutputToXterm(
       `${RESET_AFTER_BYTE_GAP}${buildKittyKeyboardRestore(session.kittyKeyboardModes.snapshotFlags)}`,
       true

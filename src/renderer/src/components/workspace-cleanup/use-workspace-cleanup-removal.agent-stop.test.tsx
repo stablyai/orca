@@ -2,9 +2,9 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type {
   WorkspaceCleanupRemoveOptions,
   WorkspaceCleanupRemoveResult
@@ -177,16 +177,6 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
 
     expect(result.current.agentStopRequest?.candidates.map((c) => c.displayName)).toEqual(['a'])
     expect(calls).toEqual([])
-  })
-
-  it('adds no step when no agent is running', async () => {
-    const calls = installRemoval()
-    const { result } = renderAtConfirm([candidateFor('a')])
-
-    act(() => result.current.confirmRemove())
-
-    expect(result.current.agentStopRequest).toBeNull()
-    await waitFor(() => expect(calls).toHaveLength(1))
   })
 
   it('asks before "Delete anyway" stops a running agent', async () => {

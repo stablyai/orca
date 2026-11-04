@@ -7,8 +7,8 @@ import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { selectReviewCacheData, selectReviewCacheEntry } from '../../review-cache-entry-selection'
@@ -71,7 +71,13 @@ export function useSourceControlWorktreeContext() {
     activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
   )
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
-  const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
+  const inFlightRemoteOpKind = useAppStore(
+    (s) =>
+      s.remoteOperations.findLast((operation) => operation.worktreeId === activeWorktreeId)?.kind ??
+      null
+  )
+  const isRemoteOperationInAnotherWorktree =
+    isRemoteOperationActive && inFlightRemoteOpKind === null
   const settings = useAppStore((s) => s.settings)
   const hostedReviewCacheKey =
     activeRepo && branchName
@@ -164,6 +170,7 @@ export function useSourceControlWorktreeContext() {
     hostedReviewEntry,
     hostedReviewEntryData,
     inFlightRemoteOpKind,
+    isRemoteOperationInAnotherWorktree,
     isBranchVisible,
     isFolder,
     isRemoteOperationActive,

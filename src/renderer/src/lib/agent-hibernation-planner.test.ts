@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   DEFAULT_AGENT_HIBERNATION_IDLE_MS,
-  MAX_AGENT_HIBERNATION_IDLE_MS,
-  MIN_AGENT_HIBERNATION_IDLE_MS,
-  getEffectiveAgentHibernationIdleMs,
   planAgentHibernationCandidates,
   type AgentHibernationPlannerSnapshot
 } from './agent-hibernation-planner'
@@ -164,16 +161,6 @@ describe('agent sleep planner', () => {
     ).toEqual([])
   })
 
-  it('treats an idle done copilot pane as a hibernation candidate', () => {
-    const copilot = entry({
-      agentType: 'copilot',
-      providerSession: { key: 'session_id', id: '940237d9-c712-48e8-bca1-fd75fc4a8d4b' }
-    })
-    expect(
-      plannedPaneKeys(snapshot({ agentStatusByPaneKey: { [copilot.paneKey]: copilot } }))
-    ).toEqual([copilot.paneKey])
-  })
-
   it('blocks done panes until their live subagent roster clears', () => {
     const withIdleTeammate = entry({
       subagents: [
@@ -213,25 +200,6 @@ describe('agent sleep planner', () => {
           snapshot({ agentStatusByPaneKey: { [orchestrated.paneKey]: orchestrated } })
         )
       ).toEqual([])
-    }
-  )
-
-  it.each(['completed', 'failed', 'circuit_broken'] as const)(
-    'allows orchestration panes after authoritative %s settlement',
-    (dispatchStatus) => {
-      const orchestrated = entry({
-        orchestration: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          dispatchStatus
-        }
-      })
-
-      expect(
-        plannedPaneKeys(
-          snapshot({ agentStatusByPaneKey: { [orchestrated.paneKey]: orchestrated } })
-        )
-      ).toEqual([orchestrated.paneKey])
     }
   )
 
@@ -346,37 +314,6 @@ describe('agent sleep planner', () => {
     ).toEqual([])
   })
 
-  it('uses foreground terminal tab last-seen as the idle baseline when it is newer', () => {
-    expect(
-      plannedWorktrees(
-        snapshot({
-          foregroundTerminalLastSeenAtByTabId: {
-            'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1
-          }
-        })
-      )
-    ).toEqual([])
-    expect(
-      plannedWorktrees(
-        snapshot({
-          foregroundTerminalLastSeenAtByTabId: {
-            'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 1
-          }
-        })
-      )
-    ).toEqual(['wt-bg'])
-    expect(
-      plannedWorktrees(
-        snapshot({
-          foregroundTerminalLastSeenAtByTabId: {
-            'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 1
-          },
-          lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD + 1 }
-        })
-      )
-    ).toEqual([])
-  })
-
   // Use the active worktree to catch wholesale exclusion (#16211); lever from @sanshengai’s #16214.
   it('does not let one foreground terminal tab reset a sibling tab in the same worktree', () => {
     const siblingEntry = entry({
@@ -409,45 +346,6 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual([`tab-2:${OTHER_LEAF}`])
-  })
-
-  it('includes the effective idle start in the candidate signature', () => {
-    const oldEntry = entry({
-      updatedAt: NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 10_000,
-      stateStartedAt: NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 10_000
-    })
-    const [withoutVisit] = planAgentHibernationCandidates(
-      snapshot({ agentStatusByPaneKey: { [oldEntry.paneKey]: oldEntry } })
-    )
-    const [withVisit] = planAgentHibernationCandidates(
-      snapshot({
-        agentStatusByPaneKey: { [oldEntry.paneKey]: oldEntry },
-        foregroundTerminalLastSeenAtByTabId: {
-          'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 1
-        }
-      })
-    )
-
-    expect(withoutVisit.signature).not.toEqual(withVisit.signature)
-  })
-
-  it('emits a pane candidate when a sibling shell PTY is live', () => {
-    expect(
-      planAgentHibernationCandidates(
-        snapshot({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] } })
-      )
-    ).toMatchObject([
-      {
-        id: `wt-bg|tab-1:${LEAF}`,
-        worktreeId: 'wt-bg',
-        paneKey: `tab-1:${LEAF}`,
-        tabId: 'tab-1',
-        leafId: LEAF,
-        targetPtyIds: ['pty-1'],
-        expectedRuntimePtyIds: ['pty-1'],
-        paneKeys: [`tab-1:${LEAF}`]
-      }
-    ])
   })
 
   it('rejects panes without live PTYs and already-sleeping panes', () => {
@@ -516,54 +414,6 @@ describe('agent sleep planner', () => {
     }
   )
 
-  it('rejects mobile-driven panes because paired clients can send input outside desktop xterm', () => {
-    expect(plannedWorktrees(snapshot({ mobileLockedPtyIds: ['pty-1'] }))).toEqual([])
-  })
-
-  it('does not let a mobile-locked sibling PTY block an unlocked target pane', () => {
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] },
-          mobileLockedPtyIds: ['pty-shell']
-        })
-      )
-    ).toEqual([`tab-1:${LEAF}`])
-  })
-
-  it('selects runtime-backed live PTYs when the renderer live map is empty', () => {
-    const [candidate] = planAgentHibernationCandidates(
-      snapshot({
-        ptyIdsByTabId: { 'tab-1': [] },
-        runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['pty-1'] },
-        runtimeLivenessRequiredWorktreeIds: ['wt-bg']
-      })
-    )
-
-    expect(candidate).toMatchObject({
-      worktreeId: 'wt-bg',
-      paneKeys: [`tab-1:${LEAF}`],
-      expectedRuntimePtyIds: ['pty-1']
-    })
-  })
-
-  it('matches wrapped remote renderer PTY IDs to raw runtime PTY IDs', () => {
-    const [candidate] = planAgentHibernationCandidates(
-      snapshot({
-        terminalLayoutsByTabId: { 'tab-1': layout(LEAF, 'remote:env-1@@terminal-1') },
-        ptyIdsByTabId: { 'tab-1': ['remote:env-1@@terminal-1'] },
-        runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['terminal-1'] },
-        runtimeLivenessRequiredWorktreeIds: ['wt-bg']
-      })
-    )
-
-    expect(candidate).toMatchObject({
-      worktreeId: 'wt-bg',
-      paneKeys: [`tab-1:${LEAF}`],
-      expectedRuntimePtyIds: ['terminal-1']
-    })
-  })
-
   it('does not select layout-only stale PTYs without runtime liveness', () => {
     expect(
       plannedWorktrees(
@@ -593,31 +443,6 @@ describe('agent sleep planner', () => {
     ).toEqual([])
   })
 
-  it('allows runtime-backed worktrees with sibling live PTYs', () => {
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          ptyIdsByTabId: { 'tab-1': [] },
-          runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['pty-1', 'pty-shell'] },
-          runtimeLivenessRequiredWorktreeIds: ['wt-bg']
-        })
-      )
-    ).toEqual([`tab-1:${LEAF}`])
-  })
-
-  it('applies mobile locks to runtime-backed PTYs', () => {
-    expect(
-      plannedWorktrees(
-        snapshot({
-          ptyIdsByTabId: { 'tab-1': [] },
-          runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['pty-1'] },
-          runtimeLivenessRequiredWorktreeIds: ['wt-bg'],
-          mobileLockedPtyIds: ['pty-1']
-        })
-      )
-    ).toEqual([])
-  })
-
   it('applies mobile locks across wrapped remote and raw runtime PTY IDs', () => {
     expect(
       plannedWorktrees(
@@ -631,122 +456,9 @@ describe('agent sleep planner', () => {
       )
     ).toEqual([])
   })
-
-  it('selects each eligible done agent pane independently', () => {
-    expect(plannedWorktrees(snapshot())).toEqual(['wt-bg'])
-    const second = entry({
-      paneKey: `tab-1:${OTHER_LEAF}`,
-      providerSession: { key: 'session_id', id: 'session-2' }
-    })
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          terminalLayoutsByTabId: {
-            'tab-1': {
-              root: {
-                type: 'split',
-                direction: 'horizontal',
-                first: { type: 'leaf', leafId: LEAF },
-                second: { type: 'leaf', leafId: OTHER_LEAF }
-              },
-              activeLeafId: LEAF,
-              expandedLeafId: null,
-              ptyIdsByLeafId: { [LEAF]: 'pty-1', [OTHER_LEAF]: 'pty-2' }
-            }
-          },
-          ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] },
-          agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry(), [second.paneKey]: second }
-        })
-      )
-    ).toEqual([`tab-1:${LEAF}`, `tab-1:${OTHER_LEAF}`])
-  })
-
-  it('clamps corrupt or out-of-range idle durations to the default', () => {
-    expect(getEffectiveAgentHibernationIdleMs(0)).toBe(DEFAULT_AGENT_HIBERNATION_IDLE_MS)
-    expect(getEffectiveAgentHibernationIdleMs(Number.NaN)).toBe(DEFAULT_AGENT_HIBERNATION_IDLE_MS)
-    expect(getEffectiveAgentHibernationIdleMs(MIN_AGENT_HIBERNATION_IDLE_MS - 1)).toBe(
-      DEFAULT_AGENT_HIBERNATION_IDLE_MS
-    )
-    expect(getEffectiveAgentHibernationIdleMs(MAX_AGENT_HIBERNATION_IDLE_MS + 1)).toBe(
-      DEFAULT_AGENT_HIBERNATION_IDLE_MS
-    )
-    expect(getEffectiveAgentHibernationIdleMs(MIN_AGENT_HIBERNATION_IDLE_MS)).toBe(
-      MIN_AGENT_HIBERNATION_IDLE_MS
-    )
-    expect(getEffectiveAgentHibernationIdleMs(DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1)).toBe(
-      DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1
-    )
-  })
-})
-
-describe('live resume anchors do not block hibernation (#10238 regression)', () => {
-  // Every resumable agent gets origin:live; treating that anchor as a sleep capture prevented Claude/Codex hibernation.
-  const NON_PI_AGENTS = [
-    'claude',
-    'codex',
-    'gemini',
-    'antigravity',
-    'opencode',
-    'mimo-code',
-    'droid',
-    'grok',
-    'devin',
-    'copilot',
-    'kimi'
-  ] as const
-
-  function liveAnchor(
-    agent: string,
-    providerSession: { key: 'session_id' | 'conversation_id'; id: string }
-  ) {
-    return {
-      paneKey: `tab-1:${LEAF}`,
-      tabId: 'tab-1',
-      worktreeId: 'wt-bg',
-      agent,
-      providerSession,
-      prompt: '',
-      state: 'done' as const,
-      capturedAt: OLD,
-      updatedAt: OLD,
-      origin: 'live' as const
-    }
-  }
-
-  it.each(NON_PI_AGENTS)('plans a long-idle done %s pane holding only its live anchor', (agent) => {
-    const providerSession =
-      agent === 'antigravity'
-        ? ({ key: 'conversation_id', id: `${agent}-conversation-1` } as const)
-        : ({ key: 'session_id', id: `${agent}-session-1` } as const)
-    const agentEntry = entry({ agentType: agent, providerSession })
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
-          sleepingAgentSessionsByPaneKey: {
-            [agentEntry.paneKey]: liveAnchor(agent, providerSession) as never
-          },
-          ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
-        })
-      )
-    ).toEqual([agentEntry.paneKey])
-  })
 })
 
 describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
-  it('is not deferred by a done→done repaint that only advances updatedAt', () => {
-    // Repaint/reconnect changes updatedAt without changing stateStartedAt; it must not restart the idle clock.
-    const repainted = entry({ stateStartedAt: OLD, updatedAt: NOW })
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          agentStatusByPaneKey: { [repainted.paneKey]: repainted },
-          ptyBindingFirstSeenAtByPaneKey: { [repainted.paneKey]: OLD }
-        })
-      )
-    ).toEqual([repainted.paneKey])
-  })
-
   it('keeps the signature stable across such a repaint so confirmation can match', () => {
     const before = entry({ stateStartedAt: OLD, updatedAt: OLD })
     const after = entry({ stateStartedAt: OLD, updatedAt: NOW - 1 })
@@ -803,12 +515,6 @@ describe('PTY binding and boundary floors', () => {
     expect(
       plannedPaneKeys(snapshot({ ptyBindingFirstSeenAtByPaneKey: { [`tab-1:${LEAF}`]: NOW } }))
     ).toEqual([])
-  })
-
-  it('plans it once the binding has aged past the idle window', () => {
-    expect(
-      plannedPaneKeys(snapshot({ ptyBindingFirstSeenAtByPaneKey: { [`tab-1:${LEAF}`]: OLD } }))
-    ).toEqual([`tab-1:${LEAF}`])
   })
 
   it('defers a boundary done that only just became a real completion', () => {

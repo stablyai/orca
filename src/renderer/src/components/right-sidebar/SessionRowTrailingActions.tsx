@@ -18,14 +18,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { agentLabel } from './ai-vault-session-filters'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import './ai-vault-session-filters'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
 import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
-import {
-  aiVaultWorktreeJumpTooltip,
-  type AiVaultSessionWorktreeInfo
-} from './ai-vault-session-worktree'
+import { aiVaultWorktreeJumpTooltip } from './ai-vault-session-worktree'
+import type { AiVaultSessionWorktreeInfo } from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 
 // Collapse hover actions so the prompt keeps full width until hover/focus; touch actions stay visible.
 const HOVER_ACTION_GROUP_BASE = 'flex items-center gap-1 transition-[max-width,margin,opacity]'

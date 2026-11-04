@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { RESET_GRAPHIC_RENDITION } from '../../../../../shared/terminal-mode-reset-profiles'
+import { RESET_GRAPHIC_RENDITION } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'

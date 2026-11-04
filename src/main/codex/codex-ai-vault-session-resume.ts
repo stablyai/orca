@@ -1,7 +1,7 @@
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
-} from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { parseWslUncPath } from '../../shared/wsl-paths'

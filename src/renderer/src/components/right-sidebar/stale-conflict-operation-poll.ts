@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import type { GitConflictOperation } from '../../../../shared/git-status-types'
+import type { GitConflictOperation } from '../../../../shared/git/status/git-status-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
@@ -66,6 +66,9 @@ export function useStaleConflictOperationPolling(args: {
         return
       }
       for (const { id, path } of staleConflictWorktrees) {
+        if (!active || !isWindowVisible()) {
+          return
+        }
         try {
           const connectionId = getConnectionId(id) ?? undefined
           // Explicit SSH disconnect removes the provider; wait for reconnection before probing.

@@ -1,11 +1,24 @@
+import type { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
+import type { LocalFileAccess } from '../../../../shared/local-file-access'
 import type { EditorSaveResult, EditorSaveTrigger } from './editor-save-disk-precondition'
 
+export type EditorSaveAcquisition =
+  | {
+      operation: ReturnType<typeof acquireEditorFileOperation>
+      access: LocalFileAccess | undefined
+    }
+  | { error: unknown }
+
 export type EditorSaveRequest = {
+  invocation: EditorSaveAcquisition
+  viewIds: readonly string[]
   fileId: string
   fallbackContent: string
   trigger: EditorSaveTrigger
   /** Dirty when asked: finding the tab clean later means its edits were saved or dropped. */
   requestedDirty: boolean
+  /** Preserve the saving view's kind if a different view takes over. */
+  requestedFromCodeView: boolean
   /** The record the request was queued under; `discardEpoch` is its epoch then. */
   recordId: string
   /** A discard since the request voids it, whatever the trigger. */
@@ -50,8 +63,8 @@ export function createEditorSaveSlots(
       }
       request.fallbackContent = incoming.fallbackContent
       request.requestedDirty ||= incoming.requestedDirty
-      if (TRIGGER_RANK[incoming.trigger] > TRIGGER_RANK[request.trigger]) {
-        request.trigger = incoming.trigger
+      if (TRIGGER_RANK[incoming.trigger] >= TRIGGER_RANK[request.trigger]) {
+        Object.assign(request, incoming, { requestedDirty: request.requestedDirty })
       }
       return slot.queued.promise
     }

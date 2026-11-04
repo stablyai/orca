@@ -9,7 +9,7 @@ export type ReattachPayloadSession = Pick<
   | 'applySnapshotKittyKeyboardModes'
   | 'buildColdRestoreAgentResumeStartup'
   | 'chooseReattachReplayReset'
-  | 'clearSleepingRecordAfterColdRestoreSpawn'
+  | 'keepResumeRecordAfterColdRestoreSpawn'
   | 'consumeRestoredViewportBlankingMarker'
   | 'createReattachGridPush'
   | 'deps'

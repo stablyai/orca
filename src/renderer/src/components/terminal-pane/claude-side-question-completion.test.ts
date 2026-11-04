@@ -9,15 +9,19 @@ import {
   createManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
 import { reserveNotificationCooldown } from '../../../../shared/notification-burst-cooldown'
-import { reduceHostTurnEnd } from '../../../../shared/agent-hook-turn-end-timing'
-import { pickHostTurnEnd } from '../../../../shared/agent-status-types'
+import { reduceHostTurnEnd } from '../../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
+import { pickHostTurnEnd } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentHookEventPayload } from '../../../../shared/agent-hook-listener/listener-event'
 import {
   installTerminalTestGlobals,
@@ -165,7 +169,13 @@ describe('Claude completion banners through the real pane and hook lanes', () =>
       dispatchNotification: (event: Parameters<typeof dispatchTerminalNotification>[1]) =>
         dispatchTerminalNotification('wt-1', event)
     })
-    await connectMockPanePty(createPane(1), createManager(1), deps)
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+    await connectMockPanePty(
+      createPane(1),
+      createManager(1),
+      bindPaneAgentTitleMocks(deps, agentTitleMocks)
+    )
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks(20)
     if (servedBy) {

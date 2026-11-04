@@ -21,7 +21,7 @@ import {
   defaultTerminalFontFamily,
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste
-} from './terminal-platform-defaults'
+} from './terminal/appearance/terminal-platform-defaults'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -216,6 +216,7 @@ export function getDefaultUIState(): PersistedUIState {
     editorFontZoomLevel: 0,
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
     _worktreeCardModeDefaulted: true,
+    showAgentModels: true,
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,

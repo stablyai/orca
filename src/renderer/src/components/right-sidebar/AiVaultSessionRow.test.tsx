@@ -4,16 +4,16 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
-import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
-import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultSessionWorktreeInfo } from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
+import { searchHit } from '../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { findAiVaultSessionLiveState } from './ai-vault-original-pane'
 import { VaultSessionRow } from './AiVaultSessionRow'
 
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   buildAiVaultOriginalPaneIndex,
   findAiVaultSessionLiveStateInIndex

@@ -2,9 +2,10 @@ import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
-} from '../../shared/agent-title-owner'
-import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+} from '../../shared/agent-status/title/agent-title-owner'
+import { resolvePaneAgentOwnerRecord } from '../../shared/agent-status/identity/pane-agent-owner'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult,

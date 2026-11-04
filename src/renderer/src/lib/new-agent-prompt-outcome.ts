@@ -1,5 +1,5 @@
 import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
-import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-prompt'
+import type { StructuredPromptDeliveryResult } from './agent-session/launch/structured-agent-session-launch-prompt'
 
 /** Delivered releases notes once host/composer owns the text; failure is omitted when the chat already reports startup/cancellation. */
 export type NewAgentPromptOutcome = { delivered: boolean; failure?: ActiveAgentNotesSendResult }
@@ -22,11 +22,17 @@ export function newAgentPromptOutcome(args: {
 }): Promise<NewAgentPromptOutcome> {
   return args.delivery.then(
     (result) =>
-      result.delivered || result.inComposer
+      result.delivered || result.inComposer || result.recipientOwned
         ? { delivered: true }
         : result.failureNotified
           ? { delivered: false }
           : { delivered: false, failure: notesFailure(result) },
     () => ({ delivered: false })
   )
+}
+
+export function agentLaunchPromptOwnership(
+  delivery: Promise<StructuredPromptDeliveryResult> | undefined
+): boolean | Promise<boolean> {
+  return delivery ? newAgentPromptOutcome({ delivery }).then((outcome) => outcome.delivered) : true
 }

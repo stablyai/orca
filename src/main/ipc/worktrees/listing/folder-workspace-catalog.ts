@@ -20,7 +20,7 @@ import {
   toDetectedWorktree,
   applyMetadataFallbackVisibility
 } from '../../../../shared/worktree/ownership'
-import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
+import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import { getProjectHostSetupMetaUpdates } from './worktree-discovery-metadata'
 import {
   getFolderWorkspaceInstanceIdentity,

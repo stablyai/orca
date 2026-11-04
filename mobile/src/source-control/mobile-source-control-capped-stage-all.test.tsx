@@ -27,7 +27,7 @@ vi.mock('../platform/haptics', () => ({
 }))
 
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { GIT_STAGE_WORKTREE_SCOPE_UNSUPPORTED_MESSAGE } from '../../../src/shared/git-stage-worktree-scope'
+import { GIT_STAGE_WORKTREE_SCOPE_UNSUPPORTED_MESSAGE } from '../../../src/shared/git/paths/git-stage-worktree-scope'
 import { gitStatusHostPayloadSchema } from './git-status-reply-schema'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import { useMobileSourceControlRunners } from './use-mobile-source-control-runners'
@@ -68,7 +68,6 @@ async function runStageAll(
       hostId: 'host-a',
       worktreeId: 'wt-1',
       status,
-      branchLabel: 'main',
       commitMessage: '',
       stagedEntries: [],
       generatingMessage: false,
@@ -88,8 +87,6 @@ async function runStageAll(
       setShowActionSheet: vi.fn(),
       setLocalBranches: vi.fn(),
       setShowBranchPicker: vi.fn(),
-      setCreatedPrUrl: vi.fn(),
-      setCreatedPrWarning: vi.fn(),
       recordCommitFailure: vi.fn()
     }).stageAll
     return null

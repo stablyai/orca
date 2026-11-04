@@ -2,19 +2,37 @@ import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 import type { PersistedAgentExitEvidence } from './agent-exit-evidence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import type {
-  AgentStatusClearIpcPayload,
-  AgentStatusState
-} from '../../../shared/agent-status-types'
-import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
+import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusState } from '../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusObservation } from '../../../shared/agent-status/contracts/agent-status-observation'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex-state'
+import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+
+export type HookServerStartOptions = {
+  env?: string
+  userDataPath?: string
+  endpointNamespace?: string
+  statusHooksEnabled?: boolean
+}
+
+export type AgentStatusDispositionEvent = {
+  source?: AgentHookSource
+  rawSource?: unknown
+  hookEventName?: string
+  isReplay?: boolean
+  hasExplicitPrompt?: boolean
+  launchToken?: string
+  retainedLaunchTokenHash?: string
+}
 
 /** Ingest-only fields, stripped before the row is stored. */
 export type IncomingAgentHookEvent = AgentHookEventPayload & {
   authorityRestartId?: string
   codexRosterAuthority?: CodexRemoteRosterAuthority
+  /** The relay echoed this link's current binding for the pane on the owner it proved. */
+  rooted?: true
 }
 
 export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
@@ -42,6 +60,7 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
   | 'authorityRestartId'
+  | 'statusAdmissionSession'
   | 'launchToken'
   | 'hostTurnRevision'
   | 'promptInteractionKey'

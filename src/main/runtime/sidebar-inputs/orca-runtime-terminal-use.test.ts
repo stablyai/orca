@@ -6,7 +6,7 @@ import {
   WORKSPACE_CLEANUP_IDLE_MS,
   getPersistedWorkspaceCleanupActivityAt,
   isWorkspaceOldForCleanup
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_USE_THROTTLE_MS } from './terminal-use-producer'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'

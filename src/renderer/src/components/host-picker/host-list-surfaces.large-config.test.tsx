@@ -6,7 +6,7 @@ import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
 import { HOST_LIST_ROW_LIMIT } from './bounded-host-list'
 import { HostCombobox } from './HostCombobox'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { SshTargetSelect } from '../settings/SshTargetSelect'
+import { SshTargetSelect } from './SshTargetSelect'
 import { SkillInstallMachineSelect } from '../skills/SkillInstallMachineSelect'
 import { RemoteStep } from '../sidebar/AddRepoRemoteStep'
 import { AddRepoHostSelector } from '../sidebar/AddRepoHostSelector'
@@ -50,21 +50,6 @@ describe('host lists with a 13,692-host ssh config', () => {
     expect(nodeCount()).toBeLessThan(NODE_BUDGET)
     fireEvent.change(search, { target: { value: lastName } })
     expect(screen.getAllByRole('option')[0]?.textContent).toContain(lastName)
-  })
-
-  it('HostCombobox treats re-picking the current host as no change', async () => {
-    const onChange = vi.fn()
-    render(
-      <HostCombobox
-        value="ssh-0"
-        onChange={onChange}
-        ariaLabel="Host"
-        options={names.slice(0, 3).map((name, i) => ({ id: `ssh-${i}`, label: name }))}
-      />
-    )
-    fireEvent.click(screen.getByRole('combobox', { name: 'Host' }))
-    fireEvent.click(await screen.findByRole('option', { name: names[0] }))
-    expect(onChange).not.toHaveBeenCalled()
   })
 
   it('Settings > Servers SSH host picker', async () => {

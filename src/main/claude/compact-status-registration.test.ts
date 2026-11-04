@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   createHookListenerState,
   seedLegacyAgentStatusForTests,

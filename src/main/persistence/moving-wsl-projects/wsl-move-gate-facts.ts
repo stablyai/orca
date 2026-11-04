@@ -4,9 +4,9 @@
  * Status), foreground work from the same process probe the close-tab warning uses, and running
  * automation runs and live orchestration dispatches from their own stores. This only reads.
  */
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
-import { getAgentResumeArgv } from '../../../shared/agent-resume-argv'
-import { isResumableTuiAgent } from '../../../shared/agent-session-resume'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-resume-argv'
+import { isResumableTuiAgent } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isFinalAutomationRunStatus, type AutomationRun } from '../../../shared/automations-types'
 import { probePtyRunningWorkWithInspection } from '../../../shared/pty-running-work-probe'
 import { parsePaneKey } from '../../../shared/stable-pane-id'

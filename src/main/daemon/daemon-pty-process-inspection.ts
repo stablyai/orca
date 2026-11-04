@@ -1,4 +1,5 @@
-import { isShellProcess } from '../../shared/agent-detection'
+import { PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION } from './daemon-protocol-version'
+import { isShellProcess } from '../../shared/shell-process-detection'
 import { DaemonPtyBufferSnapshots } from './daemon-pty-buffer-snapshots'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import {
@@ -27,6 +28,10 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     return this.hasChildProcessesFromForeground(await this.getForegroundProcess(id))
   }
 
+  supportsForegroundObservation(_id: string): boolean {
+    return this.protocolVersion >= PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION
+  }
+
   async inspectProcess(
     id: string,
     options?: PtyProcessInspectionOptions
@@ -49,6 +54,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       ...(options?.expectedIncarnationId
         ? { expectedIncarnationId: options.expectedIncarnationId }
         : {}),
+      ...(options?.foregroundOnly === true ? { foregroundOnly: true } : {}),
       // Additive: an older daemon ignores it and pays for the full capture.
       ...(options?.steadyState === true ? { steadyState: true } : {}),
       ...(options?.ignoreDetached === true ? { ignoreDetached: true } : {})

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   BrowserClientPageRendererOutcome,
   BrowserClientPageRendererRequest
-} from '../../../../shared/browser-client-page-renderer-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import { installBrowserClientPageRenderer } from './browser-client-page-renderer-installation'
 
 const PAGE = {

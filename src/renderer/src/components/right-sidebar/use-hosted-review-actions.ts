@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitHubPRMergeMethod, PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -25,6 +25,7 @@ export type HostedReviewActionInfo = Pick<
   Partial<
     Pick<
       HostedReviewInfo,
+      | 'checksSummary'
       | 'reviewDecision'
       | 'autoMergeEnabled'
       | 'autoMergeAllowed'
@@ -117,13 +118,12 @@ export function useHostedReviewActions({
             })
         if (!result.ok) {
           setActionError(codeHostErrorText(result))
-        } else {
-          await onRefreshReview()
         }
       } catch (err) {
         setActionError(err instanceof Error ? err.message : 'Merge failed')
       } finally {
         setMerging(false)
+        await onRefreshReview().catch(() => {})
       }
     },
     [
@@ -157,15 +157,12 @@ export function useHostedReviewActions({
       })
       if (!result.ok) {
         setActionError(codeHostErrorText(result))
-        // Refresh stale eligibility without replacing the provider's mutation error.
-        await onRefreshReview().catch(() => {})
-      } else {
-        await onRefreshReview()
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Auto-merge update failed')
     } finally {
       setMerging(false)
+      await onRefreshReview().catch(() => {})
     }
   }, [
     githubPR?.prRepo,
@@ -239,7 +236,6 @@ export function useHostedReviewActions({
                   { value0: shortLabel }
                 )
           )
-          await onRefreshReview()
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : copy.failure
@@ -247,6 +243,7 @@ export function useHostedReviewActions({
         toast.error(message)
       } finally {
         setStateUpdating(null)
+        await onRefreshReview().catch(() => {})
       }
     },
     [

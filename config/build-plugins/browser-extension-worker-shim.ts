@@ -3,7 +3,7 @@ import { build, type Plugin } from 'vite'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE
-} from '../../src/shared/browser-extension-worker-api'
+} from '../../src/shared/browser/extensions/browser-extension-worker-api'
 
 type BundledScript = { code: string; moduleIds: string[] }
 

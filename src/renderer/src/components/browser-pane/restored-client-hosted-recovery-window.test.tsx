@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS } from '../../../../shared/browser-client-page-creation-timeouts'
+import { DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS } from '../../../../shared/browser/client-hosting/browser-client-page-creation-timeouts'
 import type { BrowserPage } from '../../../../shared/browser-workspace-types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 

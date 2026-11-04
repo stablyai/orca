@@ -1,8 +1,8 @@
 import { useAppStore } from '@/store'
 import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
@@ -51,6 +51,7 @@ export function EditorContent({
   resolvedLanguage,
   isMarkdown,
   isMermaid,
+  isSvg = false,
   isCsv,
   isNotebook,
   customEditor = null,
@@ -80,6 +81,7 @@ export function EditorContent({
   resolvedLanguage: string
   isMarkdown: boolean
   isMermaid: boolean
+  isSvg?: boolean
   isCsv: boolean
   isNotebook: boolean
   customEditor?: ActivePluginCustomEditor | null
@@ -204,7 +206,9 @@ export function EditorContent({
         <EditorFileLoadErrorView
           message={fileContent.loadError}
           code={fileContent.loadErrorCode}
+          worktreeId={activeFile.worktreeId}
           onRetry={() => reloadContent(activeFile, USER_RETRY)}
+          onHostStarted={() => reloadContent(activeFile)}
         />
       )
     }
@@ -258,6 +262,7 @@ export function EditorContent({
         monacoLanguage={monacoLanguage}
         isMarkdown={isMarkdown}
         isMermaid={isMermaid}
+        isSvg={isSvg}
         isCsv={isCsv}
         isNotebook={isNotebook}
         customEditor={customEditor}

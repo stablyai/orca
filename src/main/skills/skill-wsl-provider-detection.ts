@@ -3,9 +3,9 @@ import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
-} from '../../shared/tui-agent-detection-commands'
+} from '../../shared/agent-launch/catalog/tui-agent-detection-commands'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
 
 const PROVIDER_DETECTION_COMMANDS = KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter((command) =>
   isSkillInstallProviderId(command.id)

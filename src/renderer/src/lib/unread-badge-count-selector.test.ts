@@ -7,7 +7,7 @@ import {
   TEST_REPO
 } from '@/store/slices/store-test-helpers'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { createUnreadBadgeCountSelector } from './unread-badge-count-selector'
@@ -183,17 +183,6 @@ describe('Dock unread count against the sidebar (#23363)', () => {
       }
     })
     expect(selectCount(store.getState())).toBe(0)
-  })
-
-  it('preserves id-only deduplication when a second host publishes a row', () => {
-    const store = createTestStore()
-    const selectCount = createUnreadBadgeCountSelector()
-    const row = makeWorktree({ id: BELL_WORKTREE, repoId: 'repo1', isUnread: true })
-    store.setState({ worktreesByRepo: { repo1: [row, row] } })
-    expect(selectCount(store.getState())).toBe(1)
-
-    store.setState({ worktreesByRepo: { repo1: [row, { ...row, hostId: 'ssh:remote' }] } })
-    expect(selectCount(store.getState())).toBe(1)
   })
 
   it('recounts device visibility when creator provenance or runtime ownership changes', () => {

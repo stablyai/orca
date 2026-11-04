@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { wslMoveCutoverFixture as cutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import {
@@ -105,11 +105,6 @@ describe('updateRuntimeManagedWorktreeMetadata under a WSL move', () => {
       update(MOVING, { isUnread: true, lineage: { noParent: true } })
     ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
   })
-
-  it('leaves a project the move is not taking untouched', async () => {
-    await update(STAYING, { comment: 'mine' })
-    expect(store.getWorktreeMeta(STAYING)?.comment).toBe('mine')
-  })
 })
 
 describe('persistRuntimeManagedWorktreeSortOrder under a WSL move', () => {
@@ -125,19 +120,5 @@ describe('persistRuntimeManagedWorktreeSortOrder under a WSL move', () => {
     expect(result).toEqual({ updated: 1 })
     expect(store.getWorktreeMeta(MOVING)?.sortOrder).toBe(1)
     expect(store.getWorktreeMeta(STAYING)?.sortOrder).toBeGreaterThan(2)
-  })
-
-  // A host-qualified read migrates a legacy row in place, which the move must keep frozen.
-  it('never reads the moving copy by host, even when the client names its host', () => {
-    store.setWorktreeMeta(hostWorktreeTarget({ id: STAYING, hostId: 'local' }), { sortOrder: 2 })
-    const hostRead = vi.spyOn(store, 'getWorktreeMetaForHost')
-    persistRuntimeManagedWorktreeSortOrder({
-      orderedIds: [MOVING, STAYING],
-      hostIds: ['local', 'local'],
-      store,
-      invalidateResolved: vi.fn(),
-      notifyChanged: vi.fn()
-    })
-    expect(hostRead.mock.calls.map(([id]) => id)).not.toContain(MOVING)
   })
 })

@@ -26,7 +26,7 @@ import {
 } from './sidebar-feed-index'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import { getEmptyProjectPlaceholderRepoIds } from './empty-project-placeholder-repos'
 import {
   filterFolderWorkspacesForVisibleHosts,

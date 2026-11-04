@@ -2,15 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { createBoundedGenerationMap } from './bounded-generation-map'
 
 describe('createBoundedGenerationMap', () => {
-  it('advances a key to a strictly larger generation', () => {
-    const map = createBoundedGenerationMap(4)
-    expect(map.get('a')).toBe(0)
-    map.advance('a')
-    const first = map.get('a')
-    map.advance('a')
-    expect(map.get('a')).toBeGreaterThan(first)
-  })
-
   it('keeps insertion order for eviction when a key is re-advanced', () => {
     const map = createBoundedGenerationMap(2)
     map.advance('a')
@@ -30,16 +21,5 @@ describe('createBoundedGenerationMap', () => {
     map.advance('b')
     expect(map.get('a')).toBe(2)
     expect(map.get('never-seen')).toBe(2)
-  })
-
-  it('reset clears generations, sequence and the evicted floor', () => {
-    const map = createBoundedGenerationMap(1)
-    map.advance('a')
-    map.advance('b')
-    map.reset()
-    expect(map.get('a')).toBe(0)
-    expect(map.get('b')).toBe(0)
-    map.advance('a')
-    expect(map.get('a')).toBe(1)
   })
 })

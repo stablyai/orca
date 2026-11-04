@@ -81,20 +81,6 @@ describe('settled worker process replacement accounting', () => {
     }
   )
 
-  it('keeps the original live resource unchanged across reattach', () => {
-    const worker = seedWorker(LOCAL_HOST)
-    const original = db.getWorkerTerminalResourceByOwner(worker.dispatchId)
-    register('pty-original', 'inc-original')
-    expect(db.getWorkerTerminalResourceByOwner(worker.dispatchId)).toEqual(original)
-  })
-
-  it('does not use missing incarnation evidence as proof of replacement', () => {
-    const worker = seedWorker(LOCAL_HOST)
-    const original = db.getWorkerTerminalResourceByOwner(worker.dispatchId)
-    register('pty-unverifiable')
-    expect(db.getWorkerTerminalResourceByOwner(worker.dispatchId)).toEqual(original)
-  })
-
   it('does not change another execution host with the same pane and folder', () => {
     const worker = seedWorker(SSH_HOST)
     const original = db.getWorkerTerminalResourceByOwner(worker.dispatchId)

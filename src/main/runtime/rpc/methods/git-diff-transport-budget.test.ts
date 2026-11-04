@@ -5,8 +5,8 @@ import {
   REMOTE_RPC_MAX_CONTENT_BYTES,
   remoteRpcContentBudget
 } from '../../../../shared/remote-rpc-content-budget'
-import { assertGitDiffWithinTransportBudget } from '../../../../shared/git-diff-transport-budget'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import { assertGitDiffWithinTransportBudget } from '../../../../shared/git/diff/git-diff-transport-budget'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'

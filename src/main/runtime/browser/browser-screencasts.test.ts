@@ -3,7 +3,7 @@ import type { WebContents } from 'electron'
 import type {
   BrowserScreencastOptions,
   BrowserScreencastSession
-} from '../../browser/browser-screencast-stream-types'
+} from '../../browser/cdp/screencast/browser-screencast-stream-types'
 import {
   createSinglePageBrowserCommandsHost,
   createStreamedGuest
@@ -22,7 +22,9 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   webContents: { fromId: webContentsFromId }
 }))
-vi.mock('../../browser/browser-screencast-stream', () => ({ startBrowserScreencast }))
+vi.mock('../../browser/cdp/screencast/browser-screencast-stream', () => ({
+  startBrowserScreencast
+}))
 
 function createSession() {
   let close!: () => void
@@ -33,8 +35,7 @@ function createSession() {
     stop: vi.fn(() => close()),
     done,
     updateViewport: async () => {},
-    updateFrameBudget: async () => {},
-    settleDialog: async () => false
+    updateFrameBudget: async () => {}
   }
 }
 
@@ -255,23 +256,6 @@ describe('screencast ownership', () => {
     expect(secondSend).toHaveBeenCalledOnce()
     second.session.stop()
     await second.session.done
-  })
-
-  it('settles dialogs through the stream owned by the command instance', async () => {
-    const session = createSession()
-    const settleDialog = vi.spyOn(session, 'settleDialog').mockResolvedValue(true)
-    startBrowserScreencast.mockResolvedValue(session)
-    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
-    const stream = await commands.browserScreencast(params, { sendBinary: () => true })
-
-    expect(await commands.browserDialogAccept({ page: params.page, text: 'Ada' })).toEqual({
-      accepted: true
-    })
-    expect(settleDialog).toHaveBeenCalledWith(true, 'Ada')
-    expect(await commands.browserDialogDismiss({ page: params.page })).toEqual({ accepted: false })
-    expect(settleDialog).toHaveBeenLastCalledWith(false, undefined)
-    stream.session.stop()
-    await stream.session.done
   })
 
   it('accepts startup callbacks before the stream promise is returned', async () => {

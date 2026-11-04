@@ -1,7 +1,6 @@
-import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
 import { translate } from '../i18n/mobile-i18n'
-import { terminalBufferClear, terminalInputSend } from '../terminal/mobile-terminal-operations'
+import { terminalBufferClear } from '../terminal/mobile-terminal-operations'
 import {
   clearTerminalLiveInputFocusTimer,
   scheduleTerminalLiveInputFocus
@@ -26,6 +25,7 @@ import type { MobileSessionFileActionsModel } from './use-mobile-session-file-ac
 export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsModel) {
   const {
     client,
+    sendTerminalOrderedInput,
     connState,
     toggleTerminalLiveInput,
     activeHandle,
@@ -102,61 +102,82 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     []
   )
 
-  const flushTerminalGestureInput = useCallback(async (handle: string) => {
-    const queued = terminalGestureInputQueuesRef.current.get(handle)
-    if (!queued) {
-      return
-    }
-    if (queued.timer) {
-      clearTimeout(queued.timer)
-      queued.timer = null
-    }
-    if (terminalGestureInputInFlightRef.current.has(handle)) {
-      return
-    }
-
-    terminalGestureInputQueuesRef.current.delete(handle)
-    const isActive =
-      handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
-    const isFresh = Date.now() - queued.lastUpdatedMs <= TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
-    const rpc = clientRef.current
-    if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) {
-      return
-    }
-
-    terminalGestureInputInFlightRef.current.add(handle)
-    try {
-      // Drop queued gesture arrows on disconnect so reconnect cannot move the TUI long after the swipe.
-      const response = await terminalInputSend.request(
-        rpc,
-        buildTerminalSendParams({
-          terminal: handle,
-          text: queued.bytes,
-          enter: false,
-          deviceToken: deviceTokenRef.current
-        }),
-        TERMINAL_INPUT_SEND_OPTIONS
-      )
-      if (terminalInputSend.interpret(response) === true) {
-        reportWorkerTerminalUserInput(rpc, handle)
+  const flushTerminalGestureInput = useCallback(
+    async (handle: string) => {
+      const queued = terminalGestureInputQueuesRef.current.get(handle)
+      if (!queued) {
+        return
       }
-    } catch {
-      // Transient failure
-    } finally {
-      terminalGestureInputInFlightRef.current.delete(handle)
-      const next = terminalGestureInputQueuesRef.current.get(handle)
-      if (next) {
-        if (Date.now() - next.lastUpdatedMs > TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS) {
-          if (next.timer) {
-            clearTimeout(next.timer)
-          }
-          terminalGestureInputQueuesRef.current.delete(handle)
-        } else {
+      if (queued.timer) {
+        clearTimeout(queued.timer)
+        queued.timer = null
+      }
+      if (terminalGestureInputInFlightRef.current.has(handle)) {
+        return
+      }
+
+      terminalGestureInputQueuesRef.current.delete(handle)
+      const isActive =
+        handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
+      const isFresh = Date.now() - queued.lastUpdatedMs <= TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
+      const rpc = clientRef.current
+      if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) {
+        return
+      }
+
+      terminalGestureInputInFlightRef.current.add(handle)
+      let admitted = false
+      const advance = () => {
+        if (admitted) {
+          return
+        }
+        admitted = true
+        terminalGestureInputInFlightRef.current.delete(handle)
+        if (terminalGestureInputQueuesRef.current.has(handle)) {
           void flushTerminalGestureInput(handle)
         }
       }
-    }
-  }, [])
+      try {
+        // Drop queued gesture arrows on disconnect so reconnect cannot move the TUI long after the swipe.
+        await sendTerminalOrderedInput(
+          rpc,
+          buildTerminalSendParams({
+            terminal: handle,
+            text: queued.bytes,
+            enter: false,
+            deviceToken: deviceTokenRef.current
+          }),
+          TERMINAL_INPUT_SEND_OPTIONS,
+          {
+            onAdmission: advance,
+            gestureDeadline: queued.lastUpdatedMs + TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
+            isCurrent: () =>
+              clientRef.current === rpc &&
+              handle === activeHandleRef.current &&
+              activeSessionTabTypeRef.current === 'terminal'
+          }
+        )
+      } catch {
+        // Transient failure
+      } finally {
+        if (!admitted) {
+          terminalGestureInputInFlightRef.current.delete(handle)
+          const next = terminalGestureInputQueuesRef.current.get(handle)
+          if (next) {
+            if (Date.now() - next.lastUpdatedMs > TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS) {
+              if (next.timer) {
+                clearTimeout(next.timer)
+              }
+              terminalGestureInputQueuesRef.current.delete(handle)
+            } else {
+              void flushTerminalGestureInput(handle)
+            }
+          }
+        }
+      }
+    },
+    [sendTerminalOrderedInput]
+  )
 
   const enqueueTerminalGestureInput = useCallback(
     (handle: string, bytes: string, sequenceCount: number) => {

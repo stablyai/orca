@@ -3,7 +3,11 @@ import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import type { AiVaultAgent, AiVaultGroup, AiVaultScope } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultGroup,
+  AiVaultScope
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
@@ -164,7 +168,7 @@ export function AiVaultPanelHeader({
             'auto.components.right.sidebar.AiVaultPanel.searchSessions',
             'Search sessions'
           )}
-          className="min-w-0 flex-1 bg-transparent py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground"
           aria-label={translate(
             'auto.components.right.sidebar.AiVaultPanel.searchSessions',
             'Search sessions'

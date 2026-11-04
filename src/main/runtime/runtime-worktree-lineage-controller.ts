@@ -1,7 +1,7 @@
 import type { WorktreeLineage, WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import type { WorkspaceKey } from '../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../shared/folder-workspaces/folder-workspace-types'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
@@ -15,10 +15,12 @@ import {
   worktreeRowTarget
 } from '../persistence/host-qualified-worktree-meta'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
+import { getRepoOwnedWorktreeMeta } from '../workspaces/catalog/worktree-metadata-ownership'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   RuntimeLineageError,
+  LINEAGE_PARENT_AMBIGUOUS,
+  formatAmbiguousCwdParentMessage,
   enforceCreateLineageHostBoundary,
   resolveRuntimeWorktreeCreateLineage,
   type ResolvedWorkspaceParent,
@@ -84,7 +86,15 @@ export class RuntimeWorktreeLineageController {
         }
       }
     })
-    return enforceCreateLineageHostBoundary(resolution, childHostId)
+    const retained = enforceCreateLineageHostBoundary(resolution, childHostId)
+    if (
+      retained.kind === 'lineage' &&
+      retained.capture.source === 'cwd-context' &&
+      input?.cwdParentAmbiguous === true
+    ) {
+      throw new RuntimeLineageError(LINEAGE_PARENT_AMBIGUOUS, formatAmbiguousCwdParentMessage())
+    }
+    return retained
   }
 
   async resolveParent(selector: string): Promise<ResolvedWorkspaceParent> {

@@ -1,8 +1,8 @@
 import { translate } from '@/i18n/i18n'
-import type { AgentLaunchPaneOutcome } from '../../../../shared/agent-launch-pane-verdict'
+import type { AgentLaunchPaneOutcome } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { stripClientEnvironmentFooter } from '../../../../shared/client-environment-info'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { tuiAgentDisplayName } from '../../../../shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 /** What the pane shows, if its tab keeps a final launch outcome for this leaf. */
 export function agentLaunchPaneOutcomeForLeaf(
@@ -46,6 +46,20 @@ export function agentLaunchPaneNoticeText(
   const agent =
     tuiAgentDisplayName(agentId ?? '') ??
     translate('auto.components.terminal.pane.AgentLaunchPaneNotice.agent', 'The agent')
+  if (refusal.initialOutputDiagnostic === 'git-bash-console-capacity') {
+    const explanation = translate(
+      'auto.components.terminal.pane.AgentLaunchPaneNotice.gitBashConsoleCapacity',
+      'Git Bash reported its limit of 128 open terminals on this PC while starting {{agent}}. Close some Git Bash terminals and try again.',
+      { agent }
+    )
+    return refusal.kind === 'unconfirmed'
+      ? `${translate(
+          'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',
+          "Couldn't confirm {{agent}} started. Check its terminal before trying again.",
+          { agent }
+        )} ${explanation}`
+      : explanation
+  }
   if (refusal.kind === 'unconfirmed') {
     return translate(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',

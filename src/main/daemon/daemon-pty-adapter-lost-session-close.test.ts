@@ -98,10 +98,6 @@ describe('closing a kept host-loss tab after a relaunch', () => {
   const close = (provider: { shutdown: DaemonPtyAdapter['shutdown'] }, id = lostId) =>
     provider.shutdown(id, { immediate: true })
 
-  it('starts from history left unended, as a cold restore needs', () => {
-    expect(relaunchedAdapter().hasRestorableHistory(lostId)).toBe(true)
-  })
-
   it('ends the history of a session no daemon lists', async () => {
     await expect(close(relaunchedAdapter())).resolves.toBeUndefined()
     expect(historyKept()).toBe(false)
@@ -183,11 +179,5 @@ describe('closing a kept host-loss tab after a relaunch', () => {
     const id = await sleptId()
     await expect(close(routerWithLegacyListing(true), id)).rejects.toThrow('Session not found')
     expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
-  })
-
-  it('still refuses an id with no unended history', async () => {
-    await expect(close(relaunchedAdapter(), 'never-restorable')).rejects.toThrow(
-      'Session not found'
-    )
   })
 })

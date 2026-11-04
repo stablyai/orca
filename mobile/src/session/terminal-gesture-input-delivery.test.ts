@@ -13,9 +13,6 @@ vi.mock('../terminal/mobile-terminal-operations', () => ({
   },
   terminalBufferClear: {}
 }))
-vi.mock('../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
 
 const handle = 'term-gesture'
 const up = '\x1b[A'
@@ -31,7 +28,10 @@ const accepted: Awaited<ReturnType<typeof terminalInputSend.request>> = {
 
 function fixture() {
   const client = {}
+  const legacySend: typeof terminalInputSend.request = (rpc, params, options) =>
+    terminalInputSend.request(rpc, params, options)
   const scope = {
+    sendTerminalOrderedInput: legacySend,
     client,
     clientRef: ref<object | null>(client),
     connState: 'connected',

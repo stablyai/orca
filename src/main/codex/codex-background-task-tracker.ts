@@ -3,8 +3,8 @@ import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/age
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
-} from '../../shared/agent-session-wire'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+} from '../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   observeCodexExecutionFrame,
   readCodexBackgroundTaskFrame,

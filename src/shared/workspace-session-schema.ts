@@ -7,14 +7,14 @@ import {
 } from './terminal-layout-snapshot-schema'
 import { closedTerminalPaneSchema } from './closed-terminal-panes'
 import { closedTerminalTabTombstoneSchema } from './closed-terminal-tab-tombstones'
-import type { WorkspaceKey } from './folder-workspace-types'
+import type { WorkspaceKey } from './folder-workspaces/folder-workspace-types'
 import type { TabGroupLayoutNode } from './tab-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { terminalTabIdSchema } from './terminal-tab-id-schema'
 import { terminalSurfaceTombstoneSchema } from './terminal-surface-tombstone-schema'
 import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
-import { isTuiAgent } from './tui-agent-config'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
 import { isWorkspaceKey } from './workspace-scope'
 import {
   browserHistoryEntriesSchema,
@@ -31,7 +31,7 @@ import {
   workspaceVisibleTabTypeSchema
 } from './workspace-session-tab-type-schema'
 import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from './zod-salvage'
-import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)

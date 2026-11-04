@@ -1,7 +1,5 @@
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   AGENT_INTERRUPT_SETTLE_MS,
   isNavigationEscapeIntent,
@@ -9,9 +7,9 @@ import {
   shouldIgnoreInterruptIntent,
   type AgentInterruptInferenceRequest,
   type AgentInterruptInputIntent
-} from '../../../../shared/agent-interrupt-intent'
-import { isAskUserQuestionTool } from '../../../../shared/agent-question-answered-intent'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+} from '../../../../shared/agent-status/lifecycle/agent-interrupt-intent'
+import { isAskUserQuestionTool } from '../../../../shared/agent-status/lifecycle/agent-question-answered-intent'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 
 export type AgentInterruptInference = {
   observeInputIntent(

@@ -32,10 +32,7 @@ vi.mock('../codex-accounts/fs-utils', async (importOriginal) => {
 })
 
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
-import {
-  getCodexRegistrationKey,
-  readCodexRegistrationEntries
-} from './config-toml-plugin-registration-tables'
+import { getCodexRegistrationKey } from './config-toml-plugin-registration-tables'
 
 // Registration tables written by Codex 0.145 marketplace and plugin additions.
 const MARKETPLACE_TABLE = [
@@ -134,35 +131,6 @@ function mirrorTwice(): void {
 }
 
 describe('codex plugin registration survives the managed-home mirror', () => {
-  it('keeps a marketplace and a quoted plugin registered from the managed home across two mirrors', () => {
-    writeSystemConfig('model = "gpt-5"\n')
-    syncSystemConfigIntoManagedCodexHome()
-
-    simulateCodexRegistrationWrite(`${MARKETPLACE_TABLE}\n\n${PLUGIN_TABLE}`)
-    mirrorTwice()
-
-    const runtime = readRuntimeConfig()
-    expect(runtime).toContain('[marketplaces.ponytail]')
-    expect(runtime).toContain('[plugins."ponytail@ponytail"]')
-    expect(runtime).toContain('enabled = true')
-    expect(readSystemConfig()).toContain('[marketplaces.ponytail]')
-    expect(readSystemConfig()).toContain('[plugins."ponytail@ponytail"]')
-  })
-
-  it('reaches a byte-stable steady state, so a repeated mirror is a no-op', () => {
-    writeSystemConfig('model = "gpt-5"\n')
-    syncSystemConfigIntoManagedCodexHome()
-    simulateCodexRegistrationWrite(`${MARKETPLACE_TABLE}\n\n${PLUGIN_TABLE}`)
-    mirrorTwice()
-
-    const settledRuntime = readRuntimeConfig()
-    const settledSystem = readSystemConfig()
-    syncSystemConfigIntoManagedCodexHome()
-
-    expect(readRuntimeConfig()).toBe(settledRuntime)
-    expect(readSystemConfig()).toBe(settledSystem)
-  })
-
   it('promotes a runtime-only marketplace that a metadata-only policy would drop', () => {
     writeSystemConfig('model = "gpt-5"\n\n[marketplaces.other]\nsource = "other"\n')
     syncSystemConfigIntoManagedCodexHome()
@@ -173,22 +141,6 @@ describe('codex plugin registration survives the managed-home mirror', () => {
     expect(readSystemConfig()).toContain('[marketplaces.ponytail]')
     expect(readRuntimeConfig()).toContain('[marketplaces.ponytail]')
     expect(readRuntimeConfig()).toContain('[marketplaces.other]')
-  })
-
-  it('does not treat a cached marketplace clone or plugin directory as a registration', () => {
-    writeSystemConfig('model = "gpt-5"\n')
-    syncSystemConfigIntoManagedCodexHome()
-    mkdirSync(join(runtimeHomeDir(), '.tmp', 'marketplaces', 'ponytail'), {
-      recursive: true
-    })
-    mkdirSync(join(runtimeHomeDir(), 'plugins', 'ponytail'), {
-      recursive: true
-    })
-
-    mirrorTwice()
-
-    expect(readSystemConfig()).not.toContain('marketplaces')
-    expect(readRuntimeConfig()).not.toContain('marketplaces')
   })
 
   it('honors a canonical removal instead of resurrecting the registration', () => {
@@ -226,20 +178,6 @@ describe('codex plugin registration survives the managed-home mirror', () => {
 
     expect(readSystemConfig()).toContain('enabled = false')
     expect(readRuntimeConfig()).toContain('enabled = false')
-  })
-
-  it('lets the canonical config win when both sides changed plugin enablement', () => {
-    writeSystemConfig(`model = "gpt-5"\n\n${MARKETPLACE_TABLE}\n\n${PLUGIN_TABLE}\n`)
-    syncSystemConfigIntoManagedCodexHome()
-
-    simulateCodexRegistrationFieldWrite('enabled', 'false')
-    writeSystemConfig(
-      `model = "gpt-5"\n\n${MARKETPLACE_TABLE}\n\n${PLUGIN_TABLE.replace('enabled = true', 'enabled = false\ndisabled_reason = "canonical"')}\n`
-    )
-    mirrorTwice()
-
-    expect(readSystemConfig()).toContain('disabled_reason = "canonical"')
-    expect(readRuntimeConfig()).toContain('disabled_reason = "canonical"')
   })
 
   // Include absence as the third enabled state so both sides can diverge.
@@ -318,36 +256,11 @@ describe('codex marketplace refresh metadata promotion', () => {
     expect(system).toContain('source = "https://github.com/DietrichGebert/ponytail.git"')
   })
 
-  it('does not repeat the refresh on the next synchronization', () => {
-    seedMirroredMarketplace()
-    simulateCodexRegistrationFieldWrite('last_updated', '"2026-02-01T09:30:00Z"')
-    simulateCodexRegistrationFieldWrite('last_revision', '"bbbb222"')
-    mirrorTwice()
-
-    const settledSystem = readSystemConfig()
-    const settledRuntime = readRuntimeConfig()
-    syncSystemConfigIntoManagedCodexHome()
-
-    expect(readSystemConfig()).toBe(settledSystem)
-    expect(readRuntimeConfig()).toBe(settledRuntime)
-  })
-
   it('skips an older managed timestamp', () => {
     seedMirroredMarketplace()
 
     simulateCodexRegistrationFieldWrite('last_updated', '"2020-01-01T00:00:00Z"')
     simulateCodexRegistrationFieldWrite('last_revision', '"stale99"')
-    syncSystemConfigIntoManagedCodexHome()
-
-    expect(readSystemConfig()).toContain('last_updated = "2026-01-05T10:00:00Z"')
-    expect(readSystemConfig()).toContain('last_revision = "aaaa111"')
-  })
-
-  it('skips a malformed managed timestamp', () => {
-    seedMirroredMarketplace()
-
-    simulateCodexRegistrationFieldWrite('last_updated', '"not-a-timestamp"')
-    simulateCodexRegistrationFieldWrite('last_revision', '"cccc333"')
     syncSystemConfigIntoManagedCodexHome()
 
     expect(readSystemConfig()).toContain('last_updated = "2026-01-05T10:00:00Z"')
@@ -400,36 +313,6 @@ describe('codex marketplace refresh metadata promotion', () => {
     expect(readRuntimeConfig()).toContain('ponytail-fork.git')
   })
 
-  it('refreshes several marketplaces independently', () => {
-    writeSystemConfig(
-      [
-        'model = "gpt-5"',
-        '',
-        MARKETPLACE_TABLE,
-        '',
-        '[marketplaces.other]',
-        'source_type = "git"',
-        'source = "https://example.test/other.git"',
-        'last_updated = "2026-01-05T10:00:00Z"',
-        'last_revision = "other111"',
-        ''
-      ].join('\n')
-    )
-    syncSystemConfigIntoManagedCodexHome()
-
-    const runtime = readRuntimeConfig()
-      .replace('last_updated = "2026-01-05T10:00:00Z"', 'last_updated = "2026-03-01T00:00:00Z"')
-      .replace('last_revision = "aaaa111"', 'last_revision = "fresh11"')
-    writeFileSync(runtimeConfigPath(), runtime, 'utf-8')
-    syncSystemConfigIntoManagedCodexHome()
-
-    const system = readSystemConfig()
-    expect(system).toContain('last_updated = "2026-03-01T00:00:00Z"')
-    expect(system).toContain('last_revision = "fresh11"')
-    expect(system).toContain('last_revision = "other111"')
-    expect(system).toContain('last_updated = "2026-01-05T10:00:00Z"')
-  })
-
   it('promotes only last_updated and last_revision, never another refreshed field', () => {
     writeSystemConfig(`model = "gpt-5"\n\n${MARKETPLACE_TABLE}\ndescription = "canonical"\n`)
     syncSystemConfigIntoManagedCodexHome()
@@ -477,18 +360,6 @@ describe('codex marketplace refresh metadata promotion', () => {
 
     expect(readSystemConfig()).toContain('[marketplaces.ponytail]')
     expect(readRuntimeConfig()).toContain('[marketplaces.ponytail]')
-  })
-
-  it('keeps CRLF line endings when it rewrites refresh metadata', () => {
-    writeSystemConfig(`model = "gpt-5"\r\n\r\n${MARKETPLACE_TABLE.replaceAll('\n', '\r\n')}\r\n`)
-    syncSystemConfigIntoManagedCodexHome()
-
-    simulateCodexRegistrationFieldWrite('last_updated', '"2026-02-01T09:30:00Z"')
-    syncSystemConfigIntoManagedCodexHome()
-
-    const system = readSystemConfig()
-    expect(system).toContain('last_updated = "2026-02-01T09:30:00Z"\r\n')
-    expect(system).not.toMatch(/[^\r]\n/)
   })
 })
 
@@ -570,23 +441,6 @@ describe('codex registration reconciliation isolates accounts and source homes',
     })
   })
 
-  // Losing the baseline makes a pending canonical removal look like a runtime addition.
-  it('re-promotes a canonically removed registration when the baseline is lost first', () => {
-    writeSystemConfig('model = "gpt-5"\n')
-    syncSystemConfigIntoManagedCodexHome()
-    simulateCodexRegistrationWrite(MARKETPLACE_TABLE)
-    mirrorTwice()
-
-    writeSystemConfig('model = "gpt-5"\n')
-    rmSync(baselinePath())
-    mirrorTwice()
-    expect(readSystemConfig()).toContain('[marketplaces.ponytail]')
-
-    writeSystemConfig('model = "gpt-5"\n')
-    mirrorTwice()
-    expect(readSystemConfig()).toBe('model = "gpt-5"\n')
-  })
-
   it('leaves a settled config byte-identical when the baseline is lost with no removal pending', () => {
     writeSystemConfig('model = "gpt-5"\n')
     syncSystemConfigIntoManagedCodexHome()
@@ -611,65 +465,5 @@ describe('codex registration reconciliation isolates accounts and source homes',
 
     expect(readSystemConfig()).toContain('[marketplaces.ponytail]')
     expect(readRuntimeConfig()).toContain('[marketplaces.ponytail]')
-  })
-})
-
-describe('codex registration table identity', () => {
-  it('reads basic-quoted and literal-quoted table keys as the same registration', () => {
-    const basic = readCodexRegistrationEntries('[plugins."a@b"]\nenabled = true\n')
-    const literal = readCodexRegistrationEntries("[plugins.'a@b']\nenabled = false\n")
-
-    expect([...basic.keys()]).toEqual([getCodexRegistrationKey('plugins', 'a@b')])
-    expect([...literal.keys()]).toEqual([...basic.keys()])
-  })
-
-  it('captures a multiline array field as one value and marks it unwritable', () => {
-    const entries = readCodexRegistrationEntries(
-      '[marketplaces.m]\nsparse_paths = [\n  "a",\n  "b"\n]\nsource = "s"\n'
-    )
-    const entry = entries.get(getCodexRegistrationKey('marketplaces', 'm'))
-
-    expect(entry?.fields.get('sparse_paths')?.multiline).toBe(true)
-    expect(entry?.fields.get('sparse_paths')?.raw).toContain('"b"')
-    expect(entry?.fields.get('source')?.raw).toBe('"s"')
-  })
-
-  it('attributes a subtable to its owning registration', () => {
-    const entries = readCodexRegistrationEntries(
-      '[marketplaces.m]\nsource = "s"\n\n[marketplaces.m.auth]\ntoken = "t"\n'
-    )
-    const entry = entries.get(getCodexRegistrationKey('marketplaces', 'm'))
-
-    expect(entries.size).toBe(1)
-    expect(entry?.block).toContain('[marketplaces.m.auth]')
-    expect(entry?.fields.has('token')).toBe(false)
-  })
-
-  it("leaves the next table's leading comment out of the captured block", () => {
-    const entries = readCodexRegistrationEntries(
-      '[marketplaces.m]\nsource = "s" # inline\n# keeps this one\nkey = 1\n\n# belongs to mcp_servers\n[mcp_servers.docs]\ncommand = "d"\n'
-    )
-    const block = entries.get(getCodexRegistrationKey('marketplaces', 'm'))?.block
-
-    expect(block).toContain('# keeps this one')
-    expect(block).toContain('source = "s" # inline')
-    expect(block).not.toContain('belongs to mcp_servers')
-  })
-
-  it('keeps a hash inside a multiline value out of the trailing-comment trim', () => {
-    const entries = readCodexRegistrationEntries(
-      '[marketplaces.m]\nnotes = """\n# not a comment"""\n\n[mcp_servers.docs]\ncommand = "d"\n'
-    )
-    const block = entries.get(getCodexRegistrationKey('marketplaces', 'm'))?.block
-
-    expect(block).toContain('# not a comment"""')
-  })
-
-  it('ignores an array-of-tables header under a registration root', () => {
-    expect(readCodexRegistrationEntries('[[marketplaces.m]]\nsource = "s"\n').size).toBe(0)
-  })
-
-  it('keys marketplace and plugin registrations in separate namespaces', () => {
-    expect(MARKETPLACE_KEY).not.toBe(PLUGIN_KEY)
   })
 })

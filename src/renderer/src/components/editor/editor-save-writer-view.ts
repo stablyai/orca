@@ -1,16 +1,32 @@
+import { editorSaveResourceKey } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import { assertEditorFileOperationCurrent } from '@/lib/editor-file-operation-owner'
-import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
-import type { EditorSaveTrigger } from './editor-save-disk-precondition'
+import {
+  captureEditorFileOperationForOwner,
+  acquireEditorFileOperation
+} from '@/lib/editor-file-operation-owner'
+import { editorTabFileAccess } from '@/lib/local-file-access'
+import type { AppStoreApi } from './editor-save-queue'
+import type { EditorSaveAcquisition, EditorSaveRequest } from './editor-save-slots'
+import {
+  editorBufferIdOfView,
+  editorBufferSiblingViewIds
+} from '@/store/slices/editor/buffers/editor-buffer-views'
+import { isCodeViewTab, type EditorSaveTrigger } from './editor-save-disk-precondition'
 import { canAutoSaveOpenFile } from './editor-autosave'
+import { editorDiscardEpoch } from './editor-discard-epoch'
+
+export function sameEditorSaveResource(state: AppState, source: OpenFile, view: OpenFile): boolean {
+  const key = editorSaveResourceKey(source, state)
+  return key !== null && key === editorSaveResourceKey(view, state)
+}
 
 function hasCurrentProvenance(state: AppState, file: OpenFile): boolean {
   if (!file.operationProvenance) {
     return true
   }
   try {
-    assertEditorFileOperationCurrent(state, file.worktreeId, file.operationProvenance)
+    captureEditorFileOperationForOwner(state, file, file.operationProvenance)
     return true
   } catch {
     return false
@@ -24,13 +40,14 @@ export function isEditorWritableView(view: OpenFile): boolean {
 export function firstEditorSaveWriter(
   state: AppState,
   viewIds: readonly string[],
-  trigger: EditorSaveTrigger
+  trigger: EditorSaveTrigger,
+  views: readonly OpenFile[] = state.openFiles
 ): OpenFile | null {
   // CSV previews and read-only views cannot serve as record writers.
   const mayWrite = (view: OpenFile): boolean =>
     trigger === 'autosave' ? canAutoSaveOpenFile(view) : isEditorWritableView(view)
   for (const viewId of viewIds) {
-    const view = state.openFiles.find((openFile) => openFile.id === viewId)
+    const view = views.find((openFile) => openFile.id === viewId)
     if (view && mayWrite(view) && hasCurrentProvenance(state, view)) {
       return view
     }
@@ -58,11 +75,17 @@ export function liveEditorSaveWriter(
   state: AppState,
   viewId: string,
   recordViewIds: readonly string[],
-  trigger: EditorSaveTrigger
+  trigger: EditorSaveTrigger,
+  source: OpenFile
 ): OpenFile | null {
+  const entitled = state.openFiles.filter((file) => sameEditorSaveResource(state, source, file))
+  if (trigger === 'autosave' || trigger === 'restart') {
+    return firstEditorSaveWriter(state, [viewId, ...recordViewIds], trigger, entitled)
+  }
+  const asked = entitled.find((file) => file.id === viewId)
   return (
-    state.openFiles.find((openFile) => openFile.id === viewId) ??
-    firstEditorSaveWriter(state, recordViewIds, trigger)
+    (asked && isEditorWritableView(asked) ? asked : null) ??
+    firstEditorSaveWriter(state, recordViewIds, trigger, entitled)
   )
 }
 
@@ -70,4 +93,44 @@ export function liveEditorSaveWriter(
 export function liveEditorRecordView(state: AppState, viewIds: readonly string[]): OpenFile | null {
   const open = viewIds.flatMap((id) => state.openFiles.find((file) => file.id === id) ?? [])
   return open.find(isEditorWritableView) ?? open[0] ?? null
+}
+
+export function captureEditorSave(
+  store: AppStoreApi,
+  file: OpenFile,
+  trigger: EditorSaveTrigger
+): EditorSaveAcquisition {
+  try {
+    if (file.csvPreviewOnly === true) {
+      throw new Error('Large CSV previews are read-only.')
+    }
+    const writer = editorSaveWriterView(store.getState(), file.id, trigger) ?? file
+    const operation = acquireEditorFileOperation(store.getState, writer)
+    return { operation, access: editorTabFileAccess(store.getState(), operation.file) }
+  } catch (error) {
+    return { error }
+  }
+}
+
+export function captureEditorSaveRequest(
+  store: AppStoreApi,
+  file: OpenFile,
+  fallbackContent: string,
+  trigger: EditorSaveTrigger
+): EditorSaveRequest {
+  const invocation = captureEditorSave(store, file, trigger)
+  const captured = 'operation' in invocation ? invocation.operation.file : file
+  const state = store.getState()
+  const recordId = editorBufferIdOfView(state, captured.id)
+  return {
+    fileId: captured.id,
+    fallbackContent,
+    trigger,
+    invocation,
+    viewIds: editorBufferSiblingViewIds(state, captured.id),
+    requestedDirty: state.openFiles.some((tab) => tab.id === captured.id && tab.isDirty),
+    requestedFromCodeView: isCodeViewTab(state, captured),
+    recordId,
+    discardEpoch: editorDiscardEpoch(recordId)
+  }
 }

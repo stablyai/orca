@@ -14,10 +14,8 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   readdir: mocks.readdir
 }))
 
-import {
-  parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
-} from './session-scanner-parse-cache'
+import { parseAgentSessionFileCached } from './parse-cache/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from './parse-cache/session-parse-cache-store'
 import {
   resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,

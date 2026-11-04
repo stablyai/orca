@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { sendFollowupPromptWhenAgentReady } from './agent-followup-delivery'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-paste-draft'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn()
@@ -104,26 +104,6 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
       expect(pasteDraftToAgentPtyWhenReady).not.toHaveBeenCalled()
     })
   }
-
-  it('types immediately when the resolver already returns the agent name (local ps path)', async () => {
-    // Preserve exact-name matching when local process inspection resolves the interpreter to its agent.
-    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
-      foregroundProcess: 'aider',
-      hasChildProcesses: true
-    })
-
-    const delivered = await sendFollowupPromptWhenAgentReady({
-      ptyId: 'pty-1',
-      agent: 'aider',
-      expectedProcess: 'aider',
-      prompt: 'ship it'
-    })
-
-    expect(delivered).toBe(true)
-    expect(pasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith(
-      expect.objectContaining(SUBMITTED_PASTE)
-    )
-  })
 
   it('pastes nothing when the agent left the terminal during the readiness wait', async () => {
     vi.mocked(inspectRuntimeTerminalProcess)

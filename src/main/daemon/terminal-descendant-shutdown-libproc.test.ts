@@ -16,7 +16,8 @@ vi.mock('node:child_process', () => ({ execFile }))
 
 import { setLibprocAddonForTests } from '../../shared/libproc-addon'
 import { resetNativeReadsForTests } from '../../shared/libproc-native-reads'
-import { collectDescendantRows, parseProcessTable } from '../pty-descendant-termination'
+import { collectDescendantRows } from '../pty/process-retirement/pty-descendant-termination'
+import { parseProcessTable } from '../pty/process-retirement/pty-process-table-parser'
 import { terminateShutdownDescendants } from './terminal-descendant-shutdown'
 
 const STARTED = 'Mon Jul 13 12:54:47 2026'
@@ -28,8 +29,8 @@ beforeEach(() => {
   // A stalled libuv pool: native reads never finish.
   setLibprocAddonForTests({
     readProcessTable: () => new Promise<never>(() => {}),
-    processCwd: () => null,
-    processPath: () => null
+    readProcessCwd: async () => null,
+    readProcessPath: async () => null
   })
   // A 200ms ps, killed at its timeout like execFile.
   execFile.mockImplementation((_file, _args, { timeout }, callback) => {

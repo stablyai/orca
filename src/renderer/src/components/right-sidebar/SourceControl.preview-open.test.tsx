@@ -7,8 +7,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
-} from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+} from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import SourceControl from './SourceControl'
 
 const mocks = vi.hoisted(() => {
@@ -163,7 +163,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     gitConflictOperationByWorktree: {},
     remoteStatusesByWorktree: {},
     isRemoteOperationActive: false,
-    inFlightRemoteOpKind: null,
+    remoteOperations: [],
     settings: null,
     hostedReviewCache: {},
     prCache: {},

@@ -6,10 +6,15 @@ import { cn } from '@/lib/utils'
 import { track } from '@/lib/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { GhosttyDiscoveryRow } from './GhosttyDiscoveryRow'
-import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
 import { i18n, translate } from '@/i18n/i18n'
 import { ChromePreview } from './theme-chrome-preview'
+import {
+  terminalConfigImportSettingsUpdate,
+  type TerminalConfigImportPreview
+} from '../../../../shared/terminal/appearance/terminal-config-import-preview'
+import { getSystemPrefersDark } from '@/lib/terminal-theme'
 
 type ThemeStepProps = {
   theme: GlobalSettings['theme']
@@ -32,7 +37,7 @@ export function applyOnboardingThemeSelection(
 export type DiscoveryState =
   | { status: 'idle' }
   | { status: 'detecting' }
-  | { status: 'found'; preview: GhosttyImportPreview; fields: string[] }
+  | { status: 'found'; preview: TerminalConfigImportPreview; fields: string[] }
   | { status: 'imported'; fields: string[] }
   | { status: 'absent' }
 type _DiscoveryStatusEmittedSync =
@@ -107,7 +112,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     }
   }, [])
 
-  const importGhostty = async (preview: GhosttyImportPreview) => {
+  const importGhostty = async (preview: TerminalConfigImportPreview) => {
     if (!settings || importing) {
       return
     }
@@ -128,17 +133,9 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
         track('onboarding_ghostty_import_failed', { reason: 'empty_diff' })
         return
       }
-      await updateSettings({
-        ...resolved.diff,
-        ...(resolved.diff.terminalColorOverrides
-          ? {
-              terminalColorOverrides: {
-                ...settings.terminalColorOverrides,
-                ...resolved.diff.terminalColorOverrides
-              }
-            }
-          : {})
-      })
+      await updateSettings(
+        terminalConfigImportSettingsUpdate(settings, resolved, getSystemPrefersDark())
+      )
       // Sync the controller’s local theme so Continue cannot overwrite the imported theme.
       if (resolved.diff.theme && mountedRef.current) {
         onThemeChange(resolved.diff.theme)
@@ -272,7 +269,7 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
     },
     {
       label: translate('auto.components.onboarding.ThemeStep.06a24f4f2d', 'Colors'),
-      keys: ['terminalColorOverrides']
+      keys: ['terminalColorOverrides', 'terminalColorOverridesLight']
     },
     {
       label: translate('auto.components.onboarding.ThemeStep.86c0f1caa2', 'Padding'),
@@ -280,7 +277,7 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
     },
     {
       label: translate('auto.components.onboarding.ThemeStep.b3a99a2d29', 'Window'),
-      keys: ['terminalBackgroundOpacity', 'windowBackgroundBlur', 'terminalInactivePaneOpacity']
+      keys: ['terminalBackgroundOpacity', 'windowMaterial', 'terminalInactivePaneOpacity']
     },
     {
       label: translate('auto.components.onboarding.ThemeStep.8ca01945f2', 'Dividers'),

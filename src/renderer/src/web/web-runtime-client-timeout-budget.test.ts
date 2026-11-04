@@ -1,4 +1,4 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WebRuntimeClient } from './web-runtime-client'
 

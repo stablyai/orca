@@ -1,4 +1,4 @@
-import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-status-hooks-setting'
+import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { prepareManagedWslCodexHomeBeforeShellLaunch } from '../../../codex/managed-wsl-home-shell-preflight'
 import { defineMethod } from '../core'
 import { PrepareCodexForWslPaneParams } from '../../../../shared/rpc-contract/agent-hooks-params'

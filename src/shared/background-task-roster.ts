@@ -3,7 +3,7 @@
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
-} from './agent-session-background-task-wire'
+} from './agent-session/agent-session-background-task-wire'
 import type { BackgroundTaskSay } from './background-task-copy'
 import {
   buildAgentChildRowModels,
@@ -11,10 +11,10 @@ import {
   usableAgentChildLabel,
   type AgentChildRowContext,
   type AgentChildRowModel
-} from './agent-child-row-model'
-import { agentChildRunStateFor } from './agent-status-child-work-display'
-import type { AgentChildWorkView } from './agent-status-child-work-view'
-import { formatNativeChatDuration } from './native-chat-turn-status'
+} from './agent-status/presentation/agent-child-row-model'
+import { agentChildRunStateFor } from './agent-status/child-work/agent-status-child-work-display'
+import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
+import { formatNativeChatDuration } from './native-chat/transcript/native-chat-turn-status'
 
 type TaskKind = AgentSessionBackgroundTask['kind']
 type RunState = AgentSessionBackgroundTaskRunState

@@ -1,9 +1,9 @@
 import { translate } from '@/i18n/i18n'
-import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/structured-agent-session-composer'
+import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import {
   STRUCTURED_COMPOSER_FAILURE_COPY as EN,
   type StructuredComposerFailureCode
-} from '../../../../shared/structured-agent-session-composer-failure'
+} from '../../../../shared/agent-session/failures/structured-agent-session-composer-failure'
 
 const COPY: Record<StructuredComposerFailureCode, (name: string, value: string) => string> = {
   goalObjectiveMissing: () =>

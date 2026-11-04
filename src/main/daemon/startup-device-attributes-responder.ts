@@ -1,6 +1,6 @@
 /** Answer DA1 when ConPTY startup or shell-ready gating prevents a renderer reply; bypass queued stdin. */
 import type { Terminal } from '@xterm/headless'
-import { PRIMARY_DEVICE_ATTRIBUTES_QUERY_SEQUENCES } from '../../shared/terminal-reply-query-extraction'
+import { PRIMARY_DEVICE_ATTRIBUTES_QUERY_SEQUENCES } from '../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 
 type DeviceAttributesParser = Pick<Terminal['parser'], 'registerCsiHandler'>
 

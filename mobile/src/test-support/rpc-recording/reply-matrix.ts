@@ -53,7 +53,7 @@ function successEnvelope(reply: unknown): Record<string, unknown> | null {
     : null
 }
 
-type MatrixSite = { id: string; index: number; reply: unknown }
+type MatrixSite = { id: string; index: number; reply: unknown; bridgeOnly: boolean }
 
 // Matrix every reply, including prerequisites, so new families cannot lose coverage through hand-selected sites.
 // Name stream frames by subscribe payload and occurrence to distinguish ready/events/end.
@@ -61,12 +61,26 @@ export function matrixSites(base: RecordingScenario): MatrixSite[] {
   const frames = new Map<string, number>()
   return base.steps.flatMap((step, index) => {
     if ('complete' in step) {
-      return [{ id: step.complete, index, reply: step.reply }]
+      return [
+        {
+          id: step.site ?? step.complete,
+          index,
+          reply: step.reply,
+          bridgeOnly: step.bridgeSite === true
+        }
+      ]
     }
     if ('frame' in step) {
       const occurrence = (frames.get(step.frame) ?? 0) + 1
       frames.set(step.frame, occurrence)
-      return [{ id: `${step.frame}@${occurrence}`, index, reply: step.reply }]
+      return [
+        {
+          id: step.site ?? `${step.frame}@${occurrence}`,
+          index,
+          reply: step.reply,
+          bridgeOnly: false
+        }
+      ]
     }
     return []
   })
@@ -102,33 +116,85 @@ export function driveReplyMatrix(
   const framed = 'frame' in base.steps[divergence]!
   const partitions = framed ? frameReplyPartitions(normal) : replyPartitions(normal)
   return hoistPreludeCheckpoints(
-    base,
-    partitions.map((partition) => ({
-      divergence,
-      scenario: {
-        ...base,
-        id: `${base.id}.${partition.id}`,
-        steps: base.steps.map((step, index): ScenarioStep => {
-          if (index > divergence) {
-            // After divergence, answer later requests only if sent; frames remain deliverable through the registry.
-            return 'complete' in step || 'bind' in step ? { ...step, optional: true } : step
+    base.lineage
+      ? {
+          ...base,
+          lineage: {
+            ...base.lineage,
+            site: request,
+            domain: sites[0]!.bridgeOnly ? 'bridge-only' : base.lineage.domain
           }
-          if (index !== divergence) {
-            return step
-          }
-          if ('frame' in step) {
-            return { frame: step.frame, params: step.params, reply: partition.reply }
-          }
-          if ('complete' in step) {
-            return {
-              complete: step.complete,
-              params: step.params,
-              ...('reject' in partition ? { reject: partition.reject } : { reply: partition.reply })
+        }
+      : base,
+    partitions.map((partition) => {
+      const branch = base.replyBranches?.find(
+        (entry) => entry.site === request && entry.partitions.includes(partition.id)
+      )
+      return {
+        divergence,
+        scenario: {
+          ...base,
+          id: `${base.id}.${partition.id}`,
+          ...(branch
+            ? {
+                bridgeOperations: base.bridgeOperations?.filter(
+                  (entry) => entry.request !== branch.request
+                )
+              }
+            : {}),
+          ...(base.lineage
+            ? {
+                lineage: {
+                  ...base.lineage,
+                  site: request,
+                  partition: partition.id,
+                  domain: sites[0]!.bridgeOnly ? ('bridge-only' as const) : base.lineage.domain
+                }
+              }
+            : {}),
+          steps: base.steps.flatMap((original, index): ScenarioStep[] => {
+            if (branch && original.bridgeSite && original.site === `${branch.request}.native-1`) {
+              return []
             }
-          }
-          return step
-        })
+            const step =
+              branch && 'complete' in original && original.site === branch.request
+                ? {
+                    ...original,
+                    params: branch.params,
+                    complete:
+                      base.lineage?.mode === 'bridge'
+                        ? `${branch.request}.native-1`
+                        : branch.request
+                  }
+                : original
+            return [
+              ((): ScenarioStep => {
+                if (index > divergence) {
+                  // After divergence, answer later requests only if sent; frames remain deliverable through the registry.
+                  return 'complete' in step || 'bind' in step ? { ...step, optional: true } : step
+                }
+                if (index !== divergence) {
+                  return step
+                }
+                if ('frame' in step) {
+                  return { ...step, reply: partition.reply }
+                }
+                if ('complete' in step) {
+                  return {
+                    ...step,
+                    reply: undefined,
+                    reject: undefined,
+                    ...('reject' in partition
+                      ? { reject: partition.reject }
+                      : { reply: partition.reply })
+                  }
+                }
+                return step
+              })()
+            ]
+          })
+        }
       }
-    }))
+    })
   )
 }

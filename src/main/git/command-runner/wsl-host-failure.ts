@@ -1,4 +1,7 @@
-import { isWslHostFailureExitCode, readWslHostDiagnostic } from '../../wsl/wsl-process-failure'
+import {
+  isWslHostFailureExitCode,
+  readWslHostDiagnostic
+} from '../../wsl/execution/wsl-process-failure'
 import type { ResolvedCommand } from './wsl-command-resolution'
 
 function outputText(value: unknown): string {

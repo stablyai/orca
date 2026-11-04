@@ -1,16 +1,20 @@
-import type { BrowserExtensionGlobalSettings } from './browser-extension-settings'
+import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
+import type { EditorTypographySettings } from './editor-typography-settings-types'
 import type { PluginAppearanceSettings } from './plugin-appearance-settings-types'
 import type { PluginFileTypeSuggestionSettings } from './plugins/contributions/plugin-file-type'
 import type { PluginUpdatePolicySettings } from './plugins/catalog/plugin-update-policy'
 import type { PluginSystemSettings } from './plugins/plugin-system-settings'
+import type { TerminalScrollSettings } from './terminal/appearance/terminal-scroll-settings'
 import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
-import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
-import type { OrchestrationHeartbeatSettings } from './orchestration-heartbeat'
+import type { AgentPermissionGlobalSettings } from './agent-launch/permissions/tui-agent-permission-choice'
+import type { TerminalColorOverrideGlobalSettings } from './terminal-themes/terminal-color-overrides'
+import type { WindowMaterialSettings } from './window-material'
+import type { EditorSaveSettings } from './editor-save-settings'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ClaudeAgentViewSettings &
@@ -20,9 +24,13 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
   BrowserLinkOpeningSettings &
-  OrchestrationHeartbeatSettings &
   BrowserExtensionGlobalSettings &
   PluginAppearanceSettings &
+  EditorTypographySettings &
   PluginFileTypeSuggestionSettings &
   PluginUpdatePolicySettings &
-  PluginSystemSettings
+  PluginSystemSettings &
+  TerminalScrollSettings &
+  TerminalColorOverrideGlobalSettings &
+  WindowMaterialSettings &
+  EditorSaveSettings

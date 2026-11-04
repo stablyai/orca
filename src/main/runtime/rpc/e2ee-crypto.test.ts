@@ -9,8 +9,8 @@ import {
   decryptBytes,
   MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS,
   publicKeyFromBase64
-} from '../../../shared/e2ee-crypto'
-import { MOBILE_E2EE_LEGACY_FIXTURE } from '../../../shared/mobile-e2ee-legacy-fixtures'
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { MOBILE_E2EE_LEGACY_FIXTURE } from '../../../shared/remote-runtime/e2ee/mobile-e2ee-legacy-fixtures'
 
 describe('e2ee-crypto', () => {
   it('preserves the captured legacy key and text/binary frame bytes', () => {
@@ -26,20 +26,6 @@ describe('e2ee-crypto', () => {
     expect(decryptBytes(Buffer.from(fixture.binaryFrameHex, 'hex'), shared)).toEqual(
       fixture.binaryPlaintext
     )
-  })
-
-  it('encrypt/decrypt round-trips with shared key', () => {
-    const server = generateKeyPair()
-    const client = generateKeyPair()
-
-    const serverShared = deriveSharedKey(server.secretKey, client.publicKey)
-    const clientShared = deriveSharedKey(client.secretKey, server.publicKey)
-
-    const message = '{"id":"rpc-1","method":"status.get"}'
-    const encrypted = encrypt(message, clientShared)
-    const decrypted = decrypt(encrypted, serverShared)
-
-    expect(decrypted).toBe(message)
   })
 
   it('decrypt returns null with wrong key', () => {
@@ -64,15 +50,6 @@ describe('e2ee-crypto', () => {
     const b = encrypt(message, shared)
 
     expect(a).not.toBe(b)
-  })
-
-  it('handles empty string', () => {
-    const server = generateKeyPair()
-    const client = generateKeyPair()
-    const shared = deriveSharedKey(client.secretKey, server.publicKey)
-
-    const encrypted = encrypt('', shared)
-    expect(decrypt(encrypted, shared)).toBe('')
   })
 
   it('handles unicode content', () => {

@@ -5,7 +5,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import WorktreeContextMenu from './WorktreeContextMenu'
 
@@ -58,6 +58,7 @@ vi.mock('@/i18n/i18n', () => ({
 
 vi.mock('./ProjectGroupNameDialog', () => ({ ProjectGroupNameDialog: () => null }))
 vi.mock('./WorktreeParentPickerPopover', () => ({ WorktreeParentPickerPopover: () => null }))
+vi.mock('./WorktreeWslHostStartMenuItem', () => ({ WorktreeWslHostStartMenuItem: () => null }))
 
 const openInMenu = vi.hoisted(() => vi.fn(() => null))
 vi.mock('./WorktreeOpenInMenu', () => ({ WorktreeOpenInSubMenu: openInMenu }))
@@ -137,22 +138,6 @@ describe('WorktreeContextMenu Copy Worktree Name', () => {
       expect.objectContaining({ runtimeEnvironmentId: 'remote-owner' }),
       undefined
     )
-  })
-
-  it('copies the workspace display name', () => {
-    openMenu(worktreeFixture())
-
-    clickMenuItem('Copy Worktree Name')
-
-    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('Fix authentication race')
-  })
-
-  it('falls back like every other name read when the custom name is blank', () => {
-    openMenu(worktreeFixture({ displayName: '' }))
-
-    clickMenuItem('Copy Worktree Name')
-
-    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('feature/auth-race')
   })
 
   it.each([

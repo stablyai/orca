@@ -7,11 +7,11 @@ import {
   terminalRewriteOutputPrefersRenderRefresh,
   windowsEastAsianOutputPrefersRenderRefresh
 } from '@/lib/pane-manager/terminal-complex-script'
-import { RESET_AFTER_BYTE_GAP } from '../../../../../shared/terminal-mode-reset-profiles'
+import { RESET_AFTER_BYTE_GAP } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import { registerPtyModelRestoreNeededHandler } from '../pty-model-restore-channel'
-import type { PtyModelRestoreNeededEvent } from '../../../../../shared/pty-model-restore-marker'
+import type { PtyModelRestoreNeededEvent } from '../../../../../shared/terminal/replay/pty-model-restore-marker'
 import {
   acquireHiddenRendererPtyDeliveryClaim,
   declareRendererPtyDeliveryVisible
@@ -84,6 +84,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       return
     }
     // Ground the pen at the proven gap: lost resets can leak bold into later cells (STA-4042). Skip flood markers because snapshot replay already grounds them.
+    session.resumeEscapeGap.noteGroundingWrite(session.idleCursorReset.parserEscape)
     session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
     // Capture restore state before marking synchronously starts one; a mid-restore drop needs a newer snapshot.
     const restoreWasInFlight = session.hiddenOutputRestoreInFlight !== null

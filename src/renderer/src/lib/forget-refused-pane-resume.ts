@@ -1,10 +1,10 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { RefusedPaneResume } from '../../../shared/agent-status-types'
+import type { RefusedPaneResume } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 /** Whether a saved claim names the refused conversation. Only local claims can: the host judged
  *  its own chats, and a remote host's same id is a different conversation. */

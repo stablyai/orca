@@ -1,9 +1,9 @@
 // Pure commands change layout only; runtime owns catalog/path/host-support/liveness refusals requiring external facts.
 
 import type { LiveTerminalAdoption } from './workspace-layout-terminal-adoption'
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
-import type { AgentType } from '../agent-status-types'
-import type { AiVaultSessionTitle } from '../ai-vault-session-title'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
+import type { AgentType } from '../agent-status/contracts/agent-status-types'
+import type { AiVaultSessionTitle } from '../ai-vault/contracts/ai-vault-session-title'
 import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
 import type {
   TerminalGrid,

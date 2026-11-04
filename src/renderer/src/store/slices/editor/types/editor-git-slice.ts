@@ -3,7 +3,7 @@ import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-h
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type {
   GitBranchLineTotal,
   GitConflictKind,
@@ -11,7 +11,7 @@ import type {
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus
-} from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/status/git-status-types'
 import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session-state-types'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import type { PendingEditorFocusRequest, PendingEditorReveal } from './pending-editor-reveal'
@@ -39,13 +39,9 @@ export type EditorGitSlice = {
   setConflictOperation: (worktreeId: string, operation: GitConflictOperation) => void
   remoteStatusesByWorktree: Record<string, GitUpstreamStatus>
   setUpstreamStatus: (worktreeId: string, status: GitUpstreamStatus) => void
-  // Why: refcount-backed busy flag; a bare boolean races across worktrees (A finishing re-enables B mid-flight). begin/end must be paired.
   isRemoteOperationActive: boolean
-  remoteOperationDepth: number
-  // Why: which remote op the user triggered, so the primary button mirrors its label+spinner; cleared at depth 0.
-  inFlightRemoteOpKind: RemoteOpKind | null
-  beginRemoteOperation: (kind?: RemoteOpKind) => void
-  endRemoteOperation: () => void
+  remoteOperations: { worktreeId: string; kind: RemoteOpKind }[]
+  beginRemoteOperation: (kind: RemoteOpKind, worktreeId: string) => () => void
   fetchUpstreamStatus: (
     worktreeId: string,
     worktreePath: string,

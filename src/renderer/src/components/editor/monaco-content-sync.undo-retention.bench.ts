@@ -38,8 +38,11 @@ async function measureUndoRetention(mode: MonacoContentSyncMode): Promise<{
   await forceGcAndSettle()
   const beforeArrayBuffers = process.memoryUsage().arrayBuffers
   const model = monaco.editor.createModel('', 'plaintext')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: content sync calls only the editor methods stubbed here.
   const editorInstance = {
     getModel: () => model,
+    saveViewState: () => null,
+    restoreViewState: () => {},
     pushUndoStop: () => {
       model.pushStackElement()
       return true

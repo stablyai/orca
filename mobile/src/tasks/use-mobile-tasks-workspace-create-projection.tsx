@@ -2,10 +2,8 @@ import type { ProjectMetadataLoadingModel } from './use-mobile-tasks-project-met
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   type BaseRefSearchResult,
-  MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
   MobileAgentIcon,
   type PickerOption,
-  type TuiAgent,
   type WorkspaceAgentChoice,
   deriveWorkspaceSshGate,
   filterWorkspaceAgents,
@@ -16,6 +14,8 @@ import {
   useMemo,
   workspaceAgentLabel
 } from './mobile-tasks-dependencies'
+import { TUI_AGENT_AUTO_PICK_ORDER as MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from '../../../src/shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import {
   type ActionableTaskItem,
   type RepoSummary,

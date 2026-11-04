@@ -1,7 +1,7 @@
 import { DiffTooLargeNotice } from './DiffTooLargeNotice'
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import { getDiffContentSignature } from './diff-content-signature'
 import { DiffViewer, ImageDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
@@ -150,6 +150,7 @@ export function EditorDiffFileSurface({
       // Refresh through modifiedModelKey; keying the widget by content would remount and flash on save.
       key={`${viewStateScopeId}:${diffReloadNonce}`}
       modelKey={diffViewStateKey}
+      modelOwnerKey={activeFile.id}
       originalModelKey={originalModelKey}
       modifiedModelKey={modifiedModelKey}
       originalContent={diffContent.originalContent}
@@ -162,6 +163,7 @@ export function EditorDiffFileSurface({
       sideBySide={sideBySide}
       editable={isEditable}
       worktreeId={activeFile.worktreeId}
+      noteSource={activeFile}
       onContentChange={isEditable ? onContentChange : undefined}
       onSave={isEditable ? (isMarkdown ? markdownDocuments.mdSave : onSave) : undefined}
     />

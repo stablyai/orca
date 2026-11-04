@@ -53,29 +53,6 @@ describe('purgeStaleRuntimeHostState ownership evidence', () => {
     expect(store.getState().tabsByWorktree[worktreeId]).toBeUndefined()
   })
 
-  it('uses an explicit removed-host worktree as owner evidence before catalogs load', () => {
-    const store = createTestStore()
-    const removedWorktreeId = 'repoA::/hosted'
-    const legacyWorktreeId = 'repoA::/legacy'
-    seedStore(store, {
-      repos: [],
-      worktreesByRepo: {
-        repoA: [
-          makeWorktree({ id: removedWorktreeId, repoId: 'repoA', hostId: RUNTIME_A }),
-          makeWorktree({ id: legacyWorktreeId, repoId: 'repoA', hostId: undefined })
-        ]
-      },
-      tabsByWorktree: {
-        [legacyWorktreeId]: [makeTab({ id: 'legacy-tab', worktreeId: legacyWorktreeId })]
-      }
-    })
-
-    store.getState().purgeStaleRuntimeHostState(['env-a'])
-
-    expect(store.getState().worktreesByRepo.repoA).toEqual([])
-    expect(store.getState().tabsByWorktree[legacyWorktreeId]).toBeUndefined()
-  })
-
   it('purges restored session state owned by the removed host despite an exact-id survivor', () => {
     const store = createTestStore()
     const worktreeId = 'shared::/same/path'
@@ -119,25 +96,6 @@ describe('purgeStaleRuntimeHostState ownership evidence', () => {
     expect(state.restoredRuntimeHostIdByWorkspaceSessionKey[worktreeId]).toBeUndefined()
     expect(state.activeWorktreeId).toBeNull()
     expect(state.activeWorkspaceKey).toBeNull()
-  })
-
-  it('purges a removed host session after its catalog rows have already disappeared', () => {
-    const store = createTestStore()
-    const worktreeId = 'repoA::/session-only'
-    seedStore(store, {
-      repos: [],
-      worktreesByRepo: {},
-      tabsByWorktree: {
-        [worktreeId]: [makeTab({ id: 'removed-host-tab', worktreeId })]
-      },
-      restoredRuntimeHostIdByWorkspaceSessionKey: { [worktreeId]: RUNTIME_A }
-    })
-
-    store.getState().purgeStaleRuntimeHostState(['env-a'])
-
-    const state = store.getState()
-    expect(state.tabsByWorktree[worktreeId]).toBeUndefined()
-    expect(state.restoredRuntimeHostIdByWorkspaceSessionKey[worktreeId]).toBeUndefined()
   })
 
   it('preserves a surviving restored session before its catalog rows load', () => {

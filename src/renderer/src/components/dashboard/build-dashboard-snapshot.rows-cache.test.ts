@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 
-import { dashboardCardDisplayState } from '../../../../shared/dashboard-snapshot'
+import {
+  dashboardCardDisplayState,
+  type DashboardSnapshot
+} from '../../../../shared/dashboard-snapshot'
 import { admitDashboardSnapshot } from '../../../../main/ipc/dashboard-payload-validation'
 import { buildDashboardBucketCounts } from './build-dashboard-bucket-counts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -15,8 +18,7 @@ import { AgentKanbanCard } from '../dashboard-popout/AgentKanbanCard'
 import { AgentTerminalPanel } from '../dashboard-popout/AgentTerminalDialog'
 import { projectStatus } from '../native-chat/structured-agent-session-status-projection'
 import type { StructuredTab } from '../native-chat/structured-agent-session-tabs'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
-import type { DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 vi.mock('@/store', async () => {
@@ -40,10 +42,8 @@ vi.mock('@/lib/agent-catalog', () => ({
   }
 }))
 
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'

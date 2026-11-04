@@ -1,5 +1,5 @@
 import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
-import { parseWslPath } from '../../../wsl'
+import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import type { GitHubApiRepository } from '../../github-api-repository'
 import type { GhExecOptions } from '../github-exec-scope'

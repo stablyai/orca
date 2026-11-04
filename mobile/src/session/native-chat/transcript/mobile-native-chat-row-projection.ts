@@ -1,7 +1,7 @@
 import type {
   NativeChatBlock,
   NativeChatMessage
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatRowContentProps } from './MobileNativeChatRowItemSource'
 
 type Fields = Readonly<Record<string, unknown>>

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { ReactNode } from 'react'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   act,
   cleanup,
@@ -11,7 +12,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import type { StructuredLaunchAttempt } from '@/lib/structured-agent-session-launch-request'
+import type { StructuredLaunchAttempt } from '@/lib/agent-session/launch/structured-agent-session-launch-request'
 import type * as WorktreeFixtures from '@/store/slices/worktrees-slice-test-fixtures'
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
@@ -51,10 +52,6 @@ vi.mock('@/lib/agent-catalog', () => ({
   ],
   AgentIcon: ({ agent }: { agent: string }) => <span>{agent}</span>
 }))
-vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
-    fallback.replace('{{value0}}', values?.value0 ?? '')
-}))
 const launchMock = vi.hoisted(() => vi.fn())
 const toastError = vi.hoisted(() => vi.fn())
 const toastMessage = vi.hoisted(() => vi.fn())
@@ -75,7 +72,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { ReviewNotesSendMenuContent } from '@/components/editor/ReviewNotesSendMenuContent'
-import { QuickLaunchAgentMenuItems, ProjectedAgentMenuItems } from './QuickLaunchButton'
+import {
+  QuickLaunchAgentMenuItems,
+  ProjectedAgentMenuItems,
+  useTabAgentMenuLaunch
+} from './QuickLaunchButton'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import * as menuRows from './use-new-tab-agent-menu-rows'
 import {
@@ -168,6 +169,35 @@ function expectLaunch(surface: 'chat' | 'terminal'): void {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+})
+
+it('updates the stable new-tab menu through real language and resource publications', async () => {
+  const { i18n } = await import('@/i18n/i18n')
+  const { default: spanish } = await import('@/i18n/locales/es.json')
+  const language = i18n.language
+  const previous = structuredClone(i18n.getResourceBundle('es', 'translation') ?? {})
+  await i18n.changeLanguage('en')
+  i18n.addResourceBundle('es', 'translation', spanish, true, true)
+  try {
+    const { row } = renderChoice('cli')
+    await act(() => i18n.changeLanguage('es'))
+    expect(screen.getByRole('menuitem', { name: 'Iniciar Codex en un nuevo terminal' })).toBe(row)
+    act(() =>
+      i18n.addResource(
+        'es',
+        'translation',
+        'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
+        'Terminal actualizada {{value0}}'
+      )
+    )
+    expect(screen.getByRole('menuitem', { name: 'Terminal actualizada Codex' })).toBe(row)
+    expect(launchMock).not.toHaveBeenCalled()
+  } finally {
+    cleanup()
+    i18n.removeResourceBundle('es', 'translation')
+    i18n.addResourceBundle('es', 'translation', previous)
+    await i18n.changeLanguage(language)
+  }
 })
 
 it.each(['cli', 'chat'] as const)(
@@ -388,7 +418,7 @@ it('gives static/search no agent actions while loading, retaining settings and g
       onNewBrowserTab: vi.fn()
     })
   )
-  expect(controller.result.current.agentLaunchOptions).toEqual([])
+  expect(controller.result.current.agentPickerInventory.getSnapshot()).toEqual([])
   expect(
     controller.result.current.createMenuOptions.some((option) => option.kind === 'new-terminal')
   ).toBe(true)
@@ -474,6 +504,8 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   beforeEach(() => {
     localStorage.clear()
     resetStructuredAgentLaunchRegistryForTests()
+    // A host without chats lists every agent as a terminal.
+    setLocalRuntimeCapabilitiesForTests([])
   })
 
   it('keeps every agent launchable while chats start, fail or retry', () => {
@@ -654,4 +686,46 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     fireEvent.click(document.querySelector('[title="Launch Codex in a new terminal"]')!)
     expect(launchMock).not.toHaveBeenCalled()
   })
+})
+
+it('forwards configured choices and retains matching Terminal Arguments for either requested surface', () => {
+  launchMock.mockClear()
+  launchMock.mockReturnValue({ surface: { kind: 'local-terminal', tabId: 'new-tab' } })
+  const hook = renderHook(() =>
+    useTabAgentMenuLaunch({
+      worktreeId: WORKTREE_ID,
+      groupId: 'group-1',
+      onFocusTerminal: vi.fn()
+    })
+  )
+  const choices = { model: 'astra', options: { effort: 'low' }, permissionMode: 'ask' as const }
+  hook.result.current(
+    { agent: 'codex', kind: 'cli', executionHostId: 'runtime:server' },
+    {
+      agent: 'codex',
+      surface: 'terminal',
+      choices,
+      arguments: '--add-dir docs'
+    }
+  )
+  expect(launchMock.mock.calls[0][0]).toMatchObject({
+    requestedSurface: 'terminal',
+    selectedExecutionHostId: 'runtime:server',
+    agentArgs: expect.stringContaining('--add-dir docs'),
+    sessionOptions: { model: 'astra', effort: 'low', permissionMode: 'ask' }
+  })
+  hook.result.current(
+    { agent: 'codex', kind: 'chat', executionHostId: 'runtime:server' },
+    {
+      agent: 'codex',
+      surface: 'chat',
+      choices,
+      arguments: '--add-dir docs'
+    }
+  )
+  expect(launchMock.mock.calls[1][0]).toMatchObject({
+    requestedSurface: 'chat',
+    sessionOptions: { model: 'astra', effort: 'low', permissionMode: 'ask' }
+  })
+  expect(launchMock.mock.calls[1][0].agentArgs).toBe('--add-dir docs')
 })

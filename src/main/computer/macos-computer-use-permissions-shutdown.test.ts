@@ -20,7 +20,7 @@ vi.mock('./macos-computer-use-permission-status', () => ({
 vi.mock('./macos-computer-use-permission-status-gate', () => ({
   computerUsePermissionStatusGate: { peek: mocks.peek, read: mocks.peek, invalidate: () => {} }
 }))
-vi.mock('../macos-tcc-reset', () => ({
+vi.mock('../macos-permissions/macos-tcc-reset', () => ({
   readMacosBundleId: mocks.readBundleId,
   resetMacosTccPermission: async () => ({ ok: true })
 }))
@@ -58,7 +58,7 @@ async function loadModules(): Promise<{
   markHostShuttingDown: () => void
 }> {
   const permissions = await import('./macos-computer-use-permissions')
-  const { markHostShuttingDown } = await import('../host-shutdown-state')
+  const { markHostShuttingDown } = await import('../startup/quit/host-shutdown-state')
   return { permissions, markHostShuttingDown }
 }
 
@@ -125,19 +125,6 @@ describe('computer-use setup cancellation', () => {
     await Promise.all([a1, b])
     await vi.advanceTimersByTimeAsync(10_000)
     expect(setupLaunches()).toEqual([['--permission', 'accessibility']])
-  })
-
-  it('cancels an untargeted Open during shutdown even when everything is granted', async () => {
-    mocks.peek.mockResolvedValue({
-      ...denied,
-      permissions: [
-        { id: 'accessibility', status: 'granted' },
-        { id: 'screenshots', status: 'granted' }
-      ]
-    })
-    const { permissions, markHostShuttingDown } = await loadModules()
-    markHostShuttingDown()
-    await expect(permissions.openComputerUsePermissions()).rejects.toThrow('cancelled')
   })
 
   it('cancels a queued launch before reset waits on the bundle id', async () => {

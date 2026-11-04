@@ -1,7 +1,10 @@
+import type { StructuredAgentSessionRuntimeDeps } from '../../runtime/structured-agent-session-runtime-contract'
+import { admitStructuredAgentSessionInput } from './structured-agent-session-input-admission'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   createRestTestRig,
+  acceptedDispatch,
   foundRestTestChat,
   IDLE_MS,
   REST_TEST_CALLER as CALLER,
@@ -23,20 +26,24 @@ import {
   agentModelCatalogFingerprint,
   agentModelCatalogScopeFingerprint
 } from '../agent-model-catalog/agent-model-catalog-fingerprint'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { retireAtRestCommandContext } from './at-rest-command-context'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
-import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
-import { structuredAgentSessionPermissionDescriptor } from '../../../shared/structured-agent-session-permission-option'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
+import { getAgentSessionOptionCatalog } from '../../../shared/agent-session/options/agent-session-option-catalog'
+import { structuredAgentSessionPermissionDescriptor } from '../../../shared/agent-session/options/structured-agent-session-permission-option'
 
 describe('a chat permission mode', () => {
   let rig: RestTestRig
 
   beforeEach(async () => {
     rig = await createRestTestRig()
+    rig.adapter.dispatch.mockImplementation(async (input) => {
+      await admitStructuredAgentSessionInput(input.admitFreshInput, () => {})
+      return acceptedDispatch()
+    })
   })
 
   afterEach(async () => {
@@ -352,18 +359,19 @@ describe('a chat permission mode', () => {
     const environment = createStructuredAgentEnvironmentResolvers({})
     shell.mockClear()
     capture.mockClear()
+    const deps: StructuredAgentSessionRuntimeDeps = {
+      stateDirectory: rig.root,
+      hostId: 'local',
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => rig.root,
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'system' }),
+      resolveCodexCommand: () => ({ command: 'codex-pr-30107-missing', prefixArgs: [] }),
+      logger: { warn: vi.fn(), error: vi.fn() }
+    }
     const discovery = codexModelCatalogDiscovery({
       environment,
-      deps: {
-        stateDirectory: rig.root,
-        hostId: 'local',
-        claimKeyId: 'key-1',
-        resolveWorkspacePath: async () => rig.root,
-        resolveLaunchArgs: () => [],
-        resolveClaudeAuthPolicy: () => ({ account: 'system' }),
-        resolveCodexCommand: () => ({ command: 'codex-pr-30107-missing', prefixArgs: [] }),
-        logger: { warn: vi.fn(), error: vi.fn() }
-      }
+      deps
     })
     if (discovery.kind !== 'probe') {
       throw new Error('Codex must have discovery')
@@ -439,16 +447,16 @@ describe('a chat permission mode', () => {
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps the running agent for a send while its reply runs', async () => {
+  it('reacquires a launch-bound agent before admitting input under a changed running policy', async () => {
     await foundRestTestChat(rig)
     rig.adapter.closeSession.mockClear()
     const holds = rig.adapter.holdsDispatch.mockReturnValue(true)
     await pick('full-access')
 
     expect((await rig.host.send(CALLER, restTestSend('mid-reply', fence()))).ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
-    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
-    expect(rig.adapter.acquire).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(3))
+    expect(rig.adapter.closeSession).toHaveBeenCalled()
+    expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
     holds.mockReturnValue(false)
   })
 })
