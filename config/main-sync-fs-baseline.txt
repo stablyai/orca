@@ -145,6 +145,7 @@
 3 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 8 src/main/codex/configuration/toml/config-toml-atomic-write.ts
+2 src/main/codex/configuration/toml/config-toml-desktop-cua-repl-browser-surface.ts
 4 src/main/codex/history/backfill/codex-session-backfill-marker.ts
 17 src/main/codex/history/bridges/codex-session-bridge.ts
 5 src/main/codex/history/index/codex-session-index-heal-state.ts

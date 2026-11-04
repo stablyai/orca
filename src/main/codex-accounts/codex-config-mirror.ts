@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import {
-  ensureCodexDaemonSocketGuard,
+  ensureCodexRuntimeConfigOverrides,
   syncSystemConfigIntoManagedCodexHome
 } from '../codex/configuration/settings/codex-config-mirror'
 import { readCodexTopLevelModelProvider } from '../codex/structured/launch/codex-model-provider-config'
@@ -131,7 +131,7 @@ export class CodexConfigMirror {
       }
       return thenWith(
         this.assertManagedHomePath(managedHomePath, expectedAccountId),
-        ensureCodexDaemonSocketGuard
+        ensureCodexRuntimeConfigOverrides
       )
     }
     // Refresh ordinary settings without replacing approvals owned by this runtime home.

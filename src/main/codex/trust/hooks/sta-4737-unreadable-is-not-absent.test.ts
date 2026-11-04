@@ -84,8 +84,10 @@ vi.mock('node:os', async () => {
 
 const realFs = await vi.importActual<typeof NodeFs>('node:fs')
 
-const { syncSystemConfigIntoLegacySharedCodexHome, syncSystemConfigIntoManagedCodexHome } =
+const { syncSystemConfigIntoManagedCodexHome } =
   await import('../../configuration/settings/codex-config-mirror')
+const { syncSystemConfigIntoLegacySharedCodexHome } =
+  await import('../../configuration/settings/codex-legacy-shared-home-sync')
 const { promoteCodexRuntimeSettingsToSystem, snapshotCodexRuntimeSettingsBaseline } =
   await import('../../configuration/settings/config-settings-promotion')
 const { syncCodexGlobalInstructionsIntoManagedHome } =

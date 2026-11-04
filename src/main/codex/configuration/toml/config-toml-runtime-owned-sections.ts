@@ -1,4 +1,5 @@
 import { stripCodexDaemonOverride } from '../shared-server/codex-daemon-socket-path-guard'
+import { stripDesktopCuaReplBrowserSurfaceOverride } from './config-toml-desktop-cua-repl-browser-surface'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
@@ -228,6 +229,8 @@ export function extractOrdinaryCodexSettings(config: string): string {
       .filter((section) => isRuntimeProjectTomlSection(section.header))
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
-  // The daemon override belongs to the managed home and must not be promoted.
-  return stripCodexDaemonOverride(stripRuntimeOwnedTomlSections(config, projectHeaders)).trimEnd()
+  // The daemon and desktop-plugin overrides belong to the managed home and must not be promoted.
+  return stripDesktopCuaReplBrowserSurfaceOverride(
+    stripCodexDaemonOverride(stripRuntimeOwnedTomlSections(config, projectHeaders))
+  ).trimEnd()
 }

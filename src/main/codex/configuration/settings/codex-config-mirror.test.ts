@@ -28,10 +28,8 @@ vi.mock('node:os', async () => {
     homedir: homedirMock
   }
 })
-import {
-  syncSystemConfigIntoLegacySharedCodexHome,
-  syncSystemConfigIntoManagedCodexHome
-} from './codex-config-mirror'
+import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
+import { syncSystemConfigIntoLegacySharedCodexHome } from './codex-legacy-shared-home-sync'
 import '../../trust/toml/config-toml-trust'
 
 let fakeHomeDir: string
