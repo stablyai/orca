@@ -421,11 +421,12 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Jira' }))
 
-    expect(
-      await screen.findByRole('button', {
-        name: /ORCA-123.*Disambiguate Jira search.*Company Jira.*ada@example.com/
-      })
-    ).not.toBeNull()
+    const result = await screen.findByRole('button', {
+      name: /ORCA-123.*Disambiguate Jira search.*Company Jira \(company\.atlassian\.net\).*ada@example.com/
+    })
+    expect(result.querySelector('[title]')?.getAttribute('title')).toMatch(
+      /^ORCA-123 .*Disambiguate Jira search.* — Company Jira \(company\.atlassian\.net\) — ada@example\.com$/
+    )
   })
 
   it('searches issue text when a key-shaped query matches no issue key', async () => {
@@ -470,7 +471,9 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
     })
     renderField()
 
-    const account = screen.getByRole('button', { name: /Company Jira.*ada@example.com/ })
+    const account = screen.getByRole('button', {
+      name: /Company Jira \(company\.atlassian\.net\).*ada@example.com/
+    })
     fireEvent.click(account)
     expect(jiraMock.selectAccount).toHaveBeenCalledWith('site-a')
   })

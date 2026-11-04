@@ -2,6 +2,7 @@ import type { TaskPageLinearCreationStateModel } from './linear/use-task-page-li
 import { useMemo } from 'react'
 import type { GitHubTaskKind } from '../../../../shared/task-github-search'
 import { buildGitHubRepoUrl } from '../../../../shared/github/links'
+import { getJiraSiteLabel } from '../../../../shared/jira/jira-site-label'
 import { getTaskSourceContextSummary } from '../task-source-context-summary'
 import { getGitHubProjectSourceSummary } from './task-page-source-context'
 
@@ -38,7 +39,7 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
   )
   const linearWorkspaceName =
     selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null
-  const jiraSiteName = selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+  const jiraSiteName = selectedJiraSite ? getJiraSiteLabel(selectedJiraSite) : null
   // Why the catalog dep: it changes with the language, and the summary's own copy is translated too.
   const taskSourceContextSummary = useMemo(() => {
     const providerLabel =

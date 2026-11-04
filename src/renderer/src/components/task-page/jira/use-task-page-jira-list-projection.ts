@@ -14,6 +14,7 @@ import {
 } from '@/lib/jira-issue-workspace-attachment'
 import { filterLinkedJiraIssues } from './task-page-jira-linked-issues'
 import { sortJiraIssues } from '../../jira-issue-sorter'
+import { withJiraSiteLabel } from '../../../../../shared/jira/jira-site-label'
 export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
   const {
     accountBackedTaskSourceHostId,
@@ -59,18 +60,22 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
     () =>
       (jiraHasWorkspace ? filterLinkedJiraIssues(jiraIssues, appliedJiraSearch) : jiraIssues).map(
         (issue) =>
-          findTaskPageJiraIssue(
-            jiraCacheSnapshot.issueCache,
-            jiraCacheSnapshot.searchCache,
-            issue.key,
-            {
-              sourceContext: jiraTaskSourceContext,
-              siteId: issue.siteId
-            }
-          ) ?? issue
+          withJiraSiteLabel(
+            findTaskPageJiraIssue(
+              jiraCacheSnapshot.issueCache,
+              jiraCacheSnapshot.searchCache,
+              issue.key,
+              {
+                sourceContext: jiraTaskSourceContext,
+                siteId: issue.siteId
+              }
+            ) ?? issue,
+            jiraStatus.sites ?? []
+          )
       ),
     [
       jiraIssues,
+      jiraStatus.sites,
       jiraHasWorkspace,
       appliedJiraSearch,
       jiraCacheSnapshot.issueCache,
