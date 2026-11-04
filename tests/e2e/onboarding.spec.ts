@@ -151,10 +151,10 @@ test.describe('Onboarding flow', () => {
 
   test('Chat surface saves with the agent page and survives going back', async ({ orcaPage }) => {
     await chooseOnboardingAgentSurface(orcaPage, 'chat')
-    expect((await getSettings(orcaPage)).experimentalNativeChat).not.toBe(true)
+    expect((await getSettings(orcaPage)).agentDefaultSurface).not.toBe('chat')
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
-    await expect.poll(async () => (await getSettings(orcaPage)).experimentalNativeChat).toBe(true)
+    await expect.poll(async () => (await getSettings(orcaPage)).agentDefaultSurface).toBe('chat')
     await orcaPage.getByRole('button', { name: 'Back', exact: true }).click()
     await orcaPage.getByRole('button', { name: 'Back', exact: true }).click()
     await expect(orcaPage.getByRole('radio', { name: /^Chat UI/ })).toHaveAttribute(
