@@ -49,6 +49,7 @@ export function ChatBehaviorSetting({
     entries.resumeOnRestart,
     ...(hostContinuesUsageLimits ? [entries.autoContinueAfterUsageLimit] : []),
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
+    entries.scrollToLatestOnSend,
     entries.linkPreviews,
     entries.shellEnvironment
   ]
@@ -58,6 +59,7 @@ export function ChatBehaviorSetting({
   const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
   const queueFollowUps = nativeChatQueueFollowUps(settings)
   const autoContinueEnabled = settings.nativeChatAutoContinueAfterUsageLimit === true
+  const scrollToLatestOnSend = settings.nativeChatScrollToLatestOnSend !== false
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
   return (
     <section id="chat-behavior" className="space-y-3">
@@ -127,6 +129,22 @@ export function ChatBehaviorSetting({
                 />
               </SearchableSetting>
             ) : null}
+            <SearchableSetting
+              {...entries.scrollToLatestOnSend}
+              id={entries.scrollToLatestOnSend.targetSectionId}
+              forceVisible={forceVisible}
+              className="max-w-none"
+            >
+              <SettingsSwitchRow
+                label={entries.scrollToLatestOnSend.title}
+                description={entries.scrollToLatestOnSend.description}
+                checked={scrollToLatestOnSend}
+                ariaLabel={entries.scrollToLatestOnSend.title}
+                onChange={() =>
+                  updateSettings({ nativeChatScrollToLatestOnSend: !scrollToLatestOnSend })
+                }
+              />
+            </SearchableSetting>
             <SearchableSetting
               {...entries.linkPreviews}
               id={entries.linkPreviews.targetSectionId}

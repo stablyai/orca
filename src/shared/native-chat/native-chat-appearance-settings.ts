@@ -25,6 +25,8 @@ export type NativeChatGlobalSettings = {
   nativeChatAutoName?: boolean
   /** Explicit per-agent overrides of the default surface. */
   nativeChatProviders?: NativeChatProviderChoices
+  /** Own sends bring the latest into view; off keeps a reader who scrolled up in place. Absent means on. */
+  nativeChatScrollToLatestOnSend?: boolean
 }
 
 export const DEFAULT_NATIVE_CHAT_FONT_SIZE = 14

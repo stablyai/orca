@@ -1,4 +1,5 @@
 import { useCallback, useImperativeHandle, useMemo, useRef } from 'react'
+import { useAppStore } from '@/store'
 import { hasAskAnswer } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
@@ -59,13 +60,17 @@ export type NativeChatMessageListHandle = {
   messageCopyText: (messageId: string) => string | null
 }
 
-/** This pane's own transcript; an unmounted pane's reveal reaches nothing. */
+/** This pane's own sends reveal its transcript; an unmounted pane's reveal reaches nothing. */
 export function useNativeChatRevealLatest(): {
   messageListRef: React.RefObject<NativeChatMessageListHandle | null>
   revealLatest: () => void
 } {
   const messageListRef = useRef<NativeChatMessageListHandle>(null)
   const revealLatest = useCallback(() => {
+    // Off keeps a reader who scrolled up in place; one at the end still follows the reply.
+    if (useAppStore.getState().settings?.nativeChatScrollToLatestOnSend === false) {
+      return
+    }
     try {
       messageListRef.current?.revealLatest()
     } catch (error) {

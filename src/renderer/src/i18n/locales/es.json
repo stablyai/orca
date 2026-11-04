@@ -20263,6 +20263,10 @@
     "settings": {
       "nativeChat": {
         "followUpBehaviorTitle": "Poner mensajes de seguimiento en cola",
+        "scrollToLatestOnSendTitle": "Desplazar a lo último al enviar",
+        "scrollToLatestOnSendCopy": "Enviar con el chat desplazado hacia arriba salta al último mensaje y sigue la respuesta. Desactívalo para mantener tu posición.",
+        "scrollToLatestOnSendSearchScroll": "desplazar",
+        "scrollToLatestOnSendSearchPosition": "posición",
         "followUpBehaviorCopy": "Los mensajes enviados mientras el agente trabaja esperan como tarjetas hasta que termina el turno, en lugar de entrar en el turno en curso. Cmd/Ctrl+Intro hace lo contrario para un mensaje.",
         "inlineVisualsTitle": "Elementos visuales inline",
         "inlineVisualsCopy": "Permite que el agente muestre gráficos, diagramas y maquetas dentro de sus respuestas. Se aplica a los chats nuevos.",

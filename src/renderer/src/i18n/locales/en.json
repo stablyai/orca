@@ -20841,6 +20841,10 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Queue follow-ups",
+        "scrollToLatestOnSendTitle": "Scroll to latest when sending",
+        "scrollToLatestOnSendCopy": "Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.",
+        "scrollToLatestOnSendSearchScroll": "scroll",
+        "scrollToLatestOnSendSearchPosition": "position",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",

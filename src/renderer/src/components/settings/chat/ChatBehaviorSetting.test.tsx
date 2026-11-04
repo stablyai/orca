@@ -190,6 +190,19 @@ describe('ChatBehaviorSetting follow-up behavior', () => {
   )
 })
 
+it('turns scrolling to the latest on send off, and back on', () => {
+  const SWITCH = '[role="switch"][aria-label="Scroll to latest when sending"]'
+  const updateSettings = vi.fn()
+  const { container, unmount } = renderSetting({}, updateSettings)
+  fireEvent.click(container.querySelector(SWITCH)!)
+  expect(updateSettings).toHaveBeenLastCalledWith({ nativeChatScrollToLatestOnSend: false })
+  unmount()
+
+  const off = renderSetting({ nativeChatScrollToLatestOnSend: false }, updateSettings)
+  fireEvent.click(off.container.querySelector(SWITCH)!)
+  expect(updateSettings).toHaveBeenLastCalledWith({ nativeChatScrollToLatestOnSend: true })
+})
+
 it('renders the Queue switch and description using the German catalog', async () => {
   setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
   i18n.addResourceBundle('de', 'translation', de, true, true)
