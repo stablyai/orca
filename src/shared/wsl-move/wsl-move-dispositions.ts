@@ -37,6 +37,10 @@ export const notApplicableDisposition = (item: number, note?: string) =>
   ({ disposition: 'not-applicable', item, ...(note ? { note } : {}) }) as const
 
 export const PERSISTED_STATE_DISPOSITIONS = {
+  dashboardTaskNotes: notApplicableDisposition(
+    62,
+    'Local profile observations retain their original host identity.'
+  ),
   schemaVersion: notApplicableDisposition(62),
   repos: moveDisposition(1),
   projects: moveDisposition(3),

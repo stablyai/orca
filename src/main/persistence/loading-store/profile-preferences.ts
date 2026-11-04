@@ -1,3 +1,13 @@
+import {
+  getProfileDashboardTaskNotes,
+  loadProfileDashboardTaskNotes,
+  saveProfileDashboardTaskNote
+} from './profile-dashboard-task-notes'
+import type {
+  DashboardTaskNoteChange,
+  DashboardTaskNoteMutation,
+  DashboardTaskNotes
+} from '../../../shared/dashboard-task-notes'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import { createAgentModelCatalogSettingsExpiry } from '../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
@@ -30,6 +40,7 @@ import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-
 type ProfilePreferencesRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
+  | 'dirtyProfileStateDomains'
   | 'githubCacheDirty'
   | 'githubCacheGeneration'
   | 'githubCacheWriteListeners'
@@ -141,6 +152,18 @@ export class ProfilePreferences {
       this[profilePreferencesContext].runtime.state,
       this[profilePreferencesContext].runtime.activeViewPreference.get()
     )
+  }
+
+  getDashboardTaskNotes(): DashboardTaskNotes {
+    return getProfileDashboardTaskNotes(this[profilePreferencesContext].runtime)
+  }
+
+  loadDashboardTaskNotes(): Promise<DashboardTaskNotes> {
+    return loadProfileDashboardTaskNotes(this[profilePreferencesContext].runtime)
+  }
+
+  setDashboardTaskNote(input: DashboardTaskNoteMutation): Promise<DashboardTaskNoteChange> {
+    return saveProfileDashboardTaskNote(this[profilePreferencesContext].runtime, input)
   }
 
   updateUI(updates: Partial<PersistedState['ui']>): void {

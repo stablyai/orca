@@ -1,3 +1,4 @@
+import { registerDashboardTaskNoteHandlers } from './dashboard-task-notes'
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
@@ -29,6 +30,7 @@ export function registerDashboardPopoutHandlers(
   store: Store,
   keybindings?: KeybindingService
 ): void {
+  registerDashboardTaskNoteHandlers(store)
   ipcMain.removeHandler('dashboardPopout:open')
   ipcMain.removeHandler('dashboard:publishSnapshot')
   ipcMain.removeHandler('dashboard:requestSnapshot')

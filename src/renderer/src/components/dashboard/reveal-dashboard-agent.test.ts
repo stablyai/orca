@@ -137,7 +137,7 @@ describe('revealDashboardAgent', () => {
         })
       )
     )
-    fireEvent.click(screen.getByRole('button', { name: /Open this conversation/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Agent is working/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Open worktree' }))
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('agent-session', 'wt-1')
     expect(mocks.activateTab).toHaveBeenCalledWith(args.tabId, { worktreeId: 'wt-1' })

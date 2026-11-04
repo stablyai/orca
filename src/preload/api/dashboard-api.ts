@@ -1,3 +1,8 @@
+import type {
+  DashboardTaskNotes,
+  DashboardTaskNoteChange,
+  DashboardTaskNoteMutation
+} from '../../shared/dashboard-task-notes'
 import type { DashboardRevealAgentArgs, DashboardSnapshot } from '../../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -5,6 +10,12 @@ import type {
 } from '../../shared/terminal/replay/terminal-preview'
 
 export type DashboardApi = {
+  taskNotes?: {
+    storage: 'profile'
+    get: () => Promise<DashboardTaskNotes>
+    set: (mutation: DashboardTaskNoteMutation) => Promise<DashboardTaskNoteChange>
+    onChanged: (callback: (change: DashboardTaskNoteChange) => void) => () => void
+  }
   openPopout: () => Promise<void>
   publishSnapshot: (snapshot: DashboardSnapshot) => Promise<void>
   getPopoutOpen: () => Promise<boolean>

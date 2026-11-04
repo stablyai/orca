@@ -64,6 +64,7 @@ export class StateSerializationSecretHandlingOperations {
         case 'workspaceSession':
           stateToSave[domain] = this.runtime.state.workspaceSession
           break
+        case 'dashboardTaskNotes':
         case 'automations':
         case 'automationRuns':
           stateToSave[domain] = this.runtime.state[domain]
