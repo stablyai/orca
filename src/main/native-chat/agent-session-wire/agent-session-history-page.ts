@@ -2,7 +2,6 @@ import { resolveHistoryLimit } from './agent-session-history-limit'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { pageSnapshotTail } from './agent-session-history-latest-turn'
-import { isSubagentBlock } from '../../../shared/native-chat/native-chat-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
