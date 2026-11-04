@@ -824,6 +824,7 @@ describe('NativeChatSessionOptionPickers', () => {
 })
 
 it('renders and selects Ultracode in the existing effort control', async () => {
+  surface.setOption.mockResolvedValueOnce(undefined)
   const ultracode: SessionOptionDescriptor = {
     ...effort,
     kind: {
