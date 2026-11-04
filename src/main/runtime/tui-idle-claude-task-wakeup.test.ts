@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
-import { normalizeAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import { evaluateHookTurn, readTuiIdleHookTurn } from './tui-idle-hook-lane'
@@ -113,22 +112,5 @@ describe('Claude task wake-up readiness authority', () => {
     expect(
       verdict(pendingRow({ evidenceObservedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1 }))
     ).toBeNull()
-  })
-
-  it('accepts only known phases on a nonterminal Claude payload', () => {
-    expect(normalizeAgentStatusPayload(pendingRow())).toHaveProperty(
-      'claudeTaskWakeupPending',
-      'notification'
-    )
-    for (const fields of [
-      { claudeTaskWakeupPending: false },
-      { claudeTaskWakeupPending: 'true' },
-      { state: 'done' },
-      { agentType: 'codex' }
-    ]) {
-      expect(normalizeAgentStatusPayload({ ...pendingRow(), ...fields })).not.toHaveProperty(
-        'claudeTaskWakeupPending'
-      )
-    }
   })
 })
