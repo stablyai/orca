@@ -1896,6 +1896,7 @@
       "agentStarting": "L'agent est encore en cours de démarrage.",
       "agentStillWorking": "L'agent est encore en train de travailler.",
       "answerUnconfirmed": "Votre réponse a été enregistrée, mais l'agent ne l'a pas confirmée.",
+      "pluginInputRequired": "{{agent}} s’est arrêté car le plugin « {{plugin}} » attend une saisie dans un volet de terminal. Désactivez le plugin pour les sessions de chat ou exécutez la tâche dans un terminal {{agent}}.",
       "antigravityNotSignedIn": "Antigravity n’est pas connecté. Connectez-vous dans Paramètres → Comptes → Antigravity. Puis renvoyez votre message.",
       "argumentsMissingValue": "Les arguments enregistrés nécessitent une valeur pour {{option}}.",
       "argumentsMultipleValues": "Les arguments enregistrés donnent plusieurs valeurs à {{option}}.",

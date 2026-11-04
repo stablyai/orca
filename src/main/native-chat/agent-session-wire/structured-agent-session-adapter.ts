@@ -153,6 +153,18 @@ export type StructuredAgentSessionOptionsReportedEvent =
 export type StructuredAgentSessionLifecycleEvent =
   | StructuredAgentSessionEndedEvent
   | StructuredAgentSessionOptionsReportedEvent
+  | StructuredAgentSessionRetiringEvent
+
+/** A logical failure stops input immediately; only a later ended event proves writer death. */
+export type StructuredAgentSessionRetiringEvent = {
+  type: 'retiring'
+  sessionId: string
+  reason: string
+  failure: SubmissionRejectionFact
+  fence: number
+  acquisitionGeneration: string
+  observedAt: number
+}
 
 export type StructuredAgentSessionProviderChildPhase = 'starting' | 'ready'
 

@@ -168,8 +168,11 @@ function itemKind(kind: string): string | null {
   return kind.startsWith('item:') ? kind.slice('item:'.length) : null
 }
 
-export function isClaudePluginUiFrame(kind: string): boolean {
-  return kind.startsWith('message:system:ui_')
+export function isUnmodeledClaudeSystemFrame(kind: string): boolean {
+  return (
+    (kind === 'message:system' || kind.startsWith('message:system:')) &&
+    !Object.hasOwn(PROVIDER_FRAME_CLASSIFICATIONS.claude, kind)
+  )
 }
 
 export function isDeltaProviderFrameKind(kind: string): boolean {
@@ -182,7 +185,7 @@ const CLAUDE_FRAME_CLASSIFICATIONS: Readonly<Record<string, ProviderFrameClassif
   PROVIDER_FRAME_CLASSIFICATIONS.claude
 
 /** Classify failures only from declared kinds/outcome fields; nested statuses can describe unrelated work.
- * Unlisted frames retain visible fallback rows. */
+ * Unlisted non-system frames retain visible fallback rows. */
 const PROVIDER_FRAME_CATALOGS: ReadonlyMap<
   string,
   (kind: string, payload: unknown) => ProviderFrameClassification | undefined
@@ -217,8 +220,7 @@ const PROVIDER_FRAME_CATALOGS: ReadonlyMap<
           ? 'error-surface'
           : 'suppressed-benign'
       }
-      // Terminal UI commands are not conversation content.
-      if (isClaudePluginUiFrame(kind)) {
+      if (isUnmodeledClaudeSystemFrame(kind)) {
         return 'suppressed-benign'
       }
       if (kind === 'message:auth_status') {

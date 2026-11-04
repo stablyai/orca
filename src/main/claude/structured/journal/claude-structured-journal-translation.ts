@@ -40,6 +40,10 @@ import { ClaudeAssistantFailures } from '../../claude-assistant-failures'
 import { ClaudeUsageLimits } from '../../claude-usage-limits'
 import { ClaudeThreadGoal } from '../../claude-thread-goal'
 import { createClaudeFinalOutputCoverage } from '../../claude-final-output-coverage'
+import {
+  journalClaudePluginInputFailure,
+  settleClaudeInterruptedTurn
+} from '../../claude-plugin-input-failure-journal'
 
 export function createClaudeJournalTranslator(
   deps: ClaudeJournalTranslatorDeps
@@ -161,21 +165,21 @@ export function createClaudeJournalTranslator(
     acceptStartupFailure: deps.acceptStartupFailure
   }
 
+  const finish = (observedAt: number, failed: boolean): void => {
+    prompts.retryPendingCancellations()
+    flush()
+    corrections.abandon()
+    backgroundTasks.settleSession()
+    settleClaudeInterruptedTurn(turn, observedAt, failed)
+  }
   return {
     handle: (event) => {
+      if (event.type === 'retiring') {
+        journalClaudePluginInputFailure({ event, turn, sink: deps.sink, finish })
+        return
+      }
       if (event.type === 'ended') {
-        prompts.retryPendingCancellations()
-        flush()
-        corrections.abandon()
-        backgroundTasks.settleSession()
-        // Child exit proves the turn ended; the journal's Stop event determines whether a person ended it.
-        turn.settle({
-          state: 'interrupted',
-          ...(event.failure?.kind === 'pluginInputRequired' ? { outcome: 'failure' as const } : {}),
-          completedAt: event.observedAt ?? Date.now()
-        })
-        // Prevent late frames from opening a turn after the child can no longer close it.
-        turn.suppressReopen()
+        finish(event.observedAt ?? Date.now(), event.failure?.kind === 'pluginInputRequired')
         return
       }
       turn.observeStartedSend(event.type === 'message' ? (event.startedSend ?? null) : null)

@@ -734,13 +734,13 @@ describe('Claude structured journal translation', () => {
     expect(frames.map((frame) => frame.kind)).toEqual(
       expect.arrayContaining([
         'message:system:local_command_output',
-        'message:system:command_started',
         'message:result',
         'control_request:future_control'
       ])
     )
     expect(frames.map((frame) => frame.kind)).not.toEqual(
       expect.arrayContaining([
+        'message:system:command_started',
         'message:system:hook_response',
         'message:tool_progress',
         'message:prompt_suggestion'

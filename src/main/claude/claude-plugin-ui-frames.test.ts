@@ -21,7 +21,7 @@ function providerFrameKinds(items: { body: AgentJournalItemBody }[]): string[] {
 }
 
 /** Shape reported from Claude Code 2.1.316; UUIDs are test identities. */
-function pluginUi(subtype: string, uuid: string, fields: Record<string, unknown>) {
+function pluginUi(subtype: string | undefined, uuid: string, fields: Record<string, unknown>) {
   return {
     type: 'message' as const,
     sessionId: 'orca-session',
@@ -110,7 +110,8 @@ describe('Claude plugin UI frames', () => {
       'ui_placed',
       'ui_scroll',
       'ui_focus',
-      'ui_future'
+      'ui_future',
+      'future_notice'
     ].entries()) {
       translator.handle(pluginUi(subtype, `ui-${index}`, {}))
     }
@@ -124,48 +125,57 @@ describe('Claude plugin UI frames', () => {
     expect(providerFrameKinds(state.items)).toEqual([])
   })
 
-  it('does not flush streamed text for N or 10N passive plugin frames', () => {
-    const writes = (count: number) => {
-      const state = sinkState()
-      const translator = createClaudeJournalTranslator({
-        sink: state.sink,
-        schedule: () => () => {}
-      })
-      translator.handle(userTurn('user-stream', 'Reply'))
-      let sequence = 0
-      const stream = (event: Record<string, unknown>) =>
-        translator.handle({
-          type: 'message',
-          sessionId: 'orca-session',
-          message: {
-            type: 'stream_event',
-            uuid: `stream-${sequence++}`,
-            session_id: 'claude-session',
-            event
-          }
+  it.each(['ui_status', 'future_notice', undefined])(
+    'does not flush streamed text for N or 10N %s diagnostics',
+    (subtype) => {
+      const writes = (count: number) => {
+        const state = sinkState()
+        const translator = createClaudeJournalTranslator({
+          sink: state.sink,
+          schedule: () => () => {}
         })
-      stream({
-        type: 'message_start',
-        message: { id: 'msg-stream', role: 'assistant', content: [] }
-      })
-      stream({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })
-      for (let i = 0; i < count; i++) {
-        stream({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'a' } })
-        translator.handle(
-          pluginUi('ui_status', `status-${i}`, { text: 'PR 6 · 진행 13 · 대기 6   /board' })
-        )
+        translator.handle(userTurn('user-stream', 'Reply'))
+        let sequence = 0
+        const stream = (event: Record<string, unknown>) =>
+          translator.handle({
+            type: 'message',
+            sessionId: 'orca-session',
+            message: {
+              type: 'stream_event',
+              uuid: `stream-${sequence++}`,
+              session_id: 'claude-session',
+              event
+            }
+          })
+        stream({
+          type: 'message_start',
+          message: { id: 'msg-stream', role: 'assistant', content: [] }
+        })
+        stream({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })
+        for (let i = 0; i < count; i++) {
+          stream({
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'text_delta', text: 'a' }
+          })
+          const frame = pluginUi(subtype, `status-${i}`, {
+            text: 'PR 6 · 진행 13 · 대기 6   /board'
+          })
+          translator.handle(frame)
+        }
+        const assistantWrites = () =>
+          state.items.filter(({ body }) => body.kind === 'message' && body.role === 'assistant')
+        expect(assistantWrites()).toHaveLength(0)
+        expect(providerFrameKinds(state.items)).toEqual([])
+        translator.flush()
+        expect(assistantWrites()).toHaveLength(1)
+        expect(assistantWrites()[0].body).toMatchObject({
+          blocks: [{ type: 'text', text: 'a'.repeat(count) }]
+        })
+        translator.dispose()
+        return assistantWrites().length
       }
-      const assistantWrites = () =>
-        state.items.filter(({ body }) => body.kind === 'message' && body.role === 'assistant')
-      expect(assistantWrites()).toHaveLength(0)
-      translator.flush()
-      expect(assistantWrites()).toHaveLength(1)
-      expect(assistantWrites()[0].body).toMatchObject({
-        blocks: [{ type: 'text', text: 'a'.repeat(count) }]
-      })
-      translator.dispose()
-      return assistantWrites().length
+      expect(writes(20)).toBe(writes(200))
     }
-    expect(writes(20)).toBe(writes(200))
-  })
+  )
 })

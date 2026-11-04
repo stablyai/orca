@@ -7,7 +7,6 @@ import type { AgentSessionJournalIdentity } from '../../shared/agent-session/jou
 import { MAX_PROVIDER_DIAGNOSTIC_CHARS } from '../../shared/agent-session/failures/agent-session-failure'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import {
   closeTestJournalHostDatabases,
@@ -119,7 +118,7 @@ describe('a Claude api_retry frame', () => {
     expect(row?.failure?.detail?.text.length).toBe(MAX_PROVIDER_DIAGNOSTIC_CHARS)
   })
 
-  it('leaves a frame kind no one catalogued to the provider fallback, as before', async () => {
+  it('hides unmodeled system frames even when their payload names an error', async () => {
     const unknown = {
       type: 'system',
       subtype: 'future_notice',
@@ -128,10 +127,6 @@ describe('a Claude api_retry frame', () => {
       uuid: 'future-1'
     }
     const rows = await statusRowsFor([unknown])
-    expect(rows).toEqual([
-      unhandledProviderFrameJournalItem('claude', 'message:system:future_notice', unknown)?.body
-    ])
-    expect(rows[0]).toMatchObject({ text: 'rate_limit' })
-    expect(rows[0]).not.toHaveProperty('tone')
+    expect(rows).toEqual([])
   })
 })

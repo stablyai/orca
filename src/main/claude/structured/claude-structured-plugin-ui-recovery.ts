@@ -2,7 +2,8 @@ import { claudeFocusedPlugin, ClaudePluginInputError } from '../claude-plugin-ui
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeAcquireCallbacks,
-  ClaudeSession
+  ClaudeSession,
+  ClaudeSessionExit
 } from './claude-structured-session-state'
 
 export function claudePluginUiRecovery(
@@ -29,7 +30,8 @@ export function claudePluginUiRecovery(
       if (
         session &&
         sessions.get(sessionId) === session &&
-        session.translator?.openTurnInLiveProviderCycle === true
+        (session.translator?.openTurnInLiveProviderCycle === true ||
+          session.dispatchWaiters.some((waiter) => waiter.clientMessageId !== null))
       ) {
         // A plugin-held tool may never acknowledge interrupt; the exit owner closes the child.
         callbacks.handleExit(sessionId, attempt, new ClaudePluginInputError(plugin))
@@ -37,4 +39,16 @@ export function claudePluginUiRecovery(
     })
     return true
   }
+}
+
+export function ignoresClaudeRetiredConnection(
+  liveSession: ClaudeSession | null,
+  current: ClaudeSession | undefined,
+  exit: ClaudeSessionExit | undefined
+): boolean {
+  return Boolean(
+    liveSession &&
+    current !== liveSession &&
+    (exit?.session !== liveSession || exit?.error instanceof ClaudePluginInputError)
+  )
 }

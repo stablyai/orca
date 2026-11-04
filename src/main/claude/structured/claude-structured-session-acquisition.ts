@@ -1,17 +1,14 @@
 import type { AgentSessionAcquisition } from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { openClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import { claudeLaunchPermissions } from './claude-structured-inbound-control'
-import { resolveClaudeReplayTurn } from '../claude-replay-turn-resolution'
+import {
+  resolveClaudeReplayTurn,
+  withClaudeReplaySettlements
+} from '../claude-replay-turn-resolution'
 import { claudeStartedUnechoedSend } from '../claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from '../claude-session-state-turn-over'
 import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
-import {
-  createClaudeInitProof,
-  readClaudeCapabilities,
-  observeClaudeReportedPermissionMode,
-  readClaudeFrameString,
-  readClaudeInit
-} from './claude-structured-init-proof'
+import * as proof from './claude-structured-init-proof'
 import { claudeConfigDirEnvPatch } from '../claude-config-dir-pin'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from '../claude-prompt-registry'
@@ -37,7 +34,10 @@ import {
 import { isRootClaudeFrame } from '../claude-turn-opening'
 import { createClaudeStartupOutcome, endsClaudeStartup } from './claude-structured-startup-outcome'
 import { claudeStartupResultError } from '../claude-stream-json-exit-error'
-import { claudePluginUiRecovery } from './claude-structured-plugin-ui-recovery'
+import {
+  claudePluginUiRecovery,
+  ignoresClaudeRetiredConnection
+} from './claude-structured-plugin-ui-recovery'
 
 export async function acquireClaudeSession({
   input,
@@ -61,7 +61,7 @@ export async function acquireClaudeSession({
     expectedProviderSessionId: string | null = null
   // Preserve the CLI diagnostic when SDK cleanup reports a generic error.
   let childEnded: Error | null = null
-  const initProof = createClaudeInitProof()
+  const initProof = proof.createClaudeInitProof()
   // Owned by this acquisition alone, so a late frame cannot fail a replacement's open.
   const startup = createClaudeStartupOutcome()
   const childFailed = (error: Error, ended?: Promise<unknown>): void => {
@@ -82,8 +82,13 @@ export async function acquireClaudeSession({
   const observedOptions: sessionState.ClaudeSession['reportedOptions'] = {}
   const handlePluginUi = claudePluginUiRecovery(delivery, () => liveSession)
   const onMessage = (message: Record<string, unknown>): void => {
-    const init = readClaudeInit(message)
-    if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
+    if (
+      ignoresClaudeRetiredConnection(liveSession, sessions.get(sessionId), exits.get(sessionId))
+    ) {
+      return
+    }
+    const init = proof.readClaudeInit(message)
+    if (proof.readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
       // Foreign init frames refuse startup; ordinary foreign frames are ignored.
       if (init || (message.type === 'system' && message.subtype === 'init')) {
         initProof.refuse()
@@ -95,19 +100,22 @@ export async function acquireClaudeSession({
     }
     if (message.type === 'system' && message.subtype === 'init' && isRootClaudeFrame(message)) {
       firstRootInit ??= {
-        permissionMode: readClaudeFrameString(message, 'permissionMode')
+        permissionMode: proof.readClaudeFrameString(message, 'permissionMode')
       }
       if (liveSession) {
         liveSession.firstRootInit = firstRootInit
       }
     }
-    const permissionChanged = observeClaudeReportedPermissionMode(observedOptions, message)
+    const permissionChanged = proof.observeClaudeReportedPermissionMode(observedOptions, message)
     const modelChanged =
       liveSession && init?.model ? observeClaudeExecutionModel(liveSession, init.model) : false
     if (init) {
       initProof.resolve(init)
       if (liveSession) {
-        liveSession.capabilities = readClaudeCapabilities(liveSession.capabilities, init.message)
+        liveSession.capabilities = proof.readClaudeCapabilities(
+          liveSession.capabilities,
+          init.message
+        )
       }
     }
     observedLeafUuid = readClaudeTranscriptEntryUuid(message) ?? observedLeafUuid
@@ -133,53 +141,38 @@ export async function acquireClaudeSession({
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
     const startedSend = !startsTurn && liveSession ? claudeStartedUnechoedSend(liveSession) : null
-    // Retain send ownership during publication until the host receives its settlement.
-    const session = liveSession
-    const reported = session?.unreportedSettlements
-    if (session && settlements.length > 0) {
-      session.unreportedSettlements = new Set([
-        ...(reported ?? []),
-        ...settlements.map((settlement) => settlement.clientMessageId)
-      ])
-    }
-    try {
-      callbacks.deliver(attempt, sessionId, () => {
-        if (liveSession && (modelChanged || permissionChanged)) {
+    withClaudeReplaySettlements(
+      liveSession,
+      settlements,
+      () =>
+        callbacks.deliver(attempt, sessionId, () => {
+          if (liveSession && (modelChanged || permissionChanged)) {
+            callbacks.emit(liveSession, input.events, {
+              type: 'options-reported',
+              sessionId,
+              fence: liveSession.fence,
+              acquisitionGeneration: liveSession.acquisitionGeneration,
+              reportedOptions: {
+                ...(modelChanged && init?.model ? { model: init.model } : {}),
+                reportedPermissionMode: observedOptions.reportedPermissionMode
+              }
+            })
+          }
           callbacks.emit(liveSession, input.events, {
-            type: 'options-reported',
+            type: 'message',
             sessionId,
-            fence: liveSession.fence,
-            acquisitionGeneration: liveSession.acquisitionGeneration,
-            reportedOptions: {
-              ...(modelChanged && init?.model ? { model: init.model } : {}),
-              reportedPermissionMode: observedOptions.reportedPermissionMode
-            }
+            message,
+            ...(startsTurn ? { startsTurn: true } : {}),
+            ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
+            ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
+            ...(startedSend ? { startedSend } : {}),
+            ...observedAt
           })
-        }
-        callbacks.emit(liveSession, input.events, {
-          type: 'message',
-          sessionId,
-          message,
-          ...(startsTurn ? { startsTurn: true } : {}),
-          ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
-          ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
-          ...(startedSend ? { startedSend } : {}),
-          ...observedAt
-        })
-        // Final snapshots and the turn settlement must reach the journal before its leaf can move.
-        recordTurnEnd(liveSession, message, leafAtFrame)
-      })
-    } finally {
-      try {
-        for (const settlement of settlements) {
-          deps.onDispatchSettledLate?.({ sessionId, ...settlement })
-        }
-      } finally {
-        if (session) {
-          session.unreportedSettlements = reported
-        }
-      }
-    }
+          // Final snapshots and the turn settlement must reach the journal before its leaf can move.
+          recordTurnEnd(liveSession, message, leafAtFrame)
+        }),
+      (settlement) => deps.onDispatchSettledLate?.({ sessionId, ...settlement })
+    )
   }
   const emit = (event: Parameters<typeof callbacks.emit>[2]): void =>
     callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
@@ -226,7 +219,11 @@ export async function acquireClaudeSession({
               return
             }
             childFailed(...claudeStartupExit(error, attempt.connection, input.events))
-            callbacks.handleExit(sessionId, attempt, error)
+            if (exits.get(sessionId)?.connection === attempt.connection) {
+              callbacks.finishClose(sessionId, attempt)
+            } else {
+              callbacks.handleExit(sessionId, attempt, error)
+            }
           })
         }
       )

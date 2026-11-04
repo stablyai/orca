@@ -88,15 +88,13 @@ describe('provider frame classification catalog', () => {
     ).toBe('status-chrome')
   })
 
-  it('suppresses every Claude plugin UI subtype, including ones not yet seen', () => {
-    for (const subtype of ['ui_status', 'ui_toast', 'ui_future_surface']) {
+  it('suppresses unmodeled Claude system diagnostics, including terminal UI', () => {
+    for (const subtype of ['ui_status', 'ui_toast', 'ui_future_surface', 'uinotify']) {
       expect(
         classifyProviderFrame('claude', `message:system:${subtype}`, { plugin: 'p', text: 'x' })
       ).toBe('suppressed-benign')
     }
-    expect(classifyProviderFrame('claude', 'message:system:uinotify', {})).toBe(
-      'timeline-substantive'
-    )
+    expect(classifyProviderFrame('claude', 'message:system', {})).toBe('suppressed-benign')
   })
 
   it('keeps unknown future frames on the substantive bounded fallback path', () => {
@@ -193,9 +191,7 @@ describe('failure is decided by kind, never by searching the payload', () => {
         error: 'auth expired'
       })
     ).toBeNull()
-    const unknown = unhandledProviderFrameJournalItem('claude', 'message:system:future', failed)
-    expect(unknown?.classification).toBe('timeline-substantive')
-    expect(unknown?.body.tone).toBeUndefined()
+    expect(unhandledProviderFrameJournalItem('claude', 'message:system:future', failed)).toBeNull()
   })
 })
 

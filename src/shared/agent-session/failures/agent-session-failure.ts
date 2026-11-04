@@ -371,13 +371,4 @@ export function withProviderDiagnostic<TError extends Error>(
   return diagnostic ? Object.assign(error, { providerDiagnostic: diagnostic }) : error
 }
 
-/** The detail behind a failure's Details: provider words, or a log tail such as a CLI's startup stderr.
- *  A retry's log is the raw frame its row already shows. */
-export function agentSessionFailureDetailText(
-  fact: AgentSessionFailureFact | undefined
-): string | undefined {
-  const detail = fact?.detail
-  return detail && !(detail.audience === 'log' && fact.kind === 'providerRetrying')
-    ? detail.text
-    : undefined
-}
+export { agentSessionFailureDetailText } from './agent-session-failure-quoted-detail'

@@ -31,6 +31,7 @@ it('renders a plugin input failure with its recovery in English and French', asy
     'Claude stopped because the "blast-radius" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a Claude terminal.'
   renderFailure(failure, text)
   expect(screen.getByText(text)).toBeInTheDocument()
+  expect(screen.queryByText('Details')).not.toBeInTheDocument()
   cleanup()
   await i18n.changeLanguage('fr')
   renderFailure(failure, text)
@@ -39,4 +40,8 @@ it('renders a plugin input failure with its recovery in English and French', asy
       'Claude s’est arrêté car le plugin « blast-radius » attend une saisie dans un volet de terminal. Désactivez le plugin pour les sessions de chat ou exécutez la tâche dans un terminal Claude.'
     )
   ).toBeInTheDocument()
+  expect(screen.queryByText('Détails')).not.toBeInTheDocument()
+  cleanup()
+  renderFailure(failure, 'Custom host recovery advice.')
+  expect(screen.getByText('Custom host recovery advice.')).toBeInTheDocument()
 })

@@ -143,8 +143,12 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     return
   }
   const close = child.close
-  const expected = exit.expected && close?.failure?.kind !== 'hostFault'
-  const failure = close?.failure?.kind === 'hostFault' ? close.failure : exit.failure
+  const failedClose =
+    close?.failure?.kind === 'hostFault' || close?.failure?.kind === 'pluginInputRequired'
+  const personallyStoppedPlugin =
+    exit.failure?.kind === 'pluginInputRequired' && close?.cause === 'user-stop'
+  const expected = (exit.expected || personallyStoppedPlugin) && !failedClose
+  const failure = failedClose ? close?.failure : exit.failure
   // Use the first death observation when settling the running turn.
   const observation = child.exitObservation?.()
   const observedAt = observation?.observedAt ?? exit.observedAt ?? context.now()
