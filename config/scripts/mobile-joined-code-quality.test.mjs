@@ -31,8 +31,8 @@ describe('Mobile joined analyzer routing', () => {
     )
     expect(parseCodeQualityOptions(['base']).mobileHostDeclarations).toBe(false)
     expect(() => parseCodeQualityOptions(['base', '--typo'])).toThrow()
-    expect(partitionMobileJoinedFiles(root, [roots[0], 'src/ordinary.ts', roots[2]])).toEqual({
-      joined: [roots[0], roots[2]],
+    expect(partitionMobileJoinedFiles(root, [roots[0], 'src/ordinary.ts', roots[1]])).toEqual({
+      joined: [roots[0], roots[1]],
       rest: ['src/ordinary.ts']
     })
     expect(partitionMobileJoinedFiles(root, ['src/ordinary.ts']).joined).toEqual([])

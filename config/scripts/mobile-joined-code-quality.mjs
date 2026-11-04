@@ -22,11 +22,11 @@ export function partitionMobileJoinedFiles(root, files) {
         .join('/')
     )
   if (
-    roots.length !== 3 ||
-    new Set(roots).size !== 3 ||
+    roots.length !== 2 ||
+    new Set(roots).size !== 2 ||
     roots.some((file) => !file.startsWith('mobile/'))
   ) {
-    throw new Error('Expected the three complete Mobile joined test roots')
+    throw new Error('Expected the two complete Mobile joined test roots')
   }
   const joinedRoots = new Set(roots)
   const joined = files.filter((file) => joinedRoots.has(file))
