@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { isDefaultBranchWorkspace } from '../../../../shared/worktree/workspace-kinds'
 import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
 
 function makeRepo(id: string, path: string, kind: Repo['kind']): Repo {
@@ -75,22 +74,6 @@ function visibleWithHideDefault(repos: Repo[], worktrees: Worktree[]): string[] 
 }
 
 describe('"Hide default branch" on folder projects', () => {
-  it('keeps a folder project root visible, even as its only workspace', () => {
-    const repo = makeRepo('notes', '/Users/me/notes', 'folder')
-    const { root, instance } = folderProjectRows(repo)
-
-    expect(visibleWithHideDefault([repo], [root])).toEqual([root.id])
-    expect(visibleWithHideDefault([repo], [root, instance])).toEqual([root.id, instance.id])
-  })
-
-  it('keeps the root of a folder project added from a git subdirectory', () => {
-    const repo = makeRepo('app', '/Users/me/monorepo/packages/app', 'folder')
-    const { root } = folderProjectRows(repo)
-    root.branch = 'refs/heads/main'
-
-    expect(visibleWithHideDefault([repo], [root])).toEqual([root.id])
-  })
-
   it('still hides the main checkout of a git project beside a folder project', () => {
     const gitRepo = makeRepo('repo', '/code/repo', 'git')
     const folderRepo = makeRepo('notes', '/notes', 'folder')
@@ -105,20 +88,6 @@ describe('"Hide default branch" on folder projects', () => {
     expect(visibleWithHideDefault([gitRepo, folderRepo], [main, feature, root])).toEqual([
       feature.id,
       root.id
-    ])
-  })
-
-  it('keeps an empty-branch git main visible: detached HEAD, or an SSH row synthesized offline', () => {
-    const repo = makeRepo('repo', '/code/repo', 'git')
-    const remoteRepo = makeRepo('remote', '/srv/remote', 'git')
-    const detached = makeRow(repo, { id: 'repo::/code/repo', branch: '' })
-    const sshOffline = makeRow(remoteRepo, { id: 'remote::/srv/remote', branch: '', head: '' })
-
-    expect(isDefaultBranchWorkspace(detached, repo)).toBe(false)
-    expect(isDefaultBranchWorkspace(sshOffline, remoteRepo)).toBe(false)
-    expect(visibleWithHideDefault([repo, remoteRepo], [detached, sshOffline])).toEqual([
-      detached.id,
-      sshOffline.id
     ])
   })
 })

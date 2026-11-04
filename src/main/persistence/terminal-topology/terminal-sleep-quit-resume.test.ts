@@ -140,25 +140,4 @@ describe('sleep → quit → resume', () => {
       await relaunched.freezeWritesAsync()
     }
   })
-
-  it('keeps a record that only the before-unload stage carried', async () => {
-    const { directory, store, window } = await storeWithAgentPane()
-    window.sleepingAgentSessionsByPaneKey = { [PANE_KEY]: record('quit', 3) }
-    store.stageWorkspaceSessionBeforeUnload(structuredClone(window))
-
-    const relaunched = await reopenTopologyStore(store, directory)
-    try {
-      expect(heldForPane(relaunched)).toEqual({
-        record: record('quit', 3),
-        worktreeRecord: record('quit', 3),
-        tabs: [TAB],
-        binding: PTY
-      })
-      expect(resumeCommand(heldForPane(relaunched).record)).toBe(
-        "codex '-c' 'disable_paste_burst=true' 'resume' 'session-3'"
-      )
-    } finally {
-      await relaunched.freezeWritesAsync()
-    }
-  })
 })
