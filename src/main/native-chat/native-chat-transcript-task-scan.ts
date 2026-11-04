@@ -1,7 +1,7 @@
 // A chat paints a tail. The pills need the calls that happened before that tail.
 
 import { stat } from 'node:fs/promises'
-import type { AgentType } from '../../shared/agent-status-types'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import {
   latestNativeChatTaskSeed,
   nativeChatSubagentActivities,

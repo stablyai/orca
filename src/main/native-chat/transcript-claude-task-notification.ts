@@ -1,4 +1,4 @@
-import { isAgentChildWorkKind } from '../../shared/agent-status-child-work-liveness'
+import { isAgentChildWorkKind } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import { classifyClaudeBackgroundTaskKind } from '../../shared/claude-background-task-kind'
 import { nativeChatRosterActivityLine } from '../../shared/native-chat/input/native-chat-roster-activity-line'
 import type {
