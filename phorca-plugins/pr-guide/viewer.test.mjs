@@ -34,6 +34,7 @@ it('embeds the exact PR diff in the local guide without rendering untrusted HTML
   assert.equal(embedded.guide.title, snapshot.guide.title)
   assert.equal(embedded.files[0].lines.find((line) => line.kind === 'add').text, 'yes')
   assert.equal(parsePatch('diff --git "a/a b.ts" "b/a b.ts"\n--- "a/a b.ts"\n+++ "b/a b.ts"\n@@ -1 +1 @@\n-old\n+new')[0].path, 'a b.ts')
+  assert.equal(parsePatch('diff --git "a/caf\\303\\251.ts" "b/caf\\303\\251.ts"\n--- "a/caf\\303\\251.ts"\n+++ "b/caf\\303\\251.ts"\n@@ -1 +1 @@\n-old\n+new')[0].path, 'café.ts')
 })
 
 it('navigates thematic chapters and their files without losing comment controls', () => {
@@ -118,21 +119,16 @@ it('sends inline feedback only to a selected writable local agent session', asyn
   const calls = []
   let writable = true
   const viewer = await startViewer({ ...snapshot, worktreeId: 'repo::path' }, {
-    run: async (file, args) => {
-      calls.push({ file, args })
-      if (args[0] === 'pr') return JSON.stringify(source)
-      if (args[0] === 'terminal' && args[1] === 'list') return JSON.stringify({ ok: true, result: { terminals: [
-        { handle: 'term_1', title: 'Review agent', agentIdentity: 'codex', connected: true, writable, orphaned: false },
-        { handle: 'term_shell', title: 'Shell', connected: true, writable: true, orphaned: false }
-      ] } })
-      if (args[0] === 'terminal' && args[1] === 'send') return JSON.stringify({ ok: true, result: { send: { accepted: true } } })
-      throw new Error('Unexpected CLI call')
-    }
+    run: async (_file, args) => {
+      assert.equal(args[0], 'pr')
+      return JSON.stringify(source)
+    },
+    listSessions: async () => writable ? [{ handle: 'term_1', title: 'Review agent', agentIdentity: 'codex' }] : [],
+    sendSession: async (terminal, prompt) => { calls.push({ terminal, prompt }); return { accepted: true } }
   })
   try {
     const listed = await (await fetch(viewer.url + '/sessions')).json()
     assert.deepEqual(listed.sessions, [{ handle: 'term_1', title: 'Review agent', agentIdentity: 'codex' }])
-    assert.ok(calls.some(({ args }) => args[1] === 'list' && args[3] === 'id:repo::path'))
     const post = (terminalHandle) => fetch(viewer.url + '/comment', {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: new URL(viewer.url).origin },
@@ -140,30 +136,20 @@ it('sends inline feedback only to a selected writable local agent session', asyn
     })
     assert.equal((await post('term_shell')).status, 400)
     assert.equal((await post('term_1')).status, 200)
-    const sent = calls.find(({ args }) => args[1] === 'send')
-    assert.equal(sent.args[3], 'term_1')
-    assert.match(sent.args[5], /src\/a\.ts:2 \(RIGHT\)\n\nCheck this/)
-    assert.equal(calls.filter(({ args }) => args[0] === 'api').length, 0)
+    assert.equal(calls[0].terminal.handle, 'term_1')
+    assert.match(calls[0].prompt, /src\/a\.ts:2 \(RIGHT\)\n\nCheck this/)
     writable = false
     assert.equal((await post('term_1')).status, 400)
-    assert.equal(calls.filter(({ args }) => args[1] === 'send').length, 1)
+    assert.equal(calls.length, 1)
   } finally {
     viewer.close()
   }
 })
 
-it('does not offer active-worktree sessions from another repository', async () => {
-  const calls = []
-  const viewer = await startViewer(snapshot, {
-    run: async (_file, args) => {
-      calls.push(args)
-      if (args[0] === 'worktree') return JSON.stringify({ ok: true, result: { worktree: { projectId: 'github:other/repo' } } })
-      throw new Error('Unexpected CLI call')
-    }
-  })
+it('offers no local sessions without an explicit terminal access provider', async () => {
+  const viewer = await startViewer(snapshot)
   try {
     assert.deepEqual((await (await fetch(viewer.url + '/sessions')).json()).sessions, [])
-    assert.equal(calls.some((args) => args[0] === 'terminal'), false)
   } finally {
     viewer.close()
   }

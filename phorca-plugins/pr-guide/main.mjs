@@ -1,9 +1,11 @@
-import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, delimiter, isAbsolute, join } from 'node:path'
 import { GUIDE_REVIEW_PROMPT, GUIDE_SCHEMA_JSON, validateGuideOutput } from './guide-prompt.mjs'
+import processHost from './process-host.cjs'
+
+const { runProcess, spawnProcess } = processHost
 
 const MAX_PATCH_BYTES = 600_000
 const MAX_GUIDE_BYTES = 200_000
@@ -62,62 +64,22 @@ export async function resolveClaudeExecutable(
   )
 }
 
-export function runCli(file, args, stdin = '', maxBytes = MAX_PATCH_BYTES, timeoutMs = 120_000) {
-  return new Promise((resolve, reject) => {
-    const env = { ...process.env }
-    delete env.CLAUDECODE
-    delete env.ELECTRON_RUN_AS_NODE
-    if (process.platform === 'win32') {
-      env.APPDATA ??= join(homedir(), 'AppData', 'Roaming')
-      env.LOCALAPPDATA ??= join(homedir(), 'AppData', 'Local')
-    }
-    const child = spawn(file, args, {
-      shell: false,
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env
-    })
-    child.stdout.setEncoding('utf8')
-    child.stderr.setEncoding('utf8')
-    let stdout = ''
-    let stderr = ''
-    let settled = false
-    const finish = (error, value) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      if (error) {
-        reject(error)
-      } else {
-        resolve(value)
-      }
-    }
-    const timer = setTimeout(() => {
-      child.kill()
-      finish(new Error(`${basename(file)} timed out`))
-    }, timeoutMs)
-    child.on('error', (error) => finish(error))
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk
-      if (Buffer.byteLength(stdout) > maxBytes) {
-        child.kill()
-        finish(new Error(`${basename(file)} output is too large`))
-      }
-    })
-    child.stderr.on('data', (chunk) => {
-      stderr = (stderr + chunk).slice(-4096)
-    })
-    child.on('close', (code) =>
-      finish(
-        code === 0 ? null : new Error(`${basename(file)} failed: ${stderr || `exit ${code}`}`),
-        stdout
-      )
-    )
-    child.stdin.on('error', () => undefined)
-    child.stdin.end(stdin)
+export async function runCli(file, args, stdin = '', maxBytes = MAX_PATCH_BYTES, timeoutMs = 120_000) {
+  const env = { ...process.env }
+  delete env.CLAUDECODE
+  delete env.ELECTRON_RUN_AS_NODE
+  if (process.platform === 'win32') {
+    env.APPDATA ??= join(homedir(), 'AppData', 'Roaming')
+    env.LOCALAPPDATA ??= join(homedir(), 'AppData', 'Local')
+  }
+  const result = await runProcess({
+    program: file, args, input: stdin, env, timeoutMs,
+    maxOutputBytes: maxBytes, killOnOutputLimit: true, terminationBarrier: true
   })
+  if (result.timedOut) throw new Error(`${basename(file)} timed out`)
+  if (result.outputTruncated) throw new Error(`${basename(file)} output is too large`)
+  if (result.code !== 0) throw new Error(`${basename(file)} failed: ${result.stderr.slice(-4096) || `exit ${result.code}`}`)
+  return result.stdout
 }
 
 export function validateGuide(guide, files) {
@@ -256,7 +218,7 @@ export async function saveGuide(result) {
 
 export function openViewerUrl(url) {
   const opener = process.platform === 'win32' ? 'explorer.exe' : 'open'
-  const browser = spawn(opener, [url], { shell: false, detached: true, stdio: 'ignore', windowsHide: true })
+  const browser = spawnProcess({ program: opener, args: [url], detached: true, stdio: 'ignore' })
   browser.unref()
   return browser
 }
@@ -267,6 +229,28 @@ export async function openViewerInPhorca(viewerUrl, run = runCli) {
     'tab', 'create', '--worktree', 'active', '--url', viewerUrl, '--json'
   ]))
   return opened.ok === true
+}
+
+export function hostLocalAccess(api, run = runCli) {
+  const executable = process.platform === 'win32' ? 'orca.exe' : 'orca'
+  return {
+    listSessions: async (snapshot) => {
+      const context = await api.host.call('workspace.readContext')
+      if (!context) return []
+      const shown = JSON.parse(await run(executable, ['worktree', 'show', '--worktree', 'active', '--json']))
+      const worktree = shown.result?.worktree
+      const [, owner, repo] = new URL(snapshot.url).pathname.split('/')
+      if (!shown.ok || worktree?.projectId?.toLowerCase() !== `github:${owner}/${repo}`.toLowerCase() ||
+          (snapshot.worktreeId && worktree.id !== snapshot.worktreeId)) return []
+      const allowed = new Set(context.terminals.map((terminal) => terminal.id))
+      const listed = JSON.parse(await run(executable, ['terminal', 'list', '--worktree', 'active', '--json']))
+      if (!listed.ok || !Array.isArray(listed.result?.terminals)) throw new Error('Could not list local agent sessions.')
+      return listed.result.terminals
+        .filter((terminal) => allowed.has(terminal.handle) && terminal.agentIdentity && terminal.connected && terminal.writable && !terminal.orphaned)
+        .map(({ handle, title, agentIdentity }) => ({ handle, title, agentIdentity }))
+    },
+    sendSession: (terminal, text) => api.host.call('terminal.sendText', { terminalId: terminal.handle, text, enter: true })
+  }
 }
 
 export default function activate(orca, readUrl = readPrUrlFromClipboard) {
@@ -291,6 +275,7 @@ export default function activate(orca, readUrl = readPrUrlFromClipboard) {
       const file = await saveGuide(result)
       await saveSnapshot(result, file)
       const viewer = await startViewer(result, {
+        ...hostLocalAccess(orca),
         onRefresh: async (updated) => {
           const nextFile = await saveGuide(updated)
           await saveSnapshot(updated, nextFile)

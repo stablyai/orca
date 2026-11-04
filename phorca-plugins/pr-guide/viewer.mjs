@@ -11,8 +11,30 @@ const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({
 function patchPath(text, prefix) {
   let path = text.slice(4)
   if (path.startsWith('"')) {
-    // shortcut: Git octal path escapes need a full decoder if they appear in a PR.
-    try { path = JSON.parse(path) } catch { return null }
+    if (!path.endsWith('"')) return null
+    const bytes = []
+    const quoted = path.slice(1, -1)
+    const escapes = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, e: 27, '"': 34, '\\': 92 }
+    for (let index = 0; index < quoted.length; index++) {
+      if (quoted[index] !== '\\') {
+        const codepoint = quoted.codePointAt(index)
+        bytes.push(...Buffer.from(String.fromCodePoint(codepoint)))
+        if (codepoint > 0xffff) index++
+        continue
+      }
+      const escape = quoted[++index]
+      if (escape == null) return null
+      const octal = quoted.slice(index).match(/^[0-7]{1,3}/)?.[0]
+      if (octal) {
+        const byte = parseInt(octal, 8)
+        if (byte > 255) return null
+        bytes.push(byte)
+        index += octal.length - 1
+      }
+      else if (Object.hasOwn(escapes, escape)) bytes.push(escapes[escape])
+      else return null
+    }
+    try { path = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bytes)) } catch { return null }
   }
   return path.startsWith(prefix) ? path.slice(2) : null
 }
@@ -61,7 +83,7 @@ export function renderViewer(snapshot, pathname) {
   }).replace(/</g, '\\u003c')
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escape(snapshot.guide.title)} · PR Guide</title><link rel="stylesheet" href="${pathname}/guide-ui.css"></head><body><div id="guide-root"></div><script type="application/json" id="guide-data">${data}</script><script type="module" src="${pathname}/guide-ui.js"></script></body></html>`
 }
-export async function startViewer(initial, { run = runCli, generate = generateGuide, onRefresh = async () => undefined } = {}) {
+export async function startViewer(initial, { run = runCli, generate = generateGuide, onRefresh = async () => undefined, listSessions = async () => [], sendSession = async () => ({ accepted: false }) } = {}) {
   parsePrUrl(initial.url)
   if (!/^[0-9a-f]{40}$/i.test(initial.headSha) || !/^[0-9a-f]{64}$/i.test(initial.sourceFingerprint) || typeof initial.patch !== 'string' ||
       typeof initial.guide?.title !== 'string' || typeof initial.guide?.intent !== 'string' ||
@@ -74,21 +96,9 @@ export async function startViewer(initial, { run = runCli, generate = generateGu
   const secret = randomUUID()
   const pathname = `/guide/${secret}`
   const gh = process.platform === 'win32' ? 'gh.exe' : 'gh'
-  const orca = process.platform === 'win32' ? 'orca.exe' : 'orca'
   const { pathname: prPath } = new URL(initial.url)
   const [, owner, repo, , number] = prPath.split('/')
-  const sessions = async () => {
-    const selector = snapshot.worktreeId ? `id:${snapshot.worktreeId}` : 'active'
-    if (!snapshot.worktreeId) {
-      const shown = JSON.parse(await run(orca, ['worktree', 'show', '--worktree', 'active', '--json']))
-      if (shown.result?.worktree?.projectId?.toLowerCase() !== `github:${owner}/${repo}`.toLowerCase()) return []
-    }
-    const listed = JSON.parse(await run(orca, ['terminal', 'list', '--worktree', selector, '--json']))
-    if (!listed.ok || !Array.isArray(listed.result?.terminals)) throw new Error('Could not list local agent sessions.')
-    return listed.result.terminals
-      .filter((terminal) => terminal.agentIdentity && terminal.connected && terminal.writable && !terminal.orphaned)
-      .map(({ handle, title, agentIdentity }) => ({ handle, title, agentIdentity }))
-  }
+  const sessions = () => listSessions(snapshot)
   const refresh = async () => {
     if (refreshing) return refreshing
     refreshing = (async () => {
@@ -154,8 +164,9 @@ export async function startViewer(initial, { run = runCli, generate = generateGu
           if (!terminal) return send(400, { error: 'Select an available local agent session.' })
           const location = input.kind === 'inline' ? `${input.path}:${input.line} (${input.side})` : input.kind === 'section' ? `Guide section: ${snapshot.guide.sections[input.section].title}` : 'Entire PR'
           const prompt = `PR Guide comment for ${snapshot.url} at ${snapshot.headSha}\n${location}\n\n${body}\n\nPlease review and address this feedback in this session.`
-          const receipt = JSON.parse(await run(orca, ['terminal', 'send', '--terminal', terminal.handle, '--text', prompt, '--enter', '--json']))
-          if (!receipt.ok || !receipt.result?.send?.accepted) return send(503, { error: 'The local agent session did not accept the comment.' })
+          if (prompt.length > 4096) return send(400, { error: 'Local session comments must fit within 4,096 characters including PR context.' })
+          const receipt = await sendSession(terminal, prompt)
+          if (!receipt?.accepted) return send(503, { error: 'The local agent session did not accept the comment.' })
           send(200, { session: terminal.title })
         } else {
           const posted = JSON.parse(await run(gh, ['api', endpoint, '-X', 'POST', '--input', '-'], JSON.stringify(payload), 100_000))

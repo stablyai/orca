@@ -5,6 +5,7 @@ import { delimiter, join } from 'node:path'
 import { describe, it } from 'node:test'
 import {
   generateGuide,
+  hostLocalAccess,
   openViewerInPhorca,
   parsePrUrl,
   prFingerprint,
@@ -12,12 +13,47 @@ import {
   readPrUrlFromClipboard,
   renderGuide,
   resolveClaudeExecutable,
+  runCli,
   saveGuide,
   validateGuide
 } from './main.mjs'
 import activate from './main.mjs'
 
 describe('PR Guide', () => {
+  it('runs CLI processes through the bundled process host', async () => {
+    assert.equal(await runCli(process.execPath, ['-e', 'process.stdout.write("ok")']), 'ok')
+    await assert.rejects(runCli(process.execPath, ['-e', 'process.exit(2)']), /failed/)
+  })
+
+  it('gates local terminal discovery and sending through host capabilities', async () => {
+    const hostCalls = []
+    const api = { host: { call: async (method, params) => {
+      hostCalls.push({ method, params })
+      return method === 'workspace.readContext'
+        ? { terminals: [{ id: 'term_1' }, { id: 'term_shell' }] }
+        : { accepted: true }
+    } } }
+    const cliCalls = []
+    const access = hostLocalAccess(api, async (_file, args) => {
+      cliCalls.push(args)
+      if (args[0] === 'worktree') return JSON.stringify({ ok: true, result: { worktree: { id: 'repo::path', projectId: 'github:a/b' } } })
+      return JSON.stringify({ ok: true, result: { terminals: [
+        { handle: 'term_1', title: 'Review agent', agentIdentity: 'codex', connected: true, writable: true },
+        { handle: 'term_shell', title: 'Shell', agentIdentity: null, connected: true, writable: true },
+        { handle: 'term_other', title: 'Other worktree', agentIdentity: 'claude', connected: true, writable: true }
+      ] } })
+    })
+    const sessions = await access.listSessions({ url: 'https://github.com/a/b/pull/2', worktreeId: 'repo::path' })
+    assert.deepEqual(sessions, [{ handle: 'term_1', title: 'Review agent', agentIdentity: 'codex' }])
+    assert.deepEqual(await access.sendSession(sessions[0], 'Review this'), { accepted: true })
+    assert.deepEqual(hostCalls.map(({ method }) => method), ['workspace.readContext', 'terminal.sendText'])
+    assert.deepEqual(hostCalls[1].params, { terminalId: 'term_1', text: 'Review this', enter: true })
+    assert.deepEqual(await access.listSessions({ url: 'https://github.com/other/repo/pull/2' }), [])
+    assert.equal(cliCalls.filter((args) => args[0] === 'terminal').length, 1)
+    const denied = hostLocalAccess({ host: { call: async () => { throw new Error('Capability denied') } } }, async () => { throw new Error('CLI must not run') })
+    await assert.rejects(denied.listSessions({ url: 'https://github.com/a/b/pull/2' }), /Capability denied/)
+  })
+
   it('resolves the native Claude executable on Windows and uses PATH on macOS', async () => {
     assert.equal(await resolveClaudeExecutable('darwin'), 'claude')
     const dir = await mkdtemp(join(tmpdir(), 'pr-guide-claude-'))

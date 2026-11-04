@@ -16,6 +16,36 @@ export function checkAssociation(prUrl, worktree, sessionId) {
   return Number(number)
 }
 
+export async function linkIfUnlinked(prUrl, worktree, sessionId, run = runCli) {
+  if (worktree.linkedPR != null) return
+  const orca = process.platform === 'win32' ? 'orca.exe' : 'orca'
+  const latest = JSON.parse(await run(orca, ['worktree', 'show', '--worktree', `id:${worktree.id}`, '--json']))
+  if (!latest.ok || !latest.result?.worktree) throw new Error('The worktree could not be rechecked before linking the PR.')
+  const number = checkAssociation(prUrl, latest.result.worktree, sessionId)
+  if (latest.result.worktree.linkedPR != null) return
+  const linked = JSON.parse(await run(orca, [
+    'worktree', 'set', '--worktree', `id:${worktree.id}`, '--pr', String(number), '--json'
+  ]))
+  if (!linked.ok) throw new Error(`Orca could not link PR #${number}.`)
+}
+
+export function sessionLocalAccess(worktreeId, run = runCli) {
+  const orca = process.platform === 'win32' ? 'orca.exe' : 'orca'
+  return {
+    listSessions: async () => {
+      const listed = JSON.parse(await run(orca, ['terminal', 'list', '--worktree', `id:${worktreeId}`, '--json']))
+      if (!listed.ok || !Array.isArray(listed.result?.terminals)) throw new Error('Could not list local agent sessions.')
+      return listed.result.terminals
+        .filter((terminal) => terminal.agentIdentity && terminal.connected && terminal.writable && !terminal.orphaned)
+        .map(({ handle, title, agentIdentity }) => ({ handle, title, agentIdentity }))
+    },
+    sendSession: async (terminal, text) => {
+      const receipt = JSON.parse(await run(orca, ['terminal', 'send', '--terminal', terminal.handle, '--text', text, '--enter', '--json']))
+      return { accepted: receipt.ok && receipt.result?.send?.accepted }
+    }
+  }
+}
+
 export async function createSessionGuide(prUrl, sessionId = process.env.CODEX_SESSION_ID ?? process.env.CLAUDE_SESSION_ID) {
   const orca = process.platform === 'win32' ? 'orca.exe' : 'orca'
   const current = JSON.parse(await runCli(orca, ['worktree', 'current', '--json']))
@@ -23,7 +53,7 @@ export async function createSessionGuide(prUrl, sessionId = process.env.CODEX_SE
     throw new Error('Run this command from an Orca-managed worktree.')
   }
   const worktree = current.result.worktree
-  const number = checkAssociation(prUrl, worktree, sessionId)
+  checkAssociation(prUrl, worktree, sessionId)
   const result = {
     ...await generateGuide(prUrl),
     sessionId,
@@ -33,13 +63,10 @@ export async function createSessionGuide(prUrl, sessionId = process.env.CODEX_SE
   }
   const file = await saveGuide(result)
   await saveSnapshot(result, file)
-  if (worktree.linkedPR == null) {
-    const linked = JSON.parse(await runCli(orca, [
-      'worktree', 'set', '--worktree', `id:${worktree.id}`, '--pr', String(number), '--json'
-    ]))
-    if (!linked.ok) throw new Error(`Guide saved at ${file}, but Orca could not link PR #${number}.`)
-  }
+  try { await linkIfUnlinked(prUrl, worktree, sessionId) }
+  catch (error) { throw new Error(`Guide saved at ${file}, but ${error.message}`) }
   const viewer = await startViewer(result, {
+    ...sessionLocalAccess(worktree.id),
     onRefresh: async (updated) => {
       const next = {
         ...updated,

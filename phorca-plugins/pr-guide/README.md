@@ -4,14 +4,24 @@ Create a chaptered local guide with the PR's real code diff using your existing 
 
 PR Guide owns the chaptering prompt, guide validation, React viewer, diff display, and comment controls. The viewer has thematic chapters, reviewed checkboxes, one file at a time with compact file navigation, and lightweight code highlighting. Expand **About this PR** or **Chapter overview** when you need that context. PR fetching, refresh, and GitHub comment posting also live in this standalone plugin.
 
-The viewer is bundled with the plugin. It has no Plannotator package, asset service, or cache dependency. Installing and running the plugin needs no npm, Bun, or build step on Windows or macOS.
+The viewer and Orca process-host wrapper are bundled with the plugin. It has no Plannotator package, asset service, or cache dependency. Installing and running the plugin needs no npm, Bun, or build step on Windows or macOS.
 
-The viewer and comment form are React components in `guide-ui.jsx` and `comment-ui.jsx`. Run `npm ci && npm run build` after editing either; Phorca serves the bundled `guide-ui.js` and does not need React or npm installed at runtime.
+The viewer and comment form are React components in `guide-ui.jsx` and `comment-ui.jsx`. In a Phorca source checkout, run `npm install --no-package-lock && npm run build` after editing them; the build also refreshes the bundled process-host wrapper. Phorca does not need React or npm installed at runtime.
 
 ## Install
 
-1. Install and sign in to [GitHub CLI](https://cli.github.com/) (`gh auth login`) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code/setup) (`claude auth login`). On Windows, use the native `claude.exe` installer.
-2. In Phorca, open **Settings → Plugins**, enable plugins, and choose **Install plugin → Local folder**. Select this folder and approve **notifications** and **storage**.
+1. Install Phorca 1.4.224 or newer, Git, [GitHub CLI](https://cli.github.com/) (`gh auth login`), and [Claude Code](https://docs.anthropic.com/en/docs/claude-code/setup) (`claude auth login`). On Windows, use the native `claude.exe` installer. You need access to the Phorca repository.
+2. In PowerShell or a macOS terminal, download only the plugin folder:
+
+   ```sh
+   git clone --filter=blob:none --sparse --depth 1 https://github.com/phocassoftware/phorca.git phorca-pr-guide
+   git -C phorca-pr-guide sparse-checkout set phorca-plugins/pr-guide
+   ```
+
+   Until [PR #30](https://github.com/phocassoftware/phorca/pull/30) merges, add `--branch lfa9603/pr-guide-plugin-module` to the `git clone` command.
+3. In Phorca, open **Settings → Plugins**, enable plugins, and choose **Install plugin → Local folder**. Enter the absolute path to `phorca-pr-guide/phorca-plugins/pr-guide` and approve **notifications**, **storage**, **workspace read**, and **terminal send**. Phorca copies the checked-in bundle and refreshes the plugin. The **Git URL** tab expects `orca-plugin.json` at the repository root, so it cannot install this subfolder directly.
+
+To update later, run `git -C phorca-pr-guide pull --ff-only`, then install the same local folder again in Phorca and approve any changed permissions. No worktree is created or pruned by the plugin.
 
 ## Create a guide
 
@@ -37,7 +47,7 @@ The command uses `CODEX_SESSION_ID` (or `CLAUDE_SESSION_ID`) to record the curre
 
 Guides are saved under `%LOCALAPPDATA%\Phorca PR Guide\guides` on Windows or `~/Library/Application Support/Phorca PR Guide/guides` on macOS. Each run writes a Markdown file and a JSON snapshot containing the guide and PR patch. The PR body and patch are sent to the local Claude Code CLI for generation; the body is not saved. PR changes produce new snapshots. The viewer listens only on `127.0.0.1` with a random URL; closing Phorca or the session command stops its local server.
 
-To reopen a saved snapshot without regenerating it, run `node /path/to/pr-guide/viewer.mjs /path/to/guide.json`, then open the printed local URL. Keep that process running while commenting. It still refreshes from the GitHub PR when the remote head changes.
+To reopen a saved snapshot without regenerating it, run `node /path/to/pr-guide/viewer.mjs /path/to/guide.json`, then open the printed local URL. Keep that process running while commenting. It still refreshes from the GitHub PR when the remote head changes. This standalone viewer supports GitHub comments; local agent comments require a guide opened by the Phorca action or session command.
 
 Guide generation uses Claude Sonnet at medium effort and accepts up to 250 changed files and a 600 KB patch. It checks GitHub's total file count before downloading the diff and gets the complete filename list from the paginated files API. Larger PRs return a clear error rather than a partial guide. For example, phorca PR #24 changes 16,928 files and needs to be split before a complete guide can be generated. On macOS, `gh` and `claude` must be on Phorca's `PATH`. On Windows, `gh.exe` must be on `PATH`; the plugin accepts a `claude.exe` on `PATH` or a standard WinGet `claude.cmd` shim pointing to the native executable.
 

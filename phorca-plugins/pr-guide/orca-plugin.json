@@ -3,7 +3,7 @@
   "id": "pr-guide",
   "publisher": "phocassoftware",
   "name": "PR Guide",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "Review GitHub PRs with chaptered guides, real diffs, and inline comments sent to GitHub or a local agent session.",
   "engines": { "orca": ">=1.4.224" },
   "pluginApi": 1,
@@ -13,5 +13,5 @@
       { "id": "create-guide", "title": "PR Guide: Create from clipboard" }
     ]
   },
-  "capabilities": [{ "kind": "notifications:show" }, { "kind": "storage" }]
+  "capabilities": [{ "kind": "notifications:show" }, { "kind": "storage" }, { "kind": "workspace:read" }, { "kind": "terminal:send" }]
 }
