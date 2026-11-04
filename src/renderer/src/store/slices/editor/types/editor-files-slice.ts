@@ -1,5 +1,5 @@
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import type { CheckRunDetailsTabPatch } from '@/components/editor/check-run-details-tab'
+import type { CheckRunDetailsTabPatch } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type {
   CombinedDiffAlternate,
   ConflictReviewEntry,
