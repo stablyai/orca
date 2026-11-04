@@ -7,6 +7,7 @@ import type * as Net from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import { sendRequest } from './transport'
 import { formatCliError } from '../cli-error'
 import { RuntimeClient } from './client'
@@ -347,6 +348,44 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
       response: { ok: true, result: { satisfied: true } }
     })
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('advertises CLI client capabilities on the authenticated local frame', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-caps-'))
+    roots.push(userDataPath)
+    const endpoint = join(userDataPath, 'runtime.sock')
+    let acceptFrame!: (frame: Record<string, unknown> & { id: string }) => void
+    const received = new Promise<Record<string, unknown> & { id: string }>((resolve) => {
+      acceptFrame = resolve
+    })
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: JSON.parse of the frame our own transport just wrote; only id and the asserted capability fields are read.
+        const frame = JSON.parse(String(data).trim()) as Record<string, unknown> & { id: string }
+        acceptFrame(frame)
+        socket.end(
+          `${JSON.stringify({ id: frame.id, ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+
+    const metadata: RuntimeMetadata = {
+      runtimeId: 'runtime-1',
+      pid: 123,
+      transports: [{ kind: 'unix', endpoint }],
+      authToken: 'token',
+      startedAt: 1
+    }
+    const pending = sendRequest(metadata, 'status.get', undefined, 1_000)
+    const frame = await received
+    // Capable `worktree rm` waits out background deletion and reports the real outcome (#35135).
+    expect(frame.clientCapabilities).toContain(WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY)
+    expect(frame.authToken).toBe('token')
+    await expect(pending).resolves.toMatchObject({ ok: true })
   })
 
   it('rejects promptly when the runtime closes the socket before responding', async () => {

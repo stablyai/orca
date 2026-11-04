@@ -1,6 +1,7 @@
 import { createConnection } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
+import { CLI_CLIENT_CAPABILITIES } from './client-capabilities'
 import type {
   ExpectedRuntimeSource,
   RuntimeOrchestrationEnvelope,
@@ -213,6 +214,8 @@ export async function sendRequest<TResult>(
           authToken: metadata.authToken,
           method: requestedMethod,
           params: requestedParams,
+          // The local frame is owner-token authenticated, so capabilities ride it like a handshake.
+          clientCapabilities: CLI_CLIENT_CAPABILITIES,
           orchestrationCapability: envelope?.orchestrationCapability,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
