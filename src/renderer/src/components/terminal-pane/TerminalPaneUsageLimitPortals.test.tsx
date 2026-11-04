@@ -21,10 +21,20 @@ type State = {
   activeWorktreeId?: string
   activeWorkspaceExecutionHostId?: ExecutionHostId
 }
-const mocks = vi.hoisted(() => ({
+type Mocks = {
+  call: ReturnType<
+    typeof vi.fn<(...args: unknown[]) => Promise<TerminalUsageLimitContinuationResult>>
+  >
+  capability: 'supported' | 'unknown' | 'unsupported'
+  target: RuntimeClientTarget | null
+  renders: number
+  locale: string
+  mobile: boolean
+}
+const mocks = vi.hoisted((): Mocks => ({
   call: vi.fn<(...args: unknown[]) => Promise<TerminalUsageLimitContinuationResult>>(),
-  capability: 'supported' as 'supported' | 'unknown' | 'unsupported',
-  target: { kind: 'local' } as RuntimeClientTarget | null,
+  capability: 'supported',
+  target: { kind: 'local' },
   renders: 0,
   locale: 'en',
   mobile: false

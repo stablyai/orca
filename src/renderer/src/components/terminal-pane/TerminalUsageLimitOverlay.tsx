@@ -31,7 +31,7 @@ export function TerminalUsageLimitOverlay({
           type="button"
           variant="ghost"
           size="xs"
-          className="min-w-0 shrink px-1"
+          className="min-w-0 shrink"
           onClick={() => setCollapsed(false)}
         >
           <span className="truncate">{title}</span>
