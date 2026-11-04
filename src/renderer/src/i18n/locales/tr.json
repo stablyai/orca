@@ -17993,6 +17993,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "Kaydedilen çalıştırma ana makinesi artık bu proje kurulumuyla eşleşmiyor."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Aracı başlatma ayarları her çalıştırmada yeni bir oturum gerektirir."
         }
       },
       "agent": {

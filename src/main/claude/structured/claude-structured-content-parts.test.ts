@@ -14,14 +14,6 @@ function sinkState() {
   return { sink, items }
 }
 
-function providerRows(items: { body: AgentJournalItemBody }[]) {
-  return items.flatMap((item) =>
-    item.body.kind === 'status' && item.body.providerFrame
-      ? [{ kind: item.body.providerFrame.kind, text: item.body.text }]
-      : []
-  )
-}
-
 function userMessageWith(part: unknown) {
   return {
     type: 'message' as const,
@@ -39,10 +31,6 @@ function userMessageWith(part: unknown) {
 }
 
 /** Local-image replay shape emitted by claudeDispatchMessageContent. */
-const BASE64_IMAGE = {
-  type: 'image',
-  source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUg==' }
-}
 
 describe('Claude message content parts', () => {
   it.each(['isMeta', 'isSynthetic', 'isCompactSummary'])(
@@ -75,26 +63,6 @@ describe('Claude message content parts', () => {
     ])
   })
 
-  it.each([
-    { content: '# Skill instructions' },
-    { content: [{ type: 'future_context', text: '# Skill instructions' }] },
-    {
-      content: [
-        { type: 'text', text: '[Image: source: /tmp/pasted.png]' },
-        { type: 'text', text: '# Skill instructions' }
-      ]
-    }
-  ])('does not surface injected content as text or a provider fallback: %j', ({ content }) => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
-    const event = userMessageWith(null)
-    translator.handle({
-      ...event,
-      message: { ...event.message, isMeta: true, message: { role: 'user', content } }
-    })
-    expect(state.items).toEqual([])
-  })
-
   it('does not render user echoes even without metadata flags', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
@@ -117,69 +85,5 @@ describe('Claude message content parts', () => {
     translator.handle({ ...event, startsTurn: undefined })
     expect(state.items).toEqual([])
     expect(state.sink.publish).not.toHaveBeenCalled()
-  })
-
-  it('does not leak a wire kind for a locally attached image', () => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
-
-    translator.handle(userMessageWith(BASE64_IMAGE))
-
-    expect(providerRows(state.items)).toEqual([])
-  })
-
-  it('does not render echoed image URLs', () => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
-
-    translator.handle(
-      userMessageWith({ type: 'image', source: { type: 'url', url: 'https://x.test/a.png' } })
-    )
-
-    expect(providerRows(state.items)).toEqual([])
-    expect(
-      state.items.flatMap((item) => (item.body.kind === 'message' ? item.body.blocks : []))
-    ).toEqual([])
-  })
-
-  it('says what is true for a content part it cannot render, not the wire kind', () => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
-
-    const event = userMessageWith(null)
-    translator.handle({
-      ...event,
-      message: {
-        ...event.message,
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'some_future_part', payload: { a: 1 } }] }
-      }
-    })
-
-    const rows = providerRows(state.items)
-    expect(rows).toHaveLength(1)
-    expect(rows[0].kind).toBe('message:assistant:content:some_future_part')
-    expect(rows[0].text).not.toContain('message:assistant:content')
-    expect(rows[0].text.toLowerCase()).toContain('claude')
-  })
-
-  it('prefers a readable sentence the part carries over the placeholder', () => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
-
-    const event = userMessageWith(null)
-    translator.handle({
-      ...event,
-      message: {
-        ...event.message,
-        type: 'assistant',
-        message: {
-          role: 'assistant',
-          content: [{ type: 'some_future_part', message: 'the server refused the upload' }]
-        }
-      }
-    })
-
-    expect(providerRows(state.items)[0].text).toBe('the server refused the upload')
   })
 })

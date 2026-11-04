@@ -23,6 +23,7 @@ import { withoutDiscoveryShadows } from './wsl-drive-unc-discovery-shadows'
 import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
 import {
   createWslDriveUncRewriter,
+  mergeWslDriveUncKeyedEntries,
   rewriteWslDriveUncValue,
   type WslDriveUncRewriter
 } from './wsl-drive-unc-identity-rewrite'
@@ -93,17 +94,23 @@ function withRewrittenChildKeys(
   rewriter: WslDriveUncRewriter
 ): Record<string, unknown> {
   let changed = false
-  const next: Record<string, unknown> = {}
+  const entries = new Map<string, { child: unknown; rekeyed: boolean }>()
   for (const [key, lineage] of Object.entries(record)) {
-    const childWorkspaceKey = rewriter.identity(key)
-    if (childWorkspaceKey === key || !isWorkspaceKey(childWorkspaceKey)) {
-      next[key] = lineage
-      continue
+    const mapped = rewriter.identity(key)
+    const rekeyed = mapped !== key && isWorkspaceKey(mapped)
+    const nextKey = rekeyed ? mapped : key
+    const entry = {
+      child: rekeyed ? withCrossStoreChildKey(lineage, mapped) : lineage,
+      rekeyed
     }
-    changed = true
-    next[childWorkspaceKey] = withCrossStoreChildKey(lineage, childWorkspaceKey)
+    changed ||= rekeyed
+    const other = entries.get(nextKey)
+    // A UNC key and its drive key with different records is a collision, as for any rewritten field.
+    entries.set(nextKey, other ? mergeWslDriveUncKeyedEntries(nextKey, other, entry) : entry)
   }
-  return changed ? next : record
+  return changed
+    ? Object.fromEntries([...entries].map(([key, entry]) => [key, entry.child]))
+    : record
 }
 
 /** Keeps the original array when no row changed, so an unchanged field is not written. */

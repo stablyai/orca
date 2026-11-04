@@ -4,6 +4,11 @@ import {
   isRunnableAutomationSchedule,
   isValidAutomationSchedule
 } from '../../../../shared/automation-schedule-parsing'
+import { automationDraftLaunchSetup } from './automation-launch-surface'
+import {
+  automationWithLaunchSetup,
+  applyAutomationLaunchSetupPatch
+} from '../../../../shared/automation-launch-setup'
 import { buildAutomationEditDraft } from './automation-edit-draft'
 import { getCronScheduleStatusLabel } from './AutomationCustomCronPanel'
 import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
@@ -111,5 +116,38 @@ describe('editing an automation whose saved schedule predates the input gate', (
     const draft = buildAutomationEditDraft(makeAutomation({ rrule: '0 9 32 * *' }))
     expect(draft.customSchedule).toBe('')
     expect(draft.scheduleWarning).toBeTruthy()
+  })
+})
+
+describe('saved setup draft writes', () => {
+  it('keeps canonical model and extras through an unrelated save', () => {
+    const current = automationWithLaunchSetup(
+      makeAutomation({ launchPreferences: { model: 'sonnet' }, extraAgentArgs: '--add-dir docs' })
+    )
+    const draft = { ...buildAutomationEditDraft(current), name: 'Renamed' }
+    const updates = automationDraftLaunchSetup(draft, 'terminal', current)
+    expect(updates).toEqual({})
+    expect(applyAutomationLaunchSetupPatch(updates, current)).toMatchObject({
+      launchPreferences: { model: 'sonnet' },
+      extraAgentArgs: '--add-dir docs'
+    })
+  })
+
+  it('keeps a surface-only pick and the following legacy extras edit together', () => {
+    const current = makeAutomation()
+    const draft = {
+      ...buildAutomationEditDraft(current),
+      surface: 'terminal' as const,
+      extraAgentArgs: '--model sonnet',
+      launchSetupPatch: {
+        surface: 'chat' as const,
+        arguments: { kind: 'legacy-extras' as const, value: '--model sonnet' }
+      }
+    }
+    const updates = automationDraftLaunchSetup(draft, 'terminal', current)
+    expect(applyAutomationLaunchSetupPatch(updates, current)).toMatchObject({
+      surface: 'terminal',
+      extraAgentArgs: '--model sonnet'
+    })
   })
 })

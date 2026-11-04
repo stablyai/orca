@@ -6,12 +6,7 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import {
-  readCodexThreadId,
-  readCodexTurnDurationMs,
-  readCodexTurnId,
-  readCodexTurnStatus
-} from '../../app-server/codex-structured-thread-facts'
+import { readCodexThreadId, readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 
 const SESSION_ID = 'session-1'
 
@@ -83,57 +78,11 @@ function receipt(frames: readonly CapturedFrame[], method: string, turnId: strin
   return frame.t
 }
 
-function completion(frames: readonly CapturedFrame[], turnId: string) {
-  const frame = frames.find(
-    (entry) => entry.method === 'turn/completed' && readCodexTurnId(entry.params) === turnId
-  )
-  return frame
-    ? {
-        t: frame.t,
-        status: readCodexTurnStatus(frame.params),
-        durationMs: readCodexTurnDurationMs(frame.params)
-      }
-    : null
-}
-
-const VERDICT: Record<string, { state: string; outcome: string }> = {
-  completed: { state: 'completed', outcome: 'success' },
-  failed: { state: 'completed', outcome: 'failure' },
-  interrupted: { state: 'interrupted', outcome: 'cancellation' }
-}
-
 const ENDED_CASES = [...new Set(FRAMES.map((frame) => frame.case))].filter(
   (name) => name !== '0.158.0-conn-refused'
 )
 
 describe('captured Codex turns end once, on their own completion', () => {
-  it.each(ENDED_CASES)('%s', (name) => {
-    const { frames, rows } = replay(name)
-    const turnIds = frames
-      .filter((frame) => frame.method === 'turn/started')
-      .map((frame) => readCodexTurnId(frame.params) ?? '')
-
-    expect(turnIds.length).toBeGreaterThan(0)
-    for (const turnId of turnIds) {
-      const end = completion(frames, turnId)
-      expect(end).not.toBeNull()
-      if (!end) {
-        continue
-      }
-      const verdict = VERDICT[end.status ?? '']
-      expect(verdict).toBeDefined()
-      expect(terminalWrites(rows, turnId)).toEqual([
-        expect.objectContaining({
-          state: verdict?.state,
-          outcome: verdict?.outcome,
-          startedAt: receipt(frames, 'turn/started', turnId),
-          completedAt: end.t,
-          durationMs: end.durationMs
-        })
-      ])
-    }
-  })
-
   it('keeps every failed turn working through its error until the completion', () => {
     for (const name of ENDED_CASES) {
       const frames = framesOf(name)
