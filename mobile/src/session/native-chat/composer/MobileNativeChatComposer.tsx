@@ -270,7 +270,7 @@ export function MobileNativeChatComposer({
     : t('chat.composer.attachImage', 'Attach image')
 
   return (
-    <View>
+    <View style={styles.root}>
       {menu.rows.length > 0 ? (
         <MobileNativeChatComposerMenu
           rows={menu.rows}

@@ -374,7 +374,7 @@ export function MobileNativeChatView({
         </View>
       ) : null}
       {trayContent}
-      <View style={promptOwnsInput ? styles.hidden : undefined}>
+      <View style={promptOwnsInput ? styles.hidden : styles.composerSlot}>
         <MobileNativeChatDraftComposer
           draftScopeKey={composerScopeKey}
           structured={structuredActivityUi && structured ? { ...structured, onOpenFile } : null}

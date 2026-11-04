@@ -89,6 +89,7 @@ function MenuRow({
 
 const styles = themedStyleSheet(() => ({
   card: {
+    flexShrink: 1,
     marginHorizontal: 10,
     marginBottom: spacing.sm,
     paddingVertical: 6,

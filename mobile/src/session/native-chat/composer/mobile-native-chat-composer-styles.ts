@@ -6,6 +6,8 @@ import { composerInputStyles } from '../../../components/composer-input/composer
 export const COMPOSER_INSET_TOP = 6
 
 export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
+  // Only the / menu above the box shrinks; the box itself keeps its height.
+  root: { flexShrink: 1 },
   composerInset: {
     paddingHorizontal: spacing.md,
     paddingTop: COMPOSER_INSET_TOP,

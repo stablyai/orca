@@ -8,6 +8,8 @@ const LOAD_EARLIER_RETRY_HEIGHT = 28
 
 export const styles = themedStyleSheet(() => ({
   hidden: { display: 'none' },
+  // Lets an open / menu give up height so the composer stays above the keyboard.
+  composerSlot: { flexShrink: 1 },
   root: {
     flex: 1,
     backgroundColor: colors.bgBase
