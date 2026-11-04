@@ -30,6 +30,15 @@ export function claudeText(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
+/** Server-side tools (advisor, web_search, ...) use their own call and result block types. */
+export function isClaudeToolUseType(type: unknown): boolean {
+  return type === 'tool_use' || type === 'server_tool_use'
+}
+
+export function isClaudeToolResultType(type: unknown): boolean {
+  return type === 'tool_result' || (typeof type === 'string' && type.endsWith('_tool_result'))
+}
+
 export function readClaudeMessageEnvelope(
   frame: Record<string, unknown>
 ): ClaudeMessageEnvelope | null {
@@ -120,7 +129,9 @@ export function claudeToolUses(envelope: ClaudeMessageEnvelope): ClaudeToolUse[]
     const part = claudeRecord(value)
     const id = claudeText(part?.id)
     const name = claudeText(part?.name)
-    return part?.type === 'tool_use' && id && name ? [{ id, name, input: part.input ?? null }] : []
+    return part && isClaudeToolUseType(part.type) && id && name
+      ? [{ id, name, input: part.input ?? null }]
+      : []
   })
 }
 
@@ -144,7 +155,7 @@ function resultText(value: unknown): string {
 
 export function claudeToolResultId(part: Record<string, unknown> | null): string | null {
   const toolUseId = claudeText(part?.tool_use_id)
-  return part?.type === 'tool_result' ? toolUseId : null
+  return isClaudeToolResultType(part?.type) ? toolUseId : null
 }
 
 export function claudeToolResults(envelope: ClaudeMessageEnvelope): ClaudeToolResult[] {
