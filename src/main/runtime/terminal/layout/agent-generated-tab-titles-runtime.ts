@@ -1,3 +1,4 @@
+import type { TerminalCloseRunOptions } from '../../terminal-surface-close'
 import { OrcaRuntimeWithWorktreeSleepResumeRecording } from '../stop/worktree-sleep-resume-recording'
 import { AgentGeneratedTabTitles, type GeneratedTitleTarget } from './agent-generated-tab-titles'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
@@ -9,7 +10,7 @@ import type { WindowLayoutCommand } from '../../runtime-layout-apply'
 export abstract class OrcaRuntimeWithAgentGeneratedTabTitles extends OrcaRuntimeWithWorktreeSleepResumeRecording {
   abstract applyLayoutCommand(
     command: WindowLayoutCommand,
-    beforeAction?: () => void
+    run?: TerminalCloseRunOptions
   ): Promise<LayoutApplyReply>
 
   private readonly agentGeneratedTabTitles = new AgentGeneratedTabTitles({

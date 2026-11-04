@@ -1,3 +1,4 @@
+import type { TerminalCloseRunOptions } from '../../terminal-surface-close'
 import { OrcaRuntimeWithPickMostRecentActor } from './terminal-layout-queue'
 import type { ApplyLayoutResult, PtyLayoutState, PtyLayoutTarget } from '../../orca-runtime-core'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -9,7 +10,7 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
   protected abstract suppressResizesForMs(ms: number): void
   abstract applyLayoutCommand(
     command: WindowLayoutCommand,
-    beforeAction?: () => void
+    run?: TerminalCloseRunOptions
   ): Promise<LayoutApplyReply>
   private paneGrids: PaneGridRecorder | null = null
 

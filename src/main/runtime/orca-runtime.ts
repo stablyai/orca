@@ -39,6 +39,7 @@ import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
 import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
+import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import {
   installStructuredAgentAvailability,

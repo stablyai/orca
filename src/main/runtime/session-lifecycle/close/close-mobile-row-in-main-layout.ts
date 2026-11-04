@@ -1,3 +1,4 @@
+import type { TerminalCloseRunOptions } from '../../terminal-surface-close'
 import type { MobileSessionLifecycleCloseHost } from '../../mobile-session-lifecycle-close-adjudication'
 // In main-owned layouts, phone row closes use main's pane/tab close with or without a window.
 import { OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose } from './refuse-unattributed-mobile-session-tab-close'
@@ -18,7 +19,7 @@ import type { LayoutApplyReply } from '../../../../shared/workspace-layout/works
 export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {
   abstract applyLayoutCommand(
     command: WindowLayoutCommand,
-    beforeAction?: () => void
+    run?: TerminalCloseRunOptions
   ): Promise<LayoutApplyReply>
 
   protected abstract stopExplicitlyClosedTabPtys(

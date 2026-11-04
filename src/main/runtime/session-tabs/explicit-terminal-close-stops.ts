@@ -1,3 +1,4 @@
+import type { TerminalCloseRunOptions } from '../terminal-surface-close'
 import type { WorktreePtyHostFence } from '../worktree-pty-host-fence'
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
 import type { RuntimePtyTabCloseAuthority } from '../runtime-terminal-state-records'
@@ -16,7 +17,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
   abstract applyLayoutCommand(
     command: WindowLayoutCommand,
-    beforeAction?: () => void
+    run?: TerminalCloseRunOptions
   ): Promise<LayoutApplyReply>
   protected abstract refreshPtyWorktreeRecordsFromController(
     resolvedWorktrees: ResolvedWorktree[],

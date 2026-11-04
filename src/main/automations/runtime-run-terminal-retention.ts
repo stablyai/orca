@@ -1,5 +1,5 @@
 import type { AutomationService } from './service'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { createHeadlessRunTerminalRetention } from './headless-run-terminal-retention'
 import { runOwnHandle } from './headless-automation-agent-launch'
