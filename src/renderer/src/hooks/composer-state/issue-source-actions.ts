@@ -35,7 +35,12 @@ import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
-import { buildLinearWorkspaceSource as toLinearLinkedWorkItem } from '../../../../shared/new-workspace/workspace-source'
+import {
+  buildLinearWorkspaceSource as toLinearLinkedWorkItem,
+  buildJiraWorkspaceSource,
+  buildWorkspaceSourceSelection,
+  shouldApplyWorkspaceSourceAutoName
+} from '../../../../shared/new-workspace/workspace-source'
 import {
   getLinkedItemDisplayName,
   getSmartNameSelection as getFolderSmartNameSelection
@@ -51,11 +56,6 @@ import {
   getLinkedWorkItemWorkspaceName,
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
-import {
-  buildJiraWorkspaceSource,
-  buildWorkspaceSourceSelection,
-  shouldApplyWorkspaceSourceAutoName
-} from '../../../../shared/new-workspace/workspace-source'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 

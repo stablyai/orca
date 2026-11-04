@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import './folder-workspace-source-repos'
 import { getFolderSourceRepos } from './folder-workspace-source-repos'
 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {

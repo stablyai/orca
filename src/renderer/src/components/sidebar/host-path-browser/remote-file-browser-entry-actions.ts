@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import '@/lib/text-control-paste'
+import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '@/lib/text-control-paste'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
 import type { FilesystemPathFlavor } from '../../../../../shared/filesystem-entry-types'
 import {
@@ -8,7 +8,6 @@ import {
   joinDrivePath,
   parentOfDrivePath
 } from './remote-file-browser-drive-paths'
-import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '../../../lib/text-control-paste'
 
 export type DirEntry = {
   name: string

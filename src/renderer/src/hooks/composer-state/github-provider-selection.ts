@@ -35,9 +35,11 @@ import { useCallback } from 'react'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
-import { buildGitHubWorkspaceSource as toGitHubLinkedWorkItem } from '../../../../shared/new-workspace/workspace-source'
+import {
+  buildGitHubWorkspaceSource as toGitHubLinkedWorkItem,
+  shouldApplyWorkspaceSourceAutoName
+} from '../../../../shared/new-workspace/workspace-source'
 import { getLinkedItemDisplayName } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
-import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'

@@ -2,7 +2,6 @@ import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import type { ComposerRuntimeTargetSelectionInput } from './composer-target-input-contracts'
 
 import { useEffect, useMemo, useRef } from 'react'
-import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderSourceRepos } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { parseExecutionHostId, getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getSelectedRepoSshGate } from '@/lib/new-workspace-ssh-gate'

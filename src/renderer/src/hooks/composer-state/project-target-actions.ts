@@ -51,7 +51,6 @@ import {
   findActionableFolderProjectGroup
 } from '@/lib/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
-import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderSourceRepos } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { resolveWorkspaceCreationRepoId } from '@/lib/project-host-workspace-target'
 
