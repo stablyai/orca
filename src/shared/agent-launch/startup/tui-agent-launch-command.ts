@@ -250,9 +250,11 @@ export function terminalSessionOptionInputs(args: {
     extras?.ok &&
     args.agent === 'pi' &&
     extras.kinds.has('model') &&
-    piInlineApiKeyIsUnpinned([args.command, raw], args.shell)
+    piInlineApiKeyIsUnpinned(args.command, raw, args.shell)
   ) {
-    throw new Error("A Pi model override needs --provider beside this host's --api-key.")
+    throw new Error(
+      'A Pi model override needs a non-empty --provider beside an --api-key in Arguments, and no --api-key in a custom Command.'
+    )
   }
   if (extras?.ok) {
     const merged = mergeParsedExtraAgentArgs({
