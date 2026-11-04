@@ -429,15 +429,13 @@ describe('Cmd+J quick action context', () => {
       openAddQuickCommand: () => {},
       canSplitActiveChat: true
     } satisfies CmdJQuickActionContext
-    const actions = getCmdJQuickActions().filter(
-      (action) => action.id.startsWith('split-chat-') && action.isAvailable(context).available
-    )
+    const actions = getCmdJQuickActions().filter((action) => action.isAvailable(context).available)
     const results = rankCmdJMiddleResults({
       query,
       settingsResults: [],
       actionResults: buildCmdJActionResults(actions)
-    })
-    return { actions, results }
+    }).filter((result) => result.id.startsWith('split-chat-'))
+    return { actions: actions.filter((action) => action.id.startsWith('split-chat-')), results }
   }
 
   it.each([
