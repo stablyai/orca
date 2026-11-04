@@ -68,55 +68,6 @@ function getDetectedProjectDefaultCheckout(
   )
 }
 
-function hasDetectedHiddenLinkedExternalWorktrees(
-  detected: DetectedWorktreeListResult | undefined,
-  executionHostId?: ExecutionHostId
-): boolean {
-  if (detected?.authoritative !== true) {
-    return false
-  }
-  return getProjectWorktreesForHost(detected.worktrees, executionHostId).some(
-    (worktree) =>
-      !worktree.isMainWorktree &&
-      !worktree.selectedCheckout &&
-      !worktree.visible &&
-      worktree.ownership !== 'orca-managed' &&
-      // Agent scratch alone must not enable repo-wide external visibility.
-      worktree.ownership !== 'agent-scratch'
-  )
-}
-
-async function revealDetectedHiddenLinkedExternalWorktrees(
-  repoId: string,
-  executionHostId?: ExecutionHostId
-): Promise<DefaultCheckoutHandoffReason | null> {
-  const state = useAppStore.getState()
-  if (
-    !hasDetectedHiddenLinkedExternalWorktrees(
-      selectDetectedWorktreesByRepo(state)[repoId],
-      executionHostId
-    )
-  ) {
-    return null
-  }
-
-  // Preserve external-worktree visibility formerly set by the explicit import step.
-  const updated = executionHostId
-    ? await state.updateRepo(
-        repoId,
-        { externalWorktreeVisibility: 'show' },
-        { hostId: executionHostId }
-      )
-    : await state.updateRepo(repoId, { externalWorktreeVisibility: 'show' })
-  if (!updated) {
-    return 'show_detected_linked_failed'
-  }
-  const refreshed = await useAppStore
-    .getState()
-    .fetchWorktrees(repoId, ownerRefreshOptions(executionHostId))
-  return refreshed ? null : 'linked_external_refresh_failed'
-}
-
 async function findDetectedDefaultCheckout(
   repoId: string,
   executionHostId?: ExecutionHostId
@@ -203,19 +154,7 @@ export async function openProjectDefaultCheckout({
   }
 
   if (defaultCheckout) {
-    const revealLinkedFailureReason = await revealDetectedHiddenLinkedExternalWorktrees(
-      repoId,
-      executionHostId
-    )
-    if (revealLinkedFailureReason) {
-      track('add_repo_default_checkout_handoff', {
-        source,
-        result: 'revealed_project',
-        reason: revealLinkedFailureReason
-      })
-      finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
-      return
-    }
+    // Linked worktrees Orca didn't create stay hidden; the sidebar's discovered-worktrees line offers them.
     // Onboarding must reveal its default checkout even when the normal sidebar preference hides it.
     const state = useAppStore.getState()
     if (state.hideDefaultBranchWorkspace) {

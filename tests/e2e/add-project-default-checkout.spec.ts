@@ -132,7 +132,7 @@ test.describe('Add project default checkout', () => {
       })
   })
 
-  test('reveals sibling git worktrees before opening the default checkout', async ({
+  test('keeps sibling git worktrees hidden when opening the default checkout', async ({
     orcaPage
   }) => {
     await waitForSessionReady(orcaPage)
@@ -172,14 +172,15 @@ test.describe('Add project default checkout', () => {
           }, fixture.mainPath),
         {
           timeout: 30_000,
-          message: 'linked worktrees were not revealed before opening the default checkout'
+          message: 'default checkout did not open with sibling worktrees hidden'
         }
       )
       .toEqual({
         activeCheckoutIsDefault: true,
-        linkedRepoVisibility: 'show',
-        visibleBranches: ['refs/heads/feature', 'refs/heads/main'],
-        visibleCount: 2
+        linkedRepoVisibility: undefined,
+        visibleBranches: ['refs/heads/main'],
+        visibleCount: 1
       })
+    await expect(orcaPage.getByText('Hiding 1 discovered worktree')).toBeVisible()
   })
 })
