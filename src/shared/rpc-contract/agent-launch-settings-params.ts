@@ -13,7 +13,7 @@ const ChoiceValue = z
   .min(1)
   .max(512)
   .refine((value) => !value.includes('\0'))
-const OptionKey = ChoiceValue.refine(
+export const OptionKey = ChoiceValue.refine(
   (key) =>
     !['__proto__', 'constructor', 'prototype', 'agentId', 'model', 'permissionMode'].includes(key)
 )

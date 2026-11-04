@@ -13,6 +13,7 @@ import {
 } from './automation-launch-setup-source'
 import { hasExtraAgentArgs, parseExtraAgentArgs } from './automation-extra-agent-args'
 import type { TuiAgent } from './tui-agent'
+import { retireAutomationChoiceSources } from './automation-launch-source-edits'
 
 export function automationCanonicalLaunchSetup(
   automation: AutomationLaunchSetup & { launchSetup?: AutomationLaunchSetup }
@@ -63,7 +64,14 @@ export function applyAutomationLaunchSetupPatch<
   if (rebind) {
     const visible = input.extraAgentArgs ?? automationLegacyArguments(current.agentId, setup)
     setup = { surface: setup.surface }
-    if (patch?.arguments === undefined && patch?.copy === undefined && hasExtraAgentArgs(visible)) {
+    if (
+      patch?.arguments === undefined &&
+      patch?.copy === undefined &&
+      patch?.sources?.arguments === undefined &&
+      patch?.sources?.legacyArguments === undefined &&
+      patch?.sources?.extraAgentArgs === undefined &&
+      hasExtraAgentArgs(visible)
+    ) {
       const parsed = parseExtraAgentArgs({ agent, extraAgentArgs: visible })
       if (!parsed.ok) {
         throw new Error(parsed.error)
@@ -88,6 +96,24 @@ export function applyAutomationLaunchSetupPatch<
   }
   if (patch?.arguments && patch.arguments.kind !== 'legacy-extras') {
     setup = patchAutomationArguments(agent, setup, patch.arguments)
+  }
+  if (patch?.sources) {
+    const sources = patch.sources
+    if (sources.arguments) {
+      setup = patchAutomationArguments(agent, setup, sources.arguments)
+    }
+    if (sources.legacyArguments !== undefined) {
+      setup = editAutomationLegacyArguments(agent, setup, sources.legacyArguments)
+    }
+    if (sources.extraAgentArgs !== undefined) {
+      setup = {
+        ...setup,
+        extraAgentArgs: hasExtraAgentArgs(sources.extraAgentArgs)
+          ? sources.extraAgentArgs
+          : undefined
+      }
+    }
+    setup = retireAutomationChoiceSources(agent, setup, sources.retiredChoices ?? [])
   }
   if (patch?.choices) {
     setup = patchAutomationChoices(agent, setup, patch.choices)

@@ -9,6 +9,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { AUTOMATION_RUNTIME_CAPABILITIES } from '../../../../shared/automation-runtime-capabilities'
 import { applyAutomationLaunchSetupPatch } from '../../../../shared/automation-launch-setup'
+import { assertAutomationExtraAgentArgs } from '../../../../shared/automation-extra-agent-args-record'
 import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
@@ -205,7 +206,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     expect(onDraftChange).toHaveBeenCalledTimes(1)
     const accepted = onDraftChange.mock.calls[0][0](DRAFT)
     expect(accepted.agentArgs).toBe('--search --add-dir docs')
-    expect(accepted.launchSetupPatch.arguments).toEqual({
+    expect(accepted.launchSetupPatch.sources.arguments).toEqual({
       kind: 'value',
       value: '--search --add-dir docs'
     })
@@ -327,6 +328,12 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     }
     renderSidebar(changed, initial)
     const value = '--add-dir docs --add-dir fixtures'
+    for (const partial of ['--add-dir docs ', '--add-dir "docs', '--add-dir "docs" ']) {
+      fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
+        target: { value: partial }
+      })
+      expect(screen.getByLabelText('Extra agent arguments')).toHaveProperty('value', partial)
+    }
     fireEvent.change(screen.getByLabelText('Extra agent arguments'), { target: { value } })
     openPicker()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Claude' }))
@@ -383,9 +390,15 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     expect(screen.getByLabelText('Extra agent arguments').getAttribute('aria-invalid')).toBe('true')
     const invalid = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
     expect(() =>
-      applyAutomationLaunchSetupPatch(
-        { agentId: 'claude', ...automationDraftLaunchSetup(invalid, 'terminal', null) },
-        initial
+      assertAutomationExtraAgentArgs(
+        applyAutomationLaunchSetupPatch(
+          {
+            agentId: 'claude',
+            reuseSession: invalid.reuseSession,
+            ...automationDraftLaunchSetup(invalid, 'terminal', null)
+          },
+          initial
+        )
       )
     ).toThrow()
     fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
@@ -400,20 +413,36 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     ).toBe('--add-dir fixtures')
   })
 
-  it('re-derives legacy presentation from canonical source after capability arrives', () => {
-    const capabilities = vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+  it('keeps accepted full Arguments through a legacy destination edit and return', () => {
+    const capabilities = vi
+      .spyOn(launchRoute, 'resolveHostCapabilities')
+      .mockReturnValue(AUTOMATION_RUNTIME_CAPABILITIES)
     const changed = vi.fn()
     const initial: AutomationDraft = {
       ...DRAFT,
       agentId: 'claude',
       extraAgentArgs: '--add-dir docs',
-      launchPreferences: { model: 'sonnet' }
+      agentArgs: '--saved-literal --model sonnet'
     }
     const form = renderSidebar(changed, initial, {
       kind: 'runtime',
       environmentId: 'old',
       pairingRevision: 1
     })
+    openPicker()
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+    const argumentsInput = [...document.querySelectorAll('textarea')].find(
+      (input) => input !== screen.getByLabelText('Extra agent arguments')
+    )
+    expect(argumentsInput).toBeTruthy()
+    fireEvent.change(argumentsInput!, {
+      target: { value: '--verbose --model opus' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
+    const acceptedFull = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
+    expect(acceptedFull.agentArgs).toBe('--verbose --model opus')
+    capabilities.mockReturnValue([])
+    form.refresh()
     fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
       target: { value: '--model opus --add-dir fixtures' }
     })
@@ -423,15 +452,45 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
       'value',
       '--add-dir fixtures'
     )
-    openPicker()
-    expect(screen.getByRole('button', { name: 'Configure Claude' })).toBeTruthy()
     const next = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
-    expect(
-      applyAutomationLaunchSetupPatch(
-        { agentId: 'claude', ...automationDraftLaunchSetup(next, 'terminal', null) },
-        initial
-      )
-    ).toMatchObject({ extraAgentArgs: '--add-dir fixtures', launchPreferences: { model: 'opus' } })
+    const saved = applyAutomationLaunchSetupPatch(
+      { agentId: 'claude', ...automationDraftLaunchSetup(next, 'terminal', null) },
+      initial
+    )
+    expect(saved.agentArgs).toContain('--verbose')
+    expect(saved.agentArgs).not.toContain('--saved-literal')
+    expect(saved.agentArgs).toContain('--model opus')
+    expect(saved.extraAgentArgs).toBe('--add-dir fixtures')
+  })
+
+  it('retains the source reset after rebinding away and back on a legacy destination', () => {
+    const capabilities = vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+    const changed = vi.fn()
+    const initial: AutomationDraft = {
+      ...DRAFT,
+      agentId: 'claude',
+      launchPreferences: { model: 'sonnet' },
+      agentArgs: '--verbose'
+    }
+    const form = renderSidebar(changed, initial, {
+      kind: 'runtime',
+      environmentId: 'old',
+      pairingRevision: 1
+    })
+    for (const agent of ['Codex', 'Claude']) {
+      openPicker()
+      fireEvent.click(screen.getByRole('menuitem', { name: agent }))
+    }
+    capabilities.mockReturnValue(AUTOMATION_RUNTIME_CAPABILITIES)
+    form.refresh()
+    const next = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
+    const saved = applyAutomationLaunchSetupPatch(
+      { agentId: 'claude', ...automationDraftLaunchSetup(next, 'terminal', null) },
+      initial
+    )
+    expect(saved.launchPreferences).toBeUndefined()
+    expect(saved.agentArgs).toBeUndefined()
+    expect(saved.extraAgentArgs).toBe(next.extraAgentArgs)
   })
 
   it('sends a legacy argument edit after an earlier surface pick', () => {

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ChoicePatch } from './agent-launch-settings-params'
+import { ChoicePatch, OptionKey } from './agent-launch-settings-params'
 import { AGENT_PERMISSION_CHOICES } from '../tui-agent-permission-choice'
 import { isTuiAgent } from '../tui-agent-config'
 import {
@@ -213,6 +213,34 @@ export const AutomationLaunchSetupPatch = z
         z.strictObject({ kind: z.literal('empty') }),
         z.strictObject({ kind: z.literal('inherit') })
       ])
+      .optional(),
+    sources: z
+      .strictObject({
+        arguments: z
+          .discriminatedUnion('kind', [
+            z.strictObject({
+              kind: z.literal('value'),
+              value: z.string().refine((value) => !value.includes('\0'))
+            }),
+            z.strictObject({ kind: z.literal('empty') }),
+            z.strictObject({ kind: z.literal('inherit') })
+          ])
+          .optional(),
+        legacyArguments: z.string().optional(),
+        extraAgentArgs: z.string().optional(),
+        retiredChoices: z
+          .array(
+            z
+              .string()
+              .refine(
+                (key) =>
+                  key === 'model' ||
+                  key === 'permissionMode' ||
+                  (key.startsWith('options.') && OptionKey.safeParse(key.slice(8)).success)
+              )
+          )
+          .optional()
+      })
       .optional(),
     copy: AutomationCanonicalLaunchSetup.optional()
   })

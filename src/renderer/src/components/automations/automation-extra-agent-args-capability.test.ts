@@ -7,6 +7,13 @@ import {
 } from '../../../../shared/protocol-version'
 import type { AutomationCreateInput } from '../../../../shared/automations-types'
 import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
+import { applyAutomationLaunchSetupPatch } from '../../../../shared/automation-launch-setup'
+import {
+  encodeAutomationLaunchEdit,
+  foldAutomationSourceEdit
+} from '../../../../shared/automation-launch-source-edits'
+import { automationCopyLaunchSetup } from './automation-launch-surface'
+import { makeAutomation } from './automations-page-fixtures'
 
 const callRuntimeRpc = vi.fn()
 const getRuntimeEnvironmentStatus = vi.fn()
@@ -51,8 +58,39 @@ beforeEach(async () => {
 })
 
 describe('extra agent args capability gate', () => {
+  it('moves a reopened supplemental-only edit through the existing extra-args capability', async () => {
+    const current = makeAutomation({ surface: 'terminal', extraAgentArgs: '--add-dir docs' })
+    const { patch } = foldAutomationSourceEdit('claude', current, undefined, {
+      kind: 'supplemental',
+      value: '--add-dir fixtures'
+    })
+    const reopened = makeAutomation({
+      ...current,
+      ...applyAutomationLaunchSetupPatch(
+        {
+          launchSetupPatch: encodeAutomationLaunchEdit(patch, 'terminal')
+        },
+        current
+      )
+    })
+    const input = automationCopyLaunchSetup(reopened, {}, INPUT)
+    const { createAutomationForDestination } = await client()
+    getRuntimeEnvironmentStatus.mockResolvedValue(CURRENT_HOST)
+    callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1' } })
+    await createAutomationForDestination(RUNTIME, input, { selector: { kind: 'self' } })
+    expect(callRuntimeRpc.mock.calls[0]?.[2]).toMatchObject({
+      extraAgentArgs: '--add-dir fixtures'
+    })
+  })
   it.each([
     { arguments: { kind: 'empty' as const } },
+    {
+      sources: {
+        arguments: { kind: 'value' as const, value: '--opaque' },
+        extraAgentArgs: '--add-dir docs',
+        retiredChoices: ['model']
+      }
+    },
     { choices: { options: { fastMode: 'true' } } },
     { copy: { agentArgs: null, launchPreferences: { model: null } } }
   ])(

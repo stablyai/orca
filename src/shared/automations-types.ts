@@ -1,17 +1,18 @@
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
-import type { AgentChoicePatch } from './agent-launch-choices'
-
-export type AutomationLaunchPreferences = Omit<AgentChoicePatch, 'permissionMode'> & {
-  permissionMode?: Exclude<AgentChoicePatch['permissionMode'], 'default'>
-}
-export type AutomationLaunchSetup = {
-  surface?: 'chat' | 'terminal'
-  extraAgentArgs?: string
-  launchPreferences?: AutomationLaunchPreferences
-  agentArgs?: string | null
-}
+import type {
+  AutomationLaunchSetup,
+  AutomationLaunchSetupPatch,
+  AutomationLaunchPreferences
+} from './automation-launch-types'
+export type {
+  AutomationLaunchSetup,
+  AutomationLaunchSetupPatch,
+  AutomationLaunchPreferences,
+  AutomationArgumentEdit,
+  AutomationLaunchSourceEdits
+} from './automation-launch-types'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -97,18 +98,6 @@ export type AutomationPrecheckResult = {
   error: string | null
   startedAt: number
   completedAt: number
-}
-
-export type AutomationLaunchSetupPatch = {
-  surface?: 'chat' | 'terminal'
-  choices?: AgentChoicePatch
-  arguments?:
-    | { kind: 'legacy-extras'; value: string }
-    | { kind: 'value'; value: string }
-    | { kind: 'empty' }
-    | { kind: 'inherit' }
-  /** Canonical copies travel inside the strict envelope old hosts reject. */
-  copy?: AutomationLaunchSetup
 }
 
 export type Automation = {

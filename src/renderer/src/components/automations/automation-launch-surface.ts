@@ -1,3 +1,4 @@
+import { encodeAutomationLaunchEdit } from '../../../../shared/automation-launch-source-edits'
 import {
   applyAutomationLaunchSetupPatch,
   automationCanonicalLaunchSetup,
@@ -100,7 +101,7 @@ export function automationDraftLaunchSetup(
   currentAutomation: Automation | null
 ): Pick<AutomationUpdateInput, 'launchSetupPatch' | 'extraAgentArgs'> {
   if (draft.launchSetupPatch) {
-    return { launchSetupPatch: { ...draft.launchSetupPatch, surface } }
+    return { launchSetupPatch: encodeAutomationLaunchEdit(draft.launchSetupPatch, surface) }
   }
   const argumentsChanged =
     draft.extraAgentArgs !==

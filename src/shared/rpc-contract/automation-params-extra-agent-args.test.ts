@@ -14,7 +14,11 @@ describe('extraAgentArgs RPC params', () => {
   it('retains complete sparse setup and rejects it on the shipped old strict envelope', () => {
     const launchSetupPatch = {
       choices: { model: null, options: { serviceTier: 'fast', effort: null } },
-      arguments: { kind: 'empty' }
+      sources: {
+        arguments: { kind: 'empty' },
+        extraAgentArgs: '--add-dir docs',
+        retiredChoices: ['model', 'options.effort']
+      }
     }
     expect(AutomationCreate.parse({ ...CREATE, launchSetupPatch }).launchSetupPatch).toEqual(
       launchSetupPatch
@@ -68,7 +72,9 @@ describe('extraAgentArgs RPC params', () => {
       {},
       { surface: 'other' },
       { model: 'opus' },
-      { arguments: { kind: 'full', value: 'x' } }
+      { arguments: { kind: 'full', value: 'x' } },
+      { sources: { retiredChoices: ['extraAgentArgs'] } },
+      { sources: { retiredChoices: ['options.__proto__'] } }
     ]) {
       expect(AutomationUpdate.safeParse({ id: 'a', updates: { launchSetupPatch } }).success).toBe(
         false

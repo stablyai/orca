@@ -219,6 +219,7 @@ export async function prepareAutomationLaunchSetup<
   }
   const status = await sharedCapabilityProbe(authority, capabilityProbeKey(authority))
   const modern =
+    launchSetupPatch.sources !== undefined ||
     launchSetupPatch.choices !== undefined ||
     launchSetupPatch.copy !== undefined ||
     (launchSetupPatch.arguments !== undefined &&

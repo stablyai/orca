@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import type { AutomationTemplate } from './automation-templates'
 import { getDefaultWorktree } from './automation-draft-model'
+import { hasModernAutomationLaunchSetup } from '../../../../shared/automation-launch-setup'
 import type { AutomationsPageDestinationState } from './use-automations-page-destination-state'
 import type { AutomationsPageDestinationFormState } from './use-automations-page-destination-form'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
@@ -140,7 +141,11 @@ export function useAutomationDraftEffects({
           ? {
               launchPreferences: undefined,
               agentArgs: undefined,
-              launchSetupPatch: undefined,
+              launchSetupPatch:
+                hasModernAutomationLaunchSetup(current) || current.launchSetupPatch?.copy
+                  ? { copy: { surface: current.surface } }
+                  : { arguments: { kind: 'legacy-extras' as const, value: '' } },
+              launchArgumentsInput: undefined,
               extraAgentArgs: ''
             }
           : {}),

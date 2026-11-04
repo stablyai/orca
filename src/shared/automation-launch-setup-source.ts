@@ -155,7 +155,8 @@ export function patchAutomationArguments(
       }
     }
     if (setup.launchPreferences !== undefined) {
-      setup.launchPreferences = preferences
+      const { options, ...rest } = preferences
+      setup.launchPreferences = Object.keys(options).length ? preferences : rest
     }
   }
   return setup
@@ -259,9 +260,12 @@ export function patchAutomationLegacyArguments(
     .filter((entry) => raw.some((prior) => prior.key === entry.key))
     .map((entry) => value.slice(entry.start, entry.end))
     .join(' ')
+  const { options, ...rest } = preferences
   return {
     ...setup,
-    ...(setup.launchPreferences !== undefined ? { launchPreferences: preferences } : {}),
+    ...(setup.launchPreferences !== undefined
+      ? { launchPreferences: Object.keys(options).length ? preferences : rest }
+      : {}),
     ...(setup.agentArgs !== undefined && kept !== null
       ? { agentArgs: [kept, rawIncoming].filter(Boolean).join(' ') || null }
       : {}),

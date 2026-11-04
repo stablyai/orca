@@ -42,8 +42,18 @@ import {
 import { selfScopedList } from './automations-page-runtime-fixtures'
 import { listedRow } from './automations-page-listed-items'
 import { makeAutomation, REPO_ID } from './automations-page-fixtures'
+import { applyAutomationLaunchSetupPatch } from '../../../../shared/automation-launch-setup'
+import type { AutomationUpdateInput } from '../../../../shared/automations-types'
+import type { AutomationDraft } from './AutomationEditorDialog'
+import { editAutomationLegacyDraft, pickAutomationLaunch } from './automation-launch-draft'
+import { getAutomationTemplates } from './automation-templates'
 
 installAutomationsPageHarness()
+
+function launchDraft(value: unknown): AutomationDraft {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness captures the real editor props and forwards its actual draft unchanged.
+  return value as AutomationDraft
+}
 
 /** A runtime project with the same host-local id as the desktop project. */
 function addCollidingRuntimeProject(): void {
@@ -75,6 +85,109 @@ function addCollidingRuntimeProject(): void {
 }
 
 describe('AutomationsPage edit fencing', () => {
+  it.each(['full-first', 'legacy-first', 'template-rebind'] as const)(
+    'saves accepted sources through destination callbacks and the latest owner: %s',
+    async (order) => {
+      const automation = makeAutomation({
+        surface: 'terminal',
+        launchSetup: {
+          surface: 'terminal',
+          launchPreferences: { model: 'sonnet' },
+          agentArgs: '--saved-literal'
+        }
+      })
+      api.automations.list.mockResolvedValue([])
+      scopedList([automation])
+      runtimeHost([], [])
+      addRuntimeProject()
+      mocks.state.fetchWorktrees = async () => undefined
+      const { setLocalRuntimeCapabilitiesForTests } =
+        await import('@/runtime/local-runtime-capabilities')
+      setLocalRuntimeCapabilitiesForTests([
+        ...CHAT_CAPABILITIES,
+        AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY
+      ])
+      let saved = automation
+      api.automations.update.mockImplementation(
+        async ({ updates }: { updates: AutomationUpdateInput }) => {
+          saved = makeAutomation({
+            ...saved,
+            ...applyAutomationLaunchSetupPatch(updates, saved),
+            launchSetup: undefined
+          })
+          return saved
+        }
+      )
+      await renderPage()
+      await settleHostQueries()
+      await act(async () => {
+        void mocks.listPanel?.openEditDialog(listedRow(automation.id))
+      })
+      const acceptFull = async () => {
+        await act(async () => {
+          mocks.editorDialog?.onDraftChange((current) =>
+            pickAutomationLaunch(
+              launchDraft(current),
+              'claude',
+              {
+                agent: 'claude',
+                surface: 'terminal',
+                choices: {},
+                acceptedEdits: {
+                  choices: {},
+                  arguments: order === 'full-first' ? '--verbose --model opus' : '--verbose'
+                }
+              },
+              undefined,
+              true,
+              'terminal'
+            )
+          )
+        })
+      }
+      if (order === 'full-first') {
+        await acceptFull()
+      }
+      await act(async () => {
+        mocks.editorDialog?.editDestination?.onSelect(RUNTIME_SELF_KEY)
+      })
+      await act(async () => {
+        mocks.editorDialog?.onProjectChange(RUNTIME_REPO_ID)
+      })
+      expect(mocks.editorDialog?.launchAuthority?.kind).toBe('runtime')
+      if (order === 'template-rebind') {
+        for (const agentId of ['codex', 'claude'] as const) {
+          await act(async () => {
+            mocks.editorDialog?.onApplyTemplate({ ...getAutomationTemplates()[0], agentId })
+          })
+        }
+      } else {
+        await act(async () => {
+          mocks.editorDialog?.onDraftChange((current) =>
+            editAutomationLegacyDraft(launchDraft(current), '--model opus --add-dir docs', false)
+          )
+        })
+      }
+      await act(async () => {
+        mocks.editorDialog?.editDestination?.onSelect(DESKTOP_SELF_KEY)
+      })
+      await act(async () => {
+        mocks.editorDialog?.onProjectChange(REPO_ID)
+      })
+      expect(mocks.editorDialog?.launchAuthority?.kind).toBe('desktop')
+      if (order === 'legacy-first') {
+        await acceptFull()
+      }
+      const accepted = launchDraft(mocks.editorDialog?.draft)
+      await save()
+      expect(api.automations.update).toHaveBeenCalledOnce()
+      expect(createRpcCalls()).toHaveLength(0)
+      expect(saved.agentArgs).toBe(accepted.agentArgs)
+      expect(saved.launchPreferences).toEqual(accepted.launchPreferences)
+      expect(saved.extraAgentArgs ?? '').toBe(accepted.extraAgentArgs)
+    }
+  )
+
   async function editAndSave(row: AutomationListRow): Promise<void> {
     await act(async () => {
       void mocks.listPanel?.openEditDialog(row)

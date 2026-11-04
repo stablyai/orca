@@ -9,9 +9,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { automationTerminalLaunchInputs } from '../../../shared/automation-launch-setup'
+import {
+  automationCanonicalLaunchSetup,
+  automationTerminalLaunchInputs
+} from '../../../shared/automation-launch-setup'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
+import {
+  encodeAutomationLaunchEdit,
+  foldAutomationSourceEdit,
+  type AutomationSourceEdit,
+  type AutomationLaunchEdit
+} from '../../../shared/automation-launch-source-edits'
 
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
@@ -388,5 +397,121 @@ describe('automation extra agent args persistence', () => {
       launchSetupPatch: { copy: source.launchSetup }
     })
     expect(copy.launchSetup).toEqual(source.launchSetup)
+  })
+  it.each([
+    [
+      { kind: 'arguments', value: { kind: 'value', value: '--new-literal --model opus' } },
+      { kind: 'legacy', value: '--model opus --add-dir docs' }
+    ],
+    [
+      { kind: 'legacy', value: '--model opus --add-dir docs' },
+      { kind: 'arguments', value: { kind: 'value', value: '--verbose' } }
+    ]
+  ] satisfies AutomationSourceEdit[][])(
+    'saves composed source intent in either Arguments order: %j',
+    async (...edits) => {
+      const store = await createStore()
+      store.addRepo(makeRepo())
+      const created = store.createAutomation({
+        ...BASE,
+        launchSetupPatch: {
+          copy: {
+            surface: 'terminal',
+            launchPreferences: { model: 'sonnet' },
+            agentArgs: '--saved-literal'
+          }
+        }
+      })
+      let setup = automationCanonicalLaunchSetup(created)
+      let patch: AutomationLaunchEdit | undefined
+      for (const edit of edits) {
+        ;({ setup, patch } = foldAutomationSourceEdit('claude', setup, patch, edit))
+      }
+      const saved = store.updateAutomation(created.id, {
+        launchSetupPatch: encodeAutomationLaunchEdit(patch ?? {}, 'terminal')
+      })
+      expect(saved.launchSetup).toEqual(setup)
+      expect(saved.launchSetup?.agentArgs).not.toContain('--saved-literal')
+      store.flush()
+      await closeTestStores()
+      expect((await createStore()).listAutomations()[0].launchSetup).toEqual(setup)
+    }
+  )
+
+  it('retains cumulative model retirement after later full Arguments no longer contain a model', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const created = store.createAutomation({
+      ...BASE,
+      launchSetupPatch: { choices: { model: 'sonnet', options: { fastMode: 'true' } } }
+    })
+    let setup = automationCanonicalLaunchSetup(created)
+    let patch: AutomationLaunchEdit | undefined
+    for (const value of ['--model opus', '--verbose']) {
+      ;({ setup, patch } = foldAutomationSourceEdit('claude', setup, patch, {
+        kind: 'arguments',
+        value: { kind: 'value', value }
+      }))
+    }
+    const saved = store.updateAutomation(created.id, {
+      launchSetupPatch: encodeAutomationLaunchEdit(patch ?? {}, 'terminal')
+    })
+    expect(saved.launchSetup?.launchPreferences?.model).toBeUndefined()
+    expect(saved.launchSetup?.agentArgs).toBe('--verbose')
+    expect(saved.launchSetup?.launchPreferences).toEqual(setup.launchPreferences)
+  })
+
+  it('keeps supplemental-only edits legacy-compatible after Save and reopen', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const created = store.createAutomation({
+      ...BASE,
+      launchSetupPatch: {
+        surface: 'terminal',
+        arguments: { kind: 'legacy-extras', value: '--add-dir docs' }
+      }
+    })
+    const { setup, patch } = foldAutomationSourceEdit(
+      'claude',
+      automationCanonicalLaunchSetup(created),
+      undefined,
+      { kind: 'supplemental', value: '--add-dir fixtures' }
+    )
+    const saved = store.updateAutomation(created.id, {
+      launchSetupPatch: encodeAutomationLaunchEdit(patch, 'terminal')
+    })
+    expect(saved.launchSetup).toEqual(setup)
+    expect(saved.launchSetup?.launchPreferences).toBeUndefined()
+    store.flush()
+    await closeTestStores()
+    const reopened = (await createStore()).listAutomations()[0]
+    expect(reopened.launchSetup).toEqual(setup)
+    expect(reopened.launchSetup?.agentArgs).toBeUndefined()
+    expect(reopened.launchSetup?.launchPreferences).toBeUndefined()
+  })
+
+  it('applies permission source edits to the latest old-writer model without replacing its raw field', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const created = store.createAutomation({
+      ...BASE,
+      launchSetupPatch: {
+        arguments: { kind: 'value', value: '--verbose --model sonnet --permission-mode default' }
+      }
+    })
+    const { patch } = foldAutomationSourceEdit(
+      'claude',
+      automationCanonicalLaunchSetup(created),
+      undefined,
+      { kind: 'choices', value: { permissionMode: 'full-access' } }
+    )
+    store.updateAutomation(created.id, { extraAgentArgs: '--model opus' })
+    const saved = store.updateAutomation(created.id, {
+      launchSetupPatch: encodeAutomationLaunchEdit(patch ?? {}, 'terminal')
+    })
+    expect(saved.launchSetup?.agentArgs).toContain('--model opus')
+    expect(saved.launchSetup?.agentArgs).not.toContain('sonnet')
+    expect(saved.launchSetup?.agentArgs).not.toContain('--permission-mode')
+    expect(saved.launchSetup?.launchPreferences?.permissionMode).toBe('full-access')
   })
 })

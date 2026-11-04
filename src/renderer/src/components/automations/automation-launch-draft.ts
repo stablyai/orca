@@ -1,13 +1,14 @@
+import { automationLegacyArguments } from '../../../../shared/automation-launch-setup-source'
 import {
-  automationArgumentChoices,
-  automationLegacyArguments,
-  patchAutomationArguments,
-  patchAutomationChoices,
-  patchAutomationLegacyArguments
-} from '../../../../shared/automation-launch-setup-source'
-import { automationCanonicalLaunchSetup } from '../../../../shared/automation-launch-setup'
+  automationCanonicalLaunchSetup,
+  hasModernAutomationLaunchSetup
+} from '../../../../shared/automation-launch-setup'
+import {
+  foldAutomationSourceEdit,
+  type AutomationLaunchEdit
+} from '../../../../shared/automation-launch-source-edits'
+import { parseExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
 import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
-import type { AutomationLaunchSetupPatch } from '../../../../shared/automations-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
@@ -31,48 +32,46 @@ export function pickAutomationLaunch(
     return current
   }
   let setup = automationCanonicalLaunchSetup(current)
-  let patch: AutomationLaunchSetupPatch = { ...current.launchSetupPatch }
+  let patch: AutomationLaunchEdit = { ...current.launchSetupPatch }
   if (rebound) {
     const extraAgentArgs = modern
       ? current.extraAgentArgs
-      : current.launchSetupPatch?.arguments?.kind === 'legacy-extras'
-        ? current.launchSetupPatch.arguments.value
+      : current.launchArgumentsInput?.kind === 'legacy'
+        ? current.launchArgumentsInput.value
         : automationLegacyArguments(current.agentId, current)
     setup = { surface: pickedSurface ?? surface, ...(extraAgentArgs ? { extraAgentArgs } : {}) }
-    patch = modern
-      ? { copy: setup }
-      : { arguments: { kind: 'legacy-extras', value: extraAgentArgs ?? '' } }
+    patch =
+      modern || hasModernAutomationLaunchSetup(current) || current.launchSetupPatch?.copy
+        ? { copy: setup }
+        : { arguments: { kind: 'legacy-extras', value: extraAgentArgs ?? '' } }
   }
   if (pickedSurface) {
     setup = { ...setup, surface: pickedSurface }
     patch.surface = pickedSurface
   }
   if (edits?.arguments !== undefined) {
-    patch.arguments =
-      edits.arguments === null ? { kind: 'empty' } : { kind: 'value', value: edits.arguments }
-    setup = patchAutomationArguments(agentId, setup, patch.arguments)
-    if (patch.choices) {
-      patch.choices = { ...patch.choices, options: { ...patch.choices.options } }
-      for (const occurrence of automationArgumentChoices(agentId, edits.arguments ?? '')
-        .recognized) {
-        if (occurrence.key === 'model') {
-          delete patch.choices.model
-        } else if (occurrence.key === 'permissionMode') {
-          delete patch.choices.permissionMode
-        } else {
-          delete patch.choices.options![occurrence.key]
-        }
-      }
-    }
+    const folded = foldAutomationSourceEdit(agentId, setup, patch, {
+      kind: 'arguments',
+      value:
+        edits.arguments === null ? { kind: 'empty' } : { kind: 'value', value: edits.arguments }
+    })
+    setup = folded.setup
+    patch = folded.patch
   }
   if (choicesChanged) {
-    setup = patchAutomationChoices(agentId, setup, choices)
-    patch.choices = {
-      ...patch.choices,
-      ...choices,
-      options: { ...patch.choices?.options, ...choices.options }
-    }
+    const folded = foldAutomationSourceEdit(agentId, setup, patch, {
+      kind: 'choices',
+      value: choices
+    })
+    setup = folded.setup
+    patch = folded.patch
   }
+  const raw = current.launchArgumentsInput
+  const keepRaw =
+    !rebound &&
+    raw &&
+    edits?.arguments === undefined &&
+    (!choicesChanged || !parseExtraAgentArgs({ agent: agentId, extraAgentArgs: raw.value }).ok)
   return {
     ...current,
     ...setup,
@@ -80,7 +79,8 @@ export function pickAutomationLaunch(
     extraAgentArgs: setup.extraAgentArgs ?? '',
     launchPreferences: setup.launchPreferences,
     agentArgs: setup.agentArgs,
-    launchSetupPatch: patch
+    launchSetupPatch: patch,
+    launchArgumentsInput: keepRaw ? raw : undefined
   }
 }
 
@@ -89,42 +89,20 @@ export function editAutomationLegacyDraft(
   value: string,
   modern: boolean
 ): AutomationDraft {
-  const canonical = automationCanonicalLaunchSetup(current)
-  const represented = modern
-    ? (automationLegacyArguments(current.agentId, {
-        ...canonical,
-        extraAgentArgs: value || undefined
-      }) ?? '')
-    : value
-  const setup = patchAutomationLegacyArguments(current.agentId, canonical, represented)
-  const patch: AutomationLaunchSetupPatch = {
-    ...current.launchSetupPatch,
-    arguments: { kind: 'legacy-extras', value: represented }
-  }
-  if (patch.choices) {
-    patch.choices = { ...patch.choices, options: { ...patch.choices.options } }
-    if (patch.choices.model !== undefined) {
-      if (setup.launchPreferences?.model === undefined) {
-        delete patch.choices.model
-      } else {
-        patch.choices.model = setup.launchPreferences.model
-      }
-    }
-    if (patch.choices.options?.effort !== undefined) {
-      const effort = setup.launchPreferences?.options?.effort
-      if (effort === undefined) {
-        delete patch.choices.options.effort
-      } else {
-        patch.choices.options.effort = effort
-      }
-    }
-  }
+  const kind = modern ? 'supplemental' : 'legacy'
+  const { setup, patch } = foldAutomationSourceEdit(
+    current.agentId,
+    automationCanonicalLaunchSetup(current),
+    current.launchSetupPatch,
+    { kind, value }
+  )
   return {
     ...current,
     ...setup,
     extraAgentArgs: setup.extraAgentArgs ?? '',
     launchPreferences: setup.launchPreferences,
     agentArgs: setup.agentArgs,
-    launchSetupPatch: patch
+    launchSetupPatch: patch,
+    launchArgumentsInput: { kind, value }
   }
 }

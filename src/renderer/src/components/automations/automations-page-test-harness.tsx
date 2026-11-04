@@ -21,6 +21,7 @@ import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationListViewItem } from './automation-list-view'
 import { AutomationDestinationField } from './AutomationDestinationField'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import type { AutomationTemplate } from './automation-templates'
 import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 import {
   addRuntimeProject as addRuntimeProjectFixture,
@@ -79,6 +80,7 @@ export type EditorDialogProps = {
   onSave: () => void
   onProjectChange: (projectId: string) => void
   onDraftChange: (updater: (current: unknown) => unknown) => void
+  onApplyTemplate: (template: AutomationTemplate) => void
 }
 
 export type DeleteDialogProps = {

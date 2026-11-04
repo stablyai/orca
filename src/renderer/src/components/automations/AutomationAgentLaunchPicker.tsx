@@ -21,7 +21,10 @@ import type { AutomationAuthorityRef } from '../../../../shared/automation-owner
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { draftExtraAgentArgsNeedFreshSession } from './automation-draft-model'
-import { mergeExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
+import {
+  mergeExtraAgentArgs,
+  parseExtraAgentArgs
+} from '../../../../shared/automation-extra-agent-args'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import type { NewTabAgentMenuModel } from '@/components/tab-bar/new-tab-agent-menu-model'
@@ -32,12 +35,23 @@ import type { AutomationDraft } from './AutomationEditorDialog'
 import { pickAutomationLaunch, editAutomationLegacyDraft } from './automation-launch-draft'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
+function editsSupplementalArguments(draft: AutomationDraft, modern: boolean): boolean {
+  const input = draft.launchArgumentsInput
+  return (
+    modern &&
+    !(
+      input?.kind === 'legacy' &&
+      !parseExtraAgentArgs({ agent: draft.agentId, extraAgentArgs: input.value }).ok
+    )
+  )
+}
+
 function legacyArgumentsDraft(draft: AutomationDraft): AutomationDraft {
   return {
     ...draft,
     extraAgentArgs:
-      draft.launchSetupPatch?.arguments?.kind === 'legacy-extras'
-        ? draft.launchSetupPatch.arguments.value
+      draft.launchArgumentsInput?.kind === 'legacy'
+        ? draft.launchArgumentsInput.value
         : (automationLegacyArguments(draft.agentId, draft) ?? '')
   }
 }
@@ -82,8 +96,19 @@ export function AutomationAgentLaunchPicker({
         ? resolveHostCapabilities(state, `runtime:${authority.environmentId}`)
         : null
   const modern = capabilities?.includes(AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY) === true
-  const legacyDraft = modern ? draft : legacyArgumentsDraft(draft)
-  const showLegacyArguments = surface === 'terminal' && (!modern || Boolean(draft.extraAgentArgs))
+  const supplemental = editsSupplementalArguments(draft, modern)
+  const legacyDraft = supplemental
+    ? {
+        ...draft,
+        extraAgentArgs:
+          draft.launchArgumentsInput?.kind === 'supplemental'
+            ? draft.launchArgumentsInput.value
+            : draft.extraAgentArgs
+      }
+    : legacyArgumentsDraft(draft)
+  const showLegacyArguments =
+    surface === 'terminal' &&
+    (!modern || Boolean(draft.extraAgentArgs || draft.launchArgumentsInput))
   const model: NewTabAgentMenuModel = useMemo(
     () => ({
       ...(observation.model.state === 'settled'
@@ -196,13 +221,22 @@ export function AutomationAgentLaunchPicker({
           draft={legacyDraft}
           onDraftChange={(update) =>
             onDraftChange((current) => {
-              const visible = modern ? current : legacyArgumentsDraft(current)
+              const supplemental = editsSupplementalArguments(current, modern)
+              const visible = supplemental
+                ? {
+                    ...current,
+                    extraAgentArgs:
+                      current.launchArgumentsInput?.kind === 'supplemental'
+                        ? current.launchArgumentsInput.value
+                        : current.extraAgentArgs
+                  }
+                : legacyArgumentsDraft(current)
               const next = update(visible)
               if (next.extraAgentArgs === visible.extraAgentArgs) {
                 return { ...current, reuseSession: next.reuseSession }
               }
               return {
-                ...editAutomationLegacyDraft(current, next.extraAgentArgs, modern),
+                ...editAutomationLegacyDraft(current, next.extraAgentArgs, supplemental),
                 reuseSession: next.reuseSession
               }
             })
