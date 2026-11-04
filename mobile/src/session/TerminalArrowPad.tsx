@@ -85,6 +85,41 @@ export function TerminalArrowPad({
     onHoldChange(false)
   }
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || hot === null || typeof window === 'undefined') {
+      return
+    }
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const cleanupIfStuck = (): void => {
+      if (timer !== null) {
+        clearTimeout(timer)
+      }
+      timer = setTimeout(() => {
+        timer = null
+        if (dragRef.current !== null) {
+          end(null)
+        }
+      }, 0)
+    }
+    window.addEventListener('pointerup', cleanupIfStuck, true)
+    window.addEventListener('pointercancel', cleanupIfStuck, true)
+    window.addEventListener('touchend', cleanupIfStuck, true)
+    window.addEventListener('touchcancel', cleanupIfStuck, true)
+    window.addEventListener('mouseup', cleanupIfStuck, true)
+    window.addEventListener('blur', cleanupIfStuck)
+    return () => {
+      if (timer !== null) {
+        clearTimeout(timer)
+      }
+      window.removeEventListener('pointerup', cleanupIfStuck, true)
+      window.removeEventListener('pointercancel', cleanupIfStuck, true)
+      window.removeEventListener('touchend', cleanupIfStuck, true)
+      window.removeEventListener('touchcancel', cleanupIfStuck, true)
+      window.removeEventListener('mouseup', cleanupIfStuck, true)
+      window.removeEventListener('blur', cleanupIfStuck)
+    }
+  })
+
   const iconColor = (key: TerminalArrowKey) =>
     hot === key ? colors.textPrimary : colors.textSecondary
 
@@ -111,8 +146,8 @@ export function TerminalArrowPad({
         const localY = Number.isFinite(locationY) ? locationY : height / 2
         const side = sideAt(localX, localY, width, height)
         setHot(side)
-        onHoldChange(true)
         onPressStart(side)
+        onHoldChange(true)
       }}
       onResponderMove={(event) => {
         const drag = dragRef.current

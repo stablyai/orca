@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, ScrollView, Pressable } from 'react-native'
+import { Platform, View, Text, ScrollView, Pressable } from 'react-native'
 import {
   ChevronDown,
   Keyboard as KeyboardIcon,
@@ -109,7 +109,7 @@ export function MobileSessionAccessoryKeys({
       <ScrollView
         style={styles.keyScroll}
         horizontal
-        scrollEnabled={!padHeld}
+        scrollEnabled={Platform.OS === 'web' ? true : !padHeld}
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.keyScrollContent}
