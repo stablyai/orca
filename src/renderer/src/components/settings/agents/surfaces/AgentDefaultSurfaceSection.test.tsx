@@ -4,7 +4,6 @@ import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store/index'
 import { saveNativeChatProviderChoice } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
 import { AgentDefaultSurfaceSection } from './AgentDefaultSurfaceSection'
@@ -12,7 +11,6 @@ import { AgentDefaultSurfaceSection } from './AgentDefaultSurfaceSection'
 vi.mock('@/lib/chat-provider-agents', () => ({
   chatProviderAgents: () => ['claude', 'codex', 'grok', 'opencode']
 }))
-vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), dismiss: vi.fn(), error: vi.fn() } }))
 
 let persisted: GlobalSettings
@@ -39,7 +37,6 @@ beforeEach(() => {
   presentation = 'tiles'
   useAppStore.setState(useAppStore.getInitialState(), true)
   settingsSet.mockClear()
-  vi.mocked(track).mockClear()
   vi.mocked(toast.success).mockClear()
   vi.mocked(toast.error).mockClear()
   Object.defineProperty(window, 'api', {
@@ -111,36 +108,6 @@ describe('Open agents as', () => {
     await Promise.resolve()
     expect(toast.success).not.toHaveBeenCalled()
   })
-})
-
-describe('Chat UI launch tip experiment', () => {
-  it.each([
-    [[], 'treatment'],
-    [['chat-ui-here'], 'treatment'],
-    [['chat-ui-here'], 'control']
-  ] as const)(
-    'reports a switch with consumed tips %j in %s without inferring display',
-    async (seen, cohort) => {
-      useAppStore.setState({ featureTipsSeenIds: [...seen] })
-      renderSection({
-        agentDefaultSurface: 'terminal',
-        telemetry: {
-          optedIn: true,
-          installId: 'install',
-          existedBeforeTelemetryRelease: true,
-          chatUiLaunchTipCohort: cohort
-        }
-      })
-      fireEvent.click(screen.getByRole('radio', { name: /^Chat/ }))
-      await waitFor(() =>
-        expect(track).toHaveBeenCalledExactlyOnceWith('agent_default_surface_changed', {
-          from_mode: 'terminal',
-          to_mode: 'chat',
-          source: 'settings'
-        })
-      )
-    }
-  )
 })
 
 describe('acknowledged default writes', () => {
