@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driver-resources'
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
 

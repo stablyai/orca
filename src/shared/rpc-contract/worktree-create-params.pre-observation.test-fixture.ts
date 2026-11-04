@@ -6,7 +6,7 @@ import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { workspaceSourceSchema } from '../telemetry-events'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { sleepingAgentLaunchConfigSchema } from '../workspace-session-sleeping-agents'
-import { isTuiAgent } from '../tui-agent-config'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { LaunchSourceParam } from './launch-source-param'
 import {
   OptionalBoolean,

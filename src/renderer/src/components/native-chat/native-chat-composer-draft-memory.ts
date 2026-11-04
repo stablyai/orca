@@ -1,5 +1,5 @@
 import type { LoadBookkeeping } from './native-chat-composer-draft-load'
-import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch-picker-authority'
+import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import {
   currentDraftScope,
   captureLaunchDraftDestination,
@@ -7,7 +7,7 @@ import {
   nativeChatLaunchPromptDraftOwner,
   retainLaunchDraftSource
 } from './native-chat-launch-draft-source'
-import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 export {
   nativeChatLaunchPromptDraftOwner,
   nativeChatLaunchPromptDraftScopeKey,

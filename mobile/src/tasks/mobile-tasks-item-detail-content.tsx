@@ -167,7 +167,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                   onPress={() => void rerunGitHubChecks(actionItem, true)}
                 >
                   <Text style={styles.inlineSaveText}>
-                    {translate('tasks.itemDetailContent.rerunFailed', 'Rerun failed')}
+                    {translate('tasks.rerunUnsuccessful', 'Retry checks')}
                   </Text>
                 </Pressable>
                 <Pressable

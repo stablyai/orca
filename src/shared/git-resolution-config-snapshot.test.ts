@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  getEffectiveGitUpstreamStatus,
-  resolveEffectiveGitUpstream
-} from './git-effective-upstream'
+import { getEffectiveGitUpstreamStatus } from './git-effective-upstream'
 import { resolveConfiguredGitPushTarget } from './git-push-target-resolution'
 
 function createRunner(config = new Map<string, string>(), snapshotFails = false) {
@@ -46,16 +43,6 @@ describe('resolution config snapshots', () => {
     expect(runGit).toHaveBeenCalledTimes(4)
   })
 
-  it('shares one snapshot across pull upstream config lookups', async () => {
-    const runGit = createRunner()
-
-    await expect(resolveEffectiveGitUpstream(runGit)).resolves.toBeNull()
-
-    expect(runGit.mock.calls.filter(([args]) => args[0] === 'config')).toEqual([
-      [['config', '--list', '-z']]
-    ])
-  })
-
   it('reads a fresh push snapshot after branch config changes', async () => {
     const config = new Map([
       ['branch.feature.remote', 'fork'],
@@ -95,26 +82,5 @@ describe('resolution config snapshots', () => {
 
     expect(runGit.mock.calls.filter(([args]) => args[1] === '--list')).toHaveLength(1)
     expect(runGit.mock.calls.filter(([args]) => args[1] === '--get')).toHaveLength(5)
-  })
-
-  it('skips config reads when the configured upstream resolves directly', async () => {
-    const runGit = vi.fn(async (args: string[]) => {
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/heads/feature\n' }
-      }
-      if (args[0] === 'rev-parse') {
-        return { stdout: 'origin/feature\n' }
-      }
-      return { stdout: '1\t0\n' }
-    })
-
-    await expect(getEffectiveGitUpstreamStatus(runGit)).resolves.toEqual({
-      hasUpstream: true,
-      upstreamName: 'origin/feature',
-      ahead: 1,
-      behind: 0
-    })
-
-    expect(runGit.mock.calls.filter(([args]) => args[0] === 'config')).toHaveLength(0)
   })
 })

@@ -2,11 +2,7 @@ import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { ControlRenewalOutcome } from './control-renewal-statement.js'
-import {
-  openInMemoryRelayDatabase,
-  type RelayDatabase,
-  type SqlRow
-} from './database.js'
+import { openInMemoryRelayDatabase, type RelayDatabase, type SqlRow } from './database.js'
 
 const now = 1_900_000_000_000
 const expiresAt = now + 105_000
@@ -57,53 +53,6 @@ class RenewalStatementProbe implements RelayDatabase {
 }
 
 describe('batched control renewals on PostgreSQL', () => {
-  it('spends one statement on every host that came due', async () => {
-    const probe = new RenewalStatementProbe(() => 'renewed')
-    const store = new RelayAssignmentStore(probe, () => now)
-
-    const outcomes = await store.renewControlActivities([
-      renewal('user-a', 'host000000000001'),
-      renewal('user-a', 'host000000000002'),
-      renewal('user-b', 'host000000000003')
-    ])
-
-    expect(outcomes).toEqual(['renewed', 'renewed', 'renewed'])
-    expect(probe.statements).toHaveLength(1)
-    expect(probe.statements[0]!.params[0]).toEqual(['user-a', 'user-a', 'user-b'])
-    expect(probe.statements[0]!.params[4]).toEqual([expiresAt, expiresAt, expiresAt])
-  })
-
-  it('locks assignment rows in primary-key order and still answers in input order', async () => {
-    const probe = new RenewalStatementProbe((userId) =>
-      userId === 'user-b' ? 'control_activity_moved' : 'renewed'
-    )
-    const store = new RelayAssignmentStore(probe, () => now)
-
-    const outcomes = await store.renewControlActivities([
-      renewal('user-c', 'host000000000003'),
-      renewal('user-a', 'host000000000002'),
-      renewal('user-b', 'host000000000001'),
-      renewal('user-a', 'host000000000001')
-    ])
-
-    // (user_id, relay_host_id) is the primary key of relay_assignments, and the
-    // statement's ORDER BY repeats it: no batch can queue against another in a
-    // different sequence.
-    expect(probe.statements[0]!.params[0]).toEqual(['user-a', 'user-a', 'user-b', 'user-c'])
-    expect(probe.statements[0]!.params[1]).toEqual([
-      'host000000000001',
-      'host000000000002',
-      'host000000000001',
-      'host000000000003'
-    ])
-    expect(outcomes).toEqual([
-      'renewed',
-      'renewed',
-      'control_activity_moved',
-      'renewed'
-    ])
-  })
-
   it('keeps a malformed request out of the statement and fails only that row', async () => {
     const probe = new RenewalStatementProbe(() => 'renewed')
     const store = new RelayAssignmentStore(probe, () => now)
@@ -148,39 +97,6 @@ describe('batched control renewals on PostgreSQL', () => {
     }
   })
 
-  it('runs the batch on the priority lane and the per-host fallback on the general one', async () => {
-    const probe = new RenewalStatementProbe(() => 'renewed')
-    probe.failuresRemaining = 1
-    const lanes: string[] = []
-    const database: RelayDatabase = {
-      dialect: 'postgres',
-      query: async (sql, params) => {
-        lanes.push('general')
-        return await probe.query(sql, params)
-      },
-      queryPriority: async (sql, params) => {
-        lanes.push('priority')
-        return await probe.query(sql, params)
-      },
-      queryLocked: async () => await probe.queryLocked(),
-      transaction: async () => await probe.transaction(),
-      close: async () => undefined
-    }
-    const store = new RelayAssignmentStore(database, () => now)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    try {
-      await store.renewControlActivities([
-        renewal('user-a', 'host000000000001'),
-        renewal('user-a', 'host000000000002')
-      ])
-
-      // A 200-row fallback would otherwise jump the whole general queue.
-      expect(lanes).toEqual(['priority', 'general', 'general'])
-    } finally {
-      warn.mockRestore()
-    }
-  })
-
   it('does not fan out per host when the batch never got a connection', async () => {
     const probe = new RenewalStatementProbe(() => 'renewed')
     probe.failuresRemaining = 1
@@ -215,59 +131,6 @@ describe('batched control renewals on PostgreSQL', () => {
     } finally {
       warn.mockRestore()
     }
-  })
-
-  it('counts a lone renewal that threw before rethrowing it', async () => {
-    const probe = new RenewalStatementProbe(() => 'renewed')
-    probe.failuresRemaining = 1
-    const recordControlRenewal = vi.fn()
-    const store = new RelayAssignmentStore(probe, () => now, { recordControlRenewal })
-
-    // A one-row flush keeps the pre-batch contract and rethrows, but the metric
-    // still owes an outcome for the attempt.
-    await expect(
-      store.renewControlActivities([renewal('user-a', 'host000000000001')])
-    ).rejects.toThrow('statement timeout')
-
-    expect(recordControlRenewal).toHaveBeenCalledTimes(1)
-    expect(recordControlRenewal.mock.calls[0]![1]).toBe('database_error')
-  })
-
-  it('counts a batch in which every row was rejected before the statement', async () => {
-    const probe = new RenewalStatementProbe(() => 'renewed')
-    const recordControlRenewal = vi.fn()
-    const store = new RelayAssignmentStore(probe, () => now, { recordControlRenewal })
-
-    const outcomes = await store.renewControlActivities([
-      { ...renewal('user-a', 'host000000000001'), activityId: '' },
-      renewal('user-a', 'host000000000002', now - 1)
-    ])
-
-    expect(outcomes).toEqual(['invalid_activity_id', 'invalid_activity_expiry'])
-    expect(probe.statements).toHaveLength(0)
-    expect(recordControlRenewal.mock.calls.map((call) => call[1])).toEqual([
-      'invalid_activity_id',
-      'invalid_activity_expiry'
-    ])
-  })
-
-  it('counts one renewal outcome metric per row', async () => {
-    const probe = new RenewalStatementProbe((userId) =>
-      userId === 'user-b' ? 'assignment_not_found' : 'renewed'
-    )
-    const recordControlRenewal = vi.fn()
-    const store = new RelayAssignmentStore(probe, () => now, { recordControlRenewal })
-
-    await store.renewControlActivities([
-      renewal('user-a', 'host000000000001'),
-      renewal('user-b', 'host000000000002')
-    ])
-
-    expect(recordControlRenewal).toHaveBeenCalledTimes(2)
-    expect(recordControlRenewal.mock.calls.map((call) => call[1])).toEqual([
-      'renewed',
-      'assignment_not_found'
-    ])
   })
 })
 

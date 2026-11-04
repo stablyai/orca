@@ -4,9 +4,12 @@ import {
   type AgentTabActionId,
   type KeybindingOverrides
 } from '../../../shared/keybindings'
-import { ALL_TUI_AGENTS } from '../../../shared/tui-agent-display-names'
-import { normalizeDisabledTuiAgents, pickTuiAgent } from '../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import { ALL_TUI_AGENTS } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
+import {
+  normalizeDisabledTuiAgents,
+  pickTuiAgent
+} from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'
 import { loadDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import {

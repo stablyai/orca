@@ -88,6 +88,14 @@ function checksGate(checks: PRCheckDetail[], checksError: string | null): PrGate
           : null
     }
   }
+  if (summary.outcome === 'cancelled') {
+    return {
+      ...base,
+      tone: 'idle',
+      title: translate('pullRequest.checkStatus.cancelled', 'Cancelled'),
+      subtitle: summary.label
+    }
+  }
   if (summary.total === 0) {
     return {
       ...base,

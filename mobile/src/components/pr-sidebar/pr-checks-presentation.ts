@@ -1,12 +1,8 @@
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
-import type {
-  PRState,
-  ProviderCheckSummary
-} from '../../../../src/shared/github/pull-request-types'
+import type { PRState } from '../../../../src/shared/github/pull-request-types'
 import {
-  classifyCheckOutcome,
-  summarizeProviderChecks,
-  type CheckOutcome as SharedCheckOutcome
+  getProviderChecksOutcome,
+  summarizeProviderChecks
 } from '../../../../src/shared/provider-check-summary'
 import { prStateToken } from '../pr-state-token'
 import { translate } from '../../i18n/mobile-i18n'
@@ -22,17 +18,10 @@ export type MobileStatusToken =
   | 'textSecondary'
 
 export type CheckOutcome = 'success' | 'pending' | 'failure' | 'neutral'
+type CheckPresentationOutcome = CheckOutcome | 'cancelled'
 
-const OUTCOME_BY_SHARED: Record<SharedCheckOutcome, CheckOutcome> = {
-  passed: 'success',
-  failed: 'failure',
-  pending: 'pending',
-  neutral: 'neutral'
-}
-
-// Share desktop classifier: duplicate logic misclassified skipped as unresolved and action_required as pending.
-export function checkOutcome(check: PRCheckDetail): CheckOutcome {
-  return OUTCOME_BY_SHARED[classifyCheckOutcome(check)]
+export function checkOutcome(check: PRCheckDetail): CheckPresentationOutcome | 'none' {
+  return getProviderChecksOutcome(summarizeProviderChecks([check]))
 }
 
 export type PRChecksSummary = {
@@ -40,16 +29,9 @@ export type PRChecksSummary = {
   passed: number
   pending: number
   failed: number
-  outcome: CheckOutcome | 'none'
+  cancelled: number
+  outcome: CheckPresentationOutcome | 'none'
   label: string
-}
-
-const OUTCOME_BY_STATE: Record<ProviderCheckSummary['state'], CheckOutcome | 'none'> = {
-  success: 'success',
-  failure: 'failure',
-  pending: 'pending',
-  neutral: 'neutral',
-  none: 'none'
 }
 
 export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSummary {
@@ -59,13 +41,17 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
       passed: 0,
       pending: 0,
       failed: 0,
+      cancelled: 0,
       outcome: 'none',
       label: translate('pullRequest.prChecksPresentation.noChecks', 'No checks')
     }
   }
   // Counts and the worst-case rollup come from the shared summarizer; only the label wording is mobile's.
-  const { total, passed, pending, failed, neutral, state } = summarizeProviderChecks(checks)
-  const outcome = OUTCOME_BY_STATE[state]
+  const summary = summarizeProviderChecks(checks)
+  const { total, passed, pending, neutral } = summary
+  const cancelled = summary.cancelled ?? 0
+  const failed = summary.failed - cancelled
+  const outcome = getProviderChecksOutcome(summary)
   const parts: string[] = []
   if (failed > 0) {
     const count = failed
@@ -76,6 +62,9 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
             count
           })
     )
+  }
+  if (cancelled > 0) {
+    parts.push(`${cancelled} ${translate('pullRequest.checkStatus.cancelled', 'Cancelled')}`)
   }
   if (pending > 0) {
     const count = pending
@@ -110,6 +99,7 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
     passed,
     pending,
     failed,
+    cancelled,
     outcome,
     label: parts.join(' · ')
   }
@@ -122,7 +112,7 @@ export function prChecksSummaryLabel(summary: PRChecksSummary, checksError: stri
     : translate('pullRequest.prChecksPresentation.unavailable', 'Checks unavailable')
 }
 
-export function checkOutcomeToken(outcome: CheckOutcome | 'none'): MobileStatusToken {
+export function checkOutcomeToken(outcome: CheckPresentationOutcome | 'none'): MobileStatusToken {
   switch (outcome) {
     case 'success':
       return 'statusGreen'

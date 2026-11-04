@@ -1,7 +1,7 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { shallow } from 'zustand/shallow'
 import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
-import { memo, useCallback, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import AgentSettingsDialog, { restoreAgentSettingsInvoker } from './AgentSettingsDialog'
@@ -24,13 +24,15 @@ import {
   agentPickerDraft,
   type AgentPickerDraft,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
-import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { agentPickerPanelArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 
 /** Forms own selection and dispatch; rows and setup remain the same as the new-tab menu. */
 export const AgentLaunchPicker = memo(
   function AgentLaunchPicker({
     model,
+    entries: suppliedEntries,
+    triggerLabel,
     draftScope,
     worktreeId,
     value,
@@ -43,10 +45,13 @@ export const AgentLaunchPicker = memo(
     cli,
     children,
     onTriggerEnter,
+    onCatalogOpen,
     onOpenAgentSettings,
     onPick
   }: {
     model: NewTabAgentMenuModel
+    entries?: AgentPickerEntry[]
+    triggerLabel?: string
     draftScope?: object
     worktreeId?: string
     value?: AgentPickerDraft
@@ -60,6 +65,8 @@ export const AgentLaunchPicker = memo(
     cli?: boolean
     children?: ReactNode
     onTriggerEnter?: () => void
+    /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
+    onCatalogOpen?: (agent: AgentPickerEntry['agent']) => void
     onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
     onPick: (
       agent: AgentPickerEntry['agent'],
@@ -82,12 +89,19 @@ export const AgentLaunchPicker = memo(
     }, [onOpenAgentSettings])
     const [open, setOpen] = useState(false)
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
-    const entries = useAgentLaunchPickerInventory(
+    const observedEntries = useAgentLaunchPickerInventory(
       worktreeId,
       model,
-      open && !setupDisabled,
+      open && !setupDisabled && !suppliedEntries,
       selected ?? agent ?? undefined
     )
+    const entries = suppliedEntries ?? observedEntries
+    const catalogAgent = open && suppliedEntries ? (agent ?? undefined) : undefined
+    useEffect(() => {
+      if (catalogAgent) {
+        onCatalogOpen?.(catalogAgent)
+      }
+    }, [catalogAgent, onCatalogOpen])
     const entry = entries.find((entry) => entry.agent === agent)
     const draft = entry ? (value ?? draftForEntry?.(entry)) : undefined
     const choices = entry
@@ -126,8 +140,8 @@ export const AgentLaunchPicker = memo(
             >
               {agent ? <AgentIcon agent={agent} size={14} /> : null}
               <span className="min-w-0 flex-1 truncate text-left">
-                {agentLabel}
-                {agent && summary ? (
+                {triggerLabel ?? agentLabel}
+                {!triggerLabel && agent && summary ? (
                   <span className="text-muted-foreground"> · {summary}</span>
                 ) : null}
               </span>
@@ -153,7 +167,12 @@ export const AgentLaunchPicker = memo(
                 mode="select"
                 disabled={disabled}
                 setupDisabled={setupDisabled}
-                onSelectAgent={setSelected}
+                onSelectAgent={(agent) => {
+                  setSelected(agent)
+                  if (suppliedEntries) {
+                    onCatalogOpen?.(agent)
+                  }
+                }}
                 runLaunch={(row, draft, entry, surface) =>
                   onPick(
                     row.agent,

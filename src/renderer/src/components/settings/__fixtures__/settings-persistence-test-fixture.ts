@@ -11,7 +11,7 @@ import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
   type AgentLaunchSettingsMutation
-} from '../../../../../shared/agent-launch-settings'
+} from '../../../../../shared/agent-launch/choices/agent-launch-settings'
 
 const originalState = useAppStore.getState()
 const originalApi = window.api

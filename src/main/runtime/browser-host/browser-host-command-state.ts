@@ -1,7 +1,7 @@
 import {
   BROWSER_COMMAND_CACHE_MAX_BYTES,
   BROWSER_COMMAND_CACHE_MAX_BYTES_PER_PAGE
-} from '../../browser/browser-command-cache-bytes'
+} from '../../browser/client-hosts/commands/browser-command-cache-bytes'
 import type {
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult,

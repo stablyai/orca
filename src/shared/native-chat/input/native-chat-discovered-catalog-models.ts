@@ -8,7 +8,7 @@ import type {
   AgentSessionOptionCatalog,
   CatalogModel
 } from '../../agent-session/options/agent-session-option-catalog-types'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { CommitMessageModelCapability } from '../../commit-message-agent-spec'
 
 export type NativeChatModelDiscoveryResult =

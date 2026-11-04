@@ -3,12 +3,14 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RelayAgentHookServer } from './agent-hook-server'
-import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
+import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
-import type { probeAgentProcessPresence } from '../shared/agent-process-presence-probe'
+import type { probeAgentProcessPresence } from '../shared/agent-status/process/agent-process-presence-probe'
 
 const probe = vi.hoisted(() => vi.fn<typeof probeAgentProcessPresence>(async () => 'live'))
-vi.mock('../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe
+}))
 afterEach(() => probe.mockReset().mockResolvedValue('live'))
 
 it.each(['live', 'unverifiable', 'exited'] as const)(

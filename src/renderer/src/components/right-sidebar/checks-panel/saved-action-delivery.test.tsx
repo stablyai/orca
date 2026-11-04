@@ -1,5 +1,5 @@
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch/choices/agent-launch-settings'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { useChecksPanelCommentResolution } from './use-checks-panel-comment-resolution'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'

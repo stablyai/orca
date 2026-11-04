@@ -1,6 +1,6 @@
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
 import { USAGE_RUNTIME_CAPABILITIES } from './usage-history-rpc'
-import * as agentLaunchCapabilities from './agent-launch-runtime-capability'
+import * as agentLaunchCapabilities from './agent-launch/contracts/agent-launch-runtime-capability'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   AGENT_SESSION_RUNTIME_CAPABILITIES

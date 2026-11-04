@@ -242,10 +242,8 @@ afterEach(() => {
 it('refuses recovery overlap before initializing the browser provider or runtime', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-recovery-'))
   const maintenance = acquireProfileStateMaintenance(state.root)
-  const { startOrcad, parseArgs } = await import('./orcad-entry')
-  const commandArguments = await import('./orcad-command-arguments')
+  const { startOrcad } = await import('./orcad-entry')
   try {
-    expect(parseArgs).toBe(commandArguments.parseArgs)
     await expect(startOrcad({ noPairing: true, json: true })).rejects.toThrow()
     expect(state.browserProvider).not.toHaveBeenCalled()
     expect(state.rpcStarted).toBe(false)

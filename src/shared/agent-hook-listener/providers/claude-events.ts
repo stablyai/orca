@@ -1,9 +1,9 @@
-import type { ParsedAgentStatusPayload } from '../../agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
 import {
   heldTurnCountsAsFinished,
   isAgentStatusHeldOpenByChildWork
-} from '../../agent-lead-status-fold'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
 import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inventory'
 import {
   claudeRosterHasRestoredSnapshotSubagent,

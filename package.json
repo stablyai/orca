@@ -316,7 +316,7 @@
     "devalue": "6.0.3",
     "diff": "8.0.4",
     "dompurify": "3.4.17",
-    "electron": "43.8.4",
+    "electron": "43.8.6",
     "electron-builder": "26.15.3",
     "electron-vite": "^6.0.0",
     "emoji-picker-react": "^4.22.3",
@@ -396,7 +396,7 @@
   },
   "lint-staged": {
     "{*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}}": [
-      "oxlint",
+      "oxlint --no-error-on-unmatched-pattern",
       "oxlint --config config/oxlint-js-plugins.json",
       "ast-grep scan --config config/sgconfig.yml --min-severity warning",
       "oxlint --config config/oxlint-react-doctor.json",

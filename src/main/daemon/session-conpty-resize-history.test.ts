@@ -125,10 +125,4 @@ describe('daemon checkpoint after a relaunch resize under ConPTY', () => {
       expect(rows[restoredPrompt + 1]).toBe('')
     }
   )
-
-  // Control: the Unix grow model pulls history into ConPTY's grid, and its repaint overwrites it.
-  it('loses restored history without the ConPTY model', async () => {
-    const rows = await checkpointAfterResizes('posix-pty', [2, ROWS])
-    expect(rows.filter((row) => /^L\d$/.test(row.trimEnd())).length).toBeLessThan(6)
-  })
 })

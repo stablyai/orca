@@ -8,7 +8,7 @@ import {
 } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { _setWslCachesForTests } from '../../wsl/discovery/distro-catalog'
-import { acquireWatcherRemovalGate } from '../watcher-removal-gate'
+import { acquireWatcherRemovalGate } from '../../workspaces/removal/watcher-removal-gate'
 import { registerPtyHandlers } from './register-handlers'
 import { join } from 'node:path'
 import { getShellReadyWrapperRoot } from '../../providers/local-pty/local-pty-shell-ready-wrapper-root'

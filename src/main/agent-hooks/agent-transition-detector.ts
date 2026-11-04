@@ -1,5 +1,5 @@
-import { resolveAgentStatusWorktreeId } from '../../shared/agent-status-worktree-attribution'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import { resolveAgentStatusWorktreeId } from '../../shared/agent-status/identity/agent-status-worktree-attribution'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   agentPhaseTransition,
   hookRowAgentPhase,
@@ -8,7 +8,7 @@ import {
   titleAgentPhase,
   type AgentPhase,
   type AgentTransition
-} from '../../shared/agent-transitions'
+} from '../../shared/agent-status/lifecycle/agent-transitions'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import {
   getConnectionExecutionHostId,

@@ -20,8 +20,10 @@ import { bindOrcadStopTerminalAdmission } from './orcad-stop-terminal-admission'
 import type { OrcadHandle, OrcadOptions } from './orcad-start-contract'
 import { beginOrcadIdleExit, bindOrcadIdleShutdown } from './orcad-managed-idle-exit-host'
 import { orcadAutomationsKeepHostBusy, startOrcadAutomations } from './orcad-automations'
-import { changedAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
-import type { AiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+import {
+  changedAiVaultSearchSettings,
+  type AiVaultSearchSettings
+} from '../../shared/ai-vault-search-settings'
 import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 import { adoptWslHostLoginEnvironmentLogged } from './orcad-wsl-host-login-environment'
 import { installOrcadProcessErrorGuards } from './orcad-process-error-guards'
@@ -31,8 +33,7 @@ import { createOrcadStartupTiming } from './orcad-startup-timing'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from './orcad-restored-terminal-authority'
 import { installOrcadFeatureReadiness } from '../runtime/rpc/orcad-feature-readiness'
-
-export { parseArgs }
+import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 
 let closeOrcadObservability = (): Promise<void> => Promise.resolve()
 
@@ -94,7 +95,7 @@ async function startOrcadRuntime(
     await import('../daemon/daemon-session-scrollback-window')
   const { collectOrcadHealth } = await import('./orcad-health')
   const { agentHookServer } = await import('../agent-hooks/server')
-  const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
+  await import('../agent-hooks/managed-agent-hook-controls')
   const { agentHookRuntimeDeps } = await import('../agent-hooks/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/hook-status-session-tabs-republish')
@@ -107,9 +108,7 @@ async function startOrcadRuntime(
     await import('../ipc/filesystem/watcher-process/parcel-watcher-process')
 
   let paneGridsForShutdown: { flushPaneGrids(): Promise<void> | null } | null = null
-  let profileStoreForShutdown:
-    | { flushFinalOrThrowAsync(): Promise<void>; freezeWritesAsync(): Promise<void> }
-    | undefined
+  let profileStoreForShutdown: Parameters<typeof flushOrcadProfileStoreForShutdown>[0] | undefined
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
   // Cleanups run in reverse: RPC, then recovery and watchers, then the final flush; the daemon

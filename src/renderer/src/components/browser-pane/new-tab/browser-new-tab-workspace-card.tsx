@@ -1,3 +1,7 @@
+import {
+  getProviderChecksOutcome,
+  type CheckPresentationOutcome
+} from '../../../../../shared/provider-check-summary'
 import { useState } from 'react'
 import { ChevronRight, CircleDot, GitMerge, GitPullRequest } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -8,7 +12,6 @@ import { getReviewStateTone } from '@/components/github/review-state-presentatio
 import { workspaceAttachmentReferenceLabel } from '../../../../../shared/workspace-attachments'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { HostedReviewState } from '../../../../../shared/hosted-review'
-import type { CheckStatus } from '../../../../../shared/github/pull-request-types'
 import { ReviewIcon } from '../../sidebar/worktree-review-helpers'
 import { workspaceAttachmentLabel } from '../../sidebar/worktree-attachment-editing'
 import type { WorkspaceLinkedItemRow } from '../../sidebar/workspace-hover-attachments'
@@ -98,7 +101,11 @@ function LinkedItemRow({
     issue: (number) => `#${number}`,
     mr: (number) => `!${number}`
   })
-  const status = live ? reviewChecksLabel(live.status) : linkedTaskState(row)
+  const status = live
+    ? reviewChecksLabel(
+        live.status ? getProviderChecksOutcome(live.checksSummary, live.status) : undefined
+      )
+    : linkedTaskState(row)
   const reviewState = live?.state ? reviewStateLabel(live.state) : undefined
   return (
     <BrowserNewTabRow
@@ -172,7 +179,10 @@ function reviewStateLabel(state: HostedReviewState): string {
   return translate('browser.newTab.state.open', 'Open')
 }
 
-function reviewChecksLabel(status: CheckStatus | undefined): string | undefined {
+function reviewChecksLabel(status: CheckPresentationOutcome | undefined): string | undefined {
+  if (status === 'cancelled') {
+    return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+  }
   if (status === 'success') {
     return translate('browser.newTab.checks.passing', 'Checks passing')
   }

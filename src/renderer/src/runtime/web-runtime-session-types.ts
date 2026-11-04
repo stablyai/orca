@@ -6,9 +6,9 @@ import type {
   AgentLaunchPreferences,
   AgentPromptDelivery
 } from '../../../shared/agent-session/agent-session-host-authority'
-import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
+import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 export type WebRuntimeTerminalCreateOutcome =
   | { status: 'created' }

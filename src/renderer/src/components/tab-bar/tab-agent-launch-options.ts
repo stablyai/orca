@@ -1,15 +1,17 @@
-import {
-  searchAgentPickerSetups,
-  type AgentPickerDraft,
-  type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+import { searchAgentPickerSetups } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentPickerSetupIdentity } from '../agent/agent-launch-picker-drafts'
 import { rowLabel, rowId, chatUnavailableLabel } from './tab-agent-row-presentation'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { orderAgentLaunchPickerAgents } from '../../../../shared/agent-launch-picker-rows'
+import {
+  orderAgentLaunchPickerAgents,
+  type NewTabAgentMenuRow
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent

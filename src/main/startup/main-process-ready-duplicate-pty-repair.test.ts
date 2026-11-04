@@ -94,7 +94,7 @@ vi.mock('../runtime/rpc/dispatcher', () => ({ RpcDispatcher: class {} }))
 vi.mock('../browser/browser-manager', () => ({
   browserManager: { setBrowserGuestStateChangedListener: vi.fn(), setOffscreenTabOpener: vi.fn() }
 }))
-vi.mock('../browser/browser-client-page-automation-runtime', () => ({
+vi.mock('../browser/client-pages/execution/browser-client-page-automation-runtime', () => ({
   configureBrowserClientPageAutomationRuntime: vi.fn()
 }))
 vi.mock('../crash-reporting/process-gone-diagnostics', () => ({

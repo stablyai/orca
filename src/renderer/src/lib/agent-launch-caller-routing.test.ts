@@ -18,7 +18,7 @@ import {
 
 import type * as LaunchAdmissionModule from './agent-session/launch/structured-agent-session-launch-admission'
 import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
-import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 const store = createLaunchFunnelStore()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 const mockLaunchAgentInWebHostTab = vi.fn()

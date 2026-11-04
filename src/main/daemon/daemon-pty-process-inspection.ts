@@ -1,5 +1,5 @@
 import { PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION } from './daemon-protocol-version'
-import { isShellProcess } from '../../shared/agent-detection'
+import { isShellProcess } from '../../shared/shell-process-detection'
 import { DaemonPtyBufferSnapshots } from './daemon-pty-buffer-snapshots'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import {

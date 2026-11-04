@@ -7,6 +7,19 @@ import { normalizeAutoSaveDelayMs } from './editor-autosave'
 import { editorAutoSaveDueRecords } from './editor-autosave-due-records'
 import { releaseNonUtf8PausesWithoutDirtyTab } from './editor-non-utf8-autosave-pause'
 
+export function clearScheduledEditorAutoSave(
+  timers: Map<string, number>,
+  scheduledContent: Map<string, string>,
+  key: string
+): void {
+  const timerId = timers.get(key)
+  if (timerId !== undefined) {
+    window.clearTimeout(timerId)
+    timers.delete(key)
+  }
+  scheduledContent.delete(key)
+}
+
 export function createEditorAutoSaveScan(
   store: AppStoreApi,
   holds: AutoSaveHolds,
