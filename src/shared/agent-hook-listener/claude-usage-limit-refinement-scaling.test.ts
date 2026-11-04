@@ -22,15 +22,34 @@ vi.mock('node:fs', async (importOriginal) => {
   const fs = await importOriginal<typeof NodeFs>()
   return {
     ...fs,
-    readSync: vi.fn<typeof fs.readSync>((...args) => {
-      const bytes = fs.readSync(...args)
-      if (
-        new Error('quota reader operation counter').stack?.includes('readClaudeTerminalUsageLimit')
-      ) {
-        quotaReads.bytes += bytes
+    readSync: vi.fn(
+      (
+        fd: number,
+        buffer: NodeJS.ArrayBufferView,
+        offset: number | NodeFs.ReadSyncOptions = {},
+        length?: number,
+        position?: number | null
+      ) => {
+        const bytes =
+          typeof offset === 'number'
+            ? fs.readSync(
+                fd,
+                buffer,
+                offset,
+                length ?? buffer.byteLength - offset,
+                position ?? null
+              )
+            : fs.readSync(fd, buffer, offset)
+        if (
+          new Error('quota reader operation counter').stack?.includes(
+            'readClaudeTerminalUsageLimit'
+          )
+        ) {
+          quotaReads.bytes += bytes
+        }
+        return bytes
       }
-      return bytes
-    })
+    )
   }
 })
 afterEach(() => {

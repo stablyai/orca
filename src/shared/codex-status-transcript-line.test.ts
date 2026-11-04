@@ -83,11 +83,15 @@ it.each([10, 100])(
       stateStartedAt: 1,
       turnId: 'root'
     })
+    const payload = buildCodexChildDrivenStatusPayload(state, undefined, paneKey, {})
+    if (!payload) {
+      throw new Error('missing initial child payload')
+    }
     const original: AgentHookEventPayload = {
       paneKey,
       source: 'codex',
       connectionId: null,
-      payload: buildCodexChildDrivenStatusPayload(state, undefined, paneKey, {})
+      payload
     }
     reconcileCodexSubagentReviewer(transcript, childPath)
     appendFileSync(
@@ -99,6 +103,9 @@ it.each([10, 100])(
     try {
       const polled = pollCodexTranscriptStatus(state, original, {}, 'production')
       expect(polled).toBe(original)
+      if (!polled) {
+        throw new Error('missing polled child payload')
+      }
       expect(transcriptPollUpdate('codex', original, polled)).toBeUndefined()
       reconcileCodexSubagentReviewer(transcript, childPath)
       expect(parse).not.toHaveBeenCalled()
@@ -109,6 +116,9 @@ it.each([10, 100])(
         '{"type":"turn_context","payload":{"model":"gpt-6.1-sol","approvals_reviewer":"auto_review"}}\n'
       )
       const changed = pollCodexTranscriptStatus(state, original, {}, 'production')
+      if (!changed) {
+        throw new Error('missing changed child payload')
+      }
       expect(transcriptPollUpdate('codex', original, changed)).toBeDefined()
       expect(roster.get('child-0')?.model).toBe('gpt-6.1-sol')
       reconcileCodexSubagentReviewer(transcript, childPath)
