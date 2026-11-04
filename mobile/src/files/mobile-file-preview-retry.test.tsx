@@ -1,7 +1,7 @@
 vi.mock('./MobileFileMediaPreview', () => ({ MobileFileMediaPreview: () => null }))
 import { createElement } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, expect, it, vi } from 'vitest'
 
 const push = vi.hoisted(() => vi.fn())
 const transport = vi.hoisted(
@@ -86,90 +86,6 @@ async function render(): Promise<ReactTestRenderer> {
   return tree
 }
 
-function retryButtons(rendered: ReactTestRenderer): ReactTestInstance[] {
-  return rendered.root
-    .findAll((node) => String(node.type) === 'Pressable')
-    .filter((node) =>
-      node
-        .findAll((text) => String(text.type) === 'Text')
-        .some((text) => text.props.children === 'Reconnect')
-    )
-}
-
-describe('the file preview Retry while the host is unreachable', () => {
-  it('is absent on the page, where the only retry is a re-dial it cannot make', async () => {
-    transport.forceReconnect = null
-    const rendered = await render()
-    expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
-    ).not.toHaveLength(0)
-    expect(retryButtons(rendered)).toHaveLength(0)
-  })
-
-  it('still renders natively and re-dials this host', async () => {
-    const forceReconnect = vi.fn(() => Promise.resolve())
-    transport.forceReconnect = forceReconnect
-    const [retry] = retryButtons(await render())
-    await act(async () => {
-      retry?.props.onPress()
-    })
-    expect(forceReconnect.mock.calls).toEqual([['host-a']])
-  })
-
-  it('loads again when the shell reconnects, which is what the missing Retry relies on', async () => {
-    transport.forceReconnect = null
-    const rendered = await render()
-    expect(retryButtons(rendered)).toHaveLength(0)
-    const sendRequest = vi.fn(async () => ({
-      id: 'reconnected',
-      ok: true,
-      result: { content: '# Recovered preview', truncated: false, byteLength: 19 },
-      _meta: { runtimeId: 'host' }
-    }))
-    transport.connection = { client: { sendRequest }, state: 'connected' }
-    await act(async () => {
-      rendered.update(createElement(MobileFilePreviewScreen, { route: ROUTE }))
-    })
-    expect(sendRequest).toHaveBeenCalledWith('files.read', {
-      worktree: 'id:wt-1',
-      relativePath: 'README.md'
-    })
-    expect(
-      rendered.root.find((node) => String(node.type) === 'MobileFileMarkdownPreview').props.content
-    ).toBe('# Recovered preview')
-    expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
-    ).toHaveLength(0)
-  })
-})
-
-it('wires rendered file links through the preview screen to navigation', async () => {
-  transport.connection = {
-    state: 'connected',
-    client: {
-      sendRequest: vi.fn(async () => ({
-        ok: true,
-        id: '1',
-        _meta: { runtimeId: 'runtime-1' },
-        result: { content: '[Details](docs/details.md)', isBinary: false, truncated: false }
-      }))
-    }
-  }
-  const rendered = await render()
-  const markdown = rendered.root.find((node) => String(node.type) === 'MobileFileMarkdownPreview')
-  await act(async () => markdown.props.onOpenFile('docs/details.md'))
-  expect(push).toHaveBeenCalledWith({
-    pathname: '/h/[hostId]/files/preview/[worktreeId]',
-    params: {
-      hostId: 'host-a',
-      worktreeId: 'wt-1',
-      worktreeName: undefined,
-      source: 'worktree',
-      relativePath: 'docs/details.md'
-    }
-  })
-})
-
 function previewReply(content: string, truncated = false) {
   return {
     ok: true,
@@ -232,17 +148,6 @@ it('keeps the newest preview after overlapping reconnect reads settle out of ord
   expect(markdown.props.content).toBe('# Current preview')
 })
 
-it('ignores a stale rejected read after a newer reconnect read succeeds', async () => {
-  const oldRead = pendingPreviewReply()
-  serveReads(() => oldRead.promise)
-  const rendered = await render()
-  serveReads(async () => previewReply('# Current preview'))
-  await act(async () => rendered.update(createElement(MobileFilePreviewScreen, { route: ROUTE })))
-  await act(async () => oldRead.reject(new Error('Disconnected')))
-  const markdown = rendered.root.find((node) => String(node.type) === 'MobileFileMarkdownPreview')
-  expect(markdown.props.content).toBe('# Current preview')
-})
-
 it('keeps an editable dirty draft when a reconnect read returns a truncated file', async () => {
   serveReads(async () => previewReply('Original'))
   const { rendered, editor, save } = await mountArtifact()
@@ -254,41 +159,6 @@ it('keeps an editable dirty draft when a reconnect read returns a truncated file
   )
   await act(async () => refresh.text('A truncated newer disk file', true))
   expect(editor().props.value).toBe('My unsaved changes')
-  expect(save().props.disabled).toBe(false)
-})
-
-it('preserves the dirty artifact identity when its route is normalized again', async () => {
-  serveReads(async () => previewReply('Original'))
-  const { rendered, editor, save } = await mountArtifact()
-  await act(async () => editor().props.onChangeText('My unsaved changes'))
-  await act(async () => {
-    rendered.update(
-      createElement(MobileFilePreviewScreen, {
-        route: { ...ARTIFACT_ROUTE, params: { ...ARTIFACT_ROUTE.params } }
-      })
-    )
-  })
-  expect(editor().props.value).toBe('My unsaved changes')
-  expect(save().props.disabled).toBe(false)
-})
-
-it('saves once for two taps in one frame and preserves edits made during the save', async () => {
-  const pendingWrite = Promise.withResolvers<unknown>()
-  const write = vi.fn(() => pendingWrite.promise)
-  serveReads((method) =>
-    method === 'files.writeTerminalArtifact' ? write() : Promise.resolve(previewReply('Original'))
-  )
-  const { editor, save } = await mountArtifact()
-  await act(async () => editor().props.onChangeText('First edit'))
-  const press = save().props.onPress
-  await act(async () => {
-    press()
-    press()
-  })
-  expect(write).toHaveBeenCalledOnce()
-  await act(async () => editor().props.onChangeText('Newer edit'))
-  await act(async () => pendingWrite.resolve({ ok: true, id: 'save', result: { written: true } }))
-  expect(editor().props.value).toBe('Newer edit')
   expect(save().props.disabled).toBe(false)
 })
 

@@ -11,8 +11,8 @@ import type {
   AgentStatusEntry,
   AgentStatusState
 } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   PaletteLiveStatusProvider as ProductionPaletteLiveStatusProvider,
   PaletteRecentTabStatusDot,

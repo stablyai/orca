@@ -27,7 +27,6 @@ it('a pane tap moves the one input owner without dropping either stream or forwa
   const send = vi.fn(async (_handle: string, _text: string) => true)
   const focus = vi.fn()
   const unsubscribe = vi.fn()
-  const handles = new Set(['a', 'b'])
   let tap!: (handle: string) => void
   let change!: ReturnType<typeof useTerminalLiveInputCommit>['handleLiveInputChange']
   function Probe() {
@@ -68,8 +67,6 @@ it('a pane tap moves the one input owner without dropping either stream or forwa
       activeSessionTabTypeRef: { current: 'terminal' },
       connected: true,
       liveInputRef: { current: null },
-      liveInputTerminalHandles: handles,
-      liveInputTerminalHandlesRef: { current: handles },
       sendLiveTerminalInputRef: { current: send },
       setLiveInputCapture: vi.fn()
     })

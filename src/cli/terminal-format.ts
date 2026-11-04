@@ -1,4 +1,7 @@
-import { PTY_LIVE_NOTE, describeUnconfirmedCloseStop } from '../shared/pty-liveness-verdict'
+import {
+  PTY_LIVE_NOTE,
+  describeUnconfirmedCloseStop
+} from '../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { describeTerminalWaitBlockedReason } from '../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import type {

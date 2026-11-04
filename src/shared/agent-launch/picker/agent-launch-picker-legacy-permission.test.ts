@@ -10,7 +10,7 @@ import { agentPickerArgumentPermission } from './agent-launch-picker-permission'
 import { projectAgentLaunchProfile } from '../choices/agent-launch-profile'
 import '../../../main/native-chat/structured-agent-configured-args'
 import '../../../main/claude/structured/launch/claude-structured-launch-args'
-import '../../../main/codex/codex-structured-launch-args'
+import '../../../main/codex/structured/launch/codex-structured-launch-args'
 
 const settings = Object.freeze({
   agentPermissionDefault: 'ask' as const,

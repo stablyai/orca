@@ -12,6 +12,7 @@ import { MobileFileAddressToolbar } from '../components/MobileFileAddressToolbar
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { MobilePanZoomImage } from '../components/MobilePanZoomImage'
+import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { MobileSvgPreview } from '../components/MobileSvgPreview'
 import {
   MobileLoadErrorState,
@@ -115,56 +116,51 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       />
     )
   }
-  if (preview.kind === 'svg' && !preview.truncated) {
-    return (
+  if ((preview.kind === 'svg' || preview.kind === 'html') && !preview.truncated) {
+    const content = options.editable ? options.draftContent : preview.content
+    const notice =
+      options.editable && options.saveError ? (
+        <Text style={styles.previewSaveErrorText}>{options.saveError}</Text>
+      ) : null
+    const renderSource = () =>
+      options.editable ? (
+        <EditablePreviewSource {...options} />
+      ) : (
+        <View style={styles.codeContainer}>
+          <MobileFileAddressToolbar
+            path={options.relativePath || options.title}
+            showLineNumbers={options.showLineNumbers}
+            onToggleLineNumbers={options.onToggleLineNumbers}
+            content={preview.content}
+            truncated={false}
+            copyAccessibilityLabel={t('files.filePreviewBody.copyContent', 'Copy file content')}
+          />
+          <MobileFilePreviewSourceText
+            relativePath={options.relativePath}
+            content={preview.content}
+            truncated={false}
+            byteLength={preview.byteLength}
+            initialLine={options.lineColumn?.line}
+            initialLineSeq={options.initialLineSeq}
+            showLineNumbers={options.showLineNumbers}
+          />
+        </View>
+      )
+
+    return preview.kind === 'svg' ? (
       <MobileSvgPreview
-        // A writable artifact previews its unsaved draft, as desktop does.
-        markup={options.editable ? options.draftContent : preview.content}
+        markup={content}
         title={options.title}
-        notice={
-          options.editable && options.saveError ? (
-            <Text style={styles.previewSaveErrorText}>{options.saveError}</Text>
-          ) : null
-        }
-        renderSource={() =>
-          options.editable ? (
-            <EditablePreviewSource {...options} />
-          ) : (
-            <MobileFilePreviewSourceText
-              relativePath={options.relativePath}
-              content={preview.content}
-              truncated={false}
-              byteLength={preview.byteLength}
-              initialLine={options.lineColumn?.line}
-            />
-          )
-        }
+        notice={notice}
+        renderSource={renderSource}
       />
-    )
-  }
-  if (preview.kind === 'html') {
-    return options.editable ? (
-      <EditablePreviewSource {...options} />
     ) : (
-      <View style={styles.codeContainer}>
-        <MobileFileAddressToolbar
-          path={options.relativePath || options.title}
-          showLineNumbers={options.showLineNumbers}
-          onToggleLineNumbers={options.onToggleLineNumbers}
-          content={preview.content}
-          truncated={preview.truncated}
-          copyAccessibilityLabel="Copy file content"
-        />
-        <MobileFilePreviewSourceText
-          relativePath={options.relativePath}
-          content={preview.content}
-          truncated={preview.truncated}
-          byteLength={preview.byteLength}
-          initialLine={options.lineColumn?.line}
-          initialLineSeq={options.initialLineSeq}
-          showLineNumbers={options.showLineNumbers}
-        />
-      </View>
+      <MobileHtmlPreview
+        html={content}
+        initialMode={options.lineColumn?.line ? 'source' : 'preview'}
+        notice={notice}
+        renderSource={renderSource}
+      />
     )
   }
   if (options.editable) {

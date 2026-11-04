@@ -15,11 +15,11 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('../sidebar/preserved-branch-batch-toast', () => ({
+vi.mock('../sidebar/workspace-actions/deletion/preserved-branch-batch-toast', () => ({
   showPreservedBranchBatchToast: vi.fn()
 }))
 
-import { showPreservedBranchBatchToast } from '../sidebar/preserved-branch-batch-toast'
+import { showPreservedBranchBatchToast } from '../sidebar/workspace-actions/deletion/preserved-branch-batch-toast'
 
 async function settleBackgroundRemoval(): Promise<void> {
   for (let index = 0; index < 10; index += 1) {

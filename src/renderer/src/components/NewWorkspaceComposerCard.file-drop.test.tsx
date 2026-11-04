@@ -32,7 +32,9 @@ vi.mock('react-i18next', async (importOriginal) => ({
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
   useContextualTour: () => {}
 }))
-vi.mock('@/components/sidebar/AddRemoteHostDialog', () => ({ AddRemoteHostDialog: () => null }))
+vi.mock('@/components/sidebar/host-admission/ssh/AddRemoteHostDialog', () => ({
+  AddRemoteHostDialog: () => null
+}))
 vi.mock('./new-workspace/NewWorkspaceComposerProjectSection', () => ({
   NewWorkspaceComposerProjectSection: () => null
 }))

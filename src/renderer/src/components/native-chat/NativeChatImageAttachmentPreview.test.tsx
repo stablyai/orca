@@ -21,7 +21,7 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
 
-vi.mock('@/components/editor/useLocalImageSrc', () => ({
+vi.mock('@/components/editor/document-images/useLocalImageSrc', () => ({
   useLocalImageSrc: mocks.useLocalImageSrc
 }))
 

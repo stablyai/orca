@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab } from '../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { chatTabLayoutCommand, loadChatTabLayout } from './agent-session/agent-session-tab-layout'
 
 const WT = 'repo-1::/tmp/worktree-a'

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { ownedEditorFileId } from '../../shared/workspace-session/workspace-session-pane-ownership'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import {
   buildHeadlessMobileSessionEditorTabs,
   retireHeadlessEditorTab

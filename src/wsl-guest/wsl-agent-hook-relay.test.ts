@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RelayAgentHookServer } from './agent-hook-server'
-import { makePaneKey } from '../shared/stable-pane-id'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
 import {
   sanitizeWslHookInstanceKey,
   wslHookRelayEndpointDir,

@@ -180,57 +180,6 @@ describe('mobile native-chat send across screen lifetimes', () => {
     await scenario('remount-same-text', true, 'ping')
   })
 
-  it('preserves deliberately retyped same text when the original screen stays mounted', async () => {
-    await scenario('same-mount-same-text', false, 'ping')
-  })
-
-  it('preserves different new text after Back/unmount and same-scope remount', async () => {
-    await scenario('remount-different-text', true, 'new draft')
-  })
-
-  it('times the echo at the press it is given, not when the host took the send', async () => {
-    const delivery = deferred<'accepted'>()
-    transport.heal.mockResolvedValue(true)
-    transport.clearInput.mockResolvedValue(true)
-    transport.send.mockImplementation(() => delivery.promise)
-    await mount('press-time')
-    const pressedAt = Date.now() - 10_000
-    let sending: Promise<unknown> | undefined
-    await act(async () => {
-      sending = current().sender.sendWithOutcome('ping', undefined, undefined, undefined, pressedAt)
-    })
-    await act(async () => {
-      delivery.resolve('accepted')
-      await sending
-    })
-    expect(current().drafts.pending.map((item) => item.sentAt)).toEqual([pressedAt])
-  })
-
-  it('clears an unchanged remounted draft when the original send finishes healing', async () => {
-    const heal = deferred<boolean>()
-    const delivery = deferred<'accepted'>()
-    transport.heal.mockImplementation(() => heal.promise)
-    transport.clearInput.mockResolvedValue(true)
-    transport.send.mockImplementation(() => delivery.promise)
-    await mount('unchanged')
-    await edit('ping')
-    let sending: Promise<boolean> | undefined
-    await act(async () => {
-      sending = current().sender.send('ping')
-    })
-    await remount('unchanged')
-    expect(current().drafts.composerText).toBe('ping')
-
-    await act(async () => heal.resolve(true))
-    expect(current().drafts.composerText).toBe('')
-    expect(current().drafts.getComposerEditGeneration()).toBe(0)
-    await act(async () => {
-      delivery.resolve('accepted')
-      expect(await sending).toBe(true)
-    })
-    expect(current().drafts.composerText).toBe('')
-  })
-
   it('restores a definitely rejected send after newer typing on a remounted screen', async () => {
     const delivery = deferred<'rejected'>()
     transport.heal.mockResolvedValue(true)

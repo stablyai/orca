@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { HoveredWorkspaceDeleteTarget } from '../components/sidebar/hovered-workspace-delete'
+import type { HoveredWorkspaceDeleteTarget } from '../components/sidebar/workspace-actions/deletion/hovered-workspace-delete'
 import type { AppShortcutState, ShortcutDispatchInput } from './app-command-handlers'
 
 const mocks = vi.hoisted(() => ({
@@ -13,7 +13,7 @@ vi.mock('../store', () => ({
   useAppStore: Object.assign(vi.fn(), { getState: () => mocks.store })
 }))
 
-vi.mock('../components/sidebar/hovered-workspace-delete', () => ({
+vi.mock('../components/sidebar/workspace-actions/deletion/hovered-workspace-delete', () => ({
   deleteHoveredWorkspaceImmediately: mocks.deleteHoveredWorkspaceImmediately,
   resolveHoveredWorkspaceDeleteTarget: () => mocks.hoveredTarget
 }))

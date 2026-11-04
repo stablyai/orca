@@ -13,7 +13,7 @@ import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { HostCombobox } from '../../host-picker/HostCombobox'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { useSidebarHostScopeOptions } from '../../sidebar/use-sidebar-host-scope-options'
+import { useSidebarHostScopeOptions } from '../../sidebar/worktree-list/controls/use-sidebar-host-scope-options'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   buildHostScopeChoices,

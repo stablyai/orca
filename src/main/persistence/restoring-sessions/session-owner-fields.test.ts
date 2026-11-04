@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { deleteOwnerKeyedSessionFields } from './session-owner-fields'
 
 const REMOVED_OWNER_KEY = 'repo-1::/tmp/worktree-a'

@@ -6,8 +6,8 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
-import { buildSubagentChildRows } from '../sidebar/worktree-subagent-child-rows'
-import { hasSleepableWorkspaceActivity } from '../sidebar/workspace-lineage-menu-actions'
+import { buildSubagentChildRows } from '../sidebar/workspace-card/activity/worktree-subagent-child-rows'
+import { hasSleepableWorkspaceActivity } from '../sidebar/workspace-actions/context-menu/workspace-lineage-menu-actions'
 import { resolveAttention } from '../../../../shared/sidebar-list/smart-attention'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'

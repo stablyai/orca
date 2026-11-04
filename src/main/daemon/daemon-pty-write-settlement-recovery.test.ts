@@ -2,7 +2,7 @@ import type { Socket } from 'node:net'
 import { expect, it, vi } from 'vitest'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { writeNotifyWithSettlement } from './daemon-client-notify-settlement'
-import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { WriteSettlement } from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 it('preserves ambiguity when arming daemon recovery triggers a throwing listener', async () => {
   const adapter = new DaemonPtyAdapter({

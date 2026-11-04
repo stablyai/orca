@@ -20,9 +20,9 @@ import {
 } from '../../shared/agent-hook-listener/transport/agent-hook-spool'
 import { AgentHookServer, _internals } from './server'
 import { buildBody } from './server.test-fixtures'
-import { _internals as codexInternals } from '../codex/hook-service'
+import { _internals as codexInternals } from '../codex/hooks/installation/hook-service'
 import { getManagedScript as getClaudeManagedScript } from '../claude/hook-script'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { buildPosixHookSpoolLines } from './hook-stdin-contract'
 
 describe('agent hook spool', () => {

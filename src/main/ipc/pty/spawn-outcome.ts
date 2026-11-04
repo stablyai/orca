@@ -2,8 +2,8 @@ import {
   terminalExitError,
   terminalStartError,
   type TerminalStartFailure
-} from '../../../shared/terminal-start-failure'
-import { terminalAttachResult } from '../../../shared/terminal-attach-result'
+} from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import { terminalAttachResult } from '../../../shared/terminal/pty/lifecycle/terminal-attach-result'
 import type { AdoptStablePaneResult } from './ipc/spawn-types'
 import type { StartupCwdFallback } from '../../../shared/startup-cwd-fallback'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -24,7 +24,7 @@ export type PtySpawnOutcome = {
   }
 }
 
-export { provenSpawnResponse } from '../../../shared/terminal-spawn-response'
+import '../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
 
 export function requireAcceptedSpawn(
   outcome: PtySpawnOutcome,

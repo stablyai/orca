@@ -21,7 +21,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtE
 
 import { AgentHookServer, _internals } from './server'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 
 const PANE = makePaneKey('tab-lifecycle', '11111111-1111-4111-8111-111111111111')
 

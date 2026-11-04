@@ -54,7 +54,7 @@ import {
   parseOrcadStartupTimingLine,
   type OrcadStartupTimingReport
 } from '../../orcad/orcad-startup-timing-summary'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { ORCAD_LAUNCHER_FILENAME } from '../../../shared/orcad-artifacts'
 import { verifyWslOrcadIdentity } from './wsl-orcad-pairing-identity'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
