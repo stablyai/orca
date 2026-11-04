@@ -27,7 +27,7 @@ import {
 import { withRepoAiActionAgent } from './repository-source-control-ai-action-agent-draft'
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 
-import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control-action-recipe-match'
+import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control/ai/source-control-action-recipe-match'
 import { SourceControlActionAgentPicker } from '../../source-control/SourceControlActionAgentPicker'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
 import { SourceControlAiActionRecipeDefaults } from '../../source-control/SourceControlAiActionRecipeDefaults'
