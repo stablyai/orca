@@ -1522,6 +1522,7 @@
         "effortApplyFailed": "Could not apply effort {{value}}.",
         "effortPickerFailed": "Could not open the effort picker.",
         "goalObjectiveMissing": "Describe the goal after /goal.",
+        "goalMissing": "This chat has no goal yet. Set one with /goal followed by the objective.",
         "modelApplyFailed": "Could not apply model {{value}}.",
         "modelPickerFailed": "Could not open the model picker."
       },

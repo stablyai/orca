@@ -6,13 +6,13 @@ import {
   type NativeChatPickerState
 } from './use-native-chat-picker-state'
 import {
-  useNativeChatResumeCommand,
-  type NativeChatResumeCommand
-} from './use-native-chat-resume-command'
+  useNativeChatOrcaCommands,
+  type NativeChatOrcaCommands
+} from './use-native-chat-orca-commands'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 type PickerArgs = Parameters<typeof useNativeChatPickerState>[0]
-type ResumeArgs = Parameters<typeof useNativeChatResumeCommand>[0]
+type ResumeArgs = Parameters<typeof useNativeChatOrcaCommands>[0]
 
 export function useNativeChatComposerCommandPicker(
   args: Omit<
@@ -30,7 +30,7 @@ export function useNativeChatComposerCommandPicker(
        *  lists its workspace's skills. */
       mode?: 'edit' | 'launch'
     }
-): { picker: NativeChatPickerState; resume: NativeChatResumeCommand } {
+): { picker: NativeChatPickerState; resume: NativeChatOrcaCommands } {
   const { structuredTransport, editor, setNotice, mode, ...pickerArgs } = args
   const { agent, terminalTabId } = pickerArgs
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
@@ -56,7 +56,7 @@ export function useNativeChatComposerCommandPicker(
       ? { onPickerOpened: structuredTransport.refreshCommands }
       : {})
   })
-  const resume = useNativeChatResumeCommand({
+  const resume = useNativeChatOrcaCommands({
     structuredTransport,
     agent,
     terminalTabId,

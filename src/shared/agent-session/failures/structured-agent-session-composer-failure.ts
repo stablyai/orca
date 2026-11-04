@@ -1,6 +1,7 @@
 // One English table for composer command refusals: `error` stays English, desktop translates by code.
 export const STRUCTURED_COMPOSER_FAILURE_COPY = {
   goalObjectiveMissing: 'Describe the goal after /goal.',
+  goalMissing: 'This chat has no goal yet. Set one with /goal followed by the objective.',
   commandUnavailable:
     '/{{name}} is not available in chat sessions. Use the slash menu to see available commands.',
   commandTakesNoArguments: 'Use /{{name}} without arguments.',

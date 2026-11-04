@@ -65,7 +65,11 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'init', description: 'Create an AGENTS.md file' },
   { name: 'compact', description: 'Compact the conversation' },
   { name: 'plan', description: 'Switch to Plan mode' },
-  { name: 'goal', description: 'Set or view the goal' },
+  {
+    name: 'goal',
+    description: 'Set or view the goal',
+    argumentHint: '[objective|pause|resume|clear]'
+  },
   { name: 'agent', description: 'Switch the active agent thread' },
   { name: 'side', description: 'Start a side conversation' },
   { name: 'copy', description: 'Copy the last response as markdown' },

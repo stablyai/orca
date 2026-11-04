@@ -6,6 +6,9 @@ import type { AgentType } from '../../../../shared/agent-status/contracts/agent-
 import { isAiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { selectAiVaultPanelWorkspace } from '../right-sidebar/ai-vault/scope/ai-vault-panel-workspace'
 import { openAgentSessionHistoryModal } from '../right-sidebar/ai-vault/panel/agent-session-history-modal'
+import { getUsageProviderAccountsSectionId } from '../status-bar/usage-provider-settings-target'
+import { resolveAccountOwner } from '@/lib/wsl-host-account-owner'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import { findNativeChatTabOwnerWorktreeId } from './native-chat-file-link'
@@ -13,10 +16,14 @@ import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
+const NATIVE_CHAT_USAGE_COMMAND = 'usage'
+const CODEX_ACCOUNTS_SECTION_ID = getUsageProviderAccountsSectionId('codex') ?? undefined
 
-/** Replace the agent’s /resume catalog entry with Orca’s Session History command. */
-export function withNativeChatResumeCommand(
-  commands: readonly SlashCommandSuggestion[]
+/** Replace the agent’s /resume catalog entry with Orca’s Session History command, and give
+ *  Codex /usage, which its app-server cannot run from message text. */
+export function withNativeChatOrcaCommands(
+  commands: readonly SlashCommandSuggestion[],
+  agent: AgentType
 ): SlashCommandSuggestion[] {
   const resume: SlashCommandSuggestion = {
     name: NATIVE_CHAT_RESUME_COMMAND,
@@ -28,9 +35,22 @@ export function withNativeChatResumeCommand(
     orcaOwned: true
   }
   const at = commands.findIndex(({ name }) => name === NATIVE_CHAT_RESUME_COMMAND)
-  return at === -1
-    ? [...commands, resume]
-    : [...commands.slice(0, at), resume, ...commands.slice(at)]
+  const withResume =
+    at === -1 ? [...commands, resume] : [...commands.slice(0, at), resume, ...commands.slice(at)]
+  if (agent !== 'codex' || commands.some(({ name }) => name === NATIVE_CHAT_USAGE_COMMAND)) {
+    return withResume
+  }
+  return [
+    ...withResume,
+    {
+      name: NATIVE_CHAT_USAGE_COMMAND,
+      description: translate(
+        'components.native-chat.usageCommand.description',
+        'View account usage'
+      ),
+      orcaOwned: true
+    }
+  ]
 }
 
 /** Parse optional /resume search text using host command syntax; null for other drafts. */
@@ -42,9 +62,14 @@ export function parseNativeChatResumeDraft(draft: string): string | null {
   return draft.slice(firstToken.length).replace(/\s+/g, ' ').trim()
 }
 
-export type NativeChatResumeCommand = {
+/** Only a bare /usage is Orca's; text after it stays a message for the agent. */
+function isNativeChatUsageDraft(draft: string): boolean {
+  return draft.trim().toLowerCase() === `/${NATIVE_CHAT_USAGE_COMMAND}`
+}
+
+export type NativeChatOrcaCommands = {
   matchesDraft: (draft: string) => boolean
-  /** Opens Session History for a `/resume` draft; false means the draft is not Orca's. */
+  /** Runs an Orca command draft; false means the draft is not Orca's. */
   consume: (draft: string) => boolean
   /** Choosing the draft-leading Orca row runs it; mid-prompt it stays an ordinary completion. */
   interceptPick: <TItem extends NativeChatPickerItem>(
@@ -52,12 +77,15 @@ export type NativeChatResumeCommand = {
   ) => (item: TItem) => void
 }
 
-/** In a structured chat, `/resume [search]` opens its Session History and never reaches the agent. */
-export function useNativeChatResumeCommand(args: {
-  structuredTransport: Pick<NativeChatStructuredComposerTransport, 'worktreeId'> | undefined
+/** In a structured chat, `/resume [search]` opens its Session History and Codex `/usage` its
+ *  account usage; neither reaches the agent. */
+export function useNativeChatOrcaCommands(args: {
+  structuredTransport:
+    | Pick<NativeChatStructuredComposerTransport, 'worktreeId' | 'runtimeEnvironmentId'>
+    | undefined
   agent: AgentType
   terminalTabId: string
-  /** Picked skills still reach the agent, even when named resume. */
+  /** Picked skills still reach the agent, even when named like an Orca command. */
   picker: Pick<NativeChatPickerState, 'autocomplete' | 'isPickedSkill' | 'clearSkillOrigin'>
   editor: {
     textareaRef: RefObject<NativeChatComposerInput | null>
@@ -66,13 +94,15 @@ export function useNativeChatResumeCommand(args: {
     setActiveSuggestion: Dispatch<SetStateAction<number>>
   }
   setNotice: (notice: string | null) => void
-}): NativeChatResumeCommand {
+}): NativeChatOrcaCommands {
   const { structuredTransport, agent, terminalTabId } = args
   const { autocomplete, isPickedSkill, clearSkillOrigin } = args.picker
   const { textareaRef, setDraft, setCaret, setActiveSuggestion } = args.editor
   const { setNotice } = args
   const structured = structuredTransport !== undefined
   const structuredWorktreeId = structuredTransport?.worktreeId
+  const runtimeEnvironmentId = structuredTransport?.runtimeEnvironmentId ?? null
+  const hasUsage = structured && agent === 'codex'
 
   const open = useCallback(
     (search: string): void => {
@@ -123,20 +153,47 @@ export function useNativeChatResumeCommand(args: {
     ]
   )
 
+  const openUsage = useCallback((): void => {
+    const state = useAppStore.getState()
+    // The chat's host owns its Codex accounts, as the status bar's usage does for its workspace.
+    const { target } = resolveAccountOwner(
+      runtimeTargetForOwnerEnvironment(runtimeEnvironmentId),
+      state.runtimeEnvironments
+    )
+    state.openSettingsTarget({
+      pane: 'accounts',
+      repoId: null,
+      hostScope: target,
+      sectionId: CODEX_ACCOUNTS_SECTION_ID
+    })
+    state.openSettingsPage()
+    setDraft('')
+    setCaret(0)
+    setActiveSuggestion(0)
+    setNotice(null)
+  }, [runtimeEnvironmentId, setActiveSuggestion, setCaret, setDraft, setNotice])
+
   const matchesDraft = useCallback(
     (draft: string): boolean =>
-      structured && !isPickedSkill(draft) && parseNativeChatResumeDraft(draft) !== null,
-    [isPickedSkill, structured]
+      structured &&
+      !isPickedSkill(draft) &&
+      (parseNativeChatResumeDraft(draft) !== null || (hasUsage && isNativeChatUsageDraft(draft))),
+    [hasUsage, isPickedSkill, structured]
   )
   const consume = useCallback(
     (draft: string): boolean => {
       if (!matchesDraft(draft)) {
         return false
       }
-      open(parseNativeChatResumeDraft(draft) ?? '')
+      const search = parseNativeChatResumeDraft(draft)
+      if (search === null) {
+        openUsage()
+      } else {
+        open(search)
+      }
       return true
     },
-    [matchesDraft, open]
+    [matchesDraft, open, openUsage]
   )
 
   const interceptPick = useCallback(
@@ -146,13 +203,17 @@ export function useNativeChatResumeCommand(args: {
         // An explicit Orca command pick overrides an earlier same-named skill pick.
         if (leading && item.kind === 'command' && item.orcaOwned) {
           clearSkillOrigin()
+          if (item.name === NATIVE_CHAT_USAGE_COMMAND) {
+            openUsage()
+            return
+          }
           // The caret can sit right after `/resume` with a search already typed past it.
           open(parseNativeChatResumeDraft(textareaRef.current?.value ?? '') ?? '')
           return
         }
         pick(item)
       },
-    [autocomplete, clearSkillOrigin, open, textareaRef]
+    [autocomplete, clearSkillOrigin, open, openUsage, textareaRef]
   )
 
   return { consume, interceptPick, matchesDraft }

@@ -7,7 +7,7 @@ import type {
 } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import { nativeChatSessionSkills } from '../../../../shared/native-chat/input/native-chat-skill-visibility'
 import { structuredSessionSlashCommands } from '../../../../shared/agent-session/view/structured-agent-session-composer'
-import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
+import { withNativeChatOrcaCommands } from './use-native-chat-orca-commands'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 export type NativeChatComposerCatalog = {
@@ -27,13 +27,14 @@ export function useNativeChatComposerCatalog(
   const agentCommands = useMemo(
     () =>
       structured
-        ? withNativeChatResumeCommand(
+        ? withNativeChatOrcaCommands(
             structuredSessionSlashCommands(
               agent,
               conversationCommands,
               reported,
               compactInstructions
-            )
+            ),
+            agent
           )
         : getVerifiedNativeChatCommands(agent),
     [agent, compactInstructions, conversationCommands, reported, structured]
