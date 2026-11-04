@@ -234,6 +234,8 @@ export function normalizeHookTrustKeyForLookup(key: string): string {
   return normalizeCodexHookTrustLookupKey(key)
 }
 
+export { getTrustKeyWriteVariants as getHookTrustKeyWriteVariants }
+
 export function parseCodexProjectHeaderPath(line: string): string | null {
   return parseProjectTomlHeaderPath(line)
 }

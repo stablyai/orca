@@ -6,7 +6,11 @@ import {
   removeManagedCommands
 } from '../agent-hooks/installer-utils'
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
-import { upsertHookTrustEntries } from './config-toml-trust'
+import {
+  clearHookTrustKeySeparatorVariants,
+  resolveMirroredRuntimeUserHookTrustEntries
+} from './codex-mirrored-hook-runtime-trust'
+import { computeTrustKey, upsertHookTrustEntries } from './config-toml-trust'
 import { getCodexConfigTomlPath, getConfigPath, writeCodexHooksJson } from './codex-hook-definition'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
 import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
@@ -62,15 +66,29 @@ export async function refreshCodexRuntimeUserHooksExclusively(
 
   try {
     const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
-    const trustEntries = hookPlan.trustEntries.map(({ entry }) => entry)
     syncSystemConfigIntoManagedCodexHome({
       runtimeHomePath,
       systemHomePath: getSystemCodexHomePath()
     })
-    // Write current user hashes before stale cleanup removes managed trust with status hooks unavailable.
+    const trustEntries = await resolveMirroredRuntimeUserHookTrustEntries({
+      entries: hookPlan.trustEntries.map(({ entry }) => entry),
+      runtimeHomePath,
+      tomlPath
+    })
+    clearHookTrustKeySeparatorVariants(
+      tomlPath,
+      trustEntries.map((entry) => computeTrustKey(entry))
+    )
+    // Write runtime current hashes before stale cleanup removes managed trust with status hooks unavailable.
     upsertHookTrustEntries(tomlPath, trustEntries)
     removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
-    applyMirroredRuntimeUserHookTrustStates(tomlPath, hookPlan.trustEntries)
+    applyMirroredRuntimeUserHookTrustStates(
+      tomlPath,
+      hookPlan.trustEntries.map((item, index) => ({
+        entry: trustEntries[index] ?? item.entry,
+        enabled: item.enabled
+      }))
+    )
   } catch (error) {
     return {
       agent: 'codex',
