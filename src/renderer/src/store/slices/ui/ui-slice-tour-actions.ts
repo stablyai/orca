@@ -13,7 +13,8 @@ import {
 } from '../../../components/contextual-tours/contextual-tour-gate'
 import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
 
-// The session belongs to an unfinished action tour until it is seen (final tip shown or closed).
+// An unfinished action tour waits for the user to act, so it sits outside the one-tour-per-session
+// limit: it neither blocks other tours nor is blocked by them until it is seen (final tip shown or closed).
 export function isPausedActionTour(
   state: Pick<UISlice, 'contextualToursSeenIds'>,
   tourId: ContextualTourId | null
@@ -74,7 +75,8 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           sessionConsumed:
             options?.force !== true &&
             s.contextualTourSessionTourId !== null &&
-            s.contextualTourSessionTourId !== id,
+            s.contextualTourSessionTourId !== id &&
+            !isPausedActionTour(s, id),
           activeTourId: s.activeContextualTourId,
           activeModal: s.activeModal,
           blockingSurfaceVisible: s.contextualToursBlockingSurfaceVisible,
@@ -105,8 +107,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
             hasFeatureInteraction(s.featureInteractions, id),
           contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot,
           activeContextualTourSuppressed: false,
-          // A forced tour may show over a paused action tour, but must not take its session.
-          contextualTourSessionTourId: isPausedActionTour(s, s.contextualTourSessionTourId)
+          contextualTourSessionTourId: hasContextualTourActionStep(tour)
             ? s.contextualTourSessionTourId
             : id,
           lastCompletedContextualTourId: null
@@ -225,11 +226,8 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         if (!tourId || (id && activeTourId !== id)) {
           return s
         }
-        // A seen tour keeps the session; so does an unfinished action tour, which is only paused until
-        // the user finishes or closes it. An unshown informational attempt frees it for a retry.
-        const keepsSession =
-          s.contextualToursSeenIds.includes(tourId) ||
-          hasContextualTourActionStep(getContextualTour(tourId))
+        // An unshown attempt frees the session for a retry.
+        const alreadyShown = s.contextualToursSeenIds.includes(tourId)
         return {
           activeContextualTourId: null,
           activeContextualTourStepIndex: 0,
@@ -239,7 +237,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           activeContextualTourSuppressed: false,
           lastCompletedContextualTourId: null,
           contextualTourSessionTourId:
-            s.contextualTourSessionTourId === tourId && !keepsSession
+            s.contextualTourSessionTourId === tourId && !alreadyShown
               ? null
               : s.contextualTourSessionTourId
         }

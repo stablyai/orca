@@ -5,6 +5,7 @@ import {
   type FeatureInteractionState
 } from '../../../../shared/feature-interactions'
 import { useAppStore } from '@/store'
+import { isPausedActionTour } from '@/store/slices/ui/ui-slice-tour-actions'
 
 const TOUR_SOURCES = {
   'workspace-board': 'workspace_board_visible',
@@ -167,7 +168,9 @@ export function useContextualTour(
       contextualToursOnboardingVisible ||
       contextualToursBlockingSurfaceVisible ||
       activeContextualTourId !== null ||
-      (contextualTourSessionTourId !== null && contextualTourSessionTourId !== id) ||
+      (contextualTourSessionTourId !== null &&
+        contextualTourSessionTourId !== id &&
+        !isPausedActionTour({ contextualToursSeenIds }, id)) ||
       contextualToursSeenIds.includes(id)
     ) {
       return

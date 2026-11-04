@@ -139,11 +139,11 @@ describe('Split a terminal pane tip lifecycle', () => {
     expect(document.activeElement).toBe(terminalInput)
     terminalInput.remove()
 
-    // Another page's tour must not take the session while Split is unfinished.
+    // Another page's tips still show while Split is unfinished, and Split comes back afterwards.
     const tasksTarget = addTourTarget('tasks-source-filters', 300)
     renderSurfaces({ terminal: false, tasks: true })
     await settle()
-    expect(shownTip()).toBeNull()
+    expect(shownTip()).toBe('Choose the work source')
 
     tasksTarget.remove()
     renderSurfaces({ terminal: true, tasks: false })
@@ -215,7 +215,7 @@ describe('Split a terminal pane tip lifecycle', () => {
     const tasksTarget = addTourTarget('tasks-source-filters', 300)
     renderSurfaces({ terminal: false, tasks: true })
     await settle()
-    expect(shownTip()).toBeNull()
+    expect(shownTip()).toBe('Choose the work source')
 
     tasksTarget.remove()
     renderSurfaces({ terminal: true, tasks: false })

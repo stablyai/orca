@@ -74,7 +74,7 @@ export type UISliceContextual = {
   activeContextualTourWasFeaturePreviouslyInteracted: boolean
   contextualTourNavigationInteractionSnapshot: Partial<Record<ContextualTourId, boolean>>
   activeContextualTourSuppressed: boolean
-  // The one tour this app session may show; a paused tour keeps it until the user finishes or closes it.
+  // The one informational tour this app session may show; action tours sit outside this limit.
   contextualTourSessionTourId: ContextualTourId | null
   contextualToursOnboardingVisible: boolean
   contextualToursBlockingSurfaceVisible: boolean
