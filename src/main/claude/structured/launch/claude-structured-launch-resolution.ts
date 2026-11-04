@@ -39,6 +39,7 @@ import {
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
+const CLAUDE_ARTIFACT_ENV = 'CLAUDE_CODE_ARTIFACT'
 
 type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'> & {
   resolvePermissionModeInCli?: true
@@ -242,7 +243,9 @@ export function claudeStructuredLaunchPart(
           {
             ...base,
             // The turn translator relies on Claude's authoritative idle frame when no result arrives.
-            [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
+            [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1',
+            // SDK entrypoints hide Claude's Artifact tools unless this is set; a user value still wins.
+            [CLAUDE_ARTIFACT_ENV]: base[CLAUDE_ARTIFACT_ENV] ?? '1'
           },
           visuals?.visuals ?? null
         ),
