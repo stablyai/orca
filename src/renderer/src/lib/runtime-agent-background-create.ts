@@ -6,7 +6,7 @@ import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { LaunchAgentBackgroundSessionArgs } from './agent-background-session-contract'
 import type { AgentBackgroundLaunchHost } from './agent-background-session-launch-host'
-import { hostSupportsLaunchChoices } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
+import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -22,9 +22,11 @@ import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
 } from '@/runtime/agent-session-create-operation'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import {
+  callRuntimeRpc,
+  runtimeEnvironmentSupportsCapabilities
+} from '@/runtime/runtime-rpc-client'
 import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-runtime-capabilities'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
 
@@ -57,16 +59,11 @@ export async function createRuntimeAgentBackgroundTerminal(
 }
 
 export async function prepareRuntimeAgentBackgroundTerminal(environmentId: string) {
-  const complete = await runtimeEnvironmentSupportsCapability(
-    environmentId,
-    AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY
-  ).catch((error) => {
-    if (isRuntimeCompatBlockError(error)) {
-      throw error
-    }
-    return false
-  })
-  const capable = complete || (await hostSupportsLaunchChoices({ environmentId }))
+  const [complete, choices] = await runtimeEnvironmentSupportsCapabilities(environmentId, [
+    AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY,
+    AGENT_LAUNCH_CHOICES_CAPABILITY
+  ])
+  const capable = complete || choices
   return (args: RuntimeAgentBackgroundCreateArgs): Promise<{ terminal: RuntimeTerminalCreate }> =>
     createPreparedRuntimeAgentBackgroundTerminal(args, capable, complete)
 }

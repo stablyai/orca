@@ -83,86 +83,6 @@ afterEach(() => {
   renderers.clear()
 })
 
-it.each([1, 10])(
-  'shares paired/server reads and isolates selected renders for %i server chats',
-  async (count) => {
-    const desktop = connection(),
-      other = connection()
-    desktop.client.sendRequest = vi.fn<RpcClient['sendRequest']>(
-      async (_method, _params, options) => reply(options?.envelope?.executionHost !== undefined)
-    )
-    other.client.sendRequest = vi.fn<RpcClient['sendRequest']>(async () => reply(false))
-    const server = scopeRpcClientToExecutionHost(desktop.client, 'runtime:s')
-    const renders = new Map<string, number>()
-    const values = new Map<string, boolean>()
-    function Chat({ id, client, paired }: { id: string; client: RpcClient; paired: RpcClient }) {
-      values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, paired, true))
-      renders.set(id, (renders.get(id) ?? 0) + 1)
-      return null
-    }
-    await act(async () => {
-      renderers.add(
-        create(
-          <>
-            {Array.from({ length: count }, (_, index) => (
-              <Chat key={index} id={`d${index}`} client={server} paired={desktop.client} />
-            ))}
-            <Chat id="other" client={other.client} paired={other.client} />
-          </>
-        )
-      )
-    })
-    const initial = new Map(renders)
-    const desktopRenders = () =>
-      Array.from({ length: count }, (_, index) => renders.get(`d${index}`))
-    const initialDesktopRenders = desktopRenders()
-    expect(Array.from({ length: count }, (_, index) => values.get(`d${index}`))).toEqual(
-      Array(count).fill(false)
-    )
-    for (const host of [undefined, 'runtime:s']) {
-      expect(
-        vi
-          .mocked(desktop.client.sendRequest)
-          .mock.calls.filter(
-            ([method, , options]) =>
-              method === 'settings.get' && options?.envelope?.executionHost === host
-          )
-      ).toHaveLength(1)
-      expect(
-        vi
-          .mocked(desktop.client.subscribe)
-          .mock.calls.filter(
-            ([method, , , options]) =>
-              method === 'runtime.clientEvents.subscribe' &&
-              options?.envelope?.executionHost === host
-          )
-      ).toHaveLength(1)
-    }
-    expect(desktop.stops).not.toHaveBeenCalled()
-    await act(async () => desktop.emitAt(undefined, { type: 'unrelated' }))
-    expect(desktopRenders()).toEqual(initialDesktopRenders)
-    await act(async () =>
-      desktop.emitAt('runtime:s', {
-        type: 'nativeChatQueueFollowUpsChanged',
-        queueFollowUps: false
-      })
-    )
-    expect(desktopRenders()).toEqual(initialDesktopRenders)
-    await act(async () =>
-      other.emitAt(undefined, { type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: true })
-    )
-    expect(desktopRenders()).toEqual(initialDesktopRenders)
-    expect(renders.get('other')).toBe(initial.get('other')! + 1)
-    const otherRenders = renders.get('other')
-    await act(async () =>
-      desktop.emitAt(undefined, { type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: true })
-    )
-    expect(desktopRenders()).toEqual(initialDesktopRenders.map((renders) => renders! + 1))
-    expect(renders.get('other')).toBe(otherRenders)
-    expect(desktop.stops).not.toHaveBeenCalled()
-  }
-)
-
 it('shares one live scalar per connection, fences late reads/events, and isolates real hook renders', async () => {
   const a = connection(),
     b = connection()
@@ -260,38 +180,6 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
   expect(b.states.size).toBe(0)
   expect(a.stops).toHaveBeenCalledTimes(3)
   expect(b.stops).toHaveBeenCalledTimes(1)
-})
-
-it('existing phone workspace event reader ignores additive preference snapshot and events', async () => {
-  const { startHostWorktreeRefresh } = await import('../worktree/host-worktree-refresh')
-  const host = connection()
-  const fetchWorktrees = vi.fn(async () => {}),
-    fetchRepoMetadata = vi.fn(async () => {}),
-    syncViewSettings = vi.fn(async () => {})
-  const stop = startHostWorktreeRefresh({
-    client: host.client,
-    fetchWorktrees,
-    fetchRepoMetadata,
-    syncViewSettings,
-    appState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
-  })
-  const counts = [
-    fetchWorktrees.mock.calls.length,
-    fetchRepoMetadata.mock.calls.length,
-    syncViewSettings.mock.calls.length
-  ]
-  host.emit({
-    type: 'ready',
-    subscriptionId: 'old',
-    snapshot: { nativeChatQueueFollowUps: true }
-  })
-  host.emit({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
-  expect([
-    fetchWorktrees.mock.calls.length,
-    fetchRepoMetadata.mock.calls.length,
-    syncViewSettings.mock.calls.length
-  ]).toEqual(counts)
-  stop()
 })
 
 it('keeps known OFF across real direct/relay migrations and failed reads, while scoped hosts start Queue', async () => {

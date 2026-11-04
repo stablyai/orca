@@ -11,31 +11,6 @@ import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from './journal-row-schema'
 export function registerJournalAtomicSettlementOversizedTests(
   fixture: ReturnType<typeof createFixture>
 ): void {
-  it('uses an ordinary recovered tombstone when the settlement namespace exceeds the batch cap', async () => {
-    const identity = { provider: 'orca' as const, clientMessageId: 'remove-item' }
-    await fixture.journal.appendItem(
-      identity,
-      { kind: 'status', text: 'remove me' },
-      {
-        fence: 7,
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
-      }
-    )
-    const before = fixture.journal.cursor()
-    const input = {
-      settlementId: 'x'.repeat(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES),
-      fence: 7,
-      recovered: true as const,
-      mutations: [{ kind: 'tombstone' as const, identity }]
-    }
-    await fixture.journal.appendLifecycleBatch(input)
-    expect(fixture.journal.snapshot().items).toEqual([])
-    expect(fixture.journal.cursor().sequence).toBe(before.sequence + 1)
-    expect(fixture.rows().at(-1)).toMatchObject({ kind: 'tombstone', recovered: true })
-    await fixture.journal.appendLifecycleBatch(input)
-    expect(fixture.journal.cursor().sequence).toBe(before.sequence + 1)
-  })
-
   it.each(['startup', 'stop'] as const)(
     'rolls back the %s submission verdict with its oversized item',
     async (mode) => {

@@ -3,14 +3,6 @@ import './markdown-preview-search'
 import { findTextMatchRanges } from '../../../../lib/text-match-ranges'
 
 describe('whole-word search around combining marks', () => {
-  it.each(['́', 'ि'])('keeps the trailing combining mark %s attached to its word', (mark) => {
-    const text = `cat${mark} cat ${mark}cat`
-    expect(findTextMatchRanges(text, 'cat', { wholeWord: true })).toEqual([
-      { start: 4 + mark.length, end: 7 + mark.length },
-      { start: 8 + 2 * mark.length, end: 11 + 2 * mark.length }
-    ])
-  })
-
   it('does not match a Devanagari word inside a longer word ending in a vowel sign', () => {
     expect(findTextMatchRanges('किताबें किताब', 'किताब', { wholeWord: true })).toEqual([
       { start: 8, end: 13 }

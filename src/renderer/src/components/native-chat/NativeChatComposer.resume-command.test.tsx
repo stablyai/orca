@@ -53,10 +53,10 @@ vi.mock('../../store/index', () => {
   useAppStore.getState = () => state
   return { useAppStore }
 })
-vi.mock('../right-sidebar/ai-vault-panel-workspace', () => ({
+vi.mock('../right-sidebar/ai-vault/scope/ai-vault-panel-workspace', () => ({
   selectAiVaultPanelWorkspace: () => ({ worktree: { id: 'wt-1' }, repo: null })
 }))
-vi.mock('../right-sidebar/agent-session-history-modal', () => ({
+vi.mock('../right-sidebar/ai-vault/panel/agent-session-history-modal', () => ({
   openAgentSessionHistoryModal: mocks.openHistory
 }))
 vi.mock('./native-chat-runtime-send', () => ({

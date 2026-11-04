@@ -109,6 +109,76 @@ describe('background creation owning-host boundary', () => {
       expect(runtimeCall).toHaveBeenCalledTimes(1)
     }
   )
+  it('reports a failed observation and uses recovered host support on the next launch', async () => {
+    const status = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Host connection lost'))
+      .mockResolvedValue(createCompatibleRuntimeStatusResponse())
+    stubRuntimeEnvironmentBridge({
+      call: (request: { method: string }) =>
+        request.method === 'status.get' ? status() : runtimeCall(request)
+    })
+    runtimeCall.mockResolvedValue({ ok: true, result: { terminal: { handle: 'recovered' } } })
+    const legacy = vi.fn()
+    const args = {
+      environmentId: 'env-1',
+      worktreeId: 'wt-1',
+      tabId: 'tab',
+      leafId: 'leaf',
+      agent: 'claude' as const,
+      sessionOptions: { model: 'claude-opus-5-5[1m]' },
+      legacy
+    }
+    await expect(createRuntimeAgentBackgroundTerminal(args)).rejects.toThrow('Host connection lost')
+    expect(runtimeCall).not.toHaveBeenCalled()
+    await expect(createRuntimeAgentBackgroundTerminal(args)).resolves.toMatchObject({
+      terminal: { handle: 'recovered' }
+    })
+    expect(
+      runtimeCall.mock.calls.map(([request]) => [request.method, request.params.sessionOptions])
+    ).toEqual([['terminal.createAgentSession', { model: 'claude-opus-5-5[1m]' }]])
+    expect(legacy).not.toHaveBeenCalled()
+  })
+  it('keeps a persistent status failure distinct from an unsupported host', async () => {
+    const legacy = vi.fn()
+    stubRuntimeEnvironmentBridge({
+      call: async () => {
+        throw new Error('Host offline')
+      }
+    })
+    await expect(
+      createRuntimeAgentBackgroundTerminal({
+        environmentId: 'env-1',
+        worktreeId: 'wt-1',
+        tabId: 'tab',
+        leafId: 'leaf',
+        agent: 'claude',
+        sessionOptions: {},
+        legacy
+      })
+    ).rejects.toThrow('Host offline')
+    expect(legacy).not.toHaveBeenCalled()
+    expect(runtimeCall).not.toHaveBeenCalled()
+  })
+  it('does not launch a legacy duplicate after an ambiguous dispatch failure', async () => {
+    const legacy = vi.fn()
+    runtimeCall.mockRejectedValue(new Error('Connection lost after dispatch'))
+    await expect(
+      createRuntimeAgentBackgroundTerminal({
+        environmentId: 'env-1',
+        worktreeId: 'wt-1',
+        tabId: 'tab',
+        leafId: 'leaf',
+        agent: 'claude',
+        sessionOptions: {},
+        legacy
+      })
+    ).rejects.toThrow('Connection lost after dispatch')
+    expect(legacy).not.toHaveBeenCalled()
+    const operations = runtimeCall.mock.calls.map(([request]) => request.params.clientOperationId)
+    expect(operations[0]).toEqual(expect.any(String))
+    expect(new Set(operations).size).toBe(1)
+  })
   it.each(['method_not_found', 'agent_session_legacy_required'])(
     'never downgrades modern complete input after %s',
     async (code) => {

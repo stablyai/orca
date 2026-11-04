@@ -201,5 +201,49 @@ describe('orcad migration manifest contract', () => {
       launchPreferences: { model: null }
     })
     expect(legacyProjection).not.toHaveProperty('launchSetup')
+
+    for (const [reuseSession, extraAgentArgs] of [
+      [true, '--model opus'],
+      [false, '--legacy-dormant-text']
+    ] as const) {
+      const nestedChat = parseOrcadMigrationManifest(
+        manifest({
+          dormantState: {
+            ...dormantState,
+            automations: [
+              {
+                ...automation,
+                agentId: 'claude',
+                surface: undefined,
+                launchPreferences: undefined,
+                agentArgs: undefined,
+                reuseSession,
+                launchSetup: { surface: 'chat', extraAgentArgs }
+              }
+            ]
+          }
+        })
+      ).payload.dormantState?.automations?.[0]
+      expect(nestedChat).toMatchObject({ surface: 'chat', reuseSession, extraAgentArgs })
+      expect(nestedChat).not.toHaveProperty('launchSetup')
+    }
+    expect(() =>
+      parseOrcadMigrationManifest(
+        manifest({
+          dormantState: {
+            ...dormantState,
+            automations: [
+              {
+                ...automation,
+                agentId: 'claude',
+                launchPreferences: undefined,
+                agentArgs: undefined,
+                launchSetup: { surface: 'terminal', extraAgentArgs: '--resume x' }
+              }
+            ]
+          }
+        })
+      )
+    ).toThrow('orcad_migration_dormant_automation_extra_agent_args_invalid')
   })
 })
