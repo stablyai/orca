@@ -3,13 +3,16 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import {
   attachWebgl,
+  clearWebglTextureAtlas,
   primeTerminalWebglAddon,
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
 import { safeFit } from './pane-fit'
 import { disposePane } from './pane-lifecycle'
 
-function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
+function createPane(
+  options: { loadAddon?: (addon: WebglAddon) => void } = {}
+): ManagedPaneInternal {
   const leafId = '22222222-2222-4222-8222-222222222222' as never
   return {
     id: 1,
@@ -137,6 +140,94 @@ describe('terminal WebGL addon lifecycle', () => {
 
     expect(healthy.webglAddon).not.toBeNull()
     expect(healthy.webglAttachFailedSinceRecovery).not.toBe(true)
+  })
+
+  it('caps atlas texture size at 2048 and shrinks unused GPU texture slots on invalidate and clear', () => {
+    class FakeTextureAtlas {
+      static maxTextureSize = 16384
+      _config = { deviceMaxTextureSize: 16384 }
+      pages = [{ canvas: { width: 512, height: 512 }, version: 3 }]
+    }
+    const atlas = new FakeTextureAtlas()
+    const resizedSlots: { unit: number; width: number; height: number }[] = []
+    const textures = [
+      { texture: {}, version: 3 },
+      { texture: {}, version: 7 },
+      { texture: {}, version: 9 }
+    ]
+    let activeUnit = 0
+    const glyphRenderer = {
+      _atlas: atlas,
+      _atlasTextures: textures,
+      invalidateAtlasTextures(): void {
+        for (const entry of textures) {
+          entry.version = -1
+        }
+      }
+    }
+    let onRemovedCanvas: ((canvas: { width: number; height: number }) => void) | undefined
+    const pane = createPane({
+      loadAddon: (addon) => {
+        Object.assign(addon, {
+          onRemoveTextureAtlasCanvas: (
+            listener: (canvas: { width: number; height: number }) => void
+          ) => {
+            onRemovedCanvas = listener
+          },
+          _renderer: {
+            clearTextureAtlas: () => {},
+            _deviceMaxTextureSize: 16384,
+            _charAtlas: atlas,
+            _glyphRenderer: { value: glyphRenderer },
+            _gl: {
+              TEXTURE0: 0x84c0,
+              TEXTURE_2D: 0x0de1,
+              RGBA: 0x1908,
+              UNSIGNED_BYTE: 0x1401,
+              activeTexture: (unit: number) => {
+                activeUnit = unit - 0x84c0
+              },
+              bindTexture: () => {},
+              texImage2D: (
+                _target: number,
+                _level: number,
+                _internalformat: number,
+                width: number,
+                height: number
+              ) => {
+                resizedSlots.push({ unit: activeUnit, width, height })
+              }
+            }
+          }
+        })
+      }
+    })
+
+    attachWebgl(pane)
+
+    expect(FakeTextureAtlas.maxTextureSize).toBe(2048)
+    expect(atlas._config.deviceMaxTextureSize).toBe(2048)
+
+    const mergedCanvas = { width: 4096, height: 4096 }
+    onRemovedCanvas?.(mergedCanvas)
+    expect(mergedCanvas.width).toBe(0)
+    expect(mergedCanvas.height).toBe(0)
+
+    glyphRenderer.invalidateAtlasTextures()
+    expect(resizedSlots).toEqual([
+      { unit: 1, width: 1, height: 1 },
+      { unit: 2, width: 1, height: 1 }
+    ])
+
+    resizedSlots.length = 0
+    textures[0].version = 5
+    clearWebglTextureAtlas(pane)
+    expect(textures[0].version).toBe(-1)
+    expect(resizedSlots).toEqual([
+      { unit: 0, width: 1, height: 1 },
+      { unit: 1, width: 1, height: 1 },
+      { unit: 2, width: 1, height: 1 }
+    ])
   })
 })
 

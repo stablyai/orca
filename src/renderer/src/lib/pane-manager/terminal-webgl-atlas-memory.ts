@@ -1,0 +1,178 @@
+import type { WebglAddon } from '@xterm/addon-webgl'
+
+// Match BaseRenderLayer's 2048 cap so resize does not thrash charAtlasCache and Apple Silicon
+// MAX_TEXTURE_SIZE (16384) cannot merge pages into 1.33 GiB mipmapped RGBA textures (#38108).
+export const MAX_WEBGL_ATLAS_TEXTURE_SIZE = 2048
+const UNUSED_ATLAS_TEXTURE_PIXEL = new Uint8Array([255, 0, 0, 255])
+
+type AtlasWebglContext = {
+  readonly TEXTURE0?: number
+  readonly TEXTURE_2D?: number
+  readonly RGBA?: number
+  readonly UNSIGNED_BYTE?: number
+  activeTexture?: (texture: number) => void
+  bindTexture?: (target: number, texture: WebGLTexture | null) => void
+  texImage2D?: (
+    target: number,
+    level: number,
+    internalformat: number,
+    width: number,
+    height: number,
+    border: number,
+    format: number,
+    type: number,
+    pixels: ArrayBufferView | null
+  ) => void
+}
+
+type XtermTextureAtlas = {
+  constructor: {
+    maxTextureSize?: number
+  }
+  pages?: {
+    canvas: HTMLCanvasElement
+    version: number
+  }[]
+  _config?: {
+    deviceMaxTextureSize?: number
+  }
+}
+
+type XtermGlyphRenderer = {
+  _atlas?: XtermTextureAtlas
+  _atlasTextures?: {
+    texture: WebGLTexture
+    version: number
+  }[]
+  invalidateAtlasTextures?: () => void
+}
+
+type XtermWebglRendererInternals = {
+  _gl?: AtlasWebglContext
+  _deviceMaxTextureSize?: number
+  _charAtlas?: XtermTextureAtlas
+  _glyphRenderer?: {
+    value?: XtermGlyphRenderer
+  }
+}
+
+type XtermWebglAddonWithInternals = WebglAddon & {
+  onChangeTextureAtlas?: (listener: () => void) => unknown
+  onRemoveTextureAtlasCanvas?: (listener: (canvas: HTMLCanvasElement) => void) => unknown
+  _renderer?: XtermWebglRendererInternals
+}
+
+const patchedGlyphRenderers = new WeakSet<XtermGlyphRenderer>()
+
+function hasAddonInternals(
+  webglAddon: WebglAddon | null | undefined
+): webglAddon is XtermWebglAddonWithInternals {
+  return typeof webglAddon === 'object' && webglAddon !== null
+}
+
+function shrinkWebglAtlasTexturesFrom(
+  renderer: XtermWebglRendererInternals,
+  startIndex: number
+): void {
+  const gl = renderer._gl
+  const textures = renderer._glyphRenderer?.value?._atlasTextures
+  if (
+    !gl?.activeTexture ||
+    !gl.bindTexture ||
+    !gl.texImage2D ||
+    typeof gl.TEXTURE0 !== 'number' ||
+    typeof gl.TEXTURE_2D !== 'number' ||
+    typeof gl.RGBA !== 'number' ||
+    typeof gl.UNSIGNED_BYTE !== 'number' ||
+    !Array.isArray(textures)
+  ) {
+    return
+  }
+  for (let i = Math.max(0, startIndex); i < textures.length; i += 1) {
+    const entry = textures[i]
+    if (!entry) {
+      continue
+    }
+    entry.version = -1
+    gl.activeTexture(gl.TEXTURE0 + i)
+    gl.bindTexture(gl.TEXTURE_2D, entry.texture)
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      1,
+      1,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      UNUSED_ATLAS_TEXTURE_PIXEL
+    )
+  }
+}
+
+function capXtermWebglAtlasRenderer(renderer: XtermWebglRendererInternals): void {
+  if (
+    typeof renderer._deviceMaxTextureSize === 'number' &&
+    renderer._deviceMaxTextureSize > MAX_WEBGL_ATLAS_TEXTURE_SIZE
+  ) {
+    renderer._deviceMaxTextureSize = MAX_WEBGL_ATLAS_TEXTURE_SIZE
+  }
+  const atlas = renderer._charAtlas ?? renderer._glyphRenderer?.value?._atlas
+  if (
+    atlas?._config &&
+    typeof atlas._config.deviceMaxTextureSize === 'number' &&
+    atlas._config.deviceMaxTextureSize > MAX_WEBGL_ATLAS_TEXTURE_SIZE
+  ) {
+    atlas._config.deviceMaxTextureSize = MAX_WEBGL_ATLAS_TEXTURE_SIZE
+  }
+  if (
+    atlas &&
+    typeof atlas.constructor.maxTextureSize === 'number' &&
+    atlas.constructor.maxTextureSize > MAX_WEBGL_ATLAS_TEXTURE_SIZE
+  ) {
+    atlas.constructor.maxTextureSize = MAX_WEBGL_ATLAS_TEXTURE_SIZE
+  }
+  const glyphRenderer = renderer._glyphRenderer?.value
+  if (
+    glyphRenderer &&
+    typeof glyphRenderer.invalidateAtlasTextures === 'function' &&
+    !patchedGlyphRenderers.has(glyphRenderer)
+  ) {
+    patchedGlyphRenderers.add(glyphRenderer)
+    const originalInvalidate = glyphRenderer.invalidateAtlasTextures.bind(glyphRenderer)
+    glyphRenderer.invalidateAtlasTextures = () => {
+      originalInvalidate()
+      // render() only re-uploads 0..pages.length - 1; shrink higher slots after merges/evictions.
+      const activePages = (glyphRenderer._atlas ?? renderer._charAtlas)?.pages?.length ?? 0
+      shrinkWebglAtlasTexturesFrom(renderer, activePages)
+    }
+  }
+}
+
+export function boundXtermWebglAtlasMemory(webglAddon: WebglAddon): void {
+  if (!hasAddonInternals(webglAddon)) {
+    return
+  }
+  try {
+    webglAddon.onRemoveTextureAtlasCanvas?.((removedCanvas) => {
+      removedCanvas.width = 0
+      removedCanvas.height = 0
+    })
+    webglAddon.onChangeTextureAtlas?.(() => {
+      if (webglAddon._renderer) {
+        capXtermWebglAtlasRenderer(webglAddon._renderer)
+      }
+    })
+    if (webglAddon._renderer) {
+      capXtermWebglAtlasRenderer(webglAddon._renderer)
+    }
+  } catch {}
+}
+
+export function shrinkClearedWebglAtlasTextures(webglAddon: WebglAddon | null): void {
+  if (!hasAddonInternals(webglAddon) || !webglAddon._renderer) {
+    return
+  }
+  // Hidden panes do not redraw on clear; shrink every slot to 1x1 until reveal re-uploads page 0.
+  shrinkWebglAtlasTexturesFrom(webglAddon._renderer, 0)
+}

@@ -18,6 +18,10 @@ import {
   releaseWebglCanvasBackingWhileHidden,
   stopReleasingWebglCanvasBacking
 } from './terminal-webgl-hidden-canvas-release'
+import {
+  boundXtermWebglAtlasMemory,
+  shrinkClearedWebglAtlasTextures
+} from './terminal-webgl-atlas-memory'
 
 export { presentPaneViewport } from './pane-viewport-present'
 import {
@@ -180,6 +184,7 @@ export function clearWebglTextureAtlas(pane: ManagedPaneInternal): void {
   try {
     // TUI redraws can corrupt glyph atlases without context loss; clear and repaint on reveal/focus while retaining GPU rendering.
     pane.webglAddon?.clearTextureAtlas()
+    shrinkClearedWebglAtlasTextures(pane.webglAddon)
   } catch {}
 }
 
@@ -277,6 +282,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       disposeWebgl(pane, { refreshDimensions: true })
     })
     pane.terminal.loadAddon(addon)
+    boundXtermWebglAtlasMemory(addon)
     pane.webglAddon = addon
     const canvas = getXtermWebglCanvas(addon)
     if (canvas) {
