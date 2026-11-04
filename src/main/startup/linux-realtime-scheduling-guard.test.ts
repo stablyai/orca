@@ -65,6 +65,13 @@ describe('listProcessTree', () => {
     })
   })
 
+  it('reads threads in id order, whatever order the directory lists them in', () => {
+    // As text, '1000' sorts before '999'.
+    fakeThread(999, 999, '200 ')
+    fakeThread(999, 1000, '300 ')
+    expect(listProcessTree(999, procRoot).pids).toEqual([999, 200, 300])
+  })
+
   it('ignores processes that exited before their task dir was read', () => {
     fakeThread(100, 100, '200 ')
     expect(listProcessTree(100, procRoot)).toEqual({
