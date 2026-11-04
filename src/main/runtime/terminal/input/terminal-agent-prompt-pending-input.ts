@@ -45,9 +45,17 @@ export abstract class OrcaRuntimeWithPendingComposerInputGuard extends OrcaRunti
     assertWritable(signal)
   }
 
-  // Why: the paste lands wherever the composer cursor is, and Enter submits the whole
-  // row — a user's half-typed draft would ship glued to the prompt (#16289). Only a
-  // rendered draft refuses; an unreadable screen is unknown and never blocks a send.
+  /**
+   * Refuse the send when the target's composer already holds unsent text.
+   *
+   * The paste lands wherever the composer cursor is and Enter submits the whole row, so a
+   * user's half-typed draft would ship glued to the prompt (#16289). Only agents whose
+   * composer can be read are checked; a screen that cannot be read is unknown, never a
+   * refusal, so an unreadable host keeps working rather than blocking every send.
+   *
+   * @throws AgentPromptPendingInputError carrying the draft, for the caller to report as
+   * `refusedReason: 'pending-input'`.
+   */
   protected async assertNoPendingComposerInput(ptyId: string, signal?: AbortSignal): Promise<void> {
     const pty = this.ptysById.get(ptyId)
     // Why: the launch agent is stale once the user swaps agents in the pane.
@@ -61,8 +69,13 @@ export abstract class OrcaRuntimeWithPendingComposerInputGuard extends OrcaRunti
     }
   }
 
-  // Why: a provider frame is discarded when output advanced past it — which is exactly
-  // what a user's keystroke echo does — so retry briefly before giving up on evidence.
+  /**
+   * Read the composer's unsent text, or `null` when there is none to refuse over.
+   *
+   * A provider frame is discarded when output advanced past it — which is exactly what a
+   * user's keystroke echo does — so a pty served by provider snapshots retries briefly
+   * before giving up. Giving up returns `null`: absent evidence is not a draft.
+   */
   private async readComposerDraft(ptyId: string, signal?: AbortSignal): Promise<string | null> {
     const attempts = this.providerSnapshotPreferredPtys.has(ptyId)
       ? COMPOSER_DRAFT_READ_ATTEMPTS
