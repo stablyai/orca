@@ -4,9 +4,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { messages, Transcript } from './mobile-native-chat-turn-diff.test-fixture'
 import { MobileNativeChatTurnDiffRollup } from './MobileNativeChatTurnDiffRollup'
+import type * as TurnDiffRollupModule from './MobileNativeChatTurnDiffRollup'
 
 vi.mock('./MobileNativeChatTurnDiffRollup', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./MobileNativeChatTurnDiffRollup')>()
+  const actual = await importOriginal<typeof TurnDiffRollupModule>()
   return { ...actual, MobileNativeChatTurnDiffRollup: vi.fn(actual.MobileNativeChatTurnDiffRollup) }
 })
 

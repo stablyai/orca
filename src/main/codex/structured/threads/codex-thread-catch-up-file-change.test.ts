@@ -39,7 +39,7 @@ async function savedChange() {
 
 it('uses declined history status without losing the patch or resurrecting it on sparse enrichment', async () => {
   const f = await savedChange()
-  await f.c.open([f.source('declined')])
+  await f.c.open([], { returnedTurns: [f.source('declined')], paginate: false })
   expect(f.current().body).toMatchObject({
     kind: 'tool-call',
     name: 'Diff',
@@ -51,7 +51,7 @@ it('uses declined history status without losing the patch or resurrecting it on 
   expect(failed.kind === 'tool-call' && failed.output).toEqual(
     f.original.body.kind === 'diff' && f.original.body.patch
   )
-  await f.c.open([f.source()])
+  await f.c.open([], { returnedTurns: [f.source()], paginate: false })
   expect(f.current().body).toEqual(failed)
   expect(f.outcome()).toBeUndefined()
 })
@@ -60,7 +60,7 @@ it.each(['completed', undefined])(
   'retains the saved successful patch for sparse %s history',
   async (status) => {
     const f = await savedChange()
-    await f.c.open([f.source(status)])
+    await f.c.open([], { returnedTurns: [f.source(status)], paginate: false })
     expect(f.current().body).toEqual(f.original.body)
     expect(f.outcome()).toMatchObject({ added: 1, removed: 1 })
     expect(f.outcome()?.files.map((file) => file.path)).toEqual(['src/app.ts'])
@@ -70,10 +70,10 @@ it.each(['completed', undefined])(
 
 it('retains a sparse pending patch until a new import confirms its application', async () => {
   const f = await savedChange()
-  await f.c.open([f.source('inProgress')])
+  await f.c.open([], { returnedTurns: [f.source('inProgress')], paginate: false })
   expect(f.current().body).toMatchObject({ kind: 'tool-call', name: 'Diff', state: 'running' })
   expect(f.outcome()).toBeUndefined()
-  await f.c.open([f.source('completed')])
+  await f.c.open([], { returnedTurns: [f.source('completed')], paginate: false })
   expect(f.current().body).toEqual(f.original.body)
   const outcome = f.outcome()!
   expect(outcome).toMatchObject({ added: 1, removed: 1 })
