@@ -1,13 +1,10 @@
-import type { NativeChatEditFile } from '../../../../shared/native-chat/tools/native-chat-edit-model'
+import type { NativeChatEditFile } from './native-chat-edit-model'
 import type {
   NativeChatMessage,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from '../../../../shared/native-chat/native-chat-types'
-import {
-  buildDiffSummaries,
-  normalizedToolEditFiles
-} from '../../../../shared/native-chat/tools/native-chat-edit-cards'
+} from '../native-chat-types'
+import { buildEditSummaries, normalizedToolEditFiles } from './native-chat-edit-cards'
 
 export type NativeChatDiffTarget = {
   messageId: string
@@ -21,7 +18,7 @@ export type NativeChatDiffReveal = NativeChatDiffTarget & { requestId: number }
 
 export type NativeChatTurnDiffEdit = {
   call: NativeChatToolCallBlock
-  result: NativeChatToolResultBlock
+  result: NativeChatToolResultBlock | undefined
   fileIndex: number
   target: NativeChatDiffTarget
   order: number
@@ -61,11 +58,11 @@ export function nativeChatTurnDiffs(
   let editOrder = 0
   for (const [index, message] of messages.entries()) {
     const turnKey = turnKeys[index]
-    if (!turnKey || turnKey === partialTurnKey) {
+    if (!turnKey) {
       continue
     }
     const sections = subagentSectionsOf?.get(message.id)
-    for (const [call, edit] of buildDiffSummaries(message.blocks)) {
+    for (const [call, edit] of buildEditSummaries(message.blocks)) {
       let files = turns.get(turnKey)
       if (!files) {
         files = new Map()
@@ -119,9 +116,47 @@ export function nativeChatTurnDiffs(
           files,
           added: files.reduce((sum, file) => sum + file.added, 0),
           removed: files.reduce((sum, file) => sum + file.removed, 0),
-          truncated: files.some((file) => file.truncated)
+          truncated: key === partialTurnKey || files.some((file) => file.truncated)
         }
       ]
     })
+  )
+}
+
+export const NATIVE_CHAT_TURN_DIFF_FILE_LIMIT = 20
+
+/** Compare recorded inputs so unrelated streaming turns do not repaint existing outcome cards. */
+export function sameNativeChatTurnDiff(
+  left: NativeChatTurnDiff | undefined,
+  right: NativeChatTurnDiff | undefined
+): boolean {
+  return (
+    left === right ||
+    (!!left &&
+      !!right &&
+      left.added === right.added &&
+      left.removed === right.removed &&
+      left.truncated === right.truncated &&
+      left.files.length === right.files.length &&
+      left.files.every((file, index) => {
+        const other = right.files[index]!
+        return (
+          file.path === other.path &&
+          file.added === other.added &&
+          file.removed === other.removed &&
+          file.truncated === other.truncated &&
+          file.edits.length === other.edits.length &&
+          file.edits.every((edit, editIndex) => {
+            const candidate = other.edits[editIndex]!
+            return (
+              edit.call === candidate.call &&
+              edit.result === candidate.result &&
+              edit.fileIndex === candidate.fileIndex &&
+              edit.target.messageId === candidate.target.messageId &&
+              edit.target.editKey === candidate.target.editKey
+            )
+          })
+        )
+      }))
   )
 }

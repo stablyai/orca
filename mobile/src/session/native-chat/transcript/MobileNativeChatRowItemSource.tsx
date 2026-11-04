@@ -1,3 +1,5 @@
+import type { NativeChatTurnDiff } from '../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
+import { MobileNativeChatTurnDiffRollup } from './MobileNativeChatTurnDiffRollup'
 import { memo, useContext, useMemo, type ComponentProps } from 'react'
 import {
   MobileNativeChatItemSourceContext,
@@ -23,6 +25,7 @@ type Recovery = MobileNativeChatVisualSource & {
 }
 export type MobileNativeChatRowContentProps = ComponentProps<typeof MobileNativeChatMessage> & {
   scope: string
+  turnDiff?: NativeChatTurnDiff
   source: Recovery | null
 }
 
@@ -30,6 +33,7 @@ export type MobileNativeChatRowContentProps = ComponentProps<typeof MobileNative
 export const MobileNativeChatRowContent = memo(function MobileNativeChatRowContent({
   source,
   scope: _scope,
+  turnDiff,
   ...props
 }: MobileNativeChatRowContentProps) {
   const value = useMemo(() => {
@@ -50,6 +54,13 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   return (
     <MobileNativeChatItemSourceContext.Provider value={value}>
       <MobileNativeChatMessage {...props} />
+      {turnDiff ? (
+        <MobileNativeChatTurnDiffRollup
+          diff={turnDiff}
+          fontScale={props.fontScale ?? 1}
+          onOpenFile={props.onOpenFile}
+        />
+      ) : null}
     </MobileNativeChatItemSourceContext.Provider>
   )
 }, equalMobileNativeChatRowContent)
