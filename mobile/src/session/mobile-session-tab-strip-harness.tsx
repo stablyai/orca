@@ -66,7 +66,9 @@ export function mountMobileSessionTabStrip(
       worktreeName: 'workspace',
       bulkCloseConfirm: { visible: false },
       isFloatingWorkspaceRoute: true,
-      renameTarget: renameOpen ? { handle: 'term', title: 'rename', isActive: true } : null,
+      renameTarget: renameOpen
+        ? { handle: 'term', title: activeSessionTabId, isActive: true }
+        : null,
       activeSessionTabIdRef,
       activeHandleRef: { current: null },
       switchSessionTab: (tab: { id: string }) => setActiveSessionTabId(tab.id),

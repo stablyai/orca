@@ -21,14 +21,13 @@ import {
   SETTLE_SPRING
 } from '../sheet-motion-values'
 import {
+  TOP_SCROLL_EPSILON,
   bottomDrawerDismissMotion,
   bottomDrawerDragProgress,
   bottomDrawerOffset,
   bottomDrawerTravel,
   shouldDismissBottomDrawer
 } from './bottom-drawer-drag-motion'
-
-const TOP_SCROLL_EPSILON = 1
 
 /** The drawer's motion state: `progress` is its position (1 open), `fade` its opacity. */
 export type DrawerMotion = {
@@ -227,7 +226,10 @@ export function useBottomDrawerDrag(
         return
       }
       // Tall content scrolls back to its top before a downward drag takes the sheet.
-      if (scrollOffsetY.value > TOP_SCROLL_EPSILON) {
+      if (
+        scrollOffsetY.value > TOP_SCROLL_EPSILON ||
+        (!drag.dragging.value && e.translationY < 0)
+      ) {
         if (drag.dragging.value) {
           drag.settle(0)
         }
