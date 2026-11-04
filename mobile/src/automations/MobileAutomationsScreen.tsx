@@ -22,8 +22,10 @@ import { automationStyles as styles } from './automation-styles'
 export function MobileAutomationsScreen() {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const params = useLocalSearchParams<{ hostId?: string | string[] }>()
+  const params = useLocalSearchParams<{ hostId?: string | string[]; new?: string | string[] }>()
   const hostId = firstParam(params.hostId)
+  // Spent once the user picks another host, so switching back doesn't reopen the editor.
+  const [creating, setCreating] = useState(firstParam(params.new) === '1')
   const { client } = useHostClient(hostId)
   const { hostCapabilities } = useHostProtocolGates()
   const { servers, serverClients } = useReachableServerClients(client, hostCapabilities)
@@ -75,6 +77,7 @@ export function MobileAutomationsScreen() {
         key={`${hostId}:${authority}`}
         hostId={hostId}
         client={selectedClient}
+        startInEditor={creating}
         executionHost={
           authority === 'paired' ? undefined : (normalizeExecutionHostId(authority) ?? undefined)
         }
@@ -112,7 +115,10 @@ export function MobileAutomationsScreen() {
         title={t('automations.mobile.host', 'Host')}
         options={hostOptions}
         selected={authority}
-        onSelect={setAuthority}
+        onSelect={(next) => {
+          setCreating(false)
+          setAuthority(next)
+        }}
         onClose={() => setPickingHost(false)}
         searchable={hostOptions.length > 6}
       />

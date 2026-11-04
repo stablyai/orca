@@ -1,4 +1,4 @@
-import { CalendarClock, ChevronRight, ListTodo, type LucideIcon } from 'lucide-react-native'
+import { ChevronRight, ListTodo, type LucideIcon } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { PickerModal } from '../components/PickerModal'
@@ -25,23 +25,6 @@ export function MobileHomeTasksSection(props: HomeHostSectionProps) {
       title={t('home.sections.tasks', 'Tasks')}
       subtitle={t('home.sections.tasksSubtitle', 'Browse your issues and reviews')}
       pickerTitle={t('home.listFooter.hostPickerTitle', 'Open Tasks On')}
-    />
-  )
-}
-
-/** Home's Automations section, opening on a connected desktop. */
-export function MobileHomeAutomationsSection(props: HomeHostSectionProps) {
-  const t = useMobileTranslation()
-  return (
-    <HomeSection
-      {...props}
-      icon={CalendarClock}
-      title={t('home.listFooter.automationsHeading', 'Automations')}
-      subtitle={t(
-        'automations.mobile.scheduleAgentWorkAndViewRuns',
-        'Schedule agent work and view runs'
-      )}
-      pickerTitle={t('home.listFooter.automationsHostPickerTitle', 'Open Automations On')}
     />
   )
 }

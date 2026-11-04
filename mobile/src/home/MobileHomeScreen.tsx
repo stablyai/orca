@@ -1,5 +1,6 @@
-import { Fragment, useCallback, useState, type ReactElement } from 'react'
-import { Alert, ScrollView, View } from 'react-native'
+import { useFocusEffect } from 'expo-router'
+import { useCallback, useState } from 'react'
+import { Alert, BackHandler, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
@@ -8,7 +9,6 @@ import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
 import { hostRouteWithNotice } from '../host-route-notice'
-import { useResponsiveLayout } from '../layout/responsive-layout'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
@@ -28,32 +28,26 @@ import { loadHostCatalog } from '../transport/host-store'
 import type { HostCatalogEntry, HostProfile } from '../transport/types'
 import { useOpenMobileHostEdit } from '../transport/use-open-mobile-host-edit'
 import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
-import type { HomeJumpBackInRow } from '../worktree/home-jump-back-in'
+import { homeAgentNeedsYou, type HomeJumpBackInRow } from '../worktree/home-jump-back-in'
 import { isResumeTargetConfirmedMissing } from '../worktree/home-resume-card'
-import { MobileHomeAppUpdateCard } from './MobileHomeAppUpdateCard'
-import {
-  MobileHomeAutomationsSection,
-  MobileHomeTasksSection
-} from './MobileHomeTasksAndAutomations'
-import { MobileHomeAccountUsage } from './MobileHomeAccountUsage'
-import { MobileHomeBottomBar, MobileHomePairBar } from './MobileHomeBottomBar'
-import { MobileHomeEmptyState } from './MobileHomeEmptyState'
-import { MobileHomeHostList } from './MobileHomeHostList'
-import { MobileHomeJumpBackIn } from './MobileHomeJumpBackIn'
-import { MobileHomeStats } from './MobileHomeStats'
-import type { HomeSectionId } from './home-layout'
-import { MobileHomeArrangeSheet } from './MobileHomeArrangeSheet'
-import { useHomeLayout } from './use-home-layout'
-import { MobileHomeTopBar } from './MobileHomeTopBar'
-import { useMobileHomeData } from './use-mobile-home-data'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
+import { useMobileHomeData } from './use-mobile-home-data'
+import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
+import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
+import { MobileHomeFab } from './tabs/MobileHomeFab'
+import { MobileHomeFeedTab } from './tabs/MobileHomeFeedTab'
+import { MobileHomeSettingsTab } from './tabs/MobileHomeSettingsTab'
+import { MobileHomeTabBar } from './tabs/MobileHomeTabBar'
+import { MobileHomeUsageTab } from './tabs/MobileHomeUsageTab'
+
+// The floating button's height plus its gap above the tab bar.
+const FAB_CLEARANCE = 56 + spacing.lg
 
 export function MobileHomeScreen() {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const data = useMobileHomeData()
   const insets = useSafeAreaInsets()
-  const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const openMobileHostEdit = useOpenMobileHostEdit()
   const openMobileTasks = useOpenMobileTasks()
   const openMobileAutomations = useOpenMobileAutomations()
@@ -64,8 +58,30 @@ export function MobileHomeScreen() {
   const forceReconnectHost = useForceReconnect()
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
-  const { layout: homeLayout, saveLayout: saveHomeLayout } = useHomeLayout()
-  const [arranging, setArranging] = useState(false)
+  const [tab, setTab] = useState<HomeTabId>('feed')
+  // A tab mounts on first visit and then stays mounted, keeping its scroll and data.
+  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<HomeTabId>>(() => new Set(['feed']))
+  const [automationsHostId, setAutomationsHostId] = useState<string | null>(null)
+  const [tabBarHeight, setTabBarHeight] = useState(0)
+
+  const selectTab = useCallback((next: HomeTabId) => {
+    setTab(next)
+    setVisitedTabs((visited) => (visited.has(next) ? visited : new Set([...visited, next])))
+  }, [])
+
+  // Android Back from another tab returns to Feed before it leaves the app.
+  useFocusEffect(
+    useCallback(() => {
+      if (tab === 'feed') {
+        return undefined
+      }
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        selectTab('feed')
+        return true
+      })
+      return () => subscription.remove()
+    }, [selectTab, tab])
+  )
 
   const openWorktree = useCallback(
     (row: HomeJumpBackInRow) => {
@@ -131,126 +147,97 @@ export function MobileHomeScreen() {
   const actionTargetConnected =
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
 
-  const { stats } = data
-  // Null hides a section with nothing to show; `first` pulls the top one up under the bar.
-  const sections: Record<HomeSectionId, ((first: boolean) => ReactElement) | null> = {
-    jumpBackIn:
-      data.jumpBackInRows.length > 0
-        ? (first) => (
-            <MobileHomeJumpBackIn
-              rows={data.jumpBackInRows}
-              hosts={data.sortedHostCatalog}
-              first={first}
-              onOpen={openWorktree}
-            />
-          )
-        : null,
-    desktops: (first) => (
-      <MobileHomeHostList
-        autoConnectHostIds={data.autoConnectHostIds}
-        first={first}
-        hostAttempts={data.hostAttempts}
-        hostLastConnected={data.hostLastConnected}
-        hostConnections={data.hostConnections}
-        hosts={data.sortedHostCatalog}
-        hostStates={data.hostStates}
-        worktreeInfo={data.worktreeInfo}
-        onOpen={openHost}
-        onOpenActions={(host) => {
-          triggerMediumImpact()
-          openHostActions(host)
-        }}
-        onPairDesktop={pairDesktop}
-      />
-    ),
-    tasks: (first) => (
-      <MobileHomeTasksSection
-        connectedHosts={data.connectedHosts}
-        first={first}
-        onOpen={(hostId) => openMobileTasks(hostId)}
-      />
-    ),
-    automations: (first) => (
-      <MobileHomeAutomationsSection
-        connectedHosts={data.connectedHosts}
-        first={first}
-        onOpen={openMobileAutomations}
-      />
-    ),
-    stats: stats ? (first) => <MobileHomeStats stats={stats} first={first} /> : null,
-    accountUsage:
-      data.accountUsageRows.length > 0
-        ? (first) => (
-            <MobileHomeAccountUsage
-              rows={data.accountUsageRows}
-              nameDesktops={data.hostCatalog.length > 1}
-              first={first}
-              onOpen={openMobileAccounts}
-            />
-          )
-        : null
-  }
-  const visibleSections = (homeLayout?.order ?? []).flatMap((id) => {
-    const render = homeLayout?.hidden.includes(id) ? null : sections[id]
-    return render ? [{ id, render }] : []
-  })
   const paired = data.hostCatalogLoaded && data.hostCatalog.length > 0
+  const feedBadge = data.jumpBackInRows.filter(
+    (row) => !row.lastOpened && homeAgentNeedsYou(row.worktree.dotStatus)
+  ).length
+  const automationsHostConnected =
+    automationsHostId != null && data.hostStates[automationsHostId] === 'connected'
+  const fab =
+    tab === 'feed' && paired
+      ? {
+          label: t('home.bottomBar.newWorkspace', 'New workspace'),
+          disabled: data.connectedHosts.length === 0,
+          // A desktop still on its first connect would make the hint flash at launch.
+          hint: data.hostsConnecting
+            ? undefined
+            : t('home.bottomBar.connectFirst', 'Connect a desktop to start new work.'),
+          onPress: () =>
+            data.router.push(newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id)))
+        }
+      : tab === 'automations' && automationsHostId && automationsHostConnected
+        ? {
+            label: t('home.automationsTab.newAutomation', 'New automation'),
+            disabled: false,
+            hint: undefined,
+            onPress: () => openMobileAutomations(automationsHostId, { create: true })
+          }
+        : null
+  // The floating button covers the last row unless the list can scroll past it.
+  const contentBottom = spacing.xl + (fab ? FAB_CLEARANCE : 0)
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <MobileHomeTopBar
-        showBrand={!data.hostCatalogLoaded || data.hostCatalog.length > 0}
-        onOpenSettings={() => data.router.push('/settings')}
-        onArrange={paired && homeLayout ? () => setArranging(true) : undefined}
-        arrangeOpen={arranging}
+      <View style={styles.fill}>
+        {HOME_TABS.map((id) =>
+          visitedTabs.has(id) ? (
+            <View key={id} style={id === tab ? styles.fill : styles.hidden}>
+              {id === 'feed' ? (
+                <MobileHomeFeedTab
+                  data={data}
+                  bottomInset={contentBottom}
+                  onOpenWorktree={openWorktree}
+                  onOpenHost={openHost}
+                  onOpenHostActions={(host) => {
+                    triggerMediumImpact()
+                    openHostActions(host)
+                  }}
+                  onPairDesktop={pairDesktop}
+                  onOpenTasks={(hostId) => openMobileTasks(hostId)}
+                />
+              ) : id === 'usage' ? (
+                <MobileHomeUsageTab
+                  hosts={data.sortedHosts}
+                  connectedHosts={data.connectedHosts}
+                  hostStates={data.hostStates}
+                  accountsByHost={data.accountsByHost}
+                  stats={data.stats}
+                  bottomInset={contentBottom}
+                  onOpenAccounts={openMobileAccounts}
+                />
+              ) : id === 'automations' ? (
+                <MobileHomeAutomationsTab
+                  hosts={data.sortedHosts}
+                  connectedHosts={data.connectedHosts}
+                  hostStates={data.hostStates}
+                  bottomInset={contentBottom}
+                  onOpenAutomations={(hostId) => openMobileAutomations(hostId)}
+                  onHostChange={setAutomationsHostId}
+                />
+              ) : (
+                <MobileHomeSettingsTab bottomInset={contentBottom} />
+              )}
+            </View>
+          ) : null
+        )}
+      </View>
+      <MobileHomeFab
+        visible={fab != null}
+        disabled={fab?.disabled ?? false}
+        accessibilityLabel={fab?.label ?? ''}
+        disabledHint={fab?.hint}
+        bottom={tabBarHeight + spacing.lg}
+        onPress={() => fab?.onPress()}
       />
-      {!data.hostCatalogLoaded || (paired && !homeLayout) ? (
-        <View style={styles.fill} />
-      ) : data.hostCatalog.length === 0 ? (
-        <>
-          <MobileHomeEmptyState contentMaxWidth={contentMaxWidth} isWideLayout={isWideLayout} />
-          <MobileHomePairBar
-            bottomInset={insets.bottom}
-            contentMaxWidth={contentMaxWidth}
-            isWideLayout={isWideLayout}
-            onPairDesktop={pairDesktop}
-          />
-        </>
-      ) : (
-        <>
-          <ScrollView
-            contentContainerStyle={[
-              styles.content,
-              isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
-            ]}
-          >
-            {visibleSections.map(({ id, render }, index) => (
-              <Fragment key={id}>{render(index === 0)}</Fragment>
-            ))}
-            <MobileHomeAppUpdateCard />
-          </ScrollView>
-          <MobileHomeBottomBar
-            bottomInset={insets.bottom}
-            contentMaxWidth={contentMaxWidth}
-            isWideLayout={isWideLayout}
-            connectedHosts={data.connectedHosts}
-            hostsConnecting={data.hostsConnecting}
-            onCreateWorkspace={() =>
-              data.router.push(newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id)))
-            }
-          />
-        </>
-      )}
-      {homeLayout ? (
-        <MobileHomeArrangeSheet
-          visible={arranging}
-          layout={homeLayout}
-          onClose={(next) => {
-            saveHomeLayout(next)
-            setArranging(false)
-          }}
+      <View onLayout={(event) => setTabBarHeight(event.nativeEvent.layout.height)}>
+        <MobileHomeTabBar
+          tabs={HOME_TABS}
+          active={tab}
+          bottomInset={insets.bottom}
+          feedBadge={feedBadge}
+          onSelect={selectTab}
         />
-      ) : null}
+      </View>
       <ActionSheetModal
         visible={actionTarget != null}
         title={actionTarget?.name}
@@ -306,5 +293,5 @@ export function MobileHomeScreen() {
 const styles = themedStyleSheet(() => ({
   container: { flex: 1, backgroundColor: colors.bgBase },
   fill: { flex: 1 },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl }
+  hidden: { display: 'none' }
 }))

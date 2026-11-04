@@ -1,9 +1,11 @@
 import { ChevronRight } from 'lucide-react-native'
-import { Fragment } from 'react'
+import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import { AgentSpinner, agentStatusColors } from '../components/AgentSpinner'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useHostDisplay } from '../transport/use-host-display'
@@ -12,6 +14,7 @@ import type { HomeJumpBackInRow } from '../worktree/home-jump-back-in'
 import { agentStateLabel, type AgentDotState } from '../worktree/agent-row-display'
 import { homeListStyles as styles } from './home-list-styles'
 import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
+import { HOME_EASE_OUT } from './tabs/home-tabs'
 
 const LABEL_STATE: Partial<Record<WorktreeStatus, AgentDotState>> = {
   permission: 'waiting',
@@ -24,6 +27,9 @@ const LABEL_STATE: Partial<Record<WorktreeStatus, AgentDotState>> = {
 // Only states that ask something of the user take the dot's colour; running work stays quiet.
 const TINTED_STATUSES: ReadonlySet<WorktreeStatus> = new Set(['permission', 'failed', 'done'])
 
+// Enough to see what needs you without the list pushing Desktops off the first screen.
+const AGENT_ROWS_COLLAPSED = 5
+
 export function MobileHomeJumpBackIn(props: {
   rows: readonly HomeJumpBackInRow[]
   hosts: readonly HostCatalogEntry[]
@@ -32,20 +38,38 @@ export function MobileHomeJumpBackIn(props: {
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
+  const reducedMotion = useReducedMotionEnabled() === true
+  const [expanded, setExpanded] = useState(false)
   if (props.rows.length === 0) {
     return null
   }
   // One desktop needs no naming.
   const nameDesktops = props.hosts.length > 1
+  const collapsible = props.rows.length > AGENT_ROWS_COLLAPSED
+  const shown = expanded || !collapsible ? props.rows : props.rows.slice(0, AGENT_ROWS_COLLAPSED)
+  const activeCount = props.rows.filter((row) => !row.lastOpened).length
+  // Rows glide to their new place when an agent's state reorders the list.
+  const layout = reducedMotion ? undefined : LinearTransition.duration(220).easing(HOME_EASE_OUT)
+  const entering = reducedMotion ? undefined : FadeIn.duration(180)
   return (
     <>
       <MobileHomeSectionHeading
-        title={t('home.jumpBackIn.heading', 'Jump back in')}
+        title={t('home.agents.heading', 'Agents')}
+        aside={
+          activeCount > 0
+            ? t('home.agents.activeCount', '{{count}} active', { count: activeCount })
+            : undefined
+        }
         first={props.first}
       />
-      <View style={styles.group}>
-        {props.rows.map((row, index) => (
-          <Fragment key={`${row.hostId}:${row.worktree.worktreeId}`}>
+      <Animated.View style={styles.group} layout={layout}>
+        {shown.map((row, index) => (
+          <Animated.View
+            key={`${row.hostId}:${row.worktree.worktreeId}`}
+            layout={layout}
+            entering={entering}
+            exiting={reducedMotion ? undefined : FadeOut.duration(120)}
+          >
             {index > 0 ? <View style={styles.separator} /> : null}
             <JumpBackInRow
               row={row}
@@ -53,9 +77,26 @@ export function MobileHomeJumpBackIn(props: {
               nameDesktop={nameDesktops}
               onOpen={props.onOpen}
             />
-          </Fragment>
+          </Animated.View>
         ))}
-      </View>
+        {collapsible ? (
+          <Animated.View layout={layout}>
+            <View style={[styles.separator, styles.fullSeparator]} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              style={({ pressed }) => [styles.actionRow, pressed && styles.rowPressed]}
+              onPress={() => setExpanded((value) => !value)}
+            >
+              <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
+                {expanded
+                  ? t('home.agents.showFewer', 'Show fewer')
+                  : t('home.agents.showAll', 'Show all {{count}}', { count: props.rows.length })}
+              </Text>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+      </Animated.View>
     </>
   )
 }

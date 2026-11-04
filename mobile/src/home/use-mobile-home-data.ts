@@ -28,9 +28,10 @@ import { selectHomeJumpBackInRows } from '../worktree/home-jump-back-in'
 import { selectHomeResumeCard } from '../worktree/home-resume-card'
 import { fetchHomeHostStats } from '../stats/home-stats-summary-read'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
-import { selectHomeAccountUsageRows } from './home-account-usage-rows'
 import { projectHomeHostConnections } from './home-host-connection-projection'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
+
+export type MobileHomeData = ReturnType<typeof useMobileHomeData>
 
 export function useMobileHomeData() {
   const router = useRouter()
@@ -173,10 +174,6 @@ export function useMobileHomeData() {
   })
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
-  const accountUsageRows = useMemo(
-    () => selectHomeAccountUsageRows(connectedHosts, accountsByHost),
-    [connectedHosts, accountsByHost]
-  )
   const hostConnections = useMemo(
     () => projectHomeHostConnections(connections.allClients),
     [connections.allClients]
@@ -184,7 +181,7 @@ export function useMobileHomeData() {
 
   return {
     ...connections,
-    accountUsageRows,
+    accountsByHost,
     connectedHosts,
     hostCatalog,
     hostCatalogLoaded,
@@ -194,6 +191,7 @@ export function useMobileHomeData() {
     router,
     setHostCatalog,
     sortedHostCatalog,
+    sortedHosts,
     stats,
     worktreeInfo
   }

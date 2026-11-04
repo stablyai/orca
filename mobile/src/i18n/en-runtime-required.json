@@ -148,6 +148,10 @@
       "threadsWhenInSync_one": "Its GitHub comment shows here once this branch matches the pull request.",
       "threadsWhenInSync_other": "Its {{count}} GitHub comments show here once this branch matches the pull request."
     },
+    "hostCard": {
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
+    },
     "worktreeAgentList": {
       "hideChildAgents_one": "Hide {{count}} child agent",
       "hideChildAgents_other": "Hide {{count}} child agents",

@@ -739,6 +739,8 @@
     },
     "hostCard": {
       "hostActions": "「{{title}}」の操作",
+      "needsYou_one": "{{count}} 件が対応待ち",
+      "needsYou_other": "{{count}} 件が対応待ち",
       "openHost": "「{{title}}」を開く",
       "pairingInvalid": "ペアリングが無効",
       "pairingTemporarilyUnavailable": "ペアリングが一時的に利用できません",
@@ -1272,23 +1274,30 @@
     }
   },
   "home": {
-    "accountUsage": {
-      "heading": "アカウントの使用状況",
-      "sessionWindow": "5時間",
-      "systemDefault": "システムのデフォルト",
-      "weeklyWindow": "7日"
+    "agents": {
+      "activeCount": "{{count}} 件がアクティブ",
+      "heading": "Agent",
+      "showAll": "{{count}} 件をすべて表示",
+      "showFewer": "折りたたむ"
     },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
       "title": "Orca {{version}} が利用可能です",
       "updateAccessibilityLabel": "Orca {{version}} が利用可能です。タップして更新してください。"
     },
-    "arrange": {
-      "done": "完了",
-      "hint": "ドラッグして移動します。セクションをオフにすると非表示になります。",
-      "reset": "リセット",
-      "showSection": "{{section}}を表示",
-      "title": "ホームを並べ替え"
+    "automationsTab": {
+      "connectDesktop": "自動化を表示・実行するには、{{desktop}} に接続してください。",
+      "createHint": "+ をタップすると Agent の実行を予定できます。",
+      "emptyTitle": "Agent の作業を予定",
+      "lastStatus": "前回：{{status}}",
+      "newAutomation": "新しい自動化",
+      "noAutomations": "自動化はまだありません",
+      "pairDesktop": "自動化を表示・実行するには、デスクトップとペアリングしてください。",
+      "paused": "一時停止中",
+      "scheduled": "スケジュール実行",
+      "showFor": "自動化を表示するデスクトップ",
+      "toggleFailed": "{{name}} を更新できませんでした",
+      "updateDesktop": "自動化を使用するには、{{desktop}} の Orca を更新してください。"
     },
     "emptyState": {
       "connectedDescription": "デスクトップがここに表示されます。すべての通信はエンドツーエンドで暗号化されます。",
@@ -1300,9 +1309,7 @@
       "title": "デスクトップに接続"
     },
     "listFooter": {
-      "hostPickerTitle": "タスクを開くホスト",
-      "automationsHeading": "自動化",
-      "automationsHostPickerTitle": "オートメーションを開くホスト"
+      "hostPickerTitle": "タスクを開くホスト"
     },
     "listHeader": {
       "desktopsHeading": "デスクトップ"
@@ -1322,6 +1329,24 @@
       "hours": "{{hours}}時間",
       "minutes": "{{minutes}}分",
       "prsCreated": "作成された PR"
+    },
+    "tabs": {
+      "automations": "自動化",
+      "chooseDesktop": "{{desktop}}、別のデスクトップを選択",
+      "feed": "フィード",
+      "usage": "使用状況"
+    },
+    "usage": {
+      "active": "使用中",
+      "addAccounts": "デスクトップの「設定」→「アカウント」からアカウントを追加してください。",
+      "connectDesktop": "Agent アカウントの使用状況を表示するには、{{desktop}} に接続してください。",
+      "emptyTitle": "使用状況はまだありません",
+      "openAccountsHint": "このデスクトップのアカウントを開きます",
+      "pairDesktop": "Agent アカウントの使用状況を表示するには、デスクトップとペアリングしてください。",
+      "refresh": "使用状況を更新",
+      "showUsageFor": "使用状況を表示するデスクトップ",
+      "updatedAgo": "{{time}}前に更新",
+      "updatedJustNow": "たった今更新"
     }
   },
   "hooks": {
@@ -3907,7 +3932,6 @@
       "unknownResult": "不明な結果",
       "notReported": "未報告",
       "searchOptions": "オプションを検索",
-      "scheduleAgentWorkAndViewRuns": "Agentの作業を予定し、実行を確認",
       "task": "タスク",
       "review": "確認"
     },
