@@ -191,8 +191,8 @@ it.each([6, 60])('bounds retained menu work at %i chats', async (size) => {
   })
   expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
     'Quick Commands',
-    expect.stringContaining('Split Chat Right'),
-    expect.stringContaining('Split Chat Down'),
+    expect.stringContaining('Split Terminal Right'),
+    expect.stringContaining('Split Terminal Down'),
     'Copy Session ID',
     'Copy Orca Session ID',
     expect.stringContaining('Close tab')
@@ -203,7 +203,7 @@ it.each([6, 60])('bounds retained menu work at %i chats', async (size) => {
   expect(extra).toBeLessThanOrEqual(size * 2)
   expect(renders).toBe(opened)
   await new Promise((resolve) => setTimeout(resolve, 110))
-  fireEvent.click(screen.getByRole('menuitem', { name: /Split Chat Right/ }))
+  fireEvent.click(screen.getByRole('menuitem', { name: /Split Terminal Right/ }))
   expect(runNativeChatSplitTarget).toHaveBeenLastCalledWith(
     { kind: 'workspace-tab', unifiedTabId: 'chat-0', groupId: 'group-owner' },
     'right'
