@@ -1,6 +1,7 @@
 import {
   hasPendingClaudeUsageLimit,
-  isSameClaudeUsageLimitTurn
+  isSameClaudeUsageLimitTurn,
+  readClaudeUsageLimitRetrySignature
 } from '../shared/agent-hook-listener/claude-usage-limit-refinement'
 import { ClaudeHelperKillPoller } from '../shared/agent-hook-listener/providers/claude-helper-kill-poller'
 import { pollCodexTranscriptStatus } from '../shared/agent-hook-listener/providers/codex-transcript-poll'
@@ -180,7 +181,8 @@ export class AgentHookResultRetryScheduler {
     env?: string,
     version?: string,
     attempt = 1,
-    discoveryReady = false
+    discoveryReady = false,
+    quotaReadSignature?: string
   ): void {
     const quotaPending = hasPendingClaudeUsageLimit(source, body, original)
     if (
@@ -219,7 +221,8 @@ export class AgentHookResultRetryScheduler {
           env,
           version,
           attempt + 1,
-          discoveryReady
+          discoveryReady,
+          quotaReadSignature
         )
       } catch (err) {
         process.stderr.write(
@@ -240,7 +243,8 @@ export class AgentHookResultRetryScheduler {
     env: string | undefined,
     version: string | undefined,
     nextAttempt: number,
-    requireExactOriginal: boolean
+    requireExactOriginal: boolean,
+    quotaReadSignature?: string
   ): void {
     const current = this.host.state.lastStatusByPaneKey.get(original.paneKey)
     const quotaPending = hasPendingClaudeUsageLimit(source, body, original)
@@ -254,6 +258,20 @@ export class AgentHookResultRetryScheduler {
     ) {
       return
     }
+    const signature = quotaPending ? readClaudeUsageLimitRetrySignature(body) : undefined
+    if (signature !== undefined && signature === quotaReadSignature) {
+      this.scheduleAssistantMessageRetry(
+        source,
+        body,
+        original,
+        env,
+        version,
+        nextAttempt,
+        requireExactOriginal,
+        signature
+      )
+      return
+    }
     const event = normalizeHookPayload(this.host.state, source, body, this.host.env)
     const newText = !current.payload.lastAssistantMessage && event?.payload.lastAssistantMessage
     const newQuota = quotaPending && event?.payload.mainAgent?.usageLimit
@@ -265,7 +283,8 @@ export class AgentHookResultRetryScheduler {
         env,
         version,
         nextAttempt,
-        requireExactOriginal
+        requireExactOriginal,
+        signature
       )
       return
     }
@@ -287,7 +306,8 @@ export class AgentHookResultRetryScheduler {
         env,
         version,
         nextAttempt,
-        requireExactOriginal
+        requireExactOriginal,
+        signature
       )
     }
   }

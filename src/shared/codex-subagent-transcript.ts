@@ -14,7 +14,10 @@ import {
   type CodexTranscriptTurn
 } from './codex-turn-transcript'
 
-import { isCodexStatusTranscriptLine } from './codex-status-transcript-line'
+import {
+  isCodexLifecycleTranscriptLine,
+  isCodexStatusTranscriptLine
+} from './codex-status-transcript-line'
 import {
   reconcileCodexTerminalUsageLimit,
   type CodexTerminalUsageLimitTurn
@@ -301,7 +304,7 @@ export function reconcileCodexSubagentTranscript(
         entriesByDirectory
       )
     }
-    const records = readJsonlCursor(tracked, isCodexStatusTranscriptLine)
+    const records = readJsonlCursor(tracked, isCodexLifecycleTranscriptLine)
     changed ||= Boolean(records?.length)
     if (!records) {
       // Why: a rollout that never appears (or is deleted) has no completion event, so time-box it instead of leaking a working row.

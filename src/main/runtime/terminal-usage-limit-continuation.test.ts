@@ -2,10 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
-import {
-  createHookListenerState,
-  seedLegacyAgentStatusForTests
-} from '../../shared/agent-hook-listener/listener-state'
+import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
 import { terminalUsageLimitGuard } from '../../shared/agent-hook-listener/terminal-usage-limit-guard'
 import { reduceHostTurnEnd } from '../../shared/agent-hook-turn-end-timing'
 import { makePaneKey } from '../../shared/stable-pane-id'
@@ -20,6 +17,8 @@ import {
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../shared/native-chat/native-chat-usage-limit-cut'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type * as PluginHookDispatch from '../plugins/hooks/plugin-hook-dispatch'
+import { AgentHookServer, agentHookServer } from '../agent-hooks/server'
+import { TERMINAL_USAGE_LIMIT_METHODS } from './rpc/methods/terminal/terminal-usage-limit-method'
 
 vi.mock('../plugins/hooks/plugin-hook-dispatch', async (original) => ({
   ...(await original<typeof PluginHookDispatch>()),
@@ -33,6 +32,7 @@ const PROMPT = 'Continue carefully.'
 const runtimes: OrcaRuntimeService[] = []
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.clearAllTimers()
   vi.useRealTimers()
   for (const runtime of runtimes.splice(0)) {
@@ -192,82 +192,136 @@ it('rechecks owner after an asynchronous guest reply before handing off input', 
   expect(write).not.toHaveBeenCalled()
 })
 
-it('submits the owned failed root after an attributed child releases it', async () => {
-  const { runtime, write } = await setup()
-  const directory = mkdtempSync(join(tmpdir(), 'orca-root-dispatch-'))
-  try {
-    const path = join(directory, 'transcript.jsonl')
-    const sessionId = '44444444-4444-4444-8444-444444444444'
-    const promptId = '33333333-3333-4333-8333-333333333333'
-    const paneKey = makePaneKey(
-      '11111111-1111-4111-8111-111111111111',
-      '22222222-2222-4222-8222-222222222222'
-    )
-    writeFileSync(
-      path,
-      `${[
-        {
-          type: 'user',
-          sessionId,
-          promptId,
-          uuid: 'user',
-          parentUuid: null,
-          isSidechain: false,
-          message: { content: 'Finish' }
-        },
-        {
-          type: 'assistant',
-          sessionId,
-          uuid: 'quota',
-          parentUuid: 'user',
-          isSidechain: false,
-          apiError: 'usage_limit_reached',
-          error: 'rate_limit'
-        }
-      ]
-        .map((row) => JSON.stringify(row))
-        .join('\n')}\n`
-    )
-    const state = createHookListenerState()
-    const accept = (payload: Record<string, unknown>) => {
-      const event = normalizeHookPayload(
-        state,
-        'claude',
-        {
-          paneKey,
-          payload: {
-            session_id: sessionId,
-            prompt_id: promptId,
-            transcript_path: path,
-            ...payload
+it.each(
+  [10, 100].flatMap((panes) =>
+    (['settle', 'refuse', 'abort'] as const).map((outcome) => ({ panes, outcome }))
+  )
+)(
+  'retires an attributed root action on $outcome with $panes unrelated panes',
+  async ({ panes, outcome }) => {
+    const { runtime, write } = await setup('claude', outcome === 'refuse' ? 'Unsent draft' : '')
+    const directory = mkdtempSync(join(tmpdir(), 'orca-root-dispatch-'))
+    const server = new AgentHookServer()
+    try {
+      await server.start({ env: 'production', userDataPath: directory })
+      const path = join(directory, 'transcript.jsonl')
+      const sessionId = '44444444-4444-4444-8444-444444444444'
+      const promptId = '33333333-3333-4333-8333-333333333333'
+      const paneKey = makePaneKey(
+        '11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222'
+      )
+      writeFileSync(
+        path,
+        `${[
+          {
+            type: 'user',
+            sessionId,
+            promptId,
+            uuid: 'user',
+            parentUuid: null,
+            isSidechain: false,
+            message: { content: 'Finish' }
+          },
+          {
+            type: 'assistant',
+            sessionId,
+            uuid: 'quota',
+            parentUuid: 'user',
+            isSidechain: false,
+            apiError: 'usage_limit_reached',
+            error: 'rate_limit'
           }
-        },
-        'production'
-      )!
-      const next = {
-        ...event,
-        ...reduceHostTurnEnd(state.lastStatusByPaneKey.get(paneKey), event, Date.now(), true)
+        ]
+          .map((row) => JSON.stringify(row))
+          .join('\n')}\n`
+      )
+      const state = server['state']
+      const accept = (payload: Record<string, unknown>) => {
+        const event = normalizeHookPayload(
+          state,
+          'claude',
+          {
+            paneKey,
+            payload: {
+              session_id: sessionId,
+              prompt_id: promptId,
+              transcript_path: path,
+              ...payload
+            }
+          },
+          'production'
+        )!
+        const next = {
+          ...event,
+          ...reduceHostTurnEnd(state.lastStatusByPaneKey.get(paneKey), event, Date.now(), true)
+        }
+        seedLegacyAgentStatusForTests(state, next)
+        return next
       }
-      seedLegacyAgentStatusForTests(state, next)
-      return next
+      accept({ hook_event_name: 'UserPromptSubmit', prompt: 'Finish' })
+      accept({ hook_event_name: 'SubagentStart', agent_id: 'areviewer-1' })
+      const failed = accept({ hook_event_name: 'StopFailure', error: 'rate_limit' })
+      const cut = { sessionId, turnEndedAt: failed.turnEndedAt! }
+      expect(terminalUsageLimitGuard(state, paneKey, cut)).toBeNull()
+      const released = accept({ hook_event_name: 'SubagentStop', agent_id: 'areviewer-1' })
+      expect(released.toolAgentId).toBe('areviewer-1')
+      const unrelated = Array.from({ length: panes }, (_, index) => ({
+        ...released,
+        paneKey: `unrelated-${index}`,
+        receivedAt: Date.now(),
+        stateStartedAt: 1
+      }))
+      for (const row of unrelated) {
+        seedLegacyAgentStatusForTests(state, row)
+      }
+      const baseline = [
+        server['enrichedStatusListeners'].size,
+        server['paneStatusClearListeners'].size
+      ]
+      let checks: ReturnType<typeof vi.fn<() => boolean>> | undefined
+      const prepare = vi
+        .spyOn(agentHookServer, 'prepareTerminalUsageLimitSource')
+        .mockImplementation((...args) => {
+          const source = server.prepareTerminalUsageLimitSource(...args)
+          if (source) {
+            checks = vi.fn(source.isCurrent)
+            source.isCurrent = checks
+          }
+          return source
+        })
+      const controller = new AbortController()
+      if (outcome === 'abort') {
+        controller.abort()
+      }
+      const result = TERMINAL_USAGE_LIMIT_METHODS[0].handler(
+        { terminal: HANDLE, ...cut, client: { type: 'desktop', id: 'test' } },
+        { runtime, signal: controller.signal }
+      )
+      expect(prepare).toHaveBeenCalledOnce()
+      expect(server['enrichedStatusListeners'].size).toBe(baseline[0] + 1)
+      expect(server['paneStatusClearListeners'].size).toBe(baseline[1] + 1)
+      const beforeUnrelated = checks?.mock.calls.length
+      for (const row of unrelated) {
+        server['emitEnrichedStatus'](row)
+      }
+      expect(checks?.mock.calls.length).toBe(beforeUnrelated)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(await result).toEqual(
+        outcome === 'settle'
+          ? { status: 'turn-started' }
+          : { status: 'refused', reason: outcome === 'abort' ? 'unavailable' : 'draft' }
+      )
+      expect(write.mock.calls.map(([, bytes]) => bytes)).toEqual(
+        outcome === 'settle' ? [expect.stringContaining(PROMPT), '\r'] : []
+      )
+      expect(checks?.mock.calls.length).toBeLessThanOrEqual(8)
+      expect(server['enrichedStatusListeners'].size).toBe(baseline[0])
+      expect(server['paneStatusClearListeners'].size).toBe(baseline[1])
+      expect(runtime['usageLimitContinuations'].size).toBe(0)
+    } finally {
+      server.stop()
+      rmSync(directory, { recursive: true, force: true })
     }
-    accept({ hook_event_name: 'UserPromptSubmit', prompt: 'Finish' })
-    accept({ hook_event_name: 'SubagentStart', agent_id: 'areviewer-1' })
-    const failed = accept({ hook_event_name: 'StopFailure', error: 'rate_limit' })
-    const cut = { sessionId, turnEndedAt: failed.turnEndedAt! }
-    expect(terminalUsageLimitGuard(state, paneKey, cut)).toBeNull()
-    const released = accept({ hook_event_name: 'SubagentStop', agent_id: 'areviewer-1' })
-    expect(released.toolAgentId).toBe('areviewer-1')
-    const guard = terminalUsageLimitGuard(state, paneKey, cut)!
-    expect(guard()).toBe(true)
-    const result = runtime.continueTerminalUsageLimit(HANDLE, guard, 'desktop')
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(await result).toEqual({ status: 'turn-started' })
-    expect(write.mock.calls.map(([, bytes]) => bytes)).toEqual([
-      expect.stringContaining(PROMPT),
-      '\r'
-    ])
-  } finally {
-    rmSync(directory, { recursive: true, force: true })
   }
-})
+)

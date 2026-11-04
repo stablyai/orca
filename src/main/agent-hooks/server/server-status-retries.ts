@@ -7,7 +7,8 @@ import {
 } from '../../../shared/agent-hook-listener/grok-result-discovery'
 import {
   hasPendingClaudeUsageLimit,
-  isSameClaudeUsageLimitTurn
+  isSameClaudeUsageLimitTurn,
+  readClaudeUsageLimitRetrySignature
 } from '../../../shared/agent-hook-listener/claude-usage-limit-refinement'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import { pickHostTurnEnd } from '../../../shared/agent-status-types'
@@ -159,7 +160,8 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     body: unknown,
     original: EnrichedAgentHookEventPayload,
     attempt = 1,
-    discoveryReady = false
+    discoveryReady = false,
+    quotaReadSignature?: string
   ): void {
     const quotaPending = hasPendingClaudeUsageLimit(source, body, original)
     if (
@@ -189,7 +191,14 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     const timer = setTimeout(() => {
       try {
         this.assistantMessageRetryTimers.delete(original.paneKey)
-        this.applyAssistantMessageRetry(source, body, original, attempt + 1, discoveryReady)
+        this.applyAssistantMessageRetry(
+          source,
+          body,
+          original,
+          attempt + 1,
+          discoveryReady,
+          quotaReadSignature
+        )
       } catch (err) {
         console.error('[agent-hooks] assistant message retry failed:', err)
       }
@@ -205,7 +214,8 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     body: unknown,
     original: EnrichedAgentHookEventPayload,
     nextAttempt: number,
-    requireExactOriginal: boolean
+    requireExactOriginal: boolean,
+    quotaReadSignature?: string
   ): void {
     const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
       | EnrichedAgentHookEventPayload
@@ -221,12 +231,31 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
+    const signature = quotaPending ? readClaudeUsageLimitRetrySignature(body) : undefined
+    if (signature !== undefined && signature === quotaReadSignature) {
+      this.scheduleAssistantMessageRetry(
+        source,
+        body,
+        original,
+        nextAttempt,
+        requireExactOriginal,
+        signature
+      )
+      return
+    }
     const normalized = this.normalizeLocalHookPayload(source, body)
     const event = normalized.event
     const newText = !current.payload.lastAssistantMessage && event?.payload.lastAssistantMessage
     const newQuota = quotaPending && event?.payload.mainAgent?.usageLimit
     if (!newText && !newQuota) {
-      this.scheduleAssistantMessageRetry(source, body, original, nextAttempt, requireExactOriginal)
+      this.scheduleAssistantMessageRetry(
+        source,
+        body,
+        original,
+        nextAttempt,
+        requireExactOriginal,
+        signature
+      )
       return
     }
     if (!event) {
@@ -238,7 +267,14 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       normalized.onAccepted
     )
     if (next && quotaPending && !newQuota) {
-      this.scheduleAssistantMessageRetry(source, body, next, nextAttempt, requireExactOriginal)
+      this.scheduleAssistantMessageRetry(
+        source,
+        body,
+        next,
+        nextAttempt,
+        requireExactOriginal,
+        signature
+      )
     }
   }
 }

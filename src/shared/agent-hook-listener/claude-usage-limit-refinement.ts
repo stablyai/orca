@@ -1,6 +1,25 @@
+import { statSync } from 'node:fs'
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import { parseHookBodyPayloadRecord } from './grok-result-discovery'
+import { readString } from './tool-input-preview'
+
+/** Captured before a failed refinement read; never evidence authorizing terminal input. */
+export function readClaudeUsageLimitRetrySignature(body: unknown): string | undefined {
+  const payload = parseHookBodyPayloadRecord(body)
+  const path = payload && readString(payload, 'transcript_path')
+  if (!path) {
+    return undefined
+  }
+  try {
+    const stat = statSync(path, { bigint: true })
+    return stat.isFile()
+      ? `${path}:${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`
+      : undefined
+  } catch {
+    return undefined
+  }
+}
 
 export function hasPendingClaudeUsageLimit(
   source: AgentHookSource,

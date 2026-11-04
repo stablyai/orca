@@ -8,3 +8,7 @@ export function isCodexStatusTranscriptLine(line: string): boolean {
     (line.includes('"token_count"') && /"rate_limits"\s*:\s*\{/.test(line))
   )
 }
+
+export function isCodexLifecycleTranscriptLine(line: string): boolean {
+  return STATUS_RECORD_TYPE.test(line)
+}
