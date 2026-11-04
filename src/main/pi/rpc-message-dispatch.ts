@@ -52,6 +52,7 @@ export async function dispatchPiRpcMessage(
       )
     }
   }
+  await session.turns.compaction.ended(input.signal)
   input.signal?.throwIfAborted()
   if (!isCurrent() || session.connection.closed) {
     return exited()
@@ -103,7 +104,6 @@ async function submitPiRpcPrompt(
   prompt: PiRpcPrompt
 ): Promise<AgentSessionDispatchOutcome> {
   let ranOptions: Record<string, string> = {}
-  await session.turns.compaction.ended(input.signal)
   const outcome = await session.submit(
     input.clientMessageId,
     input.requestedAt ?? Date.now(),
