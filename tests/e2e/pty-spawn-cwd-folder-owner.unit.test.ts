@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   MIXED_FOLDER,
   MIXED_GROUP
-} from '../../src/shared/folder-workspace-host-routing.test-fixture'
+} from '../../src/shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import type { RuntimePtyController } from '../../src/main/runtime/runtime-pty-controller-contract'
 import { spawnMock } from '../../src/main/ipc/pty/pty-ipc-mock-registry'

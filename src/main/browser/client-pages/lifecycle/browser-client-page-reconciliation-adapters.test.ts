@@ -1,4 +1,4 @@
-import type { BrowserClientHostCommandEvent } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserClientPageCommandExecutor } from '../execution/browser-client-page-command-executor'
 import type {

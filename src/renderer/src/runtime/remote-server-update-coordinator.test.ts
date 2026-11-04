@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 import type { RemoteServerUpdaterSnapshot } from '../../../shared/remote-server-update'
-import './remote-server-update-coordinator'
 import type { RemoteServerUpdateEntry } from './remote-server-update-coordinator'
+
 import { runRemoteServerUpdateBatch } from './remote-server-update-batch'
 
 const environment: PublicKnownRuntimeEnvironment = {

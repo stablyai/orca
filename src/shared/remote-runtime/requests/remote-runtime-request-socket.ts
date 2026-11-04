@@ -4,7 +4,7 @@ import { remoteRuntimeOutboundAdmission } from '../remote-runtime-outbound-admis
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import { abortSignalReason, throwIfSignalAborted } from '../../abort-signal-reason'
-import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import type { RuntimeCapability } from '../../protocol-version'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import {

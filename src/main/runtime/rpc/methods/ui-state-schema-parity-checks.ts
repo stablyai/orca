@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import type { WorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { UiUpdateFieldsSchema } from './client-ui-schemas'
 import type { AssertNoMissingKeys, AssertNoMissingValues } from './ui-state-schema-parity'
 

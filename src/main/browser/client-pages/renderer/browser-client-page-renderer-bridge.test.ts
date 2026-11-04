@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BrowserClientPageRendererReply } from '../../../../shared/browser-client-page-renderer-protocol'
+import type { BrowserClientPageRendererReply } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import {
   completeRendererMount as completeMount,
   createRendererBridgeTestRig as createHarness,

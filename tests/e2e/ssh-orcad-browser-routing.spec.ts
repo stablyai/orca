@@ -25,7 +25,7 @@ import { sshExecutionHostStorageIdentity } from '../../src/main/browser/routing/
 import { reconnect } from './helpers/orcad-convert-flow'
 import { navigateGuest } from './helpers/browser-split-guest-probes'
 import { ORCAD_TEMPLATE, skipUnlessManagedDockerHost } from './helpers/orcad-managed-workspace'
-import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
+import { getOrcadSshDeployment } from '../../src/shared/remote-runtime/host-catalog/runtime-environments'
 
 skipUnlessManagedDockerHost()
 

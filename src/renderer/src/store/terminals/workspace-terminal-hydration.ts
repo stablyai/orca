@@ -1,4 +1,4 @@
-import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   folderWorkspaceKey,

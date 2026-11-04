@@ -4,16 +4,17 @@ import { z } from 'zod'
 import {
   createPairedE2EEClientHandshake,
   type PairedE2EEFraming
-} from '../../../shared/paired-e2ee-client-handshake'
-import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/paired-e2ee-node-primitives'
-import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
+} from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
 import { createHash } from 'node:crypto'
 import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   DelegatedMobileDeviceSyncParamsSchema
 } from '../../../shared/delegated-mobile-device-contract'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { RespondParams } from '../../../shared/rpc-contract/structured-agent-session-approval-params'
 import { RUNTIME_ORDINARY_MESSAGE_MAX_BYTES as M } from '../../../shared/runtime-ordinary-message-capability'

@@ -1,5 +1,5 @@
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 export function canContinueAiVaultSessionInNewSession(
   session: AiVaultSession,

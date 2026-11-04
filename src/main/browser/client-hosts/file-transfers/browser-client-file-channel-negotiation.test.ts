@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { BrowserClientHostAttachParams } from '../../../../shared/browser-client-host-protocol'
+import { BrowserClientHostAttachParams } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 
 describe('browser file channel negotiation', () => {
   it('rejects an attach that asks for the file channel without command negotiation', () => {

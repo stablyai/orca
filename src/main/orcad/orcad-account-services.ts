@@ -8,7 +8,7 @@ import type {
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
-} from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { createProviderAccountServices } from '../providers/accounts/provider-account-services'

@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { KnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },

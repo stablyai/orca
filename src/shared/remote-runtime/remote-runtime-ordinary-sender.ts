@@ -1,5 +1,5 @@
 import type WebSocket from 'ws'
-import type { PairedE2EEClientHandshake } from '../paired-e2ee-client-handshake'
+import type { PairedE2EEClientHandshake } from './e2ee/paired-e2ee-client-handshake'
 import type { RuntimeRpcResponse } from '../runtime-rpc-envelope'
 import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../runtime-ordinary-message-capability'
 import {

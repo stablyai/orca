@@ -1,5 +1,5 @@
 import WebSocket from 'ws'
-import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
+import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
 import type { RemoteRuntimeOrdinarySender } from '../remote-runtime-ordinary-sender'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import {

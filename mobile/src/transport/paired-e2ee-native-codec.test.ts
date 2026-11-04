@@ -6,14 +6,14 @@ import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Ready
-} from '../../../src/shared/mobile-e2ee-v2-contract'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
 import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
-} from '../../../src/shared/mobile-e2ee-v2-framing'
-import type { PairedE2EEPrimitives } from '../../../src/shared/paired-e2ee-primitives'
-import { PairedE2EEV2ClientSession } from '../../../src/shared/paired-e2ee-v2-client-session'
-import { derivePairedE2EEV2KeySchedule } from '../../../src/shared/paired-e2ee-v2-key-schedule'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
+import type { PairedE2EEPrimitives } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-primitives'
+import { PairedE2EEV2ClientSession } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-client-session'
+import { derivePairedE2EEV2KeySchedule } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-key-schedule'
 import type { PairedE2EENativeBindings } from './paired-e2ee-native-codec'
 
 // Use the package’s wasm libsodium under Node; Kotlin/Swift tests pin the separate codec stand-in.

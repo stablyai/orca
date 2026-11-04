@@ -6,10 +6,10 @@ import type {
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/nested-removal'
 import type { ListDetectedWorktreesArgs } from '../../../shared/detected-worktree-provider-contract'
-import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-linked-item-schema'
-import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachment-schema'
+import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments/workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachments/workspace-attachment-schema'
 import { TaskSourceContextSchema } from '../../../shared/task-source-context-schema'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 
 export type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance

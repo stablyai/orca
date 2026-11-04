@@ -1,12 +1,12 @@
 import { findFirstIndexedWorktree } from '@/lib/worktree-runtime-owner-index'
-import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
+import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type {
   CreateWorktreeCallOptions,
   CreatedWorktreeResult
 } from './worktrees/create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
-import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type {

@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import type { Repo } from '../../../../../../shared/repo-types'

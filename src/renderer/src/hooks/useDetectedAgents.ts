@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
-import { runtimeHostContactForEntry } from '../../../shared/runtime-host-contact'
+import { runtimeHostContactForEntry } from '../../../shared/remote-runtime/host-status/runtime-host-contact'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 

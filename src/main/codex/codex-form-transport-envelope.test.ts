@@ -48,13 +48,13 @@ import {
   splitBridgeReply,
   BridgeReplyAssembler
 } from '@orca/test-mobile/mobile-web-shell/bridge/bridge-reply-chunking'
-import { NODE_PAIRED_E2EE_PRIMITIVES } from '@orca/test-host/shared/paired-e2ee-node-primitives'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '@orca/test-host/shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import { WEB_PAIRED_E2EE_PRIMITIVES } from '@orca/test-host/renderer/src/web/web-paired-e2ee-primitives'
 import { OrcaRuntimeService } from '@orca/test-host/main/runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '@orca/test-host/main/runtime/runtime-rpc'
 import { STATUS_METHODS } from '@orca/test-host/main/runtime/rpc/methods/status'
-import { parsePairingCode } from '@orca/test-host/shared/pairing'
-import { pairedRuntimeConnectionFromOffer } from '@orca/test-host/shared/paired-runtime-connection'
+import { parsePairingCode } from '@orca/test-host/shared/remote-runtime/pairing/pairing'
+import { pairedRuntimeConnectionFromOffer } from '@orca/test-host/shared/remote-runtime/pairing/paired-runtime-connection'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '@orca/test-host/shared/electron-remote-runtime-client-capabilities'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'

@@ -7,7 +7,7 @@ import {
   createPairedE2EEClientHandshake,
   PairedE2EEDowngradeError,
   type PairedE2EEFraming
-} from '../../../src/shared/paired-e2ee-client-handshake'
+} from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import { MOBILE_PAIRED_E2EE_PRIMITIVES } from './mobile-paired-e2ee-primitives'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import {

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   KnownRuntimeEnvironment,
   OrcadDeploymentLink
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },

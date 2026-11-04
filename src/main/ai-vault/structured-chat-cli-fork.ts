@@ -13,7 +13,7 @@ import type {
   AiVaultPrepareChatForkArgs,
   AiVaultPrepareSessionResumeResult,
   AiVaultSessionResumePreparation
-} from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'

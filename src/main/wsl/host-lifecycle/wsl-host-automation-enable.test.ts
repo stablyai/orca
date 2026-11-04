@@ -16,11 +16,13 @@ vi.mock('./wsl-host-service-instance', () => ({
     ensureForRuntimeCall: async () => {}
   })
 }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: () => ({ id: 'wsl:Ubuntu', runtimeId: 'rt-1' })
 }))
-vi.mock('../../../shared/runtime-environments', () => ({ getPreferredPairingOffer: () => ({}) }))
-vi.mock('../../../shared/pairing', () => ({
+vi.mock('../../../shared/remote-runtime/host-catalog/runtime-environments', () => ({
+  getPreferredPairingOffer: () => ({})
+}))
+vi.mock('../../../shared/remote-runtime/pairing/pairing', () => ({
   encodePairingOffer: () => 'code',
   parsePairingCode: () => ({ code: 'code' })
 }))

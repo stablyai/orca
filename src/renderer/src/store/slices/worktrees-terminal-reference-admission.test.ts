@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { singlePaneLayoutSnapshot } from './terminal-helpers'
 import { makeTerminalTab, makeWorktree } from './worktrees-slice-test-fixtures'

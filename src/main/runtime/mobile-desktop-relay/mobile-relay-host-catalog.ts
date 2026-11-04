@@ -7,7 +7,7 @@ import type {
   MobileRelayHostsListResult,
   MobileRelayHostWorktreesResult,
   MobileRelayServerWorktreeRow
-} from '../../../shared/mobile-relay-hosts-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse

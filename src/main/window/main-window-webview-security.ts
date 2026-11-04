@@ -22,7 +22,7 @@ import {
 import { isDocPreviewSession } from '../browser/document-preview/doc-preview-protocol'
 import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
-import { parseChromeExtensionUrl } from '../../shared/browser-extension-url'
+import { parseChromeExtensionUrl } from '../../shared/browser/extensions/browser-extension-url'
 import { getBrowserExtensionSessionForProfile } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
 import { installBrowserJavaScriptDialogs } from '../browser/guest-lifecycle/prompts/browser-javascript-dialogs'
 import {

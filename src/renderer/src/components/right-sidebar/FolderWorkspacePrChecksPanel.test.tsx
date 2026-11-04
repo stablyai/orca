@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceLineage } from '../../../../shared/worktree/lineage-types'

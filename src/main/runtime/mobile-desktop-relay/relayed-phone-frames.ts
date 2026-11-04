@@ -3,7 +3,7 @@ import {
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../../../shared/runtime-ordinary-message-capability'
-import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/paired-e2ee-compressed-frame'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import {
   readTerminalStreamFrameId,
   writeTerminalStreamFrameId

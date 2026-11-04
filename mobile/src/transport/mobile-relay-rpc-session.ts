@@ -5,7 +5,7 @@ import {
   PairingGetEndpointsResultSchema,
   type DeviceResumeConfirmed,
   type MobileRelayEndpoint
-} from '../../../src/shared/mobile-relay-credential-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'

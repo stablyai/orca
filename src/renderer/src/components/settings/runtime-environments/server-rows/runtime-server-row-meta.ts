@@ -1,7 +1,7 @@
 import {
   type PublicKnownRuntimeEnvironment,
   getOrcadSshDeployment
-} from '../../../../../../shared/runtime-environments'
+} from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'

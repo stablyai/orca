@@ -1,7 +1,7 @@
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
-} from '../../paired-runtime-connection'
+} from '../pairing/paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
 import { WebSocketServer, type WebSocket } from 'ws'
 import {
@@ -11,9 +11,9 @@ import {
   generateKeyPair,
   publicKeyFromBase64,
   publicKeyToBase64
-} from '../../e2ee-crypto'
-import { encodePairingOffer, parsePairingCode } from '../../pairing'
-import type { PairingOffer } from '../../mobile-relay-pairing-offer'
+} from '../e2ee/node/e2ee-crypto'
+import { encodePairingOffer, parsePairingCode } from '../pairing/pairing'
+import type { PairingOffer } from '../pairing/mobile-relay-pairing-offer'
 
 export type SharedControlTestServer = {
   pairing: PairedRuntimeConnection

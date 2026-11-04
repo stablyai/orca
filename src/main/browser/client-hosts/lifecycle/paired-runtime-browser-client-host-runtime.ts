@@ -1,18 +1,18 @@
-import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../../shared/browser-client-profile-switch-protocol'
+import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
 import {
   BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
   BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY
-} from '../../../../shared/browser-client-automation-protocol'
-import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../../shared/browser-client-file-channel-protocol'
-import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser-client-host-protocol'
-import type { PairedRuntimeConnection } from '../../../../shared/paired-runtime-connection'
+} from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
+import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { BrowserClientNetworkRouteRegistry } from '../../network/client-routes/browser-client-network-route-registry'
 import {
   browserAuthorityExecutionHostStorageIdentity,

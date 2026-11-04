@@ -7,7 +7,7 @@ import type * as CommandPathResolver from './command-path/command-path-resolver'
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import type * as FsPromises from 'node:fs/promises'
 import type { Store } from '../persistence/loading-store/store'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
 import type { PtySpawnIpcArgs } from './pty/ipc/spawn-types'
 

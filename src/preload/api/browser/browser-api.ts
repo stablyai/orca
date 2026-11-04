@@ -9,7 +9,7 @@ import type { BrowserExtensionWebStoreApi } from './browser-extension-webstore-a
 import type {
   BrowserExtensionActionResult,
   BrowserExtensionListResult
-} from '../../../shared/browser-extension-types'
+} from '../../../shared/browser/extensions/browser-extension-types'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
@@ -23,7 +23,7 @@ import type {
 import type {
   BrowserClientPageMetadataParams,
   BrowserClientPageMetadataPublishOutcome
-} from '../../../shared/browser-client-page-metadata-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
@@ -74,7 +74,7 @@ import type {
 import type {
   BrowserClientPageRendererOutcome,
   BrowserClientPageRendererRequest
-} from '../../../shared/browser-client-page-renderer-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 
 export type BrowserApi = {
   /** Absent on clients that host no browser guests, including web clients. */

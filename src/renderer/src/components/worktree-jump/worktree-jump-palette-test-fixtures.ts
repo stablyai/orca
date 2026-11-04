@@ -2,7 +2,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type {
   AgentStatusEntry,
   AgentStatusState

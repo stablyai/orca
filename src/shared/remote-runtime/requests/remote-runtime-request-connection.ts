@@ -3,10 +3,10 @@ import { RemoteRuntimeOrdinarySender } from '../remote-runtime-ordinary-sender'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import { abortSignalReason } from '../../abort-signal-reason'
-import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import { scheduleOrphanedRemoteRuntimeSocketClose } from '../remote-runtime-abort-orphaned-socket'
 import { serializeRemoteRuntimeRpcRequest } from '../remote-runtime-memory-limits'
-import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
+import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
 import {
   prepareRemoteRuntimeRequest,
   releaseRemoteRuntimePreparedRequest,

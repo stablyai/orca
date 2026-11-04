@@ -1,6 +1,6 @@
 import { reserveRemoteRuntimeRetainedBytes } from '../../../shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
 import { sendRelayedRequest } from './relayed-request-send'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
 import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'

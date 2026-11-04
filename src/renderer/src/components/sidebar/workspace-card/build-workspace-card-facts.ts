@@ -1,4 +1,4 @@
-import { getWorkspaceAttachments } from '../../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../../shared/workspace-attachments/workspace-attachments'
 import type { WorktreeCardProperty } from '../../../../../shared/ui-chrome-types'
 import type {
   WorkspaceCardFacts,

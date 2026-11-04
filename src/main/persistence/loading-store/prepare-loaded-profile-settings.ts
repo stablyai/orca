@@ -9,7 +9,7 @@ import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
-} from '../../../shared/mobile-pairing-custom-address'
+} from '../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
 import { normalizeProjectGroups } from '../../../shared/project-groups'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'

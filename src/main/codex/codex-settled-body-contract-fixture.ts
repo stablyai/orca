@@ -7,8 +7,8 @@ import {
   settledBodyPresentation,
   readSettledBodyPiece
 } from '@orca/test-host/main/native-chat/agent-session-wire/agent-session-settled-body'
-import { encrypt } from '@orca/test-host/shared/e2ee-crypto'
-import { sealMobileE2EEV2Frame } from '@orca/test-host/shared/mobile-e2ee-v2-framing'
+import { encrypt } from '@orca/test-host/shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { sealMobileE2EEV2Frame } from '@orca/test-host/shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
 import {
   splitBridgeReply,
   BridgeReplyAssembler

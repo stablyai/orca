@@ -1,15 +1,16 @@
 import type { AppState } from '../types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type {
-  WorkspaceCleanupCandidate,
-  WorkspaceCleanupDismissal,
-  WorkspaceCleanupUnverifiedRemovalConsent
-} from '../../../../shared/workspace-cleanup'
-import { shouldForceWorkspaceCleanupRemoval } from '../../../../shared/workspace-cleanup'
+
+import {
+  type WorkspaceCleanupCandidate,
+  type WorkspaceCleanupDismissal,
+  type WorkspaceCleanupUnverifiedRemovalConsent,
+  shouldForceWorkspaceCleanupRemoval
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
-} from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type { PreservedBranchCleanup } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   preflightWorkspaceCleanupCandidates,

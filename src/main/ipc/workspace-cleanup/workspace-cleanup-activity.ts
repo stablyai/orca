@@ -2,7 +2,7 @@ import { lstat, open, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Worktree } from '../../../shared/worktree/types'
 import { resolveGitMetadataPath } from '../../../shared/git/metadata/git-metadata-path'
-import { getPersistedWorkspaceCleanupActivityAt } from '../../../shared/workspace-cleanup'
+import { getPersistedWorkspaceCleanupActivityAt } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 
 type StatPath = (targetPath: string) => Promise<{ mtimeMs: number }>

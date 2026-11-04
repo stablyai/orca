@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { makePaneKey } from '../../../../shared/stable-pane-id'

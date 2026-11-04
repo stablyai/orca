@@ -61,7 +61,7 @@ vi.mock('../permissions/browser-extension-permission-prompt', () => ({
 mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-apis-'))
 
 const { BROWSER_EXTENSION_EVENT_CHANNEL, BROWSER_EXTENSION_INVOKE_CHANNEL } =
-  await import('../../../../shared/browser-extension-channels')
+  await import('../../../../shared/browser/extensions/browser-extension-channels')
 const registry = await import('../api-runtime/browser-extension-namespace-registry')
 const host = await import('../api-runtime/browser-extension-api-host')
 const { registerBrowserExtensionNamespaces } =

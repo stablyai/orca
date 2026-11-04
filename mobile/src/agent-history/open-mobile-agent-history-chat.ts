@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { StructuredSessionOpenFailure } from '../../../src/shared/open-structured-agent-session'
 import type { RpcClient } from '../transport/rpc-client'
 import {

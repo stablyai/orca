@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
-import { deriveSharedKey } from '../../../shared/e2ee-crypto'
-import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
+import { deriveSharedKey } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { deriveMobileE2EEV2KeySchedule } from '../../../shared/remote-runtime/e2ee/node/mobile-e2ee-v2-node-key-schedule'
 import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Hello
-} from '../../../shared/mobile-e2ee-v2-contract'
-import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
-import { PairedE2EEV2ClientSession } from '../../../shared/paired-e2ee-v2-client-session'
-import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/paired-e2ee-node-primitives'
+} from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
+import { sealMobileE2EEV2Frame } from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
+import { PairedE2EEV2ClientSession } from '../../../shared/remote-runtime/e2ee/paired-e2ee-v2-client-session'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import { RUNTIME_ORDINARY_MESSAGE_MAX_BYTES as M } from '../../../shared/runtime-ordinary-message-capability'
 import {
   DesktopMobileE2EEV2Session,

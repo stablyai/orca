@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import './ai-vault-session-filters'
 import {
   AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES,
   filterAiVaultSessions,
@@ -7,11 +8,11 @@ import {
   groupAiVaultSessions,
   isAiVaultSessionFilterQueryTooLarge,
   parseVaultQuery
-} from './ai-vault-session-filters'
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
   deriveAiVaultScopeSessionPaths,
   deriveAiVaultWorkspaceScopePaths
-} from '../../../../shared/ai-vault-scope-paths'
+} from '../../../../shared/ai-vault/scanning/ai-vault-scope-paths'
 
 const baseSession: AiVaultSession = {
   id: 'claude:1',

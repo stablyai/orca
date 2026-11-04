@@ -1,5 +1,5 @@
-import type { WorkspaceSpaceScanStatus } from '../../../shared/workspace-space-types'
-import { WorkspaceSpaceScanCapacityError } from '../../../shared/workspace-space-scan-budget'
+import type { WorkspaceSpaceScanStatus } from '../../../shared/workspace-disk-space/workspace-space-types'
+import { WorkspaceSpaceScanCapacityError } from '../../../shared/workspace-disk-space/workspace-space-scan-budget'
 
 export type AsyncLimiter = <T>(task: () => Promise<T>) => Promise<T>
 

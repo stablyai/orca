@@ -1,9 +1,9 @@
 import type WebSocket from 'ws'
 import { expect, vi } from 'vitest'
-import { generateKeyPair } from '@orca/test-host/shared/e2ee-crypto'
+import { generateKeyPair } from '@orca/test-host/shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { E2EEChannel } from '@orca/test-host/main/runtime/rpc/e2ee-channel'
-import { createPairedE2EEClientHandshake } from '@orca/test-host/shared/paired-e2ee-client-handshake'
-import type { PairedE2EEPrimitives } from '@orca/test-host/shared/paired-e2ee-primitives'
+import { createPairedE2EEClientHandshake } from '@orca/test-host/shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
+import type { PairedE2EEPrimitives } from '@orca/test-host/shared/remote-runtime/e2ee/paired-e2ee-primitives'
 
 // A real v2 phone handshake into the installed host channel: what its RPC layer received, and what the phone opened back.
 export async function throughInstalledChannel(args: {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({ AppState: { currentState: 'active' } }))
 
-import { MOBILE_RELAY_HOSTS_LIST_METHOD } from '../../../src/shared/mobile-relay-hosts-contract'
+import { MOBILE_RELAY_HOSTS_LIST_METHOD } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import { relayHostsFeed } from './relay-hosts-feed'
 
