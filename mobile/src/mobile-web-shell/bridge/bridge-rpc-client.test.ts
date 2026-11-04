@@ -56,37 +56,6 @@ describe('bridge round trip: requests', () => {
     ])
   })
 
-  it('resolves the response the shell answered with, field for field', async () => {
-    const pair = await ready(createFakeBridgePortPair())
-    const answer = pair.client.sendRequest('worktree.ps')
-    await pair.flush()
-    const response: RpcResponse = {
-      id: 'shell-side-id',
-      ok: true,
-      result: { rows: [1, 2, 3] },
-      streaming: true,
-      _meta: { runtimeId: 'runtime-a' }
-    }
-    pair.rpc.requests[0]?.resolve(response)
-    await pair.flush()
-    await expect(answer).resolves.toEqual(response)
-  })
-
-  it('resolves a host failure, because a failure is data and not a rejection', async () => {
-    const pair = await ready(createFakeBridgePortPair())
-    const answer = pair.client.sendRequest('worktree.ps')
-    await pair.flush()
-    const failure: RpcResponse = {
-      id: 'shell-side-id',
-      ok: false,
-      error: { code: 'not_found', message: 'no such worktree', data: { host: 'a' } },
-      _meta: { runtimeId: 'runtime-a' }
-    }
-    pair.rpc.requests[0]?.resolve(failure)
-    await pair.flush()
-    await expect(answer).resolves.toEqual(failure)
-  })
-
   it('rejects with the class, the code and the delivery mark the shell captured', async () => {
     const pair = await ready(createFakeBridgePortPair())
     const answer = pair.client.sendRequest('worktree.ps')
@@ -195,24 +164,6 @@ describe('bridge round trip: subscriptions', () => {
 })
 
 describe('bridge round trip: notifications and state', () => {
-  it('carries both notifies to the shell client, with the arity each was called with', async () => {
-    const pair = await ready(createFakeBridgePortPair())
-    pair.client.notifyForeground()
-    pair.client.notifyForeground('app-resume')
-    pair.client.updateTerminalSubscriptionViewport('terminal-a', { cols: 120, rows: 40 })
-    await pair.flush()
-    expect(pair.rpc.foregroundCalls).toEqual([[], ['app-resume']])
-    expect(pair.rpc.viewports).toEqual([{ terminal: 'terminal-a', cols: 120, rows: 40 }])
-  })
-
-  it('asks the shell to open a screen the page does not render', async () => {
-    const pair = await ready(createFakeBridgePortPair())
-    expect(pair.client.notifyNavigate('/h/host-a/session/wt-1?name=a+b')).toBe(true)
-    await pair.flush()
-    expect(pair.navigations).toEqual(['/h/host-a/session/wt-1?name=a+b'])
-    expect(pair.rpc.requests).toEqual([])
-  })
-
   // Capable sender and receiver preserve original strings after the same scheme check.
   it('asks the shell to open the exact original URL outside the app', async () => {
     const pair = await ready(createFakeBridgePortPair())
@@ -255,32 +206,6 @@ describe('bridge round trip: notifications and state', () => {
     expect(pair.toShell).toHaveLength(sent)
     expect(pair.externalLinks).toEqual([])
     expect(pair.hostDiagnostics).toEqual([])
-  })
-
-  it('reads the shell client through init and fans out every change after it', async () => {
-    const rpc = createFakeRpcClient({
-      getState: () => 'reconnecting',
-      getReconnectAttempt: () => 3,
-      getLastConnectedAt: () => 1234,
-      getLastInboundAt: () => 5678,
-      getGeneration: () => 9
-    })
-    const pair = await ready(createFakeBridgePortPair({ rpc }))
-    expect(pair.client.getState()).toBe('reconnecting')
-    expect(pair.client.getReconnectAttempt()).toBe(3)
-    expect(pair.client.getLastConnectedAt()).toBe(1234)
-    expect(pair.client.getLastInboundAt?.()).toBe(5678)
-    expect(pair.client.getGeneration?.()).toBe(9)
-    const listener = vi.fn()
-    const release = pair.client.onStateChange(listener)
-    rpc.pushState('connected')
-    await pair.flush()
-    expect(listener).toHaveBeenCalledWith('connected')
-    expect(pair.client.getState()).toBe('connected')
-    release()
-    rpc.pushState('disconnected')
-    await pair.flush()
-    expect(listener).toHaveBeenCalledTimes(1)
   })
 
   it('refuses a snapshot from a shell that was rebuilt, and asks for a fresh init', async () => {

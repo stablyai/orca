@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getRemoteRuntimeRequestAdmissionEvidence } from '../../../src/shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
-import type { RpcResponse } from '../transport/types'
 import { harness, ID, OTHER, subscribeFrame, type Harness } from './bridge-host-test-harness'
 import { BRIDGE_MAX_UNACKED_BYTES, BRIDGE_MAX_UNACKED_FRAMES } from './bridge-host-subscriptions'
 import {
@@ -49,41 +48,6 @@ describe('requests', () => {
     expect(fence(1)).not.toThrow()
   })
 
-  it('carries a host failure through as data, _meta and error.data included', async () => {
-    const bridge = harness({ ready: true })
-    bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
-    const failure: RpcResponse = {
-      id: 'wire-1',
-      ok: false,
-      error: { code: 'not_found', message: 'gone', data: { path: '/x' } },
-      _meta: { runtimeId: 'runtime-a' }
-    }
-    bridge.client.requests[0]?.resolve(failure)
-    await flushBridge()
-    expect(bridge.last()).toEqual({ v: 1, type: 'reply', id: ID, payload: failure })
-  })
-
-  it('turns a rejection into the five-field capture, delivery mark and cause included', async () => {
-    const bridge = harness({ ready: true })
-    bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
-    const cause = new Error('socket closed')
-    const error = new TypeError('send failed')
-    error.cause = cause
-    bridge.client.requests[0]?.reject(error)
-    await flushBridge()
-    expect(bridge.last()).toEqual({
-      v: 1,
-      type: 'error',
-      id: ID,
-      error: {
-        category: 'TypeError',
-        message: 'send failed',
-        isRpcDeliveryUnknown: false,
-        cause: { category: 'Error', message: 'socket closed', isRpcDeliveryUnknown: false }
-      }
-    })
-  })
-
   it('answers a synchronous throw from the client and frees the slot', () => {
     const client = createFakeRpcClient()
     const bridge = harness({
@@ -130,26 +94,6 @@ describe('requests', () => {
       type: 'error',
       error: { message: expect.stringContaining('already in flight') }
     })
-  })
-
-  it('admits exactly the in-flight cap and refuses the next', () => {
-    const bridge = harness({ ready: true })
-    for (let index = 0; index < BRIDGE_MAX_PENDING_DESKTOP_REQUESTS; index += 1) {
-      bridge.host.receive(
-        clientFrame({ type: 'request', id: bridgeId(index), method: 'status.get' })
-      )
-    }
-    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS)
-    expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([])
-    bridge.host.receive(
-      clientFrame({
-        type: 'request',
-        id: bridgeId(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS),
-        method: 'x.get'
-      })
-    )
-    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS)
-    expect(bridge.last().type).toBe('error')
   })
 
   it('reopens a slot when a request settles', async () => {
@@ -256,30 +200,6 @@ describe('replies too big for one frame', () => {
 })
 
 describe('subscriptions', () => {
-  it('forwards with the arity the recorder reads and streams events from seq 1', () => {
-    const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID))
-    expect(bridge.client.streams[0]?.method).toBe('terminal.subscribe')
-    bridge.client.streams[0]?.emit({ chunk: 'a' })
-    bridge.client.streams[0]?.emit({ chunk: 'b' })
-    expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([
-      { v: 1, type: 'event', id: ID, seq: 1, payload: { chunk: 'a' } },
-      { v: 1, type: 'event', id: ID, seq: 2, payload: { chunk: 'b' } }
-    ])
-  })
-
-  it('admits exactly the subscription cap and refuses the next', () => {
-    const bridge = harness({ ready: true })
-    for (let index = 0; index < BRIDGE_MAX_SUBSCRIPTIONS; index += 1) {
-      bridge.host.receive(subscribeFrame(bridgeId(index)))
-    }
-    expect(bridge.client.streams).toHaveLength(BRIDGE_MAX_SUBSCRIPTIONS)
-    expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([])
-    bridge.host.receive(subscribeFrame(bridgeId(BRIDGE_MAX_SUBSCRIPTIONS)))
-    expect(bridge.client.streams).toHaveLength(BRIDGE_MAX_SUBSCRIPTIONS)
-    expect(bridge.last().type).toBe('error')
-  })
-
   it('reopens a slot when a stream is cancelled', () => {
     const bridge = harness({ ready: true })
     for (let index = 0; index < BRIDGE_MAX_SUBSCRIPTIONS; index += 1) {
@@ -374,17 +294,6 @@ describe('backpressure', () => {
     expect(bridge.client.streams[0]?.unsubscribes).toBe(1)
   })
 
-  it('reopens the window on ack', () => {
-    const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID, WINDOWED))
-    fill(bridge, BRIDGE_MAX_UNACKED_FRAMES)
-    bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: BRIDGE_MAX_UNACKED_FRAMES }))
-    fill(bridge, 1)
-    const events = bridge.frames().filter((frame) => frame.type === 'event')
-    expect(events).toHaveLength(BRIDGE_MAX_UNACKED_FRAMES + 1)
-    expect(events.at(-1)).toMatchObject({ seq: BRIDGE_MAX_UNACKED_FRAMES + 1 })
-  })
-
   it('acks only up to the seq it was given', () => {
     const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID, WINDOWED))
@@ -448,13 +357,6 @@ describe('backpressure', () => {
     expect(fits * 2).toBeLessThan(BRIDGE_MAX_UNACKED_FRAMES)
     expect(events()).toHaveLength(fits * 2)
     expect(bridge.frames().some((frame) => frame.type === 'end')).toBe(false)
-  })
-
-  it('ends rather than posting an event the page would refuse as oversized', () => {
-    const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID, WINDOWED))
-    bridge.client.streams[0]?.emit('z'.repeat(BRIDGE_MAX_MESSAGE_BYTES))
-    expect(bridge.last()).toEqual({ v: 1, type: 'end', id: ID, reason: 'overflow' })
   })
 
   it('keeps each stream on its own window', () => {

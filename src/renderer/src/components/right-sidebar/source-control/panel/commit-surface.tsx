@@ -1,4 +1,4 @@
-import { CreateHostedReviewComposer } from '../../CreateHostedReviewComposer'
+import { CreateHostedReviewComposer } from '../../hosted-review/creation/CreateHostedReviewComposer'
 import { CommitArea } from '../commit/commit-area'
 import { writeCommitDraftForWorktree } from '../commit/commit-drafts'
 import type { SourceControlPanelReadyProps } from './panel-props'

@@ -1,0 +1,13 @@
+import type { GitStagingArea } from '../../../../../../shared/git/status/git-status-types'
+
+export type SourceControlAction = 'discard' | 'stage' | 'unstage'
+
+export function getSourceControlActions(area: GitStagingArea): SourceControlAction[] {
+  switch (area) {
+    case 'staged':
+      return ['unstage']
+    case 'unstaged':
+    case 'untracked':
+      return ['discard', 'stage']
+  }
+}

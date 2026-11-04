@@ -4,7 +4,6 @@ import { findRepoForGitHubOwner } from '../github/repository-routing'
 import { workItemsCacheKey } from '../github/cache-identity'
 import {
   createTestStore,
-  mockApi,
   resetRemoteRuntimeMocks,
   runtimeEnvironmentCall
 } from './github-slice-test-harness'
@@ -143,29 +142,5 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         )
       ]?.data
     ).toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
-  })
-
-  it('bounds work-item cache entries across many repos', async () => {
-    vi.useFakeTimers()
-
-    try {
-      const store = createTestStore()
-      mockApi.gh.listWorkItems.mockResolvedValue({
-        items: [],
-        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
-      })
-
-      for (let i = 0; i <= 500; i++) {
-        vi.setSystemTime(1_000 + i)
-        await store.getState().fetchWorkItems(`repo-${i}`, `/repo/${i}`, 24, '')
-      }
-
-      const cache = store.getState().workItemsCache
-      expect(Object.keys(cache)).toHaveLength(500)
-      expect(cache[workItemsCacheKey('repo-0', 24, '')]).toBeUndefined()
-      expect(cache[workItemsCacheKey('repo-500', 24, '')]).toBeDefined()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

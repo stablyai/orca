@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import * as fs from 'node:fs'
 import type { RuntimeRpcResponse } from '../../src/shared/runtime-rpc-envelope'
 import { useAppStore } from '@/store'
-import { nativeClient } from '@/components/right-sidebar/ai-vault-account-native-test-fixture'
+import { nativeClient } from '@/components/right-sidebar/ai-vault/accounts/ai-vault-account-native-test-fixture'
 import type { AiVaultSession } from '../../src/shared/ai-vault/contracts/ai-vault-types'
 import { decodeAccountsSnapshot } from '../../mobile/src/components/accounts-snapshot'
 import { createRateLimitsApi } from '@/web/preload-api/web-rate-limits-api'
@@ -18,7 +18,7 @@ import {
   recordedSession,
   flushAccountWork,
   installAccountFixture
-} from '@/components/right-sidebar/ai-vault-account-test-fixture'
+} from '@/components/right-sidebar/ai-vault/accounts/ai-vault-account-test-fixture'
 
 vi.mock('node:fs', async (original) => ({ ...(await original<typeof fs>()) }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
