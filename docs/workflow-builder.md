@@ -4,6 +4,18 @@ Design, save, and run multi-agent workflows on a canvas. Each agent node becomes
 
 Open it from **Workflows** in the left sidebar.
 
+## How it differs from Orca orchestration
+
+Orca's orchestration layer (`orca orchestration …`, see [the orchestration docs](site/content/docs/cli/orchestration.mdx)) gives you the building blocks: Runs, Tasks, Dispatches, workers, mail and decision gates. A coordinator, usually an agent, decides what to start, when to start it and what to tell each worker. The Workflow Builder keeps those building blocks and moves the decisions into Orca:
+
+- **Scheduling is deterministic.** A pure scheduler in the main process starts nodes when their dependencies settle, and handles parallel branches, joins, decisions, approvals, retries and bounded loops. No agent decides the order.
+- **Routing is enforced.** Messages between workflow agents pass a route guard inside `orchestration.send`. A message with no drawn route, or one that breaks the route's policy, is refused before anything is written.
+- **Payloads are selected.** Each route picks what travels from the sender's final report, within size, count and rate budgets. The conversation itself never travels.
+- **Order and data are separate.** Execution dependencies and communication routes are two different graphs.
+- **Runs are reusable and recoverable.** Presets hold the whole design. Each run executes a frozen copy, is saved to disk, and resumes after a restart from Orca's own Task and Dispatch rows.
+
+Nothing new runs outside the orchestration runtime: every step is an ordinary Orca Task and Dispatch, so `orca orchestration task-list`, `worker-show` and `worker-read` work on workflow runs too.
+
 ## Using it
 
 ### Design mode

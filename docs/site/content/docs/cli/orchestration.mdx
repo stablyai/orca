@@ -20,6 +20,12 @@ Use it when you need ownership, completion tracking, or a DAG. For one-off promp
   the Run + worker-start flow below.
 </Callout>
 
+<Callout title="Visual Workflow Builder (this fork)">
+  The **Workflows** view in the sidebar builds on these same Runs, Tasks and Dispatches. You draw
+  the agents and routes on a canvas, and a deterministic controller schedules them, enforces who may
+  message whom, and resumes runs after a restart. See `docs/workflow-builder.md` in the repository.
+</Callout>
+
 ## Output
 
 Every orchestration command prints a short view by default: the IDs and state the next command needs, with the next step last. `--json` prints the same fields as one line of JSON (`{"ok":true,"result":{...}}`). `--full --json` prints the complete record Orca returned as pretty JSON; `--full` alone prints the longer text receipt. A failed or unconfirmed outcome exits non-zero and writes `error: <code>: <message>` to stderr.

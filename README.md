@@ -26,7 +26,78 @@
   <img src="docs/assets/readme-hero.jpg" alt="Orca desktop app running agents in parallel worktrees, with the Orca mobile companion app in the corner" width="960" />
 </p>
 
-## Features
+> [!NOTE]
+> **This is a fork of [stablyai/orca](https://github.com/stablyai/orca)** that adds a **visual Workflow Builder** for multi-agent orchestration. Everything upstream Orca does still works the same way. The download links, badges and app store builds below are upstream's and **do not include the Workflow Builder**; to use it, [build from source](#build-this-fork-from-source).
+
+## What this fork adds: the Workflow Builder
+
+Upstream Orca can already coordinate agents. Its orchestration layer has Runs, Tasks, Dispatches, supervised workers, mailboxes and decision gates. You drive all of it from the `orca orchestration` CLI, usually by asking a coordinator agent to run the commands. That agent decides when each worker starts, what each worker is told, and who talks to whom.
+
+This fork puts a **canvas and a deterministic controller** on top of that same layer. You draw the team once, save it as a preset, and run it again whenever you like. Orca then runs the graph itself instead of trusting a coordinator agent to follow a plan.
+
+Open it from **Workflows** in the left sidebar.
+
+### How it differs from upstream orchestration
+
+|                       | Upstream Orca orchestration                            | This fork's Workflow Builder                                                                                                                                                                                            |
+| --------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **How you define it** | CLI commands typed by you or by a coordinator agent    | A drag-and-drop graph (React Flow), saved as a reusable preset                                                                                                                                                          |
+| **Who schedules**     | The coordinator agent decides, turn by turn            | A deterministic scheduler in Orca's main process: sequential steps, parallel branches, joins (`all`/`any`), decisions, human approvals, retries and bounded loops                                                       |
+| **Agent setup**       | Flags on each `worker-start`                           | Per node: CLI agent, model, effort, role instructions, task template, skills, tool notes, workspace isolation and an optional JSON result contract                                                                      |
+| **Who may talk**      | Any worker can message anyone in its Run               | Communication edges are **enforced**: `orchestration.send` refuses messages along routes you didn't draw (`workflow_route_refused`), and each route has its own payload policy, size, count and rate limits             |
+| **What gets passed**  | Whatever the agent writes                              | Only what the route's policy selects from the sender's final report (summary, structured JSON, chosen fields, git refs, test results…). The sender's conversation is never forwarded.                                   |
+| **Order vs. data**    | Combined in the coordinator's head                     | Two separate graphs: **execution dependencies** (order) and **communication routes** (data). A route never implies an order.                                                                                            |
+| **Watching a run**    | `check`, `worker-show` and terminals                   | Execution mode on the same canvas: live node status, attempts, models and timers; a timeline; a searchable message log; metrics; run output; CSV/JSON export; run history                                               |
+| **Recovery**          | Manual (`dispatch-show`, `worker-stop`, retry by hand) | Retry, Stop and retry, Pause, Resume and Cancel buttons. Runs are saved to disk and resume after an Orca restart; Orca's own Task and Dispatch rows decide the outcome, and anything unprovable is marked _Unconfirmed_ |
+| **Reuse**             | Re-type the commands                                   | Presets with save, duplicate, import and export, plus six built-in templates (sequential, parallel, research → implement, hierarchical team, minimal communication, auth feature)                                       |
+
+Under the hood, nothing about Orca's runtime changed: every workflow step becomes a real Orca Run, Task and Dispatch, started through the same RPC handlers the `orca` CLI uses. The upstream commands keep working, and you can inspect a workflow's workers with them. The one change to existing code is a route-guard hook in `orchestration.send`, which applies only to Runs that a workflow owns.
+
+**Limits worth knowing.** The Workflow Builder enforces routing, placement, timeouts, attempt limits and message budgets. It does **not** sandbox agents: an agent with shell access can still read files, run commands or use the network. Token counts are estimates. Full details are in the [Workflow Builder guide](docs/workflow-builder.md).
+
+### Build this fork from source
+
+You need Node 24 (via nvm or similar) and pnpm, which comes with Node through Corepack:
+
+```bash
+corepack enable pnpm
+```
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+Run the app in development mode, then click **Workflows** in the sidebar:
+
+```bash
+pnpm dev
+```
+
+Run the Workflow Builder's tests:
+
+```bash
+pnpm test src/shared/workflow src/main/workflows src/renderer/src/components/workflows --maxWorkers=2
+```
+
+Package a macOS app you can launch directly (the output goes to `dist/`):
+
+```bash
+pnpm build:unpack
+```
+
+Or build the full macOS installer:
+
+```bash
+pnpm build:mac
+```
+
+The [Workflow Builder guide](docs/workflow-builder.md) covers the optional live test with real Claude workers, the architecture and the security boundary.
+
+---
+
+## Features (from upstream Orca)
 
 <table>
 <tr>
@@ -214,6 +285,8 @@ Works with **any CLI agent** — if it runs in a terminal, it runs in Orca.
 
 ## Install
 
+> These are upstream Orca's builds and do not include the Workflow Builder. To get it, [build this fork from source](#build-this-fork-from-source).
+
 ### Desktop — macOS, Windows, Linux
 
 - **[Download from onOrca.dev](https://onorca.dev/download)**
@@ -276,4 +349,4 @@ Windows code signing sponsored/provided by [SignPath.io](https://signpath.io), c
 
 ## License
 
-Orca is free and open source under the [MIT License](LICENSE).
+Orca is free and open source under the [MIT License](LICENSE). This fork, including the Workflow Builder, is under the same license.
