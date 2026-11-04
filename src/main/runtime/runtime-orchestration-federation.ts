@@ -110,7 +110,8 @@ export class RuntimeOrchestrationFederation {
       method.startsWith('orchestration.')
         ? { ...envelope, orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION }
         : envelope,
-      internal?.expectedEnvironmentPairingRevision
+      internal?.expectedEnvironmentPairingRevision,
+      internal?.prepareRequest
     )
     if (response.ok === false) {
       throw new OrchestrationError(response.error.code, response.error.message, response.error.data)

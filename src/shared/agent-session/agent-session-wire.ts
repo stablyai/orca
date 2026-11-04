@@ -1,3 +1,4 @@
+import type { MailDisplayProjection } from './mail-display-report'
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
 import type { AgentSessionCurrentWorkFields } from './requests/agent-session-current-work-wire'
@@ -72,6 +73,7 @@ export type AgentSessionSubagentRosterEntry = {
 }
 
 export type AgentSessionHistoryPage = {
+  mailDisplayReports?: MailDisplayProjection
   sessionId: string
   epoch: string
   /** Optional for mixed-version readers; write-capable clients use the

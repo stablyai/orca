@@ -1,3 +1,4 @@
+import { senderHasOrchestrationProvenance } from '../../../src/shared/agent-session/mail-report-presentation'
 import { useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import type { AgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
@@ -86,7 +87,8 @@ export function useMobileAgentMessageNavigation(
               outcome.reason,
               sender.name ?? '',
               outcome.surface,
-              outcome.workspaceKind
+              outcome.workspaceKind,
+              !senderHasOrchestrationProvenance(sender)
             ),
             3000
           )

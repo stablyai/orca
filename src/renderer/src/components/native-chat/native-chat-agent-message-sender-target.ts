@@ -1,3 +1,4 @@
+import { senderHasOrchestrationProvenance } from '../../../../shared/agent-session/mail-report-presentation'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
 import {
@@ -139,8 +140,16 @@ export function agentMessageSenderOpens(
  *  what the user can do. */
 export function agentMessageSenderUnavailableText(
   target: AgentMessageSenderTarget,
-  name: string
+  name: string,
+  sender?: AgentMessageSender
 ): string {
+  if (sender && !senderHasOrchestrationProvenance(sender)) {
+    return translate(
+      'components.native-chat.agentMessage.sourceUnavailable',
+      '{{name}} is no longer available. Open its terminal from the sidebar.',
+      { name }
+    )
+  }
   // The unnamed label reads mid-sentence; these sentences start with the sender.
   const subject =
     name === unnamedSenderLabel()

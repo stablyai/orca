@@ -56,6 +56,7 @@ export function importFederatedControlMessage(
     dispatchId: string
     messageId: string
     payload: string
+    displayReport?: unknown
   }
 ): { imported: boolean; type: MessageType } {
   const attachment = db.getRemoteDispatchAttachment(params.dispatchId)
@@ -95,6 +96,7 @@ export function importFederatedControlMessage(
     to: recipient,
     subject: message.subject,
     body: message.body,
+    displayReport: params.displayReport,
     type: message.type,
     priority: message.priority,
     threadId: message.threadId ?? undefined,

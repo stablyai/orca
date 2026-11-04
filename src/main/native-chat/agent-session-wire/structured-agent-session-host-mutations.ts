@@ -1,3 +1,5 @@
+import { composeJournalOperationReceipts } from '../agent-session-journal/journal-row-writer'
+import type { MailDisplayAttachment } from '../../../shared/agent-session/mail-display-report'
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
@@ -68,6 +70,7 @@ export function sendStructuredAgentSessionTurn(
     userSend?: true
     /** Host-origin personal text, including launch prompts; other agents carry from instead. */
     personsMessage?: true
+    displayAttachments?: readonly MailDisplayAttachment[]
     beforeRun?: () => void
   },
   arrival?: Parameters<typeof sendPreparation>[2]
@@ -107,7 +110,23 @@ export function sendStructuredAgentSessionTurn(
               }
             }
           }
-          return runQueueableStructuredAgentSessionSend(context, ctx, params, () => plan.run(ctx))
+          const display = params.displayAttachments?.length
+            ? ctx.journal.mailDisplayReports.receipt(params.body, params.displayAttachments)
+            : undefined
+          const original = ctx.operationReceipt
+          const withDisplay =
+            display && original
+              ? {
+                  ...ctx,
+                  operationReceipt: {
+                    ...original,
+                    ...composeJournalOperationReceipts(original, display)
+                  }
+                }
+              : ctx
+          return runQueueableStructuredAgentSessionSend(context, withDisplay, params, () =>
+            plan.run(withDisplay)
+          )
         }
       },
       sendPreparation(context, params.envelope, arrival, selection)

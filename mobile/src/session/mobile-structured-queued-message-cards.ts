@@ -79,6 +79,6 @@ export function mobileQueuedMessageCards(
     }),
     needsAttention: queuedMessageCardNeedsAttention(card),
     caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? []),
-    attribution: agentMessageAttribution('From', card.from)
+    attribution: card.report ? card.report.source : agentMessageAttribution('From', card.from)
   }))
 }

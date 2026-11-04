@@ -19681,6 +19681,8 @@
         "byteCount_many": "{{count}} octets"
       },
       "backgroundTasks": {
+        "commandExit": "Code de sortie {{code}}",
+        "commandSignal": "Signal {{signal}}",
         "monitoring": "Surveillance des tâches en arrière-plan",
         "stop": "Arrêter",
         "stopTask": "Arrêter {{value0}}",

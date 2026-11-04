@@ -70,7 +70,7 @@ export function agentMessageHeading(
 
 const sourceAddressLabels = new WeakMap<AgentMessageSender, string>()
 
-function sourceAddressLabel(sender: AgentMessageSender): string {
+export function agentMessageSourceAddressLabel(sender: AgentMessageSender): string {
   let label = sourceAddressLabels.get(sender)
   if (label === undefined) {
     label = agentMessageSenderName(sender.party.address) || '—'
@@ -89,7 +89,7 @@ export function agentMessageSenderLabel(facts: {
   fallback: string
 }): string {
   if (facts.sender && agentMessageSenderIsNamedSource(facts.sender)) {
-    return facts.snapshotName || sourceAddressLabel(facts.sender)
+    return facts.snapshotName || agentMessageSourceAddressLabel(facts.sender)
   }
   return (
     (facts.localChat && (facts.customLabel?.trim() || facts.conversationName)) ||
@@ -121,7 +121,15 @@ export function agentMessageSenderIsNamedSource(sender: AgentMessageSender | und
 
 /** Named sources and Dispatch addresses have no sender pane to open. */
 export function agentMessageSenderCanOpen(sender: AgentMessageSender): boolean {
-  return !sender.party.address.startsWith('dispatch:') && !agentMessageSenderIsNamedSource(sender)
+  return (
+    !sender.party.address.startsWith('dispatch:') &&
+    !(
+      sender.party.address.startsWith('run:') &&
+      !sender.party.orcaSessionId &&
+      !sender.party.terminalHandle
+    ) &&
+    !agentMessageSenderIsNamedSource(sender)
+  )
 }
 
 export function agentMessagePrimarySender(

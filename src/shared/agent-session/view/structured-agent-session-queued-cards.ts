@@ -1,3 +1,4 @@
+import { mailReportPresentation, type MailReportPresentation } from '../mail-report-presentation'
 // Derive hold labels on the client; the wire carries queue state, not presentation wording.
 
 import { agentMessageDisplayText } from '../agent-message-display-text'
@@ -61,6 +62,7 @@ export type QueuedMessageCard = {
   /** The typed fact the returned card's submission settled with; read like its `rejection`. */
   returnedRejection?: UnreadAgentSessionFailureFact
   from?: AgentMessageSource
+  report?: MailReportPresentation
 }
 
 export function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string {
@@ -115,13 +117,20 @@ export function projectQueuedMessageCards(
               : 'turn'
     behindReturned = behindReturned || message.state === 'returned'
     const from = queuedMessageCardSource(message.body)
+    const report = mailReportPresentation({
+      from,
+      blocks: message.body.blocks,
+      mailDisplayReports: message.mailDisplayReports
+    })
     return {
       messageId: message.messageId,
       position: message.position,
       text: queuedMessageCardText(message.body),
+      ...(report ? { report } : {}),
       ...(from
         ? {
             displayText:
+              report?.text ??
               agentMessageDisplayText(message.body.blocks, from) ??
               queuedMessageCardText(message.body)
           }

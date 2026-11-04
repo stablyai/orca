@@ -586,20 +586,23 @@ describe('orchestration RPC methods', () => {
       const task = db.createTask({ spec: 'work' })
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
 
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real send handler returns the asserted public message receipt.
       const result = (await call('orchestration.send', {
         from: 'term_worker',
         to: 'term_coord',
         subject: 'done',
         type: 'worker_done',
+        displayReport: { version: 1, kind: 'command' },
         payload: JSON.stringify({
           taskId: task.id,
           dispatchId: dispatch.id,
           outcome: 'succeeded'
         })
-      })) as { message: { to_handle: string; type: string; payload: string | null } }
+      })) as { message: { id: string; to_handle: string; type: string; payload: string | null } }
 
       expect(result.message.to_handle).toBe(`run:${activeRunId}`)
       expect(result.message.type).toBe('worker_done')
+      expect(db.getMessageById(result.message.id)?.display_report).toBeNull()
       expect(result.message.payload).toBe(
         JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
       )

@@ -372,3 +372,40 @@ it('resolves batched senders through published identity and leases replaced rows
   view.unmount()
   expect(readStoreListenerCount()).toBe(baseline)
 })
+
+it.each(['run:coordinator', 'dispatch:past'])(
+  'never borrows a same-kind successor status for a saved event with only role %s',
+  (address) => {
+    write(0, { agentType: 'codex' })
+    useAppStore.getState().setAgentSenderPublication('local', {
+      associations: [
+        { identity: address, paneKey: status(0).paneKey, worktreeId: 'workspace' },
+        { identity: 'term_0', paneKey: status(0).paneKey, worktreeId: 'workspace' }
+      ],
+      principals: [],
+      attachments: [],
+      revision: { epoch: 'successor', revision: 1 }
+    })
+    const saved = {
+      name: 'Known A',
+      agent: 'codex',
+      party: { address, terminalHandle: null, orcaSessionId: null }
+    }
+    const past = renderHook(() => useAgentMessageSenderView(saved, 'workspace', { kind: 'local' }))
+    const current = renderHook(() =>
+      useAgentMessageSenderView(
+        {
+          name: 'Known B',
+          agent: 'codex',
+          party: { address: 'term_0', terminalHandle: 'term_0', orcaSessionId: null }
+        },
+        'workspace',
+        { kind: 'local' }
+      )
+    )
+    expect(past.result.current).toEqual({ agentType: 'codex', dot: undefined, progress: undefined })
+    expect(current.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
+    write(0, { state: 'waiting' })
+    expect(past.result.current).toEqual({ agentType: 'codex', dot: undefined, progress: undefined })
+  }
+)

@@ -1,3 +1,4 @@
+import { applyMailDisplayProjection } from '../../../../src/shared/agent-session/mail-display-report'
 import { createContext, type ContextType } from 'react'
 import { z } from 'zod'
 import { isAdmissibleAgentJournalRenderItem } from '../../../../src/shared/agent-session/journal/agent-session-journal-schemas'
@@ -8,6 +9,7 @@ import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-v
 import type { MobileNativeChatMessageDetail } from './transcript/use-mobile-native-chat-message-detail'
 
 const itemReplySchema = z.object({
+  mailDisplayReports: z.unknown().optional(),
   item: z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem).nullable()
 })
 
@@ -46,5 +48,5 @@ export async function readMobileNativeChatItem(
   if (reply === null) {
     throw new Error('The host could not read this item.')
   }
-  return reply.item
+  return reply.item ? applyMailDisplayProjection([reply.item], reply.mailDisplayReports)[0] : null
 }

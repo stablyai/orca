@@ -1,3 +1,4 @@
+import { applyMailDisplayProjection } from './mail-display-report'
 import type { AgentSessionCurrentRequestsMarker } from './requests/agent-session-current-requests-wire'
 import {
   hostClockField,
@@ -184,7 +185,11 @@ export function reduceStructuredAgentSession(
     if (head && head.sequence > requested.sequence) {
       return state
     }
-    const items = mergeItems(state.items, action.page.items, action.page.removedItemIds)
+    const items = mergeItems(
+      state.items,
+      applyMailDisplayProjection(action.page.items, action.page.mailDisplayReports),
+      action.page.removedItemIds
+    )
     return {
       ...state,
       items,
@@ -231,7 +236,10 @@ export function reduceStructuredAgentSession(
         ? undefined
         : state.backgroundTasks
   const activity = event.activity !== undefined ? event.activity : state.activity
-  const liveItems = liveItemsWithinWindow(state, event.batch.items)
+  const liveItems = liveItemsWithinWindow(
+    state,
+    applyMailDisplayProjection(event.batch.items, event.mailDisplayReports)
+  )
   // Fold every roster revision even outside the window; trimmed rows retain their sequence.
   const subagentRoster = foldStructuredAgentSubagentRoster(
     state.subagentRoster ?? NO_STRUCTURED_AGENT_SUBAGENT_ROSTER,
@@ -271,9 +279,10 @@ export function reduceStructuredAgentSession(
   const items = journalUnchanged
     ? merged
     : trimRetainedItems(merged, state.retainedOwnItemLimit, state.retainedItemCap)
+  const liveItemIds = new Set(liveItems.map((item) => item.itemId))
   const outsideWindow = [
     ...(liveItems.length < event.batch.items.length
-      ? event.batch.items.filter((item) => !liveItems.includes(item))
+      ? event.batch.items.filter((item) => !liveItemIds.has(item.itemId))
       : []),
     ...merged.slice(0, merged.length - items.length)
   ]

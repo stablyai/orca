@@ -1,25 +1,22 @@
+import { withMailDisplayReports } from './mail-display-response'
 import { resolveHistoryLimit } from './agent-session-history-limit'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { snapshotLatestTurn } from './agent-session-history-latest-turn'
 
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSnapshot
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type * as Journal from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import {
+  AGENT_SESSION_HISTORY_MAX_PAGE_BYTES,
+  conversationWindow,
   boundHistoryItemsByBytes,
-  isSubagentRow,
   historyContentBytes,
   type HistoryReader,
   type HistoryPageInput,
   measureHistoryItem,
-  newestWholeSequenceGroups,
-  wholeSubagentGroupsStart,
   oversizedHistoryItem,
   submissionBytesByItemId
 } from './agent-session-history-page-bounds'
@@ -41,27 +38,22 @@ export { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-pa
 /** In-process only: both scopes window by own-agent rows; own-agent also excludes other producers. */
 export type AgentSessionHistoryScope = 'every-agent' | 'own-agent'
 
-/** Window by own-agent rows, retaining contiguous subagent work and whole sibling groups within byte bounds. */
-function conversationWindow(
-  items: readonly AgentJournalRenderItem[],
-  limit: number
-): AgentJournalRenderItem[] {
-  const own = items.filter((item) => isRootAgentJournalItem(item) && !isSubagentRow(item))
-  if (own.length === items.length) {
-    return newestWholeSequenceGroups(items, limit)
+export function readAgentSessionHistory(
+  ...args: Parameters<typeof readAgentSessionHistoryUnprojected>
+): AgentSessionHistoryResult {
+  const result = readAgentSessionHistoryUnprojected(...args)
+  return {
+    ...result,
+    page: withMailDisplayReports(
+      args[0],
+      result.page,
+      result.page.items,
+      AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
+    )
   }
-  const ownWindow = newestWholeSequenceGroups(own, limit)
-  const start = ownWindow.length < own.length ? ownWindow[0]?.sequence : undefined
-  if (start === undefined) {
-    return [...items]
-  }
-  const reach = newestWholeSequenceGroups(own, 2 * limit)
-  const floor = reach.length < own.length ? reach[0]!.sequence : Number.NEGATIVE_INFINITY
-  const whole = wholeSubagentGroupsStart(items, start, floor)
-  return items.filter((item) => item.sequence >= whole)
 }
 
-export function readAgentSessionHistory(
+function readAgentSessionHistoryUnprojected(
   journal: AgentSessionJournal,
   request: AgentSessionHistoryRequest,
   {
@@ -72,7 +64,7 @@ export function readAgentSessionHistory(
     rowReplay = false
   }: {
     /** Reuse a snapshot across synchronous catch-up pages to avoid repeated full reduction. */
-    snapshot?: AgentJournalSnapshot
+    snapshot?: Journal.AgentJournalSnapshot
     view?: ReturnType<AgentSessionJournal['publicRead']>
     scope?: AgentSessionHistoryScope
     reader?: HistoryReader
@@ -153,13 +145,14 @@ export function readAgentSessionHydrationPage(
   journal: AgentSessionJournal,
   fence?: number,
   reader: HistoryReader = CLIENT_HISTORY_READER,
-  snapshot: AgentJournalSnapshot = journal.currentRead()
+  snapshot: Journal.AgentJournalSnapshot = journal.currentRead()
 ): AgentSessionHistoryPage {
-  return buildHydrationPage(reader.snapshot?.(journal, snapshot) ?? snapshot, fence, reader)
+  const page = buildHydrationPage(reader.snapshot?.(journal, snapshot) ?? snapshot, fence, reader)
+  return withMailDisplayReports(journal, page, page.items, AGENT_SESSION_HISTORY_MAX_PAGE_BYTES)
 }
 
 function buildHydrationPage(
-  snapshot: AgentJournalSnapshot,
+  snapshot: Journal.AgentJournalSnapshot,
   fence: number | undefined,
   reader: HistoryReader
 ): AgentSessionHistoryPage {
@@ -200,11 +193,11 @@ function historyReset(
 
 function readForward(
   journal: AgentSessionJournal,
-  snapshot: AgentJournalSnapshot,
+  snapshot: Journal.AgentJournalSnapshot,
   cursor: AgentJournalCursor | undefined,
   limit: number,
   reader: HistoryReader,
-  readSnapshot: (ids: ReadonlySet<string>) => AgentJournalSnapshot
+  readSnapshot: (ids: ReadonlySet<string>) => Journal.AgentJournalSnapshot
 ): AgentSessionHistoryResult {
   if (!cursor) {
     // Why: forward paging replays rows after a position; without one there is

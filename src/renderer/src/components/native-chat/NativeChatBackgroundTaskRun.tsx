@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+import type { MailReportPresentation } from '../../../../shared/agent-session/mail-report-presentation'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { AgentStateDot } from '@/components/AgentStateDot'
@@ -18,10 +20,51 @@ import { formatNativeChatDuration } from './NativeChatWorkingStatus'
 
 /** Render the host’s durable task state, never infer it from turn state: background work can outlive the turn that launched it. */
 export function NativeChatBackgroundTaskRun({
-  block
-}: {
-  block: NativeChatBackgroundTaskBlock
-}): React.JSX.Element {
+  block,
+  report,
+  attribution,
+  children
+}:
+  | {
+      block: NativeChatBackgroundTaskBlock
+      report?: never
+      attribution?: never
+      children?: never
+    }
+  | {
+      block?: never
+      report: MailReportPresentation
+      attribution?: ReactNode
+      children: ReactNode
+    }): React.JSX.Element {
+  if (report) {
+    const result = report.report?.result
+    return (
+      <div className="min-w-0 w-full py-0.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">
+        <div className="flex min-h-6 min-w-0 items-center gap-1.5">
+          {attribution ?? (
+            <span className="min-w-0 truncate text-chat-foreground" title={report.source}>
+              {report.source}
+            </span>
+          )}
+          {result ? (
+            <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
+              {result.type === 'exit'
+                ? translate('components.native-chat.backgroundTasks.commandExit', 'Exit {{code}}', {
+                    code: result.code
+                  })
+                : translate(
+                    'components.native-chat.backgroundTasks.commandSignal',
+                    'Signal {{signal}}',
+                    { signal: result.signal }
+                  )}
+            </span>
+          ) : null}
+        </div>
+        {children}
+      </div>
+    )
+  }
   const kind = normalizeBackgroundTaskKind(block.kind)
   const Icon = KIND_ICONS[kind]
   const state = normalizeBackgroundTaskState(block.state)

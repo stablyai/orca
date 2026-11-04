@@ -1,3 +1,4 @@
+import { applyMailDisplayProjection } from '../mail-display-report'
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage, AgentSessionTurnActivity } from '../agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../agent-session-background-task-wire'
@@ -35,7 +36,9 @@ export function replacePage(
     epoch: page.epoch,
     cursor: page.liveCursor ?? page.window.nextCursor,
     fence,
-    items: [...page.items].sort(compareAgentJournalItems),
+    items: applyMailDisplayProjection(page.items, page.mailDisplayReports).sort(
+      compareAgentJournalItems
+    ),
     submissions: page.submissions,
     retainedOwnItemLimit: Math.max(MAX_RETAINED_OWN_ITEMS, ownItemCount(page.items)),
     retainedItemCap: Math.max(MAX_RETAINED_ITEMS, page.items.length),

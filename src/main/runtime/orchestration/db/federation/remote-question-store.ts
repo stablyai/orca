@@ -1,3 +1,4 @@
+import { importedAnswerSenderSnapshot } from '../../answer-sender-relay-report'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 
@@ -29,6 +30,7 @@ type RemoteAnswerParams = {
   dispatchId: string
   answerMessageId: string
   body: string
+  answerSenderReport?: unknown
 }
 
 function classifyRemoteQuestion(
@@ -65,38 +67,66 @@ function classifyRemoteQuestion(
 }
 
 export function answerRemoteQuestion(this: OrchestrationDb, params: RemoteAnswerParams): void {
-  if (classifyRemoteQuestion.call(this, params) !== 'settled') {
-    const changes = this.db
-      .prepare(
-        `UPDATE remote_questions
-         SET status = 'answered', answer_message_id = ?, answer_body = ?,
-             answered_at = datetime('now')
-         WHERE message_id = ? AND status = 'pending'`
-      )
-      .run(params.answerMessageId, params.body, params.messageId).changes
-    // Reclassify a lost UPDATE race so concurrent answer/close is reported honestly.
-    if (changes === 0 && classifyRemoteQuestion.call(this, params) !== 'settled') {
-      throw new OrchestrationError(
-        'answer_conflict',
-        `Remote Question ${params.messageId} could not be answered.`
-      )
+  this.db.exec('SAVEPOINT remote_answer_mail')
+  try {
+    const fresh = classifyRemoteQuestion.call(this, params) !== 'settled'
+    if (fresh) {
+      const updated = this.db
+        .prepare(`UPDATE remote_questions
+        SET status = 'answered', answer_message_id = ?, answer_body = ?, answered_at = datetime('now')
+        WHERE message_id = ? AND status = 'pending'`)
+        .run(params.answerMessageId, params.body, params.messageId)
+      if (updated.changes === 0 && classifyRemoteQuestion.call(this, params) !== 'settled') {
+        throw new OrchestrationError('answer_conflict', 'The remote answer could not be stored.')
+      }
     }
+    storeRemoteAnswerMail.call(this, params, fresh)
+    this.db.exec('RELEASE remote_answer_mail')
+  } catch (error) {
+    this.db.exec('ROLLBACK TO remote_answer_mail')
+    this.db.exec('RELEASE remote_answer_mail')
+    throw error
   }
-  storeRemoteAnswerMail.call(this, params)
 }
 
 /** The answer is the worker's Dispatch mail on its execution host, as at a local Run home. */
-function storeRemoteAnswerMail(this: OrchestrationDb, params: RemoteAnswerParams): void {
+function storeRemoteAnswerMail(
+  this: OrchestrationDb,
+  params: RemoteAnswerParams,
+  fresh: boolean
+): void {
   const homeRunId = this.getRemoteDispatchAttachment(params.dispatchId)?.home_run_id
-  if (!homeRunId || this.getMessageById(params.answerMessageId)) {
+  if (!homeRunId) {
     return
   }
+  const existing = this.getMessageById(params.answerMessageId)
+  if (existing) {
+    if (
+      existing.run_id !== homeRunId ||
+      existing.from_handle !== `run:${homeRunId}` ||
+      existing.to_handle !== `dispatch:${params.dispatchId}` ||
+      existing.subject !== 'Re: Question' ||
+      existing.body !== params.body ||
+      existing.thread_id !== params.messageId ||
+      existing.type !== 'status'
+    ) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        'The remote answer conflicts with an existing message.'
+      )
+    }
+    return
+  }
+  // A replay cannot enrich a previously accepted answer that lacked an event snapshot.
   this.insertMessage({
     id: params.answerMessageId,
     runId: homeRunId,
     from: `run:${homeRunId}`,
     to: `dispatch:${params.dispatchId}`,
     subject: 'Re: Question',
+    answerSenderSnapshot: fresh
+      ? importedAnswerSenderSnapshot(params.answerSenderReport, `run:${homeRunId}`)
+      : undefined,
     body: params.body,
     threadId: params.messageId
   })

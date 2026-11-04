@@ -1,7 +1,5 @@
-import {
-  nativeChatTextAttachmentPaths,
-  chatTextAttachmentName
-} from '../../../../../src/shared/native-chat-text-attachment-references'
+import { mailReportPresentation } from '../../../../../src/shared/agent-session/mail-report-presentation'
+import { TextAttachmentActions } from './MobileNativeChatTextAttachmentActions'
 import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
@@ -40,7 +38,7 @@ import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
 import { ToolRun } from './MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { styles } from './mobile-native-chat-message-styles'
-import { MobileNativeChatAgentMessageCard } from './MobileNativeChatAgentMessageCard'
+import { MobileNativeChatMailMessage } from './MobileNativeChatMailMessage'
 import { MobileNativeChatVisualContext } from '../visual/mobile-native-chat-visual-context'
 import { useMobileNativeChatFullMessage } from '../MobileNativeChatFullContent'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -119,6 +117,7 @@ function MobileNativeChatMessageImpl({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { shown: message, showFull, recovery } = useMobileNativeChatFullMessage(rowMessage)
+  const report = mailReportPresentation(message)
   const agentFrom = message.role === 'user' || message.agentStart ? message.from : undefined
   const isUser = message.role === 'user' && !agentFrom
   const isReasoning = message.role === 'reasoning'
@@ -291,16 +290,19 @@ function MobileNativeChatMessageImpl({
         testID={mobileNativeChatRowId(rowKey ?? message.id)}
       >
         <Content onLongPress={onLongPress} style={[styles.content, isUser && styles.userBubble]}>
-          {agentFrom ? (
-            <MobileNativeChatAgentMessageCard
+          {report || agentFrom ? (
+            <MobileNativeChatMailMessage
               message={message}
               from={agentFrom}
+              report={report}
               fontScale={fontScale}
               attachments={proseRows(drawnProse.filter(Chat.isImageRefBlock))}
               onOpenFile={onOpenFile}
               onLongPress={onLongPress}
               status={showFull}
-            />
+            >
+              {report ? proseRows([{ type: 'text', text: report.text }]) : null}
+            </MobileNativeChatMailMessage>
           ) : (
             <>
               {/* A roster is not tool activity, so it stays out of the settled-tools collapse. */}
@@ -392,22 +394,3 @@ function MobileNativeChatMessageImpl({
 }
 
 export const MobileNativeChatMessage = memo(MobileNativeChatMessageImpl)
-
-const TextAttachmentActions = memo(function TextAttachmentActions(props: {
-  text: string
-  pastedText: string
-  onOpenFile?: (path: string) => void
-}) {
-  const { text, pastedText, onOpenFile } = props
-  const paths = useMemo(() => nativeChatTextAttachmentPaths(text), [text])
-  return paths.map((path) => (
-    <Text
-      key={path}
-      accessibilityRole="button"
-      onPress={() => onOpenFile?.(path)}
-      style={styles.agentAttribution}
-    >
-      {chatTextAttachmentName(path, pastedText)}
-    </Text>
-  ))
-})

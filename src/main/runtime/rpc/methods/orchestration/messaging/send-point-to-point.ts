@@ -61,6 +61,7 @@ export function sendPointToPointMessage(args: {
       from,
       to,
       subject: params.subject,
+      displayReport: params.displayReport,
       body: params.body,
       type: messageType,
       priority: params.priority as MessagePriority,

@@ -175,6 +175,8 @@ export function NativeChatQueuedMessageCard({
   const textId = useId()
   const sender = card.from ? (
     <NativeChatAgentMessageSenders from={card.from} chatWorktreeId={chatWorktreeId} queued />
+  ) : card.report ? (
+    <span className="text-xs text-chat-foreground-faint">{card.report.source}</span>
   ) : null
   if (editor) {
     return (

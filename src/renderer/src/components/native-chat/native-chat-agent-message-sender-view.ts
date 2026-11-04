@@ -24,7 +24,13 @@ function useSenderLocation(
   target: RuntimeClientTarget | undefined,
   dispatchId: string | undefined
 ) {
-  sender = agentMessageSenderIsNamedSource(sender) ? undefined : sender
+  sender =
+    agentMessageSenderIsNamedSource(sender) ||
+    ((sender?.party.address.startsWith('run:') || sender?.party.address.startsWith('dispatch:')) &&
+      !sender.party.orcaSessionId &&
+      !sender.party.terminalHandle)
+      ? undefined
+      : sender
   const address = sender?.party.address
   const sessionId = sender?.party.orcaSessionId
   const handle = sender?.party.terminalHandle
@@ -94,13 +100,8 @@ export function useAgentMessageSenderView(
   target?: RuntimeClientTarget,
   dispatchId?: string
 ) {
-  const { savedAgent, locate, leaseLocate } = useSenderLocation(
-    sender,
-    chatWorktreeId,
-    target,
-    dispatchId
-  )
-  return useAgentMessageSenderSource(locate, savedAgent, leaseLocate)
+  const { locate, leaseLocate } = useSenderLocation(sender, chatWorktreeId, target, dispatchId)
+  return useAgentMessageSenderSource(locate, agentMessageSavedKind(sender), leaseLocate)
 }
 
 /** Whether the card's sender name is a link. Its kind check reads the located row, so it holds

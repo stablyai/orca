@@ -1,3 +1,8 @@
+import { withMailDisplayReports } from './mail-display-response'
+import {
+  AGENT_SESSION_HISTORY_MAX_PAGE_BYTES,
+  BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+} from './agent-session-history-page-bounds'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionPublishedWork } from './agent-session-published-work'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -94,7 +99,7 @@ export function buildSubscriberFrame(
   const sideQueued = attachedQueued
     ? (subscriber.projectQueuePublication?.(queued) ?? queued)
     : undefined
-  return {
+  const result: SubscriberFrame = {
     frames: subscriber.boundedFrames
       ? boundedFrames(event, { queued: sideQueued, backgroundTasks }, subscriber.cursor).map(
           (frame, index) =>
@@ -125,6 +130,35 @@ export function buildSubscriberFrame(
     backgroundTasks:
       backgroundTasks === undefined ? undefined : backgroundTaskFingerprint(backgroundTasks)
   }
+  if (journal) {
+    result.frames = result.frames.map((frame) => {
+      if (frame.type === 'end') {
+        return frame
+      }
+      if (frame.type !== 'batch') {
+        return {
+          ...frame,
+          page: withMailDisplayReports(
+            journal,
+            frame.page,
+            frame.page.items,
+            subscriber.boundedFrames
+              ? BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+              : AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
+          )
+        }
+      }
+      return withMailDisplayReports(
+        journal,
+        frame,
+        frame.batch.items,
+        subscriber.boundedFrames
+          ? BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+          : AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
+      )
+    })
+  }
+  return result
 }
 
 /** First/hydrating frames restate rosters changed while disconnected; ordinary batches keep prior state. */

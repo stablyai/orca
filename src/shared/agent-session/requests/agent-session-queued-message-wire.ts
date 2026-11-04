@@ -1,3 +1,4 @@
+import type { MailDisplayAttachment } from '../mail-display-report'
 // Publish queued cards, queue pause and draft mutation results together.
 
 import type { UnreadAgentSessionFailureFact } from '../failures/agent-session-failure'
@@ -36,6 +37,7 @@ export type AgentSessionQueuedMessageMoveResult = {
 
 /** Publish whole card lists on history/subscribe; image cards require the reader's agent-session.queued-image-cards.v1 capability. */
 export type AgentSessionQueuedMessage = {
+  mailDisplayReports?: readonly MailDisplayAttachment[]
   messageId: string
   position: number
   body: AgentJournalMessageItem

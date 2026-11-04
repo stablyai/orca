@@ -1,3 +1,4 @@
+import type { MailDisplayAttachment } from '../agent-session/mail-display-report'
 import type { AgentSessionProviderContextBoundary } from '../agent-session/agent-session-provider-context'
 // IPC-serializable conversation contract: plain JSON only, no classes/Maps/Dates. Sources prefer transcripts, then hooks,
 // then degraded scrollback; docs/plans/2026-06-17-001-feat-native-chat-view-plan.md (KTD2).
@@ -230,6 +231,7 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** On a conversation command the user sent, such as `/compact`: the command it names. */
   command?: { name: string }
   /** On a user-role message another agent sent through Orca: who, as the journal recorded it. */
+  mailDisplayReports?: readonly MailDisplayAttachment[]
   from?: AgentMessageSource
   /** Projected creation fact, never a user turn or provider input. */
   agentStartDispatchId?: string

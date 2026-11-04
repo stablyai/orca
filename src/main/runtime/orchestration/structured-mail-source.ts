@@ -1,3 +1,9 @@
+import { runCoordinatorKey } from './orchestration-caller-identity'
+import {
+  readAnswerSenderSnapshot,
+  readMailDisplayReport,
+  type MailDisplayAttachment
+} from '../../../shared/agent-session/mail-display-report'
 /** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
 
 import type {
@@ -19,8 +25,8 @@ import { structuredAgentSessionBlocksTooLarge } from '../../../shared/rpc-contra
 
 export type MailSourceMessage = Pick<
   MessageRow,
-  'id' | 'from_handle' | 'run_id' | 'type' | 'payload'
->
+  'id' | 'from_handle' | 'run_id' | 'type' | 'payload' | 'answer_sender_snapshot'
+> & { thread_id?: string | null }
 
 export function structuredMailSource(input: {
   db: OrchestrationDb | null
@@ -31,22 +37,32 @@ export function structuredMailSource(input: {
 }): AgentMessageSource & { orchestration: OrchestrationMailNotice } {
   const groups = new Map<string, { message: MailSourceMessage; report: ReportFact }[]>()
   for (const message of input.batch) {
-    let group = groups.get(message.from_handle)
+    const key = JSON.stringify([message.from_handle, message.answer_sender_snapshot ?? null])
+    let group = groups.get(key)
     if (!group) {
       group = []
-      groups.set(message.from_handle, group)
+      groups.set(key, group)
     }
     group.push({ message, report: reportFact(message) })
   }
   const senders: AgentMessageSender[] = []
-  for (const [address, group] of groups) {
+  for (const group of groups.values()) {
+    const address = group[0]!.message.from_handle
+    const saved = readAnswerSenderSnapshot(group[0]!.message.answer_sender_snapshot)
+    const accepted = saved?.party.address === address ? saved : undefined
     const reported = group.find(({ report }) => report.kind === 'valid')?.report
-    const sender = agentMessageSender(
-      address,
-      input.db,
-      input.senderSnapshot,
-      reported?.kind === 'valid' ? reported.dispatchId : undefined
-    )
+    const guardedAnswer = accepted
+      ? undefined
+      : historicalAnswerSender(group[0]!.message, input.db, input.senderSnapshot)
+    const sender =
+      accepted ??
+      guardedAnswer ??
+      agentMessageSender(
+        address,
+        input.db,
+        input.senderSnapshot,
+        reported?.kind === 'valid' ? reported.dispatchId : undefined
+      )
     const relations = new Map<string, AgentMessageSender['relation']>()
     const values = group.map(({ message, report }) => {
       // Sender and DB are fixed by this group/invocation; every varying evidence field is keyed.
@@ -71,7 +87,9 @@ export function structuredMailSource(input: {
     const relation = values[0]
     senders.push({
       ...sender,
-      ...(relation && values.every((value) => value === relation) ? { relation } : {})
+      ...((accepted?.relation ?? relation) && values.every((value) => value === relation)
+        ? { relation: accepted?.relation ?? relation }
+        : {})
     })
   }
   return {
@@ -100,8 +118,28 @@ export function structuredMailMessage(input: {
   message: MessageRow
   cliCommand: OrchestrationCliCommand
   senderSnapshot: SenderSnapshotResolver
-}): { body: AgentJournalMessageItem; whole: boolean } {
+}): {
+  body: AgentJournalMessageItem
+  whole: boolean
+  displayAttachments?: readonly MailDisplayAttachment[]
+} {
   const from = structuredMailSource({ ...input, batch: [input.message] })
+  const report = ['worker_done', 'heartbeat', 'escalation', 'decision_gate'].includes(
+    input.message.type
+  )
+    ? undefined
+    : readMailDisplayReport(input.message.display_report)
+  const displayAttachments = report
+    ? [
+        {
+          mailbox: input.mailboxHandle,
+          messageId: input.message.id,
+          runId: input.message.run_id,
+          from: input.message.from_handle,
+          report
+        }
+      ]
+    : undefined
   const formatted = formatMessageBannerWithContent(input.message, { cliCommand: input.cliCommand })
   const whole = [{ type: 'text' as const, text: formatted.text }]
   if (!structuredAgentSessionBlocksTooLarge(whole)) {
@@ -121,12 +159,14 @@ export function structuredMailMessage(input: {
           }
         }
       },
+      displayAttachments,
       whole: true
     }
   }
   const pointer = formatMessagePointer(1, input.mailboxHandle, input.cliCommand).trim()
   return {
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: pointer }], from },
+    displayAttachments,
     whole: false
   }
 }
@@ -169,4 +209,38 @@ function reportFact(message: MailSourceMessage): ReportFact {
     }
   }
   return { kind: 'invalid' }
+}
+
+/** Old answers may use today's binding only while the exact accepted answer generation still owns it. */
+function historicalAnswerSender(
+  message: MailSourceMessage,
+  db: OrchestrationDb | null,
+  snapshot: SenderSnapshotResolver
+): AgentMessageSender | undefined {
+  if (!db || !message.from_handle.startsWith('run:') || !message.thread_id) {
+    return
+  }
+  const question = db.getQuestion(message.thread_id)
+  const run = db.getRun(message.from_handle.slice(4))
+  if (
+    !question ||
+    question.answer_message_id !== message.id ||
+    question.run_id !== run?.id ||
+    question.answered_by_generation === null ||
+    question.answered_by_generation !== run.consumer_generation
+  ) {
+    return
+  }
+  const actor = runCoordinatorKey(run)
+  const party = {
+    address: message.from_handle,
+    terminalHandle: actor.terminalHandle,
+    orcaSessionId: actor.orcaSessionId
+  }
+  const known = snapshot(party)
+  return {
+    party: { ...party, terminalHandle: null },
+    name: known.name,
+    ...(known.agent ? { agent: known.agent } : {})
+  }
 }

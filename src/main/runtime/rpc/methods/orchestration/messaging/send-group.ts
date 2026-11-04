@@ -244,6 +244,7 @@ export async function sendGroupMessage(args: {
       from,
       to: resolution.to,
       subject: params.subject,
+      displayReport: params.displayReport,
       body: params.body,
       type: params.type as MessageType,
       priority: params.priority as MessagePriority,

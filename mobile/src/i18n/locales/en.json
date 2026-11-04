@@ -2112,6 +2112,8 @@
       "agent": "Background agent",
       "workflow": "Background workflow",
       "command": "Background command",
+      "commandExit": "Exit {{code}}",
+      "commandSignal": "Signal {{signal}}",
       "monitor": "Background monitor",
       "task": "Background task",
       "detailsUnavailable": "Task details are unavailable for this session.",
@@ -2677,6 +2679,9 @@
       "saveFailedMessage": "This layout applies for now. Choose it again to retry saving."
     },
     "structuredOpen": {
+      "sourceUpdateRequired": "Update Orca to open this source.",
+      "sourceUnavailable": "{{name}} is no longer available. Open its terminal from the sidebar.",
+      "sourceOpenFailed": "Couldn't open {{name}}. Try again.",
       "goneGeneric": "Agent's chat is no longer on this host, so it cannot be reopened here.",
       "unknownGeneric": "Agent's chat could not be found on this host. Reconnect to its computer and try again.",
       "unsupportedGeneric": "Agent's chat can't be reopened until Orca is updated.",

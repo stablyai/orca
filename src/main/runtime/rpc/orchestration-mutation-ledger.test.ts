@@ -61,6 +61,85 @@ describe('durable orchestration mutation ledger', () => {
     return { db, runtime, dispatcher, effect }
   }
 
+  it('replays federation imports across old and new optional-report parsers without enriching the first acceptance', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    const item = z.object({ dispatch_id: z.string(), sequence: z.number(), payload: z.string() })
+    const effects: unknown[] = []
+    const makeDispatcher = (newReader: boolean) =>
+      new RpcDispatcher({
+        runtime,
+        methods: [
+          defineMethod({
+            name: 'orchestration.federationImport',
+            permission: 'workspace',
+            params: z.object({
+              dispatchId: z.string(),
+              items: z.array(
+                newReader
+                  ? item.extend({
+                      displayReport: z.unknown().optional(),
+                      answerSenderReport: z.unknown().optional()
+                    })
+                  : item
+              )
+            }),
+            handler: (params) => {
+              effects.push(params.items[0])
+              return { acknowledgedThrough: 1 }
+            }
+          })
+        ]
+      })
+    const wire = {
+      dispatchId: 'dispatch-one',
+      items: [
+        {
+          dispatch_id: 'dispatch-one',
+          sequence: 1,
+          payload: 'canonical',
+          displayReport: { version: 1, kind: 'command' },
+          answerSenderReport: { version: 1, name: 'Known A', agent: 'codex' }
+        }
+      ]
+    }
+    const req = (id: string, params: unknown) => ({
+      id,
+      authToken: 'caller-token',
+      method: 'orchestration.federationImport',
+      params,
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'relay_import_one_1'
+    })
+    expect(await makeDispatcher(false).dispatch(req('old', wire))).toMatchObject({
+      ok: true,
+      result: { mutation: { replayed: false } }
+    })
+    expect(await makeDispatcher(true).dispatch(req('new', wire))).toMatchObject({
+      ok: true,
+      result: { mutation: { replayed: true } }
+    })
+    expect(
+      await makeDispatcher(true).dispatch(
+        req('omitted', {
+          dispatchId: wire.dispatchId,
+          items: [{ dispatch_id: 'dispatch-one', sequence: 1, payload: 'canonical' }]
+        })
+      )
+    ).toMatchObject({ ok: true, result: { mutation: { replayed: true } } })
+    expect(
+      await makeDispatcher(true).dispatch(
+        req('changed', {
+          dispatchId: wire.dispatchId,
+          items: [{ ...wire.items[0], payload: 'different canonical body' }]
+        })
+      )
+    ).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
+    expect(effects).toEqual([{ dispatch_id: 'dispatch-one', sequence: 1, payload: 'canonical' }])
+    db.close()
+  })
+
   it('replays one completed receipt without repeating the effect', async () => {
     const { db, dispatcher, effect } = createHarness()
     const first = await dispatcher.dispatch(

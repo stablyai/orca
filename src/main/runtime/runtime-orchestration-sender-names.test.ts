@@ -1,3 +1,5 @@
+import { acceptedAnswerSender } from './orchestration/accepted-answer-sender'
+import { OrcaRuntimeService } from './orca-runtime'
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Name senders from production-owned Dispatch tasks, mirrored workspace chat/terminal tabs and PTY records.
 
@@ -640,4 +642,121 @@ it('preserves old, malformed and absent launch observations without inventing an
   db.retainWorkerLaunchObservation(dispatchId, { requested: { agent: 'codex' } })
   expect(db.getWorkerDispatch(dispatchId)!.start_options).toBe('invalid-json')
   expect(names().snapshotOf(party)).toEqual({ name: 'Inspect parser', agent: null })
+})
+
+it('keeps the accepted answer actor after A parks and B adopts the same Run', () => {
+  const runtime = new OrcaRuntimeService()
+  runtime.setOrchestrationDb(db)
+  const run = db.createRun({
+    objective: 'A owns this',
+    coordinatorHandle: 'term_a',
+    coordinatorPaneKey: 'tab_a:leaf',
+    coordinatorOrcaSessionId: CHAT
+  })
+  const task = db.createTask({ runId: run.id, spec: 'Worker asks' })
+  const dispatch = createRootDispatch(db, task.id, 'term_worker')
+  const question = db.createQuestion({
+    runId: run.id,
+    dispatchId: dispatch.id,
+    askerHandle: 'term_worker',
+    question: 'Proceed?'
+  })
+  const snapshot = vi
+    .spyOn(runtime.orchestrationSenderNames, 'snapshotOf')
+    .mockImplementation((party) =>
+      party.address === 'term_a_new'
+        ? { name: 'Known A', agent: 'codex' }
+        : { name: 'Wrong stored actor', agent: 'claude' }
+    )
+  vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_a:leaf')
+  const answer = db.answerQuestion({
+    messageId: question.message.id,
+    runId: run.id,
+    body: 'yes',
+    consumerGeneration: run.consumer_generation,
+    captureSender: acceptedAnswerSender(runtime, `run:${run.id}`, {
+      address: 'term_a_new',
+      terminalHandle: 'term_a_new',
+      paneKey: 'tab_a:leaf',
+      orcaSessionId: null
+    })
+  })
+  const next = db.createRun({
+    objective: 'A parks here',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null
+  })
+  db.bindRun({ runId: next.id, coordinatorHandle: 'term_a_new', coordinatorPaneKey: 'tab_a:leaf' })
+  db.bindRun({ runId: run.id, coordinatorHandle: 'term_b', coordinatorPaneKey: 'tab_b:leaf' })
+  snapshot.mockReturnValue({ name: 'Known B', agent: 'claude' })
+  const delivered = structuredMailSource({
+    db,
+    mailboxHandle: `dispatch:${dispatch.id}`,
+    dispatchId: dispatch.id,
+    batch: [db.getMessageById(answer.message.id)!],
+    senderSnapshot: (party) => runtime.orchestrationSenderNames.snapshotOf(party)
+  })
+  expect(delivered.senders[0]).toMatchObject({
+    name: 'Known A',
+    agent: 'codex',
+    party: { address: `run:${run.id}`, terminalHandle: null, orcaSessionId: null }
+  })
+  snapshot.mockRestore()
+})
+
+it('uses exact saved custody for follow-up dispatch identity and refuses a later process in the same pane', () => {
+  const run = db.createRun({
+    objective: 'reuse',
+    coordinatorHandle: 'term_coord',
+    coordinatorPaneKey: null
+  })
+  const start = (agent?: string) => {
+    const task = db.createTask({ runId: run.id, spec: 'work' })
+    const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 8,
+      taskId: task.id,
+      startOptions: agent ? { agent } : {}
+    })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey: 'tab_term_worker:leaf',
+      processIncarnation: 'p:1',
+      worktreeId: WORKTREE,
+      effects: [],
+      setupState: 'not_applicable'
+    })
+    db.markWorkerDispatchReady(started.dispatch.id)
+    return db.getDispatchContextById(started.dispatch.id)!
+  }
+  const first = start('codex')
+  const resource =
+    db.getWorkerTerminalResourceByOwner(first.id) ??
+    db.createWorkerTerminalResourceStatement({
+      dispatchId: first.id,
+      terminalHandle: 'term_worker',
+      paneKey: 'tab_term_worker:leaf',
+      processIncarnation: 'p:1',
+      worktreeId: WORKTREE,
+      ownership: 'owned'
+    })
+  const next = start()
+  db.transferWorkerTerminalResourceStatement({
+    resourceId: resource.id,
+    toDispatchId: next.id,
+    terminalHandle: 'term_worker',
+    paneKey: 'tab_term_worker:leaf',
+    processIncarnation: 'p:1',
+    hostScope: null
+  })
+  pty = { foregroundAgent: 'claude' }
+  expect(names().sender(`dispatch:${next.id}`)).toMatchObject({
+    agent: 'codex',
+    party: { terminalHandle: null }
+  })
+  db.db
+    .prepare('UPDATE dispatch_contexts SET process_incarnation = ? WHERE id = ?')
+    .run('p:2', next.id)
+  expect(names().sender(`dispatch:${next.id}`).agent).toBeUndefined()
 })

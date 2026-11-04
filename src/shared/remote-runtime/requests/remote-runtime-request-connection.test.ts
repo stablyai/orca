@@ -1,3 +1,4 @@
+import { sendRemoteRuntimeRequest } from '../remote-runtime-client'
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
@@ -58,6 +59,33 @@ afterEach(async () => {
 })
 
 describe('RemoteRuntimeRequestConnection', () => {
+  it('prepares a request using the exact sending socket envelope and maximal accepted device token', async () => {
+    const server = await createServer(undefined, 'x'.repeat(65536))
+    let measured = 0
+    const params = { body: '\u0001'.repeat(20000) }
+    const response = await sendRemoteRuntimeRequest(
+      server.pairing,
+      'orchestration.federationImport',
+      params,
+      5000,
+      { orchestrationRequestId: 'before' },
+      undefined,
+      [],
+      ({ params: original, envelope, measure }) => {
+        const selected = { ...envelope, orchestrationRequestId: 'selected-prefix-7' }
+        measured = measure(original, selected)
+        return { params: original, envelope: selected }
+      }
+    )
+    expect(response.ok).toBe(true)
+    expect(server.requests).toHaveLength(1)
+    expect(server.requests[0]).toMatchObject({
+      params,
+      orchestrationRequestId: 'selected-prefix-7'
+    })
+    expect(measured).toBe(Buffer.byteLength(JSON.stringify(server.requests[0])))
+  })
+
   async function reuseWithCancellation(wait: 'admission' | 'preflight') {
     _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 }))
     const exec = vi.spyOn(gitRunner, 'gitExecFileAsync')
@@ -175,7 +203,10 @@ describe('RemoteRuntimeRequestConnection', () => {
   })
 })
 
-async function createServer(reply?: () => Promise<unknown>): Promise<TestServer> {
+async function createServer(
+  reply?: () => Promise<unknown>,
+  deviceToken = 'device-token'
+): Promise<TestServer> {
   const serverKeyPair = generateKeyPair()
   const requests: unknown[] = []
   const auths: unknown[] = []
@@ -211,7 +242,7 @@ async function createServer(reply?: () => Promise<unknown>): Promise<TestServer>
         auths.push(auth)
         expect(auth).toEqual({
           type: 'e2ee_auth',
-          deviceToken: 'device-token',
+          deviceToken,
           clientCapabilities: remoteRuntimeClientCapabilities()
         })
         authenticated = true
@@ -246,7 +277,7 @@ async function createServer(reply?: () => Promise<unknown>): Promise<TestServer>
     encodePairingOffer({
       v: 2,
       endpoint: `ws://127.0.0.1:${address.port}`,
-      deviceToken: 'device-token',
+      deviceToken,
       publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
     })
   )

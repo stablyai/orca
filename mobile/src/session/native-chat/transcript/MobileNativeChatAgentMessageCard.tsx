@@ -99,7 +99,7 @@ function CompactAgentMessageCard({
         >
           {heading}
         </Text>
-        <Senders compact from={from} />
+        <MobileNativeChatAgentMessageSenders compact from={from} />
         {agentMessageCanCopy(text) ? (
           <MobileSourceCopyButton
             text={text}
@@ -191,7 +191,7 @@ const PreviewAgentMessageCard = memo(function PreviewAgentMessageCard({
             <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
           </View>
         </View>
-        <Senders from={from} />
+        <MobileNativeChatAgentMessageSenders from={from} />
         {attachments}
         <View
           testID="agent-message-viewport"
@@ -282,7 +282,13 @@ function SenderAvatar({
   )
 }
 
-function Senders({ from, compact = false }: { from: AgentMessageSource; compact?: boolean }) {
+export function MobileNativeChatAgentMessageSenders({
+  from,
+  compact = false
+}: {
+  from: AgentMessageSource
+  compact?: boolean
+}) {
   const open = useContext(MobileAgentMessageOpenContext)
   const t = useMobileTranslation()
   const { shown, more } = agentMessageSendersShown(from)

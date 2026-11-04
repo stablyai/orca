@@ -117,6 +117,10 @@ export class JournalDraftMap<K, V> extends Map<K, V> {
     }
   }
 
+  touchedKeys(): Iterable<K> {
+    return this.touched.values()
+  }
+
   changes(reset = false): JournalEntryChange[] {
     const changes = [...this.pending].map((key) => ({
       path: this.path,

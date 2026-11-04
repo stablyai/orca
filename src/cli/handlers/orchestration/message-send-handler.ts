@@ -1,3 +1,4 @@
+import { readMailDisplayReport } from '../../../shared/agent-session/mail-display-report'
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
@@ -105,6 +106,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       priority: getOptionalStringFlag(flags, 'priority'),
       threadId: getOptionalStringFlag(flags, 'thread-id'),
       payload: getOptionalStructuredMessagePayload(flags),
+      displayReport: readMailDisplayReport(getOptionalStringFlag(flags, 'display-report')),
       // Pane keys survive remints; sessions instead authenticate by injected id, never inherited pane keys.
       senderPaneKey:
         from === undefined || readInjectedAgentSessionId()

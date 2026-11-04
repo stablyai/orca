@@ -33,6 +33,19 @@ export function agentMessageSender(
 }
 
 function senderParty(address: string, db: OrchestrationDb | null): AgentMessageSender['party'] {
+  if (address.startsWith('dispatch:')) {
+    const id = address.slice(9)
+    return {
+      address,
+      terminalHandle: null,
+      orcaSessionId: db?.getFederatedDispatch(id)
+        ? null
+        : (db?.getDispatchContextById(id)?.assignee_orca_session_id ?? null)
+    }
+  }
+  if (address.startsWith('run:')) {
+    return { address, terminalHandle: null, orcaSessionId: null }
+  }
   try {
     const { paneKey: _credential, ...party } = resolveOrchestrationParty(address, db)
     return party

@@ -79,7 +79,15 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         pairingRevision: environment.pairingRevision ?? environment.createdAt
       }
     },
-    call: (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
+    call: (
+      selector,
+      method,
+      params,
+      timeoutMs,
+      envelope,
+      expectedPairingRevision,
+      prepareRequest
+    ) =>
       callRuntimeEnvironment(
         getRuntimeEnvironmentRegistryRoot(),
         selector,
@@ -87,7 +95,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         params,
         timeoutMs,
         expectedPairingRevision,
-        envelope
+        envelope,
+        { prepareRequest }
       )
   }
   // Process-scope subscription covers desktop, headless serve and fleet status.

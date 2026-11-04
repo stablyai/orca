@@ -1,3 +1,4 @@
+import { senderHasOrchestrationProvenance } from '../../../shared/agent-session/mail-report-presentation'
 // Open the sender through chat or terminal-handle routes; choose feedback from the answering host’s evidence, never the sender’s address shape.
 
 import { toast } from 'sonner'
@@ -8,6 +9,7 @@ import type { AgentMessageSource } from '../../../shared/agent-session/agent-ses
 import { agentMessageSenderIsNamedSource } from '../../../shared/agent-session/agent-message-presentation'
 import {
   openDesktopStructuredSession,
+  structuredSessionOpenFeedback,
   structuredSessionOpenFeedbackText,
   type StructuredSessionOpenFeedback
 } from './activate-ai-vault-structured-session'
@@ -59,8 +61,10 @@ export function openAgentMessageSender(
     dispatchId
   )
   const label = name ?? sender.name ?? unnamedSenderLabel()
+  const feedback = externalSenderFeedback(sender, label)
   if (resolved.kind === 'located') {
     return openLocatedAgentMessageSender(resolved.location, label, {
+      feedback,
       current: () =>
         resolveAgentMessageSenderTarget(
           useAppStore.getState(),
@@ -78,7 +82,7 @@ export function openAgentMessageSender(
     resolved.kind !== 'legacy' &&
     !agentMessageSenderOpens(resolved, sender)
   ) {
-    toast.info(agentMessageSenderUnavailableText(resolved, label))
+    toast.info(agentMessageSenderUnavailableText(resolved, label, sender))
     return Promise.resolve()
   }
   const host =
@@ -89,7 +93,7 @@ export function openAgentMessageSender(
         )
       : null)
   if (!host) {
-    showLookupFailure('unreachable', label)
+    showLookupFailure('unreachable', label, feedback)
     return Promise.resolve()
   }
   const key = `${executionHostIdForStructuredTarget(host)}\0${chatWorktreeId}\0${sender.party.address}\0${dispatchId ?? ''}`
@@ -101,7 +105,7 @@ export function openAgentMessageSender(
     .catch((error: unknown) => {
       // Every answer above shows its own words; one that threw showed none.
       console.warn('[agent-message-sender] opening the sender failed', error)
-      showLookupFailure('unreachable', label)
+      showLookupFailure('unreachable', label, feedback)
     })
     .finally(() => opensInFlight.delete(key))
   opensInFlight.set(key, opening)
@@ -134,6 +138,7 @@ async function openSender(
         )
       )[0]
     : undefined
+  const feedback = externalSenderFeedback(sender, name)
   const result = await openDesktopStructuredSession(
     {
       kind: 'sender',
@@ -142,7 +147,10 @@ async function openSender(
       displayName: name ?? undefined,
       ...(known ? { fallback: known } : {})
     },
-    host
+    host,
+    undefined,
+    undefined,
+    feedback
   )
   if (result.kind === 'terminal') {
     if (
@@ -153,12 +161,49 @@ async function openSender(
         result.handle
       )
     ) {
-      toast.info(agentMessageSenderUnavailableText({ kind: 'replaced' }, name))
+      toast.info(agentMessageSenderUnavailableText({ kind: 'replaced' }, name, sender))
       return
     }
     await focusTerminal(result.handle, environmentId, {
-      lookupFailure: (failure) => showLookupFailure(failure, name)
+      gone: feedback?.terminalGone,
+      lookupFailure: (failure) => showLookupFailure(failure, name, feedback)
     })
+  }
+}
+
+function externalSenderFeedback(
+  sender: Sender,
+  name: string
+): StructuredSessionOpenFeedback | undefined {
+  if (senderHasOrchestrationProvenance(sender)) {
+    return
+  }
+  const unavailable = () =>
+    toast.info(
+      translate(
+        'components.native-chat.agentMessage.sourceOpenFailed',
+        "Couldn't open {{name}}. Try again.",
+        { name }
+      )
+    )
+  return {
+    ...structuredSessionOpenFeedback,
+    unavailable,
+    gone: () =>
+      toast.info(
+        agentMessageSenderUnavailableText({ kind: 'gone', sender: 'terminal' }, name, sender)
+      ),
+    hostCannotOpen: () =>
+      toast.info(
+        translate(
+          'components.native-chat.agentMessage.sourceUpdateRequired',
+          'Update Orca to open this source.'
+        )
+      ),
+    terminalGone: () =>
+      toast.info(
+        agentMessageSenderUnavailableText({ kind: 'gone', sender: 'terminal' }, name, sender)
+      )
   }
 }
 

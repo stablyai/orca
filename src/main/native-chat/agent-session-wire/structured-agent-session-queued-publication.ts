@@ -1,3 +1,4 @@
+import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
@@ -49,17 +50,23 @@ export function structuredQueueSendGate(
 
 /** Waiting and returned rows only. `paused` is a per-card hold (a failed conversion); a person's
  *  Stop pauses the queue, published once beside it. */
-function computePublishedQueuedMessages(journal: AgentSessionJournal): AgentSessionQueuedMessage[] {
+function computePublishedQueuedMessages(journal: AgentSessionJournal): {
+  list: AgentSessionQueuedMessage[]
+  serialized: string
+} {
   const published: AgentSessionQueuedMessage[] = []
   for (const row of journal.queuedMessages.list()) {
     if (row.state !== 'waiting' && row.state !== 'returned') {
       continue
     }
     const held = row.state === 'waiting' && row.holdReason !== null
+    const report = journal.mailDisplayReports?.project([{ itemId: row.messageId, body: row.body }])
+    const display = report?.entries
     published.push({
       messageId: row.messageId,
       position: row.position,
       body: row.body,
+      ...(display ? { mailDisplayReports: display } : {}),
       state: row.state,
       ...(held ? { paused: true as const } : {}),
       // Unknown stored reasons remain plain holds.
@@ -70,7 +77,12 @@ function computePublishedQueuedMessages(journal: AgentSessionJournal): AgentSess
         : {})
     })
   }
-  return published
+  const serialized = JSON.stringify(published)
+  if (Buffer.byteLength(serialized) <= MOBILE_BRIDGE_MAX_FRAME_BYTES - 64 * 1024) {
+    return { list: published, serialized }
+  }
+  const list = published.map(({ mailDisplayReports: _optional, ...row }) => row)
+  return { list, serialized: JSON.stringify(list) }
 }
 
 function isPublishedPausedReason(
@@ -92,9 +104,8 @@ export function readPublishedQueuedMessages(
   if (memo && memo.key === key) {
     return memo.list
   }
-  const list = computePublishedQueuedMessages(journal)
-  // Belt for the identity dedup: equal recomputed content keeps the previous reference.
-  const serialized = JSON.stringify(list)
+  const { list, serialized } = computePublishedQueuedMessages(journal)
+  // Equal recomputed content keeps the previous reference.
   if (memo && memo.serialized === serialized) {
     listMemos.set(journal, { key, serialized, list: memo.list })
     return memo.list

@@ -107,6 +107,7 @@ export const SendParams = z
     priority: z.enum(['normal', 'high', 'urgent']).optional(),
     threadId: OptionalString,
     payload: OptionalString,
+    displayReport: z.unknown().optional(),
     // Use remint-stable pane keys to attest worker_done/heartbeat; from handles only route.
     senderPaneKey: OptionalString,
     run: OptionalString,

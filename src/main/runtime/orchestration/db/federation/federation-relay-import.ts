@@ -24,6 +24,7 @@ export function importFederatedRelayItem(
       priority: MessagePriority
       threadId?: string
       payload?: string
+      displayReport?: unknown
     }
     lifecycle:
       | { kind: 'none' }

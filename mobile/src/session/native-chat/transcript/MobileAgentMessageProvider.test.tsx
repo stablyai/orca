@@ -18,12 +18,17 @@ const userMessage = (blocks: NativeChatMessage['blocks']): NativeChatMessage => 
 describe('phone sender provider', () => {
   let renderer: ReactTestRenderer | null = null
   it.each([false, true])(
-    'keeps command source names and glyphs without navigation (provider %s)',
+    'keeps saved external reports in the background surface without agent status or navigation (provider %s)',
     async (provider) => {
       await activateMobileUiLocale(provider ? 'fr' : 'en')
       const from: AgentMessageSource = {
         kind: 'agent',
-        orchestration: null,
+        orchestration: {
+          message: 'mail-notice',
+          mailbox: 'run:r',
+          dispatchId: null,
+          messages: [{ messageId: 'mail', runId: 'r', from: 'ci-notifier' }]
+        },
         senders: [
           {
             name: null,
@@ -57,7 +62,7 @@ describe('phone sender provider', () => {
         )
         expect(name?.props.disabled).toBe(true)
         expect(name?.props.accessibilityRole).toBeUndefined()
-        expect(findAllByHostType(renderer!.root, 'Terminal')).toHaveLength(1)
+        expect(findAllByHostType(renderer!.root, 'Terminal')).toHaveLength(0)
         expect(findAllByHostType(renderer!.root, 'Bot')).toHaveLength(0)
         expect(findAllByHostType(renderer!.root, 'AgentStateDot')).toHaveLength(0)
         expect(findAllByHostType(renderer!.root, 'ArrowUpRight')).toHaveLength(0)

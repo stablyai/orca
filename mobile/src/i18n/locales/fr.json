@@ -1788,6 +1788,8 @@
       "prepareFailed": "Impossible de préparer cette ancienne session Codex. Réessayez de la reprendre."
     },
     "backgroundTask": {
+      "commandExit": "Code de sortie {{code}}",
+      "commandSignal": "Signal {{signal}}",
       "agent": "Agent d'arrière-plan",
       "command": "Commande d'arrière-plan",
       "countAgents_many": "{{count}} agents",

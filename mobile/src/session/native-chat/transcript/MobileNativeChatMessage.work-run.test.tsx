@@ -1,10 +1,19 @@
+import { mobileI18n, activateMobileUiLocale } from '../../../i18n/mobile-i18n'
+import fr from '../../../i18n/locales/fr.json'
+import {
+  readMobileNativeChatItem,
+  MobileNativeChatItemSourceContext
+} from '../mobile-native-chat-item-read'
+import { stubRpcClient } from '../../../transport/rpc-client-test-stub'
+import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { mailReportPresentation } from '../../../../../src/shared/agent-session/mail-report-presentation'
+import { orchestrationMailFixture } from '../../../../../src/shared/agent-session/orchestration-mail.test-fixture'
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { RpcClient } from '../../../transport/rpc-client'
-import { MobileNativeChatItemSourceContext } from '../mobile-native-chat-item-read'
 import { useMobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'
 
 vi.mock('react-native', async () => {
@@ -94,9 +103,11 @@ const command: NativeChatMessage = {
 }
 
 let renderer: ReactTestRenderer | null = null
-afterEach(() => {
+afterEach(async () => {
   act(() => renderer?.unmount())
   renderer = null
+  await activateMobileUiLocale('en')
+  mobileI18n.removeResourceBundle('fr', 'translation')
 })
 
 const textIn = (node: ReactTestInstance): string[] =>
@@ -179,4 +190,69 @@ it('loads a shortened grouped thought from its own source between two tool rows'
   expect(markdown.props.content).toBe(fullText)
   expect(textIn(tree.root)).not.toContain('Show full message')
   expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Read', 'a.ts', 'pnpm test']))
+})
+
+it('keeps an exact command report on the phone full-item read', async () => {
+  const message = orchestrationMailFixture()
+  const mail = message.from.orchestration
+  if (mail?.message !== 'mail-notice') {
+    throw new Error('fixture')
+  }
+  const item: AgentJournalRenderItem = {
+    itemId: 'full',
+    sequence: 1,
+    revision: 2,
+    observedAt: 0,
+    body: { kind: 'message', role: 'user', blocks: message.blocks, from: message.from }
+  }
+  const ref = mail.messages[0]!
+  const fact = {
+    itemId: item.itemId,
+    mailbox: mail.mailbox,
+    messageId: ref.messageId,
+    runId: ref.runId,
+    from: ref.from,
+    report: { version: 1, kind: 'command', result: { type: 'exit', code: 7 } }
+  }
+  const client = stubRpcClient({
+    sendRequest: vi.fn(async () => ({
+      id: 'detail',
+      ok: true as const,
+      result: { item, mailDisplayReports: { version: 1, entries: [fact] } }
+    }))
+  })
+  const loaded = await readMobileNativeChatItem({ client, sessionId: 'session' }, item.itemId)
+  expect(mailReportPresentation(projectStructuredItemToNativeChat(loaded!)!)).toMatchObject({
+    kind: 'command-report',
+    report: { result: { type: 'exit', code: 7 } }
+  })
+  expect(loaded).toEqual(item)
+})
+
+it('shows a localized observed result in the phone background report surface', async () => {
+  mobileI18n.addResourceBundle('fr', 'translation', fr)
+  await activateMobileUiLocale('fr')
+  const message = orchestrationMailFixture()
+  const mail = message.from.orchestration
+  if (mail?.message !== 'mail-notice') {
+    throw new Error('fixture')
+  }
+  await act(async () => {
+    renderer = create(
+      createElement(MobileNativeChatMessage, {
+        message: {
+          ...message,
+          mailDisplayReports: [
+            {
+              ...mail.messages[0]!,
+              mailbox: mail.mailbox,
+              report: { version: 1, kind: 'command', result: { type: 'exit', code: 7 } }
+            }
+          ]
+        }
+      })
+    )
+  })
+  expect(textIn(renderer!.root)).toContain('Code de sortie 7')
+  expect(textIn(renderer!.root)).not.toContain('an agent')
 })
