@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { persistMirrored } from '../storage/mirrored-storage-keys'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { persistMirrored, retainMirroredStorage } from '../storage/mirrored-storage-keys'
 import {
   LAST_VISITED_WORKTREE_STORAGE_KEY,
   writeLastVisitedWorktree
@@ -68,13 +68,25 @@ async function settleWrites(): Promise<void> {
   await new Promise<void>((resolve) => setImmediate(resolve))
 }
 
+let releaseStorage: (() => void) | null = null
+
 beforeEach(async () => {
   await settleWrites()
+  releaseStorage?.()
+  releaseStorage = retainMirroredStorage([
+    RECENT_SESSION_CARDS_STORAGE_KEY,
+    LAST_VISITED_WORKTREE_STORAGE_KEY
+  ])
   storage.items.clear()
   await persistMirrored(RECENT_SESSION_CARDS_STORAGE_KEY, null)
   await persistMirrored(LAST_VISITED_WORKTREE_STORAGE_KEY, null)
   clearRecentSessionCardsForTests()
   setPendingCrossWorktreeTabTarget(null)
+})
+
+afterEach(() => {
+  releaseStorage?.()
+  releaseStorage = null
 })
 
 describe('parseRecentSessionCards', () => {

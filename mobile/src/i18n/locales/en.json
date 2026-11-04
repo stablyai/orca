@@ -148,6 +148,13 @@
     },
     "agents": {
       "permissionOwnAll": "Agents' own settings"
+    },
+    "nativeChat": {
+      "recentlyUsed": "RECENTLY USED",
+      "maxRecentItems": "Max recent items",
+      "cardsUnit": "cards",
+      "decreaseMaxRecent": "Decrease max recent items",
+      "increaseMaxRecent": "Increase max recent items"
     }
   },
   "common": {
@@ -830,7 +837,8 @@
       "hours_other": "{{count}}h",
       "days_one": "{{count}}d",
       "days_other": "{{count}}d",
-      "done": "Done"
+      "done": "Done",
+      "unread": "Unread"
     },
     "hostWorkspaceListStates": {
       "checkHost": "Check that your computer is awake and Orca is running",
@@ -2730,6 +2738,14 @@
     },
     "usePrTextAction": {
       "updateFailed": "Failed to update pull request."
+    },
+    "recentSessionCards": {
+      "decreaseLimit": "Decrease recent cards limit",
+      "increaseLimit": "Increase recent cards limit",
+      "cardClosed": "Card was closed",
+      "waitingForHost": "Waiting for host…",
+      "workspaceGone": "Workspace no longer exists",
+      "cardClosedOpeningWorkspace": "Card was closed; opening workspace"
     }
   },
   "chat": {
@@ -4534,5 +4550,7 @@
         }
       }
     }
-  }
+  },
+  "recentSessionCardsSectionTitle": "Recently Used",
+  "recentSessionCardsEmpty": "No other recent cards yet"
 }

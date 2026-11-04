@@ -85,6 +85,7 @@ vi.mock('lucide-react-native', () => ({
   MoreHorizontal: 'Icon',
   PanelLeftOpen: 'Icon',
   Plus: 'Icon',
+  History: 'Icon',
   SquareTerminal: 'TerminalIcon',
   Columns2: 'Icon',
   SquareChevronRight: 'Icon'
@@ -207,7 +208,12 @@ const visibleTabs = TAB_IDS.map((id) => ({
 
 function mountStrip(
   terminals: Pick<Controller['terminals'][number], 'handle' | 'agentIdentity'>[] = [],
-  initialTabs: Controller['visibleTabs'] = visibleTabs
+  initialTabs: Controller['visibleTabs'] = visibleTabs,
+  extras: {
+    showRecentSessionCardsAction?: boolean
+    showRecentSessionCards?: boolean
+    setShowRecentSessionCards?: (open: boolean) => void
+  } = {}
 ) {
   const scrollTo = vi.fn()
   const setRenameTarget = vi.fn()
@@ -256,7 +262,8 @@ function mountStrip(
         setRenameOpen(true)
       },
       visibleTabs: tabs,
-      terminals
+      terminals,
+      ...extras
     })
     return createElement(MobileSessionSurface, { controller })
   }
@@ -371,6 +378,25 @@ describe('MobileSessionTabStrip edge taps', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  it('opens recently used from the button beside New tab', () => {
+    const setShowRecentSessionCards = vi.fn()
+    const strip = mountStrip([], visibleTabs, {
+      showRecentSessionCardsAction: true,
+      showRecentSessionCards: false,
+      setShowRecentSessionCards
+    })
+    const recent = strip.root.findByProps({ accessibilityLabel: 'Recently Used' })
+    const newer = strip.root.findByProps({ accessibilityLabel: 'New tab' })
+    expect(recent.parent).toBe(newer.parent)
+    const labels = recent
+      .parent!.children.filter((child) => typeof child !== 'string')
+      .map((child) => child.props.accessibilityLabel)
+    expect(labels).toEqual(['Recently Used', 'New tab'])
+    act(() => recent.props.onPress())
+    expect(setShowRecentSessionCards).toHaveBeenCalledExactlyOnceWith(true)
+    strip.unmount()
   })
 
   it('opens tab details in the compact Duo header while its title is absent', () => {

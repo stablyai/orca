@@ -68,7 +68,10 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
 
   if (state === 'unread') {
     return (
-      <View style={styles.wrapper} accessibilityLabel="Unread">
+      <View
+        style={styles.wrapper}
+        accessibilityLabel={t('worktree.agentRowDisplay.unread', 'Unread')}
+      >
         <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
       </View>
     )

@@ -19,6 +19,7 @@ import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileAllowAutoCloseActions } from './mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './MobileAgentSessionTabActionSheet'
+import { RecentSessionCardsSheet } from './RecentSessionCardsSheet'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
@@ -28,6 +29,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
   )
   const {
     worktreeId,
+    activeSessionTabId,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     client,
@@ -95,6 +97,17 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
   const onPairedHost = useWorkspaceOnPairedHost()
   return (
     <>
+      <RecentSessionCardsSheet
+        visible={Boolean(
+          controller.showRecentSessionCards && controller.showRecentSessionCardsAction
+        )}
+        cards={controller.recentSessionCards ?? []}
+        jumpingCardKey={controller.jumpingRecentCardKey ?? null}
+        currentWorktreeId={worktreeId}
+        currentTabId={activeSessionTabId}
+        onSelectCard={controller.handleSelectRecentSessionCard}
+        onClose={() => controller.setShowRecentSessionCards(false)}
+      />
       <MobileSessionTerminalLayoutSheet
         controller={controller}
         visible={showTerminalLayout}

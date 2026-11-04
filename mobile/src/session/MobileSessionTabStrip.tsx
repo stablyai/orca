@@ -1,11 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, ScrollView, StyleSheet } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { History, Plus } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { AgentStateDot } from '../components/AgentStateDot'
 import { useNow } from '../hooks/use-now'
-import { type AgentDotState } from '../worktree/agent-row-display'
+import type { AgentDotState } from '../worktree/agent-row-display'
 import {
   getMobileTerminalTabHostAgentIdentity,
   getMobileSessionTabTitle,
@@ -55,6 +55,9 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     connState,
     createTabBusy,
     handleOpenNewTab,
+    showRecentSessionCardsAction,
+    showRecentSessionCards,
+    setShowRecentSessionCards,
     scrollActiveTabIntoView,
     holdTabStripReveal,
     cancelHeldTabStripReveal,
@@ -284,6 +287,17 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
       {/* Terminal layout and Quick commands live in the header's ⋯ menu. */}
       {!actionsCollapsed ? (
         <View style={newTabStyles.slot}>
+          {showRecentSessionCardsAction ? (
+            <NavBarButton
+              active={Boolean(showRecentSessionCards)}
+              onPress={() => {
+                dismiss()
+                setShowRecentSessionCards(true)
+              }}
+              accessibilityLabel={t('recentSessionCardsSectionTitle', 'Recently Used')}
+              icon={History}
+            />
+          ) : null}
           <NavBarButton
             disabled={createTabBusy || connState !== 'connected'}
             onPress={handleOpenNewTab}
@@ -299,6 +313,9 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
 // The right inset matches the nav bar's, so the + lines up with the ⋯ above it.
 const newTabStyles = StyleSheet.create({
   slot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingLeft: spacing.sm,
     paddingRight: spacing.md
   }

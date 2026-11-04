@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
 import type { MobileSessionTab, MobileSessionTabType } from './mobile-session-route-types'
 import {

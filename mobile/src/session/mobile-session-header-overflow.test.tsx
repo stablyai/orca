@@ -46,6 +46,7 @@ vi.mock('lucide-react-native', () => ({
   PanelLeftOpen: 'Icon',
   Columns2: 'Icon',
   Plus: 'Icon',
+  History: 'Icon',
   SquareChevronRight: 'Icon',
   File: 'Icon',
   FileText: 'Icon',

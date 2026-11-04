@@ -71,18 +71,21 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
       </SettingsSection>
 
       <SettingsSection
-        title="RECENTLY USED"
+        title={t('settings.nativeChat.recentlyUsed', 'RECENTLY USED')}
         footer="Customize how many recently visited cards appear in the session menu (default 7)."
       >
         <ListRow
           key="maxRecentItems"
-          title="Max recent items"
-          subtitle={`${recentMaxDisplay} cards`}
+          title={t('settings.nativeChat.maxRecentItems', 'Max recent items')}
+          subtitle={`${recentMaxDisplay} ${t('settings.nativeChat.cardsUnit', 'cards')}`}
           accessory={
             <View style={styles.stepper}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Decrease max recent items"
+                accessibilityLabel={t(
+                  'settings.nativeChat.decreaseMaxRecent',
+                  'Decrease max recent items'
+                )}
                 disabled={!canDecreaseRecent}
                 onPress={() => setRecentSessionCardsMaxDisplay(recentMaxDisplay - 1)}
                 style={({ pressed }) => [
@@ -96,7 +99,10 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
               <Text style={styles.stepperValue}>{recentMaxDisplay}</Text>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Increase max recent items"
+                accessibilityLabel={t(
+                  'settings.nativeChat.increaseMaxRecent',
+                  'Increase max recent items'
+                )}
                 disabled={!canIncreaseRecent}
                 onPress={() => setRecentSessionCardsMaxDisplay(recentMaxDisplay + 1)}
                 style={({ pressed }) => [

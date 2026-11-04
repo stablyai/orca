@@ -29,7 +29,6 @@ const TAB_TYPES = new Set<string>(['terminal', 'markdown', 'file', 'browser', 'a
 
 type Cards = RecentSessionCardRecord[]
 type ReadonlyCards = readonly RecentSessionCardRecord[]
-type IdTab = LiveRecentCardTab
 type LiveWorktree = { worktreeId: string; displayName?: string; isArchived?: boolean }
 type PendingRemoval = { hostId: string; worktreeId: string; tabId?: string; handle?: string }
 
@@ -49,7 +48,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const str = (v: unknown): string | undefined =>
   typeof v === 'string' && v.length > 0 ? v : undefined
 const cardKey = (c: RecentSessionCardRecord): string => `${c.hostId}\0${c.worktreeId}\0${c.tabId}`
-const matchesTab = (c: RecentSessionCardRecord, t: IdTab): boolean =>
+const matchesTab = (c: RecentSessionCardRecord, t: LiveRecentCardTab): boolean =>
   t.id === c.tabId || (Boolean(c.terminalHandle) && t.terminal === c.terminalHandle)
 const removalDrops = (i: RecentSessionCardRecord, r: PendingRemoval): boolean =>
   i.hostId === r.hostId &&
@@ -154,7 +153,6 @@ function mergeByRecency(primary: ReadonlyCards, secondary: ReadonlyCards): Cards
 
 const applyVisit = (existing: ReadonlyCards, record: RecentSessionCardRecord): Cards =>
   capCards([record, ...existing.filter((i) => cardKey(i) !== cardKey(record))])
-const withTabState = syncRecentCardWithLiveTab
 
 export function readAllRecentSessionCardsSync(): Cards {
   if (!memory) {
@@ -256,7 +254,7 @@ export function removeRecentSessionCard(
 export function reconcileRecentSessionCardsForWorktree(p: {
   hostId: string
   worktreeId: string
-  liveTabs: readonly IdTab[]
+  liveTabs: readonly LiveRecentCardTab[]
   allowEmpty?: boolean
   activeTabId?: string | null
 }): Cards {
@@ -272,7 +270,7 @@ export function reconcileRecentSessionCardsForWorktree(p: {
     const match = p.liveTabs.find((t) => matchesTab(i, t))
     const isActiveOnScreen =
       p.activeTabId !== undefined ? p.activeTabId !== null && i.tabId === p.activeTabId : undefined
-    const updated = match ? withTabState(i, match, { isActiveOnScreen }) : null
+    const updated = match ? syncRecentCardWithLiveTab(i, match, { isActiveOnScreen }) : null
     changed ||= updated !== i
     return updated ? [updated] : []
   })
@@ -293,7 +291,7 @@ export function getVisibleRecentSessionCards(p: {
   currentTabId: string | null
   limit?: number
   liveWorktrees?: readonly LiveWorktree[]
-  currentWorktreeTabs?: readonly IdTab[]
+  currentWorktreeTabs?: readonly LiveRecentCardTab[]
 }): Cards {
   const live = p.liveWorktrees?.length
     ? new Map(p.liveWorktrees.map((w) => [w.worktreeId, w]))
@@ -316,7 +314,7 @@ export function getVisibleRecentSessionCards(p: {
     .map((i) => {
       const match =
         i.worktreeId === p.currentWorktreeId ? tabs?.find((t) => matchesTab(i, t)) : undefined
-      const synced = withTabState(i, match, { isActiveOnScreen: false })
+      const synced = syncRecentCardWithLiveTab(i, match, { isActiveOnScreen: false })
       return {
         ...synced,
         worktreeName: live?.get(i.worktreeId)?.displayName || synced.worktreeName

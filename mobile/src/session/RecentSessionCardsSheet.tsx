@@ -1,9 +1,9 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import { useMobileTranslation } from '../i18n/mobile-translation'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { File, FileText, Globe, Minus, Plus, SquareTerminal } from 'lucide-react-native'
 import { AgentStateDot } from '../components/AgentStateDot'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import { BottomDrawer } from '../components/BottomDrawer'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { useNow } from '../hooks/use-now'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { agentStateLabel, formatTimeAgo } from '../worktree/agent-row-display'
@@ -87,10 +87,8 @@ export function RecentSessionCardsSection({
   onChangeMaxDisplay,
   onSelectCard
 }: RecentSessionCardsSectionProps) {
-  const { translate } = useMobileTranslation()
+  const t = useMobileTranslation()
   const now = useNow(30_000)
-  const sectionTitle = translate('recentSessionCardsSectionTitle', 'Recently Used')
-  const emptyLabel = translate('recentSessionCardsEmpty', 'No other recent cards yet')
   const effectiveMaxDisplay = maxDisplay ?? getRecentSessionCardsMaxDisplaySync()
   const handleUpdateMaxDisplay = onChangeMaxDisplay ?? setRecentSessionCardsMaxDisplay
   const canDecrease = effectiveMaxDisplay > MIN_RECENT_SESSION_CARDS_DISPLAY
@@ -109,12 +107,15 @@ export function RecentSessionCardsSection({
   return (
     <View style={styles.section}>
       <View style={styles.header}>
-        <Text style={styles.title}>{sectionTitle}</Text>
+        <Text style={styles.title}>{t('recentSessionCardsSectionTitle', 'Recently Used')}</Text>
         <View style={styles.limitStepper}>
           <Pressable
             testID="recent-cards-limit-decrease"
             accessibilityRole="button"
-            accessibilityLabel="Decrease recent cards limit"
+            accessibilityLabel={t(
+              'session.recentSessionCards.decreaseLimit',
+              'Decrease recent cards limit'
+            )}
             disabled={!canDecrease}
             hitSlop={6}
             onPress={() => handleUpdateMaxDisplay(effectiveMaxDisplay - 1)}
@@ -132,7 +133,10 @@ export function RecentSessionCardsSection({
           <Pressable
             testID="recent-cards-limit-increase"
             accessibilityRole="button"
-            accessibilityLabel="Increase recent cards limit"
+            accessibilityLabel={t(
+              'session.recentSessionCards.increaseLimit',
+              'Increase recent cards limit'
+            )}
             disabled={!canIncrease}
             hitSlop={6}
             onPress={() => handleUpdateMaxDisplay(effectiveMaxDisplay + 1)}
@@ -148,7 +152,9 @@ export function RecentSessionCardsSection({
       </View>
       <View style={styles.panel}>
         {visibleCards.length === 0 ? (
-          <Text style={styles.emptyText}>{emptyLabel}</Text>
+          <Text style={styles.emptyText}>
+            {t('recentSessionCardsEmpty', 'No other recent cards yet')}
+          </Text>
         ) : (
           visibleCards.map((card, index) => {
             const workspaceLabel = getWorktreeLabel(card.worktreeName, card.worktreeId)
@@ -295,7 +301,7 @@ const styles = StyleSheet.create({
   },
   panel: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   emptyText: {

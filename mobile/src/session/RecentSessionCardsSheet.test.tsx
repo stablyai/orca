@@ -1,8 +1,7 @@
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Pressable, Text } from 'react-native'
-import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
+import { Text } from 'react-native'
 import { formatWorkspaceBadgeLabel, RecentSessionCardsSheet } from './RecentSessionCardsSheet'
 import type { RecentSessionCardRecord } from './recent-session-cards'
 
@@ -33,17 +32,13 @@ vi.mock('lucide-react-native', () => ({
   Trash2: 'Trash2'
 }))
 
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ visible, children }: { visible: boolean; children: ReactNode }) =>
     visible ? children : null
 }))
 
 vi.mock('../hooks/use-now', () => ({
   useNow: () => NOW
-}))
-
-vi.mock('../agent-history/MobileAgentSessionHistoryIcon', () => ({
-  MobileAgentSessionHistoryIcon: () => null
 }))
 
 vi.mock('../components/MobileAgentIcon', () => ({
@@ -108,90 +103,74 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function pressableLabels(tree: ReactTestRenderer): string[] {
-  return tree.root.findAllByType(Pressable).map((node) => textOf(node))
-}
-
-describe('MobileSessionHeaderMoreActionsSheet', () => {
-  function renderMenu(
-    recentSessionCards: readonly RecentSessionCardRecord[],
-    showRecent = true,
-    onSelectRecentSessionCard: (card: RecentSessionCardRecord) => void = () => {}
+describe('RecentSessionCardsSheet', () => {
+  function renderSheet(
+    cards: readonly RecentSessionCardRecord[],
+    extras: {
+      visible?: boolean
+      currentWorktreeId?: string
+      currentTabId?: string | null
+      maxDisplay?: number
+      onChangeMaxDisplay?: (next: number) => void
+      onSelectCard?: (card: RecentSessionCardRecord) => void
+    } = {}
   ) {
+    const { onSelectCard = () => {}, visible = true, ...rest } = extras
     return mount(
-      createElement(MobileSessionHeaderMoreActionsSheet, {
-        visible: true,
-        showRecentSessionCards: showRecent,
-        recentSessionCards,
-        onSelectRecentSessionCard,
-        showAgentSessionHistory: true,
-        showChecks: true,
-        onOpenAgentSessionHistory: () => {},
-        onOpenChecks: () => {},
-        onClose: () => {}
+      createElement(RecentSessionCardsSheet, {
+        visible,
+        cards,
+        jumpingCardKey: null,
+        onSelectCard,
+        onClose: () => {},
+        ...rest
       })
     )
   }
 
-  it('renders recent cards above Agent History without a nested Recently Used row', () => {
-    const tree = renderMenu([notes, shell])
+  it('shows the card title and workspace, selects that card, and adjusts maxDisplay', () => {
+    const onSelectCard = vi.fn()
+    const onChangeMaxDisplay = vi.fn()
+    const tree = renderSheet([notes], { maxDisplay: 7, onChangeMaxDisplay, onSelectCard })
     const labels = texts(tree)
-    expect(labels.indexOf('Recently Used')).toBeGreaterThanOrEqual(0)
-    expect(labels.indexOf('Ship notes')).toBeLessThan(labels.indexOf('Agent History'))
-    expect(labels.indexOf('Shell')).toBeLessThan(labels.indexOf('Agent History'))
-    expect(pressableLabels(tree)).not.toContain('Recently Used')
-    expect(tree.root.findByProps({ testID: 'recent-session-card-wt-1-tab-1' })).toBeTruthy()
-    expect(tree.root.findByProps({ testID: 'recent-session-card-wt-2-tab-2' })).toBeTruthy()
-  })
-
-  it('selects a recent card from the same sheet', () => {
-    const onSelectRecentSessionCard = vi.fn()
-    const tree = renderMenu([notes], true, onSelectRecentSessionCard)
+    expect(labels).toContain('Recently Used')
+    expect(labels).toContain('Ship notes')
+    expect(labels).toContain('Orca')
+    expect(labels).toContain('5m')
+    expect(textOf(tree.root.findByProps({ testID: 'recent-cards-limit-value' }))).toBe('7')
+    act(() => {
+      tree.root.findByProps({ testID: 'recent-cards-limit-increase' }).props.onPress()
+    })
+    expect(onChangeMaxDisplay).toHaveBeenCalledWith(8)
     act(() => {
       tree.root.findByProps({ testID: 'recent-session-card-wt-1-tab-1' }).props.onPress()
     })
-    expect(onSelectRecentSessionCard).toHaveBeenCalledExactlyOnceWith(notes)
+    expect(onSelectCard).toHaveBeenCalledExactlyOnceWith(notes)
   })
 
-  it('shows an empty recent list above Agent History', () => {
-    const labels = texts(renderMenu([]))
-    expect(labels.indexOf('Recently Used')).toBeGreaterThanOrEqual(0)
-    expect(labels.indexOf('No other recent cards yet')).toBeLessThan(
-      labels.indexOf('Agent History')
-    )
+  it('shows an empty state when no other card is recent', () => {
+    expect(texts(renderSheet([]))).toContain('No other recent cards yet')
   })
 
-  it('hides the currently open card, marks same-workspace cards with a badge dot, and renders SSOT AgentStateDot indicators', () => {
-    const activeCard = card({
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      title: 'Ship notes',
-      lastVisitedAt: NOW
-    })
-    const tree = mount(
-      createElement(MobileSessionHeaderMoreActionsSheet, {
-        visible: true,
-        showRecentSessionCards: true,
-        recentSessionCards: [
-          activeCard,
-          card({
-            worktreeId: 'wt-1',
-            tabId: 'tab-3',
-            title: 'Other notes',
-            agentState: 'working',
-            lastVisitedAt: NOW - 10 * 60 * 1_000
-          }),
-          { ...shell, agentState: 'done' }
-        ],
-        currentWorktreeId: 'wt-1',
-        currentTabId: 'tab-1',
-        onSelectRecentSessionCard: () => {},
-        showAgentSessionHistory: true,
-        showChecks: true,
-        onOpenAgentSessionHistory: () => {},
-        onOpenChecks: () => {},
-        onClose: () => {}
-      })
+  it('hides the currently open card, marks same-workspace cards, and renders AgentStateDot states', () => {
+    const tree = renderSheet(
+      [
+        card({
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          title: 'Ship notes',
+          lastVisitedAt: NOW
+        }),
+        card({
+          worktreeId: 'wt-1',
+          tabId: 'tab-3',
+          title: 'Other notes',
+          agentState: 'working',
+          lastVisitedAt: NOW - 10 * 60 * 1_000
+        }),
+        { ...shell, agentState: 'done' }
+      ],
+      { currentWorktreeId: 'wt-1', currentTabId: 'tab-1' }
     )
     expect(tree.root.findAllByProps({ testID: 'recent-session-card-wt-1-tab-1' })).toHaveLength(0)
     expect(
@@ -222,7 +201,7 @@ describe('MobileSessionHeaderMoreActionsSheet', () => {
     ).toBe('Shell, Done, Tools, 5m')
   })
 
-  it('truncates long workspace branch names by abbreviating prefix before slash and keeping tail after slash', () => {
+  it('truncates long workspace branch names by abbreviating the prefix and keeping the tail', () => {
     expect(formatWorkspaceBadgeLabel('main')).toBe('main')
     expect(formatWorkspaceBadgeLabel('zhangxaochen/fix-ui')).toBe('z/fix-ui')
     expect(formatWorkspaceBadgeLabel('zhangxaochen/mobile-agent-history-stack')).toBe(
@@ -237,7 +216,7 @@ describe('MobileSessionHeaderMoreActionsSheet', () => {
       title: 'Verify PRs',
       worktreeName: 'zhangxaochen/mobile-agent-history-stack'
     })
-    const tree = renderMenu([longBranchCard])
+    const tree = renderSheet([longBranchCard])
     expect(texts(tree)).toContain('z/…history-stack')
     expect(
       tree.root.findByProps({ testID: 'recent-session-card-wt-long-tab-long' }).props
@@ -245,60 +224,7 @@ describe('MobileSessionHeaderMoreActionsSheet', () => {
     ).toBe('Verify PRs, zhangxaochen/mobile-agent-history-stack, 5m')
   })
 
-  it('hides Recently Used until the screen offers it', () => {
-    const tree = renderMenu([notes], false)
-    const labels = texts(tree)
-    expect(labels).not.toContain('Recently Used')
-    expect(labels).not.toContain('Ship notes')
-    expect(labels.indexOf('Agent History')).toBeGreaterThanOrEqual(0)
-    expect(
-      tree.root.findAll((node) =>
-        String(node.props?.testID ?? '').startsWith('recent-session-card-')
-      )
-    ).toHaveLength(0)
-  })
-})
-
-describe('RecentSessionCardsSheet', () => {
-  it('shows the card title and workspace, selects that card, and adjusts maxDisplay', () => {
-    const onSelectCard = vi.fn()
-    const onChangeMaxDisplay = vi.fn()
-    const tree = mount(
-      createElement(RecentSessionCardsSheet, {
-        visible: true,
-        cards: [notes],
-        jumpingCardKey: null,
-        maxDisplay: 7,
-        onChangeMaxDisplay,
-        onSelectCard,
-        onClose: () => {}
-      })
-    )
-    const labels = texts(tree)
-    expect(labels).toContain('Ship notes')
-    expect(labels).toContain('Orca')
-    expect(labels).toContain('5m')
-    expect(textOf(tree.root.findByProps({ testID: 'recent-cards-limit-value' }))).toBe('7')
-    act(() => {
-      tree.root.findByProps({ testID: 'recent-cards-limit-increase' }).props.onPress()
-    })
-    expect(onChangeMaxDisplay).toHaveBeenCalledWith(8)
-    act(() => {
-      tree.root.findByProps({ testID: 'recent-session-card-wt-1-tab-1' }).props.onPress()
-    })
-    expect(onSelectCard).toHaveBeenCalledExactlyOnceWith(notes)
-  })
-
-  it('shows an empty state when no other card is recent', () => {
-    const tree = mount(
-      createElement(RecentSessionCardsSheet, {
-        visible: true,
-        cards: [],
-        jumpingCardKey: null,
-        onSelectCard: () => {},
-        onClose: () => {}
-      })
-    )
-    expect(texts(tree)).toContain('No other recent cards yet')
+  it('renders nothing while closed', () => {
+    expect(renderSheet([notes], { visible: false }).toJSON()).toBeNull()
   })
 })

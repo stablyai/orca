@@ -2,8 +2,10 @@ import {
   isAgentStatusState,
   normalizeMainAgentStatusField,
   type AgentStatusEntry
-} from '../../../src/shared/agent-status-types'
+} from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../src/shared/runtime-types'
+
+export { buildTabCompletionKeys, resolveTrackedTabCompletionState } from './tab-completion-state'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null

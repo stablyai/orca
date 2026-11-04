@@ -1,4 +1,4 @@
-import { keepsTerminalPaneVisible } from './mobile-terminal-pane-layout'
+import { applyActiveTerminalHandle } from './active-terminal-handle'
 import { orphanedMarkdownDraftTabs } from './orphaned-markdown-draft-tabs'
 import {
   pendingSelectionHandle,
@@ -278,38 +278,14 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       activeSessionTabTypeRef.current = active?.type ?? null
       activeSessionTabIdRef.current = active?.id ?? null
       setActiveSessionTabId(active?.id ?? null)
-      if (active?.type === 'terminal') {
-        if (typeof active.terminal !== 'string') {
-          const previous = activeHandleRef.current
-          if (previous) {
-            if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
-              unsubscribeTerminal(previous)
-            }
-          }
-          activeHandleRef.current = null
-          setActiveHandle(null)
-          return outcome
-        }
-        const previous = activeHandleRef.current
-        if (previous && previous !== active.terminal) {
-          if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
-            unsubscribeTerminal(previous)
-          }
-        }
-        activeHandleRef.current = active.terminal
-        setActiveHandle(active.terminal)
-        subscribeToTerminal(active.terminal)
-      } else if (active) {
-        // Transient empty snapshots may omit a live terminal; only explicit successful close clears it.
-        const previous = activeHandleRef.current
-        if (previous) {
-          if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
-            unsubscribeTerminal(previous)
-          }
-        }
-        activeHandleRef.current = null
-        setActiveHandle(null)
-      }
+      applyActiveTerminalHandle({
+        active,
+        activeHandleRef,
+        visible: visibleTerminalHandlesRef?.current,
+        setActiveHandle,
+        subscribe: subscribeToTerminal,
+        unsubscribe: unsubscribeTerminal
+      })
       return outcome
     },
     [

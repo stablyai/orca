@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import { Pressable, Text } from 'react-native'
+import { Text } from 'react-native'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import { WorkspaceExecutionHostContext } from '../navigation/workspace-execution-host'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
@@ -37,7 +37,7 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({}) }))
 vi.mock('../platform/haptics', () => ({ triggerSuccess: () => {}, triggerError: () => {} }))
 vi.mock('../hooks/use-now', () => ({ useNow: () => 1_700_000_000_000 }))
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ visible, children }: { visible: boolean; children: ReactNode }) =>
     visible ? children : null
 }))
@@ -121,50 +121,62 @@ function texts(tree: ReactTestRenderer): string[] {
   return tree.root.findAllByType(Text).map((node) => textOf(node))
 }
 
-describe('MobileSessionHeaderMoreActionsSheet', () => {
-  it('renders recent cards above Agent History and selects the tapped card', async () => {
-    const { MobileSessionHeaderMoreActionsSheet } = await vi.importActual<
-      typeof import('./MobileSessionHeaderMoreActionsSheet')
-    >('./MobileSessionHeaderMoreActionsSheet')
-    const notes: RecentSessionCardRecord = {
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      worktreeName: 'Orca',
-      tabId: 'tab-1',
-      tabType: 'markdown',
-      title: 'Ship notes',
-      lastVisitedAt: NOW - 5 * 60_000
-    }
-    const onSelectRecentSessionCard = vi.fn()
+describe('RecentSessionCardsSheet from MobileSessionSheets', () => {
+  const notes: RecentSessionCardRecord = {
+    hostId: 'host-1',
+    worktreeId: 'wt-1',
+    worktreeName: 'Orca',
+    tabId: 'tab-1',
+    tabType: 'markdown',
+    title: 'Ship notes',
+    lastVisitedAt: NOW - 5 * 60_000
+  }
+
+  async function mountSheets(showRecentSessionCards: boolean, showHeaderMoreActions = false) {
+    const handleSelectRecentSessionCard = vi.fn()
+    const controller = mountFixture<Parameters<typeof MobileSessionSheets>[0]['controller']>({
+      worktreeId: 'repo::/wt',
+      activeSessionTabId: 'tab-other',
+      isFolderWorkspaceRoute: false,
+      isFloatingWorkspaceRoute: false,
+      sessionTabs: [],
+      nativeChatController: { isTabChatView: () => false },
+      createTabAgentActions: [],
+      sendDiffNotesAgentActions: [],
+      closeWithBulkActions: () => [],
+      showRecentSessionCards,
+      showRecentSessionCardsAction: true,
+      showHeaderMoreActions,
+      recentSessionCards: [notes],
+      jumpingRecentCardKey: null,
+      handleSelectRecentSessionCard,
+      setShowRecentSessionCards: () => {}
+    })
     let renderer: ReactTestRenderer | null = null
     await act(async () => {
-      renderer = create(
-        createElement(MobileSessionHeaderMoreActionsSheet, {
-          visible: true,
-          showRecentSessionCards: true,
-          recentSessionCards: [notes],
-          onSelectRecentSessionCard,
-          showAgentSessionHistory: true,
-          showChecks: true,
-          onOpenAgentSessionHistory: () => {},
-          onOpenChecks: () => {},
-          onClose: () => {}
-        })
-      )
+      renderer = create(createElement(MobileSessionSheets, { controller }))
     })
     if (renderer === null) {
       throw new Error('nothing mounted')
     }
-    const labels = texts(renderer)
-    expect(labels.indexOf('Ship notes')).toBeGreaterThanOrEqual(0)
-    expect(labels.indexOf('Ship notes')).toBeLessThan(labels.indexOf('Agent History'))
-    expect(renderer.root.findAllByType(Pressable).map((node) => textOf(node))).not.toContain(
-      'Recently Used'
-    )
+    return { renderer, handleSelectRecentSessionCard }
+  }
+
+  it('renders recent cards and selects the tapped card', async () => {
+    const { renderer, handleSelectRecentSessionCard } = await mountSheets(true)
+    expect(texts(renderer)).toContain('Ship notes')
     await act(async () => {
-      renderer?.root.findByProps({ testID: 'recent-session-card-wt-1-tab-1' }).props.onPress()
+      renderer.root.findByProps({ testID: 'recent-session-card-wt-1-tab-1' }).props.onPress()
     })
-    expect(onSelectRecentSessionCard).toHaveBeenCalledExactlyOnceWith(notes)
+    expect(handleSelectRecentSessionCard).toHaveBeenCalledExactlyOnceWith(notes)
+  })
+
+  it('keeps recent cards hidden when the sheet is closed even if the header menu is open', async () => {
+    const { renderer } = await mountSheets(false, true)
+    expect(texts(renderer)).not.toContain('Ship notes')
+    expect(renderer.root.findAllByProps({ testID: 'recent-session-card-wt-1-tab-1' })).toHaveLength(
+      0
+    )
   })
 })
 
