@@ -17,6 +17,8 @@ export type PiRpcLaunchOptions = {
   envToDelete?: readonly string[]
   sessionFile?: string
   forkFile?: string
+  /** Orca-owned extensions loaded only into this launch. */
+  extensionPaths?: readonly string[]
 }
 
 const CALLER_ENV_TO_DELETE = [
@@ -111,6 +113,7 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
       '--mode',
       'rpc',
       ...args,
+      ...(options.extensionPaths ?? []).flatMap((path) => ['--extension', path]),
       ...(options.sessionFile ? ['--session', options.sessionFile] : []),
       ...(options.forkFile ? ['--fork', options.forkFile] : [])
     ],

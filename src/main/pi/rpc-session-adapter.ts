@@ -227,6 +227,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       }
     }
   holdsDispatch = (id: string): boolean => this.sessions.get(id)?.turns.holdsDispatch ?? false
+  holdsBackgroundWork = (id: string) => this.sessions.get(id)?.dialogs.backgroundWork === true
   heldSends = (id: string): ReadonlySet<string> | undefined => this.sessions.get(id)?.heldSends
   startupEnding = (id: string, generation: string) => this.endings.get(id, generation)
   retireStartup = (id: string, generation: string) => this.endings.retire(id, generation)

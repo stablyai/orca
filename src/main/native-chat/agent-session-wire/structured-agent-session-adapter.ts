@@ -259,6 +259,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
+  /** The live child declares background work that must not be idle-stopped; false without one. */
+  holdsBackgroundWork?(sessionId: string): boolean
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */

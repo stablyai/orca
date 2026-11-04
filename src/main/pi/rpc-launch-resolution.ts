@@ -32,6 +32,7 @@ import {
   withoutPiCallerEnv,
   type PiRpcLaunchOptions
 } from './rpc-launch'
+import { ensurePiBackgroundWorkBridge } from './rpc-background-work-bridge'
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
@@ -43,6 +44,7 @@ export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
   probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
+  ensureBackgroundWorkBridge?: () => Promise<string | null>
 }
 
 // RPC turns require agent_settled (Pi 0.84+); older versions remain terminal-only.
@@ -204,6 +206,7 @@ export function piRpcLaunchPart(
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
+    const bridge = await (deps.ensureBackgroundWorkBridge ?? ensurePiBackgroundWorkBridge)()
     return {
       launch: {
         command,
@@ -215,7 +218,8 @@ export function piRpcLaunchPart(
           : {}),
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
-        ...(replacement ? { replacement } : {})
+        ...(replacement ? { replacement } : {}),
+        ...(bridge ? { extensionPaths: [bridge] } : {})
       },
       env: withoutPiCallerEnv(env),
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE

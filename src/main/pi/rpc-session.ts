@@ -263,6 +263,7 @@ export class PiRpcSession {
       return
     }
     this.publishedExit = true
+    this.dialogs.backgroundWork = false
     const observedAt = Date.now()
     this.input.events?.observeExit?.(this.heldSends, observedAt)
     const cause = (this.failure ??= error)

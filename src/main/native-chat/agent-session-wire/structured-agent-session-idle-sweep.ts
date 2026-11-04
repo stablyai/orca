@@ -27,6 +27,8 @@ export type StructuredAgentSessionIdleSweepDeps = {
   hasOpenDispatch: (sessionId: string) => boolean
   /** Provider-retained, unanswered sends. */
   providerHoldsDispatch: (sessionId: string) => boolean
+  /** Provider-declared background work that only idle release honors. */
+  providerHoldsBackgroundWork: (sessionId: string) => boolean
   store: StructuredAgentSessionCurrentWorkHost['store']
   /** Already inside nonreentrant session serialization. */
   stopAgent: (sessionId: string) => Promise<void>
@@ -145,6 +147,7 @@ export class StructuredAgentSessionIdleSweep {
   private owesWork(sessionId: string, session: StructuredAgentSessionHostSession): boolean {
     return (
       this.queuedOrDelivering(sessionId, session) ||
+      this.deps.providerHoldsBackgroundWork(sessionId) ||
       structuredAgentSessionChildHasOpenWork({
         currentWork: () =>
           heldStructuredAgentSessionCurrentWork(

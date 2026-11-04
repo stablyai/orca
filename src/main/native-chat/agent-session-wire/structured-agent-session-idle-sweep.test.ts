@@ -250,23 +250,26 @@ describe('the idle sweep', () => {
     )
   })
 
-  // Rate-limited CLIs can hold unacknowledged sends before any turn row; trust provider evidence.
-  it('never stops an agent while its provider holds a send, and gives a full window once it lets go', async () => {
-    await foundRestTestChat(rig)
-    rig.adapter.holdsDispatch.mockReturnValue(true)
-    rig.clock.now += 2 * IDLE_MS
+  // Rate-limited CLIs can hold unacknowledged sends before any turn row; Pi declares workers it waits on.
+  it.each(['holdsDispatch', 'holdsBackgroundWork'] as const)(
+    'never stops an agent while its provider %s, and gives a full window once it lets go',
+    async (holds) => {
+      await foundRestTestChat(rig)
+      rig.adapter[holds].mockReturnValue(true)
+      rig.clock.now += 2 * IDLE_MS
 
-    await sweepTicks(12)
-    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
-    expect(rig.adapter.holdsDispatch).toHaveBeenCalledWith(SESSION)
-    rig.adapter.holdsDispatch.mockReturnValue(false)
-    await sweepTicks()
-    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
-    rig.clock.now += IDLE_MS + 1
-    await vi.waitFor(() =>
-      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
-    )
-  })
+      await sweepTicks(12)
+      expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+      expect(rig.adapter[holds]).toHaveBeenCalledWith(SESSION)
+      rig.adapter[holds].mockReturnValue(false)
+      await sweepTicks()
+      expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+      rig.clock.now += IDLE_MS + 1
+      await vi.waitFor(() =>
+        expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+      )
+    }
+  )
 
   it('keeps a child an unanswered prompt waits on (P2-22 i)', async () => {
     await foundRestTestChat(rig)
@@ -351,6 +354,7 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
       childWorkOpen: () => false,
       hasOpenDispatch: () => false,
       providerHoldsDispatch: () => false,
+      providerHoldsBackgroundWork: () => false,
       stopAgent,
       stopStartingAgent: stopAgent,
       closeConversation,
