@@ -7,7 +7,7 @@ import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-age
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { addWslEnvKeys } from '../../../shared/wsl-env'
-import { isAgentStatusHooksEnabled } from '../../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabled } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { awaitExplicitAgentPluginGuestReadiness } from '../../agent-hooks/wsl-agent-plugin-readiness'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../codex/codex-state-db-backfill-recovery'
 import type { CodexSessionResumePreparation } from '../../codex/codex-session-resume-home'

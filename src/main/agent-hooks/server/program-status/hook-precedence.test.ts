@@ -4,7 +4,7 @@ import {
   HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS as SILENCE,
   programStatusHookYieldEndsAt
 } from './hook-precedence'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 const NOW = 1_000_000
 

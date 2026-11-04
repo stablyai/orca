@@ -6,7 +6,7 @@ import {
 } from './codex-background-terminals'
 import { requireLiveCodexSession, type CodexSession } from './codex-structured-session-state'
 import { interruptCodexSubagents } from './codex-subagent-interrupts'
-import type { AgentSessionBackgroundTaskStops } from '../../shared/agent-child-work-stop-targets'
+import type { AgentSessionBackgroundTaskStops } from '../../shared/agent-status/child-work/agent-child-work-stop-targets'
 
 type StopTally = { stopped: number; survived: boolean }
 

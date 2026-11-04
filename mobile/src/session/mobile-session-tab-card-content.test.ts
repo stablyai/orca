@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../src/shared/agent-status-freshness'
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../src/shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { mobileSessionTabCardContent } from './mobile-session-tab-card-content'
 

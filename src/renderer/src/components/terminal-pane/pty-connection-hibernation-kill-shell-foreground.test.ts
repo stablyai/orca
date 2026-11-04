@@ -12,7 +12,11 @@ import {
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
@@ -156,6 +160,7 @@ describe('shell showing through a hibernation kill', () => {
   }> {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const ptyId = 'pty-hibernating'
@@ -178,6 +183,8 @@ describe('shell showing through a hibernation kill', () => {
         })
       })
     )
+    bindPaneAgentTitleMocks(args[2], agentTitleMocks)
+
     connectPanePty(...args)
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()

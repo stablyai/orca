@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH,
   parseAgentStatusPayload
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import { nativeChatAskDismissKey } from '../../../../shared/native-chat/input/native-chat-ask-dismiss-key'
 import {
   parseAskFromStatus,

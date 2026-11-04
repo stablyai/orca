@@ -1,5 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   createManagedCommandMatcher,
   readHooksJson,

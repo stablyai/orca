@@ -12,7 +12,7 @@ const { fakeStore } = vi.hoisted(() => {
   }
   return { fakeStore: state }
 })
-vi.mock('../../store', () => ({ useAppStore: { getState: () => fakeStore } }))
+vi.mock('../../store/index', () => ({ useAppStore: { getState: () => fakeStore } }))
 
 import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 

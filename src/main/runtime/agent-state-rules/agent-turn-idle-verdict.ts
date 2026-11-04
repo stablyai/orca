@@ -2,7 +2,7 @@
 // Status-free panes may finish after startup grace if the shell did not refuse the command.
 // A shell prompt can look complete even after command-not-found; require fresh agent completion.
 // Status-free panes may finish after startup grace if the shell did not refuse the command.
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 /** Covers agent spin-up over SSH before an idle pane without agent status is believed. */
 export const AGENT_START_GRACE_MS = 2 * 60 * 1000

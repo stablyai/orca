@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveMobileImageAttachmentAgent } from './mobile-image-paste-agent'
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import type { MobileSessionTab } from './mobile-session-route-types'
 
 function status(agentType: string): AgentStatusEntry {

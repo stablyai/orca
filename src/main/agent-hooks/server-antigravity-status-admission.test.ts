@@ -2,14 +2,16 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
+import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { AgentHookServer } from './server'
-import type { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
+import type { probeAgentProcessPresence } from '../../shared/agent-status/process/agent-process-presence-probe'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 
 const probe = vi.hoisted(() => vi.fn<typeof probeAgentProcessPresence>(async () => 'live'))
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe
+}))
 afterEach(() => probe.mockReset().mockResolvedValue('live'))
 
 it.each(['local', 'relay'] as const)(

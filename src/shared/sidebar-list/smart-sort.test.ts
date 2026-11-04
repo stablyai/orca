@@ -4,11 +4,9 @@ import type { TerminalTab } from '../terminal-tab-types'
 import type { Worktree } from '../worktree/types'
 import { buildWorktreeComparator, CREATE_GRACE_MS, sortWorktreesSmart } from './smart-sort'
 import { buildAttentionByWorktree } from './smart-attention'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStateHistoryEntry,
-  type AgentStatusEntry
-} from '../agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../agent-status/contracts/agent-status-freshness'
+import type { AgentStateHistoryEntry } from '../agent-status/lifecycle/agent-state-history'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../stable-pane-id'
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()

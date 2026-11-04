@@ -1,6 +1,6 @@
 // Explicit layout.subscribe wire projection includes terminal startup inputs and permits live pane titles/status. Persistence-only records and view selection stay private.
 
-import type { AgentType } from '../agent-status-types'
+import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault-session-title'
 import type { ExecutionHostId } from '../execution-host'
 import type { TabContentType, TabGroupLayoutNode } from '../tab-types'

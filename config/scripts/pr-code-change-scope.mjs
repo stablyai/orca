@@ -255,9 +255,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/runtime-worktree-contracts',
   'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
   // Turn-end status a newer host publishes and an older desktop reads (cross-version-host-observed-turn-end).
-  'src/shared/agent-turn-outcome',
-  'src/shared/agent-status-types',
-  'src/shared/agent-lead-status-fold',
+  'src/shared/agent-status/lifecycle/agent-turn-outcome',
+  'src/shared/agent-status/contracts/agent-status-types',
+  'src/shared/agent-status/lifecycle/agent-lead-status-fold',
   'src/shared/agent-session-turn-record',
   'src/shared/agent-session/view/structured-agent-session-agent-status',
   'src/shared/agent-session/view/structured-agent-session-projection',

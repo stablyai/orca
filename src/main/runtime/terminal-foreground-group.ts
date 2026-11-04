@@ -1,4 +1,4 @@
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
 import { unreadableArgvName, type ProcessTableRow } from '../../shared/process-table-snapshot'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
