@@ -56,7 +56,8 @@ export function useContextualTourFocus({
     }
     // A paused tour that comes back, at any step, must not take focus again: a keystroke meant for
     // the terminal would land on its dismiss button. A tour that ended for good is not paused.
-    const focusedTourId = focusedStepRef.current?.split(':')[0] ?? null
+    // An activation cancelled before it painted keeps the earlier pause.
+    const focusedTourId = focusedStepRef.current?.split(':')[0] ?? pausedTourIdRef.current
     pausedTourIdRef.current =
       focusedTourId && !useAppStore.getState().contextualToursSeenIds.includes(focusedTourId)
         ? focusedTourId
