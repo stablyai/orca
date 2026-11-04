@@ -6,7 +6,7 @@ import {
 import type { PendingSessionSelection } from './pending-session-selection'
 import { useState, useRef, useCallback } from 'react'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
-import { Alert, type Keyboard, type TextInput } from 'react-native'
+import type { Keyboard, TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -20,8 +20,6 @@ import { resolveMobileTerminalInputGate } from '../terminal/terminal-input-conne
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
 import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
-import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
-import { useBufferedTerminalDrafts } from '../terminal/use-buffered-terminal-drafts'
 import { useMobileTerminalInventoryRecoveryBridge } from './use-mobile-terminal-inventory-recovery'
 import type {
   MobileSessionTab,
@@ -30,7 +28,6 @@ import type {
   TerminalGestureInputQueue
 } from './mobile-session-route-types'
 import type { MobileSessionScreenStateModel } from './use-mobile-session-screen-state'
-import type { MobileDictationAnchor } from '../dictation/mobile-dictation-text-insertion'
 
 export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateModel) {
   const {
@@ -42,8 +39,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     sessionTabs,
     terminals,
     setLiveInputCapture,
-    liveInputTerminalHandles,
-    liveInputTerminalHandlesRef,
     activeHandle,
     activeSessionTabId,
     keyboardHeight
@@ -80,7 +75,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const visibleTerminalHandlesRef = useRef<readonly string[]>(visibleTerminalHandles)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
-  const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
   const onLiveInputSendFailureRef = useRef<(failure: TerminalLiveInputFailure) => void>(() => {})
@@ -91,16 +85,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     typeof Keyboard.addListener
   > | null>(null)
   const sessionTabActionSheetRequestSeqRef = useRef(0)
-  const dictationRouteContextRef = useRef<{
-    readonly handle: string | null
-    readonly liveInputEnabled: boolean
-    readonly anchor: MobileDictationAnchor | null
-  } | null>(null)
-  // Terminals share one command field, so its selection names the terminal it was read in.
-  const commandFieldAnchorRef = useRef<{
-    readonly handle: string | null
-    readonly anchor: MobileDictationAnchor
-  } | null>(null)
+  // The terminal a dictation started in, so its words land there after a switch.
+  const dictationRouteContextRef = useRef<{ readonly handle: string } | null>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   const leaseOnlyHandlesRef = useRef<Set<string>>(new Set())
@@ -110,22 +96,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   // Wait for web-ready: hidden iOS WebViews can defer JS and otherwise queue init before rendering.
   const webReadyHandlesRef = useRef<Set<string>>(new Set())
   const activeHandleRef = useRef<string | null>(null)
-  const executionHost = useWorkspaceExecutionHost()
-  const bufferedTerminalDraftState = useBufferedTerminalDrafts({
-    activeHandle,
-    activeHandleRef,
-    storageKey:
-      hostId && worktreeId
-        ? `orca:terminalDrafts:${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`
-        : undefined,
-    storageScope: executionHost,
-    onStorageError: () =>
-      Alert.alert(
-        'Draft could not be saved',
-        'Keep this screen open to avoid losing the command draft.'
-      )
-  })
-  const reconcileBufferedDraftsRef = useRef(bufferedTerminalDraftState.reconcileTerminalTabs)
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingSelectionRef = useRef<PendingSessionSelection | null>(null)
   const pendingBrowserFocusPageIdRef = useRef<string | null>(null)
@@ -143,7 +113,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const delayedActionTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
   // Reject stale layout sequences; large gaps reset the mark for fresh subscriptions/server restarts.
   const layoutSeqRef = useRef<Map<string, number>>(new Map())
-  const sendingRef = useRef(false)
   // Fit the unrounded measured frame; window height can exceed visible area.
   const terminalFrameRef = useRef<TerminalFrame | null>(null)
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
@@ -169,8 +138,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     onSendFailure: handleLiveInputSendFailure,
     connected: connState === 'connected',
     liveInputRef,
-    liveInputTerminalHandles,
-    liveInputTerminalHandlesRef,
     sendLiveTerminalInputRef,
     setLiveInputCapture
   })
@@ -181,16 +148,13 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   })
   const canCompose = inputGate.canCompose
   const canSend = inputGate.canSend && clientId !== null
-  const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const { handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
-    commandInputRef,
     inputRef: liveInputRef,
     keyboardHeight,
     lifecycleIdentity: client,
     lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
-    liveInputEnabled,
     reopenFocusedInputWhenKeyboardHidden: reopensFocusedInputWhenKeyboardHidden(),
     timerRef: liveInputFocusTimerRef
   })
@@ -224,14 +188,12 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     visibleTerminalHandlesRef,
     terminalRefs,
     liveInputRef,
-    commandInputRef,
     liveInputFocusTimerRef,
     sendLiveTerminalInputRef,
     onLiveInputSendFailureRef,
     sessionTabActionSheetKeyboardHideSubRef,
     sessionTabActionSheetRequestSeqRef,
     dictationRouteContextRef,
-    commandFieldAnchorRef,
     terminalUnsubsRef,
     subscribingHandlesRef,
     leaseOnlyHandlesRef,
@@ -252,7 +214,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     subscribeSeqRef,
     delayedActionTimersRef,
     layoutSeqRef,
-    sendingRef,
     terminalFrameRef,
     activeSessionTab,
     clearPendingLiveInputCommit,
@@ -264,16 +225,11 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     sendLiveInputClick,
     canCompose,
     canSend,
-    liveInputEnabled,
     handleTerminalTap,
     resetLiveInputFocus,
     terminalInventoryRecoveryScope,
     registerTerminalInventoryRecoveryAction,
     signalTerminalInventoryRecovery,
-    bufferedTerminalDraftState,
-    reconcileBufferedDraftsRef,
-    input: bufferedTerminalDraftState.input,
-    setInput: bufferedTerminalDraftState.setInput,
     getLiveInteractionGeneration: getLiveInputInteractionGeneration
   }
 }
