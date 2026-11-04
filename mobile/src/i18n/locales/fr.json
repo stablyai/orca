@@ -287,7 +287,8 @@
       "stoppedManually": "Arrêté manuellement",
       "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
       "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
-      "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets)."
+      "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
+      "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "Vous pouvez continuer dans cette conversation.",
@@ -334,7 +335,10 @@
       "emptyAnswer": "Réponse vide",
       "resolved": "Résolu",
       "resolver": "Répondu sur {{device}}",
-      "unavailable": "Réponse sélectionnée indisponible"
+      "unavailable": "Réponse sélectionnée indisponible",
+      "thisPhone": "ce téléphone",
+      "computer": "l’ordinateur",
+      "otherDevice": "un autre appareil"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "Disponible après le démarrage de la session.",
@@ -564,6 +568,24 @@
     "agentMessage": {
       "handedOffToAgent": "Confié à un agent",
       "startedAgent": "Agent démarré"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "La réponse de la pièce jointe est illisible. Réessayez.",
+      "incompleteReply": "La pièce jointe a changé ou sa réponse était incomplète. Fermez-la et réessayez.",
+      "notText": "Ce fichier ne peut pas être prévisualisé en texte. Enregistrez-le pour l’ouvrir dans une autre application.",
+      "openFailed": "Impossible d’ouvrir la pièce jointe. Réessayez.",
+      "hostUpdate": "Cet hôte ne peut pas encore ouvrir les pièces jointes texte. Mettez Orca à jour sur cet hôte, puis réessayez.",
+      "copyTooLarge": "Ce fichier est trop volumineux pour être copié. Enregistrez-le plutôt.",
+      "connectionChanged": "La connexion a changé. Réessayez d’ouvrir la pièce jointe.",
+      "hostChanged": "L’hôte de la pièce jointe a changé. Fermez-la et rouvrez-la.",
+      "readFailed": "Impossible de lire cette pièce jointe. Reconnectez-vous et réessayez. Le fichier a peut-être été supprimé ou modifié.",
+      "copyFrame": "La copie intégrale de cette pièce jointe nécessite la prochaine mise à jour du téléphone.",
+      "copyFailed": "Impossible de copier la pièce jointe. Réessayez.",
+      "pastedText": "Texte collé",
+      "textAttachment": "Pièce jointe texte",
+      "byteSize": "{{size}} octets",
+      "saveUpdate": "L’enregistrement sera disponible dans une mise à jour du téléphone.",
+      "fullCopySaveUpdate": "La copie intégrale et l’enregistrement de cette pièce jointe seront disponibles dans une mise à jour du téléphone."
     }
   },
   "common": {
@@ -840,7 +862,8 @@
     },
     "prSidebar": {
       "loading": "Chargement de la pull request…",
-      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté."
+      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté.",
+      "retryLoading": "Réessayer de charger la pull request"
     },
     "protocolBlockScreen": {
       "backToHosts": "Retour aux hôtes",
@@ -2108,7 +2131,8 @@
       "promptUnconfirmed": "L'agent a démarré, mais l'envoi du prompt n'a pas pu être confirmé."
     },
     "prActionsEngine": {
-      "mergeFailed": "Impossible de merger la pull request."
+      "mergeFailed": "Impossible de merger la pull request.",
+      "refreshFailed": "Impossible d’actualiser la pull request."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent démarré",
@@ -3287,7 +3311,6 @@
       "pipelineJobs_one": "{{count}} job",
       "pipelineJobs_other": "{{count}} jobs",
       "rerunAll": "Tout relancer",
-      "rerunFailed": "Relancer les vérifications échouées",
       "subIssueTitle": "Titre du sous-ticket",
       "subIssues": "Sous-tickets"
     },
@@ -3521,7 +3544,6 @@
       "requestReview": "Demander une revue",
       "requestReviewers": "Demander des reviewers",
       "rerunAll": "Tout relancer",
-      "rerunFailed": "Relancer celles en échec",
       "reviewers": "Reviewers",
       "viewFile": "Afficher"
     },

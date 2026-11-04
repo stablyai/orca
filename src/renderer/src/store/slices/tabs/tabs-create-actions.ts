@@ -128,7 +128,8 @@ export function createTabsCreateActions(
           isPinned: init?.isPinned
         }
 
-        const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
+        const nextActiveTabId =
+          shouldActivate || init?.showInGroup ? created.id : (group.activeTabId ?? created.id)
         const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
         // Automation-created browsers paint without stealing the visible group selection.
         const nextRecent = shouldActivate

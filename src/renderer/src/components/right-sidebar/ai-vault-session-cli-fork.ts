@@ -2,7 +2,10 @@ import { compactIpcErrorMessage } from '@/lib/ipc-error'
 import { isAiVaultOwnershipRefusal } from '@/lib/ai-vault-resume-refusal'
 import { aiVaultCliForkHostTooOldMessage } from '@/lib/ai-vault-session-resume-preparation'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { getAgentForkArgv, agentForksThroughChat } from '../../../../shared/agent-resume-argv'
+import {
+  getAgentForkArgv,
+  agentForksThroughChat
+} from '../../../../shared/agent-launch/startup/agent-resume-argv'
 import { isResumableTuiAgent } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAiVaultAgentProviderSession } from '@/lib/ai-vault-resume-command'
 

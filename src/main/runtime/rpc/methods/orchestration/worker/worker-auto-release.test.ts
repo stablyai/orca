@@ -6,7 +6,7 @@ import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestrat
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 import { WorkerAutoReleaseActivity } from '../../../../orchestration/worker-auto-release-activity'
-import type { AgentPhase } from '../../../../../../shared/agent-transitions'
+import type { AgentPhase } from '../../../../../../shared/agent-status/lifecycle/agent-transitions'
 
 const GRACE_MS = 2 * 60_000
 

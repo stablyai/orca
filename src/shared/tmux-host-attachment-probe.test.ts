@@ -5,7 +5,7 @@ vi.mock('@orca/process-host', () => ({ runProcess: run }))
 vi.mock('node:fs/promises', () => ({
   stat: async () => ({ isSocket: () => true, uid: process.getuid?.() })
 }))
-vi.mock('./agent-process-presence-probe', () => ({
+vi.mock('./agent-status/process/agent-process-presence-probe', () => ({
   readAgentProcess: async (pid: number) => ({ verdict: 'live', startTime: `birth-${pid}` })
 }))
 let active = 0

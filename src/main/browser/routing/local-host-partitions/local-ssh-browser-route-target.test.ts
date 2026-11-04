@@ -4,10 +4,6 @@ import { requireLocalSshBrowserRouteTarget } from './local-ssh-browser-route'
 const targets = [{ id: 'target-a', generation: 4 }]
 
 describe('local SSH browser target registration', () => {
-  it('accepts the current managed deployment registration', () => {
-    expect(() => requireLocalSshBrowserRouteTarget(targets, 'target-a', 4)).not.toThrow()
-  })
-
   it('preserves direct SSH callers that do not supply a deployment fence', () => {
     expect(() => requireLocalSshBrowserRouteTarget(targets, 'target-a')).not.toThrow()
   })

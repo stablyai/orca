@@ -9,7 +9,7 @@ import {
 import type { GlobalSettings } from './global-settings-types'
 import { getDefaultSourceControlAiSettings } from './source-control-ai-settings'
 import type { SourceControlAiModelChoice } from './source-control-ai-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 type Edit = { agentId: TuiAgent; change: SourceControlAiModelEdit }
 

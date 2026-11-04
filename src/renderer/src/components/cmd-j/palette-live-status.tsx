@@ -10,7 +10,7 @@ import {
   buildExplicitEntriesByTabId,
   type TabPaneInputSources
 } from '../../../../shared/sidebar-list/smart-attention'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import {
   getWorktreeStatus,
@@ -28,10 +28,8 @@ import {
 } from '@/components/tab-bar/terminal-tab-activity-status'
 import { translate } from '@/i18n/i18n'
 import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'

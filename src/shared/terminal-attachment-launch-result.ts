@@ -3,8 +3,8 @@ import type {
   SleepingAgentLaunchConfig,
   TerminalLaunchResult
 } from './agent-session/lifecycle/agent-session-resume'
-import { isTuiAgent } from './tui-agent-config'
-import type { TuiAgent } from './tui-agent'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import { ResumeProviderSessionParam } from './rpc-contract/terminal-unary-params'
 import { sleepingAgentLaunchConfigBaseSchema } from './workspace-session-sleeping-agents'
 

@@ -1,5 +1,5 @@
 import { AgentLaunchTextModelDefault } from './AgentLaunchTextModelDefault'
-import { textActionArgumentsOwnModel } from '../../../../shared/source-control-text-action-picker'
+import { textActionArgumentsOwnModel } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
 import type { AgentLaunchSetupPanelProps } from './AgentLaunchSetupButton'
 import {
   agentLaunchSetupOptionRows,
@@ -31,20 +31,20 @@ import {
   type AgentLaunchSetupFooterHandle
 } from './AgentLaunchSetupFooter'
 import { AgentLaunchSetupActions } from './AgentLaunchSetupActions'
-import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
+import { agentPickerPanelArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit,
   type AgentPickerEdit
-} from '../../../../shared/agent-launch-picker-edits'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
+import { agentPickerArgumentsKnown } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
+import { agentPickerEffectiveChoices } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { AgentPickerSurface } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import {
-  agentPickerArgumentsKnown,
-  agentPickerEffectiveChoices,
   agentPickerModels,
   agentPickerEntryOptions,
-  agentPickerPermissions,
-  type AgentPickerSurface
-} from '../../../../shared/agent-launch-picker'
+  agentPickerPermissions
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 
 export function AgentLaunchSetupPanel({
   entry,

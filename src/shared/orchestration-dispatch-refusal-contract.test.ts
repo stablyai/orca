@@ -3,7 +3,7 @@ import {
   buildInjectRejectionMessage,
   taskNotStartableRefusal
 } from './orchestration-dispatch-refusal-contract'
-import { recognizeAgentProcess } from './agent-process-recognition'
+import { recognizeAgentProcess } from './agent-status/process/agent-process-recognition'
 
 describe('buildInjectRejectionMessage', () => {
   const message = buildInjectRejectionMessage('term_a')

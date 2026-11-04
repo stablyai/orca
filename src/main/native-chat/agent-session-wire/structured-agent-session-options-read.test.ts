@@ -5,7 +5,10 @@ import {
   hostTestRestingOptionsJournal as restingJournal,
   hostTestOptionsReadStore
 } from './structured-agent-session-host-test-data'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import {
+  CODEX_SESSION_OPTION_CATALOG,
+  CLAUDE_SESSION_OPTION_CATALOG
+} from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionSendSelection
@@ -94,7 +97,10 @@ describe('a chat at rest, read by the host', () => {
     const resting = {
       child: liveOptions ? { fence: 1 } : null,
       params: { provider: record.provider },
-      journal: restingJournal(items, wroteBeforeOpen)
+      journal: {
+        ...restingJournal(items, wroteBeforeOpen),
+        snapshot: () => ({ items: [], submissions: [] })
+      }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read touches only the declared context fields.
     const context = {
@@ -110,6 +116,26 @@ describe('a chat at rest, read by the host', () => {
     } as unknown as StructuredAgentSessionMutationContext
     return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
   }
+
+  it('separates Claude fallback reports from the saved model and accepted send selection', async () => {
+    const saved = { model: 'claude-opus-5-5', effort: 'high' }
+    const answer = await readAtRest({ provider: 'claude', options: saved }, [], false, null, true, {
+      models: [],
+      current: { model: 'claude-opus-5-5', reportedModel: 'claude-opus-4-8', confirmed: ['model'] }
+    })
+    expect(answer.current).toMatchObject({
+      model: saved.model,
+      reportedModel: 'claude-opus-4-8',
+      effort: saved.effort,
+      acceptedInputSources: { model: 'saved', effort: 'saved' }
+    })
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('claude'),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      answer
+    )
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({ ...saved, fastMode: 'false' })
+  })
 
   it.each<[string, RestingFacts, AgentJournalItemBody[], boolean, string[]]>([
     ['started here names its default as its own', {}, [], false, []],

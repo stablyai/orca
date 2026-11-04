@@ -1,8 +1,8 @@
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+} from '../../agent-status/contracts/agent-status-types'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
 import { clearPaneTurnCacheState, type HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'

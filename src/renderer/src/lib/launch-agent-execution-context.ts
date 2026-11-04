@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import { launchHostIsRemote } from '../../../shared/agent-launch-remote'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { launchHostIsRemote } from '../../../shared/agent-launch/startup/agent-launch-remote'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getConnectionIdForWorktreeCopy } from '@/lib/connection-owner-resolution'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'

@@ -2,7 +2,7 @@ import {
   agentPickerLaunchInputs,
   type AgentPickerDraft,
   type AgentPickerEntry
-} from '../../../shared/agent-launch-picker'
+} from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
 import type { DirectWorkItemSetupRequest } from '@/lib/direct-work-item-setup'
 import { agentChoicePending } from '@/lib/host-chat-program'
@@ -33,7 +33,7 @@ import { useAgentsOfferedForLaunch } from '@/lib/host-chat-program-acquisition'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'

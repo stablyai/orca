@@ -85,7 +85,9 @@ describe('capped terminal buffer retention', () => {
 
     expect(errors[0]).toHaveLength(COUNT)
     expect(
-      errors[0].every((text, index) => text.length === 4000 && text.endsWith(`:${index}`))
+      errors[0].every(
+        ({ message }, index) => message.length === 4000 && message.endsWith(`:${index}`)
+      )
     ).toBe(true)
     expect(growth).toBeLessThan(PARENT_CHARS)
   })

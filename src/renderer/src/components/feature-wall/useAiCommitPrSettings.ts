@@ -10,9 +10,9 @@ import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../shared/commit-message
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
 import { getTextGenerationModels } from '../../../../shared/source-control-ai-model-selection'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   EMPTY_COMMIT_MESSAGE_AI_SETTINGS,
   readCommitMessageAiSettings,

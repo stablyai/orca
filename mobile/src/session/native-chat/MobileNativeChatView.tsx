@@ -1,6 +1,6 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { MobileStateView } from '../../components/MobileStateView'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, type ComponentProps } from 'react'
 import { nativeChatTaskListPredecessors } from '../../../../src/shared/native-chat/input/native-chat-task-list-history'
 import {
   MobileNativeChatDisclosureContext,
@@ -9,8 +9,6 @@ import {
 import { type NativeScrollEvent, type NativeSyntheticEvent, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import type { AskAnswerSelection } from '../../../../src/shared/native-chat/input/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type {
   NativeChatLiveTurnIndicator,
@@ -54,8 +52,6 @@ import {
   NO_COMPOSER_TRAY,
   type ComposerTrayProps
 } from './composer/use-mobile-native-chat-composer-tray'
-import type { MobileChatPermission } from './input/mobile-native-chat-permission'
-import type { MobileChatQuestion } from './input/mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatScrollRootsBoundary } from '../MobileNativeChatScrollRootsBoundary'
 import { MobileNativeChatRowList } from './transcript/MobileNativeChatRowList'
@@ -67,77 +63,63 @@ export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
 type Props = ComposerTrayProps & MobileNativeChatMicProps & ChatViewProps
 
-type ChatViewProps = MobileNativeChatSendProps & {
-  // Keep raw messages to distinguish loading from a loaded transcript filtered to empty.
-  messages: NativeChatMessage[]
-  folded: NativeChatMessage[]
-  status: MobileNativeChatStatus
-  error?: string
-  // Permanent read failure replaces the pane because further chat actions cannot succeed.
-  readFailedFinally?: boolean
-  agent?: string | null
-  sessionLive?: boolean
-  /** The turn is live: working, or waiting on the reader. */
-  agentWorking?: boolean
-  canStop?: boolean
-  awaitingInput?: NativeChatAwaitingInput | null
-  structuredActivityUi?: boolean
-  turnIndicator?: NativeChatLiveTurnIndicator | null
-  workingStartedAt?: number | null
-  settledTurns?: NativeChatSettledTurns | null
-  turnJournal?: NativeChatTurnJournal | null
-  receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
-  actionablePromptIds?: readonly string[]
-  onStop?: () => void
-  // The overlay already gates partial text against authoritative transcript replacement.
-  streaming: string | null
-  hasMore?: boolean
-  olderPages?: OlderPagePhase
-  onLoadEarlier?: () => void
-  // Fence send completion by route identity after tab/view switches.
-  sendSurfaceId: string
-  getSendCompletionGeneration: () => number
-  getComposerEditGeneration: () => number
-  pending: MobileNativeChatPendingItem[]
-  // Retain local preview URIs after authoritative image messages replace optimistic rows.
-  imagePreviewsByMessageId?: Record<string, string[]>
-  composerScopeKey?: string | null
-  draftKey: string | null
-  onComposerTextChange: (text: string) => void
-  onAttachImage?: () => void
-  attachments?: PendingNativeChatImage[]
-  onRemoveAttachment?: (id: string) => void
-  isAttaching?: boolean
-  inputLockReason?: MobileNativeChatInputLockReason | null
-  // Report send failures here only while mounted; the route uses a toast otherwise.
-  sendErrorMessage?: string | null
-  onClearSendError?: () => void
-  filePaths?: string[]
-  onNeedFiles?: (query: string) => void
-  skillDiscovery?: NativeChatSkillDiscoverySnapshot
-  onNeedSkills?: () => void
-  sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
-  structuredComposer?: MobileNativeChatStructuredComposer | null
-  ask?: AskPrompt | null
-  // Keep dismissal identity above chat/terminal toggles.
-  askKey?: string | null
-  onDismissAsk?: () => void
-  onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
-  askRequiresTerminal?: boolean
-  onAnswerInTerminal?: () => void
-  onCancelAsk?: () => Promise<boolean>
-  onCancelPrompt?: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
-  onCollapseAsk?: () => void
-  onCollapsePrompt?: () => void
-  collapsedPrompt?: { title: string; expand: () => void } | null
-  question?: MobileChatQuestion | null
-  onAnswerQuestion?: (text: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
-  permission?: MobileChatPermission | null
-  promptKey?: string | null
-  onRespondPermission?: (send: string) => Promise<boolean>
-  onOpenFile?: (relativePath: string) => void
-  keyboardInset?: number
-}
+type ChatViewProps = MobileNativeChatSendProps &
+  Omit<ComponentProps<typeof MobileNativeChatPromptCard>, 'answering' | 'requiresTerminal'> & {
+    // Keep raw messages to distinguish loading from a loaded transcript filtered to empty.
+    messages: NativeChatMessage[]
+    folded: NativeChatMessage[]
+    status: MobileNativeChatStatus
+    error?: string
+    // Permanent read failure replaces the pane because further chat actions cannot succeed.
+    readFailedFinally?: boolean
+    agent?: string | null
+    sessionLive?: boolean
+    /** The turn is live: working, or waiting on the reader. */
+    agentWorking?: boolean
+    canStop?: boolean
+    awaitingInput?: NativeChatAwaitingInput | null
+    structuredActivityUi?: boolean
+    turnIndicator?: NativeChatLiveTurnIndicator | null
+    workingStartedAt?: number | null
+    settledTurns?: NativeChatSettledTurns | null
+    turnJournal?: NativeChatTurnJournal | null
+    receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
+    actionablePromptIds?: readonly string[]
+    onStop?: () => void
+    // The overlay already gates partial text against authoritative transcript replacement.
+    streaming: string | null
+    hasMore?: boolean
+    olderPages?: OlderPagePhase
+    onLoadEarlier?: () => void
+    // Fence send completion by route identity after tab/view switches.
+    sendSurfaceId: string
+    getSendCompletionGeneration: () => number
+    getComposerEditGeneration: () => number
+    pending: MobileNativeChatPendingItem[]
+    // Retain local preview URIs after authoritative image messages replace optimistic rows.
+    imagePreviewsByMessageId?: Record<string, string[]>
+    composerScopeKey?: string | null
+    draftKey: string | null
+    onComposerTextChange: (text: string) => void
+    onAttachImage?: () => void
+    attachments?: PendingNativeChatImage[]
+    onRemoveAttachment?: (id: string) => void
+    isAttaching?: boolean
+    inputLockReason?: MobileNativeChatInputLockReason | null
+    // Report send failures here only while mounted; the route uses a toast otherwise.
+    sendErrorMessage?: string | null
+    onClearSendError?: () => void
+    filePaths?: string[]
+    onNeedFiles?: (query: string) => void
+    skillDiscovery?: NativeChatSkillDiscoverySnapshot
+    onNeedSkills?: () => void
+    sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
+    structuredComposer?: MobileNativeChatStructuredComposer | null
+    askRequiresTerminal?: boolean
+    promptKey?: string | null
+    onOpenFile?: (relativePath: string) => void
+    keyboardInset?: number
+  }
 
 export function MobileNativeChatView({
   messages,
@@ -196,6 +178,8 @@ export function MobileNativeChatView({
   askKey,
   onDismissAsk,
   onAnswerAsk,
+  askPending,
+  askSendSource,
   askRequiresTerminal = false,
   onAnswerInTerminal,
   onCancelAsk,
@@ -218,7 +202,6 @@ export function MobileNativeChatView({
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
 
-  // Memoize list derivation to keep downstream autoscroll/renderItem dependencies stable.
   const { data } = useMemo(
     () =>
       buildMobileNativeChatTransientData({
@@ -367,6 +350,7 @@ export function MobileNativeChatView({
       <MobileNativeChatPromptCard
         key={promptKey ?? undefined}
         answering={promptOwnsInput && keyboardInset > 0}
+        {...{ askPending, askSendSource }}
         {...{ ask, askKey, onDismissAsk, onAnswerAsk, onCancelAsk, onCancelPrompt, onCollapseAsk }}
         requiresTerminal={askRequiresTerminal}
         onAnswerInTerminal={onAnswerInTerminal}

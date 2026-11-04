@@ -2,14 +2,14 @@ import {
   agentPickerEffectiveChoices,
   type AgentPickerEntry,
   type AgentPickerDraft
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { saveSourceControlAiActionModelChoice } from '../../../../shared/source-control-ai-action-model-choice'
 import {
   addSourceControlAiModelEdit,
   type SourceControlAiModelEdit,
   type SourceControlAiModelEdits
 } from '../../../../shared/source-control-ai-action-model-edits'
-import { textActionArgumentsOwnEffort } from '../../../../shared/source-control-text-action-picker'
+import { textActionArgumentsOwnEffort } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
 import type {
   AiTextOperation,
   SourceControlAiSettings,

@@ -12,7 +12,10 @@ import {
 import { AgentLaunchPicker } from './AgentLaunchPicker'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import * as inventoryModule from './use-agent-launch-picker-inventory'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 const entry: AgentPickerEntry = {
   agent: 'codex',
