@@ -110,6 +110,7 @@ for (const topology of ['desktop', 'headless'] as const) {
   }, testInfo) => {
     test.setTimeout(180_000)
     let headless: Awaited<ReturnType<typeof launchHeadlessPairedRuntimeHost>> | null = null
+    let directHost: Awaited<ReturnType<typeof launchHeadlessPairedRuntimeHost>> | undefined
     let proxy: Awaited<ReturnType<typeof interruptibleHost>> | undefined
     let client: Awaited<ReturnType<typeof launchPairedElectronClient>> | undefined
     let browser: Awaited<ReturnType<typeof launchPairedWebClient>> | undefined
@@ -127,8 +128,10 @@ for (const topology of ['desktop', 'headless'] as const) {
               ?.getState()
               .fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
           }, testRepoPath))
+      directHost = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
+      await directHost.client.call('repo.add', { path: testRepoPath })
       proxy = await interruptibleHost(offer)
-      client = await launchPairedElectronClient(offer, testInfo, 'Direct host')
+      client = await launchPairedElectronClient(directHost.offer, testInfo, 'Direct host')
       proxy.setOnline(false)
       const offlineId = await client.page.evaluate(async (pairingCode) => {
         const { environment } = await window.api.runtimeEnvironments.addFromPairingCode({
@@ -220,6 +223,7 @@ for (const topology of ['desktop', 'headless'] as const) {
       await browser?.dispose()
       await client?.dispose()
       await proxy?.close()
+      await directHost?.dispose()
       await headless?.dispose()
     }
   })
