@@ -149,8 +149,9 @@ describe('AgentHookServer listener replay', () => {
           prompt: 'Run sleep 30, then reply done.',
           agentType: 'codex',
           interrupted: true,
-          receivedAt: 1_500,
-          stateStartedAt: 1_500
+          receivedAt: 6_000,
+          stateStartedAt: 1_500,
+          mainAgent: { state: 'done', stateStartedAt: 1_500, outcome: 'cancellation' }
         })
       ])
     } finally {

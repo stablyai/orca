@@ -66,6 +66,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: () => null
 }))
 vi.mock('@/components/TerminalSearch', () => ({ default: () => null }))
+vi.mock('./TerminalPaneUsageLimitPortals', () => ({ TerminalPaneUsageLimitPortals: () => null }))
 vi.mock('@/components/shared/useDaemonActions', () => ({ DaemonActionDialog: () => null }))
 vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog', () => ({
   AgentSessionContinuationDialog: () => null

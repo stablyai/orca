@@ -137,7 +137,12 @@ describe('manual Claude compact hook stream', () => {
     await postHook(port, token, claudeHook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
     await postHook(port, token, claudeHook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
 
-    expect(events).toEqual(['UserPromptSubmit:working', 'SubagentStop:working', 'PostCompact:done'])
+    expect(events).toEqual([
+      'UserPromptSubmit:working',
+      'SubagentStop:working',
+      'SessionStart:working',
+      'PostCompact:done'
+    ])
     expect(server.getStatusSnapshot()).toEqual([
       expect.objectContaining({ state: 'done', prompt: 'work', agentType: 'claude' })
     ])
