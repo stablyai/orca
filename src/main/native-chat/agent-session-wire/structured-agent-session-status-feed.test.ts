@@ -659,7 +659,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    const snapshot = vi.spyOn(journal, 'snapshot')
+    const snapshot = vi.spyOn(journal, 'statusRead')
     let taskState: 'working' | 'waiting' = 'working'
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => [
       statusFeedChildView({ state: taskState })

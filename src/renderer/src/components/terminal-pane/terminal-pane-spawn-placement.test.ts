@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
 
 const TAB = {
   id: 'tab-1',

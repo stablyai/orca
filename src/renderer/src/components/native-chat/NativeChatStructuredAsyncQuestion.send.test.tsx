@@ -1,5 +1,11 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
+import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
+import {
+  getStructuredAgentSessionPendingSends,
+  structuredAgentSessionSendOut
+} from './structured-agent-session-pending-sends'
+import { runtimes } from './structured-agent-session-send-runtime'
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
 import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
 const rpc = vi.hoisted(() => ({ call: vi.fn() }))
@@ -84,7 +90,7 @@ const NO_SUBMISSIONS: AgentJournalSubmission[] = []
 const INITIAL_ITEMS = [askedItem]
 
 describe('async question send ownership', () => {
-  it.each(['publication', 'read'] as const)(
+  it.each(['publication', 'read', 'cursorless publication'] as const)(
     'bridges its actual sender through RPC-first echo until %s coverage',
     async (coverage) => {
       let reply = (_value: unknown) => {}
@@ -157,14 +163,16 @@ describe('async question send ownership', () => {
           ok: true,
           replayed: false,
           fence: 1,
-          cursor: { epoch: 'epoch', sequence: 2 },
+          ...(coverage === 'cursorless publication'
+            ? {}
+            : { cursor: { epoch: 'epoch', sequence: 2 } }),
           value: { clientMessageId: id, submission }
         })
       )
       expect(pending).toHaveLength(1)
       expect(container.querySelector('button[aria-pressed="true"]')).toBe(selected)
       expect(selected.disabled).toBe(true)
-      if (coverage === 'publication') {
+      if (coverage !== 'read') {
         act(() =>
           root.render(
             <Chat
@@ -187,6 +195,182 @@ describe('async question send ownership', () => {
       }
       expect(pending).toHaveLength(0)
       expect(container.querySelector('button[aria-pressed="true"]')).toBe(selected)
+      expect(selected.disabled).toBe(false)
+    }
+  )
+
+  it.each([true, false])(
+    'restores explicit answer controls after actual no-row unknown completion (cursor: %s)',
+    async (positioned) => {
+      const sessionId = `unknown-answer-${positioned}`
+      const target = { kind: 'local' } as const
+      const cursor = { epoch: 'epoch', sequence: 2 }
+      const owner = getStructuredAgentSessionReadOwner(sessionId, target)
+      if (positioned) {
+        owner.publishCreated({
+          sessionId,
+          epoch: 'epoch',
+          fence: 1,
+          direction: 'tail',
+          items: [askedItem],
+          removedItemIds: [],
+          submissions: [],
+          window: { oldest: { epoch: 'epoch', sequence: 1 }, newest: cursor, nextCursor: cursor },
+          liveCursor: cursor,
+          hasOlder: false,
+          hasNewer: false
+        })
+        expect(owner.getSnapshot().state.cursor).toEqual(cursor)
+      }
+      const replies: ((value: unknown) => void)[] = []
+      rpc.call.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            replies.push(resolve)
+          })
+      )
+      const completed = vi.fn()
+      let pending = getStructuredAgentSessionPendingSends(sessionId)
+      let messages: NativeChatMessage[] = []
+      const queue = {
+        capability: 'unsupported',
+        followUpsQueue: false,
+        isWorking: false,
+        stopping: false,
+        session: { queuedMessages: [] },
+        prompts: []
+      } as const
+      function Chat({ submissions = NO_SUBMISSIONS }: { submissions?: AgentJournalSubmission[] }) {
+        const sends = useStructuredAgentSessionSends({
+          sessionId,
+          target,
+          fence: 1,
+          submissions,
+          queuedMessageIds: [],
+          queue,
+          historyLoaded: false,
+          isWorking: false,
+          cursor
+        })
+        pending = sends.pending
+        messages = projectStructuredAgentSessionMessages(INITIAL_ITEMS, pending, submissions)
+        return (
+          <NativeChatStructuredAsyncQuestion
+            paneKey={sessionId}
+            sourceKey="host/epoch"
+            sourceScope="host/epoch"
+            session={{ messages, readPhase: 'ready' }}
+            submissions={submissions}
+            send={(text, _attachments, request) =>
+              sends.send(text, [], {
+                ...request,
+                onSettled: (outcome) => {
+                  completed(outcome)
+                  request?.onSettled?.(outcome)
+                }
+              })
+            }
+          />
+        )
+      }
+      act(() => root.render(<Chat />))
+      act(() =>
+        [...container.querySelectorAll('button[aria-pressed]')]
+          .find((node) => node.textContent?.includes('Blue'))!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200)
+      })
+      expect(rpc.call).toHaveBeenCalledTimes(1)
+      expect(rpc.call.mock.calls[0]![1]).toBe('agentSession.send')
+      expect(pending).toHaveLength(1)
+      const original = pending[0]!
+      expect(original).toMatchObject({ phase: 'sending', issued: true, callerKeepsText: true })
+      expect(original.afterSequence).toBe(positioned ? 2 : undefined)
+      expect(messages.find((row) => row.role === 'user')?.deliveryState).toBe('unknown')
+      expect(original.body.blocks).toEqual([{ type: 'text', text: '> Which color?\n\nBlue' }])
+      const selected = container.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')!
+      expect(selected.textContent).toContain('Blue')
+      expect(selected.disabled).toBe(true)
+      expect(completed).not.toHaveBeenCalled()
+      await act(async () => {
+        replies[0]!({
+          ok: false,
+          refusal: {
+            code: 'agent_session_operation_unknown',
+            message: 'unknown',
+            details: { reason: 'outcomeUnknown' }
+          }
+        })
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(31_000)
+      })
+      expect(completed).toHaveBeenCalledExactlyOnceWith('unconfirmed')
+      expect(runtimes.has(original.clientMessageId)).toBe(false)
+      expect(structuredAgentSessionSendOut(sessionId)).toBe(false)
+      expect(pending).toHaveLength(1)
+      expect(pending[0]).toMatchObject({
+        clientMessageId: original.clientMessageId,
+        phase: 'unconfirmed'
+      })
+      expect(pending[0]!.body).toBe(original.body)
+      expect(owner.getSnapshot().state.submissions).toHaveLength(0)
+      expect(messages.filter((message) => message.role === 'user')).toHaveLength(1)
+      expect(messages.find((message) => message.role === 'user')?.blocks).toEqual(
+        original.body.blocks
+      )
+      expect(container.querySelector('button[aria-pressed="true"]')).toBe(selected)
+      expect(selected.textContent).toContain('Blue')
+      expect(rpc.call).toHaveBeenCalledTimes(1)
+      const submit = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+        (node) => node.textContent === 'Submit' || node.textContent === 'Sending…'
+      )!
+      expect(submit).toBeDefined()
+      expect({ answerDisabled: selected.disabled, submitDisabled: submit.disabled }).toEqual({
+        answerDisabled: false,
+        submitDisabled: false
+      })
+      expect(messages.find((row) => row.role === 'user')?.journalPosition?.sequence).toBe(
+        positioned ? 2.5 : undefined
+      )
+      act(() => submit.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200)
+      })
+      expect(rpc.call).toHaveBeenCalledTimes(2)
+      const retry = pending.find((send) => send.clientMessageId !== original.clientMessageId)!
+      expect(retry.body.blocks).toEqual(original.body.blocks)
+      expect(selected.disabled).toBe(true)
+      // Exact old evidence retires only its echo, leaving the newer operation active.
+      act(() =>
+        root.render(
+          <Chat
+            submissions={[
+              {
+                ...pendingAnswer,
+                clientMessageId: original.clientMessageId,
+                dispatchState: 'unknown'
+              }
+            ]}
+          />
+        )
+      )
+      expect(pending.map((send) => send.clientMessageId)).toEqual([retry.clientMessageId])
+      expect(selected.disabled).toBe(true)
+      expect(messages.filter((row) => row.role === 'user')).toHaveLength(1)
+      expect(rpc.call).toHaveBeenCalledTimes(2)
+      await act(async () =>
+        replies[1]!({
+          ok: false,
+          refusal: {
+            code: 'agent_session_operation_unknown',
+            message: 'unknown',
+            details: { reason: 'outcomeUnknown' }
+          }
+        })
+      )
       expect(selected.disabled).toBe(false)
     }
   )

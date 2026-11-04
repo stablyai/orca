@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 
 import { finalizeHostTerminalSnapshot } from './__fixtures__/web-session-terminal-host-finalization'

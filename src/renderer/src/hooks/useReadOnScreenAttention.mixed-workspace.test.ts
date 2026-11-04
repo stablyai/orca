@@ -8,7 +8,7 @@ import {
   makeTabGroup,
   makeUnifiedTab
 } from '../store/slices/store-test-helpers'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { workspaceHasLiveMarker } from '../store/slices/workspace-attention/workspace-live-markers'
 

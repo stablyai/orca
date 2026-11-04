@@ -3104,7 +3104,6 @@
             "5c938d39ac": "sem",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Nenhuma outra conta",
             "d450654fa2": "Conta do Claude",
             "11e2354daf": "Runtime de uso do Claude",
             "3dd7ddfae1": "Abrir detalhes do Claude e alternador de conta",
@@ -20814,7 +20813,6 @@
       "dismissDeliveryNotice": "Dispensar",
       "addSelectionToChat": "Adicionar ao chat",
       "messageNotSent": "Mensagem não enviada",
-      "deliveryUnconfirmed": "Entrega não confirmada — confira o chat antes de tentar novamente",
       "messageSending": "Enviando…",
       "userMessage": {
         "showFull": "Mostrar mensagem completa",
@@ -20884,8 +20882,7 @@
       "interruptedContinue": {
         "continue": "Continuar",
         "failed": "Não foi possível continuar este chat. Tente novamente ou envie uma mensagem.",
-        "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída.",
-        "unconfirmed": "Não foi possível confirmar se o {{agent}} recebeu Continuar. Confira o chat antes de tentar novamente."
+        "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída."
       },
       "antigravitySignIn": {
         "sentence": "Você não está conectado ao Antigravity. Entre em <settings>Configurações → Contas → Antigravity</settings>. Depois envie sua mensagem novamente."

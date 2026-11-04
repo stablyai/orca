@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TERMINAL_SCROLLBACK_SESSION_HOMES } from '../../../../shared/workspace-session-terminal-buffers'
+import { TERMINAL_SCROLLBACK_SESSION_HOMES } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import {
   resolveLeafScrollbackBuffers,
   resolveTabScrollbackBuffers,

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorktreeDeleteState } from '@/store/slices/worktree-delete-state-types'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
 

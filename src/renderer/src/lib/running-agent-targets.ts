@@ -3,8 +3,8 @@ import type {
   AgentStatusEntry,
   AgentType
 } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../shared/agent-session/view/structured-agent-session-tab'
 import { resolvePaneAgentActivity } from '@/lib/pane-agent-evidence'

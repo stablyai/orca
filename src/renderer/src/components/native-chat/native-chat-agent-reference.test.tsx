@@ -206,7 +206,7 @@ it('serializes the captured draft before structured and PTY sends', async () => 
     'pty-left',
     wire
   ])
-  expect(optimistic).toHaveBeenCalledExactlyOnceWith(wire, [])
+  expect(optimistic).toHaveBeenCalledExactlyOnceWith(wire, [], false)
 })
 
 it('writes only revalidated split bytes, sanitizing controls without Enter and surfacing rejected acceptance', async () => {

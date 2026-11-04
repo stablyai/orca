@@ -4344,7 +4344,6 @@
             "5c938d39ac": "sem.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Aucun autre compte",
             "d450654fa2": "Compte Claude",
             "11e2354daf": "Runtime d'utilisation Claude",
             "3dd7ddfae1": "Ouvrir les détails Claude et le sélecteur de compte",
@@ -19853,7 +19852,6 @@
       "dismissDeliveryNotice": "Ignorer",
       "addSelectionToChat": "Ajouter au chat",
       "messageNotSent": "Message non envoyé",
-      "deliveryUnconfirmed": "Livraison non confirmée — vérifiez le chat avant de réessayer",
       "messageSending": "Envoi…",
       "userMessage": {
         "showFull": "Afficher le message complet",
@@ -19917,7 +19915,6 @@
         "continue": "Continuer",
         "failed": "Impossible de poursuivre cette conversation. Réessayez ou envoyez un message.",
         "explanation": "Continuez, et l'agent vérifiera d'abord si sa dernière étape s'est terminée.",
-        "unconfirmed": "Impossible de confirmer si {{agent}} a reçu Continuer. Vérifiez le chat avant de réessayer.",
         "usageLimitExplanation": "Demande à l’agent de reprendre là où il s’était arrêté. À utiliser une fois la limite réinitialisée."
       },
       "rewind": {

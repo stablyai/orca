@@ -31,7 +31,7 @@ import {
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 const mocks = vi.hoisted(() => ({
   getConnectionIdForFile: vi.fn()

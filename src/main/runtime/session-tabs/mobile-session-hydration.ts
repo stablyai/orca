@@ -3,7 +3,7 @@ import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredM
 import type { OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs as ReconcileHeadlessMobileSessionBrowserTabsMethods } from '../session-lifecycle/projection/reconcile-headless-mobile-session-browser-tabs'
 import type { BrowserWindow } from 'electron'
 import { RuntimeSessionTabsInventoryPublication } from './session-tabs-inventory-publication'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { buildHeadlessMobileSessionTerminalTabs } from '../mobile-session-terminal-projection'

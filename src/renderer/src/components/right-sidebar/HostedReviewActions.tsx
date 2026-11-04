@@ -21,8 +21,8 @@ import {
   isGitHubPRStackMergeQueueRequired,
   resolveGitHubPRStackMergeDecision
 } from '../../../../shared/github/pull-request-stack-merge'
-import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
-import { getDeleteStateForWorktreeHost } from '../sidebar/worktree-delete-state-host-match'
+import { runWorktreeDelete } from '../sidebar/workspace-actions/deletion/delete-worktree-flow'
+import { getDeleteStateForWorktreeHost } from '../sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
 import {
   ClosedReviewActions,

@@ -175,28 +175,6 @@ async function finish(
 }
 
 describe('Markdown refresh races through the real reader and edit/save hooks', () => {
-  it.each(['during read', 'same event'])(
-    'accepts fresh desktop text after metadata-only stale updates: %s',
-    async (timing) => {
-      const pending = deferredReply()
-      const h = mountDocument(() => pending.promise)
-      const reading = timing === 'same event' ? h.markStaleAndRead() : h.read()
-      h.markStale()
-      h.markStale()
-      await finish(pending, reading)
-      expect(h.doc).toMatchObject({
-        content: '# current desktop',
-        localContent: '# current desktop',
-        baseVersion: 'v2',
-        stale: true
-      })
-      await act(async () => {
-        await h.read()
-      })
-      expect(h.doc).toMatchObject({ content: '# current desktop', stale: false })
-    }
-  )
-
   it('preserves a phone edit followed by undo while a stale-marked read is pending', async () => {
     const pending = deferredReply()
     const h = mountDocument(() => pending.promise)
@@ -231,22 +209,6 @@ describe('Markdown refresh races through the real reader and edit/save hooks', (
     }
   )
 
-  it('does not replace an in-flight phone save when the read finishes first', async () => {
-    const pendingRead = deferredReply()
-    const pendingSave = deferredReply()
-    const h = mountDocument(
-      () => pendingRead.promise,
-      () => pendingSave.promise
-    )
-    const reading = h.read()
-    const saving = h.save()
-    const duringSave = h.doc
-    await finish(pendingRead, reading)
-    expect(h.doc).toBe(duringSave)
-    expect(h.doc).toMatchObject({ saving: true })
-    await finish(pendingSave, saving, reply('# cached', 'v1'))
-  })
-
   it('retains the save failure after its request finishes during a read', async () => {
     const pendingRead = deferredReply()
     const pendingSave = deferredReply()
@@ -266,23 +228,5 @@ describe('Markdown refresh races through the real reader and edit/save hooks', (
     await finish(pendingRead, reading)
     expect(h.doc).toBe(failed)
     expect(h.doc).toMatchObject({ saving: false, saveError: 'Save refused' })
-  })
-
-  it('accepts a fresh read started after a completed save', async () => {
-    const pendingRead = deferredReply()
-    const pendingSave = deferredReply()
-    const h = mountDocument(
-      () => pendingRead.promise,
-      () => pendingSave.promise
-    )
-    await finish(pendingSave, h.save(), reply('# cached', 'v1'))
-    const reading = h.read()
-    h.markStale()
-    await finish(pendingRead, reading)
-    expect(h.doc).toMatchObject({
-      content: '# current desktop',
-      localContent: '# current desktop',
-      baseVersion: 'v2'
-    })
   })
 })

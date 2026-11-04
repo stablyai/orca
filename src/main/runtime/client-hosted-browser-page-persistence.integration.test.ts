@@ -2,7 +2,7 @@
  * Real Store writes are covered by store-runtime-authored-session-writes.test.ts. */
 import { describe, expect, it } from 'vitest'
 import type { RuntimeBrowserClientPlacement } from '../../shared/runtime-browser-placement'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { getBrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry-instance'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
 import { OrcaRuntimeService } from './orca-runtime'

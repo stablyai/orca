@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { workspaceSessionStateSchema } from '../../shared/workspace-session-schema'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { workspaceSessionStateSchema } from '../../shared/workspace-session/workspace-session-schema'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import {
   findSavedBrowserPage,
   withClosedServeBrowserTab,

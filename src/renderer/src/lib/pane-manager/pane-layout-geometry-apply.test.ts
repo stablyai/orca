@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+
 import type { PaneManagerOptions } from './pane-manager-types'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
 import { applyExpandedLayoutTo } from '@/components/terminal-pane/expand-collapse'
 

@@ -1,4 +1,4 @@
-import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell/launch/shell-argument-quoting'
 import { statSync } from 'node:fs'
 import path from 'node:path'
 import type { LinuxRootPackageType } from '../../../shared/update-status-types'

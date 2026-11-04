@@ -12,7 +12,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead
 } from '../../../src/shared/runtime-terminal-contracts'
-import type { TerminalPaneLayoutNode } from '../../../src/shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../src/shared/workspace-layout/terminal-tab-types'
 import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
 import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'
 

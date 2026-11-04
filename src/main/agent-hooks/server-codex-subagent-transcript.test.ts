@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { AgentHookServer } from './server'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 const CHILD_ID = '019fa65f-3144-7151-9c02-cff7a28f316f'

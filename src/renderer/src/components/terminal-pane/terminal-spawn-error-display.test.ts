@@ -3,7 +3,7 @@ import {
   LEGACY_PTY_ALLOCATION_HINT,
   LEGACY_TERMINAL_PROCESS_LIMIT_HINT,
   PTY_ALLOCATION_HINT
-} from '../../../../shared/terminal-spawn-error-copy'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 
 // Why a locale stand-in: English fallbacks equal the host copy, so only a translation shows the swap.
 vi.mock('@/i18n/i18n', () => ({

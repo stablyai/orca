@@ -4579,7 +4579,6 @@
             "5c938d39ac": "Wo.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Keine weiteren Konten",
             "d450654fa2": "Claude-Konto",
             "11e2354daf": "Claude-Nutzung: Laufzeitumgebung",
             "3dd7ddfae1": "Claude-Details und Kontowechsel öffnen",
@@ -19857,7 +19856,6 @@
       "dismissDeliveryNotice": "Ausblenden",
       "addSelectionToChat": "Zum Chat hinzufügen",
       "messageNotSent": "Nachricht nicht gesendet",
-      "deliveryUnconfirmed": "Zustellung unbestätigt — vor erneutem Versuch den Chat prüfen",
       "messageSending": "Wird gesendet…",
       "userMessage": {
         "showFull": "Vollständige Nachricht anzeigen",
@@ -19929,8 +19927,7 @@
       "interruptedContinue": {
         "continue": "Fortfahren",
         "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
-        "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde.",
-        "unconfirmed": "Es konnte nicht bestätigt werden, ob {{agent}} „Fortfahren“ erhalten hat. Vor einem erneuten Versuch den Chat prüfen."
+        "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity ist nicht angemeldet. Unter <settings>Einstellungen → Konten → Antigravity</settings> anmelden. Danach die Nachricht erneut senden."

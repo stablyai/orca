@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 
 const WT = 'repo::/srv/project'
 const ENV = 'env-1'

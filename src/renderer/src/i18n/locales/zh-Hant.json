@@ -4493,7 +4493,6 @@
             "5c938d39ac": "週",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "沒有其他帳戶",
             "d450654fa2": "Claude 帳戶",
             "11e2354daf": "Claude 用量執行環境",
             "3dd7ddfae1": "開啟 Claude 詳情和帳戶切換器",
@@ -19553,7 +19552,6 @@
       "dismissDeliveryNotice": "關閉",
       "addSelectionToChat": "新增到聊天",
       "messageNotSent": "訊息未傳送",
-      "deliveryUnconfirmed": "無法確認送達 — 重試前請檢查聊天",
       "messageSending": "正在傳送…",
       "userMessage": {
         "showFull": "顯示完整訊息",
@@ -19622,8 +19620,7 @@
       "interruptedContinue": {
         "continue": "繼續",
         "failed": "無法繼續此聊天。請重試，或傳送一則訊息。",
-        "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。",
-        "unconfirmed": "無法確認 {{agent}} 是否收到「繼續」指令。請先查看聊天再重試。"
+        "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。"
       },
       "antigravitySignIn": {
         "sentence": "Antigravity 尚未登入。請前往 <settings>設定 → 帳戶 → Antigravity</settings> 登入，再重新傳送訊息。"

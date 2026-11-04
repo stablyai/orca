@@ -42,7 +42,7 @@ import {
   makePaneSpawnReservationKey,
   paneSpawnReservationsByOwnerKey
 } from './pane/spawn-reservation'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { CALLER_LAUNCH_CASES } from './pty-launch-parity-caller.test-cases'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../../runtime/rpc/rpc-caller-identity'

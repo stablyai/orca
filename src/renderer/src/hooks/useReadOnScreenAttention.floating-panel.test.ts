@@ -8,7 +8,7 @@ import { useAppStore } from '../store'
 import { selectFloatingWorkspaceHasUnread } from '../store/selectors'
 import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-session-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
   ...(await importOriginal<typeof AgentAutoAckPresence>()),

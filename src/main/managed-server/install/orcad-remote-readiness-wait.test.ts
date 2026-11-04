@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { orcadReadinessWaitCommand } from './orcad-remote-readiness-wait'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { ORCAD_LAUNCH_MACHINE_COMMAND } from './orcad-remote-host-support'
 
 const roots: string[] = []

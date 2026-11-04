@@ -6,10 +6,10 @@ import type {
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { buildRetainedAgentsSyncSnapshot } from './useRetainedAgents'
 
 const ACTIVE_PANE_KEY = makePaneKey('tab-active', '22222222-2222-4222-8222-222222222222')

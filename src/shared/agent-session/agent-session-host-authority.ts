@@ -6,8 +6,8 @@ import {
 } from './lifecycle/agent-session-resume'
 import type { RuntimeTerminalCreate } from '../runtime-terminal-create-contract'
 import type { RuntimeTerminalPresentation } from '../runtime-terminal-contracts'
-import { isTerminalLeafId } from '../stable-pane-id'
-import { isValidTerminalTabId } from '../terminal-tab-id'
+import { isTerminalLeafId } from '../workspace-layout/stable-pane-id'
+import { isValidTerminalTabId } from '../workspace-layout/terminal-tab-id'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { SpawnIntent } from '../host-spawn-admission'
 

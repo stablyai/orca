@@ -12,7 +12,7 @@ import {
   isLegacyPiCompatibleTitle,
   rebrandPiCompatibleTitle
 } from './providers/pi-compatible-synthetic-title'
-import { getWrapperTitleSegments } from '../../terminal-title-wrapper-segments'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 type TitleProfileMatch = {
   profile: SyntheticAgentTitleProfile

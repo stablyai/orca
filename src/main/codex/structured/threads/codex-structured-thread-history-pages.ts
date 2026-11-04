@@ -62,7 +62,23 @@ async function readPage(
   }
 }
 
-/** Known turns do not stop discovery of older gaps. */
+export function selectCodexHistoryTurn(
+  turn: Record<string, unknown>,
+  anchor: CodexHistoryJournalView
+): boolean {
+  if (anchor.unresolvedOrigin) {
+    throw new Error('no-legacy-origin')
+  }
+  if (anchor.importedAt !== null) {
+    if (typeof turn.startedAt !== 'number' || !Number.isFinite(turn.startedAt)) {
+      throw new Error('undated-turn')
+    }
+    return turn.startedAt * 1000 > anchor.importedAt
+  }
+  return true
+}
+
+/** Known identities exclude themselves, never the older gaps behind them. */
 export async function discoverCodexHistory(
   input: CodexHistoryRead,
   anchor: CodexHistoryJournalView
@@ -88,16 +104,15 @@ export async function discoverCodexHistory(
         throw new Error('repeated-turn')
       }
       seen.add(id)
-      if (anchor.known.has(id)) {
+      const missingAnswer =
+        !anchor.assistants?.has(id) &&
+        Array.isArray(turn.items) &&
+        turn.items.some((item) => readCodexJournalRecord(item).type === 'agentMessage')
+      if (
+        !selectCodexHistoryTurn(turn, anchor) ||
+        (anchor.known.has(id) && anchor.terminal?.has(id) && !missingAnswer)
+      ) {
         continue
-      }
-      if (anchor.importedAt !== null) {
-        if (typeof turn.startedAt !== 'number' || !Number.isFinite(turn.startedAt)) {
-          throw new Error('undated-turn')
-        }
-        if (turn.startedAt * 1000 <= anchor.importedAt) {
-          continue
-        }
       }
       selected.add(id)
       // Even empty turns consume a lifecycle row in the restore budget.
@@ -111,11 +126,19 @@ export async function discoverCodexHistory(
     cursor = page.next
     await setImmediate()
   } while (cursor !== null)
-  return { pages, rewound: anchor.latest !== null && !seen.has(anchor.latest) }
+  return {
+    pages,
+    order: [...seen].toReversed(),
+    rewound: anchor.latest !== null && !seen.has(anchor.latest)
+  }
 }
 
-/** Reject pages that changed between summary discovery and full reads. */
-export async function* loadCodexHistory(input: CodexHistoryRead, pages: readonly MissingPage[]) {
+/** Same cursor semantics in both views; reject a provider that changed selection between reads. */
+export async function* loadCodexHistory(
+  input: CodexHistoryRead,
+  pages: readonly MissingPage[],
+  onReadTurn: (turn: Record<string, unknown>) => Promise<void>
+) {
   for (const descriptor of pages.toReversed()) {
     const page = await readPage(input, descriptor.cursor, 'full')
     if (
@@ -125,13 +148,42 @@ export async function* loadCodexHistory(input: CodexHistoryRead, pages: readonly
       throw new Error('changed-page')
     }
     for (const turn of page.turns.toReversed()) {
-      if (!descriptor.selected.has(turnId(turn))) {
-        continue
-      }
+      input.check()
       if (turn.itemsView !== 'full' || !Array.isArray(turn.items)) {
         throw new Error('summary-turn')
       }
+    }
+    for (const turn of page.turns.toReversed()) {
+      input.check()
+      await onReadTurn(turn)
+    }
+    for (const turn of page.turns.toReversed()) {
       yield turn
     }
   }
+}
+
+/** Recent exact-proof reads have their own open budget, independent of transcript import. */
+export async function* loadCodexReceiptHistory(input: CodexHistoryRead) {
+  const cursors = new Set<string | null>()
+  let cursor: string | null = null
+  let count = 0
+  do {
+    if (cursors.has(cursor)) {
+      throw new Error('invalid-cursor')
+    }
+    cursors.add(cursor)
+    const page = await readPage(input, cursor, 'full')
+    for (const turn of page.turns) {
+      input.check()
+      if (++count > CODEX_RESTORE_MAX_OPERATIONS) {
+        return
+      }
+      if (Array.isArray(turn.items)) {
+        yield turn
+      }
+    }
+    cursor = page.next
+    await setImmediate()
+  } while (cursor !== null)
 }

@@ -4,7 +4,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../providers/pty-provider-contract'
 import { ptyIncarnationById, ptyOwnership } from '../ipc/pty/provider/ownership-state'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { isPtyIncarnationId } from '../../shared/pty-incarnation'
+import { isPtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
 import {
   OPENCODE_STARTUP_PROMPT_NONCE_ENV,
   OPENCODE_STARTUP_PROMPT_SHA256_ENV
