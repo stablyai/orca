@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import type { AgentSessionJournal } from './journal-store'
 import { failNextNativeJournalStatement } from './journal-native-test-instrumentation'
-import { openTestJournalHostDatabase } from './journal-host-database-test-support'
-import { readTestJournalRows } from './journal-host-database-test-support'
+import {
+  openTestJournalHostDatabase,
+  readTestJournalRows
+} from './journal-host-database-test-support'
 
 export function registerJournalEpochReplacementReceiptsTests(
   fixture: ReturnType<typeof createFixture>

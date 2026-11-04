@@ -1,8 +1,10 @@
 import type { JournalReadConnection } from './journal-sql-owner'
-import { readHistoricalAdmissionSourcesAsync } from './journal-historical-inputs'
 import { journalInputOrder } from './journal-input-order'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readHistoricalAdmissionSources } from './journal-historical-inputs'
+import {
+  readHistoricalAdmissionSources,
+  readHistoricalAdmissionSourcesAsync
+} from './journal-historical-inputs'
 import { decodeJournalOutcome } from './journal-outcome-codec'
 import { outcomeFormat1EntryParsers } from './journal-outcome-format-1'
 import type { JournalOutcomeSource } from './journal-outcome-format'
