@@ -112,6 +112,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/workflow/source-routing/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 1.1,
           "summary": "Gate files and packaging scope contracts: 76 tests passed in four files, one Windows native-read test skipped. Full daemon-host suite also passed 94 tests in eight files. Original implementation fails seven new registry regressions."
