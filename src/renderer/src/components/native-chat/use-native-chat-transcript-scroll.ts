@@ -4,7 +4,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { UIEventHandler } from 'react'
 import {
   distanceFromBottom,
+  geometryOf,
+  hasMeasurableViewport,
   isNearBottom,
+  NATIVE_CHAT_BOTTOM_THRESHOLD_PX,
   NATIVE_CHAT_FOLLOW_REARM_PX,
   nextFollowingEnd,
   readerGestureDirection,
@@ -18,18 +21,6 @@ import type {
 } from './native-chat-transcript-scroll-types'
 
 export type { NativeChatTranscriptScroll } from './native-chat-transcript-scroll-types'
-
-function geometryOf(element: HTMLElement): ScrollGeometry {
-  return {
-    scrollTop: element.scrollTop,
-    scrollHeight: element.scrollHeight,
-    clientHeight: element.clientHeight
-  }
-}
-
-function hasMeasurableViewport(element: HTMLElement | null): element is HTMLElement {
-  return element !== null && element.clientHeight > 0
-}
 
 export function useNativeChatTranscriptScroll({
   scrollRef,
@@ -243,6 +234,13 @@ export function useNativeChatTranscriptScroll({
     setShowJump(false)
   }, [clearForwardedScroll, scrollToEndWhenMeasurable])
 
+  // Where the reader last left the view; growth since then (an echo of the send) does not move them away.
+  const readerAtEnd = useCallback(
+    () =>
+      followingRef.current || previousDistanceFromEndRef.current <= NATIVE_CHAT_BOTTOM_THRESHOLD_PX,
+    []
+  )
+
   const scrollMessageToTop = useCallback(
     (element: HTMLElement) => {
       clearForwardedScroll()
@@ -317,6 +315,7 @@ export function useNativeChatTranscriptScroll({
     showJump,
     onScroll,
     scrollToBottom,
+    readerAtEnd,
     scrollMessageToTop,
     readerLeavesEnd,
     forwardedGesture

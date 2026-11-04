@@ -3,6 +3,8 @@ import { render } from './native-chat-tooltip-test-harness'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
 import { NativeChatMessageList } from './NativeChatMessageList'
@@ -158,6 +160,54 @@ describe('reader navigation', () => {
     expect(distanceFromBottom(container)).toBe(0)
     expect(screen.getByText('follow-up question')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull()
+  })
+
+  describe('with scroll to latest on send off', () => {
+    const originalSettings = useAppStore.getState().settings
+    beforeEach(() => {
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('/tmp'), nativeChatScrollToLatestOnSend: false }
+      })
+    })
+    afterEach(() => {
+      useAppStore.setState({ settings: originalSettings })
+    })
+
+    function sendFrom(readerTop: (scroller: HTMLElement) => number): HTMLElement {
+      const handle = createRef<NativeChatMessageListHandle>()
+      const view = (messages: NativeChatMessage[]) => (
+        <NativeChatMessageList
+          ref={handle}
+          session={session(messages)}
+          isWorking
+          expandSignal={false}
+        />
+      )
+      const { container, rerender } = render(view(transcript))
+      paint(container)
+      scrollTranscript(container, readerTop(scrollRoot(container)))
+      paint(container)
+      // The send's echo lands before its reveal, as a structured send's does.
+      const sent = [...transcript, userMessage(TRANSCRIPT_LENGTH, 'follow-up question')]
+      rerender(view(sent))
+      paint(container)
+      act(() => handle.current?.revealLatest())
+      rerender(view([...sent, marker(TRANSCRIPT_LENGTH + 1)]))
+      paint(container)
+      return container
+    }
+
+    it('leaves a reader who scrolled up where they were', () => {
+      const container = sendFrom(() => 1000)
+      expect(scrollRoot(container).scrollTop).toBe(1000)
+      expect(offersJumpToLatest()).toBe(true)
+    })
+
+    it('still follows the reply for a reader who stopped just short of the end', () => {
+      const container = sendFrom((scroller) => scroller.scrollHeight - scroller.clientHeight - 20)
+      expect(distanceFromBottom(container)).toBe(0)
+      expect(offersJumpToLatest()).toBe(false)
+    })
   })
 
   it('stops following when the reader pages up from the focused transcript', () => {

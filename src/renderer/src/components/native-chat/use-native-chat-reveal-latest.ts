@@ -1,5 +1,4 @@
 import { useCallback, useImperativeHandle, useMemo, useRef } from 'react'
-import { useAppStore } from '@/store'
 import { hasAskAnswer } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
@@ -52,7 +51,7 @@ export function useNativeChatInteractiveSendReveal(
 }
 
 export type NativeChatMessageListHandle = {
-  /** Bring the latest into view and follow it, wherever the reader had scrolled. */
+  /** After the reader's own send, bring the latest into view and follow it (only at the end when that setting is off). */
   revealLatest: () => void
   /** Bring a find match into view, clear of the find bar; the reader stops following the latest. */
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
@@ -60,17 +59,13 @@ export type NativeChatMessageListHandle = {
   messageCopyText: (messageId: string) => string | null
 }
 
-/** This pane's own sends reveal its transcript; an unmounted pane's reveal reaches nothing. */
+/** This pane's own transcript; an unmounted pane's reveal reaches nothing. */
 export function useNativeChatRevealLatest(): {
   messageListRef: React.RefObject<NativeChatMessageListHandle | null>
   revealLatest: () => void
 } {
   const messageListRef = useRef<NativeChatMessageListHandle>(null)
   const revealLatest = useCallback(() => {
-    // Off keeps a reader who scrolled up in place; one at the end still follows the reply.
-    if (useAppStore.getState().settings?.nativeChatScrollToLatestOnSend === false) {
-      return
-    }
     try {
       messageListRef.current?.revealLatest()
     } catch (error) {

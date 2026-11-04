@@ -3,7 +3,6 @@ import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/re
 import { afterEach, expect, it, vi } from 'vitest'
 import { useRef } from 'react'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
@@ -41,15 +40,8 @@ vi.mock('./native-chat-pty-send-queue', () => ({
   cancelNativeChatPtySends: vi.fn(),
   waitForNativeChatPtyIdle: vi.fn(async () => {})
 }))
-const store = vi.hoisted(
-  (): { settings: Pick<GlobalSettings, 'nativeChatScrollToLatestOnSend'> } => ({
-    settings: {}
-  })
-)
 vi.mock('../../store', () => ({
-  useAppStore: {
-    getState: () => ({ clearNativeChatLaunchDraft: vi.fn(), settings: store.settings })
-  }
+  useAppStore: { getState: () => ({ clearNativeChatLaunchDraft: vi.fn() }) }
 }))
 vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
@@ -59,7 +51,6 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
 
 afterEach(() => {
   cleanup()
-  store.settings = {}
   clearNativeChatDraftCacheForTests()
   vi.clearAllMocks()
 })
@@ -178,33 +169,6 @@ it('reveals a structured command at the press, before the host answers it', asyn
   hook.result.current.scrollToEnd.mockClear()
   await act(async () => host.settle(true))
   expect(hook.result.current.scrollToEnd).not.toHaveBeenCalled()
-})
-
-it('leaves a reader who scrolled up in place when scrolling to the latest on send is off', () => {
-  store.settings = { nativeChatScrollToLatestOnSend: false }
-  const hook = renderHook(() => {
-    const transcript = useReviewTranscript()
-    const t = transport(transcript.revealLatest, async () => true)
-    const send = useNativeChatStructuredComposerSend({
-      agent: 'codex',
-      draftScopeKey: 'send-keep-position',
-      imageAttachments: [],
-      structuredTransport: t,
-      isComposing: () => false,
-      clearSkillOrigin: vi.fn(),
-      setDraft: vi.fn(),
-      setCaret: vi.fn()
-    })
-    return { ...transcript, send }
-  })
-  readerScrollAway(hook.result.current)
-  hook.result.current.scrollToEnd.mockClear()
-  act(() => void hook.result.current.send('/compact'))
-  expect(hook.result.current.scrollToEnd).not.toHaveBeenCalled()
-  expect(hook.result.current.scroll.showJump).toBe(true)
-  // Jump to latest still brings the reader back.
-  act(() => hook.result.current.messageListRef.current?.revealLatest())
-  expect(hook.result.current.scrollToEnd).toHaveBeenCalled()
 })
 
 it('reveals a goal at the press, before the host sets it', async () => {
