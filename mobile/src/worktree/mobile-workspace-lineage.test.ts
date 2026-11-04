@@ -177,4 +177,14 @@ describe('getMobileWorkspaceLineageChildren across machines', () => {
       ['|mac::/src/fix', ['srv::/work/fix-tests']]
     ])
   })
+
+  it('keeps a parent ambiguous when the repo filter hides its twin', () => {
+    const twin = { ...parent, worktreeId: 'mac-copy::/src/fix', repoId: 'repo-2' }
+    const children = getMobileWorkspaceLineageChildren(
+      [parent, twin, child],
+      { ownInstallationId: 'mac-install', servers: [server] },
+      ['repo-1']
+    )
+    expect(children.size).toBe(0)
+  })
 })

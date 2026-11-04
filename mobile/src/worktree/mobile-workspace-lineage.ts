@@ -87,22 +87,21 @@ function getCrossStoreLineageParents(
   )
 }
 
-/** Children keyed by parent row identity, over valid edges between the given rows (in
- * `filterRepoIds` when set); with `stores`, a parent on another machine counts too (a same-store
- * edge wins), and lineage loops nest nothing. */
+/** Children keyed by parent row identity, over valid edges between the given rows; with `stores`,
+ * a parent on another machine counts too (a same-store edge wins), and lineage loops nest nothing.
+ * Edges resolve over every row, then `filterRepoIds` keeps those with both ends shown: a hidden
+ * twin must still make a parent ambiguous. */
 export function getMobileWorkspaceLineageChildren(
   listed: readonly Worktree[],
   stores?: MobileLineageStores,
   filterRepoIds: readonly string[] = []
 ): Map<string, Worktree[]> {
-  const worktrees =
-    filterRepoIds.length > 0 ? listed.filter((w) => filterRepoIds.includes(w.repoId)) : listed
   const worktreeById = new Map(
-    worktrees.map((worktree) => [getWorktreeRowIdentity(worktree), worktree])
+    listed.map((worktree) => [getWorktreeRowIdentity(worktree), worktree])
   )
   const parentByChild = new Map<string, Worktree>()
 
-  for (const worktree of worktrees) {
+  for (const worktree of listed) {
     const worktreeId = getWorktreeRowIdentity(worktree)
     const parentId = worktree.parentWorktreeId
     const parentIdentity = parentId
@@ -119,7 +118,7 @@ export function getMobileWorkspaceLineageChildren(
     }
     parentByChild.set(worktreeId, parent)
   }
-  const crossStore = stores ? getCrossStoreLineageParents(worktrees, stores) : new Map()
+  const crossStore = stores ? getCrossStoreLineageParents(listed, stores) : new Map()
   if (crossStore.size > 0) {
     for (const [child, parent] of crossStore) {
       if (!parentByChild.has(child)) {
@@ -133,10 +132,12 @@ export function getMobileWorkspaceLineageChildren(
       parentByChild.delete(child)
     }
   }
+  const shown = (row: Worktree): boolean =>
+    filterRepoIds.length === 0 || filterRepoIds.includes(row.repoId)
   const childrenByParentId = new Map<string, Worktree[]>()
-  for (const worktree of worktrees) {
+  for (const worktree of listed) {
     const parent = parentByChild.get(getWorktreeRowIdentity(worktree))
-    if (!parent) {
+    if (!parent || !shown(worktree) || !shown(parent)) {
       continue
     }
     const parentIdentity = getWorktreeRowIdentity(parent)
