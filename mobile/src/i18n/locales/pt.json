@@ -755,6 +755,9 @@
     },
     "hostCard": {
       "hostActions": "Ações para {{title}}",
+      "needsYou_many": "{{count}} precisam de você",
+      "needsYou_one": "{{count}} precisa de você",
+      "needsYou_other": "{{count}} precisam de você",
       "openHost": "Abrir {{title}}",
       "pairingInvalid": "Pareamento inválido",
       "pairingTemporarilyUnavailable": "Pareamento temporariamente indisponível",
@@ -1289,23 +1292,30 @@
     }
   },
   "home": {
-    "accountUsage": {
-      "heading": "Uso da conta",
-      "sessionWindow": "5h",
-      "systemDefault": "Padrão do sistema",
-      "weeklyWindow": "7d"
+    "agents": {
+      "activeCount": "{{count}} em atividade",
+      "heading": "Agentes",
+      "showAll": "Mostrar todos ({{count}})",
+      "showFewer": "Mostrar menos"
     },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar atualização do Orca {{version}}",
       "title": "Orca {{version}} está disponível",
       "updateAccessibilityLabel": "Orca {{version}} está disponível, toque para atualizar"
     },
-    "arrange": {
-      "done": "Concluído",
-      "hint": "Arraste para mover. Desative uma seção para ocultá-la.",
-      "reset": "Redefinir",
-      "showSection": "Mostrar {{section}}",
-      "title": "Organizar Início"
+    "automationsTab": {
+      "connectDesktop": "Conecte {{desktop}} para ver e executar automações.",
+      "createHint": "Toque em + para agendar um agente.",
+      "emptyTitle": "Agende o trabalho dos agentes",
+      "lastStatus": "Última: {{status}}",
+      "newAutomation": "Nova automação",
+      "noAutomations": "Ainda não há automações",
+      "pairDesktop": "Pareie um desktop para ver e executar automações.",
+      "paused": "Pausada",
+      "scheduled": "Agendadas",
+      "showFor": "Mostrar automações de",
+      "toggleFailed": "Não foi possível atualizar {{name}}",
+      "updateDesktop": "Atualize o Orca em {{desktop}} para usar automações."
     },
     "emptyState": {
       "connectedDescription": "Seu desktop aparecerá aqui. Tudo é criptografado de ponta a ponta.",
@@ -1317,9 +1327,7 @@
       "title": "Conecte seu desktop"
     },
     "listFooter": {
-      "hostPickerTitle": "Abrir tarefas em",
-      "automationsHeading": "Automações",
-      "automationsHostPickerTitle": "Abrir automações em"
+      "hostPickerTitle": "Abrir tarefas em"
     },
     "listHeader": {
       "desktopsHeading": "Desktops"
@@ -1339,6 +1347,24 @@
       "hours": "{{hours}}h",
       "minutes": "{{minutes}}min",
       "prsCreated": "PRs criados"
+    },
+    "tabs": {
+      "automations": "Automações",
+      "chooseDesktop": "{{desktop}}, escolher outro desktop",
+      "feed": "Atividade",
+      "usage": "Uso"
+    },
+    "usage": {
+      "active": "Ativa",
+      "addAccounts": "Adicione contas em Configurações → Contas no desktop.",
+      "connectDesktop": "Conecte {{desktop}} para ver o uso das contas de agentes.",
+      "emptyTitle": "Ainda não há dados de uso",
+      "openAccountsHint": "Abre as contas deste desktop",
+      "pairDesktop": "Pareie um desktop para ver o uso das contas de agentes.",
+      "refresh": "Atualizar uso",
+      "showUsageFor": "Mostrar uso de",
+      "updatedAgo": "Atualizado há {{time}}",
+      "updatedJustNow": "Atualizado agora mesmo"
     }
   },
   "hooks": {
@@ -3984,7 +4010,6 @@
       "unknownResult": "Resultado desconhecido",
       "notReported": "Não informado",
       "searchOptions": "Buscar opções",
-      "scheduleAgentWorkAndViewRuns": "Agende o trabalho dos agentes e veja as execuções",
       "task": "Tarefa",
       "review": "Revisar"
     },

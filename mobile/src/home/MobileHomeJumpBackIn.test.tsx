@@ -13,6 +13,9 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
+vi.mock('react-native-reanimated', () => ({ default: { View: 'View' } }))
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('./tabs/home-tabs', () => ({ HOME_EASE_OUT: null }))
 vi.mock('../components/AgentSpinner', () => ({
   AgentSpinner: 'AgentSpinner',
   agentStatusColors: () => ({})

@@ -755,6 +755,9 @@
     },
     "hostCard": {
       "hostActions": "Actions pour {{title}}",
+      "needsYou_many": "{{count}} ont besoin de vous",
+      "needsYou_one": "{{count}} a besoin de vous",
+      "needsYou_other": "{{count}} ont besoin de vous",
       "openHost": "Ouvrir {{title}}",
       "pairingInvalid": "Appairage invalide",
       "pairingTemporarilyUnavailable": "Appairage temporairement indisponible",
@@ -1289,23 +1292,30 @@
     }
   },
   "home": {
-    "accountUsage": {
-      "heading": "Utilisation du compte",
-      "sessionWindow": "5 h",
-      "systemDefault": "Valeur par défaut du système",
-      "weeklyWindow": "7 j"
+    "agents": {
+      "activeCount": "{{count}} en activité",
+      "heading": "Agents",
+      "showAll": "Tout afficher ({{count}})",
+      "showFewer": "Afficher moins"
     },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Ignorer la mise à jour Orca {{version}}",
       "title": "Orca {{version}} est disponible",
       "updateAccessibilityLabel": "Orca {{version}} est disponible, touchez pour mettre à jour"
     },
-    "arrange": {
-      "done": "OK",
-      "hint": "Faites glisser pour déplacer. Désactivez une section pour la masquer.",
-      "reset": "Réinitialiser",
-      "showSection": "Afficher {{section}}",
-      "title": "Organiser l'accueil"
+    "automationsTab": {
+      "connectDesktop": "Connectez {{desktop}} pour afficher et exécuter des automatisations.",
+      "createHint": "Touchez + pour planifier un agent.",
+      "emptyTitle": "Planifier le travail des agents",
+      "lastStatus": "Dernière : {{status}}",
+      "newAutomation": "Nouvelle automatisation",
+      "noAutomations": "Aucune automatisation pour l'instant",
+      "pairDesktop": "Appairez un ordinateur pour afficher et exécuter des automatisations.",
+      "paused": "En pause",
+      "scheduled": "Planifiées",
+      "showFor": "Afficher les automatisations de",
+      "toggleFailed": "Impossible de mettre à jour {{name}}",
+      "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations."
     },
     "emptyState": {
       "connectedDescription": "Votre ordinateur apparaîtra ici. Tout est chiffré de bout en bout.",
@@ -1317,9 +1327,7 @@
       "title": "Connectez votre ordinateur"
     },
     "listFooter": {
-      "hostPickerTitle": "Ouvrir les tâches sur",
-      "automationsHeading": "Automatisations",
-      "automationsHostPickerTitle": "Ouvrir les automatisations sur"
+      "hostPickerTitle": "Ouvrir les tâches sur"
     },
     "listHeader": {
       "desktopsHeading": "Ordinateurs"
@@ -1339,6 +1347,24 @@
       "hours": "{{hours}} h",
       "minutes": "{{minutes}} min",
       "prsCreated": "PRs créées"
+    },
+    "tabs": {
+      "automations": "Automatisations",
+      "chooseDesktop": "{{desktop}}, choisir un autre ordinateur",
+      "feed": "Activité",
+      "usage": "Utilisation"
+    },
+    "usage": {
+      "active": "Actif",
+      "addAccounts": "Ajoutez des comptes dans Paramètres → Comptes sur l'ordinateur.",
+      "connectDesktop": "Connectez {{desktop}} pour voir l'utilisation des comptes d'agent.",
+      "emptyTitle": "Aucune utilisation pour l'instant",
+      "openAccountsHint": "Ouvre les comptes de cet ordinateur",
+      "pairDesktop": "Appairez un ordinateur pour voir l'utilisation des comptes d'agent.",
+      "refresh": "Actualiser l'utilisation",
+      "showUsageFor": "Afficher l'utilisation de",
+      "updatedAgo": "Mis à jour il y a {{time}}",
+      "updatedJustNow": "Mis à jour à l'instant"
     }
   },
   "hooks": {
@@ -3984,7 +4010,6 @@
       "unknownResult": "Résultat inconnu",
       "notReported": "Non communiqué",
       "searchOptions": "Rechercher des options",
-      "scheduleAgentWorkAndViewRuns": "Planifier le travail des agents et voir les exécutions",
       "task": "Tâche",
       "review": "Vérifier"
     },

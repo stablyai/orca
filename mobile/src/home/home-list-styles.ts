@@ -12,14 +12,17 @@ const TILE_DOT_RING = 2.5
 
 /** Home's grouped lists: one inset group per section, a status column, a title and a wrapping detail line. */
 export const homeListStyles = themedStyleSheet(() => ({
-  sectionHeading: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
+  sectionHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.md,
     paddingHorizontal: spacing.xs,
     marginTop: 26,
     marginBottom: 9
   },
+  sectionHeading: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  sectionAside: { fontSize: 14, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   firstSectionHeading: { marginTop: spacing.sm },
   group: { backgroundColor: colors.bgPanel, borderRadius: radii.surface, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'flex-start', paddingLeft: ROW_LEADING_PADDING },

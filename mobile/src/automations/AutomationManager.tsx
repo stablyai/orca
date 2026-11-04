@@ -40,13 +40,16 @@ export function AutomationManager(props: {
   client: RpcClient | null
   hostId: string
   executionHost?: ExecutionHostId
+  /** Opens on a new automation's editor, shown once the catalog loads; read on mount only. */
+  startInEditor?: boolean
   /** The screen's bar; it carries the Automations / Runs switch as its accessory. */
   renderHeader?: (tabs: ReactNode) => ReactNode
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const catalog = useAutomationCatalog(props.client, !!props.executionHost)
-  const [view, setView] = useState<AutomationView>({ kind: 'list' })
+  const startView: AutomationView = props.startInEditor ? { kind: 'editor' } : { kind: 'list' }
+  const [view, setView] = useState<AutomationView>(startView)
   const [tab, setTab] = useState<'automations' | 'runs'>('automations')
   const [filter, setFilter] = useState<AutomationRunScope>(null)
   const filterId = filter?.automationId ?? ''
@@ -275,7 +278,7 @@ export function AutomationManager(props: {
             />
           </View>
         ) : null}
-        {view.kind === 'editor' && props.client ? (
+        {view.kind === 'editor' && props.client && catalog.loaded ? (
           <AutomationEditor
             key={view.row?.automation.id ?? 'create'}
             client={props.client}

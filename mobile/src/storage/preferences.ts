@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
 import { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
-import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeLayout } from '../home/home-layout'
 
 const PINS_PREFIX = 'orca:pins:'
 // Push-service consent is independent of legacy socket notifications.
@@ -227,20 +226,4 @@ export function saveTerminalSplitLayout(layout: TerminalSplitLayout): Promise<vo
     console.warn('Terminal split layout could not be saved', error)
   })
   return write
-}
-
-const HOME_LAYOUT_KEY = 'orca:homeLayout'
-
-// Missing or unreadable means the default layout; Home is native-only, so no page mirror.
-export async function loadHomeLayout(): Promise<HomeLayout> {
-  try {
-    const raw = await AsyncStorage.getItem(HOME_LAYOUT_KEY)
-    return raw === null ? DEFAULT_HOME_LAYOUT : normalizeHomeLayout(JSON.parse(raw))
-  } catch {
-    return DEFAULT_HOME_LAYOUT
-  }
-}
-
-export async function saveHomeLayout(layout: HomeLayout): Promise<void> {
-  await AsyncStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(layout))
 }

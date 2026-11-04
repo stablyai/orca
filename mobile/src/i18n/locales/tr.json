@@ -718,6 +718,8 @@
     },
     "hostCard": {
       "hostActions": "{{title}} için işlemler",
+      "needsYou_one": "{{count}} sizi bekliyor",
+      "needsYou_other": "{{count}} sizi bekliyor",
       "openHost": "Aç: {{title}}",
       "pairingInvalid": "Eşleştirme geçersiz",
       "pairingTemporarilyUnavailable": "Eşleştirme geçici olarak kullanılamıyor",
@@ -1251,23 +1253,30 @@
     }
   },
   "home": {
-    "accountUsage": {
-      "heading": "Hesap kullanımı",
-      "sessionWindow": "5 sa",
-      "systemDefault": "Sistem varsayılanı",
-      "weeklyWindow": "7g"
+    "agents": {
+      "activeCount": "{{count}} etkin",
+      "heading": "Ajanlar",
+      "showAll": "Tümünü göster ({{count}})",
+      "showFewer": "Daha az göster"
     },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} güncellemesini gizle",
       "title": "Orca {{version}} sürümü mevcut",
       "updateAccessibilityLabel": "Orca {{version}} sürümü mevcut, güncellemek için dokunun"
     },
-    "arrange": {
-      "done": "Bitti",
-      "hint": "Taşımak için sürükleyin. Gizlemek için bir bölümü kapatın.",
-      "reset": "Sıfırla",
-      "showSection": "{{section}} göster",
-      "title": "Ana sayfayı düzenle"
+    "automationsTab": {
+      "connectDesktop": "Otomasyonları görüntülemek ve çalıştırmak için {{desktop}} ile bağlantı kurun.",
+      "createHint": "Bir ajan zamanlamak için + simgesine dokunun.",
+      "emptyTitle": "Ajan işlerini zamanlayın",
+      "lastStatus": "Son: {{status}}",
+      "newAutomation": "Yeni otomasyon",
+      "noAutomations": "Henüz otomasyon yok",
+      "pairDesktop": "Otomasyonları görüntülemek ve çalıştırmak için bir masaüstü bilgisayarla eşleştirin.",
+      "paused": "Duraklatıldı",
+      "scheduled": "Zamanlanmış",
+      "showFor": "Otomasyonları gösterilecek masaüstü",
+      "toggleFailed": "{{name}} güncellenemedi",
+      "updateDesktop": "Otomasyonları kullanmak için {{desktop}} üzerindeki Orca'yı güncelleyin."
     },
     "emptyState": {
       "connectedDescription": "Masaüstünüz burada görünecek. Her şey uçtan uca şifrelenir.",
@@ -1279,9 +1288,7 @@
       "title": "Masaüstünüzü bağlayın"
     },
     "listFooter": {
-      "hostPickerTitle": "Görevlerin Açılacağı Sunucu",
-      "automationsHeading": "Otomasyonlar",
-      "automationsHostPickerTitle": "Otomasyonları aç"
+      "hostPickerTitle": "Görevlerin Açılacağı Sunucu"
     },
     "listHeader": {
       "desktopsHeading": "Masaüstleri"
@@ -1301,6 +1308,24 @@
       "hours": "{{hours}} sa",
       "minutes": "{{minutes}} dk",
       "prsCreated": "Oluşturulan PR'lar"
+    },
+    "tabs": {
+      "automations": "Otomasyonlar",
+      "chooseDesktop": "{{desktop}}, başka bir masaüstü seçin",
+      "feed": "Akış",
+      "usage": "Kullanım"
+    },
+    "usage": {
+      "active": "Etkin",
+      "addAccounts": "Masaüstünde Ayarlar → Hesaplar bölümünden hesap ekleyin.",
+      "connectDesktop": "Ajan hesabı kullanımını görmek için {{desktop}} ile bağlantı kurun.",
+      "emptyTitle": "Henüz kullanım yok",
+      "openAccountsHint": "Bu masaüstünün hesaplarını açar",
+      "pairDesktop": "Ajan hesabı kullanımını görmek için bir masaüstü bilgisayarla eşleştirin.",
+      "refresh": "Kullanımı yenile",
+      "showUsageFor": "Kullanımı gösterilecek masaüstü",
+      "updatedAgo": "{{time}} önce güncellendi",
+      "updatedJustNow": "Az önce güncellendi"
     }
   },
   "hooks": {
@@ -3887,7 +3912,6 @@
       "unknownResult": "Bilinmeyen sonuç",
       "notReported": "Bildirilmedi",
       "searchOptions": "Seçenekleri ara",
-      "scheduleAgentWorkAndViewRuns": "Aracı işlerini zamanlayın ve çalıştırmaları görüntüleyin",
       "task": "Görev",
       "review": "İncele"
     },

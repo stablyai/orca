@@ -11,6 +11,7 @@ import type { MobileConnectionPath } from '../transport/stable-logical-rpc-clien
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { homeAgentNeedsYou } from '../worktree/home-jump-back-in'
 import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { homeListStyles as styles } from './home-list-styles'
 
@@ -93,6 +94,18 @@ export function MobileHomeDesktopRow(props: {
     Boolean(line)
   )
   const statusLine = connected && worktreeSummary.visual ? worktreeSummary.visual : statusLabel
+  const attention = props.worktreeInfo?.catalogUnavailable
+    ? undefined
+    : props.worktreeInfo?.attention
+  const needsYou = connected
+    ? (attention?.filter((worktree) => homeAgentNeedsYou(worktree.dotStatus)).length ?? 0)
+    : 0
+  const needsYouLabel =
+    needsYou > 0
+      ? needsYou === 1
+        ? t('components.hostCard.needsYou_one', '{{count}} needs you', { count: needsYou })
+        : t('components.hostCard.needsYou_other', '{{count}} need you', { count: needsYou })
+      : null
   const MachineGlyph = display.machineKind ? MACHINE_GLYPHS[display.machineKind] : Monitor
   const accessibilityLabel = [
     t('components.hostCard.openHost', 'Open {{title}}', { title: display.title }),
@@ -100,6 +113,7 @@ export function MobileHomeDesktopRow(props: {
     statusLabel,
     connected ? mobileConnectionPathAccessibilityLabel(props.path) : null,
     connected ? worktreeSummary.accessibility : null,
+    needsYouLabel,
     ...details
   ]
     .filter(Boolean)
@@ -138,6 +152,9 @@ export function MobileHomeDesktopRow(props: {
         ) : null}
         <Text style={[styles.detail, { color: statusColor }]} numberOfLines={connected ? 1 : 2}>
           {statusLine}
+          {needsYouLabel ? (
+            <Text style={{ color: colors.statusAmber }}>{` · ${needsYouLabel}`}</Text>
+          ) : null}
         </Text>
         {details.map((line) => (
           <Text key={line} style={styles.detail} numberOfLines={3}>
