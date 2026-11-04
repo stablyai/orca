@@ -2,7 +2,7 @@ import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult
 } from '../../shared/runtime-types'
-import { pickNextActiveTabAfterClose } from '../../shared/workspace-session-terminal-tab-close'
+import { pickNextActiveTabAfterClose } from '../../shared/workspace-session/workspace-session-terminal-tab-close'
 import { findSiblingGroupId } from '../../shared/workspace-layout/tab-group-layout-tree'
 
 export type ClientSessionTabSelection = {

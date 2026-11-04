@@ -66,10 +66,25 @@ describe('resolution receipts', () => {
     expect(screen.getByText('Run command?')).toBeInTheDocument()
     expect(screen.getByText('pnpm test')).toBeInTheDocument()
     expect(screen.getByText(label)).toBeInTheDocument()
-    expect(screen.getByText('Answered on phone-client')).toBeInTheDocument()
+    expect(screen.getByText('Answered on another device')).toBeInTheDocument()
     expect(document.querySelector('time')).toHaveAttribute('datetime', new Date(1000).toISOString())
     expect(screen.queryByRole('button')).toBeNull()
   })
+
+  it.each([
+    [{ kind: 'current' }, 'this computer'],
+    [{ kind: 'named', name: 'My iPhone' }, 'My iPhone']
+  ] satisfies [NativeChatResolvedPrompt['resolution']['resolvedByDevice'], string][])(
+    'shows the projected device identity %j',
+    (resolvedByDevice, device) => {
+      render(
+        <NativeChatResolutionReceipt
+          body={{ ...approval, resolution: { ...approval.resolution, resolvedByDevice } }}
+        />
+      )
+      expect(screen.getByText(`Answered on ${device}`)).toBeInTheDocument()
+    }
+  )
 
   it('uses the SDK display name in the compact resolved receipt', () => {
     render(
@@ -391,7 +406,10 @@ describe('resolution receipts', () => {
       })
       rerender(<Harness body={receiptFor([answered, second])} />)
       expect(screen.getByText('Branch?')).toHaveClass('truncate')
-      expect(screen.queryByRole('button')).toBeNull()
+      expect(screen.getByRole('button', { name: /Asked:/ })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      )
     })
 
     it('stays plain once answered, since each question is listed with its answer', () => {
@@ -419,14 +437,17 @@ describe('resolution receipts', () => {
       expect(screen.getByText('Yes')).toBeInTheDocument()
     })
 
-    it('leaves a cancelled single question that fits its line as plain text', () => {
+    it('keeps a cancelled single question expandable even when it fits its line', () => {
       render(
         <Harness
           body={{ ...grouped, question: FIRST, questions: grouped.questions?.slice(0, 1) }}
         />
       )
       expect(screen.getByText(FIRST)).toHaveClass('truncate')
-      expect(screen.queryByRole('button')).toBeNull()
+      expect(screen.getByRole('button', { name: /Asked:/ })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      )
       expect(screen.queryByRole('list')).toBeNull()
     })
   })

@@ -15,14 +15,14 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shar
 import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
-} from './editor/editor-autosave'
+} from './editor/autosave/editor-autosave'
 import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
 import { useTerminalKeyboardShortcuts } from './use-terminal-keyboard-shortcuts'
 import { agentMenuShortcutLabels } from './tab-bar/agent-menu-shortcut-labels'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 import type * as AgentTabShortcuts from './terminal-agent-tab-shortcut'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import { useTerminalBulkCloseActions } from './use-terminal-bulk-close-actions'
 import { makeOpenFile, makeUnifiedTab } from '../store/slices/store-session-test-harness'

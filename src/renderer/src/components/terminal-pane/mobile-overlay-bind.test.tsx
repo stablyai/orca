@@ -13,7 +13,11 @@ import { createTerminalPanePtyDeps } from './terminal-pane-pty-deps'
 import { TerminalPaneMobileDriverPortals } from './TerminalPaneRuntimePortals'
 import { connectPanePty } from './pty-connection'
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createManager, createMockTransport, createPane } from './pty-connection-test-pane-fixtures'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import {
@@ -23,6 +27,7 @@ import {
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 import type { StoreState } from './pty-connection-test-store-state'
+const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
 const fixture = vi.hoisted(() => ({
   mount:
@@ -72,7 +77,7 @@ function OverlayHost({ controller }: { controller: TerminalPaneController }): Re
     if (!pane || !manager) {
       throw new Error('Missing test pane manager')
     }
-    const binding = connectPanePty(pane, manager, ptyDeps)
+    const binding = connectPanePty(pane, manager, bindPaneAgentTitleMocks(ptyDeps, agentTitleMocks))
     return () => binding.dispose()
   }
   useTerminalPaneLifecycleStage(mountedController)

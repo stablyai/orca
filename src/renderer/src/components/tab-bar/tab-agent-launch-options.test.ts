@@ -6,7 +6,7 @@ import {
   findMatchingTabAgentLaunchOptions,
   orderTabLaunchAgents
 } from './tab-agent-launch-options'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 describe('tab agent launch options', () => {
   it('orders detected agents by the configured default first', () => {

@@ -31,7 +31,7 @@ async function loadSharedModule(path) {
 
 describe('shared mobile modules without WebKit lookbehind', () => {
   it('loads agent token matchers and preserves executable and path boundaries', async () => {
-    const agent = await loadSharedModule('agent-name-token-match.ts')
+    const agent = await loadSharedModule('agent-status/title/agent-name-token-match.ts')
     expect(agent.titleHasAgentName('Codex.exe ready', 'codex')).toBe(true)
     expect(agent.titleHasAgentName('C:\\codex.exe\\ready', 'codex')).toBe(false)
     expect(agent.titleHasAnyLegacyAgentName('~/openclaude-project')).toBe(false)
@@ -42,14 +42,15 @@ describe('shared mobile modules without WebKit lookbehind', () => {
   })
 
   it('loads title status classification and preserves cleanup delimiters', async () => {
-    const status = await loadSharedModule('agent-title-status.ts')
+    const status = await loadSharedModule('agent-status/title/agent-title-status.ts')
     expect(status.detectAgentStatusFromTitle('Codex working')).toBe('working')
     expect(status.detectAgentStatusFromTitle('Codex done.')).toBe('idle')
-    expect(status.clearWorkingIndicators('Codex:working;thinking|running!')).toBe('Codex:;|!')
+    const cleanup = await loadSharedModule('agent-status/title/agent-title-working-indicators.ts')
+    expect(cleanup.clearWorkingIndicators('Codex:working;thinking|running!')).toBe('Codex:;|!')
   })
 
   it('loads compatible title ownership and retains idle normalization', async () => {
-    const owner = await loadSharedModule('agent-title-owner.ts')
+    const owner = await loadSharedModule('agent-status/title/agent-title-owner.ts')
     expect(owner.normalizeCompatibleAgentTitleForOwner('Pi ready', 'omp')).toBe('OMP ready')
   })
 

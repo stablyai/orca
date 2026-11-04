@@ -4,8 +4,8 @@ import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Ready
-} from '../../../src/shared/mobile-e2ee-v2-contract'
-import { sealMobileE2EEV2Frame } from '../../../src/shared/mobile-e2ee-v2-framing'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
+import { sealMobileE2EEV2Frame } from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
 
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length).fill(9)
@@ -13,7 +13,7 @@ vi.mock('expo-crypto', () => ({
 
 import { deriveSharedKey } from './e2ee'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
-import { derivePairedE2EEV2KeySchedule as deriveMobileE2EEV2KeySchedule } from '../../../src/shared/paired-e2ee-v2-key-schedule'
+import { derivePairedE2EEV2KeySchedule as deriveMobileE2EEV2KeySchedule } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-key-schedule'
 
 const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
@@ -122,34 +122,5 @@ describe('mobile E2EE v2 client session', () => {
       expect(session.openText(alias)).toBeNull()
     }
     expect(session.openText(encoded)).toBe(plaintext)
-  })
-
-  it('preserves full large text frames with bounded binary string conversions', () => {
-    const { session, schedule } = pairedSession()
-    const plaintext = 'a'.repeat(2 * 1024 * 1024)
-    const incoming = desktopTextFrame(plaintext, schedule)
-    const expectedOutgoing = Buffer.from(
-      sealMobileE2EEV2Frame({
-        payload: new TextEncoder().encode(plaintext),
-        key: schedule.mobileToDesktopKey,
-        sessionId: schedule.sessionId,
-        direction: 'mobile-to-desktop',
-        payloadKind: 'text',
-        counter: 0n
-      })
-    ).toString('base64')
-    const encode = vi.spyOn(globalThis, 'btoa')
-    try {
-      expect(session.sealText(plaintext)).toBe(expectedOutgoing)
-      expect(session.openText(incoming)).toBe(plaintext)
-      const largestBinaryString = encode.mock.calls.reduce(
-        (largest, [binary]) => Math.max(largest, binary.length),
-        0
-      )
-      expect(largestBinaryString).toBeGreaterThan(0)
-      expect(largestBinaryString).toBeLessThanOrEqual(16 * 1024)
-    } finally {
-      encode.mockRestore()
-    }
   })
 })

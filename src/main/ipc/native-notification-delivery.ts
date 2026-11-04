@@ -7,7 +7,7 @@ import type {
 import { safelyRevealWindow } from '../window/focus-existing-window'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { buildNotificationOptions } from './notification-options'
 import { getEffectiveNotificationSoundId } from './notification-sound-selection'
 import { macosNotificationIdentity } from './macos-notification-center'

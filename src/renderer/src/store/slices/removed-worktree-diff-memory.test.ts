@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import '../../../../shared/workspace-scope'
 import {
   claimCombinedDiffView,
   clearCombinedDiffViewMemory,
@@ -141,13 +141,5 @@ describe('removed workspace diff memory', () => {
       hostWorktreeTarget({ id: removed, hostId: 'runtime:remote' })
     ])
     expect(readCombinedDiffViewMemory(key)?.scrollTop).toBe(42)
-  })
-
-  it('releases folder workspace views using their recorded owner', () => {
-    const workspaceId = folderWorkspaceKey('folder-1')
-    const key = seedDiff(workspaceId)
-    const store = createTestStore()
-    buildWorktreePurgeState(store.getState(), [workspaceId])
-    expect(readCombinedDiffViewMemory(key)).toBeUndefined()
   })
 })

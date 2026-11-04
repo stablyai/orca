@@ -1,15 +1,15 @@
 import {
   readTerminalStartFailure,
   type TerminalStartFailure
-} from '../../../../shared/terminal-start-failure'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import {
   AGENT_LAUNCH_PANE_REFUSED_CODE,
   type AgentLaunchPaneAddress,
   type AgentLaunchPaneVerdict
-} from '../../../../shared/agent-launch-pane-verdict'
-import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
+} from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
+import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 import type { RunningAgentLaunchPane } from '../../../agent-launch/agent-launch-pane-attachment'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
+import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { agentLaunchFailureCode } from '../../../runtime/rpc/methods/agent-launch-failure-code'
 import type { PtyIpcSpawnState } from './spawn-state'

@@ -1,6 +1,6 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal-mode-reset-profiles'
+import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { flushAsyncTicks, createDeferred, renderHeadlessBuffer } from './pty-connection-test-async'
 import {
   createMockTransport,
@@ -10,7 +10,12 @@ import {
   type MockPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps, type PaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
@@ -187,7 +192,13 @@ async function connectHiddenPane(
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: false }
   })
-  const disposable = await connectMockPanePty(pane, createManager(1), deps)
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+  const disposable = await connectMockPanePty(
+    pane,
+    createManager(1),
+    bindPaneAgentTitleMocks(deps, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(captured.current).not.toBeNull()
   return {
@@ -513,7 +524,14 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const disposable = await connectMockPanePty(pane, createManager(1), deps)
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+      const disposable = await connectMockPanePty(
+        pane,
+        createManager(1),
+        bindPaneAgentTitleMocks(deps, agentTitleMocks2)
+      )
       await flushAsyncTicks(6)
       expect(captured.current).not.toBeNull()
       return {

@@ -4,7 +4,7 @@ import type {
   RuntimeTerminalWaitBlockedReason,
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
 type ReadonlyTerminalStateRecord = {
   connected: boolean

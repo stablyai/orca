@@ -212,7 +212,7 @@ export function structuredAgentSessionConversationClosable(
     ![...structuredAgentSessionHandingOver(session.journal).keys()].some((id) =>
       finalizingStructuredAgentSessionInput(session.journal, id)
     ) &&
-    !session.journal.submissions().some(isQueuedAgentJournalSubmission) &&
+    !session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission) &&
     session.journal.pendingSubmissions().length === 0 &&
     !(atRest && session.journal.queuedMessages.awaitReopenMark())
   )
@@ -264,7 +264,7 @@ export function beginFinalizedStructuredAgentSessionClose(
             context.sessions.get(sessionId) === session &&
             !session.child &&
             session.lastEndedChild === ended &&
-            !session.journal.submissions().some((s) => (s.acceptedSequence ?? 0) > acceptedBy)
+            !session.journal.inputOrder.acceptedAfter(acceptedBy)
           ) {
             await context.closeConversation(sessionId)
           }

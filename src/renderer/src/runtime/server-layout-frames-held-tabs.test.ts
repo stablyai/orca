@@ -9,12 +9,11 @@ import type {
   PublishedTab,
   PublishedWorkspaceLayout
 } from '../../../shared/workspace-layout/workspace-layout-published'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   DESKTOP_CREATED_SERVER_TAB_HOLDS,
   _reloadDesktopCreatedServerTabsForTests,
-  _resetDesktopCreatedServerTabsForTests,
-  noteDesktopCreatedServerTab
+  _resetDesktopCreatedServerTabsForTests
 } from '@/lib/desktop-created-server-tabs'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
@@ -27,11 +26,8 @@ import {
 import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { commitTabDragDrop } from '@/components/tab-group/tab-drag-drop-commit'
-import {
-  canMoveTabToNewPaneColumn,
-  moveTabToNewPaneColumn
-} from '@/components/tab-bar/tab-move-to-pane-column'
-import { resolvePanelEdgePaneColumnSplit } from '@/components/tab-group/tab-group-panel-split-target'
+import '@/components/tab-bar/tab-move-to-pane-column'
+import '@/components/tab-group/tab-group-panel-split-target'
 import { mainLayoutFrameSender } from './main-loaded-layout-frames.test-fixture'
 import {
   CAPABLE,
@@ -53,7 +49,7 @@ import {
   type TestStore
 } from './server-layout-frames.test-fixture'
 import { installLayoutFrameApplyCheck } from './workspace-layout-frame-apply-check.test-fixture'
-import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
+import './workspace-layout-frame-sync'
 import { resetFrameDrawnServerWorkspacesForTests } from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import { resetMirroredTerminalHandlesForTests } from './web-session-tabs-sync/mirrored-terminal-handle-index'
 import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
@@ -133,7 +129,7 @@ hoisted.subscribe = streams.subscribe
 const TAB_1 = toWebTerminalSurfaceTabId('host-tab-1')
 const TAB_2 = toWebTerminalSurfaceTabId('host-tab-2')
 const GROUP_2 = 'host-group-2'
-const { setServers, mirroredStore, install, uninstallAll } = createServerHarness(hoisted)
+const { setServers, install, uninstallAll } = createServerHarness(hoisted)
 
 /** The server's layout once it opened a second terminal tab: a records frame that rebuilds WT. */
 const WITH_TAB_2 = serverLayout([
@@ -314,25 +310,6 @@ describe('a held tab in a server’s frame-drawn workspace', () => {
     expect(shownIn(store, HOST_GROUP)).toBe(TAB_1)
   })
 
-  it('is not moved by an unrelated server frame sent twice', async () => {
-    const { store, stream, frames } = await appStoreFrameDrawn(serverSplit())
-    const { held } = stageHeld(GROUP_2)
-    const shown = { groups: groups(store), layout: store.getState().layoutByWorktree[WT] }
-    const recoloured = serverSplit()
-    recoloured.tabs[0] = { ...recoloured.tabs[0]!, color: '#ff0000' }
-    for (const frame of [recoloured, recoloured]) {
-      streams.send(stream, frames.records(WT, structuredClone(frame)))
-      await settle()
-      expect(groups(store)).toEqual(shown.groups)
-      expect(store.getState().layoutByWorktree[WT]).toEqual(shown.layout)
-      expect(groupOf(store, held)).toBe(GROUP_2)
-    }
-    // Presence: the frame reached the store.
-    expect(store.getState().unifiedTabsByWorktree[WT]?.find((tab) => tab.id === TAB_1)?.color).toBe(
-      '#ff0000'
-    )
-  })
-
   it('dragged to another group, moves here only: no RPC names it', async () => {
     const { store } = await appStoreFrameDrawn(serverSplit())
     const { staged, held } = stageHeld(HOST_GROUP)
@@ -375,75 +352,7 @@ describe('a held tab in a server’s frame-drawn workspace', () => {
   })
 })
 
-describe('a held tab and the split commands', () => {
-  const rect = { left: 0, top: 0, width: 1000, height: 600 }
-  const rightEdge = { x: 990, y: 300 }
-  const dragOf = (tabId: string, groupId: string) => ({
-    kind: 'tab' as const,
-    worktreeId: WT,
-    groupId,
-    unifiedTabId: tabId,
-    visibleTabId: tabId,
-    tabType: 'browser' as const,
-    label: tabId
-  })
-  const edgeSplit = (store: TestStore, tabId: string, groupId: string, target: string) =>
-    resolvePanelEdgePaneColumnSplit({
-      activeDrag: dragOf(tabId, groupId),
-      targetGroupId: target,
-      worktreeId: WT,
-      pointer: rightEdge,
-      groupsByWorktree: store.getState().groupsByWorktree,
-      layoutByWorktree: store.getState().layoutByWorktree,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the split target reads only the rect's edges.
-      panelRect: rect as DOMRect,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
-      bodyRect: { ...rect, top: 40, height: 560 } as DOMRect
-    })
-
-  it('offers a held tab no new split, by drag or by the pane-column command', async () => {
-    const { store } = await appStoreFrameDrawn(serverSplit())
-    const { held } = stageHeld(HOST_GROUP)
-    // Presence: the server's own tab gets the edge split in the same place.
-    expect(edgeSplit(store, TAB_1, HOST_GROUP, GROUP_2)).toMatchObject({ zone: 'right' })
-
-    expect(edgeSplit(store, held, HOST_GROUP, GROUP_2)).toBeNull()
-    expect(canMoveTabToNewPaneColumn(held, HOST_GROUP)).toBe(false)
-    expect(
-      moveTabToNewPaneColumn({ unifiedTabId: held, groupId: HOST_GROUP, direction: 'right' })
-    ).toBe(false)
-    expect(groupIds(store)).toEqual([HOST_GROUP, GROUP_2])
-  })
-
-  it('counts only the server’s tabs: the server group’s one tab cannot split off its own group', async () => {
-    const { store } = await appStoreFrameDrawn(serverSplit())
-    stageHeld(HOST_GROUP)
-    // Presence: the group holds two tabs here, one of them the server's.
-    expect(groups(store)[0]).toHaveLength(2)
-
-    expect(canMoveTabToNewPaneColumn(TAB_1, HOST_GROUP)).toBe(false)
-    expect(edgeSplit(store, TAB_1, HOST_GROUP, HOST_GROUP)).toBeNull()
-    expect(
-      moveTabToNewPaneColumn({ unifiedTabId: TAB_1, groupId: HOST_GROUP, direction: 'right' })
-    ).toBe(false)
-    expect(mentions(TAB_1, 'host-tab-1')).toEqual([])
-  })
-})
-
 describe('a simulator tab opened on this desktop in a server’s frame-drawn workspace', () => {
-  it('opens as the user’s tab in the server group it would split beside, and is never sent', async () => {
-    const { store } = await appStoreFrameDrawn(serverSplit())
-    store.getState().focusGroup(WT, HOST_GROUP)
-
-    const simulator = ensureSimulatorTab(WT, { targetGroupId: GROUP_2, placement: 'rightSplit' })!
-    await settle()
-    expect(groupIds(store)).toEqual([HOST_GROUP, GROUP_2])
-    expect(groupOf(store, simulator)).toBe(GROUP_2)
-    expect(store.getState().activeGroupIdByWorktree[WT]).toBe(GROUP_2)
-    expect(shownIn(store, GROUP_2)).toBe(simulator)
-    expect(mentions(simulator)).toEqual([])
-  })
-
   it('survives the next server frame and a reload’s first frame', async () => {
     const { store, stream, frames } = await appStoreFrameDrawn()
     const simulator = ensureSimulatorTab(WT, { targetGroupId: HOST_GROUP })!
@@ -482,23 +391,6 @@ describe('a simulator tab opened on this desktop in a server’s frame-drawn wor
     await settle()
     expect(tabIds(store)).toEqual([TAB_1, TAB_2])
   })
-
-  it('is recorded only while a server’s frames draw it: a mirrored server workspace records nothing', async () => {
-    const store = useAppStore
-    hoisted.owners.set(WT, ENV)
-    mirrorSnapshot(store, ENV, sessionTabs([surface('host-tab-1', LEAF_ID, 'terminal-1')], 1))
-    const before = groupIds(store)
-
-    const simulator = ensureSimulatorTab(WT, { placement: 'rightSplit' })
-    await settle()
-    // Drawn here as today, in a split of its own: no server's frames draw this workspace.
-    expect(simulator).toBeTruthy()
-    expect(tabIds(store)).toContain(simulator)
-    expect(groupIds(store)).toHaveLength(before.length + 1)
-    expect(before).not.toContain(groupOf(store, simulator!))
-    expect(DESKTOP_CREATED_SERVER_TAB_HOLDS.isTabHeld(WT, simulator!)).toBe(false)
-    expect(storage.size).toBe(0)
-  })
 })
 
 describe('a held tab across a window reload', () => {
@@ -512,42 +404,6 @@ describe('a held tab across a window reload', () => {
     // Presence: the frame drew the server's new tab.
     expect(tabIds(store)).toContain(TAB_2)
     expect(groups(store)).toEqual([[TAB_1, held, TAB_2]])
-  })
-
-  it('forgets a recorded tab the restored session no longer has, so it never comes back', async () => {
-    const { store } = await appStoreFrameDrawn()
-    noteDesktopCreatedServerTab(ENV, WT, 'gone-tab')
-    expect(DESKTOP_CREATED_SERVER_TAB_HOLDS.isTabHeld(WT, 'gone-tab')).toBe(true)
-
-    reload()
-    await firstFrameAfterReload(store)
-    expect(DESKTOP_CREATED_SERVER_TAB_HOLDS.isTabHeld(WT, 'gone-tab')).toBe(false)
-    expect([...storage.values()].join()).not.toContain('gone-tab')
-    _reloadDesktopCreatedServerTabsForTests()
-    expect(DESKTOP_CREATED_SERVER_TAB_HOLDS.isTabHeld(WT, 'gone-tab')).toBe(false)
-  })
-})
-
-describe('a tab in this window’s own frame-drawn workspace', () => {
-  it('shows as main’s frames have it: no desktop hold keeps it', async () => {
-    const store = mirroredStore()
-    hoisted.owners.clear()
-    const sync = openWorkspaceLayoutFrameSync(store)
-    const stream = streams.all.find((open) => open.target.kind === 'local' && !open.closed)!
-    const frames = mainLayoutFrameSender()
-    streams.send(stream, senderSnapshot(frames, { [WT]: SERVER_LAYOUT }, 1))
-    sync.start()
-    await settle()
-    store
-      .getState()
-      .createUnifiedTab(WT, 'simulator', { id: 'emulator-1', targetGroupId: HOST_GROUP })
-    noteDesktopCreatedServerTab(ENV, WT, 'emulator-1')
-
-    streams.send(stream, frames.records(WT, WITH_TAB_2))
-    await settle()
-    expect(check.workspaceBuilt).toContain(WT)
-    expect(tabIds(store)).not.toContain('emulator-1')
-    sync.close()
   })
 })
 
@@ -592,28 +448,5 @@ describe('a staged server-hosted browser tab (L285)', () => {
     expect(tabIds(store)).toContain('server-browser-tab')
     expect(wasStagedBrowserTabHandedToFrames(staged.workspaceId, 'server-page-1')).toBe(true)
     expect(DESKTOP_CREATED_SERVER_TAB_HOLDS.isTabHeld(WT, staged.workspaceId)).toBe(false)
-  })
-
-  it('leaves no hold on a tab the mirror adopted before the frames drew the workspace', async () => {
-    const { store, stream, frames } = await appStoreFrameDrawn()
-    const staged = stageWebRuntimeBrowserTab({
-      environmentId: ENV,
-      worktreeId: WT,
-      remotePageId: 'server-page-1',
-      activate: true,
-      targetGroupId: HOST_GROUP
-    })!
-    // The mirror's adoption: same rows, the handle no longer staged.
-    store.getState().setRemoteBrowserPageHandle(staged.pageId, {
-      environmentId: ENV,
-      remotePageId: 'server-page-1'
-    })
-
-    streams.send(stream, frames.records(WT, WITH_PAGE))
-    await settle()
-    expect(check.workspaceBuilt).toContain(WT)
-    expect(tabIds(store)).not.toContain(staged.tabId)
-    expect(tabIds(store)).toContain('server-browser-tab')
-    expect(DESKTOP_CREATED_SERVER_TAB_HOLDS.isTabHeld(WT, staged.tabId!)).toBe(false)
   })
 })

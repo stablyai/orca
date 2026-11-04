@@ -4,9 +4,9 @@ import type {
   AgentStatusEntry,
   AgentType,
   ParsedAgentStatusPayload
-} from '../../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
-import { tabHasProtectedTitle } from '../../../../../shared/agent-generated-tab-title-rules'
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { tabHasProtectedTitle } from '../../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
 import type { DropAgentStatusByWorktreeOptions, RetainedAgentEntry } from './agent-status-contract'
 import type { AgentStatusTabPrefixDropState } from './agent-status-drop-reducer'
 

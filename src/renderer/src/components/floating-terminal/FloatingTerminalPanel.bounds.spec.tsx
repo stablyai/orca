@@ -36,7 +36,7 @@ import {
   setFloatingEditorTabs
 } from './floating-terminal-panel-test-fixtures'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
-import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/editor-autosave'
+import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/autosave/editor-autosave'
 
 function requestedEditorCloses(): string[] {
   return vi

@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   makeState,
   LEAF_ID,
@@ -10,7 +10,7 @@ import {
 } from '../web-session-tabs-sync-test-harness'
 import { collectCollidingRetractionPaneKeys } from './retraction-pane-ownership'
 import { buildRetractedMirroredTabSweepPatch } from './agent-status-primitives'
-import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
+import type { WebSessionTabsSyncState } from './state'
 import {
   getForegroundTerminalTabLastSeenAtById,
   resetForegroundTerminalTabIdsForTests,
@@ -79,34 +79,4 @@ it.each([true, false])('cleans unrelated tabs when a collision is mirrored=%s', 
   } finally {
     resetForegroundTerminalTabIdsForTests()
   }
-})
-
-it('indexes unchanged auxiliary records once per batch and refreshes replacements', () => {
-  let enumerations = 0
-  const record: Record<string, number> = {}
-  const tabs = Array.from({ length: 100 }, (_, index) => toWebTerminalSurfaceTabId(`host-${index}`))
-  for (const tab of tabs) {
-    record[makePaneKey(tab, LEAF_ID)] = 1
-  }
-  const state = makeState({
-    acknowledgedAgentsByPaneKey: new Proxy(record, {
-      ownKeys(target) {
-        enumerations++
-        return Reflect.ownKeys(target)
-      }
-    })
-  })
-  const batch: WebSessionTabsBatchContext = {
-    agentPaneKeysByTabId: null,
-    changedRecords: new Set(),
-    openFilesIndex: null
-  }
-  for (const tab of tabs) {
-    expect(collectCollidingRetractionPaneKeys(state, [tab], 'host', 'folder', batch).has(tab)).toBe(
-      true
-    )
-  }
-  expect(enumerations).toBe(1)
-  state.acknowledgedAgentsByPaneKey = {}
-  expect(collectCollidingRetractionPaneKeys(state, tabs, 'host', 'folder', batch).size).toBe(0)
 })

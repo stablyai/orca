@@ -3,9 +3,9 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../src/shared/runtime-types'
-import { detectAgentStatusFromTitle } from '../../src/shared/agent-detection'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../src/shared/agent-status-types'
-import { isExplicitAgentStatusFresh } from '../../src/renderer/src/lib/agent-status'
+import { detectAgentStatusFromTitle } from '../../src/shared/agent-status/title/agent-title-status'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../src/shared/agent-status/contracts/agent-status-freshness'
+import { isExplicitAgentStatusFresh } from '../../src/renderer/src/lib/pane-agent-evidence'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import {
   SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS,

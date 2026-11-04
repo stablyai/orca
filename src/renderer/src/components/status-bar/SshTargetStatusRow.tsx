@@ -5,7 +5,7 @@ import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
-import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
+import { STATUS_LABELS, statusColor } from '../settings/ssh/targets/SshTargetCard'
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import {

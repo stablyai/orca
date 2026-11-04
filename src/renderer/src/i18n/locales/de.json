@@ -518,7 +518,18 @@
         "antigravityAccount": "Konto",
         "antigravitySignInNeeded": "Chats erfordern eine separate Antigravity-Anmeldung, unabhängig vom agy-Terminal-Konto."
       },
-      "permissionsDescriptionOwnAgents": "Neue Chats verwenden die jeweilige Agentenberechtigung unter Einstellungen → Agenten."
+      "permissionsDescriptionOwnAgents": "Neue Chats verwenden die jeweilige Agentenberechtigung unter Einstellungen → Agenten.",
+      "launch": {
+        "on": "Die Chat-Oberfläche ist aktiviert",
+        "off": "Die Chat-Oberfläche ist deaktiviert",
+        "agents": "Standard-Startmodus pro Agent",
+        "agentsDescription": "Wähle, ob jeder Agent in der Chat-Oberfläche oder seiner CLI geöffnet wird.",
+        "chatDescription": "Neue Agenten starten standardmäßig im Chatmodus.",
+        "cliDescription": "Neue Agenten starten standardmäßig als CLI.",
+        "turnOn": "Aktivieren",
+        "turnOff": "Deaktivieren",
+        "toggle": "Chat-Oberfläche standardmäßig verwenden"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC oder U.S. — Option sendet Alt/Esc-Sequenzen",
@@ -974,6 +985,28 @@
         "notPng": "Repository-Symbole müssen PNG-Dateien sein.",
         "tooLarge": "Das Bild für das Repository-Symbol darf höchstens 256 KB groß sein."
       }
+    },
+    "editorFormatOnSave": {
+      "title": "Beim Speichern formatieren",
+      "description": "Text vor manuellem und automatischem Speichern formatieren. Konfiguriere einen Formatierungsbefehl unter Einstellungen > Projekte. Standardmäßig deaktiviert.",
+      "keywords": "Formatierer Formatierung beim Speichern prettier biome gofmt"
+    },
+    "editorInsertFinalNewline": {
+      "title": "Abschließenden Zeilenumbruch einfügen",
+      "description": "Beim Speichern einer nicht leeren Codedatei einen Zeilenumbruch hinzufügen, falls sie nicht damit endet. Standardmäßig deaktiviert.",
+      "keywordNewline": "Zeilenumbruch",
+      "keywordEndOfFile": "Dateiende"
+    },
+    "repositoryFormatter": {
+      "title": "Formatierungsbefehl",
+      "description": "Den Formatierer dieses Projekts für „Beim Speichern formatieren“ verwenden.",
+      "saveFailed": "Formatierungseinstellungen konnten nicht gespeichert werden.",
+      "command": "Befehl",
+      "commandHelp": "Wird auf dem Host der Datei im Stammverzeichnis des Arbeitsbereichs ausgeführt. Liest den Puffer von stdin und darf nur formatierten Text auf stdout ausgeben. Verwende ${file} oder ${relativeFile} für den Pfad. Argumente werden direkt und ohne Shell übergeben. Verwende nicht --write. Leer lassen, um die Funktion für dieses Projekt zu deaktivieren.",
+      "include": "Einzuschließende Glob-Muster (eines pro Zeile)",
+      "includeHelp": "Pfade relativ zum Stammverzeichnis des Arbeitsbereichs abgleichen. Ohne passendes Glob-Muster erfolgt keine Formatierung. * und ** überspringen Namen, die mit einem Punkt beginnen; führe diese explizit auf, z. B. .github/**/*.yml. Aktiviere „Beim Speichern formatieren“ unter Allgemein > Editor, um diesen Befehl zu verwenden.",
+      "saving": "Wird gespeichert…",
+      "save": "Formatierer speichern"
     }
   },
   "menu": {
@@ -2105,7 +2138,6 @@
         "9c3ba11a05": "Status:",
         "934d87ab96": "Check-Details werden geladen…",
         "71c11aff84": "Alle Checks erneut ausführen",
-        "e31651a224": "Fehlgeschlagene Checks erneut ausführen",
         "1b56e28faa": "Erneut ausführen",
         "f4b1292569": "Standard-KI-Agenten für diese Checks starten",
         "9a1004fc76": "Checks aktualisieren",
@@ -2583,8 +2615,6 @@
         "25690a3855": "Arbeitsbereich aus PR starten",
         "a459866967": "Mit dem PR verknüpften Arbeitsbereich fortsetzen",
         "347034903a": "GitHub-Link kopieren",
-        "5a01ca7253": "Der Status „Angesehen“ konnte nicht mit GitHub synchronisiert werden.",
-        "996a1897d2": "Der Status „Angesehen“ konnte für diesen Pull Request nicht synchronisiert werden.",
         "e0b15c793f": "GitHub-Link konnte nicht kopiert werden",
         "992e799227": "GitHub-Link kopiert",
         "61bfc81ada": "Der mit diesem Pull Request verknüpfte Arbeitsbereich konnte nicht geöffnet werden.",
@@ -2612,7 +2642,6 @@
         "662bc2998d": "Status:",
         "d8e82b7f15": "Check-Details werden geladen…",
         "54cddd1858": "Alle Checks erneut ausführen",
-        "68605516dd": "Fehlgeschlagene Checks erneut ausführen",
         "522d9353e1": "Erneut ausführen",
         "0fa8b8faec": "Standard-KI-Agenten für diese Checks starten",
         "5d0f42766d": "Checks aktualisieren",
@@ -3987,7 +4016,7 @@
             "copyFilePathFailed": "Kopieren des Dateipfads fehlgeschlagen",
             "downloadOpenWithDefaultApp": "Herunterladen und mit Standard-App öffnen",
             "downloadOpenFailed": "„{{value0}}“ konnte nicht heruntergeladen werden.",
-            "openInThisGroup": "In dieser Gruppe öffnen",
+            "openInNewTab": "In neuem Tab öffnen",
             "openInThisGroupRefused": "{{value0}} konnte nicht in dieser Gruppe geöffnet werden"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -4551,7 +4580,6 @@
             "5c938d39ac": "Wo.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Keine weiteren Konten",
             "d450654fa2": "Claude-Konto",
             "11e2354daf": "Claude-Nutzung: Laufzeitumgebung",
             "3dd7ddfae1": "Claude-Details und Kontowechsel öffnen",
@@ -7682,7 +7710,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Computer Use öffnen",
-          "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
+          "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
           "333984cf90": "Bestehende Browser-Sitzung verwenden"
         },
         "BrowserUseEnableSwitch": {
@@ -7802,7 +7830,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Ermöglicht Agenten, lokale Desktop-Apps zu untersuchen und zu bedienen.",
-          "93255aaf18": "Computer Use-Skill",
+          "93255aaf18": "Orca Computer Use-Skill",
           "45f8e22c2e": "Öffnen",
           "d95d1cfab8": "Aktualisieren",
           "0c29da5805": "Bereit",
@@ -8687,8 +8715,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Befehlsvorlage",
-          "2b2f38652b": "Benutzerdefinierter Befehl",
-          "0ffb081b3a": "Standardagenten verwenden",
           "f4310cf63f": "Agent",
           "1cd88d470a": "Anpassen",
           "403876bb48": "Globale Einstellung verwenden",
@@ -9233,7 +9259,7 @@
           "902f5dee1f": "Beim Auswählen kopieren",
           "9129b7e805": "Das Bewegen des Mauszeigers über einen Terminalbereich aktiviert diesen ohne Klick.",
           "8eefeaa3da": "Fokus folgt der Maus",
-          "96fe15def8": "Verhalten von Maus und Zwischenablage in Terminalbereichen.",
+          "96fe15def8": "Verhalten von Scrollen, Maus und Zwischenablage in Terminalbereichen.",
           "45721f3e67": "Terminalinteraktion",
           "9c0b1c1792": "Ein",
           "c1fc9e9444": "GPU-Beschleunigung",
@@ -11266,7 +11292,8 @@
                   "supportedAgents": "Unterstützte Agenten für dieses Rezept: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}} kann dieses Textgenerierungsrezept nicht ausführen. Einen der unten aufgeführten unterstützten Agenten auswählen.",
                   "resolveComments": "Einen Agenten anhand ausgewählter ungelöster PR- oder MR-Kommentare starten.",
-                  "fixPushFailure": "Einen Agenten starten, wenn ein pre-push-Hook oder git push fehlschlägt."
+                  "fixPushFailure": "Einen Agenten starten, wenn ein pre-push-Hook oder git push fehlschlägt.",
+                  "commitMessageSharedModel": "Pull-Request-Details, Branch-Name und Chat-Name können dieses Modell ebenfalls verwenden, wenn sie kein eigenes auswählen; ihre Option „Wie Standard“ zeigt das verwendete Modell an."
                 }
               }
             }
@@ -13282,7 +13309,8 @@
           "pluginIconTheme": {
             "title": "Symboldesign",
             "description": "Datei- und Ordnersymbole aus einem aktivierten Plugin.",
-            "builtIn": "Integriert"
+            "builtIn": "Integriert",
+            "search": "Icon-Themes suchen…"
           }
         },
         "PluginAddMenu": {
@@ -13359,7 +13387,12 @@
         },
         "AppearanceThemeControl": {
           "matchTerminal": "An Terminal anpassen",
-          "dynamic": "dynamisch"
+          "dynamic": "dynamisch",
+          "searchThemes": "Themes suchen…",
+          "noThemes": "Keine Themes entsprechen deiner Suche."
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "Keine Treffer."
         }
       },
       "right": {
@@ -15031,7 +15064,6 @@
           "ae3b00ca82": "GitHub-Aufgaben einrichten",
           "ff92d15436": "Orca zeigt Benachrichtigungen an, wenn Agenten fertig sind oder Hilfe benötigen.",
           "b054332836": "Benachrichtigungen einrichten",
-          "04ae28d8ca": "Ein Erscheinungsbild auswählen, das auch nach Stunden noch gefällt.",
           "f396db9f20": "Vertraute Umgebung einrichten",
           "322fc50a18": "Orca funktioniert mit jedem CLI-Agenten. Den bevorzugten Agenten auswählen. Ein Wechsel ist jederzeit möglich.",
           "198b148b3c": "Standardagenten auswählen",
@@ -19048,7 +19080,32 @@
           "system": "An Betriebssystem anpassen",
           "dark": "Angenehm für die Augen",
           "light": "Hell & klar"
-        }
+        },
+        "looks": {
+          "activeNow": "jetzt",
+          "browsePlugins": "Plugins durchsuchen",
+          "browseThemePlugins": "Design-Plugins durchsuchen",
+          "colorMode": "Farbmodus",
+          "colorModeCaption": "Hell, dunkel oder wie dein System.",
+          "darkLook": "Dunkler Look",
+          "darkLooks": "Dunkle Looks",
+          "lightLook": "Heller Look",
+          "lightLooks": "Helle Looks",
+          "moreThemes": "Weitere Designs",
+          "next": "Weitere Looks",
+          "orcaDark": "Orca Dunkel",
+          "orcaLight": "Orca Hell",
+          "pluginsHint": "Weitere Designs gibt es als Plugins.",
+          "previous": "Vorherige Looks",
+          "showsWhenDark": "Wird angezeigt, wenn dein System dunkel ist",
+          "showsWhenLight": "Wird angezeigt, wenn dein System hell ist",
+          "slotLabel": "Zu bearbeitender Look",
+          "sourceBuiltIn": "Integriert",
+          "sourceCommunity": "Terminal-Palette",
+          "themes": "Design",
+          "themesCaption": "Optional. Geh weiter mit App-Designs und Terminal-Paletten."
+        },
+        "subtitle": "Wähle hell oder dunkel und optional ein Design. Beides kannst du jederzeit in den Einstellungen ändern."
       },
       "integrations": {
         "capabilities": {
@@ -19131,6 +19188,7 @@
         "attachmentNotAFile": "Ein Bild in dieser Nachricht ist keine Datei, daher wurde die Nachricht nicht gesendet.",
         "attachmentNoSource": "Für ein Bild in dieser Nachricht fehlt die zu sendende Datei, daher wurde die Nachricht nicht gesendet.",
         "attachmentInvalid": "Ein Anhang dieser Nachricht kann nicht an den Agenten gesendet werden.",
+        "attachmentsExpired": "Abgelaufen: {{names}}.",
         "attachmentUnreadable": "Ein Anhang dieser Nachricht konnte nicht gelesen werden, daher wurde die Nachricht nicht gesendet.",
         "emptyMessage": "Diese Nachricht ist leer und wurde daher nicht gesendet.",
         "commandUnavailable": "Dieser Befehl ist in Chats mit {{agent}} nicht verfügbar und wurde daher nicht gesendet.",
@@ -19219,6 +19277,7 @@
         "recordFailed": "Orca konnte dies nicht im Chatverlauf speichern.",
         "attachmentExpired": "Dieser Anhang ist abgelaufen.",
         "reattachFile": "Den Anhang entfernen und erneut anhängen.",
+        "reattachFiles": "Die Anhänge entfernen und erneut anhängen.",
         "conversationCleared": "Diese Unterhaltung wurde geleert.",
         "openCurrentConversation": "Zum Fortfahren die aktuelle Unterhaltung öffnen.",
         "clearUnfinished": "Der letzte /clear-Befehl wurde nicht abgeschlossen.",
@@ -19292,7 +19351,10 @@
         "cancelled": "Abgebrochen",
         "resolved": "Erledigt",
         "resolver": "Auf {{device}} beantwortet",
-        "cancelledBy": "Auf {{device}} abgebrochen"
+        "cancelledBy": "Auf {{device}} abgebrochen",
+        "thisComputer": "diesem Computer",
+        "computer": "dem Computer",
+        "otherDevice": "einem anderen Gerät"
       },
       "notices": {
         "contextCleared": "Kontext geleert",
@@ -19599,8 +19661,6 @@
         "stateUnverifiableCount_other": "{{value0}} mit nicht verfügbarem Status"
       },
       "jumpToLatest": "Zur neuesten Nachricht springen",
-      "newRowsAnnouncement": "Während der Abwesenheit sind neue Nachrichten eingegangen",
-      "newRowsMarker": "Neu",
       "find": {
         "label": "Im Chat suchen",
         "noResults": "Keine Ergebnisse",
@@ -19614,7 +19674,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Orca auf diesem Host aktualisieren, um in der Chat-Oberfläche fortzufahren.",
-        "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen."
+        "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen.",
+        "exitUnconfirmed": "{{agent}} führt diese Unterhaltung in einem anderen Terminal aus. Dort beenden oder das Terminal schließen, dann erneut versuchen."
       },
       "state": {
         "loading": {
@@ -19754,7 +19815,11 @@
         "handedOffToAgent": "An Agenten übergeben",
         "startedAgent": "Agent gestartet",
         "taskFromCoordinator": "Aufgabe vom Koordinator",
-        "updateFromWorker": "Aktualisierung vom Worker"
+        "updateFromWorker": "Aktualisierung vom Worker",
+        "senderReplaced": "{{name}} läuft nicht mehr in seinem Terminal; dort läuft jetzt ein anderer Agent. Öffne das Terminal bei Bedarf über die Seitenleiste.",
+        "senderAmbiguous": "Orca kann nicht feststellen, in welchem Terminal {{name}} läuft. Öffne es über die Seitenleiste.",
+        "senderNotRunning": "{{name}} läuft nicht mehr. Starte einen neuen Agenten über die Seitenleiste, um die Arbeit fortzusetzen.",
+        "unnamedSenderSubject": "Ein Agent"
       },
       "goal": {
         "placeholder": "Ziel beschreiben und für beste Ergebnisse messbare Resultate festlegen",
@@ -19792,7 +19857,6 @@
       "dismissDeliveryNotice": "Ausblenden",
       "addSelectionToChat": "Zum Chat hinzufügen",
       "messageNotSent": "Nachricht nicht gesendet",
-      "deliveryUnconfirmed": "Zustellung unbestätigt — vor erneutem Versuch den Chat prüfen",
       "messageSending": "Wird gesendet…",
       "userMessage": {
         "showFull": "Vollständige Nachricht anzeigen",
@@ -19864,8 +19928,7 @@
       "interruptedContinue": {
         "continue": "Fortfahren",
         "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
-        "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde.",
-        "unconfirmed": "Es konnte nicht bestätigt werden, ob {{agent}} „Fortfahren“ erhalten hat. Vor einem erneuten Versuch den Chat prüfen."
+        "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity ist nicht angemeldet. Unter <settings>Einstellungen → Konten → Antigravity</settings> anmelden. Danach die Nachricht erneut senden."
@@ -20019,6 +20082,24 @@
         "effortPickerFailed": "Die Auswahl des Denkaufwands konnte nicht geöffnet werden.",
         "modelApplyFailed": "Modell {{value}} konnte nicht angewendet werden.",
         "effortApplyFailed": "Denkaufwand {{value}} konnte nicht angewendet werden."
+      },
+      "settings": "Chat-Einstellungen",
+      "textAttachmentPreview": {
+        "copiedContents": "Kopierter Inhalt",
+        "textAttachment": "Textanhang",
+        "byteSize": "{{size}} Bytes",
+        "copyContents": "Inhalt kopieren",
+        "saveFile": "Datei speichern",
+        "copyTooLarge": "Diese Datei ist zu groß zum Kopieren. Speichere sie stattdessen.",
+        "exportError": "Anhang konnte nicht exportiert werden. Versuche es erneut.",
+        "unreadableReply": "Antwort zum Anhang ist nicht lesbar. Versuche es erneut.",
+        "incompleteReply": "Der Anhang wurde geändert oder die Antwort war unvollständig. Schließe ihn und versuche es erneut.",
+        "notText": "Diese Datei kann nicht als Text angezeigt werden. Speichere sie, um sie in einer anderen App zu öffnen.",
+        "openFailed": "Anhang konnte nicht geöffnet werden. Versuche es erneut.",
+        "hostUpdate": "Dieser Host kann Textanhänge noch nicht öffnen. Aktualisiere Orca auf diesem Host und versuche es erneut.",
+        "hostUnavailable": "Der Host des Anhangs ist nicht verfügbar. Stelle die Verbindung erneut her und versuche es erneut.",
+        "connectionChanged": "Die Verbindung hat sich geändert. Schließe diesen Anhang und öffne ihn erneut.",
+        "readFailed": "Dieser Anhang konnte auf seinem Host nicht gelesen werden. Stelle die Verbindung erneut her und versuche es erneut. Die Datei wurde möglicherweise entfernt oder geändert."
       }
     },
     "tab": {
@@ -20383,7 +20464,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Linken Rand beim Kopieren entfernen",
         "copyTrimsGutterDescription": "Den linken Rand vor der Agentenausgabe entfernen, damit kopierter Text nicht eingerückt ist. Entfernt wird nur die gemeinsame Einrückung aller ausgewählten Zeilen.",
-        "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren."
+        "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren.",
+        "scrollOnUserInput": "Bei Eingabe nach unten scrollen",
+        "scrollOnUserInputDescription": "Tippen oder Einfügen im hochgescrollten Zustand springt zur neuesten Ausgabe. Deaktiviere dies, um deine Position zu behalten."
       },
       "terminal": {
         "clipboard": {
@@ -20398,6 +20481,15 @@
             "whitespace": "Leerraum",
             "spaces": "Leerzeichen"
           }
+        },
+        "search": {
+          "typing": "tippen",
+          "input": "eingabe",
+          "jump": "springen",
+          "bottom": "unten",
+          "scrollback": "scrollback",
+          "snap": "einrasten",
+          "position": "position"
         }
       },
       "nativeChat": {
@@ -20555,6 +20647,11 @@
     },
     "wslHostMark": {
       "runsOn": "Läuft in WSL: {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "{{file}} konnte nicht formatiert werden. Wird ohne Formatierung gespeichert: {{reason}}"
+      }
     }
   },
   "dashboardPopout": {
@@ -21506,7 +21603,10 @@
         "reviewBody_one": "{{count}} weitere Claude-Sitzung wurde nicht zu {{next}} verschoben.",
         "reviewBody_other": "{{count}} weitere Claude-Sitzungen wurden nicht zu {{next}} verschoben.",
         "body_one": "{{count}} Claude-Sitzung läuft noch auf {{previous}}. Ein Neustart setzt das Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind.",
-        "body_other": "{{count}} Claude-Sitzungen laufen noch auf {{previous}}. Ein Neustart setzt jedes Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind."
+        "body_other": "{{count}} Claude-Sitzungen laufen noch auf {{previous}}. Ein Neustart setzt jedes Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind.",
+        "reasonSharedSession": "Auch in einem anderen Bereich geöffnet",
+        "sharedOne": "1 Claude-Sitzung bleibt auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
+        "sharedOther": "{{count}} Claude-Sitzungen bleiben auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen."
       }
     },
     "managedData": {
@@ -22486,6 +22586,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: Es gibt keine lesbare Sicherungskopie, daher startet dieser Abschnitt leer.",
+      "sectionKeptCurrent": "{{section}}: Ihre aktuellen Ausführungen bleiben erhalten",
       "sectionRestored": "{{section}}: aus der {{time}} gespeicherten Sicherungskopie wiederhergestellt.",
       "projectsForgotten": "Orca vergisst die Projekte und ihre Arbeitsbereichsdetails. Dateien auf dem Datenträger bleiben unverändert.",
       "newerProjectsRemoved": "Projekte, die nach dieser Sicherungskopie hinzugefügt wurden, werden zusammen mit ihren Arbeitsbereichsdetails aus Orca entfernt. Dateien auf dem Datenträger bleiben unverändert.",
@@ -22528,7 +22629,7 @@
       "noneFound": "(keine gefunden)",
       "sqlitePath": "SQLite-Pfad: {{path}}",
       "sectionsDamaged": "Ein Teil des gespeicherten Zustands dieses Profils ist beschädigt: {{sections}}. Alles andere ist intakt.",
-      "repairCommand": "Orca beenden und dann `{{command}}` ausführen, um nur die beschädigten Teile aus Sicherungskopien zu ersetzen und alles andere beizubehalten. Orca bewahrt eine Kopie der beschädigten Datei auf.",
+      "repairCommand": "Beenden Sie Orca und führen Sie dann `{{command}}` aus, um nur die beschädigten Teile zu reparieren und alles andere beizubehalten. Orca bewahrt eine Kopie der beschädigten Datei auf.",
       "restoreWholeBackup": "Um stattdessen eine vollständige Sicherungskopie wiederherzustellen, zuerst `{{exportsCommand}}` und dann `{{rollbackCommand}}` ausführen.",
       "sqliteUnreadable": "Orca kann das aktive Profil nicht sicher öffnen, da sein SQLite-Zustand nicht lesbar ist.",
       "legacyJsonPath": "Pfad der alten JSON-Datei: {{path}}",
@@ -23097,6 +23198,12 @@
     "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
   },
   "agentPicker": {
+    "catalogUnsupported": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Du kannst deine Auswahl beibehalten oder Argumente verwenden.",
+    "catalogFailed": "Modelle für {{agent}} konnten nicht geladen werden. Schließe die Agentenauswahl und öffne sie erneut.",
+    "catalogSignIn": "Melde dich bei {{agent}} an, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
+    "catalogInstall": "Installiere {{agent}} auf diesem Host, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
+    "catalogUnresolved": "Modelle für {{agent}} wurden nicht geladen. Schließe die Agentenauswahl und öffne sie erneut.",
+    "catalogEmpty": "Für {{agent}} sind keine Modelle verfügbar.",
     "setByArguments": "Durch Argumente festgelegt",
     "searchModels": "Modelle suchen",
     "noModels": "Keine Modelle entsprechen deiner Suche.",
@@ -23111,7 +23218,13 @@
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
     "launchTerminal": "Terminal starten",
+    "use": "Verwenden",
+    "select": "Agent auswählen",
     "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
-    "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien"
+    "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien",
+    "workspaceStartupFailed": "{{agent}} konnte nicht gestartet werden. Überprüfe die Argumente in dieser Einrichtung und versuche es erneut.",
+    "sameAsTextDefault": "Wie Standard · {{value0}}",
+    "chatChoicesNote": "Modell- oder Effort-Auswahlen für {{agent}} ohne CLI-Flag gelten für Chats.",
+    "composedChoicesNote": "Effort- und Geschwindigkeitsauswahlen für {{agent}} sind im Modellargument enthalten."
   }
 }

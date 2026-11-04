@@ -32,10 +32,9 @@ import {
 } from '@/store/workspace-record-selectors'
 import type {
   ActivityGroupBy,
-  ActivityThreadGroup,
-  AgentPaneThread,
   ThreadReadFilter
-} from './activity-thread-types'
+} from '../../../../shared/agents-view-thread-filters'
+import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 export type AgentPaneThreadsStoreData = Pick<
   AppState,

@@ -48,11 +48,11 @@ vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
   useAgentBucketCounts: () => mocks.bucketCounts
 }))
 
-vi.mock('./SidebarWorkspaceOptionsMenu', () => ({
+vi.mock('./worktree-list/controls/SidebarWorkspaceOptionsMenu', () => ({
   default: () => <button aria-label="Workspace options" type="button" />
 }))
 
-vi.mock('./workspace-options-menu-items', () => ({
+vi.mock('./worktree-list/controls/workspace-options-menu-items', () => ({
   useWorkspaceOptionsFilterBadge: () => ({
     hasAnyFilter: false,
     activeFilterCount: 0

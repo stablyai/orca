@@ -1,12 +1,15 @@
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentType
+} from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   type AiVaultSessionTitle,
   isAiVaultTitleAgent
-} from '../../../shared/ai-vault-session-title'
+} from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import type { AgentPaneConversationIdentity } from '@/store/slices/agent-pane-conversation'

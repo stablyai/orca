@@ -4,7 +4,7 @@ import {
   writeDockerSshHostTargetFile,
   type DockerSshHostTarget
 } from './docker-ssh-host-target'
-import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../src/shared/shell/launch/shell-argument-quoting'
 
 // Only the SSH container can resolve and reach this loopback origin; rendering its marker proves tunneled egress.
 export const SSH_REMOTE_ONLY_HOST = 'remote-only.internal'

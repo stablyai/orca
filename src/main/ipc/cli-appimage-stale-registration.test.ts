@@ -24,7 +24,7 @@ vi.mock('../cli/cli-installer', () => ({
   }
 }))
 
-vi.mock('../appimage-runtime-identity', () => ({
+vi.mock('../updater/linux-package/appimage-runtime-identity', () => ({
   resolveAppImageRuntimeIdentity: mocks.resolveAppImageRuntimeIdentity
 }))
 
@@ -58,7 +58,7 @@ vi.mock('../startup/hydrate-shell-path', () => ({
   mergePathSegments: mocks.mergePathSegments
 }))
 
-vi.mock('../wsl', () => ({ getDefaultWslDistro: vi.fn() }))
+vi.mock('../wsl/discovery/distro-catalog', () => ({ getDefaultWslDistro: vi.fn() }))
 
 import { registerCliHandlers } from './cli'
 

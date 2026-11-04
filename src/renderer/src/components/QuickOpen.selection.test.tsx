@@ -29,7 +29,7 @@ vi.mock('@/store/selectors', () => ({ useActiveWorktree: () => ({ path: '/worksp
 vi.mock('./quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({ files, loading: false, loadError: null })
 }))
-vi.mock('./right-sidebar/file-explorer-operation-owner', () => ({
+vi.mock('./right-sidebar/file-explorer/navigation/file-explorer-operation-owner', () => ({
   getFileExplorerOperationOwnerFromState: () => ({ kind: 'local' })
 }))
 vi.mock('./quick-open-file-navigation', () => ({ openQuickOpenFile: mocks.open }))

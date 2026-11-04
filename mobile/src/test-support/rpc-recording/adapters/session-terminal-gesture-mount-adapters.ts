@@ -1,3 +1,4 @@
+import type * as MobileTerminalOperations from '../../../terminal/mobile-terminal-operations'
 import { hookScreenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -33,6 +34,10 @@ export function sessionTerminalGestureMountAdapters(
         typeof import('../../../session/use-mobile-session-terminal-input')
       >('mobile/src/session/use-mobile-session-terminal-input.ts').useMobileSessionTerminalInput
 
+      const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
+        'mobile/src/terminal/mobile-terminal-operations.ts'
+      )
+
       const buckets = { current: new Map<string, TerminalGestureInputBucket>() }
       const queues = { current: new Map<string, TerminalGestureInputQueue>() }
       const inFlight = { current: new Set<string>() }
@@ -41,6 +46,7 @@ export function sessionTerminalGestureMountAdapters(
         input = useTerminalInput(
           mountFixture<Parameters<typeof useTerminalInput>[0]>({
             client,
+            sendTerminalOrderedInput: terminalInputSend.request,
             connState: 'connected',
             activeHandle: HANDLE,
             clientRef: { current: client },
@@ -58,7 +64,6 @@ export function sessionTerminalGestureMountAdapters(
             hostQueryReplyInputSupportedRef: { current: false },
             hostProgramStatusSupportedRef: { current: false },
             clearPendingLiveInputCommit: () => {},
-            toggleTerminalLiveInput: () => false,
             getTerminalRef: () => undefined,
             unsubscribeTerminal: (handle) => effect('terminal-unsubscribe', { handle }),
             subscribeToTerminal: (handle) => {

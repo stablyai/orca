@@ -1,4 +1,4 @@
-import { isAskUserQuestionTool } from '../agent-question-answered-intent'
+import { isAskUserQuestionTool } from '../agent-status/lifecycle/agent-question-answered-intent'
 import type { ToolSnapshot } from './listener-event'
 import { parseAgentHookJson } from './request-body'
 import { readString, toolUpdate } from './tool-input-preview'

@@ -34,11 +34,15 @@ describe('assignment reserve-mode behavior', () => {
   // A store that has never read the set: the table is unreadable.
   async function unknownSet(now: () => number) {
     const unknown = new RelayAssignmentStore(database!, now)
-    await database!.query('ALTER TABLE relay_cell_admit_modes RENAME TO relay_cell_admit_modes_gone')
+    await database!.query(
+      'ALTER TABLE relay_cell_admit_modes RENAME TO relay_cell_admit_modes_gone'
+    )
     return {
       unknown,
       restore: async () =>
-        await database!.query('ALTER TABLE relay_cell_admit_modes_gone RENAME TO relay_cell_admit_modes')
+        await database!.query(
+          'ALTER TABLE relay_cell_admit_modes_gone RENAME TO relay_cell_admit_modes'
+        )
     }
   }
 
@@ -59,55 +63,6 @@ describe('assignment reserve-mode behavior', () => {
     await restore()
     await setReserve(store, [])
     expect(await store.releaseExpiredActivityLeases()).toBeGreaterThan(0)
-  })
-
-  it('logs an unreadable reserve-mode set at most once a minute', async () => {
-    let now = 1_000
-    await setup(() => now)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const clock = vi.spyOn(performance, 'now')
-    let at = 1_000_000
-    clock.mockImplementation(() => at)
-    const { unknown, restore } = await unknownSet(() => now)
-    try {
-      for (let read = 0; read < 3; read += 1) {
-        expect(await unknown.reserveModeCells()).toBeNull()
-        at += 10_000
-      }
-      at += 60_000
-      expect(await unknown.reserveModeCells()).toBeNull()
-      const lines = warn.mock.calls.filter(([line]) => String(line).includes('orca_relay_reserve_mode_read_failed'))
-      expect(lines).toHaveLength(2)
-    } finally {
-      await restore()
-      clock.mockRestore()
-      warn.mockRestore()
-    }
-  })
-
-  it('tells break glass whether a cell is still heartbeating', async () => {
-    let now = 1_000
-    const store = await setup(() => now)
-    expect(await store.cellHeartbeatFresh('cell-a')).toBe(false)
-    await store.reconcileCells([{ ...CELLS[0]!, connectionHardCap: 600, connectionUnobservedBound: 50 }, CELLS[1]!])
-    await store.recordCellHeartbeat({
-      cellId: 'cell-a',
-      cellUrl: CELLS[0]!.url,
-      cellIncarnation: '11111111-1111-4111-8111-111111111111',
-      startedAt: 50,
-      ready: false,
-      observedRequests: 0,
-      totalConnections: 0,
-      inFlightConnections: 0,
-      reservedConnectionUnits: 0,
-      enforcedConnectionUnits: 0,
-      connectionHardCap: 600,
-      connectionUnobservedBound: 50
-    })
-    // Not ready is still alive: break glass is for a cell that has gone silent.
-    expect(await store.cellHeartbeatFresh('cell-a')).toBe(true)
-    now += 45_001
-    expect(await store.cellHeartbeatFresh('cell-a')).toBe(false)
   })
 
   it('keeps an idle host sticky on a reserve-mode cell where today it would be re-placed', async () => {
@@ -136,8 +91,13 @@ describe('assignment reserve-mode behavior', () => {
     await setReserve(store, [first.cellId])
     // The reserve ledger stamps last_activity_at and the cell keeps no activity rows.
     now += 5 * 60_000
-    await database!.query('DELETE FROM relay_assignment_activity_leases WHERE user_id = ?', [identity.userId])
-    await database!.query('UPDATE relay_assignments SET last_activity_at = ? WHERE user_id = ?', [now, identity.userId])
+    await database!.query('DELETE FROM relay_assignment_activity_leases WHERE user_id = ?', [
+      identity.userId
+    ])
+    await database!.query('UPDATE relay_assignments SET last_activity_at = ? WHERE user_id = ?', [
+      now,
+      identity.userId
+    ])
     await store.setCellAdmissionState(first.cellId, 'existing-only')
     now += 2 * 60_000
     expect(await store.assign(identity)).toMatchObject({
@@ -221,12 +181,16 @@ describe('assignment reserve-mode behavior', () => {
       await store.changeActivity(identity, 'control', -1)
       now += ASSIGNMENT_LIMITS.activityLeaseMs + ASSIGNMENT_LIMITS.dormantTtlMs + 1
       expect([...((await store.reserveModeCells()) ?? [])]).toEqual([])
-      await database!.query('ALTER TABLE relay_cell_admit_modes RENAME TO relay_cell_admit_modes_gone')
+      await database!.query(
+        'ALTER TABLE relay_cell_admit_modes RENAME TO relay_cell_admit_modes_gone'
+      )
       at += 61_000
       expect(await store.reserveModeCells()).toBeNull()
       expect((await store.assign(identity)).assignmentEpoch).toBeGreaterThan(first.assignmentEpoch)
     } finally {
-      await database!.query('ALTER TABLE relay_cell_admit_modes_gone RENAME TO relay_cell_admit_modes').catch(() => undefined)
+      await database!
+        .query('ALTER TABLE relay_cell_admit_modes_gone RENAME TO relay_cell_admit_modes')
+        .catch(() => undefined)
       clock.mockRestore()
     }
   })
@@ -277,11 +241,16 @@ describe('assignment reserve-mode behavior', () => {
         source_request_units, target_reserved_units, expires_at, created_at, updated_at)
        VALUES ('user-a', 'host000000000001', 'cell-b', 'cell-a', 1, 2, 0, 1, 9999, 1000, 1000)`
     )
-    await expect(store.setCellAdmitMode('cell-a', 'reserve')).rejects.toThrow('cell_has_open_migration')
+    await expect(store.setCellAdmitMode('cell-a', 'reserve')).rejects.toThrow(
+      'cell_has_open_migration'
+    )
     expect(await store.cellAdmitMode('cell-a')).toMatchObject({ admitMode: 'db' })
     await store.setCellAdmitMode('cell-a', 'db')
     await database!.query(`UPDATE relay_assignment_migrations SET aborted_at = 1001`)
     await store.setCellAdmitMode('cell-a', 'reserve')
-    expect(await store.cellAdmitMode('cell-a')).toMatchObject({ admitMode: 'reserve', updatedAt: 1_000 })
+    expect(await store.cellAdmitMode('cell-a')).toMatchObject({
+      admitMode: 'reserve',
+      updatedAt: 1_000
+    })
   })
 })

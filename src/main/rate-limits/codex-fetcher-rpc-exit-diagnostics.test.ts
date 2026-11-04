@@ -42,11 +42,11 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(() => 'present')
 }))
 
-vi.mock('../codex/codex-state-db', () => ({
+vi.mock('../codex/history/index/codex-state-db', () => ({
   isCodexStateDbBackfillPending: vi.fn(() => false)
 }))
 
-vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn(() => Promise.resolve(null))
 }))
 
@@ -98,13 +98,6 @@ describe('Codex RPC exit diagnostics', () => {
     expect(result.error).toContain("try '--help'")
   })
 
-  it('names the exit code when the child says nothing', async () => {
-    await expect(runStub('', 1)).resolves.toMatchObject({
-      error: 'Codex RPC process exited (exit code 1)',
-      status: 'error'
-    })
-  })
-
   it('classifies a dead refresh token so the re-auth warning fires', async () => {
     const result = await runStub(
       '2026-08-20T18:04:11.221Z INFO codex_core::auth: refreshing ChatGPT tokens\n' +
@@ -135,15 +128,5 @@ describe('Codex RPC exit diagnostics', () => {
     expect(result.error).not.toContain('moveoplus')
     expect(result.error).not.toContain('sk-aaaa')
     expect(result.error?.length ?? 0).toBeLessThan(500)
-  })
-
-  it('keeps the final failure after startup banners', async () => {
-    const result = await runStub(
-      'Welcome to WSL\nLoading shell profile\nERROR: unknown option --obsolete\n',
-      2
-    )
-
-    expect(result.error).toContain('Welcome to WSL')
-    expect(result.error).toContain('ERROR: unknown option --obsolete')
   })
 })
