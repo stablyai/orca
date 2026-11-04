@@ -90,8 +90,21 @@ describe('desktop mobile E2EE v2 session', () => {
     const { phone, desktop } = establishedPair()
     const frame = phone.sealText('{"id":"pad"}')
     expect(frame.endsWith('=')).toBe(true)
-    expect(desktop.openText(frame.replace(/=+$/, ''))).toBeNull()
-    expect(desktop.openText(`${frame.slice(0, 8)}\n${frame.slice(8)}`)).toBeNull()
+    expect(frame).toMatch(/[+/]/)
+    // The last data character's low bit is unused, so this alias decodes to the same authentic bytes.
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    const last = frame.replace(/=+$/, '').length - 1
+    const flipped = `${frame.slice(0, last)}${alphabet[alphabet.indexOf(frame[last]!) ^ 1]}${frame.slice(last + 1)}`
+    expect(Buffer.from(flipped, 'base64')).toEqual(Buffer.from(frame, 'base64'))
+    for (const alias of [
+      frame.replace(/=+$/, ''),
+      `${frame.slice(0, 8)}\n${frame.slice(8)}`,
+      frame.replaceAll('+', '-').replaceAll('/', '_'),
+      `${frame}=`,
+      flipped
+    ]) {
+      expect(desktop.openText(alias)).toBeNull()
+    }
     expect(desktop.openText(frame)).toBe('{"id":"pad"}')
   })
 

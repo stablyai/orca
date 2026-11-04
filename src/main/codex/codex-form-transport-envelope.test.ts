@@ -264,7 +264,7 @@ it.each(['WF1', 'WF2', 'literal', 'enum', 63, 64] as const)(
     for (const raw of [direct, remote, page]) {
       expect(Buffer.byteLength(raw)).toBeLessThanOrEqual(M)
     }
-    // The installed v2 host decode, for the phone direct and through a relaying desktop's host, both ways.
+    // The installed v2 host decode, for the phone direct and for cloud-relay host ingress, both ways.
     const replyPrefix = '{"id":"reply","result":"'
     const reply = `${replyPrefix}${'r'.repeat(M - replyPrefix.length - 6)}tail"}`
     expect(Buffer.byteLength(reply)).toBe(M)

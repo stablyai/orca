@@ -7,7 +7,10 @@ import {
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Ready
 } from '../../../src/shared/mobile-e2ee-v2-contract'
-import { sealMobileE2EEV2Frame } from '../../../src/shared/mobile-e2ee-v2-framing'
+import {
+  openMobileE2EEV2Frame,
+  sealMobileE2EEV2Frame
+} from '../../../src/shared/mobile-e2ee-v2-framing'
 import type { PairedE2EEPrimitives } from '../../../src/shared/paired-e2ee-primitives'
 import { PairedE2EEV2ClientSession } from '../../../src/shared/paired-e2ee-v2-client-session'
 import { derivePairedE2EEV2KeySchedule } from '../../../src/shared/paired-e2ee-v2-key-schedule'
@@ -212,6 +215,23 @@ describe('the native paired E2EE codec', () => {
       expect(session.openText(seal(reply, 0n))).toBe(reply)
       expect(session.openText(seal('{"next":true}', 1n))).toBe('{"next":true}')
     }
+  })
+
+  // The phone's own encoder sends the ordinary maximum; the shared frame open must read it whole.
+  it('seals a maximum ordinary request with the phone encoder', async () => {
+    const prefix = '{"id":"max","params":{"text":"'
+    const request = `${prefix}${'q'.repeat(4 * 1024 * 1024 - prefix.length - 7)}tail"}}`
+    expect(new TextEncoder().encode(request).length).toBe(4 * 1024 * 1024)
+    const { session, schedule } = pairedSession((await load(false)).primitives)
+    const opened = openMobileE2EEV2Frame({
+      frame: new Uint8Array(Buffer.from(session.sealText(request), 'base64')),
+      key: schedule.mobileToDesktopKey,
+      sessionId: schedule.sessionId,
+      direction: 'mobile-to-desktop',
+      payloadKind: 'text',
+      expectedCounter: 0n
+    })
+    expect(new TextDecoder().decode(opened!)).toBe(request)
   })
 
   it('uses native once provided, even after a lookup with no provider', async () => {
