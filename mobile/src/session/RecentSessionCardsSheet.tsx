@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { File, FileText, Globe, Minus, Plus, SquareTerminal } from 'lucide-react-native'
@@ -78,7 +79,85 @@ function RecentCardIcon({ card }: { card: RecentSessionCardRecord }) {
   return <SquareTerminal size={16} color={colors.textSecondary} />
 }
 
-export function RecentSessionCardsSection({
+const RecentSessionCardRow = memo(function RecentSessionCardRow({
+  card,
+  showSeparator,
+  isJumping,
+  anyJumping,
+  isCurrentWorkspace,
+  now,
+  onSelectCard
+}: {
+  card: RecentSessionCardRecord
+  showSeparator: boolean
+  isJumping: boolean
+  anyJumping: boolean
+  isCurrentWorkspace: boolean
+  now: number
+  onSelectCard: (card: RecentSessionCardRecord) => void
+}) {
+  const workspaceLabel = getWorktreeLabel(card.worktreeName, card.worktreeId)
+  const badgeLabel = formatWorkspaceBadgeLabel(workspaceLabel)
+  const timeAgo = formatTimeAgo(card.lastVisitedAt, now)
+  const stateLabel =
+    card.agentState && card.agentState !== 'idle' ? agentStateLabel(card.agentState) : null
+  const accessibilityLabel = stateLabel
+    ? `${card.title}, ${stateLabel}, ${workspaceLabel}, ${timeAgo}`
+    : `${card.title}, ${workspaceLabel}, ${timeAgo}`
+  return (
+    <View>
+      {showSeparator ? <View style={styles.separator} /> : null}
+      <Pressable
+        testID={`recent-session-card-${card.worktreeId}-${card.tabId}`}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        disabled={anyJumping}
+        onPress={() => onSelectCard(card)}
+        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      >
+        {card.agentState && card.agentState !== 'idle' ? (
+          <View testID={`recent-session-card-state-dot-${card.worktreeId}-${card.tabId}`}>
+            <AgentStateDot state={card.agentState} />
+          </View>
+        ) : null}
+        <RecentCardIcon card={card} />
+        <View style={styles.textBlock}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {card.title}
+          </Text>
+          <View style={styles.metaRow}>
+            <View
+              testID={
+                isCurrentWorkspace
+                  ? `recent-session-card-current-workspace-${card.worktreeId}-${card.tabId}`
+                  : undefined
+              }
+              style={styles.workspaceBadge}
+            >
+              <Text
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={[
+                  styles.workspaceBadgeText,
+                  isCurrentWorkspace && styles.workspaceBadgeTextCurrent
+                ]}
+              >
+                {badgeLabel}
+              </Text>
+            </View>
+          </View>
+        </View>
+        {isJumping ? (
+          <ActivityIndicator size="small" color={colors.textSecondary} />
+        ) : (
+          <Text style={styles.timeText}>{timeAgo}</Text>
+        )}
+      </Pressable>
+    </View>
+  )
+})
+
+export const RecentSessionCardsSection = memo(function RecentSessionCardsSection({
   cards,
   jumpingCardKey,
   currentWorktreeId,
@@ -88,22 +167,26 @@ export function RecentSessionCardsSection({
   onSelectCard
 }: RecentSessionCardsSectionProps) {
   const t = useMobileTranslation()
-  const now = useNow(30_000)
   const effectiveMaxDisplay = maxDisplay ?? getRecentSessionCardsMaxDisplaySync()
   const handleUpdateMaxDisplay = onChangeMaxDisplay ?? setRecentSessionCardsMaxDisplay
   const canDecrease = effectiveMaxDisplay > MIN_RECENT_SESSION_CARDS_DISPLAY
   const canIncrease = effectiveMaxDisplay < MAX_RECENT_SESSION_CARDS_LIMIT
-  const visibleCards = cards
-    .filter(
-      (card) =>
-        !(
-          Boolean(currentWorktreeId) &&
-          Boolean(currentTabId) &&
-          card.worktreeId === currentWorktreeId &&
-          card.tabId === currentTabId
+  const visibleCards = useMemo(
+    () =>
+      cards
+        .filter(
+          (card) =>
+            !(
+              Boolean(currentWorktreeId) &&
+              Boolean(currentTabId) &&
+              card.worktreeId === currentWorktreeId &&
+              card.tabId === currentTabId
+            )
         )
-    )
-    .slice(0, effectiveMaxDisplay)
+        .slice(0, effectiveMaxDisplay),
+    [cards, currentTabId, currentWorktreeId, effectiveMaxDisplay]
+  )
+  const now = useNow(30_000, visibleCards.length > 0)
   return (
     <View style={styles.section}>
       <View style={styles.header}>
@@ -157,76 +240,27 @@ export function RecentSessionCardsSection({
           </Text>
         ) : (
           visibleCards.map((card, index) => {
-            const workspaceLabel = getWorktreeLabel(card.worktreeName, card.worktreeId)
-            const badgeLabel = formatWorkspaceBadgeLabel(workspaceLabel)
             const key = recentCardKey(card)
-            const timeAgo = formatTimeAgo(card.lastVisitedAt, now)
             const isCurrentWorkspace =
               Boolean(currentWorktreeId) && card.worktreeId === currentWorktreeId
-            const stateLabel =
-              card.agentState && card.agentState !== 'idle'
-                ? agentStateLabel(card.agentState)
-                : null
-            const accessibilityLabel = stateLabel
-              ? `${card.title}, ${stateLabel}, ${workspaceLabel}, ${timeAgo}`
-              : `${card.title}, ${workspaceLabel}, ${timeAgo}`
             return (
-              <View key={key}>
-                {index > 0 ? <View style={styles.separator} /> : null}
-                <Pressable
-                  testID={`recent-session-card-${card.worktreeId}-${card.tabId}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={accessibilityLabel}
-                  disabled={jumpingCardKey !== null}
-                  onPress={() => onSelectCard(card)}
-                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                >
-                  {card.agentState && card.agentState !== 'idle' ? (
-                    <View testID={`recent-session-card-state-dot-${card.worktreeId}-${card.tabId}`}>
-                      <AgentStateDot state={card.agentState} />
-                    </View>
-                  ) : null}
-                  <RecentCardIcon card={card} />
-                  <View style={styles.textBlock}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>
-                      {card.title}
-                    </Text>
-                    <View style={styles.metaRow}>
-                      <View
-                        testID={
-                          isCurrentWorkspace
-                            ? `recent-session-card-current-workspace-${card.worktreeId}-${card.tabId}`
-                            : undefined
-                        }
-                        style={styles.workspaceBadge}
-                      >
-                        <Text
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                          style={[
-                            styles.workspaceBadgeText,
-                            isCurrentWorkspace && styles.workspaceBadgeTextCurrent
-                          ]}
-                        >
-                          {badgeLabel}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                  {jumpingCardKey === key ? (
-                    <ActivityIndicator size="small" color={colors.textSecondary} />
-                  ) : (
-                    <Text style={styles.timeText}>{timeAgo}</Text>
-                  )}
-                </Pressable>
-              </View>
+              <RecentSessionCardRow
+                key={key}
+                card={card}
+                showSeparator={index > 0}
+                isJumping={jumpingCardKey === key}
+                anyJumping={jumpingCardKey !== null}
+                isCurrentWorkspace={isCurrentWorkspace}
+                now={now}
+                onSelectCard={onSelectCard}
+              />
             )
           })
         )}
       </View>
     </View>
   )
-}
+})
 
 export function RecentSessionCardsSheet({
   visible,

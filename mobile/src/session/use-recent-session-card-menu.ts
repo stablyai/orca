@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getCachedWorktrees, setCachedWorktrees } from '../cache/worktree-cache'
+import { BOTTOM_DRAWER_SHOW_DURATION_MS } from '../components/bottom-drawer/bottom-drawer-constants'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   useWorkspaceExecutionHost,
@@ -31,6 +32,25 @@ import {
 } from './recent-session-cards'
 import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
 
+const EMPTY_RECENT_SESSION_CARDS: readonly RecentSessionCardRecord[] = []
+const POLL_INTERVAL_MS = 2500
+
+function sameRecentCardWorktrees(
+  prev: readonly RecentCardWorktree[],
+  next: readonly RecentCardWorktree[]
+): boolean {
+  return (
+    prev === next ||
+    (prev.length === next.length &&
+      prev.every(
+        (a, i) =>
+          a.worktreeId === next[i]?.worktreeId &&
+          a.displayName === next[i]?.displayName &&
+          a.isArchived === next[i]?.isArchived
+      ))
+  )
+}
+
 export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) {
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
@@ -49,43 +69,56 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
     showRecentSessionCards,
     setShowRecentSessionCards
   } = scope
+  const isRecentCardsOpen = Boolean(showRecentSessionCards || showHeaderMoreActions)
   const [jumpingRecentCardKey, setJumpingRecentCardKey] = useState<string | null>(null)
   const jumpLockRef = useRef(false)
   const recentCardsPollInFlightRef = useRef(false)
-  const [, setRecentCardsRevision] = useState(0)
-  useEffect(() => subscribeRecentSessionCards(() => setRecentCardsRevision((rev) => rev + 1)), [])
-  useEffect(
-    () => subscribeCatalogWorktreesForTabStatus(() => setRecentCardsRevision((rev) => rev + 1)),
-    []
-  )
+  const [recentCardsRevision, setRecentCardsRevision] = useState(0)
+  useEffect(() => {
+    if (!isRecentCardsOpen) {
+      return
+    }
+    const bump = () => setRecentCardsRevision((rev) => rev + 1)
+    const unsubCards = subscribeRecentSessionCards(bump)
+    const unsubCatalog = subscribeCatalogWorktreesForTabStatus(bump)
+    return () => {
+      unsubCards()
+      unsubCatalog()
+    }
+  }, [isRecentCardsOpen])
   const [recentCardsWorktrees, setRecentCardsWorktrees] = useState<readonly RecentCardWorktree[]>(
     () => recentCardWorktrees(getCachedWorktrees(hostId) ?? undefined)
   )
   useEffect(() => {
-    if (!client || connState !== 'connected') {
+    if (!isRecentCardsOpen || !client || connState !== 'connected') {
       return
     }
     let cancelled = false
     const pollRecentCards = async () => {
       let catalogRows: readonly unknown[] | undefined = getCachedWorktrees(hostId) ?? undefined
-      recentCardWorktrees(catalogRows)
+      const cachedNext = recentCardWorktrees(catalogRows)
+      if (cachedNext.length > 0) {
+        setRecentCardsWorktrees((prev) =>
+          sameRecentCardWorktrees(prev, cachedNext) ? prev : cachedNext
+        )
+      }
       try {
         const reply = await worktreeCatalogRead.request(client, { limit: 10000 })
         const catalog = !cancelled ? worktreeCatalogRead.interpret(reply) : null
         if (catalog?.accepted && Array.isArray(catalog.value.worktrees)) {
           catalogRows = catalog.value.worktrees
-          if (hostId) {
+          const next = recentCardWorktrees(catalogRows)
+          if (hostId && !sameRecentCardWorktrees(cachedNext, next)) {
             setCachedWorktrees(hostId, catalog.value.worktrees, { proven: true })
           }
-          const next = recentCardWorktrees(catalogRows)
           if (next.length > 0) {
-            setRecentCardsWorktrees(next)
+            setRecentCardsWorktrees((prev) => (sameRecentCardWorktrees(prev, next) ? prev : next))
           }
         }
       } catch {
         // A refused catalog leaves the cached rows in place.
       }
-      if (!hostId || cancelled || (!showHeaderMoreActions && !showRecentSessionCards)) {
+      if (!hostId || cancelled) {
         return
       }
       const ids = Array.from(
@@ -120,7 +153,7 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
       )
     }
     const tick = async () => {
-      if (recentCardsPollInFlightRef.current) {
+      if (recentCardsPollInFlightRef.current || cancelled) {
         return
       }
       recentCardsPollInFlightRef.current = true
@@ -130,10 +163,13 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
         recentCardsPollInFlightRef.current = false
       }
     }
-    void tick()
-    const timer = setInterval(() => void tick(), 2000)
+    const settleTimer = setTimeout(() => {
+      void tick()
+    }, BOTTOM_DRAWER_SHOW_DURATION_MS)
+    const timer = setInterval(() => void tick(), POLL_INTERVAL_MS)
     return () => {
       cancelled = true
+      clearTimeout(settleTimer)
       clearInterval(timer)
     }
   }, [
@@ -141,18 +177,33 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
     client,
     connState,
     hostId,
+    isRecentCardsOpen,
     sessionTabs.length,
-    showHeaderMoreActions,
-    showRecentSessionCards,
     worktreeId
   ])
-  const recentSessionCards = getVisibleRecentSessionCards({
+  const recentSessionCards = useMemo(() => {
+    if (!isRecentCardsOpen) {
+      return EMPTY_RECENT_SESSION_CARDS
+    }
+    void recentCardsRevision
+    const cached = recentCardWorktrees(getCachedWorktrees(hostId) ?? undefined)
+    const liveWorktrees = cached.length > 0 ? cached : recentCardsWorktrees
+    return getVisibleRecentSessionCards({
+      hostId,
+      currentWorktreeId: worktreeId,
+      currentTabId: activeSessionTabId,
+      liveWorktrees,
+      currentWorktreeTabs: sessionTabs
+    })
+  }, [
+    activeSessionTabId,
     hostId,
-    currentWorktreeId: worktreeId,
-    currentTabId: activeSessionTabId,
-    liveWorktrees: recentCardsWorktrees,
-    currentWorktreeTabs: sessionTabs
-  })
+    isRecentCardsOpen,
+    recentCardsRevision,
+    recentCardsWorktrees,
+    sessionTabs,
+    worktreeId
+  ])
   const closeRecentCardSheets = () => {
     setShowRecentSessionCards(false)
     setShowHeaderMoreActions(false)
