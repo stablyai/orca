@@ -17,6 +17,7 @@ import {
 } from '../../../shared/worktree/visibility-sources'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
+import { writeLocalIssueRepositoryOverride } from '../../github/sdlc-issue-repository'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -39,6 +40,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'badgeColor'
             | 'repoIcon'
             | 'upstream'
+            | 'issueRepository'
             | 'hookSettings'
             | 'editorFormatter'
             | 'worktreeBaseRef'
@@ -257,6 +259,12 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
         if ('worktreeBasePath' in updates) {
           void prepareLocalWorktreeRootForRepo(store, updated)
           invalidateAuthorizedRootsCache()
+        }
+        if ('issueRepository' in updates && getRepoExecutionHostId(updated) === 'local') {
+          await writeLocalIssueRepositoryOverride(
+            updated.path,
+            updated.issueRepository ?? null
+          ).catch(() => {})
         }
         notifyReposChanged(mainWindow)
       }

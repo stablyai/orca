@@ -3604,7 +3604,6 @@
       "pages": "GitHub 페이지",
       "pullRequests": "PR",
       "queryingSource": "조회 대상: {{source}}",
-      "repoDescription": "조회할 리포지토리를 선택하세요.",
       "repos": "리포지토리",
       "upstream": "업스트림"
     },

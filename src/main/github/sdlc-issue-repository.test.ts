@@ -3,8 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  readLocalIssueRepositoryOverride,
+  readProjectedLocalIssueRepositorySync,
   resolveNestedPrRepositoryFallback,
-  resolveSdlcOrNestedIssueRepository
+  resolveSdlcOrNestedIssueRepository,
+  writeLocalIssueRepositoryOverride
 } from './sdlc-issue-repository'
 import type { GitHubApiRepository } from './github-api-repository'
 
@@ -117,6 +120,57 @@ describe('sdlc-issue-repository', () => {
     expect(issueRepo).toEqual({
       owner: 'acme',
       repo: 'nested-app',
+      host: 'github.com'
+    })
+  })
+
+  it('persists and prioritizes explicit .orca/project.json issueRepository overrides and clears cleanly', async () => {
+    const root = await createTempDir()
+    await mkdir(join(root, '.w0m'), { recursive: true })
+    await writeFile(
+      join(root, '.w0m', 'sdlc.json'),
+      JSON.stringify({
+        vcs: { provider: 'github', repo: 'webomage/wom7board' }
+      })
+    )
+
+    expect(readProjectedLocalIssueRepositorySync(root)).toEqual({
+      owner: 'webomage',
+      repo: 'wom7board',
+      host: 'github.com'
+    })
+
+    await writeLocalIssueRepositoryOverride(root, {
+      owner: 'sxope',
+      repo: 'sxope-portal'
+    })
+    expect(await readLocalIssueRepositoryOverride(root)).toEqual({
+      owner: 'sxope',
+      repo: 'sxope-portal',
+      host: 'github.com'
+    })
+    expect(readProjectedLocalIssueRepositorySync(root)).toEqual({
+      owner: 'sxope',
+      repo: 'sxope-portal',
+      host: 'github.com'
+    })
+
+    const resolved = await resolveSdlcOrNestedIssueRepository({
+      repoPath: root,
+      origin: { owner: 'webomage', repo: 'w0m', host: 'github.com' },
+      probeRemote: async () => null
+    })
+    expect(resolved).toEqual({
+      owner: 'sxope',
+      repo: 'sxope-portal',
+      host: 'github.com'
+    })
+
+    await writeLocalIssueRepositoryOverride(root, null)
+    expect(await readLocalIssueRepositoryOverride(root)).toBeNull()
+    expect(readProjectedLocalIssueRepositorySync(root)).toEqual({
+      owner: 'webomage',
+      repo: 'wom7board',
       host: 'github.com'
     })
   })

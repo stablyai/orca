@@ -3600,7 +3600,6 @@
       "pages": "GitHub Sayfaları",
       "pullRequests": "Pull Request'ler",
       "queryingSource": "{{source}} sorgulanıyor",
-      "repoDescription": "Sorgulanacak repository'leri seçin.",
       "repos": "Repository'ler",
       "upstream": "Upstream"
     },

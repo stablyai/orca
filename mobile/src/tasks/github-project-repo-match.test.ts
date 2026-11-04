@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { findRepoForGitHubProjectRepository } from './github-project-repo-match'
+import { isHostedTaskRepo } from './hosted-repo-selection'
 
 const repos = [
   { id: 'repo-1', path: '/Users/me/orca', displayName: 'orca' },
@@ -80,5 +81,36 @@ describe('GitHub project repo matching', () => {
         'github.acme-corp.com'
       )
     ).toBeNull()
+  })
+})
+
+describe('SDLC and explicit issueRepository Project board matching', () => {
+  it('matches both origin PR rows and mapped/SDLC issueRepository rows to the same workspace repo', () => {
+    const w0mRepo = {
+      id: 'w0m-id',
+      path: '/home/me/Projects/!self/w0m',
+      displayName: 'w0m',
+      issueRepository: { owner: 'webomage', repo: 'wom7board', host: 'github.com' }
+    }
+    const slugs = {
+      'w0m-id': {
+        path: '/home/me/Projects/!self/w0m',
+        repository: { owner: 'webomage', repo: 'w0m', host: 'github.com' },
+        issueRepository: { owner: 'webomage', repo: 'wom7board', host: 'github.com' }
+      }
+    }
+    expect(findRepoForGitHubProjectRepository('webomage/wom7board', [w0mRepo], slugs)).toBe(w0mRepo)
+    expect(findRepoForGitHubProjectRepository('webomage/w0m', [w0mRepo], slugs)).toBe(w0mRepo)
+  })
+
+  it('promotes folder repos into hosted task repos once issueRepository is mapped', () => {
+    expect(isHostedTaskRepo({ id: 'f1', kind: 'folder' })).toBe(false)
+    expect(
+      isHostedTaskRepo({
+        id: 'f1',
+        kind: 'folder',
+        issueRepository: { owner: 'sxope', repo: 'portal', host: 'github.com' }
+      })
+    ).toBe(true)
   })
 })

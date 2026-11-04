@@ -30,6 +30,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     folderUpgradeGitRootPath,
     repoIcon: rawRepoIcon,
     upstream: rawUpstream,
+    issueRepository: rawIssueRepository,
     gitRemoteIdentity: rawGitRemoteIdentity,
     sourceControlAi: rawSourceControlAi,
     projectHostSetupMethod: rawProjectHostSetupMethod,
@@ -43,6 +44,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
   } = repo
   const repoIcon = sanitizeRepoIcon(rawRepoIcon)
   const upstream = sanitizeRepoUpstream(rawUpstream)
+  const issueRepository = sanitizeRepoUpstream(rawIssueRepository)
   const gitRemoteIdentity = sanitizeGitRemoteIdentity(rawGitRemoteIdentity)
   const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
   const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
@@ -68,6 +70,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
       : {}),
     ...(repoIcon !== undefined ? { repoIcon } : {}),
     ...(upstream !== undefined ? { upstream } : {}),
+    ...(issueRepository ? { issueRepository } : {}),
     ...(gitRemoteIdentity !== undefined ? { gitRemoteIdentity } : {}),
     ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
     ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),

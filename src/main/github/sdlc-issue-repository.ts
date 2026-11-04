@@ -1,8 +1,20 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { GitHubApiRepository } from './github-api-repository'
-import { isValidGitHubApiRepository } from './github-api-repository-validation'
 import { shouldSkipDirectory } from '../project-groups/nested-repo-scan-rules'
+import {
+  parseGitHubOwnerRepoSlug,
+  readLocalIssueRepositoryOverride,
+  readProjectedLocalIssueRepositorySync,
+  writeLocalIssueRepositoryOverride
+} from './local-issue-repository-override'
+
+export {
+  parseGitHubOwnerRepoSlug,
+  readLocalIssueRepositoryOverride,
+  readProjectedLocalIssueRepositorySync,
+  writeLocalIssueRepositoryOverride
+}
 
 export type SdlcWorkspaceConfig = {
   vcsRepo: GitHubApiRepository | null
@@ -10,24 +22,8 @@ export type SdlcWorkspaceConfig = {
   repoSubpaths: string[]
 }
 
-export function parseGitHubOwnerRepoSlug(raw: unknown): GitHubApiRepository | null {
-  if (typeof raw !== 'string') {
-    return null
-  }
-  const trimmed = raw
-    .trim()
-    .replace(/^\/+|\/+$/g, '')
-    .replace(/\.git$/i, '')
-  const parts = trimmed.split('/')
-  if (parts.length !== 2) {
-    return null
-  }
-  const candidate: GitHubApiRepository = {
-    owner: parts[0]?.trim() ?? '',
-    repo: parts[1]?.trim() ?? '',
-    host: 'github.com'
-  }
-  return isValidGitHubApiRepository(candidate) ? candidate : null
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 export function isGovernanceWrapperRepository(repo: GitHubApiRepository | null): boolean {
@@ -39,25 +35,20 @@ export async function readSdlcWorkspaceConfig(
 ): Promise<SdlcWorkspaceConfig | null> {
   try {
     const raw = await readFile(join(repoPath, '.w0m', 'sdlc.json'), 'utf8')
-    const parsed = JSON.parse(raw) as {
-      canonical_repo?: unknown
-      repos?: Record<string, unknown>
-      vcs?: {
-        provider?: unknown
-        repo?: unknown
-      }
+    const parsed: unknown = JSON.parse(raw)
+    if (!isObjectRecord(parsed)) {
+      return null
     }
+    const vcs = isObjectRecord(parsed.vcs) ? parsed.vcs : null
     const provider =
-      typeof parsed?.vcs?.provider === 'string'
-        ? parsed.vcs.provider.trim().toLowerCase()
-        : 'github'
-    const vcsRepo = provider === 'github' ? parseGitHubOwnerRepoSlug(parsed?.vcs?.repo) : null
+      typeof vcs?.provider === 'string' ? vcs.provider.trim().toLowerCase() : 'github'
+    const vcsRepo = provider === 'github' ? parseGitHubOwnerRepoSlug(vcs?.repo) : null
     const canonicalRepoSubpath =
-      typeof parsed?.canonical_repo === 'string' && parsed.canonical_repo.trim().length > 0
+      typeof parsed.canonical_repo === 'string' && parsed.canonical_repo.trim().length > 0
         ? parsed.canonical_repo.trim()
         : null
     const repoSubpaths: string[] = []
-    if (parsed?.repos && typeof parsed.repos === 'object') {
+    if (isObjectRecord(parsed.repos)) {
       for (const value of Object.values(parsed.repos)) {
         if (typeof value === 'string' && value.trim().length > 0) {
           repoSubpaths.push(value.trim())
@@ -139,6 +130,11 @@ export async function resolveSdlcOrNestedIssueRepository(args: {
 }): Promise<GitHubApiRepository | null> {
   if (args.connectionId) {
     return args.origin
+  }
+
+  const localOverride = await readLocalIssueRepositoryOverride(args.repoPath)
+  if (localOverride) {
+    return localOverride
   }
 
   const sdlcConfig = await readSdlcWorkspaceConfig(args.repoPath)

@@ -20,6 +20,7 @@ import {
   getOriginGitHubApiRepository
 } from './github-api-repository-remote-probe'
 import {
+  readLocalIssueRepositoryOverride,
   resolveNestedPrRepositoryFallback,
   resolveSdlcOrNestedIssueRepository
 } from './sdlc-issue-repository'
@@ -51,6 +52,12 @@ export async function getIssueGitHubApiRepository(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubApiRepository | null> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    if (!connectionId) {
+      const localOverride = await readLocalIssueRepositoryOverride(repoPath)
+      if (localOverride) {
+        return localOverride
+      }
+    }
     const originPromise = getGitHubApiRepositoryForRemote(
       repoPath,
       'origin',
@@ -192,6 +199,12 @@ export async function resolveIssueGitHubApiRepositorySource(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ResolvedGitHubApiRepositorySource> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    if (!connectionId) {
+      const localOverride = await readLocalIssueRepositoryOverride(repoPath)
+      if (localOverride) {
+        return { source: localOverride, fellBack: false }
+      }
+    }
     if (preference === 'upstream') {
       const upstream = await getGitHubApiRepositoryForRemote(
         repoPath,
@@ -211,13 +224,32 @@ export async function resolveIssueGitHubApiRepositorySource(
       return { source: origin, fellBack: origin !== null }
     }
     if (preference === 'origin') {
+      const origin = await getGitHubApiRepositoryForRemote(
+        repoPath,
+        'origin',
+        connectionId,
+        localGitOptions
+      )
       return {
-        source: await getGitHubApiRepositoryForRemote(
+        source: await resolveSdlcOrNestedIssueRepository({
           repoPath,
-          'origin',
+          origin,
           connectionId,
-          localGitOptions
-        ),
+          probeRemote: async (targetPath, remoteName) => {
+            if (
+              remoteName === 'upstream' &&
+              !(await shouldProbeGitRemote(targetPath, 'upstream', connectionId, localGitOptions))
+            ) {
+              return null
+            }
+            return getGitHubApiRepositoryForRemote(
+              targetPath,
+              remoteName,
+              connectionId,
+              localGitOptions
+            )
+          }
+        }),
         fellBack: false
       }
     }
