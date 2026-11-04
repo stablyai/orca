@@ -11,7 +11,7 @@ import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotke
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapshot'
 import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
 

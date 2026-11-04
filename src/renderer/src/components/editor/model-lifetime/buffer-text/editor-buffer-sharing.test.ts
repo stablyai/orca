@@ -7,7 +7,7 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import {
   getOpenFilesForExternalFileChange,
   isAutosaveSuspendedForFile,

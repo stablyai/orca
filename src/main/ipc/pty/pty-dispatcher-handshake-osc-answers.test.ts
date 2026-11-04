@@ -4,7 +4,7 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './register-handlers'
 import { getPtyRendererDeliveryDebugSnapshot } from './delivery/debug'
 import { _resetColorQueryReplyColorsForTest } from './provider/registry'
-import { _resetPtyOwnerHostColorsForTest } from '../../../shared/pty-owner-color-query-colors'
+import { _resetPtyOwnerHostColorsForTest } from '../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import { _resetTerminalViewAttributesForTest } from '../../runtime/terminal-view-attribute-store'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))

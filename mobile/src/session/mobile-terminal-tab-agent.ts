@@ -1,6 +1,6 @@
 import { stripLeadingAgentTitleDecorationOrEmpty } from '../../../src/shared/agent-status/title/agent-title-decoration'
 import { isClaudeManagementTitle } from '../../../src/shared/agent-status/title/agent-title-core'
-import { isShellProcess } from '../../../src/shared/shell-process-detection'
+import { isShellProcess } from '../../../src/shared/agent-status/process/shell-process-detection'
 import { agentTypeToIconAgent } from '../../../src/shared/agent-status/presentation/agent-type-icon-agent'
 import { resolveTabAgentFromSignalSnapshot } from '../../../src/shared/tab-agent-from-signals'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'

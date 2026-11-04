@@ -8,7 +8,7 @@ import { cacheRelayLegacyAgentStatus } from '../../agent-status/transport/agent-
 import { markClaudeLeadTurnInterrupted } from '../providers/claude-roster-state'
 import { ClaudeOwedNotificationExpiryTimers } from '../providers/claude-owed-notification-expiry-timers'
 import { CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS } from '../providers/claude-owed-task-notifications'
-import { makePaneKey } from '../../stable-pane-id'
+import { makePaneKey } from '../../workspace-layout/stable-pane-id'
 
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 

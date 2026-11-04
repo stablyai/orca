@@ -8,7 +8,7 @@ import type {
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { NotesSendAgentTarget } from '@/lib/notes-send-agent-targets'
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
 

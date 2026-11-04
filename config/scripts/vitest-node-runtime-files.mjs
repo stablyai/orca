@@ -156,7 +156,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/browser/guest-lifecycle/popups/browser-popup-native-compatibility.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/browser-popup-background-compatibility.electron.test.ts',
   'src/main/ai-vault/scanners/devin/session-scanner-devin-db.test.ts',
-  'src/shared/workspace-session-salvage.test.ts',
+  'src/shared/workspace-session/workspace-session-salvage.test.ts',
   'src/main/git/repo-detection.test.ts',
   'src/renderer/src/components/browser-pane/annotate/browser-grab-toast-owner-cleanup.test.tsx',
   'src/main/window/native-chat-paste-files.test.ts',

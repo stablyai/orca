@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 
 /** Remote session IDs live outside the layout model and must follow the remaining pane after close. */

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildResourcePtyRows, groupResourcePtyRows } from './resource-pty-view-model'
-import type { PtyListedSession } from '../../../../shared/pty-listed-session'
+import type { PtyListedSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   makeFolderWorkspace,
@@ -9,7 +9,7 @@ import {
   makeWorktree
 } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { makeProjectGroup } from '../sidebar/folder-workspace-composer-submit-fixtures'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 const leaf = '11111111-1111-4111-8111-111111111111'
 const session = (id: string, overrides: Partial<PtyListedSession> = {}): PtyListedSession => ({

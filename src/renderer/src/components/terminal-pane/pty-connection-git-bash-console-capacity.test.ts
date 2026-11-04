@@ -29,7 +29,7 @@ import {
   type PtyStreamPayload,
   type PtyExitPayload
 } from './pty-transport-test-harness'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { ConnectPanePtySession } from './pty-connection/connect-pane-pty-session'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import type { PtyTransport } from './pty-transport-types'

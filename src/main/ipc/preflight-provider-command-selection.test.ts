@@ -14,7 +14,7 @@ import {
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand
 } from './preflight-command-exec'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 vi.mock('../../shared/system-cli-install-dirs', () => ({
   getSystemCliInstallDirectories: (_platform: NodeJS.Platform, home: string) => [

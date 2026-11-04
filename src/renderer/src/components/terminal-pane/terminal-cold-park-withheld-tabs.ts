@@ -1,5 +1,5 @@
 /** Keep panes mounted when watchers cannot cover them or flip damping pins them; return pin expiry because settled damping removes the other wakeups. */
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   getParkVerdictUnparkPinUntilMs,
   type ParkVerdictFlipRecord

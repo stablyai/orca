@@ -9,7 +9,7 @@ import {
   orcadBunRuntimeFilename
 } from '../../../shared/orcad-artifacts'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
 // Assign the long slot path once to reduce command size on the wire.

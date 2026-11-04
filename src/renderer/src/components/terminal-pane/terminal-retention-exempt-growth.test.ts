@@ -1,6 +1,6 @@
 // Model capability outage → daemon recovery → growing hidden inventory; permanently settled unknowns would retain every tab despite the force-park budget.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
+import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT,
   isEvictionExemptTerminalPty,

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { layoutOwnerPaneGestures } from './terminal-pane-layout-owner-gestures'
 import { withPaneSplitRatios } from '../../../../shared/workspace-layout/split-ratio-intents'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'

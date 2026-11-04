@@ -1,7 +1,7 @@
 // Shared workspaces mirror multiple runtimes; each frame can retire only its own rows (#31983).
 
 import type { AppState } from '@/store/types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../shared/tab-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'

@@ -76,7 +76,7 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
-import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-git-credential-guard'
+import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/shell/launch/terminal-git-credential-guard'
 import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
 
 describe('createPtySubprocess', () => {

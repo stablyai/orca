@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { WORKTREE_ID_SEPARATOR, type ParsedWorktreeId } from '../../shared/worktree/id'
+import '../../shared/worktree/id'
+import type { ParsedWorktreeId } from '../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import type * as WorktreeIdModule from '../../shared/worktree/id'
 
 const counter = vi.hoisted(() => ({ splitCalls: 0 }))

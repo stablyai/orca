@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { parseWorkspaceSession } from '../../../../../shared/workspace-session-schema'
+import { parseWorkspaceSession } from '../../../../../shared/workspace-session/workspace-session-schema'
 import { buildPaneActivityEvents } from '@/components/activity/activity-pane-events'
 import { makeTab, makeWorktree } from '@/components/activity/ActivityPrototypePage-test-fixtures'
 import type { AppState } from '../../types'

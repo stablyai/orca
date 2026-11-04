@@ -1,4 +1,4 @@
-import { parseTerminalAttachmentLaunchResult } from '../../../shared/terminal-attachment-launch-result'
+import { parseTerminalAttachmentLaunchResult } from '../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { parseTerminalStreamEndVerdict } from '../../../shared/terminal/stream/terminal-stream-end-verdict'
