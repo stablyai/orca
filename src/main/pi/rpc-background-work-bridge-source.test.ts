@@ -13,19 +13,31 @@ type Registry = {
   register: (provider: Record<string, unknown>) => () => void
 }
 
+function isRegistry(value: unknown): value is Registry {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'register' in value &&
+    typeof value.register === 'function'
+  )
+}
+
 /** One Pi process: a realm whose globalThis outlives extension reloads, as Pi's does. */
 function piProcess() {
   const output = ts.transpileModule(getPiBackgroundWorkBridgeSource(), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
   }).outputText
-  const realm = createContext({ setInterval, clearInterval, exports: {} as { default?: unknown } })
+  const exports: { default?: unknown } = {}
+  const realm = createContext({ setInterval, clearInterval, exports })
   const reports: (string | undefined)[] = []
   const loadBridge = () => {
     runInContext(`(function () {\n${output}\n})()`, realm)
     const handlers = new Map<string, Handler>()
-    ;(realm.exports.default as (pi: unknown) => void)({
-      on: (name: string, handler: Handler) => handlers.set(name, handler)
-    })
+    const factory = exports.default
+    if (typeof factory !== 'function') {
+      throw new Error('the bridge has no default export')
+    }
+    factory({ on: (name: string, handler: Handler) => handlers.set(name, handler) })
     return handlers
   }
   const ctx = (sessionId: string) => ({
@@ -42,10 +54,16 @@ function piProcess() {
     }
   })
   // pi-subagents 0.84.0 looks the registry up in its own session_start (pi-web-session-liveness.js).
-  const registry = () =>
-    runInContext(`globalThis[Symbol.for(${JSON.stringify(REGISTRY_KEY)})]`, realm) as
-      | Registry
-      | undefined
+  const registry = (): Registry => {
+    const value: unknown = runInContext(
+      `globalThis[Symbol.for(${JSON.stringify(REGISTRY_KEY)})]`,
+      realm
+    )
+    if (!isRegistry(value)) {
+      throw new Error('the bridge installed no registry')
+    }
+    return value
+  }
   return { loadBridge, ctx, reports, registry }
 }
 
@@ -62,7 +80,7 @@ describe('the Pi background-work bridge', () => {
     const pi = piProcess()
     const bridge = pi.loadBridge()
     let running = true
-    const release = pi.registry()!.register({
+    const release = pi.registry().register({
       name: 'pi-subagents',
       sessionId: 'a',
       isActive: () => running
@@ -82,9 +100,9 @@ describe('the Pi background-work bridge', () => {
   it('keeps a throwing provider active and ignores another session’s work', () => {
     const pi = piProcess()
     const bridge = pi.loadBridge()
-    pi.registry()!.register({ name: 'other', sessionId: 'b', isActive: () => true })
+    pi.registry().register({ name: 'other', sessionId: 'b', isActive: () => true })
     bridge.get('session_start')!({}, pi.ctx('a'))
-    pi.registry()!.register({
+    pi.registry().register({
       name: 'broken',
       sessionId: 'a',
       isActive: () => {
@@ -98,7 +116,7 @@ describe('the Pi background-work bridge', () => {
   it('hands the answer to a reloaded bridge, which reuses the registry its providers hold', () => {
     const pi = piProcess()
     const first = pi.loadBridge()
-    pi.registry()!.register({ name: 'pi-subagents', sessionId: 'a', isActive: () => true })
+    pi.registry().register({ name: 'pi-subagents', sessionId: 'a', isActive: () => true })
     first.get('session_start')!({}, pi.ctx('a'))
     first.get('session_shutdown')!({}, pi.ctx('a'))
     const second = pi.loadBridge()

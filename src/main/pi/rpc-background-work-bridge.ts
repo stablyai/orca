@@ -8,7 +8,10 @@ import {
 } from './rpc-background-work-bridge-source'
 
 /** Write the bridge once per content change; null leaves the chat without idle protection, never unlaunched. */
-export async function ensurePiBackgroundWorkBridge(directory?: string): Promise<string | null> {
+export async function ensurePiBackgroundWorkBridge(
+  onFailed: (error: unknown) => void,
+  directory?: string
+): Promise<string | null> {
   const source = getPiBackgroundWorkBridgeSource()
   try {
     directory ??= join(getAppEnvironment().getPath('userData'), 'pi-native-chat')
@@ -26,7 +29,8 @@ export async function ensurePiBackgroundWorkBridge(directory?: string): Promise<
       }
     }
     return path
-  } catch {
+  } catch (error) {
+    onFailed(error)
     return null
   }
 }

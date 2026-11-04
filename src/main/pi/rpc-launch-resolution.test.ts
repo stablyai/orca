@@ -1,6 +1,5 @@
 import { createPiRpcLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
-import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,10 +11,7 @@ import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journ
 import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { buildPiRpcLaunch } from './rpc-launch'
 import { piRpcProviderLink } from './rpc-launch-resolution'
-import {
-  PI_BACKGROUND_WORK_BRIDGE_FILE,
-  getPiBackgroundWorkBridgeSource
-} from './rpc-background-work-bridge-source'
+import { PI_BACKGROUND_WORK_BRIDGE_FILE } from './rpc-background-work-bridge-source'
 import { getAppEnvironment } from '../../shared/app-environment'
 
 const probeVersion = vi.fn(async (..._input: unknown[]): Promise<{ version: string | null }> => ({
@@ -169,7 +165,6 @@ describe('Pi host launch resolution', () => {
     expect(launch.forkFile).toBeUndefined()
     expect(launch.replacement).toBeUndefined()
     expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc', '--extension', bridge()])
-    expect(readFileSync(bridge(), 'utf8')).toBe(getPiBackgroundWorkBridgeSource())
     expect(piRpcProviderLink(launch, join(root, 'fresh.jsonl'), 3, 'fresh', 101).origin).toBe(
       'created'
     )

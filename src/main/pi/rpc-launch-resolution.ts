@@ -33,6 +33,7 @@ import {
   type PiRpcLaunchOptions
 } from './rpc-launch'
 import { ensurePiBackgroundWorkBridge } from './rpc-background-work-bridge'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
@@ -45,6 +46,7 @@ export type PiRpcLaunchPartDeps = {
   probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
   ensureBackgroundWorkBridge?: () => Promise<string | null>
+  logger?: StructuredAgentSessionLogger
 }
 
 // RPC turns require agent_settled (Pi 0.84+); older versions remain terminal-only.
@@ -206,7 +208,16 @@ export function piRpcLaunchPart(
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
-    const bridge = await (deps.ensureBackgroundWorkBridge ?? ensurePiBackgroundWorkBridge)()
+    const bridge = await (
+      deps.ensureBackgroundWorkBridge ??
+      (() =>
+        ensurePiBackgroundWorkBridge((error) =>
+          deps.logger?.warn('Pi chat starts without its background-work bridge', {
+            scope: 'pi-background-work',
+            error
+          })
+        ))
+    )()
     return {
       launch: {
         command,

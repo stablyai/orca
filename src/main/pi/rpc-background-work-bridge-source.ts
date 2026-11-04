@@ -20,7 +20,9 @@ export function getPiBackgroundWorkBridgeSource(): string {
     '  const registry = {',
     '    version: 1,',
     '    register(provider) {',
-    "      if (!provider || typeof provider !== 'object' || typeof provider.isActive !== 'function' || typeof provider.sessionId !== 'string' || !provider.sessionId) throw new Error('Session liveness provider is invalid')",
+    // Same v1 validation as the reference host, so a malformed registration cannot pin a session.
+    "      const text = (value) => typeof value === 'string' && value.trim().length > 0",
+    "      if (!provider || typeof provider !== 'object' || !text(provider.name) || !text(provider.sessionId) || (provider.sessionFile !== undefined && !text(provider.sessionFile)) || typeof provider.isActive !== 'function') throw new Error('Session liveness provider is invalid')",
     '      const key = Symbol(String(provider.name))',
     '      providers.set(key, provider)',
     '      let released = false',
@@ -68,10 +70,8 @@ export function getPiBackgroundWorkBridgeSource(): string {
     '        if (next === reported) return',
     '        ctx.ui.setStatus(STATUS_KEY, next)',
     '        reported = next',
-    '      } catch {',
-    // A replaced session's context throws; its successor reports from its own session_start.
-    '        stop()',
-    '      }',
+    // Keep ticking after a failure so the next answer is re-derived; shutdown retires the timer.
+    '      } catch {}',
     '    }',
     '    tick()',
     `    timer = setInterval(tick, ${REPORT_INTERVAL_MS})`,
