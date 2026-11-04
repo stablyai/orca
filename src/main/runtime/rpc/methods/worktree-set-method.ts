@@ -63,9 +63,10 @@ export const WORKTREE_SET_METHOD = defineMethod({
         : {}),
       mobileDiffReview: params.mobileDiffReview,
       lineage:
-        params.parentWorktree || params.noParent === true
+        params.parentWorktree || params.crossStoreParent || params.noParent === true
           ? {
               parentWorktree: params.parentWorktree,
+              ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
               noParent: params.noParent === true
             }
           : undefined

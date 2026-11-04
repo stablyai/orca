@@ -18,6 +18,7 @@ import {
   resolveRuntimeGitLabWorktreeBase,
   type RuntimeGitLabWorktreeBaseArgs
 } from '../runtime-gitlab-worktree-base'
+import type { CrossStoreParentRef } from '../../../shared/worktree/lineage-types'
 import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
 import {
   adoptRuntimeProvisionedRoot,
@@ -122,6 +123,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
       pushTarget?: GitPushTarget | null
       lineage?: {
         parentWorktree?: string
+        crossStoreParent?: CrossStoreParentRef
         noParent?: boolean
       }
     }
@@ -136,6 +138,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
       ports: {
         resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
+        readStoreInstallationId: () => this.worktreeLineage.readStoreInstallationId(),
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
         invalidateScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
         notifyChanged: (repoId) => this.notifyWorktreesChanged(repoId),

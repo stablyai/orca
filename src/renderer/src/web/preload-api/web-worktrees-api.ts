@@ -248,6 +248,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       await callRuntimeResult<{
         lineage: Record<string, WorktreeLineage>
         workspaceLineage?: Record<string, WorkspaceLineage>
+        crossStoreLineage?: Record<string, unknown>
       }>('worktree.lineageList'),
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
       invalidateRuntimeWorktreeCaches()

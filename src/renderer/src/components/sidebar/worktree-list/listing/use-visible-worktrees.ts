@@ -1,3 +1,4 @@
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
@@ -82,6 +83,7 @@ export function useVisibleSidebarWorktrees(args: {
     [hideWorkspacesFromOtherDevices]
   )
   const pairedDeviceIdsByEnvironment = useAppStore(selectPairedDevices)
+  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
 
   const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
   const tabsByWorktree = useAppStore((s) =>
@@ -143,6 +145,7 @@ export function useVisibleSidebarWorktrees(args: {
       visibleWorkspaceHostIds,
       defaultHostId,
       worktreeLineageById,
+      lineageParentIdentities,
       preserveLineageParentOrder: sortBy === 'manual',
       // Both sorts rank by host identity (use-sort-order.ts).
       sortedByHostIdentity: true,
@@ -172,6 +175,7 @@ export function useVisibleSidebarWorktrees(args: {
     sortedIds,
     sortBy,
     worktreeLineageById,
+    lineageParentIdentities,
     worktreesByRepo,
     pairedDeviceIdsByEnvironment,
     worktreeIdsWithStructuredChat

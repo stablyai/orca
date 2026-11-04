@@ -14,7 +14,12 @@ import type {
   WorkspaceStatus,
   Worktree
 } from './types'
-import type { WorkspaceLineage, WorktreeLineage, WorktreeLineageWarning } from './lineage-types'
+import type {
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineage,
+  WorktreeLineage,
+  WorktreeLineageWarning
+} from './lineage-types'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
@@ -169,6 +174,8 @@ export type CreateWorktreeResult = {
   }
   lineage?: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
+  /** A parent in another Orca store; older hosts never write one. */
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   warnings?: WorktreeLineageWarning[]
   setup?: WorktreeSetupLaunch
   setupReceipt?: {

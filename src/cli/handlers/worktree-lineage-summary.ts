@@ -21,7 +21,7 @@ function getLineageSourceLabel(source: string): string {
 
 export function printLineageSummary(
   result: Pick<RuntimeWorktreeCreateResult, 'lineage' | 'workspaceLineage'> &
-    Partial<Pick<RuntimeWorktreeCreateResult, 'warnings'>>,
+    Partial<Pick<RuntimeWorktreeCreateResult, 'warnings' | 'crossStoreLineage'>>,
   json: boolean
 ): void {
   if (json) {
@@ -29,6 +29,13 @@ export function printLineageSummary(
   }
   for (const warning of result.warnings ?? []) {
     console.error(`warning: ${warning.message}`)
+  }
+  if (result.crossStoreLineage) {
+    const { parent, capture } = result.crossStoreLineage
+    console.error(
+      `parent: ${parent.workspaceKey} on another machine (${capture.confidence} from ${getLineageSourceLabel(capture.source)})`
+    )
+    return
   }
   if (result.workspaceLineage) {
     const { parentWorkspaceKey, capture } = result.workspaceLineage

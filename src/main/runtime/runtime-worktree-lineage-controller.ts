@@ -1,4 +1,8 @@
-import type { WorktreeLineage, WorkspaceLineage } from '../../shared/worktree/lineage-types'
+import type {
+  CrossStoreParentRef,
+  WorktreeLineage,
+  WorkspaceLineage
+} from '../../shared/worktree/lineage-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 
@@ -17,6 +21,9 @@ import {
 } from '../persistence/host-qualified-worktree-meta'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { getRepoOwnedWorktreeMeta } from '../workspaces/catalog/worktree-metadata-ownership'
+import { readStoreInstallationId } from './host-descriptor'
+import { assertParentInAnotherStore } from './cross-store-parent-store-check'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   RuntimeLineageError,
@@ -87,6 +94,9 @@ export class RuntimeWorktreeLineageController {
         }
       }
     })
+    if (resolution.kind === 'crossStore') {
+      await assertParentInAnotherStore(resolution.parent, () => this.readStoreInstallationId())
+    }
     const retained = enforceCreateLineageHostBoundary(resolution, childHostId)
     if (
       retained.kind === 'lineage' &&
@@ -96,6 +106,11 @@ export class RuntimeWorktreeLineageController {
       throw new RuntimeLineageError(LINEAGE_PARENT_AMBIGUOUS, formatAmbiguousCwdParentMessage())
     }
     return retained
+  }
+
+  /** This store's identity; the published descriptor reads the same file at the canonical path. */
+  async readStoreInstallationId(): Promise<string | undefined> {
+    return await readStoreInstallationId(null, getCanonicalUserDataPath())
   }
 
   async resolveParent(selector: string): Promise<ResolvedWorkspaceParent> {
@@ -131,6 +146,38 @@ export class RuntimeWorktreeLineageController {
     }
   }
 
+  /** The parent's own store names it for a child in another store. `reparent` is Set Parent:
+   * refused when the parent's chain already reaches another store, which could close a loop there. */
+  async resolveCrossStoreParentRef(
+    selector: string,
+    options: { reparent: boolean }
+  ): Promise<CrossStoreParentRef> {
+    const parent = await this.resolveParent(selector)
+    if (parent.type !== 'worktree') {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        "A folder workspace can't parent a workspace on another machine yet."
+      )
+    }
+    if (!parent.instanceId) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_MISSING',
+        'The parent workspace has no identity yet. Refresh it and try again.'
+      )
+    }
+    if (options.reparent) {
+      this.walkSavedParentChain(parent.worktree, parent.worktree)
+    }
+    const installationId = await this.readStoreInstallationId()
+    if (!installationId) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_MISSING',
+        "The parent's Orca install has no identity available, so it can't be linked from another machine."
+      )
+    }
+    return { installationId, workspaceKey: parent.workspaceKey, instanceId: parent.instanceId }
+  }
+
   validateParent(child: ResolvedWorktree, parent: ResolvedWorktree): void {
     if (child.id === parent.id) {
       throw new RuntimeLineageError('LINEAGE_PARENT_CYCLE', 'A worktree cannot parent itself.')
@@ -141,6 +188,12 @@ export class RuntimeWorktreeLineageController {
         'Parent worktree must be on the same execution host.'
       )
     }
+    this.walkSavedParentChain(child, parent)
+  }
+
+  /** Walks the parent's saved chain in this store: reaching the child is a cycle, reaching
+   * another store is refused, as that store's edges can't be checked from here. */
+  private walkSavedParentChain(child: ResolvedWorktree, parent: ResolvedWorktree): void {
     const store = this.deps.getStore()
     let readSavedInstanceId: ((id: string) => string | undefined) | undefined
     // Reparent invalidates the resolved cache; saved metadata must cover intermediate nodes or longer loops escape detection.
@@ -156,7 +209,7 @@ export class RuntimeWorktreeLineageController {
     let cursor: string | undefined = parent.id
     const visited = new Set<string>()
     while (cursor) {
-      if (cursor === child.id) {
+      if (cursor === child.id && child !== parent) {
         throw new RuntimeLineageError(
           'LINEAGE_PARENT_CYCLE',
           'Parent selector would create a lineage cycle.'
@@ -167,6 +220,13 @@ export class RuntimeWorktreeLineageController {
         break
       }
       visited.add(cursor)
+      const crossStore = store?.getCrossStoreWorkspaceLineage?.(worktreeWorkspaceKey(cursor))
+      if (crossStore && crossStore.childInstanceId === instanceIdOf(cursor)) {
+        throw new RuntimeLineageError(
+          'LINEAGE_PARENT_CONTEXT_CONFLICT',
+          "Can't move a workspace under a parent whose chain already reaches another machine. Clear that parent's parent first, or create the workspace from it instead."
+        )
+      }
       const lineage = store?.getWorktreeLineage?.(cursor)
       if (!lineage) {
         break
@@ -208,6 +268,8 @@ export class RuntimeWorktreeLineageController {
     for (const worktree of await this.deps.listResolvedWorktrees()) {
       if (
         store.getWorktreeLineage(worktree.id) ||
+        // An inferred parent must not replace an explicit one on another machine.
+        store.getCrossStoreWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id)) ||
         !worktree.instanceId ||
         isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)
       ) {

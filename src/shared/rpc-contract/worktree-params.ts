@@ -16,6 +16,7 @@ import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-a
 import { DiffCommentSchema, MobileDiffReviewSchema } from '../diff-comment-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachments/workspace-linked-item-source-context'
+import { CrossStoreParentRefSchema } from './cross-store-parent-params'
 
 export const OptionalExecutionHostId = z
   .string()
@@ -186,15 +187,25 @@ export const WorktreeSet = WorktreeSelector.extend({
   diffCommentsBase: z.array(DiffCommentSchema).optional().catch(undefined),
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
   parentWorktree: OptionalString,
+  /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
+  crossStoreParent: CrossStoreParentRefSchema.optional(),
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {
   assertLinkedWorkItemSourceContextMatch(params, ctx)
-  if (params.parentWorktree && params.noParent === true) {
+  if ((params.parentWorktree || params.crossStoreParent) && params.noParent === true) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'Choose either --parent-worktree or --no-parent, not both.'
     })
   }
+  if (params.parentWorktree && params.crossStoreParent) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Choose one parent.' })
+  }
+})
+
+/** Asked of the parent's own store; `reparent` adds the Set Parent loop check. */
+export const WorktreeCrossStoreParentRef = WorktreeSelector.extend({
+  reparent: OptionalBoolean
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({

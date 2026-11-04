@@ -19,16 +19,19 @@ import {
   wslMoveProjectRefForWorkspace
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
+import { assertParentInAnotherStore } from './cross-store-parent-store-check'
+import type { CrossStoreParentRef } from '../../shared/worktree/lineage-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
 type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
   pushTarget?: GitPushTarget | null
-  lineage?: { parentWorktree?: string; noParent?: boolean }
+  lineage?: { parentWorktree?: string; crossStoreParent?: CrossStoreParentRef; noParent?: boolean }
 }
 
 type Ports = {
   resolveWorktree: (selector: string) => Promise<ResolvedWorktree>
   validateParent: (worktree: ResolvedWorktree, parent: ResolvedWorktree) => void
+  readStoreInstallationId?: () => Promise<string | undefined>
   invalidateResolved: () => void
   invalidateScan: (repoId: string) => void
   notifyChanged: (repoId: string) => void
@@ -85,6 +88,34 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   }
   if (lineage?.noParent === true) {
     args.store.removeWorktreeLineage?.(target)
+  } else if (lineage?.crossStoreParent) {
+    await assertParentInAnotherStore(
+      lineage.crossStoreParent,
+      async () => await args.ports.readStoreInstallationId?.()
+    )
+    if (!worktree.instanceId || !args.store.setCrossStoreWorkspaceLineage) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_MISSING',
+        'Worktree instance identity or lineage storage was unavailable.'
+      )
+    }
+    const recorded = args.store.setCrossStoreWorkspaceLineage(
+      {
+        childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+        childInstanceId: worktree.instanceId,
+        parent: lineage.crossStoreParent,
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: Date.now()
+      },
+      target.hostId
+    )
+    if (!recorded) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        'A same-id workspace on another host owns this lineage.'
+      )
+    }
   } else if (lineage?.parentWorktree) {
     const parent = await args.ports.resolveWorktree(lineage.parentWorktree)
     args.ports.validateParent(worktree, parent)

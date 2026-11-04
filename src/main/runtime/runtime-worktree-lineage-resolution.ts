@@ -3,6 +3,8 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { WorkspaceKey } from '../../shared/workspace-scope'
 import type { WorktreeLineage, WorktreeLineageWarning } from '../../shared/worktree/lineage-types'
+import { crossStoreCliLineage } from './runtime-worktree-lineage-recording'
+import type { CrossStoreLineageResolution } from './runtime-worktree-lineage-recording'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 
@@ -33,6 +35,7 @@ export type WorktreeLineageResolution =
       coordinatorHandle?: string
       createdByTerminalHandle?: string
     }
+  | CrossStoreLineageResolution
   | { kind: 'none'; warnings: WorktreeLineageWarning[] }
 
 export type WorktreeLineageCandidate = {
@@ -97,17 +100,17 @@ export async function resolveRuntimeWorktreeCreateLineage(
   if (!input) {
     return { kind: 'none', warnings: [] }
   }
-  if (
-    (input.noParent === true && (input.parentWorkspace || input.parentWorktree)) ||
-    (input.parentWorkspace && input.parentWorktree)
-  ) {
+  const parents = [input.parentWorkspace, input.parentWorktree, input.crossStoreParent]
+  if (parents.filter(Boolean).length > (input.noParent === true ? 0 : 1)) {
     throw new RuntimeLineageError(
       'LINEAGE_PARENT_CONTEXT_CONFLICT',
       'Choose either one parent selector or --no-parent.'
     )
   }
-  if (input.noParent === true) {
-    return { kind: 'none', warnings: [] }
+  if (input.noParent === true || input.crossStoreParent) {
+    return input.crossStoreParent
+      ? crossStoreCliLineage(input.crossStoreParent)
+      : { kind: 'none', warnings: [] }
   }
   if (input.parentWorkspace) {
     try {

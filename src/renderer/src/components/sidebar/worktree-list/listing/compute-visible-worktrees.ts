@@ -6,6 +6,7 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../../../shared/execution-host'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import { selectVisibleSidebarWorktrees } from '../../../../../../shared/sidebar-list/visible-worktrees'
+import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import { buildDesktopWorkspaceRowFactReader } from './desktop-workspace-row-facts'
 import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
@@ -32,6 +33,8 @@ export type VisibleWorktreeOptions = {
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
   defaultHostId: ExecutionHostId
   worktreeLineageById: Record<string, WorktreeLineage>
+  /** selectSidebarLineageParentIdentities: present only while a store holds a cross-store parent. */
+  lineageParentIdentities?: SidebarLineageParentIdentities
   injectLineageAncestors?: boolean
   preserveLineageParentOrder?: boolean
   forcedVisibleWorktreeIds?: readonly string[]
@@ -57,6 +60,7 @@ export function computeVisibleWorktrees(
     filters: sidebarWorkspaceRowFilters(opts),
     facts: buildDesktopWorkspaceRowFactReader(opts),
     worktreeLineageById: opts.worktreeLineageById,
+    lineageParentIdentities: opts.lineageParentIdentities,
     filterRepoIds: opts.filterRepoIds,
     injectLineageAncestors: opts.injectLineageAncestors,
     preserveLineageParentOrder: opts.preserveLineageParentOrder,

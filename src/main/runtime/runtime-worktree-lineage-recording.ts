@@ -2,6 +2,8 @@ import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-work
 
 import type { Worktree } from '../../shared/worktree/types'
 import type {
+  CrossStoreParentRef,
+  CrossStoreWorkspaceLineage,
   WorktreeLineage,
   WorktreeLineageWarning,
   WorkspaceLineage
@@ -35,7 +37,25 @@ export type WorktreeLineageRecordingResolution =
       coordinatorHandle?: string
       createdByTerminalHandle?: string
     }
+  | CrossStoreLineageResolution
   | { kind: 'none'; warnings: WorktreeLineageWarning[] }
+
+/** A parent in another Orca store; saved only in crossStoreLineageByChildKey. */
+export type CrossStoreLineageResolution = {
+  kind: 'crossStore'
+  parent: CrossStoreParentRef
+  origin: WorktreeLineage['origin']
+  capture: WorktreeLineage['capture']
+}
+
+export function crossStoreCliLineage(parent: CrossStoreParentRef): CrossStoreLineageResolution {
+  return {
+    kind: 'crossStore',
+    parent,
+    origin: 'cli',
+    capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+  }
+}
 
 export function recordCreatedWorktreeLineage(
   store: RuntimeStore | null,
@@ -44,11 +64,15 @@ export function recordCreatedWorktreeLineage(
 ): {
   lineage: WorktreeLineage | null
   workspaceLineage: WorkspaceLineage | null
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   warnings: WorktreeLineageWarning[]
 } {
   const warnings = resolution.kind === 'none' ? [...resolution.warnings] : []
   let lineage: WorktreeLineage | null = null
   let workspaceLineage: WorkspaceLineage | null = null
+  if (resolution.kind === 'crossStore') {
+    return { lineage, workspaceLineage, ...recordCrossStoreLineage(store, worktree, resolution) }
+  }
   if (resolution.kind !== 'lineage') {
     return { lineage, workspaceLineage, warnings }
   }
@@ -125,4 +149,38 @@ export function recordCreatedWorktreeLineage(
     })
   }
   return { lineage, workspaceLineage, warnings }
+}
+
+function recordCrossStoreLineage(
+  store: RuntimeStore | null,
+  worktree: Pick<Worktree, 'id' | 'instanceId' | 'hostId'>,
+  resolution: CrossStoreLineageResolution
+): { crossStoreLineage: CrossStoreWorkspaceLineage | null; warnings: WorktreeLineageWarning[] } {
+  const target = store ? worktreeRowTarget(store, worktree) : undefined
+  const crossStoreLineage =
+    worktree.instanceId && target
+      ? (store?.setCrossStoreWorkspaceLineage?.(
+          {
+            childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+            childInstanceId: worktree.instanceId,
+            parent: resolution.parent,
+            origin: resolution.origin,
+            capture: resolution.capture,
+            createdAt: Date.now()
+          },
+          target.hostId
+        ) ?? null)
+      : null
+  return {
+    crossStoreLineage,
+    warnings: crossStoreLineage
+      ? []
+      : [
+          {
+            code: 'LINEAGE_PARENT_CONTEXT_MISSING',
+            message:
+              'Worktree created, but Orca could not record its parent on another machine for this workspace.'
+          }
+        ]
+  }
 }

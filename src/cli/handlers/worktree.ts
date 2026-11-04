@@ -1,4 +1,4 @@
-import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
+import { withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
@@ -23,7 +23,6 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import {
-  getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
   resolveWorktreeCreateCwdContext,
   resolveCurrentWorktreeSelector
@@ -32,6 +31,7 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
 import { printLineageSummary } from './worktree-lineage-summary'
+import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
 import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
 import {
   assertWorkspaceTargetFlagsCompatible,
@@ -196,14 +196,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       // CLI activation targets its runtime's desktop, never unrelated paired viewers.
       ...(activate ? { navigation: 'host' as const } : {}),
       ...(setupDecision ? { setupDecision } : {}),
-      parentWorktree: explicitParentWorktree,
-      ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
-      ...(envParentWorkspace ? { envParentWorkspace } : {}),
-      ...(cwdContext.parentWorktree
-        ? { cwdParentWorktree: cwdContext.parentWorktree.selector }
-        : {}),
-      // Older hosts ignore the observation and keep this first-row cwd parent.
-      ...(cwdContext.parentAmbiguous ? { cwdParentAmbiguous: cwdContext.parentAmbiguous } : {}),
+      ...(await resolveCreateParentFields(client, {
+        explicitParent,
+        inferredParent: envParentWorkspace,
+        cwdContext
+      })),
       noParent,
       callerTerminalHandle,
       // Always request CLI provenance, including hand-typed creates without a terminal handle.
@@ -248,11 +245,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlagAllowingEmpty(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       ...readFlags,
-      parentWorktree: await withWorktreeSelectorRecovery(
-        getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
-        parentCwdNextSteps(parentSelector),
-        parentSelector
-      ),
+      ...(await resolveSetParentFields(flags, cwd, client)),
       noParent: flags.get('no-parent') === true
     })
     const result = await withWorktreeSelectorRecovery(

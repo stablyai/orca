@@ -26,7 +26,8 @@ import {
   WorktreeResolvePrBase,
   WorktreeSelector,
   WorktreeSortOrder,
-  WorktreeTeardownMissingTerminalsParams
+  WorktreeTeardownMissingTerminalsParams,
+  WorktreeCrossStoreParentRef
 } from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
@@ -54,7 +55,19 @@ export const WORKTREE_METHODS = [
     params: null,
     handler: async (_params, { runtime }) => ({
       lineage: await runtime.listWorktreeLineage(),
-      workspaceLineage: await runtime.listWorkspaceLineage()
+      workspaceLineage: await runtime.listWorkspaceLineage(),
+      // Older desktops ignore it, so these children stay standalone there.
+      crossStoreLineage: runtime.listCrossStoreLineage()
+    })
+  }),
+  defineMethod({
+    name: 'worktree.crossStoreParentRef',
+    permission: 'workspace',
+    params: WorktreeCrossStoreParentRef,
+    handler: async (params, { runtime }) => ({
+      parent: await runtime.resolveCrossStoreParentRef(params.worktree, {
+        reparent: params.reparent === true
+      })
     })
   }),
   defineMethod({

@@ -11,7 +11,8 @@ import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
 } from '../worktree/host-qualified-identity'
-import type { WorktreeLineage } from '../worktree/lineage-types'
+import type { CrossStoreWorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
+import { isCrossStoreWorkspaceLineage } from '../worktree/cross-store-lineage-records'
 import type { Worktree } from '../worktree/types'
 import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
 import { openEnum } from '../zod-salvage'
@@ -19,6 +20,12 @@ import { DEFAULT_WORKSPACE_STATUS_ID } from '../workspace-statuses'
 import { SMART_TIERS } from './sort-stamps'
 import { WorkspaceRowSchema } from './workspace-rows'
 import { HostReportedActivitySchema, type HostReportedActivity } from './workspace-activity-facts'
+
+/** The row's parent in another Orca store; a missing or unreadable record leaves the row standalone. */
+const CrossStoreParentRecordSchema = z
+  .custom<CrossStoreWorkspaceLineage>(isCrossStoreWorkspaceLineage)
+  .optional()
+  .catch(undefined)
 
 /** One paired-server workspace as the sidebar lists it, keyed by its host-qualified id. */
 const PairedServerWorkspaceRowSchema = z
@@ -56,7 +63,8 @@ const PairedServerWorkspaceRowSchema = z
   )
   .extend({
     /** The server's own terminals and agents there; older desktops omit it. */
-    activity: HostReportedActivitySchema.optional().catch(undefined)
+    activity: HostReportedActivitySchema.optional().catch(undefined),
+    crossStoreParent: CrossStoreParentRecordSchema
   })
 
 /** See PairedServerHost; health and compatibility stay open strings, as a reader only compares them. */
@@ -91,7 +99,8 @@ export function pairedServerRowOfWorktree(
   worktree: Worktree,
   kind: PairedServerWorkspaceRow['kind'],
   repo: Pick<Repo, 'kind'> | undefined,
-  lineage: WorktreeLineage | null | undefined
+  lineage: WorktreeLineage | null | undefined,
+  crossStoreParent?: CrossStoreWorkspaceLineage
 ): PairedServerWorkspaceRow {
   const key = getWorktreeHostIdentity(worktree)
   // The server's reply carries no automation name, so the row leaves it out too.
@@ -124,7 +133,8 @@ export function pairedServerRowOfWorktree(
     ...kindFacts,
     recentAt: worktree.lastActivityAt,
     smartTier: worktree.smartTier,
-    smartAt: worktree.smartAt
+    smartAt: worktree.smartAt,
+    ...(crossStoreParent ? { crossStoreParent } : {})
   }
 }
 
@@ -181,7 +191,8 @@ const ServerWorktreePsRowSchema = z.object({
   liveTerminalCount: z.number().optional().catch(undefined),
   unverifiableTerminalCount: z.number().optional().catch(undefined),
   status: z.string().optional().catch(undefined),
-  workingMode: z.string().optional().catch(undefined)
+  workingMode: z.string().optional().catch(undefined),
+  crossStoreParent: CrossStoreParentRecordSchema
 })
 
 function reportedActivity(row: z.infer<typeof ServerWorktreePsRowSchema>): HostReportedActivity {

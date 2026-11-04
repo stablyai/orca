@@ -121,10 +121,10 @@ export function getPublishedHostDescriptor(runtimeId: string): RuntimeHostDescri
 
 /** This store's lineage identity: the published descriptor's installationId, else the profile's own file. */
 export async function readStoreInstallationId(
-  runtimeId: string,
+  runtimeId: string | null,
   userDataPath: string
 ): Promise<string | undefined> {
-  const published = getPublishedHostDescriptor(runtimeId)?.installationId
+  const published = runtimeId ? getPublishedHostDescriptor(runtimeId)?.installationId : undefined
   if (published) {
     return published
   }

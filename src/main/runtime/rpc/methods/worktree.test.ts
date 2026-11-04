@@ -855,7 +855,8 @@ describe('worktree RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
       listWorktreeLineage: vi.fn().mockResolvedValue(lineage),
-      listWorkspaceLineage: vi.fn().mockResolvedValue({})
+      listWorkspaceLineage: vi.fn().mockResolvedValue({}),
+      listCrossStoreLineage: vi.fn().mockReturnValue({})
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 

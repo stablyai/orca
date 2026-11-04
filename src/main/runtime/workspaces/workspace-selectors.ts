@@ -23,7 +23,12 @@ import type {
 } from '../runtime-worktree-lineage-resolution'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
-import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
+import type {
+  CrossStoreParentRef,
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineage,
+  WorktreeLineage
+} from '../../../shared/worktree/lineage-types'
 import type { WorkspaceKey } from '../../../shared/workspace-scope'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeStore } from '../runtime-store-contract'
@@ -187,6 +192,22 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
 
   listWorkspaceLineage(): Promise<Record<WorkspaceKey, WorkspaceLineage>> {
     return this.worktreeLineage.listWorkspaceLineage()
+  }
+
+  listCrossStoreLineage(): Record<WorkspaceKey, CrossStoreWorkspaceLineage> {
+    return this.store?.getAllCrossStoreWorkspaceLineage?.() ?? {}
+  }
+
+  /** This store's installationId; cross-store records name their parent's store by it. */
+  readStoreInstallationId(): Promise<string | undefined> {
+    return this.worktreeLineage.readStoreInstallationId()
+  }
+
+  resolveCrossStoreParentRef(
+    selector: string,
+    options: { reparent: boolean }
+  ): Promise<CrossStoreParentRef> {
+    return this.worktreeLineage.resolveCrossStoreParentRef(selector, options)
   }
 
   // Reuse the selector grammar when narrowing connection scope so matching cannot diverge.

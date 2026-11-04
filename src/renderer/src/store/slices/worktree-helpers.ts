@@ -107,6 +107,10 @@ export type WorktreeSlice = {
   worktreeCatalogVersionByRepoHost: Record<string, WorktreeCatalogVersion>
   worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
   workspaceLineageByChildKey: Readonly<Record<WorkspaceKey, WorkspaceLineage>>
+  /** Each store's saved cross-store parents as it keeps them, by lineage store key (OWN_LINEAGE_STORE_KEY or a paired environment id). */
+  crossStoreLineageByStoreKey: Readonly<Record<string, Readonly<Record<string, unknown>>>>
+  /** This desktop store's installationId; undefined until its lineage list answers. */
+  ownLineageInstallationId: string | undefined
   activeWorktreeId: string | null
   activeWorkspaceKey: WorkspaceKey | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null

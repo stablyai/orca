@@ -1,6 +1,7 @@
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 import type { Worktree } from '../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
+import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspaces/folder-workspace-worktree'
 import { getWorkspaceAttachments } from '../../shared/workspace-attachments/workspace-attachments'
@@ -18,6 +19,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
 }): Map<string, RuntimeWorktreePsSummary> {
   const summaries = new Map<string, RuntimeWorktreePsSummary>()
   const ghCache = args.store?.getGitHubCache?.()
+  const crossStoreLineage = args.store?.getAllCrossStoreWorkspaceLineage?.() ?? {}
   for (const { worktree, repo } of withOwnerRepos(
     args.resolvedWorktrees,
     args.store?.getRepos() ?? []
@@ -39,6 +41,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
         ? { number: meta.linkedPR, state: UNCACHED_LINKED_PR_STATE }
         : null
     const lineage = worktree.lineage
+    const crossStoreParent = crossStoreLineage[worktreeWorkspaceKey(worktree.id)]
     const priorWorktreeIds = meta?.priorWorktreeIds ?? worktree.priorWorktreeIds
     summaries.set(worktree.id, {
       workspaceKind: 'git',
@@ -65,6 +68,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
         : {}),
       parentWorktreeId: worktree.parentWorktreeId,
       childWorktreeIds: worktree.childWorktreeIds,
+      ...(crossStoreParent ? { crossStoreParent } : {}),
       displayName: worktree.displayName,
       workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
       sortOrder: meta?.sortOrder ?? 0,

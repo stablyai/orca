@@ -21,11 +21,6 @@ import {
 import type { AgentLaunchPreferences } from '../../../shared/agent-session/agent-session-host-authority'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorktreeLineageResolution } from '../runtime-worktree-lineage-resolution'
-import type {
-  WorkspaceLineage,
-  WorktreeLineage,
-  WorktreeLineageWarning
-} from '../../../shared/worktree/lineage-types'
 import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } from '../runtime-worktree-lineage-recording'
 import {
   deliverStartupFollowupPrompt,
@@ -195,11 +190,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
   protected recordCreatedWorktreeLineage(
     worktree: Pick<Worktree, 'id' | 'instanceId'>,
     lineageResolution: WorktreeLineageResolution
-  ): {
-    lineage: WorktreeLineage | null
-    workspaceLineage: WorkspaceLineage | null
-    warnings: WorktreeLineageWarning[]
-  } {
+  ): ReturnType<typeof recordCreatedWorktreeLineageState> {
     return recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
   }
 

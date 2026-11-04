@@ -1,5 +1,6 @@
 import { formatTerminalStartFailure } from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
+import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
@@ -70,6 +71,12 @@ export async function createRuntimeFolderWorktree(args: {
   deps: RuntimeFolderWorktreeCreateDeps
 }): Promise<CreateWorktreeResult> {
   const { request, repo, deps } = args
+  if (request.lineage?.crossStoreParent) {
+    throw new RuntimeLineageError(
+      'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      "A folder workspace can't have a parent on another machine yet."
+    )
+  }
   const now = Date.now()
   const settings = deps.store.getSettings()
   const instanceId = randomUUID()
