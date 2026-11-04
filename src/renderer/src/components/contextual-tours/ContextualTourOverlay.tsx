@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import {
   getContextualTour,
   hasUndoneContextualTourAction,
+  hasContextualTourActionStep,
   type ContextualTourId,
   type ContextualTourStepAction
 } from '../../../../shared/contextual-tours'
@@ -55,6 +56,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const markContextualToursSeen = useAppStore((s) => s.markContextualToursSeen)
   const advanceContextualTour = useAppStore((s) => s.advanceContextualTour)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const regressContextualTour = useAppStore((s) => s.regressContextualTour)
   const dismissContextualTour = useAppStore((s) => s.dismissContextualTour)
   const completeContextualTour = useAppStore((s) => s.completeContextualTour)
@@ -257,6 +259,8 @@ export function ContextualTourOverlay(): JSX.Element | null {
       !activeTourId ||
       !renderState ||
       activeTourHasUndoneAction ||
+      (hasContextualTourActionStep(getContextualTour(activeTourId)) &&
+        activeStepIndex !== getContextualTour(activeTourId).steps.length - 1) ||
       // A step change keeps the previous step's renderState until the new step measures.
       renderedStepIndexRef.current !== activeStepIndex ||
       markedTourIdRef.current === activeTourId
@@ -336,7 +340,21 @@ export function ContextualTourOverlay(): JSX.Element | null {
     completeContextualTour(activeTourId)
   }
 
+  const acknowledgeOrAdvance = (): void => {
+    if (activeTour?.steps[activeStepIndex]?.id === 'agent-sessions-add-project') {
+      void recordFeatureInteraction('project-add-introduction')
+    } else if (renderState.isLastStep) {
+      finishTour()
+    } else {
+      advanceContextualTour()
+    }
+  }
+
   const handleStepAction = (action: ContextualTourStepAction): void => {
+    if (action.kind === 'next') {
+      acknowledgeOrAdvance()
+      return
+    }
     performContextualTourStepAction({
       action,
       activeTabId,
@@ -378,13 +396,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
         dismissContextualTour(id)
       }}
       onBack={regressContextualTour}
-      onNext={() => {
-        if (renderState.isLastStep) {
-          finishTour()
-        } else {
-          advanceContextualTour()
-        }
-      }}
+      onNext={acknowledgeOrAdvance}
       onStepAction={handleStepAction}
       onOverlayKeyDownCapture={handleContextualTourOverlayKeyDown}
     />

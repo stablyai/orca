@@ -73,11 +73,10 @@ export function hasContextualTourTarget(selector: string, root?: ParentNode): bo
 export function getContextualTourStartStepIndex(
   tour: ContextualTour,
   targetExists: (selector: string) => boolean,
-  isStepDone: (step: ContextualTourStep) => boolean = () => false,
-  resumeStepIndex?: number
+  isStepDone: (step: ContextualTourStep) => boolean = () => false
 ): number | null {
   const requiredStepIndex = tour.steps.findIndex((step) => step.requiredForStart === true)
-  const firstStepIndex = Math.max(resumeStepIndex ?? requiredStepIndex, 0)
+  const firstStepIndex = Math.max(requiredStepIndex, 0)
   let startIndex = firstStepIndex
   // Resume at the first unfinished step; a finished action step never shows again.
   while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
@@ -87,11 +86,12 @@ export function getContextualTourStartStepIndex(
   if (!step || !targetExists(step.targetSelector)) {
     return null
   }
-  if (resumeStepIndex !== undefined || startIndex > firstStepIndex) {
+  if (startIndex > firstStepIndex) {
     return startIndex
   }
   return tour.steps.findIndex(
-    (candidate, index) => index <= startIndex && targetExists(candidate.targetSelector)
+    (candidate, index) =>
+      index <= startIndex && !isStepDone(candidate) && targetExists(candidate.targetSelector)
   )
 }
 
@@ -112,12 +112,15 @@ export function getNextVisibleContextualTourStepIndex(args: {
   tour: ContextualTour
   currentStepIndex: number
   targetExists: (selector: string) => boolean
+  isStepDone?: (step: ContextualTourStep) => boolean
 }): number | null {
-  return (
-    getVisibleContextualTourStepIndexes(args.tour, args.targetExists).find(
-      (index) => index > args.currentStepIndex
-    ) ?? null
+  const index = args.tour.steps.findIndex(
+    (step, index) =>
+      index > args.currentStepIndex &&
+      !args.isStepDone?.(step) &&
+      args.targetExists(step.targetSelector)
   )
+  return index === -1 ? null : index
 }
 
 export function getPreviousVisibleContextualTourStepIndex(args: {
@@ -147,7 +150,6 @@ export function getContextualTourRequestDecision(args: {
   activeModal: string
   blockingSurfaceVisible: boolean
   targetExists: (selector: string) => boolean
-  startStepIndex?: number
   isStepDone?: (step: ContextualTourStep) => boolean
 }): ContextualTourRequestDecision {
   if (!args.persistedUIReady) {
@@ -175,12 +177,7 @@ export function getContextualTourRequestDecision(args: {
     return { kind: 'blocked', reason: 'blocking-surface' }
   }
 
-  const stepIndex = getContextualTourStartStepIndex(
-    args.tour,
-    args.targetExists,
-    args.isStepDone,
-    args.startStepIndex
-  )
+  const stepIndex = getContextualTourStartStepIndex(args.tour, args.targetExists, args.isStepDone)
   if (stepIndex === null) {
     return { kind: 'blocked', reason: 'missing-start-target' }
   }

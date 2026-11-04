@@ -71,24 +71,20 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
           // Why: split can fire from keyboard/menu with the sidebar closed, but the next tour target lives in the sidebar.
           return {
             featureInteractions: next,
-            sidebarOpen: true,
-            activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
+            sidebarOpen: true
           }
         }
         if (tourProgression === 'reveal-sidebar') {
           return { featureInteractions: next, sidebarOpen: true }
         }
-        if (tourProgression === 'advance-to-next-step') {
-          return {
-            featureInteractions: next,
-            activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
-          }
-        }
         return { featureInteractions: next }
       })
       if (tourProgression === 'complete') {
         get().completeContextualTour()
-      } else if (tourProgression === 'advance') {
+      } else if (
+        tourProgression === 'advance' ||
+        tourProgression === 'reveal-sidebar-and-advance'
+      ) {
         get().advanceContextualTour()
       }
       return persistPromise

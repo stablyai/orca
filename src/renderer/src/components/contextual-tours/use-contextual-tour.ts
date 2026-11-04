@@ -47,13 +47,9 @@ export async function shouldRequestContextualTourAfterInteraction(args: {
   persisted: Promise<void>
   isCancelled: () => boolean
   getContextualToursSeenIds: () => ContextualTourId[]
-  canResume?: () => boolean
 }): Promise<boolean> {
   await args.persisted
-  return (
-    !args.isCancelled() &&
-    (args.canResume?.() === true || !args.getContextualToursSeenIds().includes(args.id))
-  )
+  return !args.isCancelled() && !args.getContextualToursSeenIds().includes(args.id)
 }
 
 export function useContextualTour(
@@ -78,9 +74,6 @@ export function useContextualTour(
     (s) => s.activeContextualTourSourceDetached
   )
   const contextualToursSeenIds = useAppStore((s) => s.contextualToursSeenIds)
-  const hasPendingContinuation = useAppStore(
-    (s) => s.pendingContextualTourContinuation?.tourId === id
-  )
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const contextualToursStartedThisSession = useAppStore((s) => s.contextualToursStartedThisSession)
   const contextualToursOnboardingVisible = useAppStore((s) => s.contextualToursOnboardingVisible)
@@ -175,12 +168,11 @@ export function useContextualTour(
       contextualToursOnboardingVisible ||
       contextualToursBlockingSurfaceVisible ||
       activeContextualTourId !== null ||
-      (!hasPendingContinuation &&
-        (contextualToursSeenIds.includes(id) ||
-          isContextualTourSessionConsumed(
-            { contextualToursSeenIds, contextualToursStartedThisSession },
-            id
-          )))
+      contextualToursSeenIds.includes(id) ||
+      isContextualTourSessionConsumed(
+        { contextualToursSeenIds, contextualToursStartedThisSession },
+        id
+      )
     ) {
       return
     }
@@ -201,8 +193,7 @@ export function useContextualTour(
         id,
         persisted,
         isCancelled: () => cancelled,
-        getContextualToursSeenIds: () => useAppStore.getState().contextualToursSeenIds,
-        canResume: () => useAppStore.getState().pendingContextualTourContinuation?.tourId === id
+        getContextualToursSeenIds: () => useAppStore.getState().contextualToursSeenIds
       }).then((shouldRequest) => {
         requestPending = false
         if (!shouldRequest) {
@@ -212,11 +203,7 @@ export function useContextualTour(
         frame = window.requestAnimationFrame(() => {
           frame = null
           const latestSnapshot = enabledInteractionSnapshotRef.current
-          const state = useAppStore.getState()
-          if (
-            state.contextualToursSeenIds.includes(id) &&
-            state.pendingContextualTourContinuation?.tourId !== id
-          ) {
+          if (useAppStore.getState().contextualToursSeenIds.includes(id)) {
             return
           }
           requestContextualTour(
@@ -268,7 +255,6 @@ export function useContextualTour(
     contextualToursStartedThisSession,
     contextualToursOnboardingVisible,
     contextualToursSeenIds,
-    hasPendingContinuation,
     enabled,
     id,
     persistedUIReady,

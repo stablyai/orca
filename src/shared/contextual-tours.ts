@@ -42,7 +42,6 @@ export type ContextualTourStep = {
   body: string
   targetSelector: string
   requiredForStart?: boolean
-  continueAfterModal?: string
   fallbackCopy?: string
   preferredPlacement?: ContextualTourStepPlacement
   targetPulse?: boolean
@@ -89,7 +88,7 @@ export const CONTEXTUAL_TOURS = [
         body: 'Add a folder or Git repository to start working on your project.',
         targetSelector: '[data-contextual-tour-target="project-add-control"]',
         preferredPlacement: 'bottom',
-        continueAfterModal: 'add-repo'
+        advanceOnFeatureInteraction: 'project-add-introduction'
       },
       {
         id: 'agent-sessions-split',
@@ -293,11 +292,17 @@ export function hasUndoneContextualTourAction(
   tour: ContextualTour,
   featureInteractions: FeatureInteractionState
 ): boolean {
-  return tour.steps.some(
-    (step) =>
-      step.advanceOnFeatureInteraction !== undefined &&
-      !isContextualTourStepDone(step, featureInteractions)
+  const requiredStart = Math.max(
+    tour.steps.findIndex((step) => step.requiredForStart),
+    0
   )
+  return tour.steps
+    .slice(requiredStart)
+    .some(
+      (step) =>
+        step.advanceOnFeatureInteraction !== undefined &&
+        !isContextualTourStepDone(step, featureInteractions)
+    )
 }
 
 export function normalizeContextualTourIds(value: unknown): ContextualTourId[] {
