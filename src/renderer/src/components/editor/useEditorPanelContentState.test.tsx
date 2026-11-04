@@ -208,8 +208,6 @@ describe('useEditorPanelContentState', () => {
   registerEditorPanelHostContentRecoveryTests(
     mocks,
     () => latestFileContents,
-    createOpenFile,
-    (file, options) => latestReloadContent(file, options),
     async (file) => {
       container = document.createElement('div')
       document.body.appendChild(container)

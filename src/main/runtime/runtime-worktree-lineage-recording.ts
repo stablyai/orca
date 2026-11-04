@@ -48,12 +48,18 @@ export type CrossStoreLineageResolution = {
   capture: WorktreeLineage['capture']
 }
 
-export function crossStoreCliLineage(parent: CrossStoreParentRef): CrossStoreLineageResolution {
+/** An inferred parent keeps the env-workspace source the same-store inference records. */
+export function crossStoreCliLineage(
+  parent: CrossStoreParentRef,
+  inferred: boolean
+): CrossStoreLineageResolution {
   return {
     kind: 'crossStore',
     parent,
     origin: 'cli',
-    capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+    capture: inferred
+      ? { source: 'env-workspace', confidence: 'inferred' }
+      : { source: 'explicit-cli-flag', confidence: 'explicit' }
   }
 }
 

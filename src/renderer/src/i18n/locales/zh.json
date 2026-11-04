@@ -17319,6 +17319,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "保存的运行主机与此项目配置不再匹配。"
+        },
+        "launchSettings": {
+          "needsFreshSession": "智能体启动设置要求每次运行都使用新会话。"
         }
       },
       "agent": {

@@ -5,6 +5,7 @@ import type {
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { reuseEqualRecordMap } from '../../repo-identity-reconcile'
 import { OWN_LINEAGE_STORE_KEY } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 
 export type HostLineageList = {
@@ -26,24 +27,38 @@ export function lineageStoreKeyOfTarget(target: RuntimeClientTarget): string {
   return target.kind === 'environment' ? target.environmentId : OWN_LINEAGE_STORE_KEY
 }
 
-/** Replaces one store's cross-store records whole: the child's store owns them, so its answer is complete. */
+/** The child's store owns its records, so its answer replaces that store's whole; as for the
+ * other lineage maps, a child written since the request started keeps its current record. */
 export function withStoreCrossStoreLineage(
   state: CrossStoreLineageState,
   storeKey: string,
-  lineage: HostLineageList
+  lineage: HostLineageList,
+  requestStart?: Partial<CrossStoreLineageState>
 ): Partial<AppState> {
-  const records = lineage.crossStoreLineageByChildKey ?? {}
-  const current = state.crossStoreLineageByStoreKey[storeKey]
-  const unchanged =
-    current === records ||
-    (Object.keys(records).length === 0 && Object.keys(current ?? {}).length === 0)
+  const current = state.crossStoreLineageByStoreKey[storeKey] ?? {}
+  const atRequestStart = requestStart?.crossStoreLineageByStoreKey
+  const before = atRequestStart?.[storeKey] ?? {}
+  const writtenSinceRequestStart = (childKey: string): boolean =>
+    atRequestStart !== undefined && before[childKey] !== current[childKey]
+  const next: Record<string, unknown> = {}
+  for (const [childKey, record] of Object.entries(current)) {
+    if (writtenSinceRequestStart(childKey)) {
+      next[childKey] = record
+    }
+  }
+  for (const [childKey, record] of Object.entries(lineage.crossStoreLineageByChildKey ?? {})) {
+    if (!writtenSinceRequestStart(childKey)) {
+      next[childKey] = record
+    }
+  }
+  const merged = reuseEqualRecordMap(current, next)
   const installationId =
     storeKey === OWN_LINEAGE_STORE_KEY ? lineage.installationId : state.ownLineageInstallationId
   return {
-    ...(unchanged
+    ...(merged === current
       ? {}
       : {
-          crossStoreLineageByStoreKey: { ...state.crossStoreLineageByStoreKey, [storeKey]: records }
+          crossStoreLineageByStoreKey: { ...state.crossStoreLineageByStoreKey, [storeKey]: merged }
         }),
     ...(installationId === state.ownLineageInstallationId
       ? {}

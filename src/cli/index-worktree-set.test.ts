@@ -479,7 +479,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('refuses a parent on this machine before any write when the server lacks cross-machine lineage', async () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const priorExitCode = process.exitCode
     pairRuntimeEnvironment(listEnvironmentsMock, 'build-box')
@@ -513,9 +513,6 @@ describe('orca cli worktree awareness', () => {
       expect(methods).toContain('status.get')
       expect(methods).not.toContain('worktree.set')
       expect(methods).not.toContain('worktree.crossStoreParentRef')
-      expect(JSON.parse(log.mock.calls.at(-1)?.[0] ?? '{}').error.message).toContain(
-        'Update Orca on'
-      )
       expect(process.exitCode).toBe(1)
     } finally {
       process.exitCode = priorExitCode

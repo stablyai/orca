@@ -92,6 +92,8 @@ export const WorktreeCreate = z
     parentWorktree: OptionalString,
     /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
     crossStoreParent: CrossStoreParentRefSchema.optional(),
+    // The caller's terminal implied it (env-workspace, inferred) rather than a parent flag.
+    crossStoreParentInferred: z.literal(true).optional(),
     cwdParentWorktree: OptionalString,
     // Absent on older clients: retain the existing cwd parent.
     cwdParentAmbiguous: z.literal(true).optional(),

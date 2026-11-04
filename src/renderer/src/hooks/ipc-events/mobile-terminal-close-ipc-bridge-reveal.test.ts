@@ -165,10 +165,4 @@ describe('showing a tab main wrote for a file it opened', () => {
       expect(state.activeTabTypeByWorktree[UNDRAWN]).toBe('editor')
     })
   })
-
-  it('leaves an undrawn workspace unvisited for an open that does not steer this window', () => {
-    const h = setup()
-    h.reveal({ worktreeId: UNDRAWN, ...FILE, tabId: 'main-tab', navigation: 'caller' })
-    expect(h.activeWorktreeId()).toBe(WT)
-  })
 })

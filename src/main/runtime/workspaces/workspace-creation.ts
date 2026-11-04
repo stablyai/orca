@@ -1,3 +1,4 @@
+import { toAgentLaunchPreferences } from '../../../shared/agent-launch/choices/agent-launch-preferences'
 import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS,
@@ -56,13 +57,13 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     rearm: PreparationRearmHolder,
     events: RuntimeWorkspaceCreateEvents
   ): Promise<CreateWorktreeResult> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
+    this.requireStore()
 
     assertOpenCodeModelLaunchPreferencesAbsent(
       args.startupAgent ?? args.createdWithAgent,
-      args.startupLaunchPreferences
+      args.startupSessionOptions && args.startupAgent
+        ? toAgentLaunchPreferences(args.startupSessionOptions, args.startupAgent)
+        : args.startupLaunchPreferences
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)

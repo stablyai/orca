@@ -1,7 +1,15 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { shallow } from 'zustand/shallow'
 import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode
+} from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import AgentSettingsDialog, { restoreAgentSettingsInvoker } from './AgentSettingsDialog'
@@ -45,6 +53,7 @@ export const AgentLaunchPicker = memo(
     cli,
     children,
     onTriggerEnter,
+    onOpenChange,
     onCatalogOpen,
     onOpenAgentSettings,
     onPick
@@ -65,6 +74,7 @@ export const AgentLaunchPicker = memo(
     cli?: boolean
     children?: ReactNode
     onTriggerEnter?: () => void
+    onOpenChange?: (open: boolean) => void
     /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
     onCatalogOpen?: (agent: AgentPickerEntry['agent']) => void
     onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
@@ -82,12 +92,16 @@ export const AgentLaunchPicker = memo(
     const [open, setOpenState] = useState(false)
     // Why: typing on the closed trigger opens the menu with that key already in the search field.
     const [initialQuery, setInitialQuery] = useState('')
-    const setOpen = useCallback((next: boolean) => {
-      if (!next) {
-        setInitialQuery('')
-      }
-      setOpenState(next)
-    }, [])
+    const setOpen = useCallback(
+      (next: boolean) => {
+        if (!next) {
+          setInitialQuery('')
+        }
+        setOpenState(next)
+        onOpenChange?.(next)
+      },
+      [onOpenChange]
+    )
     const openAgentSettings = useCallback(() => {
       setOpen(false)
       if (onOpenAgentSettings) {
@@ -104,6 +118,27 @@ export const AgentLaunchPicker = memo(
       selected ?? agent ?? undefined
     )
     const entries = suppliedEntries ?? observedEntries
+    const ownsCatalog = suppliedEntries !== undefined
+    const selectAgent = useCallback(
+      (next: AgentPickerEntry['agent']) => {
+        setSelected(next)
+        if (ownsCatalog) {
+          onCatalogOpen?.(next)
+        }
+      },
+      [ownsCatalog, onCatalogOpen]
+    )
+    const runLaunch = useCallback<ComponentProps<typeof AgentLaunchPickerMenu>['runLaunch']>(
+      (row, draft, entry, surface) =>
+        onPick(
+          row.agent,
+          draft,
+          entry,
+          // Re-selecting an agent preserves the form's surface; a new chat row chooses Chat.
+          surface ?? (!draft && row.agent !== agent && row.kind === 'chat' ? 'chat' : undefined)
+        ),
+      [onPick, agent]
+    )
     const catalogAgent = open && suppliedEntries ? (agent ?? undefined) : undefined
     useEffect(() => {
       if (catalogAgent) {
@@ -192,22 +227,8 @@ export const AgentLaunchPicker = memo(
                 mode="select"
                 disabled={disabled}
                 setupDisabled={setupDisabled}
-                onSelectAgent={(agent) => {
-                  setSelected(agent)
-                  if (suppliedEntries) {
-                    onCatalogOpen?.(agent)
-                  }
-                }}
-                runLaunch={(row, draft, entry, surface) =>
-                  onPick(
-                    row.agent,
-                    draft,
-                    entry,
-                    // Re-selecting an agent preserves the form's surface; a new chat row chooses Chat.
-                    surface ??
-                      (!draft && row.agent !== agent && row.kind === 'chat' ? 'chat' : undefined)
-                  )
-                }
+                onSelectAgent={selectAgent}
+                runLaunch={runLaunch}
               />
             ) : (
               <DropdownMenuItem disabled>

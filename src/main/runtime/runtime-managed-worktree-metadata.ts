@@ -89,6 +89,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   if (lineage?.noParent === true) {
     args.store.removeWorktreeLineage?.(target)
   } else if (lineage?.crossStoreParent) {
+    // Trusted like any paired mutation, unverified here: a forged ref only nests falsely and readers drop cycles.
     await assertParentInAnotherStore(
       lineage.crossStoreParent,
       async () => await args.ports.readStoreInstallationId?.()

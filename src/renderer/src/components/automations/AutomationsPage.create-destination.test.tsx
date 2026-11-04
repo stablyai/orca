@@ -36,6 +36,8 @@ import {
 import { getDefaultSettings } from '../../../../shared/constants'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
+import type { AutomationDraft } from './AutomationEditorDialog'
+import { editAutomationLegacyDraft } from './automation-launch-draft'
 import {
   addSshHost,
   addSshProject,
@@ -51,6 +53,48 @@ import {
 installAutomationsPageHarness()
 
 describe('AutomationsPage create destination', () => {
+  it('creates legacy extras after old-host to desktop editing and back without acquiring modern intent', async () => {
+    api.automations.list.mockResolvedValue([])
+    scopedList([])
+    runtimeHost([], [])
+    addRuntimeProject()
+    capableChatDestination()
+    mocks.state.automationHostFilter = RUNTIME_SELF_FILTER
+    runtimeCreateReturns(makeAutomation({ id: 'a-new' }))
+    await renderPage()
+    await settleHostQueries()
+    await openCreateDialogFor(RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID)
+    const editExtras = async (value: string, modern: boolean) => {
+      await act(async () => {
+        mocks.editorDialog?.onDraftChange((current) =>
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness forwards the actual editor draft unchanged.
+          editAutomationLegacyDraft(current as AutomationDraft, value, modern)
+        )
+      })
+    }
+    await editExtras('--add-dir docs', false)
+    await act(async () => mocks.editorDialog?.createDestination?.onSelect(DESKTOP_SELF_KEY))
+    await editExtras('--add-dir docs --add-dir fixtures', true)
+    await act(async () => mocks.editorDialog?.createDestination?.onSelect(RUNTIME_SELF_KEY))
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...draftRecord(current),
+        projectId: RUNTIME_REPO_ID,
+        workspaceId: RUNTIME_WORKSPACE_ID
+      }))
+    })
+    await save()
+    expect(mocks.editorDialog?.notice).toBeFalsy()
+    expect(createRpcCalls()).toHaveLength(1)
+    expect(createRpcCalls()[0]?.[2]).toMatchObject({
+      launchSetupPatch: {
+        surface: 'terminal',
+        arguments: { kind: 'legacy-extras', value: '--add-dir docs --add-dir fixtures' }
+      }
+    })
+    expect(createRpcCalls()[0]?.[2]).not.toHaveProperty('launchSetupPatch.sources')
+  })
+
   it.each(['default-off', 'explicit'] as const)(
     'creates %s Terminal on the selected runtime while Chat observation is unavailable',
     async (selection) => {

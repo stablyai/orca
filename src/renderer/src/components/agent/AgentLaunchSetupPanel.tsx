@@ -358,7 +358,6 @@ export function AgentLaunchSetupPanel({
                     argsOverride={argumentsView.text}
                     disabled={disabled || !argumentsKnown}
                     note={note}
-                    onSaveArgs={() => editDraft({ kind: 'accept-arguments' })}
                     onDraftChange={(text) =>
                       editDraft({ kind: 'arguments', text, model: currentModel })
                     }
