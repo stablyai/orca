@@ -70,6 +70,15 @@ describe('dropAgentResumeArgvFromCommand', () => {
     ).toEqual({ status: 'dropped', command: "codex '-c' 'disable_paste_burst=true' '--search'" })
   })
 
+  it.each([
+    ['--yolo --search', "'--search'"],
+    ['-s danger-full-access -c tui.x=1', "'-c' 'tui.x=1'"]
+  ])('drops Codex permission aliases from resume args: %s', (agentArgs, remaining) => {
+    expect(planFor('darwin', agentArgs)).toBe(
+      `codex '-c' 'disable_paste_burst=true' ${remaining} 'resume' '${CODEX_SESSION.id}'`
+    )
+  })
+
   it('drops the joined Copilot resume token and keeps the user args', () => {
     const providerSession = {
       key: 'session_id' as const,

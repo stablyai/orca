@@ -31,7 +31,11 @@ import {
   resolveAgentPermission
 } from './tui-agent-permission-choice'
 import { agentArgsSetPermission } from './agent-permission-args'
-import { liftAgentPermissionArgs, migrateAgentPermissionChoice } from './tui-agent-permission-lift'
+import {
+  dropRecordedAgentPermissionArgs,
+  liftAgentPermissionArgs,
+  migrateAgentPermissionChoice
+} from './tui-agent-permission-lift'
 
 const legacy = (
   args: Record<string, string>,
@@ -50,6 +54,11 @@ describe('one-time move of permission flags out of Arguments', () => {
       args: '--search'
     })
     expect(resolveTuiAgentLaunchArgs('codex', { agentPermissionDefault: 'ask' })).toBe(recipe)
+  })
+
+  it('keeps recorded Codex text whole when a later unknown region prevents a safe cut', () => {
+    const recorded = { agentArgs: '--search --yolo --unknown' }
+    expect(dropRecordedAgentPermissionArgs('codex', recorded, 'posix')).toEqual(recorded)
   })
 
   it('turns saved shapes into a stored choice and leaves the rest of the text', () => {

@@ -13,8 +13,14 @@ import {
   resolveAgentPermission,
   type AgentPermissionChoice
 } from './tui-agent-permission-choice'
+import { analyzeAgentChoiceArgs } from '../choices/agent-choice-args'
+import { agentPermissionCarrierRanges, analyzeAgentChoiceWords } from './agent-permission-args'
 import { reconcileAgentChoiceArgs } from '../choices/agent-choice-reconciliation'
-import { planAgentCliArgsSuffix, type AgentStartupShell } from '../startup/tui-agent-startup-shell'
+import {
+  planAgentCliArgsSuffix,
+  tokenizeStartupCommand,
+  type AgentStartupShell
+} from '../startup/tui-agent-startup-shell'
 
 import type { TuiAgent } from '../catalog/tui-agent'
 
@@ -41,7 +47,30 @@ export function dropRecordedAgentPermissionArgs(
 ): { agentArgs?: string | null; agentCommand?: string | null } {
   const lifted = liftAgentPermissionArgs(agent, recorded.agentArgs)
   if (!lifted.choice) {
-    return recorded
+    if (agent !== 'codex') {
+      return recorded
+    }
+    const text = recorded.agentArgs ?? ''
+    const parsed = tokenizeStartupCommand(text, 'posix')
+    if (!parsed.ok) {
+      return recorded
+    }
+    const analysis = analyzeAgentChoiceWords(agent, parsed.tokens)
+    if (
+      !analysis.carrier ||
+      analysis.carrierIndices.some((i) => analysis.roles[i] === 'uncertain')
+    ) {
+      return recorded
+    }
+    // Why: Codex aliases also override a resumed thread's saved permissions (#10886).
+    const args = analyzeAgentChoiceArgs(agent, text).cut(
+      agentPermissionCarrierRanges(parsed, analysis)
+    )
+    // shortcut: an unknown region after a carrier keeps the text whole, upgrade when the picker's cut can prove non-leading ranges
+    if (args === null) {
+      return recorded
+    }
+    lifted.args = args
   }
   const command = recorded.agentCommand?.trim()
   if (!command) {

@@ -3,7 +3,11 @@ import type { AgentChoiceCliForm } from '../choices/agent-launch-choices'
 import type { AgentPermissionChoice } from './tui-agent-permission-choice'
 import { agentRequiredValueOptions } from '../../agent-session/options/agent-session-option-agent-args'
 import { agentPermissionArgs, agentPermissionChoices } from './tui-agent-permission-choice'
-import { tokenizeStartupCommand, type AgentStartupShell } from '../startup/tui-agent-startup-shell'
+import {
+  tokenizeStartupCommand,
+  type AgentStartupShell,
+  type StartupCommandTokens
+} from '../startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'
 
 export const CODEX_PERMISSION_CONFIG_ROOTS = [
@@ -222,6 +226,31 @@ export function analyzeAgentChoiceWords(
     }
   }
   return { roles, optionIndices, carrier: carrierIndices.length > 0, carrierIndices }
+}
+
+export function agentPermissionCarrierRanges(
+  parsed: Extract<StartupCommandTokens, { ok: true }>,
+  {
+    roles,
+    carrierIndices
+  }: Pick<ReturnType<typeof analyzeAgentChoiceWords>, 'roles' | 'carrierIndices'>
+) {
+  return carrierIndices.map((index) => {
+    const name = roles[index]?.slice('option:'.length)
+    let end = index
+    while (roles[end + 1] === `value:${name}`) {
+      end++
+    }
+    return {
+      key: 'permissionMode',
+      value: '',
+      words: parsed.tokens.slice(index, end + 1),
+      start: parsed.spans[index].start,
+      end: parsed.spans[end].end,
+      lift: false,
+      owned: false
+    }
+  })
 }
 
 export function agentArgsSetPermission(agent: TuiAgent, text: string | null | undefined): boolean {

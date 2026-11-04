@@ -1,6 +1,7 @@
 import { analyzeAgentChoiceArgs } from '../choices/agent-choice-args'
 import {
   agentArgsSetPermission,
+  agentPermissionCarrierRanges,
   analyzeAgentChoiceWords
 } from '../permissions/agent-permission-args'
 import {
@@ -29,22 +30,7 @@ export function agentPickerArgumentPermission(entry: AgentPickerEntry, draft: Ag
   const { roles, carrierIndices } = analyzeAgentChoiceWords(entry.agent, parsed.tokens)
   const recipe = analysis.occurrences.find((item) => item.key === 'permissionMode' && item.owned)
   const choice = agentPermissionChoices(entry.agent).find((choice) => choice === recipe?.value)
-  const ranges = carrierIndices.map((index) => {
-    const name = roles[index]?.slice('option:'.length)
-    let end = index
-    while (roles[end + 1] === `value:${name}`) {
-      end++
-    }
-    return {
-      key: 'permissionMode',
-      value: '',
-      words: parsed.tokens.slice(index, end + 1),
-      start: parsed.spans[index].start,
-      end: parsed.spans[end].end,
-      lift: false,
-      owned: false
-    }
-  })
+  const ranges = agentPermissionCarrierRanges(parsed, { roles, carrierIndices })
   const flag = ranges.map(({ start, end }) => text.slice(start, end)).join(' ')
   const at = carrierIndices[0]
   const value =
