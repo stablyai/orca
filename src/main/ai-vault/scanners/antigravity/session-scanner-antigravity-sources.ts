@@ -30,6 +30,7 @@ export function antigravityDiscoveries(
           .filter((origin) => origin !== 'antigravity-cli')
           .map((origin) => join(home, '.gemini', origin, 'brain'))
       : []),
+    ...(options.antigravityChatBrainDir ? [options.antigravityChatBrainDir] : []),
     ...wslHomeDirs.flatMap((homeDir) =>
       origins.map((origin) => join(homeDir, '.gemini', origin, 'brain'))
     )
