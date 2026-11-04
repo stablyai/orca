@@ -19789,6 +19789,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "フォローアップをキューに入れる",
+        "scrollToLatestOnSendTitle": "送信時に最新までスクロール",
+        "scrollToLatestOnSendCopy": "上にスクロールした状態で送信すると、最新のメッセージに移動して返信を追従します。オフにすると現在の位置を維持します。",
+        "scrollToLatestOnSendSearchPosition": "位置",
         "followUpBehaviorCopy": "Agent の作業中に送信したメッセージは、実行中のターンに送られる代わりに、ターンが終わるまでカードとして待機します。Cmd/Ctrl+Enter では 1 件だけその逆になります。",
         "inlineVisualsTitle": "インライン表示",
         "inlineVisualsCopy": "Agent が返信内でグラフ、図、モックアップを表示できるようにします。新しく開始したチャットに適用されます。",

@@ -13,6 +13,7 @@ import { ChatPermissionSetting } from './ChatPermissionSetting'
 import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import { nativeChatScrollsToLatestOnSend } from '../../../../../shared/native-chat/native-chat-appearance-settings'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { getChatBehaviorEntriesByKey, getChatBehaviorTitle } from './chat-behavior-search'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
@@ -49,6 +50,7 @@ export function ChatBehaviorSetting({
     entries.resumeOnRestart,
     ...(hostContinuesUsageLimits ? [entries.autoContinueAfterUsageLimit] : []),
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
+    entries.scrollToLatestOnSend,
     entries.linkPreviews,
     entries.shellEnvironment
   ]
@@ -58,6 +60,7 @@ export function ChatBehaviorSetting({
   const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
   const queueFollowUps = nativeChatQueueFollowUps(settings)
   const autoContinueEnabled = settings.nativeChatAutoContinueAfterUsageLimit === true
+  const scrollToLatestOnSend = nativeChatScrollsToLatestOnSend(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
   return (
     <section id="chat-behavior" className="space-y-3">
@@ -127,6 +130,22 @@ export function ChatBehaviorSetting({
                 />
               </SearchableSetting>
             ) : null}
+            <SearchableSetting
+              {...entries.scrollToLatestOnSend}
+              id={entries.scrollToLatestOnSend.targetSectionId}
+              forceVisible={forceVisible}
+              className="max-w-none"
+            >
+              <SettingsSwitchRow
+                label={entries.scrollToLatestOnSend.title}
+                description={entries.scrollToLatestOnSend.description}
+                checked={scrollToLatestOnSend}
+                ariaLabel={entries.scrollToLatestOnSend.title}
+                onChange={() =>
+                  updateSettings({ nativeChatScrollToLatestOnSend: !scrollToLatestOnSend })
+                }
+              />
+            </SearchableSetting>
             <SearchableSetting
               {...entries.linkPreviews}
               id={entries.linkPreviews.targetSectionId}

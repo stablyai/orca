@@ -50,6 +50,20 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.queueSearchSteer', 'steer')
     ]
   },
+  scrollToLatestOnSend: {
+    targetSectionId: 'chat-scroll-to-latest-on-send',
+    title: translate(
+      'components.settings.nativeChat.scrollToLatestOnSendTitle',
+      'Scroll to latest when sending'
+    ),
+    description: translate(
+      'components.settings.nativeChat.scrollToLatestOnSendCopy',
+      'Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.scrollToLatestOnSendSearchPosition', 'position')
+    ]
+  },
   linkPreviews: {
     targetSectionId: 'chat-link-previews',
     title: translate('components.settings.nativeChat.linkPreviewsTitle', 'Link previews'),
