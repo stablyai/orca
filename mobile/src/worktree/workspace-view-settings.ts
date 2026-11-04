@@ -17,6 +17,7 @@ import type { FilterState } from './workspace-list-types'
 import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
+  SubagentDisplayMode,
   WorktreeCardProperty
 } from '../../../src/shared/ui-chrome-types'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../src/shared/worktree/card-properties'
@@ -53,6 +54,8 @@ export type MobileViewState = {
   /** May hold a property a newer desktop added; it is carried back unchanged. */
   worktreeCardProperties: readonly WorktreeCardProperty[]
   agentActivityDisplayMode: AgentActivityDisplayMode
+  showSubagents?: boolean
+  subagentDisplayMode?: SubagentDisplayMode
   // Null until ui.get arrives, preventing new-host other-client marks from hiding rows before their filter value.
   // Older desktops mark only rows their own filter hides.
   sharesOtherClientFilter: boolean | null
@@ -136,6 +139,12 @@ export function buildWorkspaceViewSettingsUpdate(
   if ('agentActivityDisplayMode' in patch) {
     update.agentActivityDisplayMode = next.agentActivityDisplayMode
   }
+  if ('showSubagents' in patch && next.showSubagents !== undefined) {
+    update.showSubagents = next.showSubagents
+  }
+  if ('subagentDisplayMode' in patch && next.subagentDisplayMode !== undefined) {
+    update.subagentDisplayMode = next.subagentDisplayMode
+  }
   if ('collapsedGroups' in patch) {
     update.collapsedGroups = [...next.collapsedGroups]
   }
@@ -177,6 +186,16 @@ export function applyDesktopViewSettings(
     projectOrderBy: settings.projectOrderBy ?? current.projectOrderBy,
     worktreeCardProperties: settings.worktreeCardProperties ?? current.worktreeCardProperties,
     agentActivityDisplayMode: settings.agentActivityDisplayMode ?? current.agentActivityDisplayMode,
+    ...(settings.showSubagents !== undefined
+      ? { showSubagents: settings.showSubagents }
+      : current.showSubagents !== undefined
+        ? { showSubagents: current.showSubagents }
+        : {}),
+    ...(settings.subagentDisplayMode !== undefined
+      ? { subagentDisplayMode: settings.subagentDisplayMode }
+      : current.subagentDisplayMode !== undefined
+        ? { subagentDisplayMode: current.subagentDisplayMode }
+        : {}),
     // Each ui.get is the desktop's whole state, so the field's absence means it keeps the filter.
     sharesOtherClientFilter: settings.hideWorkspacesFromOtherDevices !== undefined,
     compactWorktreeCards: current.compactWorktreeCards,

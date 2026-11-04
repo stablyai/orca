@@ -18,6 +18,7 @@ import {
 import { buildFilterRepos, type WorkspaceSectionRepo } from './workspace-filter-repos'
 import type { WorktreeHostContextOf } from './worktree-host-context-labels'
 import type { MobileLineageStores } from './mobile-workspace-lineage'
+import { buildFloatingWorkspaceSection } from './floating-workspace-section'
 
 export function useWorkspaceSections(args: {
   displayWorktrees: Worktree[]
@@ -103,10 +104,23 @@ export function useWorkspaceSections(args: {
     ]
   )
 
-  const rawSections = useMemo(
-    () => plan.render(collapsedGroups, hostContextOf),
-    [plan, collapsedGroups, hostContextOf]
+  const floating = useMemo(
+    () =>
+      buildFloatingWorkspaceSection({
+        liveRows: displayWorktrees,
+        lastVisited: null,
+        hostContextOf,
+        collapsedGroups,
+        search,
+        filterRepoIds: filters.filterRepoIds
+      }),
+    [displayWorktrees, hostContextOf, collapsedGroups, search, filters.filterRepoIds, t]
   )
+
+  const rawSections = useMemo(() => {
+    const base = plan.render(collapsedGroups, hostContextOf)
+    return floating ? [...base, floating.rawSection] : base
+  }, [plan, collapsedGroups, hostContextOf, floating])
 
   const sections = useMemo(
     () =>

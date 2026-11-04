@@ -2,6 +2,7 @@ import type { PersistedUIState } from '../persisted-ui-state-types'
 import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
+  SubagentDisplayMode,
   WorktreeCardProperty
 } from '../ui-chrome-types'
 
@@ -54,6 +55,11 @@ export const WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES = [
   { id: 'compact', label: 'Compact' },
   { id: 'full', label: 'Full list' }
 ] as const satisfies readonly WorkspaceViewChoice<AgentActivityDisplayMode>[]
+
+export const WORKSPACE_SUBAGENT_DISPLAY_CHOICES = [
+  { id: 'flat', label: 'Alongside agents' },
+  { id: 'tree', label: 'Tree under parent' }
+] as const satisfies readonly WorkspaceViewChoice<SubagentDisplayMode>[]
 
 /** "Show properties": one card property per row. */
 export const WORKSPACE_CARD_PROPERTY_CHOICES = [

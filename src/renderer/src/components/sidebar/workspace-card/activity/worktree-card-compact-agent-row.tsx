@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react'
+import { CornerDownRight } from 'lucide-react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
@@ -25,6 +26,8 @@ import {
   type ProgramStatusPresentation
 } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
+import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -127,6 +130,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   cacheTimerActive = true,
   isUnvisited = false
 }: CompactAgentRowProps) {
+  useUiLanguageRevision()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
@@ -213,6 +217,17 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     highlighted && !isUnvisited && 'text-foreground'
   )
 
+  const subagentIndicator =
+    !hideIdentityIcon && agent.rowSource === 'subagent' ? (
+      <span
+        className="inline-flex shrink-0 text-muted-foreground/75"
+        title={translate('sidebar.agentRow.subagent', 'Subagent')}
+        aria-hidden
+      >
+        <CornerDownRight className="size-3" />
+      </span>
+    ) : null
+
   const rowBody = (
     <>
       {agent.childRow ? (
@@ -226,6 +241,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           dotTitle={sendTargetDisabledReason ? null : undefined}
           tooltipSide="right"
           lineTitle={!sendTargetDisabledReason}
+          leadingIcon={subagentIndicator}
         />
       ) : (
         <>
@@ -242,6 +258,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
               <AgentTypeIcon agentType={agent.agentType} size={13} />
             </span>
           )}
+          {subagentIndicator}
           <span
             className="min-w-0 flex-1 truncate"
             title={sendTargetDisabledReason ? undefined : rowTitle}

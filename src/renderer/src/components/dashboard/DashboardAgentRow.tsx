@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react'
+import { CornerDownRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
 import { useClaudeAgentRowView } from './use-claude-agent-row-view'
@@ -316,6 +317,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         {!hideIdentityIcon && agent.rowSource !== 'subagent' && (
           <span className="inline-flex shrink-0" title={identityTitle}>
             <AgentTypeIcon agentType={agent.agentType} size={14} />
+          </span>
+        )}
+        {!hideIdentityIcon && agent.rowSource === 'subagent' && (
+          <span
+            className="inline-flex shrink-0 text-muted-foreground/75"
+            title={translate('sidebar.agentRow.subagent', 'Subagent')}
+            aria-hidden
+          >
+            <CornerDownRight className="size-3.5" />
           </span>
         )}
         {/* Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported. */}
