@@ -148,25 +148,48 @@ describe('Claude profile refresh from the default home', () => {
     expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
     fs.rmSync(join(f.source, 'settings.json'))
     await provision(f)
-    expect(fs.existsSync(join(f.profileHome, 'settings.json'))).toBe(false)
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({})
   })
-  itLinks(
-    'restores settings the profile changed and leaves a linked settings file alone',
-    async () => {
-      const f = fixture()
-      f.json(join(f.source, 'settings.json'), { model: 'a', theme: 'x' })
-      await provision(f)
-      f.json(join(f.profileHome, 'settings.json'), { theme: 'x' })
-      await provision(f)
-      expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ model: 'a', theme: 'x' })
-      const elsewhere = join(f.root, 'elsewhere.json')
-      f.json(elsewhere, { mine: true })
-      fs.rmSync(join(f.profileHome, 'settings.json'))
-      fs.symlinkSync(elsewhere, join(f.profileHome, 'settings.json'))
-      expect((await provision(f)).surfaces['settings.json']).toBe('user-owned')
-      expect(f.read(elsewhere)).toEqual({ mine: true })
+  it('keeps settings Claude saved in the account while later default-home edits still arrive', async () => {
+    const f = fixture()
+    const settings = { effortLevel: 'medium', env: { ANTHROPIC_BASE_URL: 'https://a.test' } }
+    f.json(join(f.source, 'settings.json'), settings)
+    await provision(f)
+    // What Claude 2.1.318 saves for `/model opus` then `/effort high`.
+    const saved = {
+      ...settings,
+      model: 'opus',
+      effortLevel: 'high',
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
     }
-  )
+    f.json(join(f.profileHome, 'settings.json'), saved)
+    expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual(saved)
+    f.json(join(f.source, 'settings.json'), {
+      ...settings,
+      env: { ANTHROPIC_BASE_URL: 'https://b.test' },
+      apiKeyHelper: 'helper'
+    })
+    expect((await provision(f)).surfaces['settings.json']).toBe('synced')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
+      effortLevel: 'high',
+      env: { ANTHROPIC_BASE_URL: 'https://b.test' },
+      model: 'opus',
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } },
+      apiKeyHelper: 'helper'
+    })
+  })
+  itLinks('leaves a linked settings file alone', async () => {
+    const f = fixture()
+    f.json(join(f.source, 'settings.json'), { model: 'a', theme: 'x' })
+    await provision(f)
+    const elsewhere = join(f.root, 'elsewhere.json')
+    f.json(elsewhere, { mine: true })
+    fs.rmSync(join(f.profileHome, 'settings.json'))
+    fs.symlinkSync(elsewhere, join(f.profileHome, 'settings.json'))
+    expect((await provision(f)).surfaces['settings.json']).toBe('user-owned')
+    expect(f.read(elsewhere)).toEqual({ mine: true })
+  })
   it('copies state except the login, caches and install ids, and never copies credentials', async () => {
     const f = fixture()
     fs.writeFileSync(join(f.source, '.credentials.json'), 'SOURCE_CREDENTIAL_BYTES')
