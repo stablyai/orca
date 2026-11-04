@@ -15,6 +15,7 @@ import { installTerminalIosHangulPreedit } from './terminal-ios-hangul-preedit'
 import { createTerminalIosHangulPreeditRenderer } from './terminal-ios-hangul-preedit-overlay'
 import { isCurrentPlatformIosWeb } from '@/lib/ios-web-platform'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
+import { firesNativePasteEvent } from './terminal-clipboard-event-paste'
 import {
   isNonLatinControlChordKeyup,
   resolveNonLatinControlChordInput
@@ -135,6 +136,10 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     }
     if (isNonLatinControlChordKeyup(event, claimedNonLatinControlChordCode)) {
       claimedNonLatinControlChordCode = null
+      return false
+    }
+    // Native paste must precede physical-key recovery, which would emit Ctrl+V's literal-next byte.
+    if (firesNativePasteEvent(event, isMac)) {
       return false
     }
     const nonLatinControlChord = resolveNonLatinControlChordInput(event)
