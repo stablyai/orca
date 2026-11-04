@@ -1,14 +1,17 @@
-import type { AgentStatus } from '../../../shared/agent-detection'
-import { detectAgentStatusFromTitle, getAgentLabel } from '../../../shared/agent-detection'
-import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
+import { detectAgentStatusFromTitle } from '../../../shared/agent-status/title/agent-title-status'
+import { getAgentLabel } from '../../../shared/agent-status/title/agent-title-identity'
+import { resolveExplicitTerminalTitleAgentType } from '../../../shared/agent-status/title/terminal-title-agent-type'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
-  type AgentStatusState,
-  type AgentType
-} from '../../../shared/agent-status-types'
-import { isAgentStatusFresh } from '../../../shared/agent-status-freshness'
+  isAgentStatusFresh
+} from '../../../shared/agent-status/contracts/agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentStatusState,
+  AgentType
+} from '../../../shared/agent-status/contracts/agent-status-types'
 
 // Hook status can outlive exited agents; share one configurable-TTL freshness gate without aggregate/resolver import cycles.
 export function isExplicitAgentStatusFresh(

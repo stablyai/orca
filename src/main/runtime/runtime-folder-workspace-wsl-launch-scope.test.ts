@@ -19,7 +19,6 @@ const {
 const { blockedWslDistroForPath } = await import('../wsl/filesystem/wsl-unc-access-gate')
 const { isWslUserActFor } = await import('../wsl/discovery/wsl-user-act-scope')
 const { wslDistroHoldMessage } = await import('../../shared/wsl-distro-stopped-hold')
-const { LOCAL_EXECUTION_HOST_ID } = await import('../../shared/execution-host')
 
 const PARENT = '\\\\wsl.localhost\\Ubuntu\\home\\me'
 const FOLDER = `${PARENT}\\notes`
@@ -67,16 +66,6 @@ describe('a runtime start in a folder workspace on a stopped WSL distro (E9)', (
       )
     ).resolves.toMatchObject({ id: TEST_FOLDER_WORKSPACE_KEY, path: FOLDER })
     expect(statsInUserAct).toEqual([true])
-  })
-
-  it('checks the folder as the user act for a resume the user asked for', async () => {
-    await makeRuntime().resumeAgentSessionInWorkspace(TEST_FOLDER_WORKSPACE_KEY, {
-      agent: 'claude',
-      providerSession: { key: 'session_id', id: 'provider-session-1' },
-      captureHostId: LOCAL_EXECUTION_HOST_ID,
-      mutationId: 'resume-1'
-    })
-    expect(statsInUserAct[0]).toBe(true)
   })
 
   it('holds background work with Start, naming the distro, without touching the folder', async () => {

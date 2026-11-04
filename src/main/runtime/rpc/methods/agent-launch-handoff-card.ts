@@ -1,4 +1,4 @@
-import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import {
   isOrcaSessionId,
   ORCA_SESSION_ADDRESS_PREFIX

@@ -2,7 +2,7 @@ import { bundledLanguagesInfo } from 'shiki/langs'
 import {
   getCodeBlockLanguageLabel,
   isKnownCodeBlockLanguage
-} from '@/components/editor/rich-markdown-code-block-languages'
+} from '@/components/editor/rich-markdown/code-blocks/rich-markdown-code-block-languages'
 
 /** Prefer picker labels, then highlighting names/aliases, then the original fence tag. */
 export function getCodeFenceLanguageLabel(tag: string): string {

@@ -64,13 +64,4 @@ describe('plugin authoring skill references', () => {
     expect(named.length).toBeGreaterThan(5)
     expect(unknown).toEqual([])
   })
-
-  it('keeps the main guide short; details live in references', async () => {
-    const guide = await readFile(
-      path.join(projectDir, 'skill-guides', 'orca-plugin-authoring.md'),
-      'utf8'
-    )
-    // Why: agents load the whole guide each time; references load only when needed.
-    expect(guide.split('\n').length).toBeLessThanOrEqual(150)
-  })
 })

@@ -10,7 +10,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     disposition: 'rewrite-desktop',
     item: 42
   },
-  'src/renderer/src/components/editor/ipynb-kernel-store.ts': {
+  'src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-store.ts': {
     disposition: 'rewrite-desktop',
     item: 43
   },
@@ -71,10 +71,10 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx',
       'src/renderer/src/components/onboarding/onboarding-feature-setup.ts',
       'src/renderer/src/components/pet/PetOverlay.tsx',
-      'src/renderer/src/components/right-sidebar/ai-vault-view-options-persistence.ts',
-      'src/renderer/src/components/right-sidebar/pr-comment-presentation.ts',
-      'src/renderer/src/components/settings/BrowserUsePane.tsx',
-      'src/renderer/src/components/settings/local-network-connection-history.ts',
+      'src/renderer/src/components/right-sidebar/ai-vault/scope/ai-vault-view-options-persistence.ts',
+      'src/renderer/src/components/right-sidebar/checks-panel/comments/pr-comment-presentation.ts',
+      'src/renderer/src/components/settings/browser/use/BrowserUsePane.tsx',
+      'src/renderer/src/components/settings/developer-permissions/local-network-connection-history.ts',
       'src/renderer/src/components/sidebar/linear-agent-skill-runtime.ts',
       'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx',
       'src/renderer/src/components/sidebar/mobile-sidebar-onboarding-badge.ts',
@@ -112,7 +112,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/ai-vault-search/session-search-write-buffer.ts': 'ai-vault-search-staging',
   'src/main/ai-vault/parse-cache/session-parse-cache-database.ts': 'ai-vault-parse-cache',
   'src/main/ai-vault/parse-cache/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
-  'src/main/browser/cookies/browser-cookie-staged-import.ts': 'browser-cookie-import',
+  'src/main/browser/cookies/staging/browser-cookie-staged-import.ts': 'browser-cookie-import',
   'src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts':
     'agent-session-journal',
   'src/main/native-chat/agent-session-journal/command-receipt-schema.ts': 'agent-session-journal',
@@ -137,7 +137,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
     'test-fixture',
   'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
-  'src/main/codex/codex-state-db-test-fixture.ts': 'test-fixture',
+  'src/main/codex/history/index/codex-state-db-test-fixture.ts': 'test-fixture',
   'src/main/opencode-usage/opencode-usage-sqlite-fixture.ts': 'test-fixture'
 }
 

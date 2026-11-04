@@ -3,7 +3,7 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/e
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { killAllProcessesForWorktree } from '../../../runtime/worktree-teardown'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
-import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import { notifyWorktreesChanged } from '../../worktree-remote'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { getLocalPtyProvider } from '../../pty/provider/registry'

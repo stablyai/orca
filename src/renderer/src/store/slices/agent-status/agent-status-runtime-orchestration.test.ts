@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry, AgentStatusState } from '../../../../../shared/agent-status-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 
 import { createTestStore } from '../store-test-helpers'
 import { makeTab } from '../store-session-test-harness'
-import type { AgentStatusObservation } from '../../../../../shared/agent-status-observation'
+import type { AgentStatusObservation } from '../../../../../shared/agent-status/contracts/agent-status-observation'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { buildWorktreeAgentRows } from '@/components/sidebar/worktree-agent-rows'
-import { getAgentDotState } from '@/components/sidebar/worktree-card-agent-summary'
+import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
+import '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary'
+import { agentRowDisplayDotState as getAgentDotState } from '@/lib/agent-row-dot-state'
 import { resolveAttention } from '../../../../../shared/sidebar-list/smart-attention'
 
 {

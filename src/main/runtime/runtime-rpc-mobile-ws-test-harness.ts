@@ -1,7 +1,12 @@
 import { expect } from 'vitest'
 import WebSocket from 'ws'
-import { parsePairingCode } from '../../shared/pairing'
-import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from '../../shared/e2ee-crypto'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
+import {
+  decrypt,
+  deriveSharedKey,
+  encrypt,
+  generateKeyPair
+} from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 
 export function connectWs(endpoint: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {

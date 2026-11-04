@@ -8,12 +8,10 @@ import { homedir } from 'node:os'
 import { resolveTerminalAbsolutePath } from './terminal-file-path'
 import { requireRuntimeFileProvider, runtimeFileRouteForTarget } from '../files/file-target'
 import { isSafeMobileRelativePath } from '../files/mobile-file-kind'
-import { isENOENT } from '../../ipc/filesystem/filesystem-path-containment'
+import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import type { RuntimeFileCommandHost } from '../files/file-command-host'
 import type { RuntimeTerminalArtifacts } from './artifacts/terminal-artifacts'
-
-const SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE =
-  "Files outside an SSH workspace can't be opened from another device yet."
+import { SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE } from '../../../shared/runtime-file-contracts'
 
 type RuntimeTerminalPathHost = Pick<
   RuntimeFileCommandHost,

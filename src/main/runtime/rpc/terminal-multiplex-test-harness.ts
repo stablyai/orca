@@ -10,7 +10,7 @@ import {
   decodeTerminalStreamFrame,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 export const SET_OUTPUT_PAUSED_OPCODE = 16 as TerminalStreamOpcode
 export const WRITE_UNAVAILABLE_OPCODE = 17 as TerminalStreamOpcode

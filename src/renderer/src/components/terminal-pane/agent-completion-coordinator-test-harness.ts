@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import { resetAgentCompletionCoordinatorIdentitiesForTest } from './agent-completion-coordinator'
 import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 export const HOOK_DONE_QUIET_MS = 1_500
 

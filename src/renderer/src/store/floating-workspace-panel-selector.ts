@@ -1,5 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from './types'
 
 export type FloatingWorkspacePanelVisibilityState = Pick<

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitHistory } from '@/runtime/runtime-git-status-client'

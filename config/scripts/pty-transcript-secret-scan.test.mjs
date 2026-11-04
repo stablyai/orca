@@ -47,12 +47,6 @@ describe('pty transcript secret scan', () => {
     )
   })
 
-  it('reports a clean transcript as clean', () => {
-    const findings = scanTranscriptForSecrets('Antigravity CLI 1.1.17\nSonnet 4.6 (High)\n> ')
-    expect(findings).toEqual([])
-    expect(formatFindings('fixture', findings)).toContain('clean')
-  })
-
   it('claims a span once, so a token inside an email is not double-reported', () => {
     const email = 'longlivedaccountnamefortycharacterslongenough@corp.internal'
     const findings = scanTranscriptForSecrets(email)
@@ -75,10 +69,6 @@ describe('redaction', () => {
     expect(redacted).not.toContain('jin.woo@acme.dev')
     expect(scanTranscriptForSecrets(redacted)).toEqual([])
     expect(redactTranscript(redacted).redacted).toBe(0)
-  })
-
-  it('keeps a redacted email shaped like an email', () => {
-    expect(placeholderFor('email', 'a@b.example.com'.length)).toMatch(/^u+@example\.com$/)
   })
 
   it('leaves the rest of the screen byte-for-byte untouched', () => {

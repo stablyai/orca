@@ -7,10 +7,10 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { useVisibleSidebarWorktrees } from './use-visible-worktrees'
-import type * as visibleWorktreesModule from '../../visible-worktrees'
+import type * as visibleWorktreesModule from './compute-visible-worktrees'
 
 const computeVisibleWorktreesCalls = { count: 0 }
-vi.mock('../../visible-worktrees', async (importOriginal) => {
+vi.mock('./compute-visible-worktrees', async (importOriginal) => {
   const actual = await importOriginal<typeof visibleWorktreesModule>()
   return {
     ...actual,

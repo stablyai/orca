@@ -1,8 +1,11 @@
 import { createHash } from 'node:crypto'
 
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
-import type { AgentHookSource } from '../../../shared/agent-hook-relay'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
+import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   CLOSED_AGENT_STATUS_PANE_KEYS_MAX,
   CLOSED_AGENT_STATUS_TAB_IDS_MAX,

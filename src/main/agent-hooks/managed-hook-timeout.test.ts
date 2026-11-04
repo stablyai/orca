@@ -36,7 +36,8 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import { MANAGED_HOOK_TIMEOUT_MILLISECONDS, MANAGED_HOOK_TIMEOUT_SECONDS } from './installer-utils'
-import { CodexHookService } from '../codex/hook-service'
+import '../codex/hooks/installation/hook-service'
+import { CodexHookService } from '../codex/hooks/installation/codex-hook-service-implementation'
 import { CursorHookService } from '../cursor/hook-service'
 import { CommandCodeHookService } from '../command-code/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'

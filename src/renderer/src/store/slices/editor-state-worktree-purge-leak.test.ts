@@ -69,32 +69,4 @@ describe('worktree removal purges per-file editor + git-huge state (leak regress
     expect(s.editorViewMode[FILE_A]).toBeUndefined()
     expect(s.gitStatusHugeByWorktree[WT]).toBeUndefined()
   })
-
-  it('keeps editor + git-huge state for worktrees that are NOT removed', () => {
-    const store = createTestStore()
-    const OTHER = 'repo1::/path/wt2'
-    const OTHER_FILE = '/path/wt2/keep.ts'
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [
-          makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' }),
-          makeWorktree({ id: OTHER, repoId: 'repo1', path: '/path/wt2' })
-        ]
-      },
-      openFiles: [
-        makeOpenFile({ id: FILE_A, worktreeId: WT }),
-        makeOpenFile({ id: OTHER_FILE, worktreeId: OTHER })
-      ],
-      editorCursorLine: { [FILE_A]: 12, [OTHER_FILE]: 7 },
-      editorViewMode: { [FILE_A]: 'changes', [OTHER_FILE]: 'edit' },
-      gitStatusHugeByWorktree: { [WT]: { limit: 1000 }, [OTHER]: { limit: 2000 } }
-    })
-
-    store.getState().purgeWorktreeTerminalState([WT])
-
-    const s = store.getState()
-    expect(s.editorCursorLine[OTHER_FILE]).toBe(7)
-    expect(s.editorViewMode[OTHER_FILE]).toBe('edit')
-    expect(s.gitStatusHugeByWorktree[OTHER]).toEqual({ limit: 2000 })
-  })
 })

@@ -1,4 +1,4 @@
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 

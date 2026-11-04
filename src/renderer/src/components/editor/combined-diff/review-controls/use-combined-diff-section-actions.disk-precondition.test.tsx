@@ -3,10 +3,10 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { OpenFile } from '@/store/slices/editor'
 import { useCombinedDiffSectionActions } from './use-combined-diff-section-actions'
-import { getStoredTextDiffResult } from '../../large-diff-section-content'
+import { getStoredTextDiffResult } from '../../diff/large-files/large-diff-section-content'
 import { useAppStore } from '@/store'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { acquireCombinedDiffSectionOperation } from '../load-sections/combined-diff-section-connection'
@@ -14,7 +14,7 @@ import { fetchCombinedDiffSection } from '../load-sections/fetch-combined-diff-s
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 const mocks = vi.hoisted(() => ({ writeRuntimeFile: vi.fn(), diff: vi.fn() }))
 vi.mock('@/runtime/runtime-git-diff-client', () => ({

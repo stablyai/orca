@@ -1,6 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
 import { cloneWorkspaceSessionState } from '../restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../restoring-sessions/workspace-session-write-rollback'
@@ -25,11 +25,11 @@ import {
   type PtyBindingOrigin,
   type PtyBindingSpan
 } from './pty-binding-span'
-import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../shared/workspace-layout/terminal-pane-placement'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../../shared/terminal-leaf-move'
+} from '../../../shared/workspace-layout/terminal-leaf-move'
 import {
   admitPane,
   moveLeaf,

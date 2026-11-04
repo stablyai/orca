@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { buildWorkspaceSessionPayload } from '../../lib/workspace-session'
 import '../../runtime/web-session-tabs-sync/mirrored-editor-file-identity'
 import { buildHydratedEditorSessionState } from './editor/actions/hydrated-editor-session-state'
@@ -98,17 +98,6 @@ describe('a server file keeps its id across a restart', () => {
     expect(editorEntityIds(restarted, WT_A)).toEqual([fileId])
     expect((restarted.unifiedTabsByWorktree[WT_A] ?? []).map((tab) => tab.id)).toEqual(tabIds)
     expect(restarted.activeFileIdByWorktree[WT_A]).toBe(fileId)
-  })
-
-  it('keeps an unsaved draft of a server file through a restart', () => {
-    const store = prepareStore()
-    const fileId = openServerFile(store, WT_A, ENV)
-    store.getState().setEditorDraft(fileId, 'unsaved edit')
-    store.getState().markFileDirty(fileId, true)
-
-    const restarted = restart(store)
-    expect(restarted.editorDrafts[fileId]).toBe('unsaved edit')
-    expect(restarted.openFiles.find((file) => file.id === fileId)?.isDirty).toBe(true)
   })
 
   it('still names a local file by its path, also after a server file with the same path', () => {

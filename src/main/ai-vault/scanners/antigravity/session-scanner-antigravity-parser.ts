@@ -4,7 +4,7 @@ import {
 } from '../../transcripts/remote-session-content-lines'
 import { consumeCompleteJsonlLines } from '../../session-scanner-jsonl-reader'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from '../../transcripts/session-transcript-record-budget'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   accumulatorFoldResumeState,

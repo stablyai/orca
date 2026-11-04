@@ -3,28 +3,16 @@ import { settleSessionPreferenceRead } from './session-preference-read'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
-import {
-  loadTerminalAutocompleteEnabled,
-  loadTerminalLinkOpenMode,
-  loadTerminalTextScale
-} from '../storage/preferences'
+import { loadTerminalLinkOpenMode, loadTerminalTextScale } from '../storage/preferences'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
 
 export function useMobileSessionPreferenceFocus(
   scope: Pick<
     MobileSessionKeyboardStateModel,
-    | 'setTerminalTextScale'
-    | 'terminalTextScaleRevisionRef'
-    | 'setAutocompleteEnabled'
-    | 'setTerminalLinkOpenMode'
+    'setTerminalTextScale' | 'terminalTextScaleRevisionRef' | 'setTerminalLinkOpenMode'
   >
 ) {
-  const {
-    setTerminalTextScale,
-    terminalTextScaleRevisionRef,
-    setAutocompleteEnabled,
-    setTerminalLinkOpenMode
-  } = scope
+  const { setTerminalTextScale, terminalTextScaleRevisionRef, setTerminalLinkOpenMode } = scope
   const shellStorage = useShellStorage()
   const [terminalPreferencesReady, setTerminalPreferencesReady] = useState(false)
   const readRevisionRef = useRef(0)
@@ -33,21 +21,16 @@ export function useMobileSessionPreferenceFocus(
     const revision = ++readRevisionRef.current
     const scaleRevision = terminalTextScaleRevisionRef.current
     void settleSessionPreferenceRead(
-      Promise.all([
-        loadTerminalTextScale(),
-        loadTerminalAutocompleteEnabled(),
-        loadTerminalLinkOpenMode()
-      ])
+      Promise.all([loadTerminalTextScale(), loadTerminalLinkOpenMode()])
     ).then((preferences) => {
       if (readRevisionRef.current !== revision) {
         return
       }
       if (preferences) {
-        const [scale, autocomplete, linkMode] = preferences
+        const [scale, linkMode] = preferences
         if (terminalTextScaleRevisionRef.current === scaleRevision) {
           setTerminalTextScale(scale)
         }
-        setAutocompleteEnabled(autocomplete)
         setTerminalLinkOpenMode(linkMode)
       }
       setTerminalPreferencesReady(true)
@@ -63,11 +46,7 @@ export function useMobileSessionPreferenceFocus(
   useFocusEffect(refreshTerminalPreferences)
 
   useEffect(() => {
-    const keys = [
-      'orca:terminalTextScale',
-      'orca:terminalAutocompleteEnabled',
-      'orca:terminalLinkOpenMode'
-    ]
+    const keys = ['orca:terminalTextScale', 'orca:terminalLinkOpenMode']
     const unsubscribes = keys.map((key) =>
       subscribeMirroredKey(key, () => {
         refreshTerminalPreferences()

@@ -11,7 +11,9 @@ const baseline = process.argv[2] ?? 'HEAD^'
 const require = createRequire(join(root, 'package.json'))
 const { build } = require('esbuild')
 const relative = 'src/main/browser/browser-session-registry.ts'
-const target = join(root, relative)
+const historicalTarget = join(root, relative)
+const currentRelative = 'src/main/browser/sessions/browser-session-registry.ts'
+const target = join(root, currentRelative)
 const scratch = mkdtempSync(join(tmpdir(), 'orca-browser-meta-bench-'))
 const previousSource = execFileSync('git', ['show', `${baseline}:${relative}`], {
   cwd: root,
@@ -57,9 +59,46 @@ const stubs = new Map([
 const registryByVersion = {}
 try {
   for (const [version, source] of Object.entries(sources)) {
+    const sourceTarget = version === 'before' ? historicalTarget : target
+    const currentStubSpecifiers = new Map([
+      ['./browser-session-cookie-staging', '../cookies/staging/browser-session-cookie-staging'],
+      ['./browser-session-route-policies', '../routing/sessions/browser-session-route-policies'],
+      [
+        '../persistence/loading-store/user-data-path',
+        '../../persistence/loading-store/user-data-path'
+      ],
+      ['./browser-identity-mode-store', '../identity/browser-identity-mode-store'],
+      ['./browser-site-permission-store', '../site-settings/browser-site-permission-store'],
+      ['./browser-site-display-store', '../site-settings/browser-site-display-store'],
+      [
+        './extensions/browser-extension-session-loader',
+        '../extensions/profile-sessions/browser-extension-session-loader'
+      ]
+    ])
+    const versionStubs = new Map(
+      [...stubs].map(([specifier, body]) => [
+        version === 'after' ? (currentStubSpecifiers.get(specifier) ?? specifier) : specifier,
+        body
+      ])
+    )
+    const historicalDependencies = new Map([
+      [
+        './browser-session-meta-store',
+        join(root, 'src/main/browser/sessions/browser-session-meta-store.ts')
+      ],
+      [
+        './browser-session-persisted-profile-validation',
+        join(root, 'src/main/browser/sessions/browser-session-persisted-profile-validation.ts')
+      ]
+    ])
     const output = join(scratch, `${version}.cjs`)
     await build({
-      stdin: { contents: source, sourcefile: target, resolveDir: dirname(target), loader: 'ts' },
+      stdin: {
+        contents: source,
+        sourcefile: sourceTarget,
+        resolveDir: dirname(sourceTarget),
+        loader: 'ts'
+      },
       bundle: true,
       platform: 'node',
       format: 'cjs',
@@ -69,8 +108,15 @@ try {
           name: 'isolate-startup-metadata',
           setup(builder) {
             builder.onResolve({ filter: /.*/ }, (args) => {
-              if (args.importer === target && stubs.has(args.path)) {
+              if (args.importer === sourceTarget && versionStubs.has(args.path)) {
                 return { path: args.path, namespace: 'startup-stub' }
+              }
+              if (
+                version === 'before' &&
+                args.importer === sourceTarget &&
+                historicalDependencies.has(args.path)
+              ) {
+                return { path: historicalDependencies.get(args.path) }
               }
               if (
                 args.path === 'node:fs' &&
@@ -83,7 +129,7 @@ try {
               contents:
                 args.path === 'fs-probe'
                   ? `import * as fs from 'node:fs'; export const {mkdirSync,renameSync,writeFileSync}=fs; export function readFileSync(...args){const result=fs.readFileSync(...args);globalThis.__metaBench.reads++;globalThis.__metaBench.bytes+=Buffer.byteLength(result);return result}`
-                  : stubs.get(args.path),
+                  : versionStubs.get(args.path),
               loader: 'js'
             }))
           }

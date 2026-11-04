@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import {

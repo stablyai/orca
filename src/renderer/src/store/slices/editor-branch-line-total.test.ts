@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createEditorStore } from './editor-slice-test-harness'
-import type { GitStatusResult } from '../../../../shared/git-status-types'
+import type { GitStatusResult } from '../../../../shared/git/status/git-status-types'
 
 const MERGE_BASE = '1f3c0d9a5b6e7f8091a2b3c4d5e6f708192a3b4c'
 

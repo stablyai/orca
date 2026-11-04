@@ -1,4 +1,4 @@
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'

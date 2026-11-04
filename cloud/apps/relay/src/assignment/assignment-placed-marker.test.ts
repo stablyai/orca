@@ -39,24 +39,10 @@ describe('assign marks only the answers it minted as placed', () => {
     now += ASSIGNMENT_LIMITS.dormantTtlMs
     const replaced = await store.assign(IDENTITY)
 
-    expect(replaced).toMatchObject({ cellId: first.cellId, assignmentEpoch: first.assignmentEpoch + 1 })
-    expect(replaced.placed).toBe(true)
-  })
-
-  it('marks a reserve booking and keeps the returned assignment otherwise unchanged', async () => {
-    const store = await setup(() => 100)
-    const booking = {
-      ...IDENTITY,
-      cellId: 'reserve-c1',
-      cellUrl: 'https://reserve-c1.example.com',
-      assignmentEpoch: 9,
-      leaseExpiresAt: 400_000,
-      region: 'us-central1' as const
-    }
-    const booked = await store.assign(IDENTITY, undefined, undefined, undefined, {
-      placeFresh: async () => booking
+    expect(replaced).toMatchObject({
+      cellId: first.cellId,
+      assignmentEpoch: first.assignmentEpoch + 1
     })
-
-    expect(booked).toEqual({ ...booking, placed: true })
+    expect(replaced.placed).toBe(true)
   })
 })

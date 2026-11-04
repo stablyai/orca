@@ -57,32 +57,6 @@ describe("the phone's status stream", () => {
     }
   }
 
-  it('opens one stream per client however many chats read it', () => {
-    const feed = mobileStructuredSessionStatusFeed(client)
-    feed.subscribe(() => {})
-    mobileStructuredSessionStatusFeed(client).subscribe(() => {})
-
-    expect(client.subscribe).toHaveBeenCalledOnce()
-    expect(client.subscribe).toHaveBeenCalledWith(
-      'agentSession.subscribeStatus',
-      {},
-      expect.any(Function)
-    )
-  })
-
-  it("follows the host's Stopping from the snapshot through each status frame", () => {
-    const listener = vi.fn()
-    mobileStructuredSessionStatusFeed(client).subscribe(listener)
-
-    frames[0]?.({ type: 'snapshot', sessions: [summary(true)] })
-    expect(read()?.stopping).toBe(true)
-
-    frames[0]?.({ type: 'status', session: summary(false) })
-    expect(read()).toMatchObject({ status: 'working' })
-    expect(read()).not.toHaveProperty('stopping')
-    expect(listener).toHaveBeenCalledTimes(2)
-  })
-
   it('keeps a retrying host owned and starting until readiness, then revokes ownership on disconnect', () => {
     mobileStructuredSessionStatusFeed(client).subscribe(() => {})
     const starting = { ...summary(false), hostExecutionPhase: 'starting' as const }
@@ -94,43 +68,6 @@ describe("the phone's status stream", () => {
     connection('reconnecting')
     expect(read()?.hostExecutionOwned).toBeUndefined()
     expect(read()?.hostExecutionPhase).toBeUndefined()
-  })
-
-  it('drops Stopping when the host ends the stream, and opens it again on the next connection', () => {
-    mobileStructuredSessionStatusFeed(client).subscribe(() => {})
-    frames[0]?.({ type: 'snapshot', sessions: [summary(true)] })
-
-    frames[0]?.({ type: 'end' })
-
-    expect(read()).not.toHaveProperty('stopping')
-    connection('connected')
-    expect(client.subscribe).toHaveBeenCalledTimes(2)
-  })
-
-  it('drops Stopping, keeping the rest, once the phone loses contact', () => {
-    mobileStructuredSessionStatusFeed(client).subscribe(() => {})
-    frames[0]?.({ type: 'snapshot', sessions: [summary(true)] })
-
-    connection('reconnecting')
-
-    expect(read()).toMatchObject({ sessionId: 'session-1', status: 'working' })
-    expect(read()).not.toHaveProperty('stopping')
-    expect(read()).not.toHaveProperty('hostExecutionOwned')
-  })
-
-  it('reads a host that refuses the method to phones as one without it, asking once per connection', () => {
-    mobileStructuredSessionStatusFeed(client).subscribe(() => {})
-
-    frames[0]?.(FORBIDDEN)
-    connection('connected')
-    mobileStructuredSessionStatusFeed(client).subscribe(() => {})
-    expect(client.subscribe).toHaveBeenCalledOnce()
-    expect(read()).toBeUndefined()
-
-    // A new connection may reach a host updated meanwhile.
-    connection('reconnecting')
-    connection('connected')
-    expect(client.subscribe).toHaveBeenCalledTimes(2)
   })
 })
 

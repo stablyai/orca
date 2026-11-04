@@ -1,6 +1,6 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../../shared/tab-types'
 
 // Only markers owned by live tabs count; closed tabs and superseded sessions cannot light or hold workspace dots.

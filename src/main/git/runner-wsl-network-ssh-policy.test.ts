@@ -9,10 +9,8 @@ vi.mock('node:child_process', () => ({
 }))
 
 import { gitExecFileAsync } from './runner'
-import {
-  GitAdmissionScheduler,
-  _resetGitAdmissionForTests
-} from './command-runner/git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../shared/git/admission/git-admission-scheduler'
+import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
 
 const originalPlatform = process.platform
 const WSL_CWD = String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`

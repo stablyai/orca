@@ -1,6 +1,16 @@
+import {
+  entry,
+  pickerResizeObservers as observers,
+  pickerMovementObservers as movements,
+  ResizeObserverFixture,
+  IntersectionObserverFixture,
+  compilePickerTerminalLaunch,
+  codexAskRetainedArgsTokens
+} from './agent-launch-picker-menu-test-fixture'
 // @vitest-environment happy-dom
 import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
 import { act } from 'react'
+import * as floating from '@floating-ui/dom'
 import { fireEvent, getByRole, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRoot, type Root } from 'react-dom/client'
@@ -8,35 +18,25 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
+import { agentPickerChoiceSeeds } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
 import {
-  agentPickerChoiceSeeds,
   agentPickerLaunchInputs,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
+vi.mock('@floating-ui/dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof floating>()
+  return { ...actual, autoUpdate: vi.fn(actual.autoUpdate) }
+})
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
-const entry: AgentPickerEntry = {
-  agent: 'codex',
-  label: 'Codex',
-  rows: [{ agent: 'codex', kind: 'chat' }],
-  surfaces: ['chat', 'terminal'],
-  defaultSurface: 'chat',
-  terminal: {},
-  structured: {},
-  catalog: {
-    origin: 'probe',
-    fetchedAt: 1,
-    models: [
-      { id: 'astra', label: 'Astra', isDefault: true, efforts: [{ value: 'low', label: 'Low' }] }
-    ]
-  }
-}
+
+const { autoUpdate } = await vi.importActual<typeof floating>('@floating-ui/dom')
+
 let root: Root
 let host: HTMLDivElement
 let owner = 0
@@ -152,287 +152,118 @@ it.each(['chat', 'terminal'] as const)(
   }
 )
 
-it.each([
-  { menuLeft: 700, menuWidth: 280, viewport: 1000, height: 800, side: 'left' },
-  { menuLeft: 20, menuWidth: 280, viewport: 1000, height: 800, side: 'right' },
-  { menuLeft: 300, menuWidth: 288, viewport: 700, height: 800, side: 'left' },
-  { menuLeft: 156, menuWidth: 288, viewport: 600, height: 800, side: 'bottom' },
-  { menuLeft: 156, menuWidth: 288, viewport: 600, height: 600, side: 'bottom' }
-])(
-  'contains setup in a $viewport viewport at x=$menuLeft, preferring $side',
-  async ({ menuLeft, menuWidth, viewport, height, side }) => {
-    const hydrated: AgentPickerEntry = {
-      ...entry,
-      arguments: '--add-dir docs',
-      terminal: { model: 'astra', permissionMode: 'ask' },
-      structured: { model: 'astra', permissionMode: 'ask' }
+it('bounds open geometry work at 10/100 catalog options and retires measurements with the native owner', async () => {
+  let updates = 0
+  const active = new Set<Element>()
+  vi.spyOn(floating, 'autoUpdate').mockImplementation((reference, element, update, options) => {
+    if (element !== null || !(reference instanceof Element)) {
+      return autoUpdate(reference, element, update, options)
     }
-    const showPopover = (value: AgentPickerEntry) =>
-      act(() =>
-        root.render(
-          <TooltipProvider>
-            <DropdownMenu defaultOpen modal={false}>
-              <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <AgentLaunchSetupButton
-                  entry={value}
-                  onUse={launch}
-                  renderAnchor={(trigger) => <DropdownMenuItem>{trigger}</DropdownMenuItem>}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </TooltipProvider>
-        )
-      )
-    showPopover(hydrated)
-    let viewportWidth = viewport
-    let placementReads = 0
-    const observers = new Set<ResizeObserverFixture>()
-    class ResizeObserverFixture implements ResizeObserver {
-      targets = new Set<Element>()
-      constructor(readonly callback: ResizeObserverCallback) {
-        observers.add(this)
-      }
-      observe(target: Element) {
-        this.targets.add(target)
-      }
-      unobserve(target: Element) {
-        this.targets.delete(target)
-      }
-      disconnect() {
-        this.targets.clear()
-        observers.delete(this)
-      }
+    active.add(reference)
+    const stop = autoUpdate(
+      reference,
+      element,
+      () => {
+        updates++
+        update()
+      },
+      options
+    )
+    return () => {
+      stop()
+      active.delete(reference)
     }
+  })
+  const counts: number[] = []
+  const user = userEvent.setup()
+  for (const size of [10, 100]) {
+    act(() => root.render(null))
+    observers.clear()
+    movements.clear()
     vi.stubGlobal('ResizeObserver', ResizeObserverFixture)
-    // Supply missing browser layout only; the real Popover/Popper computes collision and placement.
-    const menu = new DOMRect(menuLeft, 80, menuWidth, 240)
-    const row = new DOMRect(menuLeft + 5, 128, menuWidth - 10, 32)
-    const trigger = new DOMRect(menuLeft + menuWidth - 32, 132, 24, 24)
-    const panel = new DOMRect(0, 0, 416, 480)
-    function geometry(element: Element): DOMRect {
-      if (
-        element.matches('[data-slot="popover-content"]') ||
-        (element.hasAttribute('data-radix-popper-content-wrapper') &&
-          element.querySelector('[data-slot="popover-content"]'))
-      ) {
-        const content = element.matches('[data-slot="popover-content"]')
-          ? element
-          : element.querySelector('[data-slot="popover-content"]')!
-        const wrapper = content.parentElement!
-        const available = Number.parseFloat(
-          wrapper.style.getPropertyValue('--radix-popper-available-width')
-        )
-        const capped = content.classList.contains('max-w-(--radix-popover-content-available-width)')
-        const minimum = content.classList.contains('min-w-64') ? 256 : 0
-        const availableHeight = Number.parseFloat(
-          wrapper.style.getPropertyValue('--radix-popper-available-height')
-        )
-        const cappedHeight = content.classList.contains(
-          'max-h-(--radix-popover-content-available-height)'
-        )
-        return new DOMRect(
-          0,
-          0,
-          Math.max(
-            minimum,
-            Math.min(panel.width, capped && Number.isFinite(available) ? available : panel.width)
-          ),
-          Math.min(
-            panel.height,
-            cappedHeight && Number.isFinite(availableHeight) ? availableHeight : panel.height
-          )
-        )
+    vi.stubGlobal('IntersectionObserver', IntersectionObserverFixture)
+    const value: AgentPickerEntry = {
+      ...entry,
+      ownerKey: `${entry.ownerKey}/geometry-${size}`,
+      catalog: {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: Array.from({ length: size }, (_, i) => ({
+          id: `preset-${i}`,
+          label: `Preset ${i}`,
+          isDefault: i === 0,
+          efforts: []
+        }))
       }
-      if (element.matches('[role="menuitem"]')) {
-        return element.isConnected ? row : new DOMRect()
-      }
-      if (element.matches('[data-slot="popover-trigger"]')) {
-        return element.isConnected ? trigger : new DOMRect()
-      }
-      if (
-        element.matches('[role="menu"]') ||
-        element.hasAttribute('data-radix-popper-content-wrapper')
-      ) {
-        return menu
-      }
-      if (element === document.documentElement || element === document.body) {
-        return new DOMRect(0, 0, viewportWidth, height)
-      }
-      return new DOMRect()
     }
-    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
-      this: Element
-    ) {
-      return geometry(this)
+    show(value)
+    fireEvent.change(getByRole(document.body, 'textbox', { name: '' }), {
+      target: { value: 'Preset' }
     })
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
-      this: HTMLElement
-    ) {
-      return geometry(this).width
-    })
-    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
-      this: HTMLElement
-    ) {
-      return geometry(this).height
-    })
-    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockImplementation(() => viewportWidth)
-    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(height)
-    const computeStyle = window.getComputedStyle.bind(window)
-    vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
-      const style = computeStyle(element, pseudo)
-      if (!element.matches('[data-slot="popover-content"]')) {
-        return style
-      }
-      // happy-dom has no Tailwind layout; resolve only the consumer's sizing rules and CSS alias.
-      const isStyleProperty = (key: PropertyKey): key is keyof CSSStyleDeclaration => key in style
-      return new Proxy(style, {
-        get(target, property) {
-          if (property === 'minWidth' && element.classList.contains('min-w-64')) {
-            return '256px'
-          }
-          if (property === 'getPropertyValue') {
-            return (name: string) => {
-              if (name === '--radix-popover-content-available-width') {
-                placementReads++
-                return element.parentElement!.style.getPropertyValue(
-                  '--radix-popper-available-width'
-                )
-              }
-              return target.getPropertyValue(name)
-            }
-          }
-          if (!isStyleProperty(property)) {
-            return undefined
-          }
-          const value = target[property]
-          return typeof value === 'function' ? value.bind(target) : value
+    const renderedRows = document.querySelectorAll('button[aria-label="Configure Codex"]').length
+    expect(renderedRows).toBeGreaterThan(0)
+    expect(renderedRows).toBeLessThanOrEqual(8)
+    updates = 0
+    fireEvent(window, new Event('resize'))
+    expect(updates).toBe(0)
+    expect(active.size).toBe(0)
+    expect(
+      [...observers].some((observer) =>
+        [...observer.targets].some((target) => target.matches('[role="menuitem"]'))
+      )
+    ).toBe(false)
+    expect(
+      [...movements].some((observer) =>
+        [...observer.targets].some((target) => target.matches('[role="menuitem"]'))
+      )
+    ).toBe(false)
+    const configure = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Configure Codex"]'
+    )!
+    await user.click(configure)
+    await waitFor(() => expect(active.size).toBe(1))
+    updates = 0
+    act(() => fireEvent(window, new Event('resize')))
+    expect(updates).toBeGreaterThan(0)
+    expect(updates).toBeLessThanOrEqual(2)
+    counts.push(updates)
+    // Content-only reflow may reposition Radix; it must not feed overlap measurement.
+    const panel = getByRole(document.body, 'menu', { name: 'Configure Codex' })
+    updates = 0
+    act(() => {
+      for (const observer of new Set(observers)) {
+        if (observer.targets.has(panel) || observer.targets.has(panel.parentElement!)) {
+          observer.callback([], observer)
         }
-      })
-    })
-    act(() =>
-      document.querySelector<HTMLButtonElement>('button[aria-label="Configure Codex"]')!.click()
-    )
-    const content = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
-    expect(content.classList.contains('w-104')).toBe(true)
-    await waitFor(() => {
-      expect(content.dataset.side).toBe(side)
-      const transform = content.parentElement!.style.transform.match(
-        /translate\(([-\d.]+)px, ([-\d.]+)px\)/
-      )
-      expect(transform).not.toBeNull()
-      const x = Number(transform![1])
-      const y = Number(transform![2])
-      expect(x).toBeGreaterThanOrEqual(0)
-      const width = content.offsetWidth
-      expect(x + width).toBeLessThanOrEqual(viewport)
-      expect(y).toBeGreaterThanOrEqual(0)
-      expect(y + content.offsetHeight).toBeLessThanOrEqual(height)
-      if (side === 'left') {
-        expect(x + width).toBeLessThanOrEqual(menu.left)
-      } else if (side === 'right') {
-        expect(x).toBeGreaterThanOrEqual(menu.right)
-      } else {
-        expect(y).toBeGreaterThanOrEqual(row.bottom)
-      }
-      if (viewport === 700) {
-        expect(width).toBe(299)
-      }
-      if (viewport === 600) {
-        expect(width).toBe(panel.width)
       }
     })
-    await waitFor(() => expect(placementReads).toBe(1))
-    const originalTransform = content.parentElement!.style.transform
-    fireEvent.click(content.querySelector('button[aria-label="Toggle Arguments"]')!)
-    fireEvent.change(content.querySelector('textarea')!, { target: { value: '--add-dir src' } })
-    fireEvent.keyDown(content.querySelector('button[aria-label="Codex permissions"]')!, {
-      key: 'ArrowDown'
-    })
-    fireEvent.click(
-      [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find((item) =>
-        item.textContent?.startsWith('Full access')
-      )!
+    expect(updates).toBe(0)
+    await user.keyboard('{Escape}')
+    expect(active.size).toBe(0)
+    expect([...observers].some((observer) => observer.targets.has(document.documentElement))).toBe(
+      false
     )
-    expect(content.querySelector('button[aria-label="Codex permissions"]')?.textContent).toContain(
-      'Full access'
-    )
-    showPopover({ ...hydrated })
-    expect(document.querySelector('[role="menuitem"]')?.isConnected).toBe(true)
-    await waitFor(() => {
-      expect(content.parentElement!.style.transform).toBe(originalTransform)
-      expect(content.parentElement!.style.getPropertyValue('--radix-popper-anchor-width')).toBe(
-        `${row.width}px`
-      )
-      expect(content.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
-    })
-    expect(placementReads).toBe(1)
-    if (viewport <= 700) {
-      process.stdout.write(
-        `${JSON.stringify({ metric: 'picker-contained-layout', viewport, height, menuLeft, side: content.dataset.side, transform: content.parentElement!.style.transform, width: content.offsetWidth, contentHeight: content.offsetHeight, availableWidth: content.parentElement!.style.getPropertyValue('--radix-popper-available-width'), placementReads })}\n`
-      )
-    }
-    function externalResize(width: number, menuX = menu.x) {
-      act(() => {
-        viewportWidth = width
-        menu.x = menuX
-        row.x = menuX + 5
-        trigger.x = menuX + menuWidth - 32
-        fireEvent(window, new Event('resize'))
-        for (const observer of observers) {
-          if (
-            [...observer.targets].some(
-              (target) => target === document.documentElement || target.matches('[role="menuitem"]')
-            )
-          ) {
-            observer.callback([], observer)
-          }
-        }
-      })
-    }
-    if (viewport === 700 || (viewport === 600 && height === 800)) {
-      externalResize(600, 156)
-      await waitFor(() => {
-        expect(placementReads).toBe(2)
-        expect(content.dataset.side).toBe('bottom')
-        const position = content.parentElement!.style.transform.match(/translate\(([-\d.]+)px,/)
-        expect(position).not.toBeNull()
-        expect(Number(position![1])).toBeGreaterThanOrEqual(0)
-        expect(Number(position![1]) + content.offsetWidth).toBeLessThanOrEqual(viewportWidth)
-      })
-      externalResize(1000)
-      await waitFor(() => {
-        expect(placementReads).toBe(3)
-        expect(content.dataset.side).toBe('right')
-      })
-      // A panel's own resize must not restart the placement decision.
-      act(() => {
-        for (const observer of observers) {
-          if (observer.targets.has(content) || observer.targets.has(content.parentElement!)) {
-            observer.callback([], observer)
-          }
-        }
-      })
-      await waitFor(() => {
-        expect(placementReads).toBe(3)
-        expect(content.dataset.side).toBe('right')
-      })
-      fireEvent.keyDown(content, { key: 'Escape' })
-      expect(document.querySelector('[data-slot="popover-content"]')).toBeNull()
-      expect(
-        [...observers].some((observer) => observer.targets.has(document.documentElement))
-      ).toBe(false)
-      fireEvent.click(document.querySelector('button[aria-label="Configure Codex"]')!)
-      await waitFor(() =>
-        expect(
-          document.querySelector<HTMLElement>('[data-slot="popover-content"]')?.dataset.side
-        ).toBe('right')
-      )
-      await waitFor(() => expect(placementReads).toBe(4))
-    }
+    updates = 0
+    fireEvent(window, new Event('resize'))
+    expect(updates).toBe(0)
+    await user.click(configure)
+    expect(active.size).toBe(1)
+    // Replacing the agent source retires its active row, before the root is disposed.
+    show({ ...value, agent: 'claude', label: 'Claude' })
+    expect(active.size).toBe(0)
+    act(() => root.render(null))
+    expect([...observers].flatMap((observer) => [...observer.targets])).toEqual([])
+    expect([...movements].flatMap((observer) => [...observer.targets])).toEqual([])
+    updates = 0
+    fireEvent(window, new Event('resize'))
+    expect(updates).toBe(0)
     expect(launch).not.toHaveBeenCalled()
+    process.stdout.write(
+      `${JSON.stringify({ metric: 'native-open-geometry-bound', catalogOptions: size, renderedRows, viewportUpdates: counts.at(-1), closedUpdates: updates, activeAfterRetirement: active.size })}\n`
+    )
   }
-)
+  expect(counts[1]).toBe(counts[0])
+})
 
 it('opens setup with a clicked chevron without launching, then dispatches its selected surface once', () => {
   const configure = getByRole(document.body, 'button', { name: 'Configure Codex' })
@@ -710,11 +541,20 @@ it('retains authored Arguments on close/reopen and rebinds their acquisition aut
   )
   expect(launch).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
-      choices: { permissionMode: 'ask' },
-      arguments: '-a on-request -s read-only -c approvals_reviewer=user --add-dir old-owner',
+      arguments: '--add-dir old-owner',
       argumentsOwner: 'pair8/runtime2'
     })
   )
+  expect(
+    compilePickerTerminalLaunch(launch.mock.lastCall![0], {
+      ...own,
+      ownerKey: 'pair8/runtime2',
+      arguments: '--add-dir new-owner'
+    })
+  ).toMatchObject({
+    ok: true,
+    tokens: codexAskRetainedArgsTokens
+  })
 })
 
 it('retains the whole row draft after outside dismissal, menu remount and launch', async () => {
@@ -785,7 +625,9 @@ it('retains the whole row draft after outside dismissal, menu remount and launch
     expect(getByRole(document.body, 'switch').getAttribute('aria-checked')).toBe('true')
     expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(argumentsText)
     expect(
-      document.querySelector('button[aria-label="Remove --dangerously-skip-permissions"]')
+      document.querySelector(
+        'button[aria-label="Remove --dangerously-skip-permissions and use Claude\'s own settings"]'
+      )
     ).not.toBeNull()
     expect(document.querySelector('button[aria-label*="Remove --settings"]')).not.toBeNull()
   }

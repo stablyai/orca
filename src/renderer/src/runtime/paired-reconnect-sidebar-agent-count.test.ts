@@ -1,9 +1,9 @@
 // After sleep beyond freshness, reconnect snapshots lacking host status erased client-OSC-owned agent rows despite live PTYs (STA-3107). Preserve rows and decay to idle like local panes. Drive real mirror/sidebar builder with fake clocks; row/tab inventory, not elapsed time, is the oracle.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
@@ -14,15 +14,15 @@ import {
 } from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
-import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
+import { buildWorktreeAgentRows } from '../components/sidebar/workspace-card/activity/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree
-} from '../components/sidebar/worktree-agent-row-selectors'
+} from '../components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
-} from '../components/sidebar/worktree-card-status-inputs'
+} from '../components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 
 // Mock singleton import; this harness drives createTestStore like sibling mirror suites.
 vi.mock('../store', () => ({

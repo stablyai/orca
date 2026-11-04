@@ -1,5 +1,5 @@
 import type { BrowserScreencastResult } from '../../shared/runtime-types'
-import { runWithRequestedPageUrl } from '../browser/browser-expected-page-url'
+import { runWithRequestedPageUrl } from '../browser/cdp/input/browser-expected-page-url'
 import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import type { RuntimeBrowserCommands } from './browser/browser-commands'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'

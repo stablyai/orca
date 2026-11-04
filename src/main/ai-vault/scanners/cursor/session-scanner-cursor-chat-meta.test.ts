@@ -68,7 +68,7 @@ import {
   isAiVaultScanCancelledError,
   type AiVaultScanIssue,
   type AiVaultSession
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { AI_VAULT_AGENT_SOURCES } from '../../session-scanner-agent-sources'
 import { discoverFiles } from '../../session-scanner-discovery'
 import { scanAiVaultSessions } from '../../session-scanner'

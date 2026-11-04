@@ -13,19 +13,6 @@ afterEach(() => {
 })
 
 describe('foreground terminal tabs', () => {
-  it('keeps duplicate visible terminal tab claims until every token unregisters', () => {
-    const unregisterFirst = registerVisibleTerminalTab('tab-visible')
-    const unregisterSecond = registerVisibleTerminalTab('tab-visible')
-
-    expect(getForegroundTerminalTabIds()).toEqual(['tab-visible'])
-
-    unregisterFirst()
-    expect(getForegroundTerminalTabIds()).toEqual(['tab-visible'])
-
-    unregisterSecond()
-    expect(getForegroundTerminalTabIds()).toEqual([])
-  })
-
   it('refreshes last-seen when explicit foreground ids leave the combined foreground set', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

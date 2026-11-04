@@ -1,11 +1,9 @@
 import type {
   RuntimeEnvironmentStatus,
   RuntimeHostStatusSnapshot
-} from '../../../../shared/runtime-host-status'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AppState } from '../types'
-
-export type { RuntimeEnvironmentStatus }
 
 export type RuntimeStatusSlice = {
   readRuntimeHostStatusSnapshots: () => Promise<void>
