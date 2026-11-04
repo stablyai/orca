@@ -1,3 +1,4 @@
+import type { LinkedWorkItemPromptSettings } from '../linked-work-item-prompt-settings'
 import type { AntigravityChatAuthSettings } from '../agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { EmulatorOpeningSettings } from '../emulator/emulator-opening-preferences'
 import type { BrowserExtensionGlobalSettings } from '../browser/extensions/browser-extension-settings'
@@ -45,7 +46,8 @@ type DesktopWindowSettings = {
 }
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
-export type GlobalSettingsBase = AntigravityChatAuthSettings &
+export type GlobalSettingsBase = LinkedWorkItemPromptSettings &
+  AntigravityChatAuthSettings &
   EmulatorOpeningSettings &
   SshRemoteControlSettings &
   ClaudeAgentViewSettings &
