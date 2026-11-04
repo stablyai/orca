@@ -112,6 +112,22 @@ function listenerCount(guest: GuestFake, event: string): number {
   return guest.listeners.get(event)?.length ?? 0
 }
 
+function pressKey(guest: GuestFake, input: Partial<Electron.Input>): void {
+  const event = { preventDefault: vi.fn() }
+  for (const listener of guest.listeners.get('before-input-event') ?? []) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only before-input-event listeners, which take (event, input), are read here.
+    ;(listener as (event: unknown, input: unknown) => void)(event, {
+      type: 'keyDown',
+      shift: false,
+      control: false,
+      alt: false,
+      meta: false,
+      isAutoRepeat: false,
+      ...input
+    })
+  }
+}
+
 function navigateTo(guest: GuestFake, url: string): boolean {
   let prevented = false
   const event = { preventDefault: () => (prevented = true) } as never
@@ -121,7 +137,12 @@ function navigateTo(guest: GuestFake, url: string): boolean {
   return prevented
 }
 
-const host = { id: 5001, send: vi.fn() } as unknown as Electron.WebContents
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the document policy and its shortcut forwarding read only id, send and isDestroyed.
+const host = {
+  id: 5001,
+  send: vi.fn(),
+  isDestroyed: () => false
+} as unknown as Electron.WebContents
 
 beforeEach(() => {
   resetBrowserManagerMocks(browserMocks)
@@ -176,6 +197,28 @@ describe('guest policy profiles', () => {
     // Reattaching succeeds only after cleanup clears the policy-attached ID.
     browserManager.attachGuestPolicies(guest as never)
     expect(listenerCount(guest, 'did-create-window')).toBe(1)
+  })
+
+  it('forwards Ctrl+Tab from a focused workspace-document guest to its host', () => {
+    const { guest } = attachPreviewGuest(303)
+    vi.mocked(host.send).mockClear()
+
+    pressKey(guest, { code: 'Tab', key: 'Tab', control: true })
+    pressKey(guest, { type: 'keyUp', code: 'ControlLeft', key: 'Control' })
+
+    expect(host.send).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', { shiftKey: false })
+    expect(host.send).toHaveBeenNthCalledWith(2, 'ui:ctrlTabKeyUp')
+  })
+
+  it('stops forwarding shortcuts once a workspace-document guest is torn down', () => {
+    const { guest } = attachPreviewGuest(304)
+    expect(listenerCount(guest, 'before-input-event')).toBe(1)
+
+    for (const listener of guest.listeners.get('destroyed') ?? []) {
+      listener()
+    }
+
+    expect(listenerCount(guest, 'before-input-event')).toBe(0)
   })
 
   describe('the one door across both halves of the registry', () => {
