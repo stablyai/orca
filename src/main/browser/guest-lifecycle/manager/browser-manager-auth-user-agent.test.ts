@@ -62,6 +62,7 @@ import {
 } from './browser-manager-test-harness'
 import {
   createViewportGuestFactory,
+  expectedDesktopHintMetadata,
   flushViewportOps,
   GUEST_CLEAN_UA
 } from './browser-manager-viewport-test-fixtures'
@@ -137,9 +138,10 @@ describe('browserManager', () => {
       ([method]) => method === 'Emulation.setUserAgentOverride'
     )
     await expect(sendCommand.mock.results[uaOverrideIndex]?.value).resolves.toBeUndefined()
+    // Metadata keeps client hints alive on the page that commits under the temporary override.
     expect(sendCommand.mock.calls[uaOverrideIndex]).toEqual([
       'Emulation.setUserAgentOverride',
-      { userAgent: guestBaseUserAgent }
+      { userAgent: guestBaseUserAgent, userAgentMetadata: expectedDesktopHintMetadata('140') }
     ])
 
     // Direct navigation can restore the WebContents UA and clear the temporary CDP override.
@@ -268,7 +270,8 @@ describe('browserManager', () => {
 
     expect(guest.setUserAgent).not.toHaveBeenCalled()
     expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: googleAuthUserAgent()
+      userAgent: googleAuthUserAgent(),
+      userAgentMetadata: expectedDesktopHintMetadata('134')
     })
 
     // Detaching clears Chromium's CDP overrides and invalidates the confirmed identity.
@@ -281,7 +284,8 @@ describe('browserManager', () => {
       true
     )
     expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: googleAuthUserAgent()
+      userAgent: googleAuthUserAgent(),
+      userAgentMetadata: expectedDesktopHintMetadata('134')
     })
 
     // getUserAgent omits the CDP override; clear it on exit to restore UA and client hints.
@@ -321,7 +325,8 @@ describe('browserManager', () => {
       true
     )
     expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: googleAuthUserAgent()
+      userAgent: googleAuthUserAgent(),
+      userAgentMetadata: expectedDesktopHintMetadata('134')
     })
     releaseHeldUserAgentOverride()
     await olderHeldWrite
@@ -430,7 +435,8 @@ describe('browserManager', () => {
     willRedirect({ preventDefault: vi.fn() }, 'https://myaccount.google.com/', false, true)
     await flushViewportOps()
     expect(debuggerSendCommand).toHaveBeenLastCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: GUEST_CLEAN_UA
+      userAgent: GUEST_CLEAN_UA,
+      userAgentMetadata: expectedDesktopHintMetadata('134')
     })
     expect(presentedUserAgent()).toBe(GUEST_CLEAN_UA)
 

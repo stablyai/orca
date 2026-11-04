@@ -62,6 +62,7 @@ import {
 } from './browser-manager-test-harness'
 import {
   createViewportGuestFactory,
+  expectedDesktopHintMetadata,
   flushViewportOps,
   GUEST_CLEAN_UA,
   GUEST_ELECTRON_UA
@@ -188,7 +189,8 @@ describe('browserManager', () => {
         })
 
         expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-          userAgent: googleAuthUserAgent()
+          userAgent: googleAuthUserAgent(),
+          userAgentMetadata: expectedDesktopHintMetadata('134')
         })
       }
     )
@@ -310,7 +312,8 @@ describe('browserManager', () => {
       })
       await flushViewportOps()
       expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
-        userAgent: googleAuthUserAgent()
+        userAgent: googleAuthUserAgent(),
+        userAgentMetadata: expectedDesktopHintMetadata('134')
       })
 
       let releaseMetrics = (): void => {}
@@ -506,7 +509,8 @@ describe('browserManager', () => {
       // Rewriting the WebContents UA during redirects can abort and replay sign-in requests.
       expect(guest.setUserAgent).not.toHaveBeenCalled()
       expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
-        userAgent: googleAuthUserAgent()
+        userAgent: googleAuthUserAgent(),
+        userAgentMetadata: expectedDesktopHintMetadata('134')
       })
 
       didFailLoad(null, -3, 'Aborted', 'https://accounts.google.com/redirected', true)
@@ -546,7 +550,8 @@ describe('browserManager', () => {
         true
       )
       expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
-        userAgent: googleAuthUserAgent()
+        userAgent: googleAuthUserAgent(),
+        userAgentMetadata: expectedDesktopHintMetadata('134')
       })
       expect(debuggerSendCommand).not.toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
         userAgent: ''

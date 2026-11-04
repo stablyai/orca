@@ -43,6 +43,31 @@ export function resolveBrowserTabIdentity(args: {
   return { kind: 'process', userAgent: args.processIdentity.userAgent }
 }
 
+// A UA-only CDP override blanks every client hint, which brands the tab as a spoofed
+// browser on sign-in and anti-bot checks; ship Chromium-shaped metadata with the override.
+export function desktopUserAgentMetadata(userAgent: string): UserAgentMetadata {
+  const chromeFull =
+    userAgent.match(/Chrome\/([\d.]+)/)?.[1] ?? `${extractChromeMajor(userAgent)}.0.0.0`
+  const chromeMajor = chromeFull.split('.')[0] ?? extractChromeMajor(userAgent)
+  return {
+    brands: [
+      { brand: 'Not;A=Brand', version: '8' },
+      { brand: 'Chromium', version: chromeMajor }
+    ],
+    fullVersionList: [
+      { brand: 'Not;A=Brand', version: '8.0.0.0' },
+      { brand: 'Chromium', version: chromeFull }
+    ],
+    fullVersion: chromeFull,
+    platform:
+      process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux',
+    platformVersion: process.getSystemVersion?.() ?? '',
+    architecture: process.arch.startsWith('arm') ? 'arm' : 'x86',
+    model: '',
+    mobile: false
+  }
+}
+
 // Match the mobile UA version to the client-hint brands.
 function buildMobileUserAgent(chromeMajor: string): string {
   return `Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/${chromeMajor}.0.0.0 Mobile/15E148 Safari/604.1`

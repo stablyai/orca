@@ -6,6 +6,7 @@ import { getBrowserProcessUserAgentIdentity } from '../../identity/browser-proce
 import type { BrowserSessionRequestUserAgentResolver } from '../../identity/browser-session-ua'
 import { isGoogleAuthUrl } from '../../identity/browser-google-auth-ua'
 import {
+  desktopUserAgentMetadata,
   googleAuthTabIdentity,
   resolveBrowserTabIdentity,
   type BrowserTabIdentity
@@ -116,7 +117,12 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         : presentedByWebContents === identity.userAgent
           ? { userAgent: '' }
           : // Temporary override until cross-document navigation can update the WebContents UA.
-            { userAgent: identity.userAgent }
+            // Without metadata it blanks client hints on the document that commits under it —
+            // typically the post-Google-sign-in landing page, which anti-bot checks then refuse.
+            {
+              userAgent: identity.userAgent,
+              userAgentMetadata: desktopUserAgentMetadata(identity.userAgent)
+            }
     if (override.userAgent === '' && !this.standingCdpUserAgentOverride(guest.id)) {
       return Promise.resolve(true)
     }
