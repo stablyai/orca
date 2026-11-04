@@ -3,7 +3,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
+import type { HostedReviewCreationEligibility } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
 const getRuntimeRepoBaseRefDefault = vi.fn()
 

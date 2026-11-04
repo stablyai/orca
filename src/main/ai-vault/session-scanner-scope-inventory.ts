@@ -1,11 +1,11 @@
 import { extname, join } from 'node:path'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { openAiVaultScanSource } from './ai-vault-scan-progress'
 import { SCAN_ISSUE_LIMIT, recordSessionScanIssue } from './session-scan-issues'
-import { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault-scope-cwd-match'
+import { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
 import type { FileWithMtime } from './session-scanner-types'
 import {

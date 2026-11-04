@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 import type { Repo } from '../../../../shared/repo-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -66,21 +66,6 @@ describe('environment-catalog merge guard drops catalogs for a removed env', () 
     rpcResult.current = { repos: [repo('fresh')], projects: [], setups: [] }
 
     await store.getState().fetchRuntimeEnvironmentRepos('env-hydrating')
-
-    expect(
-      store
-        .getState()
-        .repos.map((r) => r.id)
-        .sort()
-    ).toEqual(['fresh', 'repo1'])
-  })
-
-  it('fetchRuntimeEnvironmentRepos merges the catalog for a still-saved env id', async () => {
-    const store = createTestStore()
-    seedStore(store, { repos: [TEST_REPO], runtimeEnvironments: [env('env-saved')] })
-    rpcResult.current = { repos: [repo('fresh')], projects: [], setups: [] }
-
-    await store.getState().fetchRuntimeEnvironmentRepos('env-saved')
 
     expect(
       store

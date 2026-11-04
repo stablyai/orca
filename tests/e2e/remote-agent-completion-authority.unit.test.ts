@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTerminalTitleTracker } from '../../src/shared/terminal-output-side-effects'
+import { createTerminalTitleTracker } from '../../src/shared/terminal/output/terminal-output-side-effects'
 import {
   createAgentCompletionCoordinator,
   resetAgentCompletionCoordinatorIdentitiesForTest

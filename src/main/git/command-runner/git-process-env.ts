@@ -1,9 +1,6 @@
-import { addWslEnvKeys } from '../../wsl-env'
-import {
-  appendGitConfigEnv,
-  gitCredentialPromptGuardEnv
-} from '../../../shared/git-credential-prompt-env'
-import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../shared/git-output-locale'
+import { addWslEnvKeys } from '../../../shared/wsl-env'
+import { gitCredentialPromptGuardEnv } from '../../../shared/git/commands/git-credential-prompt-env'
+import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../shared/git/commands/git-output-locale'
 
 export function gitOptionalLocksDisabledEnv(
   env: NodeJS.ProcessEnv = process.env
@@ -15,7 +12,6 @@ export function gitOptionalLocksDisabledEnv(
 }
 
 /** Append Git >= 2.31 config-env entries without overwriting the caller's existing entries. */
-export { appendGitConfigEnv }
 
 /** Pin Git diagnostics to English so parsers work under any user locale. */
 export function untranslatedGitOutputEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

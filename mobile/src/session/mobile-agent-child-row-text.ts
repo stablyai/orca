@@ -2,9 +2,9 @@ import {
   agentChildRowDetailText,
   agentChildRowLeadTrail,
   agentChildRowName
-} from '../../../src/shared/agent-child-row-lead-trail'
-import type { AgentChildRowModel } from '../../../src/shared/agent-child-row-model'
-import type { AgentChildDisplayState } from '../../../src/shared/agent-status-child-work-display'
+} from '../../../src/shared/agent-status/presentation/agent-child-row-lead-trail'
+import type { AgentChildRowModel } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
+import type { AgentChildDisplayState } from '../../../src/shared/agent-status/child-work/agent-status-child-work-display'
 import { sayMobileBackgroundTask } from './mobile-background-task-copy'
 import { translate } from '../i18n/mobile-i18n'
 import { agentStateLabel } from '../worktree/agent-row-display'

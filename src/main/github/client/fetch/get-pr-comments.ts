@@ -1,5 +1,5 @@
 import type { PRComment } from '../../../../shared/github/comment-types'
-import { runCoalescedProbe, type CoalescedProbes } from '../../../git/coalesced-probe'
+import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { extractExecError } from '../../../git/exec-error'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'

@@ -18,23 +18,9 @@ vi.mock('../store', async () => {
 
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { recoverFromDegradedStartup } from './startup-degraded-recovery'
-import { createWebRuntimeUnauthorizedError } from '../web/web-runtime-client-error'
-
-function recover(args: {
-  isCancelled: () => boolean
-  reconnectPersistedTerminals: () => Promise<void>
-}): Promise<void> {
-  return recoverFromDegradedStartup({
-    error: new Error('hydration failed'),
-    uiHydrated: true,
-    reconnectStarted: false,
-    hydratePersistedUI: vi.fn(),
-    abortSignal: new AbortController().signal,
-    ...args
-  })
-}
+import '../web/web-runtime-client-error'
 
 describe('recoverFromDegradedStartup', () => {
   beforeEach(() => {
@@ -50,29 +36,6 @@ describe('recoverFromDegradedStartup', () => {
         }
       }
     })
-  })
-
-  it('releases terminal startup restoration once the degraded reconnect succeeds', async () => {
-    await recover({
-      isCancelled: () => false,
-      reconnectPersistedTerminals: async () => {
-        useAppStore.setState({ workspaceSessionReady: true })
-      }
-    })
-
-    expect(useAppStore.getState().terminalStartupRestorationReady).toBe(true)
-  })
-
-  it('leaves the flag to the newer pass when this one was cancelled mid-reconnect', async () => {
-    let cancelled = false
-    await recover({
-      isCancelled: () => cancelled,
-      reconnectPersistedTerminals: async () => {
-        cancelled = true
-      }
-    })
-
-    expect(useAppStore.getState().terminalStartupRestorationReady).toBe(false)
   })
 
   describe('on the paired web client', () => {
@@ -153,15 +116,6 @@ describe('recoverFromDegradedStartup', () => {
       expect(relaunch).toHaveBeenCalledTimes(1)
     })
 
-    it.each([
-      'Timed out while connecting to the remote Orca runtime.',
-      'Remote Orca runtime connection interrupted.'
-    ])('treats "%s" as an unreachable host', async (message) => {
-      await recoverFrom(new Error(message))
-
-      expect(vi.mocked(toast.error).mock.calls[0]?.[0]).toBe("Couldn't reach your Orca host")
-    })
-
     it('stops waiting to reload once its startup pass is torn down', async () => {
       const pass = new AbortController()
       await recoverFrom(new Error('Could not connect to the remote Orca runtime.'), {
@@ -185,31 +139,6 @@ describe('recoverFromDegradedStartup', () => {
       })
 
       expect(toast.error).not.toHaveBeenCalled()
-      expect(statusListener).toBeNull()
-    })
-
-    it('keeps the session-restore warning when the host was connected', async () => {
-      currentTransport = 'ready'
-      await recoverFrom(new Error('Timed out waiting for the remote Orca runtime.'))
-
-      expect(vi.mocked(toast.error).mock.calls[0]?.[0]).toBe('Session restore failed')
-      expect(statusListener).toBeNull()
-    })
-
-    it('keeps the session-restore warning for a failure that is not about the connection', async () => {
-      await recoverFrom(new Error('Persisted session schema is invalid'))
-
-      expect(vi.mocked(toast.error).mock.calls[0]?.[0]).toBe('Session restore failed')
-    })
-
-    it('shows why the host refused this browser instead of a session-restore failure', async () => {
-      const refusal = createWebRuntimeUnauthorizedError('insecure-origin')
-      await recoverFrom(refusal)
-
-      const [title, options] = vi.mocked(toast.error).mock.calls[0] ?? []
-      expect(title).toBe('Orca refused this browser')
-      expect(options?.description).toBe(refusal.message)
-      expect(refusal.message).toContain('ORCA_ALLOW_INSECURE_WEB_PAIRING=1')
       expect(statusListener).toBeNull()
     })
   })

@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { WorkspaceCleanupScanResult } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanResult } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import WorkspaceCleanupDialog from './WorkspaceCleanupDialog'
 
 const probes = vi.hoisted(() => ({ facets: vi.fn() }))

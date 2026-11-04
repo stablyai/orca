@@ -2,10 +2,13 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import type {
+  RuntimeHostStatusSnapshot,
+  RuntimeEnvironmentStatus
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { useAppStore } from '../store'
-import type { RuntimeEnvironmentStatus } from '../store/slices/runtime-status-types'
+
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 import { getDefaultSettings } from '../../../shared/constants'
 

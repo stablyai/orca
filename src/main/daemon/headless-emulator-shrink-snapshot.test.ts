@@ -4,7 +4,7 @@ import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { HeadlessEmulator } from './headless-emulator'
-import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
+import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal/appearance/terminal-unicode-provider'
 
 const WIDE = 135
 const NARROW = 48

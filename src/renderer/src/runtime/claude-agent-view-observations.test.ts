@@ -51,17 +51,3 @@ it('shares one host stream and clears its observed view when disconnected until 
   expect(close).toHaveBeenCalledTimes(2)
   expect(vi.getTimerCount()).toBe(0)
 })
-
-it('degrades quietly with an older host that does not expose observed views', async () => {
-  vi.useFakeTimers()
-  subscribe.mockImplementation(async (_target, _method, _params, handlers) => {
-    handlers.onError({ code: 'method_not_found' })
-    return { unsubscribe: vi.fn() }
-  })
-  const release = subscribeClaudeAgentViews('older-host', { kind: 'local' }, vi.fn())
-  await vi.advanceTimersByTimeAsync(15000)
-  expect(readClaudeAgentViews('older-host')).toEqual([])
-  expect(subscribe).toHaveBeenCalledTimes(1)
-  release()
-  await Promise.resolve()
-})

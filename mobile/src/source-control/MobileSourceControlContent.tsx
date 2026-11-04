@@ -42,12 +42,18 @@ function CleanStateFade({ animate, children }: { animate: boolean; children: Rea
 
 type Props = {
   state: Omit<MobileSourceControlState, 'primaryActionArgs'>
+  stageAllInBar: boolean
   /** Clears the next-step bar the panel floats over the list. */
   bottomInset: number
   onOpenCommits: () => void
 }
 
-export function MobileSourceControlContent({ state, bottomInset, onOpenCommits }: Props) {
+export function MobileSourceControlContent({
+  state,
+  stageAllInBar,
+  bottomInset,
+  onOpenCommits
+}: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { busyAction, hasVisibleChanges } = state
@@ -128,6 +134,7 @@ export function MobileSourceControlContent({ state, bottomInset, onOpenCommits }
         }}
         header={header}
         bottomInset={bottomInset + spacing.lg}
+        stageAllInBar={stageAllInBar}
       />
     ),
     [
@@ -138,6 +145,7 @@ export function MobileSourceControlContent({ state, bottomInset, onOpenCommits }
       busyAction,
       header,
       openDiffForFile,
+      stageAllInBar,
       resolveConflict,
       runGitAction,
       sections,

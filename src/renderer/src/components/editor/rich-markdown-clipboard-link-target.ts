@@ -3,7 +3,10 @@ import {
   isWindowsAbsolutePathLike,
   relativePathInsideRoot
 } from '../../../../shared/cross-platform-path'
-import { fileUriToFilesystemPath, filesystemPathToFileUri } from '../../../../shared/file-uri-path'
+import {
+  fileUriToFilesystemPath,
+  filesystemPathToFileUri
+} from '../../../../shared/file-links/file-uri-path'
 import { projectMarkdownHrefForClipboard } from './markdown-internal-links'
 import { resolveMarkdownPreviewHref } from './markdown-preview-links'
 

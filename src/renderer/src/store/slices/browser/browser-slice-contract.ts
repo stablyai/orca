@@ -47,6 +47,8 @@ export type CreateBrowserTabOptions = {
   split?: TabSplitTarget
   /** Client-local unified tab id of the source; the new tab lands right after it when still live. */
   afterTabId?: string
+  /** Shows the tab in its pane without making it the active pane or browser surface. */
+  showInGroup?: boolean
   /** Verified execution host for the new wrapper; unset keeps createUnifiedTab's active-workspace fallback. */
   executionHostId?: ExecutionHostId
   // Explicit "New Tab" focuses the address bar even with a real home URL; link-opened tabs leave it unset.

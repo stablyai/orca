@@ -27,7 +27,7 @@ import {
   createNativeChatRestartStore,
   type NativeChatRestartStore
 } from './native-chat-resume-on-restart-store'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import * as runtimeRpc from '@/runtime/runtime-rpc-client'
 import * as hostOffer from './native-chat-restart-host-offer'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'

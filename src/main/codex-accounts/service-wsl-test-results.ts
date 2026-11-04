@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import type { WslResult, WslSpec } from '../wsl/wsl-runner'
+import type { WslResult, WslSpec } from '../wsl/execution/wsl-runner'
 
 export function wslOk(stdout = ''): WslResult {
   return { environmentResolved: true, code: 0, stdout, stderr: '', timedOut: false }

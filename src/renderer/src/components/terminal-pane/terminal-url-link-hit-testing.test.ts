@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { extractTerminalHttpLinks } from '../../../../shared/terminal-http-url-extraction'
-import { TERMINAL_HTTP_URL_MAX_LENGTH } from '../../../../shared/terminal-http-link-limits'
+import { extractTerminalHttpLinks } from '../../../../shared/terminal/links/terminal-http-url-extraction'
+import { TERMINAL_HTTP_URL_MAX_LENGTH } from '../../../../shared/terminal/links/terminal-http-link-limits'
 
 describe('extractTerminalHttpLinks', () => {
   it('extracts regular http links and trims terminal trailing punctuation', () => {

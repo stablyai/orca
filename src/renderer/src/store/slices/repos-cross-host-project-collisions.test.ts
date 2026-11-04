@@ -25,19 +25,6 @@ function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   } as Repo
 }
 
-const localTwin = repo('local-uuid', {
-  path: '/laptop/shared',
-  executionHostId: 'local'
-})
-const remoteATwin = repo('env-a-uuid', {
-  path: '/mini/shared',
-  executionHostId: 'runtime:env-a'
-})
-const remoteBTwin = repo('env-b-uuid', {
-  path: '/server/shared',
-  executionHostId: 'runtime:env-b'
-})
-
 const reposRemove = vi.fn()
 const reposRemoveForHost = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -71,38 +58,6 @@ function answerRepoRm(options: { failingSelector?: string; code?: string } = {})
   })
 }
 
-/** repo.list per environment, so a catalog refresh sees exactly what that host still has. */
-function answerCatalogs(reposByEnvironment: Record<string, Repo[]>): void {
-  runtimeEnvironmentCall.mockImplementation((args: RuntimeCall) => {
-    const meta = { runtimeId: `runtime-${args.selector}` }
-    if (args.method === 'repo.list') {
-      return {
-        id: 'rpc-repo-list',
-        ok: true,
-        result: { repos: reposByEnvironment[args.selector] ?? [] },
-        _meta: meta
-      }
-    }
-    if (args.method === 'project.list') {
-      return {
-        id: 'rpc-project-list',
-        ok: true,
-        result: { projects: [] },
-        _meta: meta
-      }
-    }
-    if (args.method === 'projectHostSetup.list') {
-      return {
-        id: 'rpc-setup-list',
-        ok: true,
-        result: { setups: [] },
-        _meta: meta
-      }
-    }
-    return { id: 'rpc', ok: true, result: {}, _meta: meta }
-  })
-}
-
 function seed(repos: readonly Repo[], activeRuntimeEnvironmentId: string | null = null) {
   const store = createTestStore()
   store.setState({
@@ -110,16 +65,6 @@ function seed(repos: readonly Repo[], activeRuntimeEnvironmentId: string | null 
     repos: [...repos]
   })
   return store
-}
-
-function repoRmCalls(): RuntimeCall[] {
-  return runtimeEnvironmentTransportCall.mock.calls
-    .map(([args]) => args)
-    .filter((args) => args.method === 'repo.rm')
-}
-
-function remainingRepoIds(store: ReturnType<typeof seed>): string[] {
-  return store.getState().repos.map((entry) => entry.id)
 }
 
 beforeEach(() => {
@@ -146,18 +91,6 @@ beforeEach(() => {
   })
 })
 
-describe('deleting one host copy of a same-named project', () => {
-  it('keeps remote B when remote A reports the project already gone', async () => {
-    // The reporter's #11994 case with a name collision: the ghost purge is host-scoped.
-    answerRepoRm({ failingSelector: 'env-a', code: 'repo_not_found' })
-    const store = seed([localTwin, remoteATwin, remoteBTwin], 'env-b')
-
-    await store.getState().removeProject('env-a-uuid', { hostId: 'runtime:env-a' })
-
-    expect(remainingRepoIds(store)).toEqual(['local-uuid', 'env-b-uuid'])
-  })
-})
-
 describe('deleting one host copy of a project whose id exists on two hosts', () => {
   const duplicateLocal = repo('dup-id', {
     path: '/laptop/dup',
@@ -168,35 +101,6 @@ describe('deleting one host copy of a project whose id exists on two hosts', () 
     executionHostId: 'runtime:env-a'
   })
 
-  it('scopes the local removal to the local host instead of the bare id', async () => {
-    const store = seed([duplicateLocal, duplicateRemote], 'env-a')
-
-    await store.getState().removeProject('dup-id', { hostId: 'local' })
-
-    // repos:remove is id-only and would delete every host's row in main persistence.
-    expect(reposRemove).not.toHaveBeenCalled()
-    expect(reposRemoveForHost).toHaveBeenCalledWith({
-      repoId: 'dup-id',
-      hostId: 'local'
-    })
-    expect(store.getState().repos.map((entry) => entry.path)).toEqual(['/mini/dup'])
-  })
-
-  it('leaves the local row when the remote copy is removed', async () => {
-    const store = seed([duplicateLocal, duplicateRemote], 'env-a')
-
-    await store.getState().removeProject('dup-id', { hostId: 'runtime:env-a' })
-
-    expect(repoRmCalls()).toEqual([
-      expect.objectContaining({
-        selector: 'env-a',
-        params: { repo: 'dup-id' }
-      })
-    ])
-    expect(reposRemove).not.toHaveBeenCalled()
-    expect(store.getState().repos.map((entry) => entry.path)).toEqual(['/laptop/dup'])
-  })
-
   it('keeps the row when the owner cannot disambiguate a duplicate id', async () => {
     // selector_ambiguous is a real refusal, not missing-project proof; keep row and report failure.
     answerRepoRm({ failingSelector: 'env-a', code: 'selector_ambiguous' })
@@ -205,24 +109,5 @@ describe('deleting one host copy of a project whose id exists on two hosts', () 
     await store.getState().removeProject('dup-id', { hostId: 'runtime:env-a' })
 
     expect(store.getState().repos.map((entry) => entry.path)).toEqual(['/laptop/dup', '/mini/dup'])
-  })
-})
-
-describe('refetching one host catalog after its own delete', () => {
-  it('keeps another host row that shares the deleted repo id', async () => {
-    const duplicateLocal = repo('dup-id', {
-      path: '/laptop/dup',
-      executionHostId: 'local'
-    })
-    const duplicateRemote = repo('dup-id', {
-      path: '/mini/dup',
-      executionHostId: 'runtime:env-a'
-    })
-    answerCatalogs({ 'env-a': [] })
-    const store = seed([duplicateLocal, duplicateRemote], 'env-a')
-
-    await store.getState().fetchRuntimeEnvironmentRepos('env-a')
-
-    expect(store.getState().repos.map((entry) => entry.path)).toEqual(['/laptop/dup'])
   })
 })

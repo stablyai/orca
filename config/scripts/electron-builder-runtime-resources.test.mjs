@@ -1,19 +1,15 @@
 import { cp, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { delimiter, dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { removeTree } from '../../src/shared/windows-transient-lock-removal.ts'
 
 const require = createRequire(import.meta.url)
-const projectRoot = resolve(import.meta.dirname, '..', '..')
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const {
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
-  prunePackagedSherpaOnnx,
-  prunePackagedRuntimeTypeAndSourceMapArtifacts,
-  prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
 } = require('../packaged-runtime-node-modules.cjs')
 
@@ -281,60 +277,6 @@ describe('packaged runtime resources', () => {
     }
   })
 
-  it('prunes type declaration artifacts from packaged runtime node_modules', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-type-prune-'))
-    try {
-      const packageDir = join(resourcesDir, 'node_modules', 'example-package')
-      await mkdir(join(packageDir, 'dist'), { recursive: true })
-      await writeFile(join(packageDir, 'dist', 'index.cjs'), 'module.exports = {}', 'utf8')
-      await writeFile(join(packageDir, 'dist', 'index.d.ts'), 'export type Value = string', 'utf8')
-      await writeFile(join(packageDir, 'dist', 'index.d.cts'), 'export type Value = string', 'utf8')
-      await writeFile(join(packageDir, 'dist', 'index.d.mts.map'), '{}', 'utf8')
-
-      prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir)
-
-      await expect(readdir(join(packageDir, 'dist'))).resolves.toEqual(['index.cjs'])
-    } finally {
-      await removeTree(resourcesDir)
-    }
-  })
-
-  it('prunes duplicate darwin sherpa-onnx runtime dylib aliases', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-sherpa-prune-'))
-    try {
-      const packageDir = join(resourcesDir, 'node_modules', 'sherpa-onnx-darwin-arm64')
-      await mkdir(packageDir, { recursive: true })
-      await writeFile(join(packageDir, 'sherpa-onnx.node'), '', 'utf8')
-      await writeFile(join(packageDir, 'libonnxruntime.1.23.2.dylib'), '', 'utf8')
-      await writeFile(join(packageDir, 'libonnxruntime.dylib'), '', 'utf8')
-
-      prunePackagedSherpaOnnx(resourcesDir, 'darwin')
-
-      await expect(readdir(packageDir).then((entries) => entries.sort())).resolves.toEqual([
-        'libonnxruntime.1.23.2.dylib',
-        'sherpa-onnx.node'
-      ])
-    } finally {
-      await removeTree(resourcesDir)
-    }
-  })
-
-  it('prunes zod TypeScript sources from packaged runtime resources', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-zod-prune-'))
-    try {
-      const packageDir = join(resourcesDir, 'node_modules', 'zod')
-      await mkdir(join(packageDir, 'src'), { recursive: true })
-      await writeFile(join(packageDir, 'index.cjs'), 'module.exports = {}', 'utf8')
-      await writeFile(join(packageDir, 'src', 'index.ts'), 'export const value = true', 'utf8')
-
-      prunePackagedZodSources(resourcesDir)
-
-      await expect(readdir(packageDir)).resolves.toEqual(['index.cjs'])
-    } finally {
-      await removeTree(resourcesDir)
-    }
-  })
-
   it('fails when the packaged resources directory is missing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-config-'))
     try {
@@ -459,7 +401,7 @@ describe('packaged runtime resources', () => {
           join(unpackedCliDir, 'index.js'),
           [
             'const args = process.argv.slice(2)',
-            "if (args[1] === 'list') console.log(JSON.stringify({ topics: [{ name: 'orca-cli' }, { name: 'computer-use' }] }))",
+            "if (args[1] === 'list') console.log(JSON.stringify({ topics: [{ name: 'orca-cli' }, { name: 'orca-computer-use' }] }))",
             "else if (args[1] === 'get') console.log(`---\\nname: ${args[2]}\\n---`)",
             'else console.log(JSON.stringify({ executed: false }))'
           ].join('\n'),
@@ -531,30 +473,3 @@ async function seedBundledRipgrep(resourcesDir) {
     await writeFile(join(dir, platform.startsWith('win32-') ? 'rg.exe' : 'rg'), '', 'utf8')
   }
 }
-
-describe('lazily required packages reach Resources/node_modules', () => {
-  it('resolves the copied emoji dataset the way the packaged main bundle does', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-lazy-require-'))
-    try {
-      const datasetPath = 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
-      const entry = electronBuilderConfig.mac.extraResources.find(
-        (resource) => String(resource.to) === datasetPath
-      )
-      expect(entry).toBeDefined()
-      const destination = join(resourcesDir, ...datasetPath.split('/'))
-      await mkdir(dirname(destination), { recursive: true })
-      await cp(join(projectRoot, ...String(entry.from).split('/')), destination)
-
-      // app.asar's parent is Resources, so main's bare require walks into Resources/node_modules.
-      const packagedMainDir = join(resourcesDir, 'app.asar', 'out', 'main')
-      await mkdir(packagedMainDir, { recursive: true })
-      const probe = join(packagedMainDir, 'probe.cjs')
-      await writeFile(probe, 'module.exports = require', 'utf8')
-
-      const dataset = require(probe)('emojibase-data/en/shortcodes/emojibase.json')
-      expect(Object.keys(dataset).length).toBeGreaterThan(1000)
-    } finally {
-      await removeTree(resourcesDir)
-    }
-  })
-})

@@ -5,7 +5,7 @@ import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session/agent-session-conversation-command'
 import type { StructuredAgentContextUsage } from '../../../../shared/agent-session/structured-agent-session-context-usage'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   StructuredAgentSessionCommandOutcome,
   StructuredAgentSessionCommandRefusalCause
@@ -41,6 +41,7 @@ export type NativeChatComposerSendIntent = Pick<StructuredAgentSessionSendReques
 export type NativeChatStructuredComposerTransport = {
   capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  compactInstructions?: boolean
   send: (
     text: string,
     attachments: readonly NativeChatComposerImageAttachment[],

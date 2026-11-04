@@ -5,8 +5,8 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
-import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import type { MobilePairingConnectionMode } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 
 type StoreState = {
   closeMobilePage: () => void
@@ -39,7 +39,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('./use-mobile-install-qr', () => ({ useMobileInstallQr: () => null }))
 vi.mock('./use-mobile-page-escape', () => ({ useMobilePageEscape: vi.fn() }))
-vi.mock('../settings/mobile-pairing-device-polling', () => ({
+vi.mock('../settings/mobile/pairing/mobile-pairing-device-polling', () => ({
   useMobilePairingDevicePolling: vi.fn()
 }))
 

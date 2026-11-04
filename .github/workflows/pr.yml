@@ -629,9 +629,9 @@ jobs:
             export GIT_EXEC_PATH="$HOME/.cache/orca-git-compat/git-$ORCA_GIT_COMPAT_VERSION"
           fi
           pnpm exec vitest run --config config/vitest.config.ts \
-            src/shared/git-binary-compatibility.test.ts \
-            src/main/git/worktree-safety-real-git.test.ts \
-            src/main/git/worktree-rebase-update-refs-real-git.test.ts
+            src/shared/git/compatibility/git-binary-compatibility.test.ts \
+            src/main/git/worktrees/creation/worktree-safety-real-git.test.ts \
+            src/main/git/worktrees/removal/worktree-rebase-update-refs-real-git.test.ts
 
   # Run pinned real Codex: thread/read must repair an unindexed rollout’s threads row; stub-only units cannot detect upstream removal of this behavior.
   codex_index_heal_contract:
@@ -688,7 +688,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_NO_DAEMON_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/pty/codex-no-daemon-binary-contract.test.ts
+            src/main/pty/shell-startup/codex-no-daemon-binary-contract.test.ts
 
       # Test pins plus latest because Codex’s managed-home approval hash can change before users encounter review prompts.
       - name: Verify Codex hook file-entry contract (pinned)
@@ -727,7 +727,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_TRUST_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/agent-trust-presets.test.ts
+            src/main/agent-launch/trust/agent-trust-presets.test.ts
 
   xterm_patch_sync:
     name: xterm patch sync
@@ -851,21 +851,21 @@ jobs:
             src/main/daemon/shell-ready.test.ts \
             src/main/daemon/node-pty-fd-leak.test.ts \
             src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts \
-            src/main/pty/codex-shell-launch-preflight.test.ts \
-            src/main/pty/codex-shell-no-daemon.test.ts \
-            src/main/pty/omp-shell-wrapper-alias-safety.test.ts \
-            src/main/pty/omp-shell-wrapper.node-pty.test.ts \
-            src/main/fish-xdg-data-dirs-handoff.test.ts \
-            src/main/shell-startup-feature-channel.test.ts \
-            src/main/zsh-deferred-startup-line-init.live-shell.test.ts \
-            src/main/terminal-history-fish-session.node-pty.test.ts \
-            src/main/zsh-scoped-histfile.live-shell.test.ts \
-            src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
+            src/main/pty/shell-startup/codex-shell-launch-preflight.test.ts \
+            src/main/pty/shell-startup/codex-shell-no-daemon.test.ts \
+            src/main/pty/shell-startup/omp-shell-wrapper-alias-safety.test.ts \
+            src/main/pty/shell-startup/omp-shell-wrapper.node-pty.test.ts \
+            src/main/pty/shell-startup/fish-xdg-data-dirs-handoff.test.ts \
+            src/main/pty/shell-startup/shell-startup-feature-channel.test.ts \
+            src/main/pty/shell-startup/zsh-deferred-startup-line-init.live-shell.test.ts \
+            src/main/pty/history/terminal-history-fish-session.node-pty.test.ts \
+            src/main/pty/shell-startup/zsh-scoped-histfile.live-shell.test.ts \
+            src/main/pty/shell-startup/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
             src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
             src/shared/fish-wsl-cwd-report.node-pty.test.ts \
-            src/main/wsl-sh-cwd-report.node-pty.test.ts \
+            src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
             src/shared/pty-reply-echo-shapes.node-pty.test.ts \
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
@@ -877,6 +877,8 @@ jobs:
     uses: ./.github/workflows/unit-plan.yml
     with:
       selection_mode: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+      # Only selected drafts apply a plan before tests; everything else defers shadow analysis.
+      defer_shadow: ${{ !(vars.ORCA_UNIT_SELECTION_MODE == 'selected' && github.event.pull_request.draft == true) }}
 
   test:
     needs: [code_paths, unit_plan]
@@ -894,15 +896,18 @@ jobs:
       # Restore main's transform cache; the `ci:cold-unit-cache` label or ORCA_UNIT_MODULE_CACHE=off forces cold.
       module_cache: ${{ (vars.ORCA_UNIT_MODULE_CACHE == 'off' || contains(github.event.pull_request.labels.*.name, 'ci:cold-unit-cache')) && 'off' || 'warm' }}
       shards: ${{ needs.unit_plan.outputs.shards }}
+      download_selection_plan: ${{ needs.unit_plan.outputs.selection_planned == 'true' }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
       run_relay_integration: ${{ needs.code_paths.outputs.relay_integration != 'false' || needs.code_paths.outputs.orcad_browser == 'true' }}
       browser_contract: ${{ needs.code_paths.outputs.orcad_browser == 'true' }}
 
   # Keep advisory evidence sibling to tests and outside verify.needs; reusable-workflow dependency otherwise added ~36s after last shard.
   unit_selection_evidence:
-    needs: [test]
+    needs: [unit_plan, test]
     if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'failure') }}
     uses: ./.github/workflows/unit-selection-evidence.yml
+    with:
+      rebuild_plan: ${{ needs.unit_plan.outputs.selection_planned != 'true' }}
 
   # Isolate two browser/mobile files to avoid every unit shard paying for their installs; test the same shipped bundle plus render/census.
   mobile_web_app:
@@ -984,7 +989,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Use blob:none for merge-base history because blobs are ~89% of pack; fetch rare historical contents on demand.
+          # Requested historical snapshots acquire their blobs before timed extraction.
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
@@ -1104,21 +1109,21 @@ jobs:
         run: >-
           xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
-          src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
-          src/main/browser/browser-route-webrtc-egress.electron.test.ts
+          src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts
+          src/main/browser/network/egress/browser-route-webrtc-egress.electron.test.ts
           src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts
-          src/main/browser/popup-origin-chrome.electron.test.ts
-          src/main/browser/browser-link-materialization.electron.test.ts
-          src/main/browser/browser-popup-compatibility.electron.test.ts
-          src/main/browser/browser-popup-adapter-compatibility.electron.test.ts
-          src/main/browser/browser-popup-native-compatibility.electron.test.ts
-          src/main/browser/browser-popup-background-compatibility.electron.test.ts
-          src/main/browser/extensions/browser-extension-api.electron.test.ts
-          src/main/browser/extensions/browser-extension-persistence.electron.test.ts
-          src/main/browser/extensions/browser-extension-lifecycle.electron.test.ts
-          src/main/browser/extensions/browser-extension-toolbar.electron.test.ts
-          src/main/browser/extensions/browser-extension-native-messaging.electron.test.ts
+          src/main/browser/guest-lifecycle/popups/popup-origin-chrome.electron.test.ts
+          src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts
+          src/main/browser/guest-lifecycle/popups/browser-popup-compatibility.electron.test.ts
+          src/main/browser/guest-lifecycle/popups/browser-popup-adapter-compatibility.electron.test.ts
+          src/main/browser/guest-lifecycle/popups/browser-popup-native-compatibility.electron.test.ts
+          src/main/browser/guest-lifecycle/popups/browser-popup-background-compatibility.electron.test.ts
+          src/main/browser/extensions/api-runtime/browser-extension-api.electron.test.ts
+          src/main/browser/extensions/profile-storage/browser-extension-persistence.electron.test.ts
+          src/main/browser/extensions/profile-sessions/browser-extension-lifecycle.electron.test.ts
+          src/main/browser/extensions/actions/browser-extension-toolbar.electron.test.ts
+          src/main/browser/extensions/native-messaging/browser-extension-native-messaging.electron.test.ts
 
       - name: Restore native components
         id: linux-native-restore

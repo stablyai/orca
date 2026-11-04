@@ -1,7 +1,10 @@
 import { isPathInsideOrEqual } from '../../../src/shared/cross-platform-path'
-import { latestSessionConversationTurn } from '../../../src/shared/ai-vault-session-display'
-import { aiVaultAgentLabel } from '../../../src/shared/ai-vault-types'
-import type { AiVaultSession, AiVaultSessionOpenTab } from '../../../src/shared/ai-vault-types'
+import { latestSessionConversationTurn } from '../../../src/shared/ai-vault/session-display/ai-vault-session-display'
+import {
+  aiVaultAgentLabel,
+  type AiVaultSession,
+  type AiVaultSessionOpenTab
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import { formatTimeAgo } from '../worktree/agent-row-display'
 import { translate } from '../i18n/mobile-i18n'
 

@@ -10,7 +10,11 @@ import {
   createManager
 } from './pty-connection-test-pane-fixtures'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
@@ -61,6 +65,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('lets concurrent agent-complete notifications win over terminal bell notifications', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
       >('./use-notification-dispatch')
@@ -86,7 +92,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const manager = createManager(1)
       const deps = createDeps({ dispatchNotification })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
 
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
@@ -114,6 +124,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('does not suppress terminal bell notifications when agent-complete notifications are disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -132,7 +144,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
 
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
@@ -159,6 +175,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('forwards agent completion to notification policy when desktop banners are disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
@@ -178,7 +196,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
 
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
@@ -200,18 +222,20 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('shares one raw store subscriber for agent-complete notification settings across panes', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       transportFactoryQueue.push(createMockTransport('pty-1'), createMockTransport('pty-2'))
 
       vi.useFakeTimers()
       const firstBinding = connectPanePty(
         createPane(1) as never,
         createManager(1) as never,
-        createDeps() as never
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks4)
       )
       const secondBinding = connectPanePty(
         createPane(2) as never,
         createManager(1) as never,
-        createDeps() as never
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks4)
       )
       await flushAsyncTicks()
 
@@ -225,6 +249,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('offers generic title completions while desktop completion banners are disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
@@ -249,7 +275,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+      )
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -278,6 +308,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('keeps an in-flight generic completion when desktop completion banners are enabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
@@ -303,7 +335,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -343,6 +379,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('keeps raw title completion continuity across desktop banner changes', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
@@ -361,7 +399,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+      )
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -405,6 +447,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('keeps a scheduled agent completion across desktop banner changes', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
@@ -423,7 +467,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks8)
+      )
 
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
@@ -467,6 +515,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('restores a suppressed terminal bell when disabling pending agent completion', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
@@ -485,7 +535,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
+      )
 
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
@@ -519,6 +573,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('delivers completion after working and desktop banner changes', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
@@ -537,7 +593,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks10)
+      )
 
       const workingHandler = createdTransportOptions[0]?.onAgentBecameWorking as
         | (() => void)
@@ -583,6 +643,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('delivers completion after working starts with desktop banners disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
@@ -601,7 +663,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks11)
+      )
 
       const workingHandler = createdTransportOptions[0]?.onAgentBecameWorking as
         | (() => void)

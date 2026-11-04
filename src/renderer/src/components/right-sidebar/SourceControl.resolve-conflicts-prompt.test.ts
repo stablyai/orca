@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildResolvePullRequestConflictsPrompt } from './source-control/ai/prompts'
+import { buildResolvePullRequestConflictsPrompt } from '../../../../shared/source-control/recovery/source-control-conflict-prompts'
 
 describe('buildResolvePullRequestConflictsPrompt', () => {
   it('does not emit unquoted git commands for option-looking base branches', () => {

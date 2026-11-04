@@ -1,6 +1,9 @@
 import type { JSX } from 'react'
 import { Switch } from '@/components/ui/switch'
-import { getAgentAwakeDescription, getAgentAwakeTitle } from '../settings/agent-awake-copy'
+import {
+  getAgentAwakeDescription,
+  getAgentAwakeTitle
+} from '../settings/agents/behavior/agent-awake-copy'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import {

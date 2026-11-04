@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildAppFontFamily } from '@/lib/app-font-family'
-import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
+import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 
 const makeSettings = createGlobalSettingsFixture
@@ -29,6 +29,22 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
         nativeChatAppearance: { fontFamily: '' }
       })['--chat-font-family']
     ).toBeUndefined()
+  })
+
+  it('prefers editorFontFamily for code blocks unless matchTerminalInterface is enabled', () => {
+    const settings = makeSettings({
+      editorFontFamily: 'D2CodingLigature Nerd Font',
+      terminalFontFamily: 'D2CodingLigature Nerd Font Mono'
+    })
+    expect(nativeChatAppearanceStyle(settings)['--chat-code-font-family']).toBe(
+      buildFontFamily('D2CodingLigature Nerd Font')
+    )
+    expect(
+      nativeChatAppearanceStyle({
+        ...settings,
+        nativeChatAppearance: { matchTerminalInterface: true }
+      })['--chat-code-font-family']
+    ).toBe(buildFontFamily('D2CodingLigature Nerd Font Mono'))
   })
 
   it('uses the selected theme and live overrides as the two palette sources', () => {

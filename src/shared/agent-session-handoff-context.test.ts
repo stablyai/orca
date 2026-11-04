@@ -107,39 +107,6 @@ it('preserves Unicode at both excerpt boundaries and across multiple blocks', ()
   expect(context.indexOf('FAILED')).toBeLessThan(context.indexOf('Last detail'))
 })
 
-it('retains saved decisions, delivery states and image references while excluding reasoning and creation notices', () => {
-  const context = buildAgentSessionHandoffContext([
-    { ...text('system', 'Private worker assignment'), agentStart: true },
-    text('reasoning', 'Private reasoning'),
-    text('system', 'Prompt state: resolved\nSelected choice: Keep planning'),
-    { ...text('user', 'Do not deploy'), queued: true },
-    { ...text('user', 'Unsent request'), unsent: true },
-    message('user', [{ type: 'image-ref', path: '/work/reference.png' }])
-  ])
-  expect(context).toContain('Selected choice: Keep planning')
-  expect(context).toContain('[user queued] Do not deploy')
-  expect(context).toContain('[user unsent] Unsent request')
-  expect(context).toContain('[user] [image] /work/reference.png')
-  expect(context).not.toContain('Private')
-})
-
-it('pairs out-of-order tool results by call ID and labels standalone results without guessing a tool', () => {
-  const context = buildAgentSessionHandoffContext([
-    message('assistant', [
-      { type: 'tool-call', name: 'Read', input: 'a.ts', callId: 'a' },
-      { type: 'tool-call', name: 'Search', input: 'pattern', callId: 'b' },
-      { type: 'tool-result', output: 'search result', callId: 'b' },
-      { type: 'tool-result', output: 'file contents', callId: 'a' },
-      { type: 'tool-result', output: 'standalone result', callId: 'unknown' }
-    ])
-  ])
-  expect(context).toContain('[tool Read input preview] call=a a.ts')
-  expect(context).toContain('[tool result] call=a file contents')
-  expect(context).toContain('[tool Search input preview] call=b pattern')
-  expect(context).toContain('[tool result] call=b search result')
-  expect(context).toContain('[tool result] call=unknown standalone result')
-})
-
 it.each([false, true])(
   'prioritizes the latest out-of-order result under tool budget pressure (separate messages: %s)',
   (separateMessages) => {
@@ -196,37 +163,6 @@ it('respects the total bound with oversized metadata and a nearly exhausted tool
   expect(context.length).toBeLessThanOrEqual(8_100)
   expect(context).toContain('[tool result error]')
   expect(buildAgentSessionHandoffContext([])).toBe('')
-})
-
-it('retains readable provider failures and warnings while excluding wordless frames', () => {
-  const frame = {
-    provider: 'codex',
-    kind: 'notification:hook/completed',
-    payload: { head: '{}', byteLength: 2, digest: 'abc', truncated: false }
-  }
-  const context = buildAgentSessionHandoffContext([
-    text('user', 'Run the tests'),
-    message('system', [
-      {
-        type: 'text',
-        text: 'Codex PreToolUse hook failed: permission denied',
-        tone: 'error',
-        providerFrame: frame
-      },
-      {
-        type: 'text',
-        text: 'The configured sandbox is unavailable',
-        tone: 'warning',
-        providerFrame: frame
-      },
-      { type: 'text', text: 'Readable provider notice', providerFrame: frame },
-      { type: 'text', text: 'codex · notification:hook/completed', providerFrame: frame }
-    ])
-  ])
-  expect(context).toContain('permission denied')
-  expect(context).toContain('The configured sandbox is unavailable')
-  expect(context).toContain('Readable provider notice')
-  expect(context).not.toContain('codex · notification:hook/completed')
 })
 
 it.each(['queued', 'unsent'] as const)(

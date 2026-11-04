@@ -1,4 +1,4 @@
-import { markEnvironmentUsed } from '../../../shared/runtime-environment-store'
+import { markEnvironmentUsed } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
 /** Subscription callbacks cannot reject to a caller; usage writes must tolerate removed or unreadable environments. */
 export function recordRuntimeEnvironmentUsage(

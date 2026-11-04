@@ -11,7 +11,7 @@ import {
 } from '../../../ai-vault/structured-chat-cli-fork'
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
 import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'

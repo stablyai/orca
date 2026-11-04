@@ -1,30 +1,30 @@
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
-import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import { resolveCreatedWorktree } from '../ipc/created-worktree-reconciliation'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import { configureCreatedWorktreePushTarget } from '../ipc/worktree-remote'
-import {
-  addSparseWorktree,
-  addWorktree,
-  type AddWorktreeOptions,
-  type AddWorktreeResult
-} from '../git/worktree'
+import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
+import { addWorktree } from '../git/worktrees/creation/worktree-add'
+import type {
+  AddWorktreeOptions,
+  AddWorktreeResult
+} from '../git/worktrees/worktree-operation-options'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeLocalWorktreeCreateBase } from './runtime-local-worktree-create-base'
-import { isGeneratedWorktreeCreateName } from '../worktree-create-candidates'
+import { isGeneratedWorktreeCreateName } from '../../shared/new-workspace/worktree-create-retry-policy'
 import {
   consumePreparedWorktreeCreate,
   type PreparationRearmHolder
-} from '../worktree-create-preparation'
+} from '../workspaces/creation/preparation/worktree-create-preparation'
 import {
   failedWorktreeCreationNeedsRetirement,
   retireGeneratedWorktreeName
-} from '../worktree-name-retirement'
-import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
+} from '../workspaces/removal/retirement/worktree-name-retirement'
+import type { WorktreeCreateTimingRecorder } from '../workspaces/creation/worktree-create-timing'
 
 export type RuntimeLocalBaseRefRefresh = {
   /** Awaits the deferred refresh started before naming, if any. */

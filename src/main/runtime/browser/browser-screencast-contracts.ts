@@ -3,7 +3,7 @@ import type {
   BrowserScreencastFrameBudget,
   BrowserScreencastSession,
   BrowserScreencastViewport
-} from '../../browser/browser-screencast-stream-types'
+} from '../../browser/cdp/screencast/browser-screencast-stream-types'
 import type { ScreencastSubscriberDeliveryState } from '../browser-screencast-ghost-subscriber-eviction'
 import type { RpcBinarySender } from '../rpc/rpc-binary-sender'
 import type { BrowserCommandTargetParams } from './browser-command-contracts'

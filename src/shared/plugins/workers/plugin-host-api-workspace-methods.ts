@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isTuiAgent } from '../../tui-agent-config'
+import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../contributions/plugin-command-actions'
 import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 

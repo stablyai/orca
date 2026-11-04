@@ -7,7 +7,7 @@ import {
   readChecksPanelGitStatusSnapshot,
   readChecksPanelPublishActionGitStatus
 } from '../checks-panel-git-status-snapshot'
-import { resolveHostedReviewCreationProvider } from '../../../../../shared/hosted-review-creation-providers'
+import { resolveHostedReviewCreationProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { resolveChecksPanelReviewLookup } from '../checks-panel-review-lookup-authority'
 import {
@@ -21,13 +21,13 @@ import {
   markPullRequestGenerationRequiresPushBeforeCreate,
   type PullRequestGenerationContext
 } from '@/store/slices/pull-request-generation'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/commit-message-host-key'
+import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
+import { DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
-  DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
   resolveSourceControlAiEnabled,
-  resolveSourceControlAiForOperation,
   resolveSourceControlAiPrCreationDefaults
-} from '../../../../../shared/source-control-ai'
+} from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
+import { resolveSourceControlAiForOperation } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import type { ChecksPanelReviewStateInput } from './review-state-dependencies'
 

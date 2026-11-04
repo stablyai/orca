@@ -9,8 +9,8 @@ import { getDefaultSettings } from '../../../../../../shared/constants'
 import {
   getDefaultSourceControlAiSettings,
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
-} from '../../../../../../shared/source-control-ai-settings'
-import type { HostedReviewCreationEligibility } from '../../../../../../shared/hosted-review'
+} from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useSourceControlCreatePrIntentReview } from './use-create-pr-intent-review'
 
 const runtime = vi.hoisted(() => ({ generate: vi.fn() }))

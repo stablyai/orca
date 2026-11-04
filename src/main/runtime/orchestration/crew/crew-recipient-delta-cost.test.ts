@@ -47,6 +47,9 @@ it('charges independent peers on the whole trigger, covered reuse and equal topo
       f.db.crewChanges.notify(new Set(['topology']))
       expect(model.read('term_worker')).toEqual(output)
       expect(sqlTotals(meter.executions).selected).toBe(2 * cold.selected)
+      expect(sourceRows).toHaveBeenCalledOnce()
+      f.db.crewChanges.notify(new Set(['records']))
+      expect(model.read('term_worker')).toEqual(output)
       expect(sourceRows).toHaveBeenCalledTimes(2)
       return { cold }
     } finally {
