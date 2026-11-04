@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { editor } from 'monaco-editor'
 import type { OnMount } from '@monaco-editor/react'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
-import { ORCA_EDITOR_FILE_CACHE_STALE_EVENT } from './editor-autosave'
+import { ORCA_EDITOR_FILE_CACHE_STALE_EVENT } from './autosave/editor-autosave'
 import type { MonacoEditorMountParams } from './monaco-editor-mount-params'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 
@@ -29,10 +29,10 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('./monaco-markdown-doc-link-decorations', () => ({
+vi.mock('./markdown-source-tools/monaco/monaco-markdown-doc-link-decorations', () => ({
   createMarkdownDocLinkDecorationController: vi.fn()
 }))
-vi.mock('./monaco-markdown-doc-completions', () => ({
+vi.mock('./markdown-source-tools/monaco/monaco-markdown-doc-completions', () => ({
   ensureMarkdownDocCompletionProvider: vi.fn()
 }))
 vi.mock('./monaco-e2e-probe', () => ({ installMonacoE2EProbe: () => vi.fn() }))

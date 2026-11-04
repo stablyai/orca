@@ -7,7 +7,7 @@ import type { PtyModelRestoreReason } from '../../../shared/terminal/replay/pty-
 import type {
   PtyDeliveryWriteOff,
   PtyRendererDeliveryStateReport
-} from '../../../shared/pty-renderer-delivery-health'
+} from '../../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
 import type { PtyRendererDeliveryDebugSnapshot } from './delivery/debug'
 import { PtyProducerFlowController } from './delivery/pty-producer-flow-control'
 import { PtyPendingDataDrainQueue } from './delivery/pty-pending-data-drain-queue'

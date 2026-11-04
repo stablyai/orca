@@ -3,7 +3,7 @@ import type { AgentType } from './agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from './native-chat/native-chat-types'
 import type { OrchestrationFleetWorker } from './orchestration-fleet-projection'
 import type { RuntimeTerminalRead, RuntimeTerminalState } from './runtime-types'
-import type { PtyLivenessVerdict } from './pty-liveness-verdict'
+import type { PtyLivenessVerdict } from './terminal/pty/lifecycle/pty-liveness-verdict'
 
 export const ORCHESTRATION_WORKER_READ_SOURCES = ['auto', 'transcript', 'terminal'] as const
 export type OrchestrationWorkerReadSource = (typeof ORCHESTRATION_WORKER_READ_SOURCES)[number]

@@ -5,9 +5,9 @@ import {
   checkLogDigest,
   checkReadingIntentKey,
   checkReadingLogKey
-} from '@/components/editor/check-details-reading-cache'
-import type { CheckDetailsReadingOwner } from '@/components/editor/check-details-reading-owner'
-import { attachCheckReadingViewport } from '@/components/editor/check-details-reading-viewport'
+} from '@/components/editor/check-details/reading/check-details-reading-cache'
+import type { CheckDetailsReadingOwner } from '@/components/editor/check-details/reading/check-details-reading-owner'
+import { attachCheckReadingViewport } from '@/components/editor/check-details/reading/check-details-reading-viewport'
 import {
   findInitialCheckLogDiagnostic,
   measureInitialCheckLogScrollTop

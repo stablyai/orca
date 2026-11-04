@@ -3,7 +3,7 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as WorkspaceSessionModule from '@/lib/workspace-session'
 import type * as WorkspaceLayoutLoadModule from '../../../shared/workspace-layout/workspace-layout-load'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import {

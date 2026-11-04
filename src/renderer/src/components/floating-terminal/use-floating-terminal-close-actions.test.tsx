@@ -14,7 +14,7 @@ const requestEditorFileClose = vi.hoisted(() => vi.fn())
 vi.mock('../confirmation-dialog-context', () => ({
   useConfirmationDialog: () => async () => true
 }))
-vi.mock('@/components/editor/editor-autosave', () => ({ requestEditorFileClose }))
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({ requestEditorFileClose }))
 
 const worktreeId = FLOATING_TERMINAL_WORKTREE_ID
 const groupId = 'floating-group'

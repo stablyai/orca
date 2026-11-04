@@ -2,7 +2,7 @@ import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { rmSync } from 'node:fs'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { _resetPtyOwnerHostColorsForTest } from '../../shared/pty-owner-color-query-colors'
+import { _resetPtyOwnerHostColorsForTest } from '../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,

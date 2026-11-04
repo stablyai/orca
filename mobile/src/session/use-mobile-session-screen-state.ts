@@ -9,8 +9,6 @@ import {
 } from '../terminal/terminal-accessory-layout'
 import type { CustomKey } from '../terminal/terminal-custom-keys'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
-import { useTerminalLiveInputModePreference } from './use-terminal-live-input-mode-preference'
-import { listMobileTerminalAgentHandles } from './mobile-terminal-tab-agent'
 import type { AppliedSnapshotMarker } from './session-tab-snapshot-gate'
 import { useWorktreeSessionTabsLoaded } from './use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
@@ -29,7 +27,7 @@ import { useMobileSessionTabActionTargets } from './use-mobile-session-tab-actio
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
-  const { worktreeId, hostId, initialCreateWarning } = scope
+  const { worktreeId, initialCreateWarning } = scope
   const terminalSplitLayout = useTerminalSplitLayout()
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
@@ -39,26 +37,11 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const appliedSessionTabsRevisionRef = useRef(0)
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
   const [terminalsLoaded, setTerminalsLoaded] = useWorktreeSessionTabsLoaded(worktreeId)
-  const [input, setInput] = useState('')
   const [terminalTextScale, setTerminalTextScale] = useState(1)
   const terminalTextScaleRevisionRef = useRef(0)
-  const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
-  const agentHandleKey = listMobileTerminalAgentHandles(sessionTabs).join('\n')
-  const agentHandles = useMemo(
-    () => new Set(agentHandleKey ? agentHandleKey.split('\n') : []),
-    [agentHandleKey]
-  )
-  const {
-    clearTerminalLiveInputDefault,
-    defaultTerminalHandlesToLiveInput,
-    liveInputTerminalHandles,
-    liveInputTerminalHandlesRef,
-    pruneTerminalHandlesFromLiveInput,
-    toggleTerminalLiveInput
-  } = useTerminalLiveInputModePreference({ hostId, worktreeId, agentHandles })
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
@@ -143,23 +126,13 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     closedTabTombstonesRef,
     terminalsLoaded,
     setTerminalsLoaded,
-    input,
-    setInput,
     terminalTextScale,
     setTerminalTextScale,
     terminalTextScaleRevisionRef,
-    autocompleteEnabled,
-    setAutocompleteEnabled,
     terminalLinkOpenMode,
     setTerminalLinkOpenMode,
     liveInputCapture,
     setLiveInputCapture,
-    clearTerminalLiveInputDefault,
-    defaultTerminalHandlesToLiveInput,
-    liveInputTerminalHandles,
-    liveInputTerminalHandlesRef,
-    pruneTerminalHandlesFromLiveInput,
-    toggleTerminalLiveInput,
     activeHandle,
     setActiveHandle,
     coveredStreamRevision,

@@ -7,7 +7,7 @@ import type { SparsePreset } from '../worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
 import type { WorktreeMeta } from '../worktree/meta-types'
 import type { RetiredNameRegistry } from '../worktree/retired-name-registry'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import type { OrcadMigrationClientStatePayload } from './orcad-migration-client-state'
 import type {
   OrcadMigrationSnapshotUploadState,

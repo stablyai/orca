@@ -13,7 +13,7 @@ import {
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
 import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 
 /** Verify composition: same-environment tab death, environment teardown, global stale-generation pruning and read-time pane identity. Retain verdicts for live/genuine reattached panes so expiry cannot re-park forever. */
 

@@ -12,7 +12,6 @@ import { fileIdentity } from './session-search-file-cursor'
 import type { SessionSearchFileWrite } from './session-search-index-writer'
 import type { SessionSearchResumableCursor, SessionSearchStore } from './session-search-store'
 
-// File-read assumptions are checked by session-search-transcript-dependencies.test.ts.
 export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   claude: true,
   qoder: true,

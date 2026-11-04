@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration/orcad-migration-manifest'
 
 import { isRecord } from '../../shared/orcad-migration/orcad-migration-manifest-fields'
-import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../../shared/workspace-session/workspace-session-pane-ownership'
 import {
   ORCAD_MIGRATION_PATH_FIELDS,
   type OrcadMigrationPathFieldKind

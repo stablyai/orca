@@ -22,7 +22,7 @@ import {
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
 import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
-import { structuredQueueHold } from './structured-agent-session-queued-messages'
+import { structuredQueueHold } from './structured-agent-session-queued-gate'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { queuedMessageOwed } from './structured-agent-session-queued-mail'
 import { resumeStructuredQueue } from './structured-agent-session-queued-pause'

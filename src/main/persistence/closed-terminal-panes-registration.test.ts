@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { windowViewSaveForMain } from './window-save-view'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { parseWorkspaceSession } from '../../shared/workspace-session-schema'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { parseWorkspaceSession } from '../../shared/workspace-session/workspace-session-schema'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 

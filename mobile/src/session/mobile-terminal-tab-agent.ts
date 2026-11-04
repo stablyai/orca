@@ -1,6 +1,6 @@
 import { stripLeadingAgentTitleDecorationOrEmpty } from '../../../src/shared/agent-status/title/agent-title-decoration'
 import { isClaudeManagementTitle } from '../../../src/shared/agent-status/title/agent-title-core'
-import { isShellProcess } from '../../../src/shared/shell-process-detection'
+import { isShellProcess } from '../../../src/shared/agent-status/process/shell-process-detection'
 import { agentTypeToIconAgent } from '../../../src/shared/agent-status/presentation/agent-type-icon-agent'
 import { resolveTabAgentFromSignalSnapshot } from '../../../src/shared/tab-agent-from-signals'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'
@@ -98,14 +98,6 @@ export function isMobileTerminalTabRunningAgent(tab: MobileTerminalTabAgentIdent
     return false
   }
   return resolveMobileTerminalTabOwnedAgentId(tab) !== null
-}
-
-export function listMobileTerminalAgentHandles(tabs: readonly MobileSessionTab[]): string[] {
-  return tabs.flatMap((tab) =>
-    tab.type === 'terminal' && tab.terminal && isMobileTerminalTabRunningAgent(tab)
-      ? [tab.terminal]
-      : []
-  )
 }
 
 // Phones get no process, sleeping-session or sibling signals; host Cursor identity stands in for an unowned pane's process, since terminal.list can keep it after the pane is reused.

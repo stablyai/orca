@@ -3,7 +3,10 @@ import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-ter
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import { createWorkerWorktree } from './rpc/methods/orchestration/worker/worker-worktree-creation'
 import { failFederatedAttachmentWithReceipt } from './rpc/methods/orchestration/federation/federation-start-receipt'
-import { terminalExitError, terminalStartError } from '../../shared/terminal-start-failure'
+import {
+  terminalExitError,
+  terminalStartError
+} from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 

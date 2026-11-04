@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import { getPaletteHostBadge } from './palette-host-badge'
-import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
+import { buildSidebarHostOptions } from '../sidebar/worktree-list/controls/sidebar-host-options'
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 

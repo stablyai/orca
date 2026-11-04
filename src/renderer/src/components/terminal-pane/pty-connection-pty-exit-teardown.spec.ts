@@ -1,7 +1,7 @@
 import { registerPtyConnectionShutdownExitDeferralTests } from './pty-connection-pty-shutdown-exit-deferral.spec'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   sendTerminalInputThroughPane,
   temporarilySetNavigatorUserAgent

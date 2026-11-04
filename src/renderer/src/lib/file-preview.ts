@@ -1,7 +1,7 @@
 import { openPlannedFileBrowserLink, type FileBrowserLinkTarget } from './file-preview-link-open'
 import type { BrowserLinkOpenContext, BrowserOpenOutcome } from './browser-link-destination'
 import { toast } from 'sonner'
-import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
+import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing/markdown-internal-links'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { webClientDocPreviewRefusal } from '@/lib/doc-preview-web-client'
 import { useCallback } from 'react'

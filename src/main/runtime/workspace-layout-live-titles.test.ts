@@ -3,7 +3,7 @@ import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { PublishedPane } from '../../shared/workspace-layout/workspace-layout-published'
 import type { WorkspaceLayoutEvent } from '../../shared/workspace-layout/workspace-layout-stream-frames'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
 

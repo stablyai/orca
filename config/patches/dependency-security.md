@@ -24,14 +24,10 @@ The formatting patch applies to desktop and mobile; mobile's older sprintf-js
 Mobile patch files stay inside its independent workspace for standalone builds.
 
 `config/scripts/dependency-security-patches.test.mjs` exercises excessive numeric
-precision in both installed desktop formatting entries, each desktop minimatch copy's `**/..`
-limit, and glob abort. The mobile regressions in
-`mobile/scripts/dependency-security-patches.test.ts` exercise deeply nested brace
-and parenthesis patterns and direct AST inputs, `**/..` pattern limits, glob abort, and
-deepmerge `__proto__` keys, then check the installed Expo
-RSA dependency (node-forge 1.4.2, fixed upstream) still rejects a signed malformed DigestInfo while accepting a valid
-signature. Both suites use the packages installed from the workspace lockfiles;
-they do not run installs or access the registry. Normal patterns and formatting
+precision in both installed desktop formatting entries. The minimatch pattern-count
+and glob read-count examples were retired without replacement. The remaining test
+uses packages installed from the workspace lockfile without installs or registry access. The mobile dependency-only
+regression suite was retired; those package examples have no replacement here. Normal patterns and formatting
 retain their previous behavior. Excessive brace patterns now fail explicitly;
 out-of-range numeric precision is clamped instead of throwing a RangeError.
 

@@ -11,7 +11,7 @@ import type { AgentSessionJournal } from '../native-chat/agent-session-journal/j
 import type { AgentMessageSource } from '../../shared/agent-session/agent-session-message-source'
 import { agentSessionRefusalNotice } from '../../shared/agent-session/failures/agent-session-refusal-notice'
 import { agentSessionWriteKindForMethod } from '../../shared/agent-session/failures/agent-session-write-failure'
-import { nextStructuredQueuedMessage } from '../native-chat/agent-session-wire/structured-agent-session-queued-messages'
+import { nextStructuredQueuedMessage } from '../native-chat/agent-session-wire/structured-agent-session-queued-gate'
 import { idOf } from './rpc/orchestration-session-caller-test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
 import {
