@@ -1,4 +1,4 @@
-import type { SourceControlAiSettingsInput } from '../../shared/source-control-ai'
+import type { SourceControlAiSettingsInput } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { GitPushTarget, GitWorktreeInfo, Worktree } from '../../shared/worktree/types'

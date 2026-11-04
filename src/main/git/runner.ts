@@ -8,9 +8,8 @@ export {
   configureWindowsHostGitEnvironmentReadiness
 } from './command-runner/windows-host-git-environment'
 export { DEFAULT_GIT_MAX_BUFFER } from './command-runner/git-exec-options'
-export { GitCommandTimeoutError } from './command-runner/git-command-timeout'
+
 export {
-  appendGitConfigEnv,
   gitOptionalLocksDisabledEnv,
   nonInteractiveGitEnv,
   promptGuardGitEnv,

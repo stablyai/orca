@@ -7,11 +7,11 @@ import { isFolderRepo } from '../../../../../shared/repo-kind'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
-} from '../../../../../shared/source-control-ai-types'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   CUSTOM_AGENT_ID,
   type CustomAgentId
-} from '../../../../../shared/commit-message-agent-spec'
+} from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 
 import {
   SOURCE_CONTROL_ACTION_IDS,
@@ -19,14 +19,14 @@ import {
   type SourceControlActionRecipe,
   type SourceControlActionId,
   type SourceControlAiActionDefaults
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { Label } from '../../ui/label'
 import { useAppStore } from '@/store/index'
 import { useRepos } from '@/store/selectors'
 import {
   summarizeReposOverridingActionRecipe,
   type SourceControlActionRecipeOverrideSummary
-} from '../../../../../shared/source-control-launch-agent-selection'
+} from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository/repository-settings-targets'
 import { matchesSettingsSearch } from '../search/settings-search'

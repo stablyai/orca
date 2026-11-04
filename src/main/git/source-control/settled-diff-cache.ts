@@ -1,5 +1,5 @@
 import { BoundedMap } from '../../../shared/bounded-map'
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import {
   canProveUnchangedByStamp,
   isDiffStampClockSkewed,

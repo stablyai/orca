@@ -23,7 +23,7 @@ vi.mock('../../command-runner/wsl-path-translation', async (importOriginal) => (
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
-import { GitCommandTimeoutError } from '../../../../shared/git-command-timeout'
+import { GitCommandTimeoutError } from '../../../../shared/git/commands/git-command-timeout'
 import { addWorktree } from './worktree-add'
 import {
   resolveWorktreeAddTimeoutMs,

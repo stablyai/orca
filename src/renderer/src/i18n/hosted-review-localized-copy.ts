@@ -1,8 +1,8 @@
-import type { HostedReviewProvider } from '../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   resolveHostedReviewCreationProvider,
   type HostedReviewCreationProvider
-} from '../../../shared/hosted-review-creation-providers'
+} from '../../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { translate } from '@/i18n/i18n'
 
 export type SupportedHostedReviewCopyProvider = HostedReviewCreationProvider

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
+import {
+  GitCommandTimeoutError,
+  gitCommandTimeoutMs
+} from '../../../shared/git/commands/git-command-timeout'
 
 describe('gitCommandTimeoutMs', () => {
   it.each([

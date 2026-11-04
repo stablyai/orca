@@ -3,16 +3,16 @@ import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-servi
 import { getAppEnvironment } from '../../shared/app-environment'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../shared/agent-skill-sharing-gate'
-import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
+import { applyPRBotAuthorOverride } from '../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { TASK_PROVIDERS } from '../../shared/task-providers'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
 } from '../../shared/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
-import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai'
-import { normalizeSourceControlGroupOrder } from '../../shared/source-control-group-order'
-import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../shared/source-control-ai-actions'
+import { normalizeSourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings'
+import { normalizeSourceControlGroupOrder } from '../../shared/source-control/listing/source-control-group-order'
+import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-options'

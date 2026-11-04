@@ -1,4 +1,4 @@
-import { resolveGitMetadataPath } from '../../../shared/git-metadata-path'
+import { resolveGitMetadataPath } from '../../../shared/git/metadata/git-metadata-path'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 
 const GUEST_ROOTED_PATH = /^\/(?!\/)/

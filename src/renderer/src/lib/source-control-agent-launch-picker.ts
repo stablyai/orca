@@ -8,11 +8,11 @@ import {
   selectSourceControlActionRecipe,
   pickSourceControlActionAgent,
   type CurrentActionSelection
-} from '../../../shared/source-control-action-selection'
+} from '../../../shared/source-control/ai/recipes/source-control-action-selection'
 import {
   sourceControlActionExecutionArgs,
   selectedSourceControlActionPreferences
-} from '../../../shared/source-control-action-launch-preferences'
+} from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 
 export function sourceControlPickerDraft(
   selection: CurrentActionSelection,

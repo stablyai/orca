@@ -1,5 +1,5 @@
 // Ref mutation tests use fictitious repositories; administrative reservations have real-Git coverage.
-vi.mock('../../../../shared/git-worktree-admin', () => ({
+vi.mock('../../../../shared/git/worktrees/git-worktree-admin', () => ({
   isBranchReservedByWorktreeOperation: vi.fn().mockResolvedValue(false)
 }))
 
