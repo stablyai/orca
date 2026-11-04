@@ -4711,7 +4711,6 @@
             "5c938d39ac": "wk",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "No other accounts",
             "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
@@ -4741,6 +4740,8 @@
             "zcodeUsageMenu": "ZCode Usage",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "signedOutAccounts": "Signed out",
+            "addAnotherAccount": "Add another account…",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
             "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account."
           },
@@ -8123,9 +8124,6 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -8187,7 +8185,9 @@
           "7ddd66fede": "Editor Word Wrap",
           "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
           "collapseUnchangedTitle": "Collapse Unchanged Regions",
-          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way."
+          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
+          "markdownDefaultView": "Default Markdown View",
+          "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -10336,14 +10336,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
-            },
-            "orchestrationPanel": {
-              "title": "Orchestration panel",
-              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
-              "orchestration": "orchestration",
-              "agents": "agents",
-              "workers": "workers",
-              "manager": "manager"
             }
           }
         },
@@ -10532,7 +10524,11 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "markdownDefaultView": "Default Markdown View",
+            "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.",
+            "markdownSourceKw": "source",
+            "markdownRichKw": "rich"
           }
         },
         "git": {
@@ -15312,7 +15308,6 @@
           "ae3b00ca82": "Set up GitHub tasks",
           "ff92d15436": "Orca will notify you when agents are done or need help.",
           "b054332836": "Set up notifications",
-          "04ae28d8ca": "Pick the look you want to stare at for hours.",
           "f396db9f20": "Make it feel like home",
           "322fc50a18": "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time.",
           "198b148b3c": "Pick your default agent",
@@ -17148,6 +17143,9 @@
           "isolationOff": "{{value0}} runs only in an isolated frame, and isolated plugin frames are turned off.",
           "heading": "This editor needs the Orca desktop app",
           "openSource": "Open Source"
+        },
+        "MarkdownDefaultViewContextMenu": {
+          "label": "Default Markdown View"
         }
       },
       "diff": {
@@ -18284,6 +18282,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "The saved run host no longer matches this project setup."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Agent launch settings require a fresh session for every run."
         }
       },
       "agent": {
@@ -19387,7 +19388,32 @@
           "system": "Match OS",
           "dark": "Easy on the eyes",
           "light": "Bright & crisp"
-        }
+        },
+        "looks": {
+          "activeNow": "now",
+          "browsePlugins": "Browse plugins",
+          "browseThemePlugins": "Browse theme plugins",
+          "colorMode": "Color mode",
+          "colorModeCaption": "Light, dark, or follow your OS.",
+          "darkLook": "Dark look",
+          "darkLooks": "Dark looks",
+          "lightLook": "Light look",
+          "lightLooks": "Light looks",
+          "moreThemes": "More themes",
+          "next": "More looks",
+          "orcaDark": "Orca Dark",
+          "orcaLight": "Orca Light",
+          "pluginsHint": "More themes are available as plugins.",
+          "previous": "Previous looks",
+          "showsWhenDark": "Shows when your system is dark",
+          "showsWhenLight": "Shows when your system is light",
+          "slotLabel": "Look to edit",
+          "sourceBuiltIn": "Built in",
+          "sourceCommunity": "Terminal palette",
+          "themes": "Theme",
+          "themesCaption": "Optional. Go further with app themes and terminal palettes."
+        },
+        "subtitle": "Choose light or dark, then optionally a theme. Change either any time in Settings."
       },
       "integrations": {
         "capabilities": {
@@ -19498,6 +19524,7 @@
         "cancelled": "This message was withdrawn before the agent started it.",
         "chatClosed": "The chat closed before this message was sent.",
         "hostRestarted": "Orca restarted before this message was sent.",
+        "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
         "commandRefused": "This command didn't run.",
@@ -19753,6 +19780,7 @@
         "availableAfterSessionStarts": "Available after the session starts.",
         "optionUpdateFailed": "Could not update option",
         "optionValue": {
+          "ultracode": "Ultracode",
           "fast": "Fast",
           "minimal": "Minimal",
           "low": "Low",
@@ -20167,9 +20195,9 @@
         "orcaSessionIdTooltip": "Orca's ID for this chat, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca."
       },
       "dismissDeliveryNotice": "Dismiss",
+      "editDeliveryNotice": "Edit",
       "addSelectionToChat": "Add to chat",
       "messageNotSent": "Message not sent",
-      "deliveryUnconfirmed": "Delivery unconfirmed — check chat before retrying",
       "messageSending": "Sending…",
       "userMessage": {
         "showFull": "Show full message",
@@ -20243,7 +20271,6 @@
         "continue": "Continue",
         "failed": "Couldn't continue this chat. Try again, or send a message.",
         "explanation": "Continue, and the agent first checks whether its last step finished.",
-        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
         "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
       },
       "antigravitySignIn": {
@@ -20817,10 +20844,13 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Queue follow-ups",
+        "scrollToLatestOnSendTitle": "Scroll to latest when sending",
+        "scrollToLatestOnSendCopy": "Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.",
+        "scrollToLatestOnSendSearchPosition": "position",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
-        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message.",
+        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message. Messages with images wait as cards too.",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",
         "resumeSearchRelaunch": "relaunch",
@@ -20838,7 +20868,13 @@
         "usageLimitContinueCopy": "Orca sends \"Continue where you left off.\" when the limit resets. Applies to all chats with a known reset time.",
         "usageLimitContinueSearchLimit": "usage limit",
         "usageLimitContinueSearchReset": "reset",
-        "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets"
+        "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets",
+        "idleStopTitle": "Stop idle agents after",
+        "idleStopCopy": "Ends a chat's agent once the chat has been idle this long, to free memory. The chat stays, and your next message starts the agent again. Choose Never for agents that keep working in the background between turns.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "timeout",
+        "idleStopSearchKeepAlive": "keep alive",
+        "idleStopNever": "Never"
       }
     },
     "agentChildRow": {
@@ -21662,6 +21698,7 @@
     "searchHitSourceHost": "Found on {{value0}}",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
+    "antigravityChatToCli": "Chat → CLI",
     "continueInCli": "Continue in CLI",
     "continueInCliNewTab": "Continue in CLI in New Tab",
     "subagents": {

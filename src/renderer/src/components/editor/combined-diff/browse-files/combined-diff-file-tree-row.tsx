@@ -1,6 +1,6 @@
 import { createElement, memo } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { STATUS_COLORS } from '@/components/right-sidebar/status-display'
+import { STATUS_COLORS } from '@/lib/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type { SourceControlTreeNode } from '../../../../../../shared/source-control/listing/source-control-tree'
 import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'

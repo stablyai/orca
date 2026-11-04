@@ -194,6 +194,7 @@
       "loadFailed": "Failed to load host.",
       "saveFailed": "Failed to save host.",
       "title": "Edit host",
+      "removeHost": "Remove host",
       "saveHost": "Save host",
       "goBack": "Go back",
       "help": "Change the display name or connection address. Leave the name empty to use the name the desktop reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same desktop is reachable at a different IP (for example home LAN vs Tailscale).",
@@ -270,11 +271,6 @@
       "textSizeHeading": "TEXT SIZE",
       "textSizeDescription": "Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal itself, which updates this setting. Per-device display only; doesn't change the desktop terminal.",
       "textSize": "Text size",
-      "keyboardInputHeading": "KEYBOARD INPUT",
-      "keyboardInputDescription": "Autocomplete, autocorrect, and spelling suggestions apply only to buffered command input. Use the double-chevron button above the keyboard to switch from live input, then edit your command before tapping Send. Off by default to avoid rewriting commands, flags, or paths.",
-      "autocomplete": "Autocomplete & autocorrect",
-      "autocompleteOn": "On",
-      "autocompleteOff": "Off",
       "restoreHost": "Restore {{name}}",
       "textSizePickerTitle": "Terminal text size"
     }
@@ -295,7 +291,10 @@
       "loadingAccounts": "Loading accounts…",
       "manageAccountsHint": "Add or re-authenticate accounts from desktop Settings → Accounts.",
       "useReset": "Use reset",
-      "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts."
+      "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts.",
+      "otherAgents": "Other agents",
+      "fableWindow": "Fable",
+      "mcpWindow": "MCP"
     }
   },
   "agentHistory": {
@@ -522,9 +521,7 @@
       "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen."
     },
     "listFooter": {
-      "hostPickerTitle": "Open Tasks On",
-      "automationsHeading": "Automations",
-      "automationsHostPickerTitle": "Open Automations On"
+      "hostPickerTitle": "Open Tasks On"
     },
     "listHeader": {
       "desktopsHeading": "Desktops"
@@ -544,13 +541,59 @@
       "pairDesktop": "Pair a desktop"
     },
     "jumpBackIn": {
-      "heading": "Jump back in",
       "lastOpened": "Last opened",
       "connectToOpen": "Connect {{desktop}} to open"
     },
     "sections": {
       "tasks": "Tasks",
       "tasksSubtitle": "Browse your issues and reviews"
+    },
+    "stats": {
+      "heading": "Your stats",
+      "agentsSpawned": "Agents spawned",
+      "agentTime": "Agent time",
+      "prsCreated": "PRs created",
+      "days": "{{days}}d",
+      "hours": "{{hours}}h",
+      "minutes": "{{minutes}}m"
+    },
+    "agents": {
+      "heading": "Agents",
+      "activeCount": "{{count}} active",
+      "showFewer": "Show fewer",
+      "showAll": "Show all {{count}}"
+    },
+    "automationsTab": {
+      "newAutomation": "New automation",
+      "lastStatus": "Last: {{status}}",
+      "paused": "Paused",
+      "showFor": "Show automations for",
+      "emptyTitle": "Schedule agent work",
+      "pairDesktop": "Pair a desktop to view and run automations.",
+      "updateDesktop": "Update Orca on {{desktop}} to use automations.",
+      "connectDesktop": "Connect {{desktop}} to view and run automations.",
+      "noAutomations": "No automations yet",
+      "createHint": "Tap + to schedule an agent.",
+      "scheduled": "Scheduled",
+      "toggleFailed": "Couldn’t update {{name}}"
+    },
+    "tabs": {
+      "automations": "Automations",
+      "feed": "Feed",
+      "chooseDesktop": "{{desktop}}, choose another desktop",
+      "usage": "Usage"
+    },
+    "usage": {
+      "refresh": "Refresh usage",
+      "showUsageFor": "Show usage for",
+      "pairDesktop": "Pair a desktop to see agent account usage.",
+      "connectDesktop": "Connect {{desktop}} to see agent account usage.",
+      "addAccounts": "Add accounts from desktop Settings → Accounts.",
+      "updatedJustNow": "Updated just now",
+      "updatedAgo": "Updated {{time}} ago",
+      "active": "Active",
+      "openAccountsHint": "Opens this desktop’s accounts",
+      "emptyTitle": "No usage yet"
     }
   },
   "hooks": {
@@ -1048,7 +1091,9 @@
       "repairHint": "Tap to re-pair with your desktop",
       "unlockHint": "Unlock your phone, then tap to retry",
       "openHost": "Open {{title}}",
-      "hostActions": "Actions for {{title}}"
+      "hostActions": "Actions for {{title}}",
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
     },
     "htmlPreview": {
       "previewRenderedHtml": "Preview rendered HTML",
@@ -1898,22 +1943,21 @@
     "accessoryKeys": {
       "dismissKeyboard": "Dismiss keyboard",
       "sendKey": "Send {{label}}",
-      "modifierHint": "Applies to the next key. Double tap to keep it on.",
       "typeCharacter": "Type {{character}}",
       "control": "Control",
-      "escape": "Escape",
-      "shiftTab": "Shift Tab",
-      "enter": "Enter",
       "interrupt": "Interrupt terminal",
-      "tab": "Tab",
       "alt": "Alt",
       "shift": "Shift",
       "keysModeLabel": "Keys mode: typing goes straight to the terminal. Switch to Message mode",
       "messageModeLabel": "Message mode: write, then send. Switch to Keys mode",
-      "keysMode": "Keys",
-      "messageMode": "Message",
       "moreKeys": "More keys and actions",
-      "showKeyboard": "Show keyboard"
+      "showKeyboard": "Show keyboard",
+      "dismissKeyboardHint": "Hides the software keyboard and keeps the current terminal session open.",
+      "switchToDesktopMode": "Switch to desktop mode",
+      "switchToPhoneMode": "Switch to phone mode",
+      "pasteFromClipboard": "Paste from clipboard",
+      "paste": "Paste",
+      "addCustomShortcut": "Add custom shortcut"
     },
     "activeContent": {
       "noTabs": "No tabs in this session",
@@ -1927,10 +1971,7 @@
     "commandDock": {
       "liveInputLabel": "Live terminal input",
       "liveInputHint": "Typed text is sent directly to the active terminal",
-      "sendCommand": "Send command",
-      "messageAgentPlaceholder": "Message {{agent}}",
-      "theAgent": "the agent",
-      "writeCommandPlaceholder": "Write a command, then send"
+      "tapToShowKeyboard": "Tap to show keyboard"
     },
     "contentRow": {
       "dismissCreationWarning": "Dismiss workspace creation warning"
@@ -2285,9 +2326,6 @@
     "terminalRecords": {
       "defaultTitle": "Terminal"
     },
-    "tabCard": {
-      "editor": "Editor"
-    },
     "terminalTabAgent": {
       "newBrowser": "New Browser",
       "browser": "Browser",
@@ -2561,7 +2599,8 @@
       "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
       "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
       "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
-      "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again."
+      "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
+      "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent."
     },
     "writeNotice": {
       "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -2646,14 +2685,6 @@
       "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
       "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
       "keepOpen": "Keep open"
-    },
-    "terminalArrowPad": {
-      "label": "Arrow keys",
-      "hint": "Tap a side for one arrow press, or hold and drag to repeat",
-      "up": "Up",
-      "down": "Down",
-      "left": "Left",
-      "right": "Right"
     },
     "terminalMoreKeys": {
       "sendKey": "Send {{label}}",
@@ -2840,6 +2871,7 @@
       "showAll": "Full task list"
     },
     "sessionOptionCopy": {
+      "ultracode": "Ultracode",
       "on": "On",
       "off": "Off",
       "permissions": "Permissions",
@@ -4441,6 +4473,7 @@
       "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Runs on the selected host. Keep that host available at the scheduled time.",
       "host": "Host",
       "pairedHost": "Paired host",
+      "chooseHost": "Automations on {{host}}, choose another host",
       "selectedServerUnavailable": "Selected server (unavailable)",
       "addANameInstructionsAndAnAgent": "Add a name, instructions and an agent.",
       "chooseAnExistingWorkspace": "Choose an existing workspace.",
@@ -4469,7 +4502,6 @@
       "unknownResult": "Unknown result",
       "notReported": "Not reported",
       "searchOptions": "Search options",
-      "scheduleAgentWorkAndViewRuns": "Schedule agent work and view runs",
       "task": "Task",
       "review": "Review"
     },

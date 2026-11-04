@@ -4,7 +4,7 @@ import {
   recognizeAgentProcess
 } from '../../shared/agent-status/process/agent-process-recognition'
 import { isOpenCodeNativeTitle } from '../../shared/agent-status/title/providers/opencode-terminal-title'
-import { isShellProcess } from '../../shared/shell-process-detection'
+import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 import { isKnownReadyPromptPreview } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'

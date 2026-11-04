@@ -1,4 +1,4 @@
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { buildAnyShellStdoutFence } from '../../shared/posix-stdout-fence'
 
 const COMMAND_ONLY_SHELLS = new Set(['sh', 'dash', 'csh', 'tcsh'])

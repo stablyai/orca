@@ -7,7 +7,7 @@ import type { StartupCwdFallback } from '../../../shared/startup-cwd-fallback'
 import {
   resolveTerminalStartupCwd,
   type TerminalStartupCwdMissingDirFallback
-} from '../../../shared/terminal-startup-cwd'
+} from '../../../shared/shell/launch/terminal-startup-cwd'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime/runtime-legacy-worker-terminal-recovery-types'
 import { isWslUncPath, toWindowsWslPath } from '../../../shared/wsl-paths'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'

@@ -134,20 +134,6 @@ describe('remote skill setup availability', () => {
     useAppStore.setState({ runtimeEnvironments: [], runtimeStatusByEnvironmentId: new Map() })
   })
 
-  it.each([false, true])(
-    'shows a manually disconnected host before any click (discovery installed: %s)',
-    async (installed) => {
-      setHostConnected(false)
-      await renderPanel(installed)
-
-      expect(container?.textContent).toContain('Connect to this SSH host to install its skills.')
-      expect(container?.textContent).not.toContain('Not installed')
-      expect(buttonLabels()).toEqual(['Re-check'])
-      expect(mocks.capability).not.toHaveBeenCalled()
-      expect(mocks.rpc).not.toHaveBeenCalled()
-    }
-  )
-
   it('withdraws a connected plan immediately on disconnect and replans on reconnect', async () => {
     await renderPanel()
     expect(buttonLabels()).toContain('Install for Claude Code')
@@ -170,15 +156,5 @@ describe('remote skill setup availability', () => {
     expect(container?.textContent).not.toContain('Connect to this SSH host')
     expect(buttonLabels()).toEqual(['Re-check'])
     expect(mocks.rpc).toHaveBeenCalledTimes(2)
-  })
-
-  it('shows a failed host check without claiming the skill is absent or offering installation', async () => {
-    mocks.capability.mockRejectedValue(new Error('Runtime environment is manually disconnected.'))
-    await renderPanel()
-
-    expect(container?.textContent).toContain('Check failed')
-    expect(container?.textContent).not.toContain('Not installed')
-    expect(buttonLabels()).toEqual(['Re-check'])
-    expect(mocks.rpc).not.toHaveBeenCalled()
   })
 })

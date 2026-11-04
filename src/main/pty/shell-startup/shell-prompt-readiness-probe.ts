@@ -1,10 +1,10 @@
-import { createPtySlaveLineEditorProbe } from '../../../shared/pty-slave-line-discipline-echo'
+import { createPtySlaveLineEditorProbe } from '../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo'
 import {
   listChildProcessIds,
   readShellProcessReadiness,
   resolveInstalledShellExecutablePaths,
   resolveShellExecutablePath
-} from '../../../shared/shell-process-readiness'
+} from '../../../shared/terminal/pty/native-process/shell-process-readiness'
 import {
   createLineEditorReadyOutputScanState,
   scanForLineEditorReadyOutput

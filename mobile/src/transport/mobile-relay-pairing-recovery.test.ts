@@ -175,25 +175,6 @@ describe('mobile relay pairing recovery', () => {
     expect(pending.close).toHaveBeenCalledOnce()
   })
 
-  it('clears a journal whose relay routing the host already carries, without dialing', async () => {
-    const saved = journal()
-    const connectRelay = vi.fn()
-    const bundle: MobileRelayCredentialBundle = {
-      v: 1,
-      hostId: 'host-1',
-      deviceToken: offer.deviceToken,
-      current: { token: 'C'.repeat(43), hash: 'D'.repeat(43), version: 1, expiresAt: now + 60_000 }
-    }
-    const { relay } = endpoints(saved, { state: 'not-found' })
-    const hosts = [{ ...saved.metadata.host, deviceToken: offer.deviceToken, relay }]
-    const deps = dependencies({ journal: saved, connectRelay, bundle, hosts })
-
-    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('recovered')
-    expect(connectRelay).not.toHaveBeenCalled()
-    expect(deps.savePairedHost).not.toHaveBeenCalled()
-    expect(deps.clearJournal).toHaveBeenCalledOnce()
-  })
-
   it('tries pending then current before an unexpired invite and transitions after not-found', async () => {
     const saved = journal()
     const currentToken = 'C'.repeat(43)

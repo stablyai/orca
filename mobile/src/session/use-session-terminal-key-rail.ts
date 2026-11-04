@@ -26,8 +26,6 @@ export function useSessionTerminalKeyRail(controller: MobileSessionController): 
     activeSessionTab,
     terminalModes,
     canSend,
-    canCompose,
-    liveInputEnabled,
     keyboardHeight,
     keyboardLift,
     directionPadEnabled,
@@ -46,24 +44,16 @@ export function useSessionTerminalKeyRail(controller: MobileSessionController): 
   const toolbar = useMemo<BridgeTerminalToolbar>(
     () => ({
       canSend,
-      canCompose,
+      // There is no composer to switch to: shipped shells grey their input-mode key, newer ones hide it.
+      canCompose: false,
       keyboardVisible,
-      liveInputEnabled,
+      liveInputEnabled: true,
       phoneDisplayMode,
       runsAgent,
       modifiers,
       directionPadEnabled
     }),
-    [
-      canSend,
-      canCompose,
-      keyboardVisible,
-      liveInputEnabled,
-      phoneDisplayMode,
-      runsAgent,
-      modifiers,
-      directionPadEnabled
-    ]
+    [canSend, keyboardVisible, phoneDisplayMode, runsAgent, modifiers, directionPadEnabled]
   )
   const railKeys = useShellTerminalKeyRail(
     railShown,
@@ -75,16 +65,13 @@ export function useSessionTerminalKeyRail(controller: MobileSessionController): 
       if (id === 'toggleKeyboard') {
         if (keyboardVisible) {
           controller.dismissSoftwareKeyboard()
-        } else if (liveInputEnabled ? canSend : canCompose) {
-          const field = liveInputEnabled ? controller.liveInputRef : controller.commandInputRef
-          field.current?.focus()
+        } else if (canSend) {
+          controller.liveInputRef.current?.focus()
         }
         return
       }
+      // Sent by shipped shells only; the terminal has one input now.
       if (id === 'toggleInputMode') {
-        if (canCompose) {
-          controller.toggleLiveInput()
-        }
         return
       }
       if (id === 'moreKeys') {

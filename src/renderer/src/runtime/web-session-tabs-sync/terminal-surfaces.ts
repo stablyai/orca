@@ -3,9 +3,12 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionAgentTab
 } from '../../../../shared/runtime-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
-import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
 import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
@@ -13,7 +16,7 @@ import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   WEB_TERMINAL_SURFACE_TAB_PREFIX,
   toWebTerminalSurfaceTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 import type {
   ReadyBrowserSurface,
   ReadyEditorSurface,

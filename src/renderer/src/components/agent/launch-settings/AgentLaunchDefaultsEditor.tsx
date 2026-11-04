@@ -103,7 +103,7 @@ export function AgentDefaultArgsInput({
   containsFocus?: (target: EventTarget | null) => boolean
   onDiscardArgs?: () => void
   argsOverride: string
-  onSaveArgs: (value: string) => void | Promise<void>
+  onSaveArgs?: (value: string) => void | Promise<void>
   choiceChips?: readonly AgentArgsChoice[]
   note?: string
   disabled?: boolean
@@ -138,7 +138,7 @@ export function AgentDefaultArgsInput({
     return () => observer.disconnect()
   }, [chipFlags])
   const commitArgs = (): void => {
-    if (disabled || pending || (!onDraftChange && draft === null)) {
+    if (!onSaveArgs || disabled || pending || (!onDraftChange && draft === null)) {
       return
     }
     const value = argsDraft.trim()
@@ -262,7 +262,7 @@ export function AgentDefaultArgsInput({
               }
               write(
                 defaultArgs,
-                () => (onResetArgs ? onResetArgs() : onSaveArgs(defaultArgs)),
+                () => (onResetArgs ? onResetArgs() : onSaveArgs?.(defaultArgs)),
                 () => setDraft((current) => (current === argsDraft ? null : current))
               )
             }}

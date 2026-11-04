@@ -128,7 +128,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/main\\/startup\\/main-process-plugins',
       'config\\/build-plugins\\/main-build-entry-points',
       'src\\/main\\/browser\\/guest-lifecycle\\/input\\/browser-guest-shortcut-(?:forwarding|dispatch)',
-      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-frame-|use-plugin-frame-|PluginPanel\\.tsx$|plugin-panel-design-token-css|use-plugin-panel-theme-revision)',
+      'src\\/renderer\\/src\\/components\\/(?:plugins\\/frames\\/|right-sidebar\\/plugin-panels\\/PluginPanel\\.tsx$)',
       'src\\/renderer\\/src\\/components\\/editor\\/(?:PluginCustomEditorFrame\\.tsx$|plugin-custom-editor-host)'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
@@ -139,7 +139,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     [
       `${UI}(?:declarative\\/|plugin-icon-glyphs\\.ts$)`,
       'src\\/shared\\/plugins\\/(?:declarative\\/|frames\\/plugin-declarative-)',
-      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:PluginDeclarativePanel|use-plugin-declarative-|plugin-declarative-)',
+      'src\\/renderer\\/src\\/components\\/right-sidebar\\/plugin-panels\\/declarative\\/(?:PluginDeclarativePanel|use-plugin-declarative-|plugin-declarative-)',
       'resources\\/plugins\\/declarative\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
@@ -177,7 +177,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     [
       'src\\/shared\\/plugins\\/declarative\\/(?:plugin-declarative-message|runtime\\/declarative-(?:atoms|memory-retention|error-location|panel-context|renderer))',
       'src\\/shared\\/plugins\\/frames\\/plugin-(?:declarative-host-document|frame-bridge)',
-      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:PluginDeclarativePanel|PluginPanel\\.tsx$|use-plugin-declarative-(?:state|tree)|plugin-declarative-retained-memory)',
+      'src\\/renderer\\/src\\/components\\/right-sidebar\\/plugin-panels\\/(?:PluginPanel\\.tsx$|declarative\\/(?:PluginDeclarativePanel|use-plugin-declarative-(?:state|tree)|plugin-declarative-retained-memory))',
       'src\\/main\\/plugins\\/(?:plugin-dev-|panels\\/plugin-frame-guest-sessions)',
       'resources\\/plugins\\/declarative\\/'
     ].join('|'),
@@ -220,7 +220,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       // Every `plugin shot` checks for a chrome region and resolves the default shots folder.
       'src\\/cli\\/(?:handlers\\/plugin-(?:view|shot-chrome|shot-default-dir)|specs\\/plugin-view)',
       'src\\/renderer\\/src\\/hooks\\/(?:ipc-events\\/plugin-view-ipc-bridge|use-document-dark-theme)',
-      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-panel-draw-status|use-plugin-panel-draw-report|right-sidebar-panel-content)'
+      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-panels\\/health\\/(?:plugin-panel-draw-status|use-plugin-panel-draw-report)|right-sidebar-panel-content)'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke|compiled-orca-cli'
   ),

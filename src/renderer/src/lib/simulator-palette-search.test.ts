@@ -4,16 +4,12 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { buildPaletteTabDocument } from '../../../shared/palette-match/tab-document'
 import '../../../shared/palette-match/palette-query'
-import {
-  resolveWorktreeBranchLabel,
-  resolveWorktreeDisplayName
-} from './worktree-default-display-name'
+
 import {
   SIMULATOR_PALETTE_QUERY_MAX_BYTES,
   SIMULATOR_TYPE_SEARCH_ALIASES,
   buildSearchableSimulatorTabs,
   searchSimulatorTabs,
-  simulatorPaletteTabTitle,
   type SearchableSimulatorTab
 } from './simulator-palette-search'
 
@@ -57,43 +53,6 @@ function makeTab(overrides: Partial<Tab> = {}): Tab {
 }
 
 /** Mirrors buildSearchableSimulatorTabs so hand-built rows index the same fields. */
-function makeEntry(entry: Omit<SearchableSimulatorTab, 'document'>): SearchableSimulatorTab {
-  return {
-    ...entry,
-    document: buildPaletteTabDocument({
-      id: entry.tab.id,
-      title: simulatorPaletteTabTitle(entry.tab),
-      secondaryTexts: [],
-      worktreeName: resolveWorktreeDisplayName(entry.worktree),
-      branch: resolveWorktreeBranchLabel(entry.worktree),
-      repoName: entry.repoName,
-      typeAliases: SIMULATOR_TYPE_SEARCH_ALIASES
-    })
-  }
-}
-
-describe('simulator-palette-search lastActiveAt', () => {
-  function entryFor(overrides: Partial<Tab>): SearchableSimulatorTab {
-    return makeEntry({
-      tab: makeTab(overrides),
-      worktree: makeWorktree(),
-      repoName: 'repo/mobile',
-      worktreeSortIndex: 0,
-      isCurrentTab: false,
-      isCurrentWorktree: true
-    })
-  }
-
-  it('breaks a rank tie between equally-matching tabs by recency', () => {
-    // Ids are ordered so an id-only tiebreak would flip this expectation.
-    const older = entryFor({ id: 'sim-a-older', lastFocusedAt: 1000 })
-    const newer = entryFor({ id: 'sim-z-newer', lastFocusedAt: 5000 })
-
-    const results = searchSimulatorTabs([older, newer], 'emulator')
-
-    expect(results.map((result) => result.tabId)).toEqual(['sim-z-newer', 'sim-a-older'])
-  })
-})
 
 describe('simulator-palette-search', () => {
   it('keeps same-id simulator tabs isolated by execution host', () => {

@@ -3,7 +3,7 @@ import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../s
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { Tab } from '../../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { wslMoveCutoverFixture } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { wslMoverProfile } from '../__fixtures__/wsl-mover/wsl-mover-profiles'
 import { tabGroup, terminalTab } from '../__fixtures__/wsl-mover/wsl-mover-profile-rows'

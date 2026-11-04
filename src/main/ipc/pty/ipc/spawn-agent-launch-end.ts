@@ -1,7 +1,7 @@
 import {
   readTerminalStartFailure,
   type TerminalStartFailure
-} from '../../../../shared/terminal-start-failure'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import {
   AGENT_LAUNCH_PANE_REFUSED_CODE,
   type AgentLaunchPaneAddress,
@@ -23,6 +23,7 @@ export type PaneAgentLaunch = {
   launchRuntime?: AgentLaunchRuntime
   /** After provider dispatch, a failure cannot prove that nothing ran. */
   dispatched: boolean
+  returnLaunchFailure?: boolean
   refuseIfClosed: () => void
 }
 
@@ -74,7 +75,7 @@ export function endPaneAgentLaunch(ctx: PtyIpcSpawnState, end: PaneAgentLaunchEn
           ...diagnosticFields(readTerminalStartFailure(end.error))
         }
   )
-  return new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
+  return launch.returnLaunchFailure ? toError(end.error) : new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
 }
 
 /** A pane closed during launch must stop any agent that may already have spawned. */

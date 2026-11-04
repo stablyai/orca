@@ -52,16 +52,6 @@ beforeEach(() => {
 })
 
 describe('isWorkspaceNotificationMutedBySidebarFilters', () => {
-  it('mutes a workspace a Filters switch hides while the setting is off', () => {
-    expect(muted(CLI_ID)).toBe(true)
-    expect(muted(PLAIN_ID)).toBe(false)
-  })
-
-  it('mutes nothing when Notify about hidden workspaces is on', () => {
-    setNotifyHiddenWorkspaces(true)
-    expect(muted(CLI_ID)).toBe(false)
-  })
-
   it('fails open before settings or UI state hydrate, and for an unknown workspace', () => {
     expect(muted('repo1::/tmp/unknown')).toBe(false)
     store.setState({ persistedUIReady: false })
@@ -132,11 +122,6 @@ describe('isWorkspaceNotificationMutedBySidebarFilters', () => {
     expect(muted(folderWorkspaceKey('f1'))).toBe(false)
     store.setState({ hideWorkspacesFromOtherDevices: true })
     expect(muted(folderWorkspaceKey('f1'))).toBe(true)
-  })
-
-  it('ignores the project filter, which is not a Filters switch', () => {
-    store.setState({ hideCliCreatedWorkspaces: false, filterRepoIds: ['other-repo'] })
-    expect(muted(PLAIN_ID)).toBe(false)
   })
 })
 

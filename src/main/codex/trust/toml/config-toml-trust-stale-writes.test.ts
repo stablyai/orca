@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { chmodSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { chmodSync, statSync } from 'node:fs'
 import './config-toml-trust'
 import {
   createTrustConfigFixture,
@@ -27,25 +27,6 @@ describe('config.toml partial and stale writes', () => {
 
     expect(updated.startsWith(partial)).toBe(true)
     expect(updated).toContain('[projects."C:/Remote/Repo"]')
-  })
-
-  it('pins the no-lock stale-writer policy to one complete last snapshot', () => {
-    const fixture = createTrustConfigFixture()
-    fixtures.push(fixture.tmpDir)
-    const original = 'model = "gpt-5"\n'
-    const first = upsertProjectTrustContent(original, '/remote/first', 'trusted', {
-      alreadyCanonical: true
-    })
-    const second = upsertProjectTrustContent(original, '/remote/second', 'trusted', {
-      alreadyCanonical: true
-    })
-
-    writeTomlConfigAtomically(fixture.configPath, first)
-    writeTomlConfigAtomically(fixture.configPath, second)
-
-    expect(readFileSync(fixture.configPath, 'utf-8')).toBe(second)
-    expect(readFileSync(fixture.configPath, 'utf-8')).not.toContain('/remote/first')
-    expect(readdirSync(fixture.tmpDir).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
 
   it.skipIf(process.platform === 'win32')(

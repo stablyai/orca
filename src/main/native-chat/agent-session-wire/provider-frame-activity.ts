@@ -2,6 +2,7 @@ import { normalizeOptionalField } from '../../../shared/agent-status/contracts/a
 import { formatNativeChatDuration } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 
 export const MAX_PROVIDER_ACTIVITY_LENGTH = 160
+export const PROVIDER_COMPACTING_ACTIVITY = 'Compacting the conversation'
 
 type ActivityText = string | null | undefined
 
@@ -71,7 +72,7 @@ const CODEX_ITEM_ACTIVITY: Readonly<Record<string, string>> = {
   imageGeneration: 'Generating an image',
   enteredReviewMode: 'Reviewing changes',
   exitedReviewMode: 'Reviewing changes',
-  contextCompaction: 'Compacting the conversation',
+  contextCompaction: PROVIDER_COMPACTING_ACTIVITY,
   hookPrompt: 'Processing workspace guidance'
 }
 
@@ -114,7 +115,7 @@ export function codexProviderFrameActivity(
 export function claudeProviderFrameActivity(kind: string, payload: unknown): ActivityText {
   const source = record(payload)
   if (kind === 'message:system:status') {
-    return stringField(source, 'status') === 'compacting' ? 'Compacting the conversation' : null
+    return stringField(source, 'status') === 'compacting' ? PROVIDER_COMPACTING_ACTIVITY : null
   }
   if (
     kind === 'message:system:task_started' ||

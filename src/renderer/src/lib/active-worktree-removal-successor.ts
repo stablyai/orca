@@ -13,7 +13,7 @@ import {
 } from '@/lib/worktree-runtime-owner-index'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
-import { getDeleteStateForWorktreeHost } from '@/components/sidebar/worktree-delete-state-host-match'
+import { getDeleteStateForWorktreeHost } from '@/components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,

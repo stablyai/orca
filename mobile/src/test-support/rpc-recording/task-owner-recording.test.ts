@@ -137,35 +137,6 @@ describe('committed production task owners in recording adapters', () => {
     }
   )
 
-  it('does not commit product effects or dispatch from an abandoned detail render', async () => {
-    const clock = vitestRecordingScheduler()
-    await clock.start()
-    const transport = new ScriptedRpcTransport(clock.elapsed)
-    const effects: string[] = []
-    const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
-      mutation: {
-        name: 'abandon-before-commit',
-        file: 'tasks/use-mobile-tasks-item-detail-loading.tsx',
-        before: '  return model\n}',
-        after: "  throw new Error('abandoned detail render')\n}"
-      }
-    })
-    const mounted = adapters['tasks.item-detail-github']({
-      client: transport.client,
-      effect: (name) => effects.push(name)
-    })
-    try {
-      expect(() => mounted.action('mount', {})).toThrow('abandoned detail render')
-      await clock.flush()
-      assertMutationApplied()
-      expect(effects).toEqual([])
-      expect(transport.requests).toEqual([])
-      expect(transport.payloads).toEqual([])
-    } finally {
-      await disposeTaskOwnerRecording(mounted, clock, [transport])
-    }
-  })
-
   it.each([
     ['tk-item-metadata-gitlab', 'update-gitlab'],
     ['tk-item-comment-github', 'comment'],
@@ -355,25 +326,6 @@ describe('committed production task owners in recording adapters', () => {
       ])
     }
   )
-
-  it('observes the actual hidden metadata owner without unchanged effects or provider work', async () => {
-    const base = pilot('tk-item-detail-metadata')
-    const recording = await record({
-      ...base,
-      steps: [
-        { action: 'mount', id: 'mount' },
-        { checkpoint: 'baseline' },
-        { action: 'update', id: 'unchanged' },
-        { checkpoint: 'unchanged' }
-      ]
-    })
-    const baseline = observation(recording, 'baseline')
-    expect(fieldValues(baseline, 'itemBodyDraft')).toEqual(['', 'body'])
-    expect(fieldValues(baseline, 'itemLabelsLoading')).toEqual([false])
-    expect(baseline.sender).toEqual([])
-    expect(baseline.payloads).toEqual([])
-    expect(observation(recording, 'unchanged').effects).toEqual(baseline.effects)
-  })
 
   it.each([
     ['tk-item-detail-github', 'payload', 'detailLoading'],

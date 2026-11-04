@@ -1,10 +1,10 @@
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { TerminalLaunchResult } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session/agent-session-host-authority'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
+import type { TerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
 import type { OpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 
 export type PtySpawnResult = TerminalLaunchResult & {

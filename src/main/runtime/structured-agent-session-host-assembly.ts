@@ -76,6 +76,7 @@ export async function installOnJournal(
     journalDatabase,
     claimKeyId: deps.claimKeyId,
     usageLimitAutoContinue: deps.usageLimitAutoContinue,
+    ...(deps.idleSweep ? { idleSweep: deps.idleSweep } : {}),
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
     resolveWorkspacePath: deps.resolveWorkspacePath,

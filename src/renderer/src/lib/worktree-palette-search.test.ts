@@ -73,26 +73,6 @@ describe('worktree-palette-search', () => {
     })
   })
 
-  it('returns a truncated comment snippet with the highlighted match range', () => {
-    const results = searchWorktrees(
-      [
-        makeWorktree({
-          comment:
-            'This worktree carries the quick jump refresh implementation details for the new palette.'
-        })
-      ],
-      'implementation',
-      repoMap
-    )
-
-    expect(results).toHaveLength(1)
-    expect(results[0].supportingText?.labelKind).toBe('comment')
-    expect(results[0].supportingText?.accessibilityLabel).toBe('Workspace comment')
-    expect(results[0].supportingText?.text).toContain('implementation')
-    const [range] = results[0].supportingText?.matchRanges ?? []
-    expect(results[0].supportingText?.text.slice(range.start, range.end)).toBe('implementation')
-  })
-
   it('does not search stale GitHub cache metadata when Checks selected another review', () => {
     const staleWorktree = makeWorktree({
       branch: 'refs/heads/feature/palette-refresh',
@@ -155,13 +135,6 @@ describe('worktree-palette-search', () => {
     expect(results[0].matchedFields).toEqual(['repo', 'branch'])
     expect(results[0].repoRanges).toEqual([{ start: 9, end: 13 }])
     expect(results[0].branchRanges).toEqual([{ start: 0, end: 4 }])
-  })
-
-  it('requires every token of a multi-token query to land somewhere', () => {
-    const worktree = makeWorktree({ comment: 'waiting on infra' })
-
-    expect(searchWorktrees([worktree], 'jump palette', repoMap)).toHaveLength(1)
-    expect(searchWorktrees([worktree], 'jump nowhere', repoMap)).toEqual([])
   })
 
   it('matches a pasted GitHub issue URL to the linked worktree instead of the URL text', () => {

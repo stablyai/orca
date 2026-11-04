@@ -30,7 +30,6 @@ it('keeps switching and signing in independent through keyboard and pointer sele
             action={
               <InlineUsageSignInAction
                 accountLabel="account@example.com"
-                isFetching={false}
                 isSigningIn={false}
                 disabled={false}
                 onSignIn={signIn}

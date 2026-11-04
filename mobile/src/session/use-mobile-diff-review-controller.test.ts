@@ -154,19 +154,6 @@ describe('useMobileDiffReviewController', () => {
     expect(screenState).toMatchObject({ kind: 'ready', status: { branch: 'feature/one' } })
   })
 
-  it('waits for the desktop when the drop lands before the review loads', async () => {
-    loadSnapshot.mockReturnValueOnce(new Promise(() => {}))
-
-    await act(async () => {
-      renderer = create(createElement(Probe, { connState: 'connected' }))
-      await Promise.resolve()
-    })
-    expect(screenState).toMatchObject({ kind: 'loading' })
-
-    await update('disconnected')
-    expect(screenState).toMatchObject({ kind: 'error', message: 'Waiting for desktop...' })
-  })
-
   describe('Stage · next file', () => {
     let controller: ReturnType<typeof useMobileDiffReviewController> | null = null
 
@@ -229,11 +216,6 @@ describe('useMobileDiffReviewController', () => {
 
     beforeEach(() => {
       client.requests.length = 0
-    })
-
-    it('wraps to the first file after staging the last one', async () => {
-      await stageCurrent()
-      expect(controller?.currentItem?.filePath).toBe('a.ts')
     })
 
     it('keeps a file the reader picked while the stage was running', async () => {

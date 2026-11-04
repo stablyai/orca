@@ -371,6 +371,8 @@ export type AgentSessionModelOption = {
   /** Transient display declaration; null is observed unknown, absence supplies no evidence. */
   declaredDefaultEffort?: string | null
   efforts: AgentSessionOptionChoice[]
+  /** Additional structured-chat choices; never CLI effort arguments. Older hosts omit this. */
+  chatEfforts?: AgentSessionOptionChoice[]
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
   /** Whether the model runs Approve for me; absent is unknown, which neither offers nor launches it. */
