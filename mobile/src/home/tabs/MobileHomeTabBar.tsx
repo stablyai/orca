@@ -1,6 +1,6 @@
 import { CalendarClock, Gauge, LayoutList, Settings, type LucideIcon } from 'lucide-react-native'
 import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -42,7 +42,8 @@ export function MobileHomeTabBar(props: {
   return (
     <View
       style={[styles.bar, { paddingBottom: Math.max(props.bottomInset, spacing.sm) }]}
-      accessibilityRole="tabbar"
+      // Android has no 'tabbar' role and crashes on mount; iOS keeps its tab-bar trait.
+      accessibilityRole={Platform.OS === 'ios' ? 'tabbar' : 'tablist'}
     >
       {props.tabs.map((tab) => (
         <TabButton

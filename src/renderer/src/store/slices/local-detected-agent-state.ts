@@ -52,6 +52,10 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       nativeInventoryRequested = true
       return actions.ensureDetectedAgents(undefined, true)
     },
+    refreshNativeDetectedAgents: (): Promise<TuiAgent[]> => {
+      nativeInventoryRequested = true
+      return refreshLocalAgentInventory(set, get, lifecycle, undefined, false, {}, true)
+    },
     ensureAllDetectedAgents: (worktreeId?: string | null): Promise<TuiAgent[]> =>
       actions.ensureDetectedAgents(worktreeId, false, true),
     isLocalAgentInventoryRefused: (worktreeId?: string | null): boolean =>
