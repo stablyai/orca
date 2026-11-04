@@ -16479,6 +16479,8 @@
               "25349b66fc": "新規 Markdown ファイル",
               "784812ca24": "アクティブなワークスペースでブラウザタブを開きます。",
               "892bfa9339": "新規ブラウザタブ",
+              "splitChatRight": "右の分割チャット",
+              "splitChatDown": "チャットを下に分割",
               "verbs": {
                 "newBrowser": "新規ブラウザ",
                 "newBrowserTab": "新規ブラウザタブ",
@@ -16494,6 +16496,8 @@
                 "newShell": "新規シェル",
                 "splitChatRight": "チャットを右に分割",
                 "splitChatDown": "チャットを分割する",
+                "chatPaneRight": "チャットペイン右",
+                "chatPaneBelow": "下のチャットペイン",
                 "terminalTab": "ターミナルタブ",
                 "createWorktree": "ワークツリーを作成する",
                 "addWorktree": "ワークツリーを追加",

@@ -411,11 +411,10 @@ describe('Cmd+J quick action context', () => {
     expect(calls).toEqual(['delete'])
   })
 
-  it.each([
-    ['en', 'split chat'],
-    ['ko', '채팅 분할'],
-    ['ko', '터미널 분할']
-  ] as const)('finds both terminal splits in %s for %s', async (locale, query) => {
+  async function rankNativeChatSplits(
+    locale: Parameters<typeof loadRendererUiLanguage>[0],
+    query: string
+  ) {
     await i18n.changeLanguage(await loadRendererUiLanguage(locale))
     const context = {
       ...ctx({}),
@@ -438,6 +437,15 @@ describe('Cmd+J quick action context', () => {
       settingsResults: [],
       actionResults: buildCmdJActionResults(actions)
     })
+    return { actions, results }
+  }
+
+  it.each([
+    ['en', 'split chat'],
+    ['ko', '채팅 분할'],
+    ['ko', '터미널 분할']
+  ] as const)('finds both terminal splits in %s for %s', async (locale, query) => {
+    const { actions, results } = await rankNativeChatSplits(locale, query)
     expect(results.map((result) => result.id).sort()).toEqual([
       'split-chat-down',
       'split-chat-right'
@@ -445,6 +453,24 @@ describe('Cmd+J quick action context', () => {
     expect(results.map((result) => result.title)).toEqual(
       expect.arrayContaining(actions.map((action) => action.title))
     )
+  })
+
+  it.each([
+    ['zh', '右侧拆分聊天', 'split-chat-right'],
+    ['ja', '右の分割チャット', 'split-chat-right'],
+    ['ja', 'チャットを下に分割', 'split-chat-down'],
+    ['ko', '채팅을 오른쪽으로 분할', 'split-chat-right']
+  ] as const)('keeps the former %s directional title %s searchable', async (locale, query, id) => {
+    const { results } = await rankNativeChatSplits(locale, query)
+    expect(results[0]?.id).toBe(id)
+  })
+
+  it('keeps chat pane searches available for both terminal splits', async () => {
+    const { results } = await rankNativeChatSplits('en', 'chat pane')
+    expect(results.map((result) => result.id).sort()).toEqual([
+      'split-chat-down',
+      'split-chat-right'
+    ])
   })
 
   it('offers and runs split actions only for an active movable chat', async () => {

@@ -17425,6 +17425,8 @@
               "25349b66fc": "New Markdown File",
               "784812ca24": "Open a browser tab in the active workspace.",
               "892bfa9339": "New Browser Tab",
+              "splitChatRight": "Split Chat Right",
+              "splitChatDown": "Split Chat Down",
               "verbs": {
                 "newBrowser": "new browser",
                 "newBrowserTab": "new browser tab",
@@ -17440,6 +17442,8 @@
                 "newShell": "new shell",
                 "splitChatRight": "split chat right",
                 "splitChatDown": "split chat down",
+                "chatPaneRight": "chat pane right",
+                "chatPaneBelow": "chat pane below",
                 "terminalTab": "terminal tab",
                 "createWorktree": "create worktree",
                 "addWorktree": "add worktree",

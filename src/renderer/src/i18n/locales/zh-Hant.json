@@ -16927,6 +16927,8 @@
               "25349b66fc": "新的 Markdown 檔案",
               "784812ca24": "在使用中的工作區中開啟瀏覽器分頁。",
               "892bfa9339": "新瀏覽器分頁",
+              "splitChatRight": "向右分割聊天",
+              "splitChatDown": "向下分割聊天",
               "verbs": {
                 "newBrowser": "新瀏覽器",
                 "newBrowserTab": "新的瀏覽器分頁",
@@ -16942,6 +16944,8 @@
                 "newShell": "新 shell",
                 "splitChatRight": "向右分割聊天",
                 "splitChatDown": "向下分割聊天",
+                "chatPaneRight": "聊天窗格右側",
+                "chatPaneBelow": "下面的聊天窗格",
                 "terminalTab": "終端機分頁",
                 "createWorktree": "建立工作樹",
                 "addWorktree": "新增工作樹",

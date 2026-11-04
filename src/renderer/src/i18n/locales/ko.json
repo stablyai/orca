@@ -16479,6 +16479,8 @@
               "25349b66fc": "새 Markdown 파일",
               "784812ca24": "활성 워크스페이스에서 브라우저 탭을 엽니다.",
               "892bfa9339": "새 브라우저 탭",
+              "splitChatRight": "채팅을 오른쪽으로 분할",
+              "splitChatDown": "채팅 분할",
               "verbs": {
                 "newBrowser": "새 브라우저",
                 "newBrowserTab": "새 브라우저 탭",
@@ -16494,6 +16496,8 @@
                 "newShell": "새 셸",
                 "splitChatRight": "바로 채팅 분할",
                 "splitChatDown": "채팅을 분할하다",
+                "chatPaneRight": "채팅창 오른쪽",
+                "chatPaneBelow": "아래 채팅 창",
                 "terminalTab": "terminal 탭",
                 "createWorktree": "작업 트리 만들기",
                 "addWorktree": "작업 트리 추가",

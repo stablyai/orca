@@ -49,7 +49,9 @@ export function getNativeChatSplitQuickActions(): CmdJQuickAction[] {
       verbKeywords: [
         right,
         terminal,
-        translate('auto.components.cmd.j.quick.actions.verbs.splitChatRight', 'split chat right')
+        translate('auto.components.cmd.j.quick.actions.verbs.splitChatRight', 'split chat right'),
+        translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right'),
+        translate('auto.components.cmd.j.quick.actions.verbs.chatPaneRight', 'chat pane right')
       ]
     }),
     splitAction('down', {
@@ -60,7 +62,9 @@ export function getNativeChatSplitQuickActions(): CmdJQuickAction[] {
       verbKeywords: [
         down,
         terminal,
-        translate('auto.components.cmd.j.quick.actions.verbs.splitChatDown', 'split chat down')
+        translate('auto.components.cmd.j.quick.actions.verbs.splitChatDown', 'split chat down'),
+        translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down'),
+        translate('auto.components.cmd.j.quick.actions.verbs.chatPaneBelow', 'chat pane below')
       ]
     })
   ]

@@ -17155,6 +17155,8 @@
               "25349b66fc": "Markdown-Datei erstellen",
               "784812ca24": "Einen Browser-Tab im aktiven Arbeitsbereich öffnen.",
               "892bfa9339": "Neuen Browser-Tab öffnen",
+              "splitChatRight": "Chat nach rechts teilen",
+              "splitChatDown": "Chat nach unten teilen",
               "verbs": {
                 "newBrowser": "Neuen Browser öffnen",
                 "newBrowserTab": "Neuen Browser-Tab öffnen",
@@ -17170,6 +17172,8 @@
                 "newShell": "Neue Shell öffnen",
                 "splitChatRight": "Chat nach rechts teilen",
                 "splitChatDown": "Chat nach unten teilen",
+                "chatPaneRight": "Chat-Bereich rechts",
+                "chatPaneBelow": "Chat-Bereich darunter",
                 "terminalTab": "Terminal-Tab",
                 "createWorktree": "Worktree erstellen",
                 "addWorktree": "Worktree hinzufügen",

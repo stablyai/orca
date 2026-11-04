@@ -17112,6 +17112,8 @@
               "25349b66fc": "Nouveau fichier markdown",
               "784812ca24": "Ouvrir un onglet de navigateur dans l'espace de travail actif.",
               "892bfa9339": "Nouvel onglet de navigateur",
+              "splitChatRight": "Diviser le chat à droite",
+              "splitChatDown": "Diviser la discussion",
               "verbs": {
                 "newBrowser": "nouveau navigateur",
                 "newBrowserTab": "nouvel onglet de navigateur",
@@ -17127,6 +17129,8 @@
                 "newShell": "nouveau shell",
                 "splitChatRight": "diviser le chat à droite",
                 "splitChatDown": "diviser la discussion",
+                "chatPaneRight": "volet de discussion à droite",
+                "chatPaneBelow": "volet de discussion ci-dessous",
                 "terminalTab": "onglet de terminal",
                 "createWorktree": "créer un worktree",
                 "addWorktree": "ajouter un worktree",
