@@ -324,10 +324,10 @@ describe('an idle stop that fails (P2-11 a)', () => {
 })
 
 describe('the idle sweep with no child running (P2-22 ii)', () => {
-  function sweepWithoutChild(session: object, idleMs?: () => number | null) {
+  function sweepWithoutChild(journal: unknown, idleMs?: () => number | null) {
     const sessions = Object.assign(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a session fixture carrying only the journal and child facts the sweep reads.
-      new Map([[SESSION, { ...session, child: null } as never]]),
+      new Map([[SESSION, { journal, child: null } as never]]),
       { lastActivityAt: () => 0, touch: () => undefined }
     )
     const stopAgent = vi.fn(async () => undefined)
@@ -385,14 +385,14 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
         ]
       })
     }
-    const { sweep, stopAgent, closeConversation } = sweepWithoutChild({ journal })
+    const { sweep, stopAgent, closeConversation } = sweepWithoutChild(journal)
     await sweep.tick()
     expect(stopAgent).not.toHaveBeenCalled()
     expect(closeConversation).toHaveBeenCalledWith(SESSION)
   })
 
   it('still retires it on the default window while idle stop is Never', async () => {
-    const { sweep, closeConversation } = sweepWithoutChild({}, () => null)
+    const { sweep, closeConversation } = sweepWithoutChild(null, () => null)
     await sweep.tick()
     expect(closeConversation).toHaveBeenCalledWith(SESSION)
   })
