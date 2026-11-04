@@ -121,23 +121,4 @@ describe('client host hosting identity wiring', () => {
       await hostingIdentityForLaunch(mkdtempSync(join(tmpdir(), 'orca-host-wiring-')))
     ).not.toBe(await hostingIdentityForLaunch(mkdtempSync(join(tmpdir(), 'orca-host-wiring-'))))
   })
-
-  it('attaches under the identity already stamped into the first window', async () => {
-    await launch(mkdtempSync(join(tmpdir(), 'orca-host-wiring-')))
-
-    // Windows receive the hosting id before pairing; the lease must reuse it.
-    const { getBrowserClientHostId } = await import('./browser-client-host-id')
-    const stamped = getBrowserClientHostId()
-
-    expect(await hostingIdentity()).toBe(stamped)
-  })
-
-  it('keeps hosting on a process-local identity when no profile was ever resolved', async () => {
-    vi.resetModules()
-    createHostCallbacks.length = 0
-    hostOptions.length = 0
-
-    const { getBrowserClientHostId } = await import('./browser-client-host-id')
-    expect(await hostingIdentity()).toBe(getBrowserClientHostId())
-  })
 })

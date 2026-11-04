@@ -2,7 +2,7 @@ import { discoveredModel } from '../../agent-session/options/structured-agent-se
 import { createClaudeCatalogOptions } from '../../agent-session/options/agent-session-option-catalog-claude-codex'
 import type { CatalogOption } from '../../agent-session/options/agent-session-option-catalog-types'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
-import { sourceControlActionOptions } from '../../source-control-action-options'
+import { sourceControlActionOptions } from '../../source-control/ai/recipes/source-control-action-options'
 import {
   agentPermissionChoices,
   agentPermissionHasTerminalChoice

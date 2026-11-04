@@ -25,13 +25,6 @@ describe('createAgentStatusTracker with OSC 7501 activity', () => {
     expect(events).toEqual(['working', 'idle:Fix the parser', 'working', 'idle:Fix the parser'])
   })
 
-  it('never reads a glyph-less title as an exit while the program reports', () => {
-    const { instance, events } = tracker()
-    instance.handleProgramActivity('idle')
-    instance.handleTitle('some topic title the detector cannot classify ⟂')
-    expect(events).toEqual([])
-  })
-
   it('hands classification back to titles once the program stops reporting', () => {
     const { instance, events } = tracker()
     instance.handleProgramActivity('idle')

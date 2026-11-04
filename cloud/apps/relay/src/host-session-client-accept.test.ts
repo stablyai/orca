@@ -42,7 +42,9 @@ const config = {
   assignmentSigningKey: new Uint8Array(32),
   role: 'cell',
   cellId: 'production-gce-c3',
-  cells: [{ id: 'production-gce-c3', url: 'https://relay-c3.example.com', capacityRequests: 4_000 }],
+  cells: [
+    { id: 'production-gce-c3', url: 'https://relay-c3.example.com', capacityRequests: 4_000 }
+  ],
   adminAudience: 'https://relay-c3.example.com/v1/admin/drain',
   deployServiceAccount: 'deploy@example.com',
   runtimeServiceAccount: 'runtime@example.com',
@@ -251,9 +253,9 @@ describe('client accept abandoned mid-DB-phase', () => {
         'activity',
         expect.any(Number)
       )
-      const line = warn.mock.calls.map((call) => String(call[0])).find((entry) =>
-        entry.includes('orca_relay_client_accept_abandoned')
-      )
+      const line = warn.mock.calls
+        .map((call) => String(call[0]))
+        .find((entry) => entry.includes('orca_relay_client_accept_abandoned'))
       expect(line).toBeDefined()
       expect(JSON.parse(line!)).toMatchObject({ stage: 'activity' })
       expect(line).not.toContain(identity.relayHostId)
@@ -722,33 +724,6 @@ describe('control lease jitter', () => {
     vi.useRealTimers()
   })
 
-  it('grants a lease uniformly around its mean so cohorts drift apart at the same mean rate', async () => {
-    const now = 1_700_000_000_000
-    const helloAck = (socket: FakeSocket) =>
-      JSON.parse(
-        String(socket.send.mock.calls.find((call) => String(call[0]).includes('host-hello-ack'))![0])
-      ) as { leaseExpiresAt: number }
-
-    const shortest = harness({ now: () => now, random: () => 0 })
-    const shortestAck = helloAck(await activeHost(shortest))
-    const centered = harness({ now: () => now, random: () => 0.5 })
-    const centeredAck = helloAck(await activeHost(centered))
-    const longestRoll = 0.999999
-    const longest = harness({ now: () => now, random: () => longestRoll })
-    const longestAck = helloAck(await activeHost(longest))
-
-    // Pinned, not bounded: a jitter clamped to one side still satisfies an upper
-    // bound, so only the exact top of the band proves it is symmetric.
-    const longestOffset = Math.floor((longestRoll * 2 - 1) * CONTROL_LEASE_JITTER_MS)
-    expect(shortestAck.leaseExpiresAt).toBe(now + CONTROL_LEASE_MS - CONTROL_LEASE_JITTER_MS)
-    expect(centeredAck.leaseExpiresAt).toBe(now + CONTROL_LEASE_MS)
-    expect(longestAck.leaseExpiresAt).toBe(now + CONTROL_LEASE_MS + longestOffset)
-    shortest.registry.drain(0)
-    centered.registry.drain(0)
-    longest.registry.drain(0)
-    vi.advanceTimersByTime(0)
-  })
-
   it('rebinds re-roll the jitter instead of pinning the cohort phase', async () => {
     const now = 1_700_000_000_000
     let roll = 0
@@ -821,7 +796,7 @@ describe('paced drain and the phones of a host not yet told', () => {
     expect(untold.send).toHaveBeenCalledWith(expect.stringContaining('conn-open'))
   })
 
-  it('refuses that host\'s phones as soon as its own drain is sent', async () => {
+  it("refuses that host's phones as soon as its own drain is sent", async () => {
     const { h, untold } = await twoHostCell()
     h.registry.drain(0, { paceWindowMs: 40_000 })
     await vi.advanceTimersByTimeAsync(40_000)

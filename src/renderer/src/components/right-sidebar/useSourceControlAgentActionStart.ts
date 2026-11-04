@@ -1,5 +1,5 @@
-import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
-import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
+import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
@@ -7,8 +7,8 @@ import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type {
   SourceControlLaunchActionId,
   SourceControlActionRecipe
-} from '../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { SourceControlAiWriteTarget } from '../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'

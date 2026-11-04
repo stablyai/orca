@@ -2,14 +2,14 @@ import {
   normalizeSourceControlActionRecipe,
   readSourceControlActionDefault,
   type SourceControlActionRecipe
-} from '../../source-control-ai-actions'
-import { liftActionPermissionArgs } from '../../source-control-action-permission-lift'
+} from '../../source-control/ai/recipes/source-control-ai-actions'
+import { liftActionPermissionArgs } from '../../source-control/ai/recipes/source-control-action-permission-lift'
 import {
   lowerActionArgumentChoices,
   readActionArgumentNode,
   transportActionArgumentChoices
-} from '../../source-control-action-argument-document'
-import { editActionArgumentChoices } from '../../source-control-action-argument-choices'
+} from '../../source-control/ai/recipes/source-control-action-argument-document'
+import { editActionArgumentChoices } from '../../source-control/ai/recipes/source-control-action-argument-choices'
 import * as startupShell from '../startup/tui-agent-startup-shell'
 import { tokenizeStartupCommand } from '../startup/tui-agent-startup-shell'
 import { describe, expect, it, vi } from 'vitest'

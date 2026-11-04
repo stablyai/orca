@@ -3,7 +3,7 @@ import { CreateIntentParams } from '../../../shared/rpc-contract/structured-agen
 import {
   projectSourceControlActionLaunch,
   resolveSourceControlActionSessionOptions
-} from '../../../shared/source-control-action-launch-preferences'
+} from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { startStructuredAgentLaunch } from './agent-session/launch/structured-agent-session-launch'
 import { holdStructuredAgentSessionLaunchOption } from './agent-session/launch/structured-agent-session-launch-options'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'

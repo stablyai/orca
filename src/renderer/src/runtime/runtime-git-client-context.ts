@@ -1,11 +1,11 @@
 import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
-} from '../../../shared/commit-message-agent-spec'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
+} from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/source-control/ai/generation/commit-message-host-key'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { HostedReviewProvider } from '../../../shared/hosted-review'
-import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
+import type { HostedReviewProvider } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TextGenerationFailureFields } from '../../../shared/text-generation-failure-copy'

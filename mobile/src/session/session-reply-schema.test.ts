@@ -21,6 +21,7 @@ import {
   githubWorkItemDetailsSchema,
   hostedReviewForBranchSchema
 } from './github-pr-read-reply-schema'
+import { getProviderChecksOutcome } from '../../../src/shared/source-control/checks/provider-check-summary'
 import { prChecksSchema } from './github-pr-entity-reply-schema'
 import {
   reviewCreatedTerminalSchema,
@@ -551,4 +552,45 @@ describe('a newer host is not refused', () => {
     })
     expect(inventory.layoutVersion).toBe(3)
   })
+})
+
+it('keeps additive cancellation summaries through explicit PR and hosted-review parsers', () => {
+  const summary = {
+    state: 'failure',
+    total: 1,
+    passed: 0,
+    failed: 1,
+    pending: 0,
+    neutral: 0,
+    cancelled: 1
+  }
+  const pr = reads(githubPrForBranchSchema, {
+    number: 4,
+    state: 'open',
+    checksStatus: 'failure',
+    checksSummary: summary
+  })
+  expect(pr?.kind === 'found' && pr.pr.checksSummary).toEqual(summary)
+  const readReview = (checksSummary: unknown) =>
+    reads(hostedReviewForBranchSchema, {
+      provider: 'github',
+      number: 4,
+      status: 'failure',
+      checksSummary
+    })
+  expect(readReview(summary)?.checksSummary).toEqual(summary)
+  expect(readReview({ ...summary, scope: 'pipeline' })?.checksSummary?.scope).toBe('pipeline')
+  for (const invalid of [
+    undefined,
+    { ...summary, cancelled: -1 },
+    { ...summary, cancelled: 2 },
+    { ...summary, cancelled: '1' },
+    { ...summary, scope: 'future_scope' },
+    { ...summary, passed: undefined },
+    { ...summary, failed: 0, pending: 1, cancelled: 0 }
+  ]) {
+    const review = readReview(invalid)
+    expect(review?.number).toBe(4)
+    expect(getProviderChecksOutcome(review?.checksSummary, 'failure')).toBe('failure')
+  }
 })

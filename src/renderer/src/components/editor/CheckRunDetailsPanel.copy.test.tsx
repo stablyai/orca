@@ -6,7 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import * as normalization from '@/lib/check-run-details-log-normalization'
-import * as sanitation from '../../../../shared/check-job-log-excerpt'
+import * as sanitation from '../../../../shared/source-control/checks/logs/check-job-log-excerpt'
 import {
   captured,
   checkLogDetails,

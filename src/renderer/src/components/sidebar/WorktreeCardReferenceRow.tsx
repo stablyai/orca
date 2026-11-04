@@ -166,7 +166,9 @@ export function WorktreeCardReferenceRow({
             </span>
           ) : null}
           <span className={cn('shrink-0', stale && STALE_SHIMMER)}>{label}</span>
-          {review?.status ? <ReviewChecksIndicator status={review.status} /> : null}
+          {review?.status ? (
+            <ReviewChecksIndicator status={review.status} checksSummary={review.checksSummary} />
+          ) : null}
           {sourceText ? (
             <>
               <span aria-hidden className="shrink-0">

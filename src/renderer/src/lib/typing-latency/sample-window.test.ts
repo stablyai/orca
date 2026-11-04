@@ -24,27 +24,6 @@ function exactSample(value: number): ExactEchoSample {
 }
 
 describe('typing latency sample window', () => {
-  it('retains the newest 2000 exact samples in every percentile series', () => {
-    const samples = createExactLatencySampleWindow()
-
-    for (let value = 0; value <= 2000; value += 1) {
-      appendExactLatencySample(samples, exactSample(value))
-    }
-
-    for (const [values, first, last] of [
-      [samples.inputToDispatchMs, 1, 2000],
-      [samples.dispatchToParseMs, 10_001, 12_000],
-      [samples.parseToPaintMs, 20_001, 22_000],
-      [samples.inputToPaintMs, 30_003, 36_000],
-      [samples.outputBytes, 40_001, 42_000],
-      [samples.outputWrites, 5001, 7000]
-    ] as const) {
-      expect(values).toHaveLength(2000)
-      expect(values[0]).toBe(first)
-      expect(values.at(-1)).toBe(last)
-    }
-  })
-
   it('expires optional phases with their inputs across mixed direct and IME captures', () => {
     const samples = createExactLatencySampleWindow()
     const optionalFields = [

@@ -2,7 +2,7 @@ import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../../../shared/abort-signal-reason'
-import { annotateWorktreeLocksFromAdmin } from '../../../../shared/git-worktree-admin'
+import { annotateWorktreeLocksFromAdmin } from '../../../../shared/git/worktrees/git-worktree-admin'
 import { stat } from 'node:fs/promises'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { toWslExecutionSpace } from '../../../../shared/wsl-paths'
@@ -10,9 +10,9 @@ import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedRevParsePathFormatError,
   isUnsupportedWorktreeListZError
-} from '../../../../shared/git-worktree-command-capabilities'
+} from '../../../../shared/git/worktrees/git-worktree-command-capabilities'
 import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/git-capability-state'
-import { parseWorktreeList } from '../../../../shared/git-worktree-porcelain-parser'
+import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
 import {
   WORKTREE_LIST_TIMEOUT_MS,

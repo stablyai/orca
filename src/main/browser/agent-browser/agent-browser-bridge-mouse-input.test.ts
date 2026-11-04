@@ -239,4 +239,22 @@ describe('AgentBrowserBridge', () => {
       { enabled: false }
     ])
   })
+  it("sizes the page's pane to the viewport it sets, so a wider page scrolls instead of being cut off", async () => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+    const showAgentViewportInPane = vi.fn()
+    bridge = new AgentBrowserBridge(
+      mockBrowserManager(undefined, undefined, { showAgentViewportInPane })
+    )
+    bridge.setActiveTab(100)
+
+    await bridge.setViewport(1280, 900, 1, false, undefined, 'tab-1')
+
+    expect(showAgentViewportInPane).toHaveBeenCalledWith(100, {
+      width: 1280,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false
+    })
+  })
 })

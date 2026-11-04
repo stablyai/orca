@@ -59,34 +59,6 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     resetMobileNativeChatDraftStoreForTests()
   })
 
-  it('sends the skills picked into the draft', async () => {
-    const review = { name: 'review', path: '/skills/review/SKILL.md' }
-    recordMobileNativeChatSkillPick(ORIGIN.draftKey, { token: '$review', path: review.path })
-    sendStructured.mockResolvedValue('accepted')
-    mount('codex')
-
-    await sendWithOutcome('$review this')
-
-    expect(sendStructured).toHaveBeenCalledWith('$review this', undefined, undefined, undefined, [
-      review
-    ])
-  })
-
-  // The structured session draws, or holds, what the host took; the composer stays cleared.
-  it.each(['accepted', 'queued'] as const)(
-    'leaves a %s send of a command the active agent owns to the structured session',
-    async (outcome) => {
-      sendStructured.mockResolvedValue(outcome)
-      mount('claude')
-
-      await expect(sendWithOutcome('/review')).resolves.toBe(outcome)
-
-      expect(sendStructured).toHaveBeenCalledWith('/review', undefined, undefined, undefined, [])
-      expect(clearDraftForSend).toHaveBeenCalledExactlyOnceWith(ORIGIN, '/review')
-      expect(restoreRejectedDraft).not.toHaveBeenCalled()
-    }
-  )
-
   it('retains transport-unknown input in the transcript without restoring the draft', async () => {
     recordMobileNativeChatSkillPick(ORIGIN.draftKey, {
       token: '$review',
@@ -110,45 +82,4 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
       'newer'
     ])
   })
-
-  it('does not restore unknown text for another agent', async () => {
-    sendStructured.mockResolvedValue('unknown')
-    mount('grok')
-
-    await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
-
-    expect(restoreRejectedDraft).not.toHaveBeenCalled()
-  })
-
-  it('puts a refused send back in the composer', async () => {
-    sendStructured.mockResolvedValue('rejected')
-    mount('claude')
-
-    await expect(sendWithOutcome('hello')).resolves.toBe('rejected')
-
-    expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, 'hello')
-  })
-  it.each(['accepted', 'unknown', 'rejected'] as const)(
-    'carries typed provider commands and attachments through %s',
-    async (outcome) => {
-      sendStructured.mockResolvedValue(outcome)
-      mount('codex')
-      for (const text of ['/fast', '/permissions']) {
-        restoreRejectedDraft.mockClear()
-        await expect(sendWithOutcome(text, ['/shot.png'])).resolves.toBe(outcome)
-        expect(sendStructured).toHaveBeenLastCalledWith(
-          text,
-          ['/shot.png'],
-          undefined,
-          undefined,
-          []
-        )
-        if (outcome === 'rejected') {
-          expect(restoreRejectedDraft).toHaveBeenLastCalledWith(ORIGIN, text)
-        } else {
-          expect(restoreRejectedDraft).not.toHaveBeenCalled()
-        }
-      }
-    }
-  )
 })

@@ -7,7 +7,7 @@ import {
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { githubAvatarIcon, type RepoIcon } from '../../../shared/repo-icon'
-import { isUnresolvedSshHostAlias } from '../../../shared/git-remote-host-alias'
+import { isUnresolvedSshHostAlias } from '../../../shared/git/remotes/git-remote-host-alias'
 import { getProjectProviderIdentity } from '../../../shared/project-host-setup-projection'
 import { getStoredRepoExecutionHostId } from '../execution-host/repo-execution-host'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
