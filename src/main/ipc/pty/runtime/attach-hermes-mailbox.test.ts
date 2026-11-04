@@ -96,6 +96,7 @@ describe('mail to a Hermes terminal attached without a renderer', () => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach needs runtime; its delivery callbacks are optional.
         const deps = { runtime } as unknown as PtyRuntimeControllerDeps
         expect(await attachPtyFromRuntimeController(deps, PTY_ID)).toBe(true)
+        expect(ptySizes.get(PTY_ID)).toEqual({ cols: 120, rows: 40 })
         await runtime.serializeMainTerminalBuffer(PTY_ID)
         runtime.onPtyData(PTY_ID, '\x1b]0;Hermes ready\x07', Date.now())
         runtime.notifyMessageArrived(mailbox, 'status')
@@ -116,4 +117,26 @@ describe('mail to a Hermes terminal attached without a renderer', () => {
       }
     }
   )
+
+  it('keeps a resize that lands while attach is in flight', async () => {
+    ptySizes.set(PTY_ID, { cols: 80, rows: 24 })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach reads only this provider's attach method.
+    const provider = {
+      attach: async () => {
+        ptySizes.set(PTY_ID, { cols: 140, rows: 48 })
+        return {
+          id: PTY_ID,
+          isReattach: true,
+          snapshot: '─ ready │ grok 4.7 │ 150k tokens\r\n❯',
+          snapshotCols: 120,
+          snapshotRows: 40
+        }
+      }
+    } as unknown as IPtyProvider
+    setLocalPtyProvider(provider)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach needs only the optional delivery callbacks.
+    const deps = {} as unknown as PtyRuntimeControllerDeps
+    expect(await attachPtyFromRuntimeController(deps, PTY_ID)).toBe(true)
+    expect(ptySizes.get(PTY_ID)).toEqual({ cols: 140, rows: 48 })
+  })
 })
