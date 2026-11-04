@@ -369,6 +369,14 @@ describe('settled terminal fits belong to their stream and document', () => {
     act(() => fits(h)[1]())
     expect(h.terminal.resetZoom).toHaveBeenCalledTimes(1)
   })
+  it('accepts a display-mode resize whose layout seq is smaller than the scrollback output byte seq', () => {
+    const h = subscriptionHarness({ fit: PHONE, webReady: true, viewport: PHONE })
+    h.subscribe()
+    h.event(0, { type: 'subscribed', seq: 1 })
+    h.event(0, { type: 'scrollback', seq: 15, cols: PHONE.cols, rows: PHONE.rows, serialized: '$' })
+    h.event(0, { type: 'resized', seq: 2, cols: 120, rows: 40, displayMode: 'desktop' })
+    expect(h.terminal.resize).toHaveBeenCalledWith(120, 40, h.terminalFrameRef.current)
+  })
 })
 
 describe('a stream terminating while subscribe is still returning', () => {

@@ -29,6 +29,8 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
       inner.set(clientId, {
         ...softLeaver.record,
         viewport: viewport ?? null,
+        wasResizedToPhone:
+          viewport && mode !== 'desktop' ? true : softLeaver.record.wasResizedToPhone,
         lastActedAt: Date.now()
       })
       if (!viewport) {
@@ -68,14 +70,22 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
     const someoneAlreadyFitted = [...inner.values()].some((s) => s.wasResizedToPhone)
     const currentSize = this.getTerminalSize(ptyId)
     const rendererSize = this.lastRendererSizes.get(ptyId)
+    const clampedViewport = viewport ? clampTerminalViewport(viewport.cols, viewport.rows) : null
+    const unmeasuredCurrentSize =
+      clampedViewport &&
+      currentSize &&
+      currentSize.cols === clampedViewport.cols &&
+      currentSize.rows === clampedViewport.rows
+        ? null
+        : currentSize
     const previousCols =
       existing?.previousCols ??
       heldOverride?.previousCols ??
-      (someoneAlreadyFitted ? null : (rendererSize?.cols ?? currentSize?.cols ?? null))
+      (someoneAlreadyFitted ? null : (rendererSize?.cols ?? unmeasuredCurrentSize?.cols ?? null))
     const previousRows =
       existing?.previousRows ??
       heldOverride?.previousRows ??
-      (someoneAlreadyFitted ? null : (rendererSize?.rows ?? currentSize?.rows ?? null))
+      (someoneAlreadyFitted ? null : (rendererSize?.rows ?? unmeasuredCurrentSize?.rows ?? null))
     const now = Date.now()
     const subscribedAt = existing?.subscribedAt ?? now
 

@@ -155,6 +155,9 @@ export function useMobileSessionTerminalSubscription(
             return
           }
           if (data.type === 'subscribed') {
+            void (typeof data.seq === 'number'
+              ? layoutSeqRef.current.set(handle, data.seq)
+              : layoutSeqRef.current.delete(handle))
             markNativeChatInputLeaseReady(handle)
             return
           }
@@ -168,7 +171,7 @@ export function useMobileSessionTerminalSubscription(
           ) {
             return
           }
-          // Reject superseded resize sequences; fresh scrollback resets the mark or reconnect can blank the terminal.
+          // Reject superseded resize sequences; subscribed seeds the mark from layout seq, not scrollback output seq.
           const eventSeq = typeof data.seq === 'number' ? data.seq : null
           if (eventSeq != null && data.type === 'resized') {
             const last = layoutSeqRef.current.get(handle)
@@ -184,8 +187,6 @@ export function useMobileSessionTerminalSubscription(
               })
               return
             }
-            layoutSeqRef.current.set(handle, eventSeq)
-          } else if (eventSeq != null && data.type === 'scrollback') {
             layoutSeqRef.current.set(handle, eventSeq)
           }
           if (data.type === 'scrollback') {

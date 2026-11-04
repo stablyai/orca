@@ -66,7 +66,7 @@ export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWith
       return { cols: renderer.cols, rows: renderer.rows }
     }
     const size = this.getTerminalSize(ptyId)
-    if (size) {
+    if (size && this.layouts.get(ptyId)?.kind !== 'phone') {
       return { cols: size.cols, rows: size.rows }
     }
     return { cols: 80, rows: 24 }

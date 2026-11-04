@@ -525,6 +525,18 @@ describe('mobile subscribe integration', () => {
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 200, rows: 60 })
     })
+
+    it('restores desktop dimensions when an unmeasured subscribe resubscribes with a viewport inside soft-leave grace', async () => {
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', undefined)
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+      runtime.setMobileDisplayMode('pty-1', 'desktop')
+      await runtime.applyMobileDisplayMode('pty-1')
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    })
   })
 
   describe('recordRendererGeometry (pty:reportGeometry IPC)', () => {
