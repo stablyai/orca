@@ -30,7 +30,7 @@ import {
   resolveStructuredAgentSessionAdoptionForCreate,
   structuredAgentSessionAdoptAttach
 } from '../../runtime/agent-session/structured-agent-session-create-adoption'
-import { prepareCodexAiVaultSessionResume } from '../../codex/codex-ai-vault-session-resume'
+import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 
 import { fixture } from './structured-agent-session-create-adoption-contract-test-fixture'
 

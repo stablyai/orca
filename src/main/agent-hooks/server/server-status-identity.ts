@@ -4,9 +4,9 @@ import type { AgentProviderSessionMetadata } from '../../../shared/agent-session
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   pickHostTurnEnd,
-  type AgentStatusIpcPayload,
   type AgentType
-} from '../../../shared/agent-status-types'
+} from '../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AGENT_PROMPT_SENT_AGENT_KINDS } from './server-constants'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
@@ -75,8 +75,6 @@ export function toAgentStatusIpcPayload(
     ...entry.payload
   }
 }
-
-export { isToolProgressWorkingAfterInterrupt } from '../../../shared/agent-hook-cancel-verdict-latch'
 
 export function paneCacheKeyTabId(key: string): string | null {
   const paneKey = key.split('\0', 1)[0] ?? key

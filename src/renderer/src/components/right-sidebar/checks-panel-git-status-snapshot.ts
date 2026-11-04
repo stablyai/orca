@@ -1,4 +1,7 @@
-import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type {
+  GitStatusEntry,
+  GitUpstreamStatus
+} from '../../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 
 export type ChecksPanelGitStatusContextInput = {

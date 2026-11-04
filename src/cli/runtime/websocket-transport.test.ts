@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
-import { encodePairingOffer, type PairingOffer } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import {
   decrypt,
@@ -12,7 +13,7 @@ import {
   encrypt,
   generateKeyPair,
   publicKeyToBase64
-} from '../../shared/e2ee-crypto'
+} from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { sendWebSocketRequestWithStatusPreflight } from './websocket-transport'
 import { getRemoteRuntimeRequestAdmissionEvidence } from '../../shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
 import { RuntimeClient } from './client'

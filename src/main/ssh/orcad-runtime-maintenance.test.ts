@@ -1,13 +1,14 @@
 import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { listEnvironments } from '../../shared/runtime-environment-store'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { ORCAD_UPDATE_ADMISSION_FENCE_MS } from '../../shared/orcad-terminal-census'
 import {
   moveManagedOrcadLocalPort,
   recordManagedOrcadMigration,
   refreshManagedOrcadPairing
-} from '../../shared/runtime-environment-managed-orcad-store'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+} from '../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   orcadUpdateFailedThisLaunch,
   recordOrcadUpdateFailedThisLaunch

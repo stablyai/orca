@@ -1,7 +1,10 @@
 import { homedir } from 'node:os'
 import { join, sep } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultListResult, AiVaultSession } from '../../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type * as CachedSessionListModule from '../../ai-vault/cached-session-list'
 import type * as SessionParseCacheModule from '../../ai-vault/parse-cache/session-parse-cache-store'
 

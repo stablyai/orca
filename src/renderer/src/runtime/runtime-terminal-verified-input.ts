@@ -1,6 +1,6 @@
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
-import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
+import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal/input/terminal-input'
 import { readTerminalSendAcknowledgment } from '../../../shared/terminal-send-acknowledgment'
 import { classifyTerminalProcessInspectionFailure } from '../../../shared/terminal-process-inspection'
 import { callRuntimeRpc } from './runtime-rpc-client'

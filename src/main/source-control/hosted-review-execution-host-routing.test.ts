@@ -74,13 +74,15 @@ vi.mock('../git/command-runner/git-process-env', async (importOriginal) => ({
 
 vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
-vi.mock('../git/repo', () => ({
+vi.mock('../git/repo', () => ({}))
+
+vi.mock('../../shared/git/refs/git-default-base-ref', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock
 }))
 
 vi.mock('../git/exact-ref-probe', () => ({
-  probeAnyExactRef: probeAnyExactRefMock,
-  isShowRefNoMatchError: vi.fn(() => false)
+  probeAnyExactRef: probeAnyExactRefMock
 }))
 
 vi.mock('../git/worktrees/content-paths/worktree-symlink-detection', () => ({

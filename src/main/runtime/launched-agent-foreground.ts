@@ -2,7 +2,7 @@ import {
   isExpectedAgentProcess,
   isNodeInterpreterOfAgent,
   recognizeAgentProcess
-} from '../../shared/agent-process-recognition'
+} from '../../shared/agent-status/process/agent-process-recognition'
 import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../shared/process-table-snapshot'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'

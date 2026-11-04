@@ -1,11 +1,11 @@
-import { tokenizeCommandLine } from '../../shared/agent-command-line-entrypoint'
-import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
+import { tokenizeCommandLine } from '../../shared/agent-status/process/agent-command-line-entrypoint'
+import { recognizeAgentProcess } from '../../shared/agent-status/process/agent-process-recognition'
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../shared/agent-status-types'
+} from '../../shared/agent-status/contracts/agent-status-types'
 import { FOREGROUND_COMMAND_READS } from '../../shared/foreground-command-settle'
-import { isOpenCodeRunCommand } from '../../shared/opencode-headless-command'
+import { isOpenCodeRunCommand } from '../../shared/agent-status/process/opencode-headless-command'
 import { isShellProcess } from '../../shared/shell-process-detection'
 
 const SIGINT_EXIT_CODE = 130

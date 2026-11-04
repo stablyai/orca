@@ -1,4 +1,4 @@
-import { createCodexSessionResumeLaunchPreparation } from '../codex/codex-session-resume-launch-preparation'
+import { createCodexSessionResumeLaunchPreparation } from '../codex/history/resume/codex-session-resume-launch-preparation'
 import { mainProcessState as state } from './main-process-state'
 
 const desktopResumeLaunch = createCodexSessionResumeLaunchPreparation({

@@ -38,6 +38,7 @@
     "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/main/gitlab/mappers.ts",
     "../src/main/source-control/hosted-review-branch-cache.ts",
+    "../src/main/source-control/hosted-review-branch-cache-types.ts",
     "../src/main/source-control/hosted-review-active-branch-claims.ts",
     "../src/main/source-control/hosted-review-unsettled-lookups.ts",
     "../src/main/source-control/hosted-review-inflight-lookups.ts",

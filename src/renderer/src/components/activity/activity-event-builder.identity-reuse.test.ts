@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentStatusEntry,
-  AgentStateHistoryEntry
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStateHistoryEntry } from '../../../../shared/agent-status/lifecycle/agent-state-history'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {

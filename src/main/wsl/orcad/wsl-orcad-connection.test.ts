@@ -1,8 +1,11 @@
 import { connect, createServer, type Server, type Socket } from 'node:net'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer, parsePairingCode } from '../../../shared/pairing'
-import { PAIRING_OFFER_VERSION } from '../../../shared/mobile-relay-pairing-offer'
+import {
+  encodePairingOffer,
+  parsePairingCode
+} from '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { OrcadManagedIdentityError } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import {
@@ -13,7 +16,7 @@ import {
   createEnvironmentFromPairingOffer,
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { checkOrcadStdioBridge, openOrcadStdioBridgeChannel } from '../../ssh/orcad-stdio-bridge'
 import { startEchoServer } from '../../managed-server/lifecycle/orcad-stdio-bridge-test-channel'
 import {

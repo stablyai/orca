@@ -2,7 +2,7 @@ import { getAgentLaunchExecutableName } from '../../shared/agent-launch/startup/
 import {
   isAgentStatusHooksEnabledForAgent,
   type AgentStatusHooksSettings
-} from '../../shared/agent-status-hooks-setting'
+} from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { ClaudeAgentViewSettings } from '../../shared/claude-agent-view'
 import {
   detectExplicitPiAgentKindFromCommand,

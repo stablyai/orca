@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AiVaultSearchStatus } from '../../../../../shared/ai-vault-search-types'
+import type { AiVaultSearchStatus } from '../../../../../shared/ai-vault/search/ai-vault-search-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { useWindowStreamVisible } from '@/hooks/use-window-stream-visibility'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'

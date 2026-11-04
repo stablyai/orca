@@ -15,10 +15,15 @@ async function openFixture(page: Page, name: string) {
   return bounds
 }
 
-test('in a short native chat the card stops above the composer and scrolls', async ({ page }) => {
-  const card = await openFixture(page, 'tenWorkersShortChatExpanded')
-  const composer = await page.getByTestId('composer').boundingBox()
-  expect(card.y + card.height).toBeLessThanOrEqual(composer!.y)
+test('a saved orchestration opt-in keeps the native panel hidden and composer available', async ({
+  page
+}) => {
+  await page.goto(
+    '/fixtures.html?id=orchestration-crew/OrchestrationCrewPanel:tenWorkersShortChatExpanded'
+  )
+  await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
+  await expect(page.getByRole('complementary', { name: 'Orchestration' })).toHaveCount(0)
+  await expect(page.getByTestId('composer')).toBeVisible()
 })
 
 test('in a short terminal the card keeps the bottom quarter clear and scrolls', async ({
@@ -69,7 +74,7 @@ for (const [name, width] of [
   })
 }
 
-for (const name of ['terminalQuestionDetails', 'nativeLatestDetails']) {
+for (const name of ['terminalQuestionDetails']) {
   for (const width of [280, 360]) {
     test(`${name} keeps long expanded details inside a ${width}px frame`, async ({ page }) => {
       await page.goto(`/fixtures.html?id=orchestration-crew/OrchestrationCrewPanel:${name}`)

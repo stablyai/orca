@@ -3,12 +3,12 @@ import type { Repo } from '../../../src/shared/repo-types'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
-} from '../../../src/shared/source-control-ai-actions'
-import { resolveSourceControlActionRecipe } from '../../../src/shared/source-control-ai'
+} from '../../../src/shared/source-control/ai/recipes/source-control-ai-actions'
+import { resolveSourceControlActionRecipe } from '../../../src/shared/source-control/ai/source-control-ai-operation-policy'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
-} from '../../../src/shared/source-control-launch-agent-selection'
+} from '../../../src/shared/source-control/ai/source-control-launch-agent-selection'
 import { filterEnabledTuiAgents } from '../../../src/shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent as isMobileTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'

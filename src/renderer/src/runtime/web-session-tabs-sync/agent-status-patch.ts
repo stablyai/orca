@@ -1,9 +1,9 @@
 import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status-freshness'
-import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
-import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
-import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-title-owner'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import { agentEntryCompletionAt } from '../../../../shared/agent-status/lifecycle/agent-completion-time'
+import { agentMainAgentVerdict } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId

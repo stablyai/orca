@@ -11,9 +11,10 @@ import {
   type AutomationRunFailure
 } from '../../shared/automation-run-failure-copy'
 import {
-  hasHeldRunTurnDone,
+  judgeHeldRunTurn,
   judgeIdleRun,
-  type AutomationRunAgentEvidence
+  type AutomationRunAgentEvidence,
+  type IdleRunVerdict
 } from './automation-run-agent-evidence'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
@@ -67,12 +68,18 @@ async function judgeIdleTail(
   runStartedAt: number
 ): Promise<AutomationRunCompletionObservation | null> {
   const verdict = judgeIdleRun(evidence, run, tail, runStartedAt, Date.now())
-  if (verdict.kind === 'wait') {
-    return null
+  return verdict.kind === 'wait' ? null : observationOf(verdict, tail)
+}
+
+function observationOf(
+  verdict: Exclude<IdleRunVerdict, { kind: 'wait' }>,
+  tail: readonly string[]
+): AutomationRunCompletionObservation {
+  if (verdict.kind === 'completed') {
+    return { status: 'completed', outputSnapshot: snapshotOf(tail), error: null }
   }
-  return verdict.kind === 'completed'
-    ? { status: 'completed', outputSnapshot: snapshotOf(tail), error: null }
-    : { status: 'dispatch_failed', outputSnapshot: snapshotOf(tail), error: verdict.error }
+  const { kind: _kind, ...failure } = verdict
+  return { status: 'dispatch_failed', outputSnapshot: snapshotOf(tail), ...failure }
 }
 
 /** Rejudge unchanged idle output: an idle shell may never emit another idle edge. */
@@ -267,21 +274,17 @@ export function createRuntimeAutomationRunTerminalObserver(
           if (signal.aborted || !isTerminalWaitTimeout(error)) {
             throw error
           }
-          if (
-            judged &&
-            hasHeldRunTurnDone(
-              judged.evidence,
-              judged.run,
-              runStartedAt,
-              Date.now(),
-              HELD_DONE_SETTLE_MS
-            )
-          ) {
-            return {
-              status: 'completed',
-              outputSnapshot: snapshotOf(await readTail(runtime, handle)),
-              error: null
-            }
+          const held = judged
+            ? judgeHeldRunTurn(
+                judged.evidence,
+                judged.run,
+                runStartedAt,
+                Date.now(),
+                HELD_DONE_SETTLE_MS
+              )
+            : null
+          if (held) {
+            return observationOf(held, await readTail(runtime, handle))
           }
         }
       }

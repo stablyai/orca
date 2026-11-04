@@ -26,13 +26,13 @@ const RUNTIME_SESSIONS_ROOT = join(FAKE_ROOT, 'runtime', 'sessions')
 const SYSTEM_SESSIONS_ROOT = join(FAKE_ROOT, 'system', 'sessions')
 const RUNTIME_BULK_DIR = join(RUNTIME_SESSIONS_ROOT, 'bulk')
 
-vi.mock('../codex/codex-home-paths', () => ({
+vi.mock('../codex/configuration/homes/codex-home-paths', () => ({
   getOrcaManagedCodexHomePath: () => join(FAKE_ROOT, 'runtime'),
   getOrcaUserDataPath: () => FAKE_ROOT,
   getSystemCodexHomePath: () => join(FAKE_ROOT, 'system')
 }))
 
-vi.mock('../codex/codex-session-bridge', () => ({
+vi.mock('../codex/history/bridges/codex-session-bridge', () => ({
   getLegacyCopiedCodexSessionBridgeScanPreference:
     getLegacyCopiedCodexSessionBridgeScanPreferenceMock
 }))

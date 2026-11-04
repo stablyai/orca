@@ -4,8 +4,8 @@ import {
   TERMINAL_ORDERED_INPUT_WINDOW,
   terminalOrderedInputControls,
   terminalOrderedInputByteLength
-} from '../../../src/shared/terminal-ordered-input'
-import { getTerminalInputByteLength } from '../../../src/shared/terminal-input'
+} from '../../../src/shared/terminal/input/terminal-ordered-input'
+import { getTerminalInputByteLength } from '../../../src/shared/terminal/input/terminal-input'
 import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { terminalInputSend, terminalInputSessionOpen } from './mobile-terminal-operations'

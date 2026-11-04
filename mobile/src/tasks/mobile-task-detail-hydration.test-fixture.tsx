@@ -24,7 +24,8 @@ export const SUCCESS_CHECKS = {
   passed: 1,
   failed: 0,
   pending: 0,
-  neutral: 0
+  neutral: 0,
+  cancelled: 0
 } as const
 
 export function gitlabItem(

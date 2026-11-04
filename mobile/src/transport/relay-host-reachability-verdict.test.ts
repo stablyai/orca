@@ -15,7 +15,7 @@ vi.mock('./mobile-e2ee-v2-physical-channel', () => ({
   }
 }))
 
-import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import { classifyConnection } from './connection-health'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RelayReconnectController } from './mobile-relay-reconnect-controller'

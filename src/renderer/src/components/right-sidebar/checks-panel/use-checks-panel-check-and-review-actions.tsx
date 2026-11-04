@@ -9,7 +9,7 @@ import {
   collectFixChecksPromptDetails,
   getBrokenChecks,
   hasGitHubCheckHandle
-} from '../../../../../shared/pr-checks-fix-prompt'
+} from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 
 import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'

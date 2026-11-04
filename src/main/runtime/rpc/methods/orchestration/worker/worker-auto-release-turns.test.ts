@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
 import { WorkerAutoReleaseActivity } from '../../../../orchestration/worker-auto-release-activity'
-import type { AgentPhase } from '../../../../../../shared/agent-transitions'
+import type { AgentPhase } from '../../../../../../shared/agent-status/lifecycle/agent-transitions'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
 const GRACE_MS = 2 * 60_000

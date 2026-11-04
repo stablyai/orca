@@ -7,6 +7,7 @@ import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
+import type { HostedReviewInfo } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
 import { isGitHubPRSuppressed } from '../../../src/shared/worktree/github-pr-suppression'
 import {
@@ -65,9 +66,7 @@ export type PrSidebarLoadDeps = {
   fetchForBranch: (
     worktreeId: string,
     args: { branch: string; linkedGitHubPR?: number | null }
-  ) => Promise<
-    GitHubPrReadOutcome<import('../../../src/shared/hosted-review').HostedReviewInfo | null>
-  >
+  ) => Promise<GitHubPrReadOutcome<HostedReviewInfo | null>>
   // Resolve persisted links in parallel so closed/merged PRs add no serial read.
   fetchWorktreeGitHubPRLink: (worktreeId: string) => Promise<WorktreeGitHubPRLink>
   clearWorktreeReviewLink: (

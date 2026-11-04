@@ -6,7 +6,7 @@ import {
   runtimeEnvironmentIdForWorkspaceOwner,
   type RuntimeEnvironmentOwnerMatch
 } from '@/lib/resolve-owner'
-import type { OrcadDeploymentLink } from '../../../shared/runtime-environments'
+import type { OrcadDeploymentLink } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   callRuntimeRpc,
   peekRuntimeEnvironmentCapability,

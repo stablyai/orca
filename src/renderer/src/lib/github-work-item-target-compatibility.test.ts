@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { callGitHubTargetOperation } from './github-work-item-target-request'
 import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as capability } from '../../../shared/source-control-runtime-capabilities'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as capability } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ repos: [] }) } }))
 const ownerRepo = { owner: 'fork', repo: 'widgets', host: 'github.corp' }

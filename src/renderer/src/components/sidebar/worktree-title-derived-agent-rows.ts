@@ -1,6 +1,10 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
-import { isCursorAgentTitle } from '../../../../shared/agent-title-core'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import {
+  isClaudeManagementTitle,
+  isCursorAgentTitle
+} from '../../../../shared/agent-status/title/agent-title-core'
+
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import type {
@@ -8,7 +12,7 @@ import type {
   AgentStatusOrchestrationContext,
   AgentStatusState,
   AgentType
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import {
   resolveRuntimePaneTitleLeafIdFromRoot,
@@ -21,8 +25,8 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner,
   type CompatibleAgentOwnerOptions
-} from '../../../../shared/agent-title-owner'
-import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
+} from '../../../../shared/agent-status/title/agent-title-owner'
+import { resolvePaneAgentOwner } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import {
   resolveTitleDerivedAgentType,
   resolveTitleDerivedPaneAgent,

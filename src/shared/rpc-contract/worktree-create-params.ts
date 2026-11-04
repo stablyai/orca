@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
-import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
+import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { workspaceSourceSchema } from '../telemetry-events'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'

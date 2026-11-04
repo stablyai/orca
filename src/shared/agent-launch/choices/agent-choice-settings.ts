@@ -3,7 +3,7 @@ import {
   agentRequiredValueOptions,
   removeAgentArgOption
 } from '../../agent-session/options/agent-session-option-agent-args'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 
 export function readAgentChoiceSettings(
   value: string | undefined

@@ -1,9 +1,9 @@
 import { launchDraftSource } from '@/components/native-chat/native-chat-launch-draft-source'
 import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/runtime-workspace-attachment-capabilities'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   assertRuntimeEnvironmentCapability,
@@ -32,7 +32,8 @@ import {
   getFolderWorkspaceUpdateIdentity,
   reconcileFailedFolderWorkspaceUpdate
 } from './folder-workspace-catalog'
-import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
+import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import * as chatDrafts from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 
 export type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates

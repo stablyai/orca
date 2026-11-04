@@ -3,7 +3,7 @@ import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
 import { parseLinearIssueInput } from '../../../../shared/linear/links'
 import { parseJiraIssueUrl } from '../../../../shared/jira/jira-issue-url'
-import { getWorkspaceAttachmentUrlScope } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentUrlScope } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 
 function humanText(value: string | null | undefined): string | null {
   const text = value?.trim()

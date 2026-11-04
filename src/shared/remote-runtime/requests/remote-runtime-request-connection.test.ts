@@ -1,11 +1,11 @@
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
-} from '../../paired-runtime-connection'
+} from '../pairing/paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { WebSocketServer, type WebSocket } from 'ws'
-import { encodePairingOffer, parsePairingCode } from '../../pairing'
+import { encodePairingOffer, parsePairingCode } from '../pairing/pairing'
 import {
   decrypt,
   deriveSharedKey,
@@ -13,7 +13,7 @@ import {
   generateKeyPair,
   publicKeyFromBase64,
   publicKeyToBase64
-} from '../../e2ee-crypto'
+} from '../e2ee/node/e2ee-crypto'
 import { RemoteRuntimeRequestConnection } from './remote-runtime-request-connection'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import { createFakeSpawnedChild } from '../../__fixtures__/fake-spawned-child'
@@ -24,7 +24,7 @@ import {
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests
 } from '../../../main/git/command-runner/git-subprocess-admission'
-import { GitAdmissionScheduler } from '../../git-admission-scheduler'
+import { GitAdmissionScheduler } from '../../git/admission/git-admission-scheduler'
 
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
 vi.mock('node:child_process', async (original) => ({

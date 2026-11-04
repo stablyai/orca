@@ -4,7 +4,7 @@ import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
 } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { makeWorktree } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 
 const mocks = vi.hoisted(() => ({

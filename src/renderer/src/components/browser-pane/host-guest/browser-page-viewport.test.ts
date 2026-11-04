@@ -11,6 +11,7 @@ import {
   registerBrowserOverlaySlotViewport,
   removeBrowserPageViewport,
   scrollBrowserPageViewport,
+  setBrowserPageAgentViewportSize,
   setBrowserPageViewportPresetSize,
   subscribeBrowserOverlaySlotViewport,
   syncBrowserPageChromeInset
@@ -27,6 +28,7 @@ function mountSlotViewport(workspaceTabId: string): HTMLDivElement {
 afterEach(() => {
   for (const id of ['page-1', 'page-2']) {
     removeBrowserPageViewport(id)
+    setBrowserPageAgentViewportSize(id, null)
     setBrowserPageViewportPresetSize(id, null)
   }
   for (const id of ['workspace-1']) {
@@ -79,6 +81,26 @@ describe('ensureBrowserPageViewport', () => {
   })
 
   // Keep preset dimensions in window DIP; CSS divides them by live UI zoom.
+  it("keeps an agent's size over the preset through a pane remount until it is cleared", () => {
+    mountSlotViewport('workspace-1')
+    const widthOf = () =>
+      ensureBrowserPageViewport('page-1', 'workspace-1')!.content.style.getPropertyValue(
+        '--browser-page-viewport-width'
+      )
+    ensureBrowserPageViewport('page-1', 'workspace-1')
+    setBrowserPageAgentViewportSize('page-1', { width: 1280, height: 900 })
+
+    // A remount reapplies the pane's own preset (none); the agent's size still sizes the box.
+    removeBrowserPageViewport('page-1')
+    setBrowserPageViewportPresetSize('page-1', null)
+    expect(widthOf()).toBe('1280px')
+
+    setBrowserPageViewportPresetSize('page-1', { width: 390, height: 844 })
+    expect(widthOf()).toBe('1280px')
+    setBrowserPageAgentViewportSize('page-1', null)
+    expect(widthOf()).toBe('390px')
+  })
+
   it('stores preset host dimensions as window-DIP CSS variables', () => {
     mountSlotViewport('workspace-1')
 

@@ -26,7 +26,7 @@ vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) =
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
-vi.mock('../../shared/git-worktree-porcelain-parser', async (importOriginal) => ({
+vi.mock('../../shared/git/worktrees/git-worktree-porcelain-parser', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   parseWorktreeList: (await import('./worktrees-test-module-mocks')).parseWorktreeListMock
 }))
@@ -82,6 +82,7 @@ vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/repo-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBaseRefDefault: (await import('./worktrees-test-module-mocks')).getBaseRefDefaultMock

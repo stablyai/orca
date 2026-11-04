@@ -1,5 +1,8 @@
-import { drainAgentHookSpoolAsync, type SpoolRecord } from '../../../shared/agent-hook-spool'
-import { hookRootAnswerDeadline } from '../../../shared/hook-root-attempts'
+import {
+  drainAgentHookSpoolAsync,
+  type SpoolRecord
+} from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
+import { hookRootAnswerDeadline } from '../../../shared/agent-hook-listener/presence/hook-root-attempts'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 import { ClaudeAgentViewBridge } from '../../claude/agent-view/agent-view-bridge'
 

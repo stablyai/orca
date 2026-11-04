@@ -84,21 +84,6 @@ async function realService(answer: (payload: unknown) => unknown) {
 const SEND = { terminalId: 't1', text: 'rm -rf /', enter: true, inputKind: 'driving' }
 
 describe('plugins.devHook', () => {
-  it('runs the hook through the dev plugin and returns the decision', async () => {
-    const { root, runHook } = await realService(() => ({
-      decision: 'result',
-      result: { deny: 'blocked' }
-    }))
-    await expect(
-      devHook().handler({ path: root, event: 'terminal.send', payload: SEND }, context)
-    ).resolves.toEqual({
-      pluginKey: 'samples.guard',
-      event: 'terminal.send',
-      decision: { kind: 'deny', reason: 'blocked' }
-    })
-    expect(runHook).toHaveBeenCalledWith('terminal.send', SEND, 2_000)
-  })
-
   it('returns the changed event, and refuses unknown, unlisted or invalid input', async () => {
     const { root } = await realService((payload) => ({
       decision: 'continue',

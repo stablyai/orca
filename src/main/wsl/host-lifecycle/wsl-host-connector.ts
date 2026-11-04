@@ -5,11 +5,11 @@ import {
   readSettledConfirmedRunningWslDistros,
   wasWslDistroLastSeenRunningSettled
 } from '../discovery/wsl-background-distro-gate'
-import { parsePairingCode } from '../../../shared/pairing'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { verifyOrcadPairingIdentity } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
-import { resolveEnvironmentPairingOffer } from '../../../shared/runtime-environment-store'
-import { findWslHostDeployment } from '../../../shared/runtime-environment-wsl-host-store'
+import { resolveEnvironmentPairingOffer } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { findWslHostDeployment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import { listWslHostDistros } from './wsl-host-distro-list'
