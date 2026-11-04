@@ -181,7 +181,7 @@ it.each([true, false])(
       if (split) {
         runNativeChatSplitTarget(target, 'down')
       } else {
-        void store.getState().openNewTerminalTabInActiveWorkspace()
+        void store.getState().openNewTerminalTabInActiveWorkspace(target.groupId)
       }
       const groupId = store.getState().activeGroupIdByWorktree[worktreeId]
       const laterWorkspace = folderWorkspaceKey('another-folder')
@@ -193,7 +193,7 @@ it.each([true, false])(
           method: 'session.tabs.createTerminal',
           params: expect.objectContaining({
             worktree: `id:${worktreeId}`,
-            targetGroupId: split ? groupId : undefined
+            targetGroupId: split ? groupId : source.groupId
           })
         })
       )
