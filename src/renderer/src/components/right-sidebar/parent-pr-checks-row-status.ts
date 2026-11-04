@@ -1,6 +1,6 @@
-import { getProviderChecksOutcome } from '../../../../shared/provider-check-summary'
+import { getProviderChecksOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
 import type { CheckStatus } from '../../../../shared/github/pull-request-types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { translate } from '@/i18n/i18n'
 import type {
   ParentPrChecksGroupKey,

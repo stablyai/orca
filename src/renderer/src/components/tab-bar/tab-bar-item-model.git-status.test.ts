@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
-import type { GitFileStatus } from '../../../../shared/git-status-types'
+import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import { resolveEditorTabGitStatus } from './tab-bar-item-model'
 
 const statusByRelativePath = new Map<string, GitFileStatus>([['index.html', 'modified']])

@@ -1,14 +1,14 @@
 import type {
   DropdownActionKind,
   DropdownEntry
-} from '../../../../../../shared/source-control-dropdown-item-types'
+} from '../../../../../../shared/source-control/dropdown/source-control-dropdown-item-types'
 import type { PrimaryAction, RemoteOpKind } from '../../source-control-primary-action'
 import type { SourceControlPushRecovery } from '../sync/push-recovery'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
-} from '../../../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control-ai-recipe-save'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 
 export type CreatePrIntentNotice = {
   message: string

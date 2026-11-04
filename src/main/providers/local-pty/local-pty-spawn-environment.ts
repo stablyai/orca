@@ -1,4 +1,4 @@
-import { mergeGitConfigEnvProtocol } from '../../../shared/git-credential-prompt-env'
+import { mergeGitConfigEnvProtocol } from '../../../shared/git/commands/git-credential-prompt-env'
 import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
 import {
   ORCA_IMAGE_PROTOCOL_ENV,

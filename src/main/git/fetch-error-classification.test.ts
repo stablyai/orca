@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isMissingRemoteRefGitError,
-  isTransientReviewHeadFetchError
-} from './fetch-error-classification'
+import { isMissingRemoteRefGitError } from '../../shared/git/refs/git-missing-remote-ref'
+import { isTransientReviewHeadFetchError } from './fetch-error-classification'
 
 describe('isMissingRemoteRefGitError', () => {
   it('does not match auth or network failures', () => {

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeReferenceStack } from './WorktreeReferenceStack'
 import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
 import { referenceAttachment, referenceReview } from './workspace-reference-fixtures.test-support'
-import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
+import { summarizeProviderChecks } from '../../../../shared/source-control/checks/provider-check-summary'
 
 afterEach(cleanup)
 describe('fixed workspace reference stacks', () => {

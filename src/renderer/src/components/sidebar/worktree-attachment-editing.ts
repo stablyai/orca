@@ -1,8 +1,8 @@
-import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../../shared/repo-types'
-import { normalizeGitRemoteUrl } from '../../../../shared/git-remote-identity'
+import { normalizeGitRemoteUrl } from '../../../../shared/git/remotes/git-remote-identity'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {

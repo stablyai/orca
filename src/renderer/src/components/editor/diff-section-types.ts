@@ -1,5 +1,5 @@
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import type { LargeDiffRenderLimit } from './large-diff-render-limit'
 import type { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
 

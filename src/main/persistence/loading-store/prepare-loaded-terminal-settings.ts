@@ -1,4 +1,4 @@
-import { migrateActionPermissionArgs } from '../../../shared/source-control-action-permission-lift'
+import { migrateActionPermissionArgs } from '../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
 import { homedir } from 'node:os'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
@@ -8,10 +8,8 @@ import type {
 import type { Repo } from '../../../shared/repo-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { migrateExternalWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
-import {
-  mergeLegacyCommitMessageAiIntoSourceControlAi,
-  sourceControlAiSettingsFromLegacy
-} from '../../../shared/source-control-ai'
+import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-reconciliation'
+import { sourceControlAiSettingsFromLegacy } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   normalizeOsc52ClipboardDefaultOn,
   osc52ClipboardDefaultOnOverridesPersistedOff

@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from './execution-host'
-import type { HostedReviewProvider } from './hosted-review'
+import type { HostedReviewProvider } from './source-control/hosted-review/hosted-review-contracts'
 import type { WorkspaceCleanupBlocker } from './workspace-cleanup'
 
 /** `any` leaves the facet unconstrained; `only`/`exclude` narrow to rows with/without the trait. */

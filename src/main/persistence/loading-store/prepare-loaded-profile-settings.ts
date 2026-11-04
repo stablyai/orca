@@ -10,7 +10,7 @@ import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
 } from '../../../shared/mobile-pairing-custom-address'
-import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
+import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
 import { normalizeProjectGroups } from '../../../shared/project-groups'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'

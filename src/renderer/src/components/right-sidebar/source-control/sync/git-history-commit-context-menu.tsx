@@ -6,7 +6,7 @@ import {
   ContextMenuSeparator
 } from '@/components/ui/context-menu'
 import { translate } from '@/i18n/i18n'
-import type { GitHistoryItem } from '../../../../../../shared/git-history'
+import type { GitHistoryItem } from '../../../../../../shared/git/history/git-history-types'
 import { useAppStore } from '@/store'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 

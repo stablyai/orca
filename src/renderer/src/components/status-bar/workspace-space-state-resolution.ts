@@ -1,4 +1,4 @@
-import type { GitStatusResult } from '../../../../shared/git-status-types'
+import type { GitStatusResult } from '../../../../shared/git/status/git-status-types'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import type { WorkspaceSpaceDeleteState } from './workspace-space-manager-state-types'

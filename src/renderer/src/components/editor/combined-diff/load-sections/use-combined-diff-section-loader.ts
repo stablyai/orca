@@ -4,8 +4,8 @@ import type { OpenFile } from '@/store/slices/editor'
 import type {
   GitBranchChangeEntry,
   GitDiffResult
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { DiffSection } from '../../diff-section-types'
 import { getLargeDiffRenderLimit } from '../../large-diff-render-limit'
 import { getStoredTextDiffContent, getStoredTextDiffResult } from '../../large-diff-section-content'

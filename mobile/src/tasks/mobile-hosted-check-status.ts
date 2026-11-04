@@ -7,7 +7,7 @@ import { resolveGitHubPRMergeState } from '../../../src/shared/github/pull-reque
 import {
   getProviderChecksLabel,
   getProviderChecksOutcome
-} from '../../../src/shared/provider-check-summary'
+} from '../../../src/shared/source-control/checks/provider-check-summary'
 
 export type MobileHostedReviewStatus = {
   state?: string

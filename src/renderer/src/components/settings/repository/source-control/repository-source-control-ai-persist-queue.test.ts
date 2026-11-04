@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
+import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { createRepoAiPersistQueue } from './repository-source-control-ai-persist-queue'
 
 type Harness = ReturnType<typeof makeQueue>

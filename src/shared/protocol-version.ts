@@ -22,7 +22,7 @@ import {
   SESSION_TABS_RUNTIME_CAPABILITIES
 } from './session-tabs-runtime-capabilities'
 import { SKILL_RUNTIME_CAPABILITIES } from './skill-install-capability'
-import { SOURCE_CONTROL_RUNTIME_CAPABILITIES } from './source-control-runtime-capabilities'
+import { SOURCE_CONTROL_RUNTIME_CAPABILITIES } from './source-control/runtime/source-control-runtime-capabilities'
 import { TASK_SOURCE_RUNTIME_CAPABILITIES } from './task-source-runtime-capabilities'
 import { TERMINAL_RUNTIME_CAPABILITIES } from './terminal-runtime-capabilities'
 import { WORKSPACE_PORTS_RUNTIME_CAPABILITIES } from './workspace-ports-runtime-capabilities'
@@ -50,7 +50,7 @@ export * from './host-runtime-capabilities'
 
 export * from './mobile-runtime-capabilities'
 export * from './preflight-runtime-capabilities'
-export * from './source-control-runtime-capabilities'
+
 export * from './task-source-runtime-capabilities'
 export * from './terminal-runtime-capabilities'
 export * from './workspace-ports-runtime-capabilities'

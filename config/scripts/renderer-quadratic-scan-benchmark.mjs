@@ -190,7 +190,9 @@ compare({
 
 const importShared = (relativePath) =>
   import(pathToFileURL(path.join(ROOT, 'src/shared', relativePath)).href)
-const { buildSourceControlTree } = await importShared('source-control-tree.ts')
+const { buildSourceControlTree } = await importShared(
+  'source-control/listing/source-control-tree.ts'
+)
 const { normalizeRelativePath, splitPathSegments } = await importShared('cross-platform-path.ts')
 const { compareFileNames } = await importShared('file-name-sort.ts')
 

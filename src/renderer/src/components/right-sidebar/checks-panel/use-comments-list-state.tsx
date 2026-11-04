@@ -5,12 +5,12 @@ import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
-} from '../../../../../shared/pr-comment-audience'
+} from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import {
   getPRCommentGroupId,
   groupPRComments,
   type PRCommentGroup
-} from '../../../../../shared/pr-comment-groups'
+} from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import {
   getPRCommentGroupActionState,
   isPRCommentGroupQueueableForAI,

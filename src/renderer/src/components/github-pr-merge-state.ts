@@ -1,4 +1,4 @@
-import { getProviderChecksOutcome } from '../../../shared/provider-check-summary'
+import { getProviderChecksOutcome } from '../../../shared/source-control/checks/provider-check-summary'
 import {
   resolveGitHubPRMergeState,
   type GitHubPRAutoMergeActionIntent,

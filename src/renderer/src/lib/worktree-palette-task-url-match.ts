@@ -1,10 +1,10 @@
-import { foldComparableGitHubHost } from '../../../shared/git-remote-host-alias'
+import { foldComparableGitHubHost } from '../../../shared/git/remotes/git-remote-host-alias'
 import {
   matchGitRemoteKeyParts,
   splitGitRemoteKey,
   type GitRemoteKeyParts
-} from '../../../shared/git-remote-identity'
-import type { HostedReviewInfo } from '../../../shared/hosted-review'
+} from '../../../shared/git/remotes/git-remote-identity'
+import type { HostedReviewInfo } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   parseGitHubIssueOrPRLink,
   type GitHubIssueOrPRLink,
