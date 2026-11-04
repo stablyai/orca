@@ -77,7 +77,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/acp/acp-structured-child-stop.test.ts',
   'src/main/acp/acp-structured-child-work-admission.test.ts',
   'src/main/acp/acp-structured-child-work.test.ts',
-  'src/main/acp/acp-structured-host-subagent-stop.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-background-stop-unreadable.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-exit-delivery.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-provider-open.test.ts',
