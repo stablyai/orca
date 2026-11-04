@@ -16,6 +16,8 @@ ORCA automations remove <automationId> --json
 
 Schedules accept `hourly`, `daily`, `weekdays`, `weekly`, 5-field cron, or RRULE. Use `--time <HH:MM>` with `daily`/`weekdays`/`weekly`, and `--day <0-6>` only with `weekly` where Sunday is `0`.
 
+For a single run on a specific date, pass `--trigger 'ONCE=2028-11-02T09:30:00.000Z'`. The timestamp is an absolute UTC instant with minute precision and must be in the future. After that occurrence is processed, the automation pauses automatically. Missed runs use the configured grace period.
+
 Use `--precheck <command>` to run a shell command only before scheduled runs. Exit code `0` continues; any other exit, error, or timeout skips the run. Set the time limit with `--precheck-timeout <seconds>` (default `60`). Skips appear in Orca run history and `ORCA automations runs --id <automationId> --json` with status `skipped_precheck`.
 
 **Run now** in Orca and `ORCA automations run <automationId>` intentionally bypass the precheck, so you can test the automation or override its scheduled condition.

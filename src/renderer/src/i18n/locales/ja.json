@@ -22629,6 +22629,9 @@
         "effortRepeated": "追加の引数で推論レベルが複数回指定されています。"
       },
       "hostUpdateRequired": "追加の引数を使用するには、このホストの Orca を更新してください。"
+    },
+    "once": {
+      "preset": "指定日時に1回実行"
     }
   },
   "codeHost": {

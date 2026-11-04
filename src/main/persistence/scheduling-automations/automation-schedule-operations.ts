@@ -1,5 +1,6 @@
 import type { Automation } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { parseAutomationOnceSchedule } from '../../../shared/automation-once-schedule'
 import {
   latestAutomationOccurrenceAtOrBefore,
   nextAutomationOccurrenceAfter
@@ -16,8 +17,17 @@ export function advanceAutomationNextRun(
     throw new Error('Automation not found.')
   }
   const current = state.automations[index]
-  const nextRunAt = nextAutomationOccurrenceAfter(current.rrule, current.dtstart, now)
-  const updated = { ...current, nextRunAt, updatedAt: now }
+  const once = parseAutomationOnceSchedule(current.rrule)
+  const finished = once !== null && once.runAt <= now
+  const nextRunAt = finished
+    ? current.nextRunAt
+    : nextAutomationOccurrenceAfter(current.rrule, current.dtstart, now)
+  const updated = {
+    ...current,
+    nextRunAt,
+    enabled: finished ? false : current.enabled,
+    updatedAt: now
+  }
   // Replace the array to invalidate identity-keyed list projections.
   state.automations = state.automations.map((entry) => (entry.id === id ? updated : entry))
   flush()

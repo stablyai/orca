@@ -22549,6 +22549,13 @@
         "effortRepeated": "額外引數重複設定了推理強度。"
       },
       "hostUpdateRequired": "請更新此主機上的 Orca 以使用額外引數。"
+    },
+    "once": {
+      "preset": "指定日期，僅執行一次",
+      "date": "日期",
+      "futureRequired": "請選擇有效的未來日期和時間。",
+      "description": "僅執行一次，觸發後自動暫停。時區：{{timezone}}。",
+      "label": "{{date}} 執行一次"
     }
   },
   "codeHost": {

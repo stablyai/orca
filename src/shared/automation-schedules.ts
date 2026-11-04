@@ -17,6 +17,7 @@ export type AutomationCronScheduleClassification =
 
 /** Locale-free schedule shape: the renderer localizes it, the CLI renders it in English. */
 export type AutomationScheduleDescriptor =
+  | { kind: 'once'; runAt: number }
   | { kind: 'hourly'; minute: number }
   | { kind: 'daily'; hour: number; minute: number }
   | { kind: 'weekdays'; hour: number; minute: number }
@@ -151,6 +152,9 @@ export function formatAutomationSchedule(scheduleExpression: string): string {
   try {
     const trimmed = scheduleExpression.trim()
     const schedule = parseSchedule(trimmed)
+    if (schedule.kind === 'once') {
+      return `Once on ${new Date(schedule.runAt).toLocaleString('en', { dateStyle: 'medium', timeStyle: 'short' })}`
+    }
     if (schedule.kind === 'cron') {
       return classifyParsedCronSchedule(schedule).label
     }
@@ -178,6 +182,9 @@ export function describeAutomationSchedule(
   try {
     const trimmed = scheduleExpression.trim()
     const schedule = parseSchedule(trimmed)
+    if (schedule.kind === 'once') {
+      return schedule
+    }
     if (schedule.kind === 'cron') {
       return toScheduleDescriptor(classifyParsedCronSchedule(schedule))
     }

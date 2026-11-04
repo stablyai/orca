@@ -1,4 +1,4 @@
-import type { AutomationPrecheck, AutomationSchedulePreset } from '../../shared/automations-types'
+import type { AutomationPrecheck } from '../../shared/automations-types'
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext
@@ -18,8 +18,12 @@ import {
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 
-const PRESET_TRIGGERS = new Set<AutomationSchedulePreset>(['hourly', 'daily', 'weekdays', 'weekly'])
+const PRESET_TRIGGERS = ['hourly', 'daily', 'weekdays', 'weekly'] as const
 const SCHEDULE_MODIFIER_FLAGS = ['day', 'time'] as const
+
+function isPresetTrigger(raw: string): raw is (typeof PRESET_TRIGGERS)[number] {
+  return PRESET_TRIGGERS.some((preset) => preset === raw)
+}
 
 function getScheduleModifierFlag(flags: Map<string, string | boolean>): string | undefined {
   return SCHEDULE_MODIFIER_FLAGS.find((flag) => flags.has(flag))
@@ -29,7 +33,7 @@ function validateScheduleModifierApplicability(
   flags: Map<string, string | boolean>,
   raw: string
 ): void {
-  const isPreset = PRESET_TRIGGERS.has(raw as AutomationSchedulePreset)
+  const isPreset = isPresetTrigger(raw)
   if (!isPreset) {
     if (flags.has('time')) {
       throw new RuntimeClientError(
@@ -151,9 +155,9 @@ export function getScheduleFlag(
   validateScheduleModifierApplicability(flags, raw)
   const { hour, minute } = raw === 'hourly' ? { hour: 0, minute: 0 } : getTimeFlag(flags)
   const dayOfWeek = raw === 'weekly' ? (getOptionalDayFlag(flags) ?? 1) : 1
-  const rrule = PRESET_TRIGGERS.has(raw as AutomationSchedulePreset)
+  const rrule = isPresetTrigger(raw)
     ? buildAutomationRrule({
-        preset: raw as Exclude<AutomationSchedulePreset, 'custom'>,
+        preset: raw,
         hour,
         minute,
         dayOfWeek

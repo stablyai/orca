@@ -3941,6 +3941,13 @@
         "unsupported": "所选自动化主机不支持此项目。"
       },
       "wslDistroStopped": "WSL 发行版 {{distro}} 已停止，因此本次计划运行没有启动它。请启动该发行版或使用“立即运行”；它运行期间，后续运行会照常进行。"
+    },
+    "once": {
+      "preset": "指定日期，仅运行一次",
+      "date": "日期（YYYY-MM-DD）",
+      "futureRequired": "请选择有效的未来日期和时间。",
+      "description": "仅运行一次，触发后自动暂停。时区：{{timezone}}。",
+      "label": "{{date}} 运行一次"
     }
   },
   "auto": {

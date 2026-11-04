@@ -27,7 +27,7 @@ export function createAutomationRunWriter(
   publish: PublishAutomationsChanged | null
 ): AutomationRunWriter {
   // Scope to the run’s host; missing records fall back to an authority-wide event.
-  const announce = (automationId: string, reason: 'run' | 'usage'): void => {
+  const announce = (automationId: string, reason: 'run' | 'usage' | 'definition'): void => {
     if (!publish) {
       return
     }
@@ -38,6 +38,9 @@ export function createAutomationRunWriter(
     advanceNextRun: async (id, now) => {
       const automation = store.advanceAutomationNextRun(id, now)
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+      if (!automation.enabled) {
+        announce(id, 'definition')
+      }
       return automation
     },
     createRun: async (automation, scheduledFor, trigger): Promise<AutomationRun> => {

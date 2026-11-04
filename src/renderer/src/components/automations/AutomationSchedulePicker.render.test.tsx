@@ -8,6 +8,11 @@ import { AutomationSchedulePicker } from './AutomationSchedulePicker'
 import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedule-parsing'
 import { useTranslation } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
+import { fireEvent } from '@testing-library/react'
+import {
+  automationOnceRunAt,
+  buildAutomationOnceSchedule
+} from '../../../../shared/automation-once-schedule'
 
 // Use a native Select stand-in so weekday assertions read mounted DOM text without opening Radix’s portal.
 vi.mock('@/components/ui/select', () => ({
@@ -102,6 +107,45 @@ function renderedCronFieldChips(): { text: string; title: string }[] {
 }
 
 describe('AutomationSchedulePicker rendered DOM (#14404)', () => {
+  it('edits a one-time date and keeps it after switching between cadences', () => {
+    function EditablePicker() {
+      const [draft, setDraft] = React.useState<AutomationDraft>({
+        ...BASE_DRAFT,
+        preset: 'once',
+        onceDate: '2099-11-02'
+      })
+      return <AutomationSchedulePicker draft={draft} onDraftChange={setDraft} />
+    }
+    act(() => root.render(<EditablePicker />))
+    const date = container.querySelector<HTMLInputElement>('input[type="date"]')!
+    expect(date.value).toBe('2099-11-02')
+    fireEvent.change(date, { target: { value: '2099-11-03' } })
+    expect(date.value).toBe('2099-11-03')
+    expect(date.getAttribute('aria-invalid')).toBe('false')
+    const cadence = container.querySelector('select')!
+    fireEvent.change(cadence, { target: { value: 'daily' } })
+    expect(container.querySelector('input[type="date"]')).toBeNull()
+    fireEvent.change(cadence, { target: { value: 'once' } })
+    expect(container.querySelector<HTMLInputElement>('input[type="date"]')!.value).toBe(
+      '2099-11-03'
+    )
+  })
+
+  it('flags a past date but keeps an unchanged completed schedule editable', () => {
+    const onceDate = '2000-01-01'
+    renderPicker({ preset: 'once', onceDate })
+    expect(container.querySelector('input[type="date"]')!.getAttribute('aria-invalid')).toBe('true')
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('future')
+    renderPicker({
+      preset: 'once',
+      onceDate,
+      savedSchedule: buildAutomationOnceSchedule(automationOnceRunAt(onceDate, BASE_DRAFT.time)!)
+    })
+    expect(container.querySelector('input[type="date"]')!.getAttribute('aria-invalid')).toBe(
+      'false'
+    )
+  })
+
   it.each([
     ['zh', ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']],
     ['ja', ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日']],

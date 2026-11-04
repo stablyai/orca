@@ -16,7 +16,6 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { buildAutomationRrule } from '../../../../shared/automation-schedule-occurrences'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -35,6 +34,7 @@ import {
   saveExistingAutomation
 } from './automation-orca-save-operations'
 import type { AutomationSaveContext } from './automation-save-context'
+import { buildAutomationDraftSchedule } from './automation-draft-schedule'
 
 /** Saves an Orca automation, including destination validation and host moves. */
 export async function saveOrcaAutomation(
@@ -92,17 +92,11 @@ export async function saveOrcaAutomation(
   const edited = (key: keyof typeof draft): boolean =>
     !draftAtOpen || draft[key] !== draftAtOpen[key]
   const targetEdited = !currentAutomation || local.targetEdited
-  const scheduleEdited = (['preset', 'time', 'dayOfWeek', 'customSchedule'] as const).some(edited)
+  const scheduleEdited = (
+    ['preset', 'onceDate', 'time', 'dayOfWeek', 'customSchedule'] as const
+  ).some(edited)
   const timezone = currentAutomation?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-  const rrule =
-    draft.preset === 'custom'
-      ? draft.customSchedule.trim()
-      : buildAutomationRrule({
-          preset: draft.preset,
-          hour: time.hour,
-          minute: time.minute,
-          dayOfWeek: Number(draft.dayOfWeek)
-        })
+  const rrule = buildAutomationDraftSchedule(draft, time)
   const rawGrace = Number(draft.missedRunGraceMinutes)
   const missedRunGraceMinutes = Number.isFinite(rawGrace) ? Math.max(0, rawGrace) : 720
   const precheck = buildDraftPrecheck(draft)

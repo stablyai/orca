@@ -20,6 +20,7 @@ import {
   storedExtraAgentArgs
 } from '../../../shared/automation-extra-agent-args-record'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
+import { parseAutomationOnceSchedule } from '../../../shared/automation-once-schedule'
 import {
   applyAutomationExecutionTarget,
   deriveAutomationExecutionTargetForCreate,
@@ -199,7 +200,10 @@ export function updateAutomation(
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
   const rrule = updates.rrule ?? current.rrule
   const dtstart = updates.dtstart ?? current.dtstart
-  const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
+  const refreshSchedule =
+    updates.rrule !== undefined ||
+    updates.dtstart !== undefined ||
+    (updates.enabled === true && parseAutomationOnceSchedule(rrule) !== null)
   const workspaceMode = updates.workspaceMode ?? current.workspaceMode
   // Omitted preserves; empty or whitespace clears.
   const extraAgentArgs = Object.hasOwn(definedUpdates, 'extraAgentArgs')
@@ -261,7 +265,7 @@ export function updateAutomation(
         : false,
     rrule,
     dtstart,
-    nextRunAt: scheduleChanged
+    nextRunAt: refreshSchedule
       ? nextAutomationOccurrenceAfter(rrule, dtstart, Date.now())
       : current.nextRunAt,
     updatedAt: Date.now()

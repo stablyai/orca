@@ -1277,6 +1277,9 @@
       },
       "hostUpdateRequired": "Update Orca on this host to use extra arguments."
     },
+    "once": {
+      "preset": "Once on a date"
+    },
     "runFailures": {
       "agentInterrupted": "The agent was interrupted before it finished this run.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
