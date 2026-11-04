@@ -2,6 +2,7 @@
 // Unknown machine/boot ownership must preserve slots too.
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { ORCAD_RUNTIMES_DIRNAME } from '../../shared/orcad-artifacts'
 import { nodeRuntimeAsset } from '../../shared/node-runtime-pin'
 import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
 import { orcadPeerPidIsJudgeableHere } from './orcad-lock-holder-locality'
@@ -37,9 +38,10 @@ export async function pruneOrcadArtifactCache(
     }
     const targetRoot = join(cacheRoot, target)
     const slots = await Promise.all(
-      // Dot entries are staging directories another process may be filling right now.
+      // Dot entries are staging directories another process may be filling right now, and
+      // `runtimes/` is the Node runtime shared across Orca versions beside the slots (#38181).
       (await listNames(targetRoot))
-        .filter((name) => !name.startsWith('.'))
+        .filter((name) => !name.startsWith('.') && name !== ORCAD_RUNTIMES_DIRNAME)
         .map(async (name) => ({ name, mtimeMs: await mtimeOf(join(targetRoot, name)) }))
     )
     const present = slots.filter(
