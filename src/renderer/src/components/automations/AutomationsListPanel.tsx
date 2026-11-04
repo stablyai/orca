@@ -13,7 +13,6 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
-import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import type { AutomationRowAction } from './automation-captured-owner'
 import type { AutomationHostTarget } from './automation-host-client'
 import {
@@ -87,7 +86,6 @@ export type AutomationsListPanelProps = {
   sshStateByEnvironment?: ReadonlyMap<string, RuntimeEnvironmentSshBucket>
   runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
   hostTargetFor: (row: AutomationListRow) => AutomationHostTarget | null
-  automationSourceHostAvailabilityByRowKey: ReadonlyMap<string, TaskSourceHostAvailability[]>
   hostLabelById?: ReadonlyMap<string, string>
   isActionEnabled: (row: AutomationListRow, action: AutomationRowAction) => boolean
   externalActionKey: string | null
@@ -141,7 +139,6 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     sshStateByEnvironment,
     runtimeStatusByEnvironmentId,
     hostTargetFor,
-    automationSourceHostAvailabilityByRowKey,
     hostLabelById,
     isActionEnabled,
     externalActionKey,
@@ -271,7 +268,6 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     sshStateByEnvironment,
     runtimeStatusByEnvironmentId,
     hostTargetFor,
-    automationSourceHostAvailabilityByRowKey,
     hostLabelById,
     isActionEnabled,
     onSelect: (rowKey: string) => {

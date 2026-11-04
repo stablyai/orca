@@ -37,7 +37,6 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
-import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import type { AutomationHostTarget } from './automation-host-client'
 import {
   getAutomationRowLastRunSnapshot,
@@ -77,7 +76,6 @@ export type AutomationListLocalRowProps = {
   sshStateByEnvironment?: ReadonlyMap<string, RuntimeEnvironmentSshBucket>
   runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
   hostTargetFor: (row: AutomationListRow) => AutomationHostTarget | null
-  automationSourceHostAvailabilityByRowKey: ReadonlyMap<string, TaskSourceHostAvailability[]>
   hostLabelById?: ReadonlyMap<string, string>
   isActionEnabled?: (row: AutomationListRow, action: AutomationRowAction) => boolean
   onSelect: (rowKey: string) => void
@@ -105,7 +103,6 @@ export function AutomationListLocalRow({
   sshStateByEnvironment,
   runtimeStatusByEnvironmentId,
   hostTargetFor,
-  automationSourceHostAvailabilityByRowKey,
   hostLabelById = EMPTY_HOST_LABELS,
   isActionEnabled,
   onSelect,
@@ -134,8 +131,7 @@ export function AutomationListLocalRow({
     sshConnectionStates,
     sshStateByEnvironment,
     runtimeStatusByEnvironmentId,
-    automationHostTarget: hostTargetFor(row),
-    sourceHostAvailability: automationSourceHostAvailabilityByRowKey.get(row.key)
+    automationHostTarget: hostTargetFor(row)
   })
   const projectLabel =
     automationRepo?.displayName ??
