@@ -1,20 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import * as paths from '../../../../shared/cross-platform-path'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
+import { toAiVaultProjectKey } from '../../../../shared/ai-vault/scanning/ai-vault-project-key'
 import {
   buildAiVaultProjectContext,
   buildAiVaultSessionProjectById
 } from './ai-vault-session-projects'
-import { truncateAiVaultListResult } from '../../../../shared/ai-vault-session-depth'
+import { truncateAiVaultListResult } from '../../../../shared/ai-vault/scanning/ai-vault-session-depth'
 import {
   groupAiVaultSessions,
   filterAiVaultSessions
-} from '../../../../shared/ai-vault-session-filters'
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 
 const baseSession: AiVaultSession = {
   id: 'claude:1',

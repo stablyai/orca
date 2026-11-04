@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import type { Automation } from '../../shared/automations-types'
 import { isRetainedOrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
-import { parsePairingCode } from '../../shared/pairing'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import {
   ORCAD_MIGRATION_DESTINATION_UNSUPPORTED,
   sendSupportedMigrationRequest,

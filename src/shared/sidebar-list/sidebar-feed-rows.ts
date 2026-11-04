@@ -24,7 +24,7 @@ import {
 } from './sidebar-feed-index'
 import type { Worktree } from '../worktree/types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import { getEmptyProjectPlaceholderRepoIds } from './empty-project-placeholder-repos'
 import {
   filterFolderWorkspacesForVisibleHosts,
@@ -198,16 +198,16 @@ export function planSidebarFeedRows(
     visibleWorktrees,
     filterRepoIds: view.filters.filterRepoIds
   })
-  // The catalog's order, not the feed's repoOrder: only it places a paired server's projects.
-  const repoOrder = getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
   const plan = planSidebarRows({
     groupBy,
+    sortBy: view.sortBy,
     worktrees: visibleWorktrees,
     repoMap,
     repoOfWorktree: index.repoOf,
     prGroupOf: (worktree) =>
       prGroupOfReviewFact(domains.review.get(getWorktreeHostIdentity(worktree))),
-    repoOrder,
+    // The catalog's order, not the feed's repoOrder: only it places a paired server's projects.
+    repoOrder: getLogicalRepoOrderRankById(repos.map((repo) => repo.id)),
     workspaceStatuses: view.workspaceStatuses,
     projectOrderBy: view.projectOrderBy,
     lineageById,

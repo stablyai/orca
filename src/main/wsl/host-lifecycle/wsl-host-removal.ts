@@ -8,8 +8,8 @@ import { wslHostServerStopReason } from '../../../shared/wsl-host-failure-copy'
 import {
   removeWslHostEnvironment,
   setWslHostPendingStop
-} from '../../../shared/runtime-environment-wsl-host-store'
-import type { WslHostDeploymentRecord } from '../../../shared/wsl-host-deployment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type { WslHostAddResult, WslHostServerStop } from '../../../shared/wsl-host-types'
 import { admitWslHostDistro, wslHostRemovalPendingMessage } from './wsl-host-add-admission'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'

@@ -22,7 +22,7 @@ import {
   onRuntimeEnvironmentsRetired,
   onRuntimeEnvironmentRevisionsChanged
 } from '@/runtime/runtime-environment-revision'
-import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   resolveNativeChatCliForkIdentity,
   type NativeChatCliForkIdentity

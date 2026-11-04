@@ -1,4 +1,7 @@
-import type { AiVaultListResult, AiVaultScanIssue } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultScanIssue
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
 
 export function blockingAiVaultScanIssue(

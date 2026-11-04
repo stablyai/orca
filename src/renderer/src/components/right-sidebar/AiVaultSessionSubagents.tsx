@@ -17,7 +17,7 @@ import {
   isAiVaultSessionResumableContent,
   type AiVaultSession,
   type AiVaultSubagentRunStatus
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { canOpenAiVaultSessionLogInOrca } from './ai-vault-session-path-actions'
 import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'

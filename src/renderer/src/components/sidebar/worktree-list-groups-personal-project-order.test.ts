@@ -55,6 +55,7 @@ describe('personal project order through sidebar rows', () => {
       : []
     const rows = planSidebarRows({
       groupBy: 'repo',
+      sortBy: 'manual',
       worktrees: [
         { ...worktree, id: 'a', repoId: alpha.id, lastActivityAt: 1 },
         { ...worktree, id: 'b', repoId: beta.id, lastActivityAt: 9999 }
@@ -137,6 +138,7 @@ it('keeps host-local same-ID folder projects and their pins on their actual owne
   ]
   const plan = planSidebarRows({
     groupBy: 'repo',
+    sortBy: 'manual',
     worktrees: rows,
     repoMap: new Map([['same', local]]),
     repoOfWorktree: (row) => (row.hostId === 'local' ? local : remote),

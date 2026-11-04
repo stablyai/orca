@@ -3,7 +3,7 @@ import {
   BROWSER_EXTENSION_API_SCHEME,
   BROWSER_EXTENSION_WORKER_SHIM_FILE,
   BROWSER_EXTENSION_WORKER_WRAPPER_FILE
-} from '../../../../shared/browser-extension-worker-api'
+} from '../../../../shared/browser/extensions/browser-extension-worker-api'
 
 type Manifest = Record<string, unknown>
 

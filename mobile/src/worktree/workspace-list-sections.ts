@@ -228,7 +228,7 @@ export function buildMobileWorkspacePlan(
         )
         for (const [key, section] of projectSections) {
           sections.push(
-            makeSection(key, section.label, orderMainWorktreeFirst(section.items), {
+            makeSection(key, section.label, orderMainWorktreeFirst(section.items, sortMode), {
               repo: section.repo
             })
           )

@@ -34,6 +34,7 @@ function localOnlyViewHeader(
   const repoMap = new Map([[keptRegistration.id, keptRegistration]])
   const rows = planSidebarRows({
     groupBy: 'repo',
+    sortBy: 'smart',
     worktrees,
     repoMap,
     repoOfWorktree: createHostScopedRepoOf([localTwin, serverTwin], repoMap),

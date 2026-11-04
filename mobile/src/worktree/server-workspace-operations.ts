@@ -6,7 +6,7 @@ import {
   MOBILE_RELAY_HOSTS_LIST_METHOD,
   type MobileRelayHost,
   type MobileRelayHostRelay
-} from '../../../src/shared/mobile-relay-hosts-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { worktreeCatalogSchema } from './worktree-catalog-reply-schema'

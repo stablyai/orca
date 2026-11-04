@@ -5,7 +5,7 @@ import {
   type AiVaultGroup,
   type AiVaultSearchSort,
   type AiVaultSort
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   createDefaultAiVaultViewOptions,
   enabledAiVaultAgents,

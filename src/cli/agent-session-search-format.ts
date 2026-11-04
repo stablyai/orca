@@ -1,9 +1,9 @@
-import { aiVaultAgentLabel } from '../shared/ai-vault-types'
+import { aiVaultAgentLabel } from '../shared/ai-vault/contracts/ai-vault-types'
 import type {
   AiVaultSearchHit,
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../shared/ai-vault-search-types'
+} from '../shared/ai-vault/search/ai-vault-search-types'
 import { terminalSafeLine } from '../shared/terminal/output/terminal-safe-text'
 
 type SessionSearchResults = Extract<AiVaultSearchResponse, { kind: 'results' }>

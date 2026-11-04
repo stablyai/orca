@@ -8,11 +8,11 @@ import { build as buildVite } from 'vite'
 import {
   bundleBrowserExtensionContentScript,
   bundleBrowserExtensionWorkerShim
-} from '../../../../../config/build-plugins/browser-extension-worker-shim'
+} from '../../../../../config/build-plugins/sandboxed-script-bundles'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE
-} from '../../../../shared/browser-extension-worker-api'
+} from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import { resolveElectronProbeLaunch } from '../../electron-fixtures/electron-probe-display-launch'
 
 vi.setConfig({ expect: { poll: { timeout: 45_000, interval: 200 } } })

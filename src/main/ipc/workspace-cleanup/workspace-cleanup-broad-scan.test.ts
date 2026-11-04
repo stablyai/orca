@@ -6,7 +6,7 @@ import type { GitStatusResult } from '../../../shared/git/status/git-status-type
 import type { Repo } from '../../../shared/repo-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import { WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT } from '../../../shared/workspace-cleanup'
+import { WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT } from '../../../shared/workspace-cleanup/workspace-cleanup'
 
 const {
   lstatMock,

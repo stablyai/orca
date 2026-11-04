@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { SessionFileCandidate } from '../session-scanner-types'
 
 // Publish reads so new consumers do not require reader or cache changes.

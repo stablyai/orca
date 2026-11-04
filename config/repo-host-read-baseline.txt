@@ -47,7 +47,7 @@
 1 src/main/workspaces/creation/worktree-create-base-prefetch.ts
 2 src/main/workspaces/removal/retirement/worktree-name-retirement.ts
 1 src/shared/endpoint-catalog-adoption.ts
-1 src/shared/folder-workspace-execution-host.ts
+1 src/shared/folder-workspaces/folder-workspace-execution-host.ts
 1 src/shared/github/github-cache-key.ts
 1 src/shared/new-workspace-dialog-repo.ts
 1 src/shared/sidebar-list/workspace-review-facts.ts

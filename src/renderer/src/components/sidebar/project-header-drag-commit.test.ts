@@ -185,6 +185,7 @@ it('ranks after the visible unpinned sibling even when a same-host twin is pinne
   const projection = projectHostSetupProjectionFromRepos(repos)
   const rows = planSidebarRows({
     groupBy: 'repo',
+    sortBy: 'manual',
     worktrees: repos.map((repo) => ({
       ...worktree,
       id: `${repo.id}::/w`,

@@ -199,11 +199,15 @@ class BrowserSessionRegistry {
     return [...this.profiles.values()]
   }
 
+  /** Called after startup has materialized the known profile sessions. */
+  profileIdForSession(candidate: Electron.Session): string | null {
+    return (
+      this.listProfiles().find((p) => session.fromPartition(p.partition) === candidate)?.id ?? null
+    )
+  }
+
   isAllowedPartition(partition: string): boolean {
-    if (partition === this.defaultPartition) {
-      return true
-    }
-    return [...this.profiles.values()].some((p) => p.partition === partition)
+    return this.listProfiles().some((p) => p.partition === partition)
   }
 
   resolvePartition(profileId: string | null | undefined): string {

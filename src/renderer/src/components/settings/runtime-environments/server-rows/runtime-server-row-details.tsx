@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
-import { classifyRemotePairingHostname } from '../../../../../../shared/remote-pairing-address'
+import { classifyRemotePairingHostname } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../../../ui/button'

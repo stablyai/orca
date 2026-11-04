@@ -1,5 +1,5 @@
 import type React from 'react'
-import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
+import type { AiVaultListResult } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultScanNoticeIssues,
   blockingAiVaultScanIssue,

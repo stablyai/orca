@@ -1,4 +1,4 @@
-import type { BrowserClientAutomationMethod } from '../../../../shared/browser-client-automation-protocol'
+import type { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { BrowserClientFileChannelTransport } from '../../client-hosts/file-transfers/browser-client-file-channel-transport'
 import type { BrowserClientPageGuestBinding } from '../lifecycle/browser-client-page-guest-binding'
 import type { BrowserClientUploadStaging } from '../../client-hosts/file-transfers/browser-client-upload-staging'

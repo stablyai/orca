@@ -1,4 +1,4 @@
-import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
