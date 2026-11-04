@@ -36,12 +36,17 @@ import type {
 type LineageAtRequestStart = {
   worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
   workspaceLineageByChildKey: Readonly<Record<string, WorkspaceLineage>>
+  crossStoreLineageByStoreKey?: AppState['crossStoreLineageByStoreKey']
 }
 
-function captureLineageAtRequestStart(
-  state: Pick<AppState, 'worktreeLineageById' | 'workspaceLineageByChildKey'>
-): LineageAtRequestStart {
+type LineageRefreshState = Pick<
+  AppState,
+  'worktreeLineageById' | 'workspaceLineageByChildKey' | 'crossStoreLineageByStoreKey'
+>
+
+function captureLineageAtRequestStart(state: LineageRefreshState): LineageAtRequestStart {
   return {
+    crossStoreLineageByStoreKey: state.crossStoreLineageByStoreKey,
     worktreeLineageById: state.worktreeLineageById,
     workspaceLineageByChildKey: state.workspaceLineageByChildKey
   }
@@ -242,7 +247,7 @@ export function applyHostLineageRefresh(
   storeKey = OWN_LINEAGE_STORE_KEY
 ): void {
   set((s) => {
-    const crossStore = withStoreCrossStoreLineage(s, storeKey, lineage)
+    const crossStore = withStoreCrossStoreLineage(s, storeKey, lineage, lineageAtRequestStart)
     const worktreeLineageById = mergeLineageForHost(
       s,
       hostId,
@@ -269,7 +274,7 @@ export function applyHostLineageRefresh(
 export async function refreshWorktreeLineageForTarget(
   target: RuntimeClientTarget,
   set: Parameters<StateCreator<AppState>>[0],
-  getState: () => Pick<AppState, 'worktreeLineageById' | 'workspaceLineageByChildKey'>,
+  getState: () => LineageRefreshState,
   options: BackgroundRuntimeRefreshOptions = {}
 ): Promise<void> {
   const finish = beginWorktreeLineageRefresh(getState, target)
@@ -294,7 +299,7 @@ export async function refreshWorktreeLineageForTarget(
 export async function refreshRemoteWorktreeLineageBestEffort(
   target: RuntimeClientTarget | null,
   set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
-  getState: () => Pick<AppState, 'worktreeLineageById' | 'workspaceLineageByChildKey'>
+  getState: () => LineageRefreshState
 ): Promise<void> {
   if (target?.kind !== 'environment') {
     return

@@ -11,6 +11,12 @@ export function callerOrcaClient(client: RuntimeClient): RuntimeClient {
   return client.isRemote ? new RuntimeClient(client.userDataPath, undefined, null, null) : client
 }
 
+/** `failed`: an inferred attempt fell back, so nothing else may stand in for that parent. */
+type CrossStoreParentAttempt =
+  | { kind: 'not-attempted' }
+  | { kind: 'parent'; parent: CrossStoreParentRef }
+  | { kind: 'failed' }
+
 /**
  * A parent on this machine for a workspace on the connected server. The server must advertise
  * the capability before anything is sent (an older one would apply the rest and drop the parent);
@@ -20,9 +26,9 @@ export async function resolveCallerCrossStoreParent(
   client: RuntimeClient,
   selector: string | undefined,
   options: { explicit: boolean; reparent: boolean }
-): Promise<CrossStoreParentRef | undefined> {
+): Promise<CrossStoreParentAttempt> {
   if (!selector || !client.isRemote) {
-    return undefined
+    return { kind: 'not-attempted' }
   }
   try {
     const status = (await client.call<RuntimeStatus>('status.get')).result
@@ -34,42 +40,52 @@ export async function resolveCallerCrossStoreParent(
       'worktree.crossStoreParentRef',
       { worktree: selector, ...(options.reparent ? { reparent: true } : {}) }
     )
-    return minted.result.parent
+    return { kind: 'parent', parent: minted.result.parent }
   } catch (error) {
     if (options.explicit) {
       throw error
     }
     const reason = error instanceof Error ? error.message : String(error)
     console.error(`warning: ${reason} Creating without a parent.`)
-    return undefined
+    return { kind: 'failed' }
   }
 }
 
 /** `worktree create`'s parent fields. Explicit active/current against a server, or an inferred terminal
- * parent, is on this machine: sent as a cross-store parent, which the host takes over inferred ones. */
+ * parent, is on this machine: sent as a cross-store parent, which the host takes over inferred ones.
+ * A failed inferred attempt sends noParent, so the server's own inference can't pick a same-store twin. */
 export async function resolveCreateParentFields(
   client: RuntimeClient,
   args: {
     explicitParent: { parentWorktree?: string; parentWorkspace?: string; onCallerMachine?: true }
     inferredParent: string | undefined
     cwdContext: { parentWorktree?: { selector: string }; parentAmbiguous?: true }
+    noParent: boolean
   }
 ): Promise<Record<string, unknown>> {
   const { explicitParent, inferredParent, cwdContext } = args
-  const crossStoreParent = await resolveCallerCrossStoreParent(
+  const explicit = explicitParent.onCallerMachine === true
+  const attempt = await resolveCallerCrossStoreParent(
     client,
-    explicitParent.onCallerMachine ? explicitParent.parentWorktree : inferredParent,
-    { explicit: explicitParent.onCallerMachine === true, reparent: false }
+    explicit ? explicitParent.parentWorktree : inferredParent,
+    { explicit, reparent: false }
   )
+  if (attempt.kind === 'failed') {
+    return { noParent: true }
+  }
   return {
-    ...(crossStoreParent
-      ? { crossStoreParent }
+    ...(attempt.kind === 'parent'
+      ? {
+          crossStoreParent: attempt.parent,
+          ...(explicit ? {} : { crossStoreParentInferred: true })
+        }
       : { parentWorktree: explicitParent.parentWorktree }),
     ...(explicitParent.parentWorkspace ? { parentWorkspace: explicitParent.parentWorkspace } : {}),
     ...(inferredParent ? { envParentWorkspace: inferredParent } : {}),
     ...(cwdContext.parentWorktree ? { cwdParentWorktree: cwdContext.parentWorktree.selector } : {}),
     // Older hosts ignore the observation and keep this first-row cwd parent.
-    ...(cwdContext.parentAmbiguous ? { cwdParentAmbiguous: cwdContext.parentAmbiguous } : {})
+    ...(cwdContext.parentAmbiguous ? { cwdParentAmbiguous: cwdContext.parentAmbiguous } : {}),
+    noParent: args.noParent
   }
 }
 
@@ -87,11 +103,11 @@ export async function resolveSetParentFields(
       cwd,
       callerOrcaClient(client)
     )
-    const crossStoreParent = await resolveCallerCrossStoreParent(client, selector, {
+    const attempt = await resolveCallerCrossStoreParent(client, selector, {
       explicit: true,
       reparent: true
     })
-    return { crossStoreParent }
+    return attempt.kind === 'parent' ? { crossStoreParent: attempt.parent } : {}
   }
   return {
     parentWorktree: await withWorktreeSelectorRecovery(

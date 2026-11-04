@@ -115,6 +115,7 @@ export function buildManagedWorktreeCreateArgs(
       envParentWorkspace: params.envParentWorkspace,
       parentWorktree: params.parentWorktree,
       ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
+      ...(params.crossStoreParentInferred ? { crossStoreParentInferred: true as const } : {}),
       ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
       ...(params.cwdParentAmbiguous === true
         ? { cwdParentAmbiguous: params.cwdParentAmbiguous }

@@ -199,9 +199,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(await resolveCreateParentFields(client, {
         explicitParent,
         inferredParent: envParentWorkspace,
-        cwdContext
+        cwdContext,
+        noParent
       })),
-      noParent,
       callerTerminalHandle,
       // Always request CLI provenance, including hand-typed creates without a terminal handle.
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {}

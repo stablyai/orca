@@ -109,7 +109,7 @@ export async function resolveRuntimeWorktreeCreateLineage(
   }
   if (input.noParent === true || input.crossStoreParent) {
     return input.crossStoreParent
-      ? crossStoreCliLineage(input.crossStoreParent)
+      ? crossStoreCliLineage(input.crossStoreParent, input.crossStoreParentInferred === true)
       : { kind: 'none', warnings: [] }
   }
   if (input.parentWorkspace) {
