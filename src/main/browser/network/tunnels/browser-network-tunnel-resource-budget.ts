@@ -13,6 +13,7 @@ const OPEN_RATE_WINDOW_MS = 10_000
 const MIN_RETAINED_BYTES = 8 * 1024 * 1024
 const RETAINED_WINDOWS_PER_SESSION = 16
 
+/** Builds the session budget, sizing its retained-byte limit from the negotiated window. */
 export function createBrowserNetworkTunnelResourceBudget(
   options: BrowserNetworkTunnelSessionOptions
 ): BrowserNetworkTunnelResourceBudget {
