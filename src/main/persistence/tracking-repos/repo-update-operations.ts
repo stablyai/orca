@@ -2,6 +2,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { type ExecutionHostId, getRepoExecutionHostId } from '../../../shared/execution-host'
 import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
+import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/worktree/visibility/external-worktree-visibility'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
@@ -61,6 +62,21 @@ function assertKindChangeKeepsFolderWorkspaces(
   }
 }
 
+/** Path changes re-key every worktree id the project owns, so only the folder repoint flow may write them (#30807). */
+function assertRepoPathChangeAllowed(repo: Repo, nextPath: string | undefined): void {
+  if (
+    nextPath === undefined ||
+    normalizeRuntimePathForComparison(nextPath) === normalizeRuntimePathForComparison(repo.path)
+  ) {
+    return
+  }
+  if (!isFolderRepo(repo)) {
+    throw new Error(
+      `Git projects cannot be repointed to a new path; re-import the project instead. (${repo.id})`
+    )
+  }
+}
+
 export class RepoUpdatePersistenceOperations {
   constructor(private readonly operations: RepoUpdateMutationOperations) {}
 
@@ -99,6 +115,7 @@ export class RepoUpdatePersistenceOperations {
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
+        | 'path'
         | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
@@ -136,6 +153,7 @@ export class RepoUpdatePersistenceOperations {
       return null
     }
     assertKindChangeKeepsFolderWorkspaces(repo, updates.kind, this.state.worktreeMeta)
+    assertRepoPathChangeAllowed(repo, updates.path)
     const previousGhAccount = repo.ghAccount
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
     if (

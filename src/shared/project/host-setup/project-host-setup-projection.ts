@@ -126,6 +126,13 @@ export function isHostLocalProjectId(projectId: string): boolean {
   return projectId.startsWith(HOST_LOCAL_PROJECT_ID_PREFIX)
 }
 
+/** The repo row a host-local project id names; null for provider- or remote-keyed ids. */
+export function repoIdForHostLocalProjectId(projectId: string): string | null {
+  return isHostLocalProjectId(projectId)
+    ? projectId.slice(HOST_LOCAL_PROJECT_ID_PREFIX.length)
+    : null
+}
+
 export function getProjectIdForProviderIdentity(identity: ProjectProviderIdentity): string {
   return `github:${githubRepoIdentityKey(identity)}`
 }
