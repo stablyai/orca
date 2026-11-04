@@ -129,7 +129,7 @@ export type PendingWorktreeCreation = {
   startedAt: number
   // Remote/runtime targets without phase events need one indeterminate spinner, never a checklist stuck at step one.
   indeterminate: boolean
-  // Background creates reveal the loader immediately; older callers opt in, keeping faux tabs stable through terminal handoff.
+  // Instant folder creates retain the initiating surface; explicit opens and retries reveal progress.
   loaderVisible: boolean
   error?: string
   provisioningLog?: string
@@ -142,6 +142,12 @@ export type PendingWorktreeCreation = {
   /** The launch owns the captured input until its replacement surface is published. */
   chatInputHandedOff?: boolean
   request: WorktreeCreationRequest
+}
+
+export function pendingWorktreeCreationIsVisible(
+  entry: PendingWorktreeCreation | undefined
+): boolean {
+  return entry !== undefined && (entry.loaderVisible || entry.status === 'error')
 }
 
 /** Draft scope of the chat composer shown while this creation has no workspace yet. */

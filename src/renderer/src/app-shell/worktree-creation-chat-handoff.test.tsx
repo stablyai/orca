@@ -11,6 +11,7 @@ import {
   type TabsDrawnFromMain
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 import { executeWorktreeCreation } from '@/lib/worktree-creation-flow-execute'
+import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
@@ -69,7 +70,14 @@ vi.mock('../components/Terminal', () => ({
         (tab) => tab.contentType === 'agent-session'
       )
     )
-    return hasChat ? <div role="log" aria-label="Created chat" /> : null
+    const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+    return hasChat ? (
+      <div role="log" aria-label="Created chat" />
+    ) : (
+      <div role="log" aria-label="Workspace terminal">
+        {activeWorktreeId}
+      </div>
+    )
   }
 }))
 
@@ -93,9 +101,62 @@ afterEach(() => {
 })
 
 describe('worktree creation chat handoff', () => {
+  it('retains the visible workspace until ordinary local folder creation completes', async () => {
+    const worktree = { ...makeCreatedAgentWorktree(), hostId: 'local' as const }
+    const previous = { ...worktree, id: 'previous-workspace', path: '/workspace/previous' }
+    seedEmptyActivatableWorktree(worktree, { extraWorktrees: [previous] })
+    const checkout = Promise.withResolvers<{
+      worktree: typeof worktree
+      startupTerminal: { spawned: boolean }
+    }>()
+    useAppStore.setState((state) => ({
+      repos: state.repos.map((repo) => ({ ...repo, kind: 'folder' as const })),
+      activeWorktreeId: previous.id,
+      activeView: 'terminal',
+      pendingWorktreeCreations: {},
+      createWorktree: vi.fn(() => checkout.promise)
+    }))
+    main = await drawTabsFromMain(useAppStore)
+    render(
+      <TooltipProvider>
+        <WorkspaceShell />
+      </TooltipProvider>
+    )
+    const terminal = await screen.findByRole('log', { name: 'Workspace terminal' })
+    expect(terminal.textContent).toBe('previous-workspace')
+
+    act(() => {
+      runBackgroundWorktreeCreation({
+        repoId: worktree.repoId,
+        executionHostId: 'local',
+        worktreeCreateProgressMode: 'stepped',
+        name: 'feature',
+        setupDecision: 'skip',
+        agent: null,
+        pendingFirstAgentMessageRename: false,
+        note: '',
+        startupPlan: null,
+        quickPrompt: '',
+        quickTelemetry: null
+      })
+    })
+    expect(screen.getByRole('log', { name: 'Workspace terminal' })).toBe(terminal)
+    expect(terminal.textContent).toBe('previous-workspace')
+
+    await act(async () => {
+      checkout.resolve({ worktree, startupTerminal: { spawned: true } })
+    })
+    await waitFor(() =>
+      expect(screen.getByRole('log', { name: 'Workspace terminal' }).textContent).toBe(
+        'repo-1::/workspace/feature'
+      )
+    )
+  })
+
   it.each([true, false])(
     'keeps the pending chat and sidebar mounted through handoff (sidebar open: %s)',
     async (rightSidebarOpen) => {
+      await import('../components/worktree-creation/PendingNativeChatCreation')
       const worktree = { ...makeCreatedAgentWorktree(), hostId: 'local' as const }
       seedEmptyActivatableWorktree(worktree)
       const request: WorktreeCreationRequest = {

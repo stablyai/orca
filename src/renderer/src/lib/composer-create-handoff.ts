@@ -117,6 +117,7 @@ export function scheduleComposerCreateHandoff({
       const existingCreationId = findPendingLinkedWorkItemCreationId(others, request)
       if (existingCreationId) {
         store.removePendingWorktreeCreation(stagedCreationId)
+        store.updatePendingWorktreeCreation(existingCreationId, { loaderVisible: true })
         store.setActivePendingWorktreeCreation(existingCreationId)
         store.setActiveView('terminal')
         store.setSidebarOpen(true)
