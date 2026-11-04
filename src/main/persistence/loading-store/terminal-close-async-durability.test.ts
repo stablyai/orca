@@ -228,6 +228,7 @@ it('preserves the saved tab and resume record when its owner changes during the 
     ...concurrent,
     closedTerminalTabTombstonesByTabId: {
       ...concurrent.closedTerminalTabTombstonesByTabId,
+      // ast-grep-ignore: test-no-wall-clock -- Tombstones are pruned against the real clock, so this concurrent one must be current.
       'other-closed-tab': { worktreeId: binding.worktreeId, closedAt: Date.now(), reason: 'user' }
     },
     tabsByWorktree: {

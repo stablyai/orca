@@ -17,6 +17,10 @@ import {
   isTerminalTabPinnedInSession
 } from './paired-host-terminal-close'
 
+function isWorkspaceSessionUnavailable(error: unknown): boolean {
+  return error instanceof Error && error.message === 'workspace_session_unavailable'
+}
+
 export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithExplicitCloseTabPtyStops {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
@@ -83,6 +87,19 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     })
   }
 
+  private async closeSurfaceTabOrNotifyHeadless(worktreeId: string, tabId: string): Promise<void> {
+    try {
+      await this.closeMobileSessionTab(`id:${worktreeId}`, tabId, {
+        localPtyTeardownOwnedExternally: true
+      })
+    } catch (error) {
+      if (!isWorkspaceSessionUnavailable(error)) {
+        throw error
+      }
+      this.notifyRendererOfHeadlessTerminalClose(tabId)
+    }
+  }
+
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       const mainClose = await closeMainOwnedPaneByHandle(
@@ -137,16 +154,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         this.resolveTerminalCloseTarget(pty.pty.worktreeId, paneTarget) === 'last-pane'
       if (closesTab && surface && this.tabs.has(tabId) && this.notifier?.closeTerminalTab) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
-        try {
-          await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
-            localPtyTeardownOwnedExternally: true
-          })
-        } catch (error) {
-          if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
-            throw error
-          }
-          this.notifyRendererOfHeadlessTerminalClose(tabId)
-        }
+        await this.closeSurfaceTabOrNotifyHeadless(pty.pty.worktreeId, tabId)
         const stop = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
@@ -161,11 +169,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
           })
         } catch (error) {
           // Without a published surface, the authority came from the saved tab, which an uncommitted stop would strand.
-          if (
-            !ptyCloseAuthority.surface ||
-            !(error instanceof Error) ||
-            error.message !== 'workspace_session_unavailable'
-          ) {
+          if (!ptyCloseAuthority.surface || !isWorkspaceSessionUnavailable(error)) {
             throw error
           }
         }
@@ -208,16 +212,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         }
       } else if (surface) {
         // Paired viewers retain ended streams until HUB removal; use durable host close instead of viewer-local exit handling.
-        try {
-          await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
-            localPtyTeardownOwnedExternally: true
-          })
-        } catch (error) {
-          if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
-            throw error
-          }
-          this.notifyRendererOfHeadlessTerminalClose(tabId)
-        }
+        await this.closeSurfaceTabOrNotifyHeadless(pty.pty.worktreeId, tabId)
       } else {
         this.notifyRendererOfHeadlessTerminalClose(tabId)
       }
