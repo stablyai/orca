@@ -11,10 +11,10 @@ import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
   requireUnownedStructuredAgentSessionAdoption,
-  resolveStructuredAgentSessionAdoptionForCreate,
   structuredAgentSessionAdoptAttach,
   type StructuredAgentSessionCreateIntentInput
 } from '../agent-session/structured-agent-session-create-adoption'
+import { resolveStructuredAgentSessionAdoptionForCreateOrFresh } from '../agent-session/structured-agent-session-create-adoption-fresh'
 import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import {
   resolveHostStructuredAgentCreateSupport,
@@ -214,7 +214,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     // Adoption pins the transcript's actual account home; fresh-create defaults may open a blank conversation under the old name.
     const adoption =
       resumeFrom && transcriptImport
-        ? await resolveStructuredAgentSessionAdoptionForCreate({
+        ? await resolveStructuredAgentSessionAdoptionForCreateOrFresh({
             settings,
             agent: input.agent,
             transcriptImport,
