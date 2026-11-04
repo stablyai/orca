@@ -27,6 +27,22 @@ afterEach(() => {
 })
 
 describe('Pi hook normalization', () => {
+  it('marks a Pi run the extension reports as cancelled as an interrupted done', () => {
+    const cancelled = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'agent_end', interrupted: true }),
+      'production'
+    )
+    expect(cancelled?.payload).toMatchObject({ state: 'done', interrupted: true })
+
+    const finished = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'agent_end', turn_completed_at: 1 }),
+      'production'
+    )
+    expect(finished?.payload.interrupted).toBeUndefined()
+  })
+
   it('carries the model an OMP post stamps on the pane status', () => {
     const started = _internals.normalizeHookPayload(
       'omp',

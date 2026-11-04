@@ -30,6 +30,7 @@ export type NativeChatTranscriptRowContext = {
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
   allowFileUriLinks: boolean
+  structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   onToggleExpandedTurn: (turnKey: string) => void
@@ -105,6 +106,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {!slot.drawsMessage ? null : receipt ? (
         <NativeChatResolutionReceipt
           body={receipt}
+          onLinkClick={context.onLinkClick}
           disclosureId={message.id}
           awaiting={isActionableStructuredAgentSessionPrompt(
             message.id,
@@ -134,6 +136,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           subagentDisclosure={context.subagentDisclosure}
           inSubagentSection={slot.depth > 0}
           runtimeContext={context.runtimeContext}
+          structuredAttachments={context.structuredAttachments}
           rewind={
             nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined) &&
             (!rewind?.eligibleItemIds || rewind.eligibleItemIds.has(message.id))

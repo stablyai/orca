@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { resolvePaneAgentSessionId, type PaneAgentSessionIdState } from './pane-agent-session-id'
 

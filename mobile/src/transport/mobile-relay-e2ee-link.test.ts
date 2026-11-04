@@ -16,7 +16,7 @@ vi.mock('./mobile-e2ee-v2-physical-channel', () => ({
   }
 }))
 
-import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/mobile-relay-close-codes'
+import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import { MobileRelayE2eeLink, RelayOuterError } from './mobile-relay-e2ee-link'
 
 class ThrowingSocket {

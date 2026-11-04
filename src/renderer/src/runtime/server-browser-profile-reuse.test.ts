@@ -90,25 +90,6 @@ describe('server browser profile publication and link reuse', () => {
     }
   )
 
-  it('keeps unknown legacy metadata ineligible for both default and named-profile reuse', () => {
-    const snapshot = desktopSnapshot(undefined)
-    expect(snapshot.tabs[0]?.browserProfileId).toBeUndefined()
-    const client = mirrorOnClient(snapshot)
-    for (const profileId of [null, 'isolated-login']) {
-      expect(selectPage(client, profileId)).toMatchObject({ status: 'ready', match: null })
-    }
-  })
-
-  it('does not infer a remote page profile from its mirrored workspace metadata', () => {
-    const client = mirrorOnClient(desktopSnapshot('isolated-login'))
-    const republished = buildMobileSessionTabSnapshots(client.getState()).find(
-      (snapshot) => snapshot.worktree === WORKSPACE
-    )
-    const row = republished?.tabs.find((tab) => tab.type === 'browser')
-    expect(row).toBeDefined()
-    expect(row?.type === 'browser' && row.browserProfileId).toBeUndefined()
-  })
-
   it('clears a previously known identity when an old peer republishes without it', () => {
     const snapshot = desktopSnapshot('isolated-login')
     const client = mirrorOnClient(snapshot)

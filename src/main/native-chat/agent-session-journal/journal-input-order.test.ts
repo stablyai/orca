@@ -564,3 +564,82 @@ it('retries partial keeps from committed facts and carries rank moves on the fir
     await rm(root, { recursive: true, force: true })
   }
 })
+
+// A sent card's released lineage leaves the history an observed send was placed behind
+// once the queue next pauses, however many pauses came before that send.
+it.each([0, 1])(
+  'recovers an older direct send ahead of a newer card after a sent card settles, %s pauses before it',
+  async (pauses) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-settled-order-'))
+    const journals = createTrackedJournalOpener()
+    const journal = await journals.open({
+      identity: {
+        sessionId: 'settled',
+        workspaceId: 'folder',
+        hostId: 'ssh',
+        agent: 'claude',
+        providerHandle: claudeProviderHandle('thread', null)
+      },
+      stateDirectory: root
+    })
+    try {
+      await journal.queuedMessages.insert({
+        messageId: 'C',
+        body: { ...message('/compact'), command: { name: 'compact' } }
+      })
+      await journal.queuedMessages.insert({ messageId: 'A', body: message('old waiting') })
+      const sent = await journal.queuedMessages.insert({ messageId: 'S', body: message('sent') })
+      await journal.appendSubmission(
+        {
+          clientMessageId: 'sent-S',
+          body: sent.body,
+          payloadFingerprint: sent.fingerprint,
+          fence: 0,
+          handoverRecorded: true,
+          origin: 'client'
+        },
+        { messageId: 'S', expect: 'waiting' }
+      )
+      await journal.resolveDispatch({
+        clientMessageId: 'sent-S',
+        state: 'accepted',
+        providerIdentity: null,
+        fence: 0
+      })
+      expect(journal.inputOrder.lineage.cards.has('S')).toBe(false)
+      for (let n = 0; n < pauses; n++) {
+        await journal.appendStopEvent({ reason: 'user-stop' }, 0)
+        journal.queuedMessages.nextInputCard()
+        await journal.appendQueueResume(0)
+        journal.queuedMessages.nextInputCard()
+      }
+      await journal.appendSubmission({
+        clientMessageId: 'M',
+        body: message('unhanded direct send'),
+        payloadFingerprint: 'M',
+        fence: 0,
+        handoverRecorded: true,
+        origin: 'client'
+      })
+      expect(journal.inputOrder.forced('M')).toBe(true)
+      await journal.queuedMessages.insert({ messageId: 'L', body: message('newer card') })
+      await journal.queuedMessages.move({ messageId: 'L', beforeMessageId: 'A' })
+      await journal.queuedMessages.withdraw(['A'])
+      const position = () =>
+        journal.inputOrder.predecessors(journal.queuedMessages.inputState(), 'M').position
+      expect(position()).toBe(3)
+      await journal.appendStopEvent({ reason: 'user-stop' }, 0)
+      expect(position()).toBe(1)
+      await holdUnsentSends(journal, { fence: 0, hold: { cause: 'chatClosed' } })
+      expect(
+        journal.queuedMessages
+          .list()
+          .filter((card) => card.state === 'waiting')
+          .map((card) => card.messageId)
+      ).toEqual(['C', 'M', 'L'])
+    } finally {
+      await journals.closeAll()
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+)

@@ -1,6 +1,9 @@
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { FolderWorkspace, WorkspaceKey } from '../../shared/folder-workspace-types'
+import type {
+  FolderWorkspace,
+  WorkspaceKey
+} from '../../shared/folder-workspaces/folder-workspace-types'
 import type { WorktreeLineage, WorktreeLineageWarning } from '../../shared/worktree/lineage-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'

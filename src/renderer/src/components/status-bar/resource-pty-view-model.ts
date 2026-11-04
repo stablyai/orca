@@ -6,7 +6,7 @@ import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
-import { projectGroupIdFromRepoId } from '../../../../shared/folder-workspace-worktree'
+import { projectGroupIdFromRepoId } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { recentStamp } from '../../../../shared/sidebar-list/stamp-order'
 import {

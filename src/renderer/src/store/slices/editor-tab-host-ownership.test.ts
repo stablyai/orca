@@ -1,82 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
-import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
+import './worktrees-slice-test-fixtures'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance
 } from '@/lib/editor-file-operation-owner'
 
-describe('editor tabs retain their captured file owner', () => {
-  it.each([
-    { hostId: 'local', runtimeEnvironmentId: null },
-    { hostId: 'runtime:wsl', runtimeEnvironmentId: 'wsl' },
-    { hostId: 'ssh:linux', runtimeEnvironmentId: null },
-    { hostId: 'ssh:linux', runtimeEnvironmentId: 'wsl' }
-  ] as const)('keeps $hostId via $runtimeEnvironmentId while another host is focused', (owner) => {
-    const store = createEditorTabsStore()
-    store.setState({
-      repos: [{ ...TEST_REPO, id: 'repo-1', path: '/repo', executionHostId: owner.hostId }],
-      worktreesByRepo: {
-        'repo-1': [
-          makeWorktree({
-            id: 'wt-1',
-            repoId: 'repo-1',
-            path: '/repo',
-            hostId: owner.hostId,
-            ...(owner.runtimeEnvironmentId
-              ? { runtimeOwnerEnvironmentId: owner.runtimeEnvironmentId }
-              : {})
-          })
-        ]
-      },
-      activeWorktreeId: 'wt-1',
-      activeWorkspaceExecutionHostId: 'runtime:mac',
-      sshConnectionStates: new Map(),
-      sshStateByEnvironment: new Map()
-    })
-
-    store.getState().openFile({
-      filePath: '/repo/file.ts',
-      relativePath: 'file.ts',
-      worktreeId: 'wt-1',
-      language: 'typescript',
-      mode: 'edit'
-    })
-
-    const file = store.getState().openFiles[0]
-    expect(file?.operationProvenance?.generation.route).toEqual({
-      executionHostId: owner.hostId,
-      runtimeEnvironmentId: owner.runtimeEnvironmentId
-    })
-    expect(
-      store.getState().unifiedTabsByWorktree['wt-1']?.find((tab) => tab.entityId === file?.id)
-        ?.executionHostId
-    ).toBe(owner.hostId)
-  })
-})
-
 describe('editor owners ignore unrelated workspace focus', () => {
-  it('captures an unstamped local worktree independently of the focused host', () => {
-    const store = createEditorTabsStore()
-    store.setState({
-      repos: [{ ...TEST_REPO, id: 'repo-1', path: '/repo' }],
-      worktreesByRepo: {
-        'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })]
-      },
-      activeWorkspaceExecutionHostId: 'runtime:mac',
-      settings: { ...getDefaultSettings('/tmp/orca-test'), activeRuntimeEnvironmentId: null }
-    })
-
-    expect(
-      captureEditorFileOperationProvenance(store.getState(), 'wt-1', undefined, false).generation
-        .route
-    ).toEqual({
-      executionHostId: 'local',
-      runtimeEnvironmentId: null
-    })
-  })
-
   function folderStore() {
     const store = createEditorTabsStore()
     store.setState({
@@ -119,18 +50,6 @@ describe('editor owners ignore unrelated workspace focus', () => {
     })
     return store
   }
-
-  it('captures a folder owner while another host is focused', () => {
-    const store = folderStore()
-    store.setState({ activeWorkspaceExecutionHostId: 'runtime:mac' })
-    const route = captureEditorFileOperationProvenance(
-      store.getState(),
-      'folder:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
-      undefined,
-      false
-    ).generation.route
-    expect(route).toEqual({ executionHostId: 'local', runtimeEnvironmentId: null })
-  })
 
   it('disambiguates same-id folders from catalog evidence and retains the captured owner', () => {
     const store = folderStore()

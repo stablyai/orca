@@ -16,7 +16,7 @@ import {
 } from '../../../../shared/worktree/removal'
 import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
 import { showPreservedBranchBatchToast } from './preserved-branch-batch-toast'
-import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
+import type { PreservedBranchCleanup } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'
 import { beginWorktreeSnapshotPruneBatch } from './worktree-snapshot-prune-batch'
 import { runWorktreeDeleteWithToast } from './run-worktree-delete-with-toast'

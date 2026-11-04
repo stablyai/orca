@@ -6,7 +6,10 @@ import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { ghExecFileAsync } from '../git/command-runner/gh-exec-file'
 import { glabExecFileAsync } from '../git/command-runner/glab-exec-file'
 import { execFileCaptureToTermination } from '../git/command-runner/exec-file-capture'
-import { beginLocalCommandSelection, resolveSelectedLocalCommand } from './command-path-resolver'
+import {
+  beginLocalCommandSelection,
+  resolveSelectedLocalCommand
+} from './command-path/command-path-resolver'
 import {
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand

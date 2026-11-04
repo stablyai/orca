@@ -176,8 +176,8 @@ import { i18n } from '@/i18n/i18n'
       expect(container.querySelector('[data-native-chat-tool-run-state]')).toBeNull()
     })
 
-    it('leaves a question that fits on its line as plain text', () => {
-      const { container } = render(
+    it('keeps a question that fits on its line collapsed but expandable', () => {
+      render(
         <NativeChatToolRun
           blocks={askBlocks('completed')}
           expandSignal
@@ -185,7 +185,10 @@ import { i18n } from '@/i18n/i18n'
         />
       )
       expect(screen.getByText(QUESTION)).toHaveClass('truncate')
-      expect(container.querySelector('button')).toBeNull()
+      expect(screen.getByRole('button', { name: /Asked:/ })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      )
     })
 
     it('opens a clipped question below the toggle and folds it back', () => {

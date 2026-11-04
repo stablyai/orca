@@ -16,7 +16,10 @@ const state = {
   updateDiffComment: vi.fn(),
   clearDeliveredDiffComments: vi.fn(),
   keybindings: {},
-  worktreesByRepo: {},
+  // The source copy is listed, so its notes are known and blocks offer Add note.
+  worktreesByRepo: {
+    fixture: [{ id: 'fixture', repoId: 'fixture', path: '/fixture', diffComments: [] }]
+  },
   repos: [],
   folderWorkspaces: [],
   projectGroups: [],

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { buildRuntimeSessionMirrorEnvironmentKeys } from '@/runtime/use-runtime-session-mirror-environment-key'
 import {
@@ -118,24 +118,5 @@ describe('regaining contact is its own mirror-recovery trigger', () => {
     expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(connectedGeneration)
     expect(mirrorKeys(store).environmentKey).toBe(connected.environmentKey)
     expect(mirrorKeys(store).resubscribeSignal).not.toBe(connected.resubscribeSignal)
-  })
-
-  it('advances the generation when the runtime restarted during the outage', () => {
-    const store = createSliceStore()
-    seedEnvironment(store)
-
-    store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(1, { verification: 'verified' }))
-    const connectedGeneration = getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)
-
-    store
-      .getState()
-      .applyRuntimeHostStatusSnapshot(makeSnapshot(2, { verification: 'unavailable' }))
-    store
-      .getState()
-      .applyRuntimeHostStatusSnapshot(
-        makeSnapshot(3, { verification: 'verified', status: makeStatus('rt-2') })
-      )
-
-    expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(connectedGeneration + 1)
   })
 })

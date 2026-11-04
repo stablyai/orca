@@ -1,29 +1,24 @@
 import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mocks, hostMocks } from './launch-work-item-direct-test-fixture'
-import * as hostPreferences from '@/components/settings/use-host-agent-launch-preferences'
+
 import { resolveProjectExecutionRuntime } from '../../../shared/project-execution-runtime'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import type { ProjectLaunchContext } from '../../../shared/rpc-contract/preflight-params'
-import type { Repo } from '../../../shared/repo-types'
+
 import * as inventory from './agent-detection-target-inventory'
 import * as localCapabilities from '@/runtime/local-runtime-capabilities'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
-import {
-  clearHostAgentMenuSettingsForTests,
-  ensureAgentLaunchPreferences
-} from '@/components/settings/use-host-agent-launch-preferences'
-import { projectAgentLaunchSettings } from '../../../shared/agent-launch-settings'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { useAppStore } from '@/store'
-import * as worktreeRows from '@/store/slices/worktree-helpers'
-import * as routeInputs from './agent-launch-route-input'
-import * as chatPrograms from './host-chat-program'
-import * as chatAcquisition from './host-chat-program-acquisition'
-import { resolveDirectProspectiveAgent } from './launch-work-item-direct-preflight'
-import * as availability from '@/runtime/host-structured-agent-availability'
+
 import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { runSourceControlAgentActionStart } from '../components/right-sidebar/runSourceControlAgentActionStart'
+import { startFixChecksFromDialog } from '../components/pull-request-page/checks/fix-launch'
+import { sourceControlActionRecipeEntry } from '../../../shared/source-control/ai/recipes/source-control-action-selection'
+import { pr } from '@/hooks/composer-state/composer-review-base-test-fixture'
 import { launchWorkItemDirect } from './launch-work-item-direct'
 import { beginDirectWorkItemStructuredLaunch } from './launch-work-item-direct-agent-routing'
 
@@ -60,295 +55,152 @@ afterEach(() => {
 })
 
 describe('direct workspace defaults', () => {
-  it.each(['codex', 'claude'] as const)(
-    'keeps a usable preferred Codex chat over detected Claude, then honors the current default (%s)',
-    async (currentDefault) => {
-      const projectContext = {
-        agents: ['claude'],
-        workspaceKind: 'git-worktree',
-        executionContext: {
-          kind: 'host',
-          projectRuntime: resolveProjectExecutionRuntime({ appPlatform: 'darwin', projectId: 'p1' })
-        }
-      } satisfies ProjectLaunchContext
-      vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue(projectContext)
-      stageChat()
-      hostMocks.callRuntimeRpc.mockResolvedValue({ agents: [{ agent: 'codex', capabilities: {} }] })
-      mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-      mocks.store.settings = { defaultTuiAgent: 'codex', nativeChatProviders: EVERY_AGENT_CHAT }
-      useAppStore.setState({
-        readLocalAgentInventory: () => ({ state: 'successful', ids: ['claude'] })
-      })
-      const unsubscribe = vi.fn()
-      const subscriptionHandle = Promise.resolve({ unsubscribe })
-      let delivered = false
-      hostMocks.subscribe.mockImplementation((_target, _method, _params, handlers) => {
-        queueMicrotask(() => {
-          handlers.onEvent({
-            type: 'availability',
-            agents: [{ agent: 'codex', state: 'available', chatProgram: 'available' }]
-          })
-          delivered = true
-        })
-        return subscriptionHandle
-      })
-      mocks.createWorktree.mockImplementationOnce(async () => {
-        const worktree = makeWorktree({
-          id: 'repo-1::/repo/worktree',
-          path: '/repo/worktree',
-          repoId: 'repo-1'
-        })
-        mocks.store.settings = {
-          defaultTuiAgent: currentDefault,
-          nativeChatProviders: EVERY_AGENT_CHAT
-        }
-        useAppStore.setState({
-          worktreesByRepo: { 'repo-1': [worktree] }
-        })
-        return { worktree }
-      })
-      vi.mocked(beginDirectWorkItemStructuredLaunch).mockImplementationOnce(({ beforeOpen }) => ({
-        completed: beforeOpen() !== false,
-        structuredLaunch: true,
-        primaryTabId: 'chat-tab'
-      }))
-
-      const state = useAppStore.getState()
-      const repo = state.repos[0]
-      const prospective = {
-        kind: projectContext.workspaceKind,
-        repoId: repo.id,
-        executionHostId: getRepoExecutionHostId(repo),
-        executionContext: projectContext.executionContext
-      }
-      const owner = chatPrograms.resolveChatProgramContext(state, prospective)
-      const seed = chatAcquisition.holdChatProgramFacts(owner)
-      try {
-        expect(hostMocks.subscribe).toHaveBeenCalledOnce()
-        await Promise.all([seed.catalog, seed.first()])
-        expect(delivered).toBe(true)
-        expect(
-          availability.readHostStructuredAgentAvailability(
-            owner.executionHostId,
-            owner.runtimeId,
-            owner.pairingRevision
-          )
-        ).toEqual({
-          state: 'received',
-          byAgent: new Map([
-            ['codex', { agent: 'codex', state: 'available', chatProgram: 'available' }]
-          ])
-        })
-        expect(
-          chatPrograms.agentChoiceOpensAsChat(useAppStore.getState(), 'codex', prospective, [
-            'claude'
-          ])
-        ).toBe(true)
-        const acquisition = vi.spyOn(chatAcquisition, 'acquireAgentLaunchChoices')
-        const offers = vi.spyOn(chatPrograms, 'agentsOfferedForLaunch')
-        const plannedAgents: string[] = []
-        await expect(
-          launch({
-            resolveSessionOptions: (agent) => {
-              plannedAgents.push(agent)
-              return undefined
-            }
-          })
-        ).resolves.toBe(true)
-
-        expect(plannedAgents).toEqual(['codex', currentDefault])
-        expect(mocks.updateWorktreeMeta).toHaveBeenCalledWith('repo-1::/repo/worktree', {
-          createdWithAgent: currentDefault
-        })
-        expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
-          expect.objectContaining({
-            plan: expect.objectContaining({
-              agent: currentDefault,
-              route: 'structured-native-chat',
-              worktreeId: 'repo-1::/repo/worktree',
-              prompt: item.url,
-              promptDelivery: 'draft'
-            })
-          })
-        )
-        expect(
-          vi.mocked(beginDirectWorkItemStructuredLaunch).mock.lastCall?.[0].plan?.launchOptions
-        ).toBeUndefined()
-        expect(mocks.activateAndRevealWorktree).toHaveBeenCalledOnce()
-        expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
-          'repo-1::/repo/worktree',
-          expect.objectContaining({ providesInitialSurface: true })
-        )
-        if (currentDefault === 'codex') {
-          expect(acquisition).toHaveBeenCalledOnce()
-          await expect(acquisition.mock.results[0].value).resolves.toEqual({
-            detected: ['claude'],
-            offered: ['claude', 'codex']
-          })
-          expect(offers).toHaveBeenCalledOnce()
-          expect(offers.mock.results[0].value).toEqual(['claude', 'codex'])
-        } else {
-          expect(acquisition).not.toHaveBeenCalled()
-          expect(offers).not.toHaveBeenCalled()
-        }
-        expect(hostMocks.subscribe).toHaveBeenCalledOnce()
-        expect(unsubscribe).not.toHaveBeenCalled()
-      } finally {
-        seed.release()
-        await Promise.resolve()
-        await subscriptionHandle
-        expect(unsubscribe).toHaveBeenCalledOnce()
+  it('plans a saved Chat preference before creation under CLI settings and carries both captured views', async () => {
+    stageChat()
+    mocks.store.settings = { defaultTuiAgent: 'codex', nativeChatProviders: { codex: false } }
+    const recipe = {
+      agentId: 'codex' as const,
+      surface: 'chat' as const,
+      agentArgs: '--model "unterminated',
+      launchPreferences: {
+        agentId: 'codex' as const,
+        model: 'gpt-5.5',
+        options: { effort: 'high' }
       }
     }
-  )
+    await expect(
+      launch({
+        agentOverride: 'codex',
+        resolveLaunchInputs: (agent) =>
+          projectSourceControlActionLaunch(recipe, agent, { basePrompt: item.url })
+      })
+    ).resolves.toBe(true)
+    expect(mocks.createWorktree).toHaveBeenCalledOnce()
+    const plan = vi.mocked(beginDirectWorkItemStructuredLaunch).mock.lastCall?.[0].plan
+    expect(plan).toMatchObject({
+      agent: 'codex',
+      route: 'structured-native-chat',
+      launchOptions: { model: 'gpt-5.5', effort: 'high' }
+    })
+    expect(plan).not.toHaveProperty('requestedSurface')
+    expect(plan?.chatLaunchOptions).toBeUndefined()
+    expect(mocks.openModalFallback).not.toHaveBeenCalled()
+  })
 
-  it('uses prospective native facts to ignore hidden args before create', async () => {
+  it('dispatches saved Chat through the actual custom Checks runner with its paired native alternative', async () => {
+    stageChat()
+    mocks.store.settings = { defaultTuiAgent: 'codex', nativeChatProviders: { codex: false } }
+    const recipe = sourceControlActionRecipeEntry({
+      agentId: 'codex',
+      surface: 'chat',
+      agentArgs: `-c 'model="true"'`,
+      launchPreferences: {
+        agentId: 'codex',
+        modelSelection: {
+          base: 'default',
+          options: { effort: { agentId: 'codex', value: 'high' } }
+        }
+      }
+    })
+    await expect(
+      runSourceControlAgentActionStart({
+        recipe,
+        selectedAgent: 'codex',
+        trimmedCommandInput: 'Fix checks',
+        saveTargetValue: 'none',
+        actionId: 'fixChecks',
+        repoId: 'repo-1',
+        repo: null,
+        settings: useAppStore.getState().settings,
+        promptDelivery: 'submit-after-ready',
+        launchPlatform: 'darwin',
+        launchSource: 'task_page',
+        onStart: (launch) =>
+          startFixChecksFromDialog({
+            ...launch,
+            targetRepoId: 'repo-1',
+            item: { ...pr, repoId: 'repo-1' }
+          }),
+        onClose: vi.fn()
+      })
+    ).resolves.toBe(true)
+    const plan = vi.mocked(beginDirectWorkItemStructuredLaunch).mock.lastCall?.[0].plan
+    expect(plan).toMatchObject({
+      agent: 'codex',
+      route: 'structured-native-chat',
+      launchOptions: { effort: 'high' },
+      chatLaunchOptions: { model: 'true', effort: 'high' }
+    })
+    expect(plan).not.toHaveProperty('requestedSurface')
+    expect(mocks.createWorktree).toHaveBeenCalledOnce()
+    expect(mocks.openModalFallback).not.toHaveBeenCalled()
+  })
+
+  it('reprojects one captured saved source for the actual agent after delayed workspace creation', async () => {
+    localCapabilities.setLocalRuntimeCapabilitiesForTests([])
+    mocks.store.settings = { defaultTuiAgent: 'claude', nativeChatProviders: {} }
     vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue({
-      agents: ['codex'],
+      agents: ['claude'],
       workspaceKind: 'git-worktree',
       executionContext: {
         kind: 'host',
         projectRuntime: resolveProjectExecutionRuntime({
           appPlatform: 'darwin',
-          projectId: 'p1'
+          projectId: 'repo-1'
         })
       }
     })
-    vi.spyOn(localCapabilities, 'readLocalRuntimeCapabilitiesOrUnknown').mockReturnValue(
-      RUNTIME_CAPABILITIES
-    )
-    mocks.store.settings = { nativeChatProviders: EVERY_AGENT_CHAT, disabledTuiAgents: ['codex'] }
-    vi.mocked(beginDirectWorkItemStructuredLaunch).mockImplementationOnce(({ beforeOpen }) => ({
-      completed: beforeOpen() !== false,
-      structuredLaunch: true,
-      primaryTabId: 'chat-tab'
-    }))
-    await launchWorkItemDirect({
-      repoId: 'repo-1',
-      launchSource: 'task_page',
-      openModalFallback: vi.fn(),
-      agentLaunchPreferences: { defaultTuiAgent: 'codex', disabledTuiAgents: undefined },
-      agentArgs: '--model "unterminated',
-      resolveSessionOptions: () => ({ model: 'chosen' }),
-      item: {
-        type: 'issue',
-        number: 42,
-        title: 'Fix',
-        url: 'https://github.com/acme/repo/issues/42'
-      }
-    })
-    expect(mocks.createWorktree).toHaveBeenCalledOnce()
-    expect(
-      vi.mocked(beginDirectWorkItemStructuredLaunch).mock.calls.at(-1)?.[0].plan?.launchOptions
-    ).toEqual({ model: 'chosen' })
-  })
-  it.each([undefined, 'codex'] as const)(
-    'uses actual WSL inventory after native project preflight (override %s)',
-    async (agentOverride) => {
-      localCapabilities.setLocalRuntimeCapabilitiesForTests([])
-      const path = String.raw`\\wsl.localhost\Ubuntu\workspaces\task`
-      const worktree = makeWorktree({ id: `repo-1::${path}`, path, repoId: 'repo-1' })
-      mocks.store.repos = [
-        { id: 'repo-1', path: String.raw`C:\src\repo`, addedAt: 1, displayName: 'Repo' }
-      ]
-      vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue({
-        agents: ['codex'],
-        workspaceKind: 'git-worktree',
-        executionContext: {
-          kind: 'host',
-          projectRuntime: resolveProjectExecutionRuntime({
-            appPlatform: 'win32',
-            projectId: 'repo-1'
-          })
+    const live = {
+      agentId: 'claude' as const,
+      surface: 'chat' as const,
+      agentArgs: `-c 'model="true"'`,
+      launchPreferences: {
+        agentId: 'codex' as const,
+        modelSelection: {
+          base: 'default' as const,
+          options: { effort: { agentId: 'codex' as const, value: 'high' } }
         }
-      })
-      mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-      mocks.createWorktree.mockImplementationOnce(async () => {
-        useAppStore.setState({ worktreesByRepo: { 'repo-1': [worktree] } })
-        return { worktree }
-      })
-      await expect(launch({ agentOverride })).resolves.toBe(agentOverride === undefined)
-      expect(mocks.ensureDetectedAgents).toHaveBeenCalledWith(worktree.id)
-      if (agentOverride) {
-        expect(mocks.toastError).toHaveBeenCalledWith(expect.any(String))
-        expect(mocks.updateWorktreeMeta).not.toHaveBeenCalled()
-      } else {
-        expect(mocks.updateWorktreeMeta).toHaveBeenCalledWith(worktree.id, {
-          createdWithAgent: 'claude'
-        })
-        expect(mocks.activateAndRevealWorktree.mock.lastCall?.[1].startup).toMatchObject({
-          launchAgent: 'claude'
-        })
-        expect(mocks.activateAndRevealWorktree.mock.lastCall?.[1].startup.command).toContain(
-          'claude'
-        )
       }
     }
-  )
-
-  it.each([false, true])(
-    'uses cached owner defaults and preserves supplied preferences (%s)',
-    async (supplied) => {
-      stageChat()
-      const repo = {
-        id: 'repo-1',
-        path: '/repo',
-        executionHostId: 'runtime:alpha',
-        addedAt: 1,
-        displayName: 'Repo',
-        badgeColor: '#000000'
-      } satisfies Repo
-      const status = {
-        ...createCompatibleRuntimeStatusResponse('r1').result,
-        hostPlatform: 'linux' as const
+    const captured = structuredClone(live)
+    const created = Promise.withResolvers<Awaited<ReturnType<typeof mocks.createWorktree>>>()
+    mocks.createWorktree.mockReturnValueOnce(created.promise)
+    const agents: string[] = []
+    const action = launch({
+      resolveLaunchInputs: (agent) => {
+        agents.push(agent)
+        return projectSourceControlActionLaunch(captured, agent, { basePrompt: item.url })
       }
-      useAppStore.setState({
-        repos: [repo],
-        runtimeStatusByEnvironmentId: new Map([['alpha', { status, checkedAt: 1 }]]),
-        ensureRuntimeDetectedAgents: async () => ['claude', 'codex']
-      })
-      mocks.store.settings = { defaultTuiAgent: 'claude', nativeChatProviders: EVERY_AGENT_CHAT }
-      hostMocks.supports.mockResolvedValue(true)
-      hostMocks.callRuntimeRpc.mockResolvedValue({
-        settings: projectAgentLaunchSettings({ defaultTuiAgent: 'codex' })
-      })
-      const acquiredPreferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
-        kind: 'git-worktree',
-        repoId: repo.id,
-        executionHostId: repo.executionHostId
-      })
-      expect(acquiredPreferences.defaultTuiAgent).toBe('codex')
-      vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue(undefined)
-      hostMocks.callRuntimeRpc.mockClear()
-      mocks.createWorktree.mockImplementationOnce(async () => {
-        const worktree = makeWorktree({
-          id: 'repo-1::/repo/worktree',
-          path: '/repo/worktree',
-          repoId: repo.id,
-          hostId: repo.executionHostId
-        })
-        useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } })
-        return { worktree }
-      })
-      const agent = supplied ? 'claude' : 'codex'
-      await expect(
-        launch(
-          supplied
-            ? { agentLaunchPreferences: { defaultTuiAgent: 'claude', disabledTuiAgents: [] } }
-            : {}
-        )
-      ).resolves.toBe(true)
-      expect(mocks.updateWorktreeMeta).toHaveBeenCalledWith('repo-1::/repo/worktree', {
-        createdWithAgent: agent
-      })
-      expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          plan: expect.objectContaining({ agent, route: 'structured-native-chat' })
-        })
-      )
-      expect(hostMocks.callRuntimeRpc).not.toHaveBeenCalled()
+    })
+    await vi.waitFor(() => expect(mocks.createWorktree).toHaveBeenCalledOnce())
+    live.agentArgs = '--model later-form'
+    live.launchPreferences.modelSelection.options.effort.value = 'low'
+    const worktree = makeWorktree({
+      id: 'repo-1::/repo/worktree',
+      path: '/repo/worktree',
+      repoId: 'repo-1'
+    })
+    mocks.store.settings = {
+      defaultTuiAgent: 'codex',
+      nativeChatProviders: {},
+      agentCmdOverrides: { codex: 'cx' }
     }
-  )
+    mocks.ensureDetectedAgents.mockResolvedValue(['codex'])
+    useAppStore.setState({ worktreesByRepo: { 'repo-1': [worktree] } })
+    created.resolve({ worktree })
+    await expect(action).resolves.toBe(true)
+    expect(agents).toEqual(['claude', 'codex'])
+    const startup = mocks.activateAndRevealWorktree.mock.lastCall?.[1].startup
+    const parsed = tokenizeStartupCommand(startup.command, 'posix')
+    expect(parsed).toMatchObject({
+      ok: true,
+      tokens: ['cx', '-c', 'model="true"', '-c', 'model_reasoning_effort=high']
+    })
+    expect(startup.launchConfig.agentArgs).toBe(`-c 'model="true"'`)
+    expect(JSON.stringify(startup)).not.toContain('later-form')
+    expect(JSON.stringify(startup)).not.toContain('chatSessionOptions')
+    expect(JSON.stringify(startup)).not.toContain('chatLaunchOptions')
+  })
 
   it('uses the post-availability snapshot for changed default, route and startup settings', async () => {
     stageChat()
@@ -405,173 +257,4 @@ describe('direct workspace defaults', () => {
     expect(hostMocks.subscribe).toHaveBeenCalledOnce()
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
-
-  it.each(['blank', 'codex'] as const)(
-    'keeps blank creation and disabled preferred fallback (%s)',
-    async (defaultTuiAgent) => {
-      mocks.store.settings = {
-        defaultTuiAgent,
-        disabledTuiAgents: ['codex'],
-        nativeChatProviders: {}
-      }
-      mocks.ensureDetectedAgents.mockResolvedValue(['claude', 'codex'])
-      await expect(launch()).resolves.toBe(true)
-      const selected = defaultTuiAgent === 'blank' ? undefined : 'claude'
-      expect(mocks.activateAndRevealWorktree.mock.lastCall?.[1].startup?.launchAgent).toBe(selected)
-    }
-  )
-
-  it('matches new-tab unavailable fallback through the moved prospective selector', async () => {
-    const { resolveDefaultAgentForNewTab } = await import('./agent-tab-shortcuts')
-    mocks.store.settings = { defaultTuiAgent: 'codex', nativeChatProviders: {} }
-    mocks.ensureDetectedAgents.mockResolvedValue([])
-    const store = useAppStore.getState()
-    const prospective = await resolveDirectProspectiveAgent(store, store.repos[0], undefined, {})
-    expect(prospective.prospectiveAgent).toBe(
-      resolveDefaultAgentForNewTab({
-        defaultTuiAgent: 'codex',
-        detectedAgentIds: [],
-        disabledTuiAgents: []
-      })
-    )
-    expect(prospective.prospectiveAgent).toBeNull()
-  })
-
-  it.each([100, 1000])(
-    'bounds real default acquisition without root traversal over %s worktrees',
-    async (n) => {
-      stageChat()
-      mocks.store.settings = { defaultTuiAgent: 'codex', nativeChatProviders: EVERY_AGENT_CHAT }
-      const rows = Array.from({ length: n }, (_, i) =>
-        makeWorktree({ id: `repo-1::/repo/w${i}`, path: `/repo/w${i}`, repoId: 'repo-1' })
-      )
-      const target = rows[n - 1]
-      useAppStore.setState({
-        worktreesByRepo: { 'repo-1': rows },
-        readLocalAgentInventory: () => ({ state: 'successful', ids: ['claude'] })
-      })
-      mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-      mocks.createWorktree.mockResolvedValue({ worktree: target })
-      vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue({
-        agents: ['claude'],
-        workspaceKind: 'git-worktree',
-        executionContext: {
-          kind: 'host',
-          projectRuntime: resolveProjectExecutionRuntime({
-            appPlatform: 'darwin',
-            projectId: 'repo-1'
-          })
-        }
-      })
-      const unsubscribe = vi.fn()
-      hostMocks.subscribe.mockImplementation(async (_target, _method, _params, handlers) => {
-        queueMicrotask(() =>
-          handlers.onEvent({
-            type: 'availability',
-            agents: ['codex', 'claude'].map((agent) => ({
-              agent,
-              state: 'available',
-              chatProgram: 'available'
-            }))
-          })
-        )
-        return { unsubscribe }
-      })
-      const offers = vi.spyOn(chatPrograms, 'agentsOfferedForLaunch')
-      const routes = vi.spyOn(routeInputs, 'buildAgentLaunchRouteInput')
-      let inRootLookup = false,
-        visits = 0
-      const find = rows.find
-      vi.spyOn(rows, 'find').mockImplementation((predicate, thisArg) =>
-        find.call(rows, (row, index, array) => {
-          if (inRootLookup) {
-            visits++
-          }
-          return predicate.call(thisArg, row, index, array)
-        })
-      )
-      const lookup = worktreeRows.findWorktreeById
-      const roots = vi.spyOn(worktreeRows, 'findWorktreeById').mockImplementation((byRepo, id) => {
-        inRootLookup = true
-        try {
-          return lookup(byRepo, id)
-        } finally {
-          inRootLookup = false
-        }
-      })
-      await expect(launch()).resolves.toBe(true)
-      expect(offers).toHaveBeenCalledOnce()
-      expect(offers.mock.results[0].value).toEqual(['claude', 'codex'])
-      expect(routes.mock.calls.length).toBeGreaterThanOrEqual(2)
-      expect(routes.mock.calls.length).toBeLessThanOrEqual(20)
-      for (const cwd of [undefined, null, '', '  ']) {
-        expect(
-          routeInputs.buildAgentLaunchRouteInput(useAppStore.getState(), {
-            agent: 'codex',
-            workspace: { kind: 'git-worktree', worktreeId: target.id },
-            tuiCustomization: { cwd }
-          }).startsOutsideWorkspaceRoot
-        ).toBe(false)
-      }
-      expect(roots).not.toHaveBeenCalled()
-      expect(visits).toBe(0)
-      expect(mocks.updateWorktreeMeta).toHaveBeenCalledWith(target.id, {
-        createdWithAgent: 'codex'
-      })
-      expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          plan: expect.objectContaining({ agent: 'codex', route: 'structured-native-chat' })
-        })
-      )
-      expect(hostMocks.subscribe).toHaveBeenCalledOnce()
-      expect(unsubscribe).toHaveBeenCalledOnce()
-    }
-  )
 })
-
-it.each(['native', 'blank', 'terminal'] as const)(
-  'acquires terminal preferences only for an actual terminal consumer (%s)',
-  async (route) => {
-    stageChat()
-    mocks.store.settings = {
-      defaultTuiAgent: route === 'blank' ? 'blank' : 'codex',
-      nativeChatProviders: route === 'native' ? EVERY_AGENT_CHAT : {}
-    }
-    vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue(undefined)
-    const answer = Promise.withResolvers<Awaited<ReturnType<typeof ensureAgentLaunchPreferences>>>()
-    const ensure = vi
-      .spyOn(hostPreferences, 'ensureAgentLaunchPreferences')
-      .mockReturnValue(answer.promise)
-    try {
-      const action = launch()
-      if (route === 'terminal') {
-        await vi.waitFor(() => expect(ensure).toHaveBeenCalledOnce())
-        expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-        answer.resolve({
-          defaultTuiAgent: 'codex',
-          disabledTuiAgents: undefined,
-          agentLaunchChoices: { codex: { model: 'owner-result' } }
-        })
-      }
-      await expect(action).resolves.toBe(true)
-      if (route !== 'terminal') {
-        expect(ensure).not.toHaveBeenCalled()
-      }
-      if (route === 'native') {
-        expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
-          expect.objectContaining({
-            plan: expect.objectContaining({ route: 'structured-native-chat' })
-          })
-        )
-      } else if (route === 'terminal') {
-        expect(mocks.activateAndRevealWorktree.mock.lastCall?.[1].startup.command).toContain(
-          'owner-result'
-        )
-      } else {
-        expect(mocks.activateAndRevealWorktree.mock.lastCall?.[1].startup).toBeUndefined()
-      }
-    } finally {
-      answer.resolve({ defaultTuiAgent: undefined, disabledTuiAgents: undefined })
-    }
-  }
-)

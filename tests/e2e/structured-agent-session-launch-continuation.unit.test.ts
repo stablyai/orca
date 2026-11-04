@@ -51,7 +51,7 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async (original) =
 vi.mock('@/components/native-chat/StructuredAgentSessionStatusBridge', () => ({
   useStructuredAgentSessionStatusSummary: () => ({ summary: null, observation: 'live' })
 }))
-vi.mock('../../src/main/agent-workspace-trust', () => ({
+vi.mock('../../src/main/agent-launch/trust/agent-workspace-trust', () => ({
   applyAgentWorkspaceTrust: vi.fn(async () => ({}))
 }))
 let restore: (() => void) | undefined

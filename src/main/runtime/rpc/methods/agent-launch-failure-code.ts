@@ -4,7 +4,7 @@ import {
   LINEAGE_PARENT_AMBIGUOUS
 } from '../../runtime-worktree-lineage-resolution'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchTarget } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
@@ -12,11 +12,11 @@ import {
 import {
   AgentLaunchPaneAlreadyLiveError,
   AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE
-} from '../../../../shared/agent-launch-pane-already-live'
+} from '../../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
 import {
   AgentLaunchSessionAlreadyExistsError,
   AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE
-} from '../../../../shared/agent-launch-session-already-exists'
+} from '../../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import { FolderWorkspaceCreateRefusedError } from '../../../project-groups/folder-workspace-create-refusal'
 import { WorktreeCreateSetupChoiceRefusedError } from '../../worktree-create-setup-choice-refusal'

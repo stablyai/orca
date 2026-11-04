@@ -1,8 +1,8 @@
 import React from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { ConflictBanner } from './ConflictComponents'
 import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
@@ -89,6 +89,7 @@ export function ChangesModeView({
           sideBySide={sideBySide}
           editable={true}
           worktreeId={activeFile.worktreeId}
+          noteSource={activeFile}
           onContentChange={onContentChange}
           onSave={onSave}
         />

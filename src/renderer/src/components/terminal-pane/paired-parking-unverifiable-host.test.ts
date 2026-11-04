@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
-import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import '../../../../shared/protocol-version'
+import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
 import {
   resetPairedRuntimeParkingEnvironmentIdsCacheForTest,

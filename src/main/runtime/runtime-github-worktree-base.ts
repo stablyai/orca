@@ -11,10 +11,10 @@ import { gitExecFileAsync } from '../git/runner'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectGhExecOptions
-} from '../project-runtime-git-options'
+} from '../workspaces/execution-host/project-runtime-git-options'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { requireRepoLocalGitRoute } from '../repo-execution-host'
-import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
+import { requireRepoLocalGitRoute } from '../workspaces/execution-host/repo-execution-host'
+import type { ProjectRuntimeResolutionStore } from '../workspaces/execution-host/local-project-runtime-resolution'
 import { reviewStartPointFailure } from '../../shared/review-start-point-failure-copy'
 
 export type RuntimeGitHubWorktreeBaseArgs = {

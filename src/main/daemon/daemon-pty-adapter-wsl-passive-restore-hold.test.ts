@@ -1,7 +1,7 @@
 import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
-import type * as DistroGate from '../wsl-background-distro-gate'
+import type * as DistroGate from '../wsl/discovery/wsl-background-distro-gate'
 import type { DaemonServer } from './daemon-server'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
@@ -13,7 +13,7 @@ const readState = vi.hoisted(() =>
       'stopped'
   )
 )
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof DistroGate>()),
   readWslDistroRunningState: readState
 }))

@@ -161,3 +161,22 @@ export async function recordStructuredAgentSessionDeliveryFailure(
     clientMessageId
   )
 }
+
+export async function failedStructuredAgentSessionInputContinuation(
+  journal: StructuredAgentSessionHostSession['journal'],
+  context: AgentSessionFailureWordsContext,
+  cause: StructuredAgentSessionStartFailureCause,
+  fence: number,
+  startKey: string
+) {
+  const words = structuredAgentSessionStartFailure(cause, context)
+  if (!('failure' in cause && cause.failure.kind === 'cancelled')) {
+    await journal.appendLifecycleBatch({
+      settlementId: `start-failure:${startKey}`,
+      fence,
+      recovered: true,
+      mutations: [structuredAgentSessionStartFailureRow(startKey, words)]
+    })
+  }
+  return { kind: 'failed' as const, fence, outcome: { state: 'rejected' as const, ...words } }
+}

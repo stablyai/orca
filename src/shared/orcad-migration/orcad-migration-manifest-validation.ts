@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationImportReceipt,

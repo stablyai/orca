@@ -2,7 +2,7 @@ import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import { Folder, GitBranch } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import type { ClaudeAccountSwitchPromptSessions } from '@/lib/claude-account-switch-sessions'
 import {
   isClaudePaneMidTurn,
@@ -164,6 +164,11 @@ function cantMoveReasonLabel(reason: ClaudeSessionCantMoveReason): string {
       return translate('accounts.claude.switchSessions.reasonUnknownAccount', 'Account unknown')
     case 'no-session':
       return translate('accounts.claude.switchSessions.reasonNoSession', "Can't resume")
+    case 'shared-session':
+      return translate(
+        'accounts.claude.switchSessions.reasonSharedSession',
+        'Also open in another pane'
+      )
   }
 }
 

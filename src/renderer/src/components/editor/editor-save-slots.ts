@@ -17,6 +17,8 @@ export type EditorSaveRequest = {
   trigger: EditorSaveTrigger
   /** Dirty when asked: finding the tab clean later means its edits were saved or dropped. */
   requestedDirty: boolean
+  /** Preserve the saving view's kind if a different view takes over. */
+  requestedFromCodeView: boolean
   /** The record the request was queued under; `discardEpoch` is its epoch then. */
   recordId: string
   /** A discard since the request voids it, whatever the trigger. */

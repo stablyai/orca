@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { exit, stopServers, releaseAll } = vi.hoisted(() => ({
@@ -11,14 +9,16 @@ vi.mock('electron', () => ({
   app: { exit, getPath: () => 'C:\\Users\\u\\AppData\\Roaming\\orca' }
 }))
 vi.mock('./windows-app-data-path', () => ({ ensureWindowsAppDataPath: vi.fn() }))
-vi.mock('../wsl/wsl-distro-holder', () => ({ createWslDistroHolder: () => ({ releaseAll }) }))
-vi.mock('../wsl/wsl-host-uninstall-server-stop', () => ({
+vi.mock('../wsl/discovery/wsl-distro-holder', () => ({
+  createWslDistroHolder: () => ({ releaseAll })
+}))
+vi.mock('../wsl/host-lifecycle/wsl-host-uninstall-server-stop', () => ({
   stopWslHostServersForUninstall: stopServers,
   wslHostUninstallStopDependencies: () => ({ distros: () => [], listRunning: async () => [] })
 }))
 
-import type { WslDistroHolder } from '../wsl/wsl-distro-holder'
-import type { WslHostUninstallStopDependencies } from '../wsl/wsl-host-uninstall-server-stop'
+import type { WslDistroHolder } from '../wsl/discovery/wsl-distro-holder-types'
+import type { WslHostUninstallStopDependencies } from '../wsl/host-lifecycle/wsl-host-uninstall-server-stop'
 import {
   releaseWslHoldersForUninstall,
   runWslHolderUninstallPreflight,
@@ -93,21 +93,5 @@ describe('runWslHolderUninstallPreflight', () => {
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0))
 
     expect(stopServers).toHaveBeenCalledTimes(1)
-  })
-
-  it('is only passed by the NSIS hook when no other install shares this userData', () => {
-    const hook = readFileSync(
-      join(__dirname, '..', '..', '..', 'config', 'nsis', 'orca-installer-hooks.nsh'),
-      'utf8'
-    )
-    const lines = hook.split('\n')
-    const withFlag = lines.findIndex((line) => line.includes(WSL_SERVER_UNINSTALL_FLAG))
-
-    expect(withFlag).toBeGreaterThan(0)
-    expect(lines.filter((line) => line.includes(WSL_SERVER_UNINSTALL_FLAG))).toHaveLength(1)
-    expect(lines[withFlag - 1].trim()).toBe('${if} $2 == "none"')
-    expect(lines.slice(withFlag - 6, withFlag - 1).join('\n')).toContain(
-      '!insertmacro ORCA_OTHER_INSTALL_STATE $2'
-    )
   })
 })

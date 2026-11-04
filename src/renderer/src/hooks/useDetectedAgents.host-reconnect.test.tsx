@@ -9,7 +9,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 

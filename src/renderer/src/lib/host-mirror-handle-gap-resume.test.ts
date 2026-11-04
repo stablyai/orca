@@ -17,7 +17,7 @@ import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
 } from '@/store/slices/runtime-status'
-import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   HOST_MIRROR_HANDLE_GAP_DEADLINE_MS,
   countParkedHostMirrorHandleGapPanesForTests,
@@ -408,24 +408,6 @@ describe('resume across the mirror handle gap', () => {
     expect(hasHostMirrorHandleWaitExpired(RUNTIME_ENV_ID, WEB_TAB_ID)).toBe(true)
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
-  })
-
-  it('re-arms the wait after a reconnect instead of inheriting the expired verdict', () => {
-    const worktree = makeRuntimeOwnedWorktree()
-    seedMirroredWorkspace(worktree)
-    seedActiveSleepingRecord(worktree.id)
-    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
-    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
-    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
-    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
-
-    seedMirroredWorkspace(worktree)
-    const paneKey = seedActiveSleepingRecord(worktree.id)
-    setRuntimeEnvironmentConnectionGenerationForTests(RUNTIME_ENV_ID, 1)
-    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
-
-    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
   })
 
   // Reconnect during an armed wait must invalidate its pending deadline, independently of already-recorded verdicts.

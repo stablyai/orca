@@ -1,4 +1,7 @@
-import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { reuseEqualCatalogRows } from '@/store/slices/worktree-catalog-reconciliation'
 

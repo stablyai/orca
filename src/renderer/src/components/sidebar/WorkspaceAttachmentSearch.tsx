@@ -17,7 +17,7 @@ import type { SmartNameMode } from '../../../../shared/new-workspace/smart-works
 import { useWorkItemSourceSearch } from '../new-workspace/use-work-item-source-search'
 import { SmartWorkspaceSourceTabs } from '../new-workspace/SmartWorkspaceSourceTabs'
 import { SmartWorkspaceSourceResultList } from '../new-workspace/SmartWorkspaceSourceResultList'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {
   ATTACHMENT_INPUT_KINDS,
   isAttachmentInputKind,
@@ -258,6 +258,7 @@ export function WorkspaceAttachmentSearch({
       {query.trim() ? (
         <div className="mt-2 flex max-h-60 min-h-0 shrink flex-col overflow-hidden">
           <SmartWorkspaceSourceResultList
+            focusBehavior="page"
             // Jira URL status owns its message; a Linear read of that URL cannot diagnose it.
             model={
               taskUrlProvider === 'jira' ? { ...controller, linearReadError: null } : controller

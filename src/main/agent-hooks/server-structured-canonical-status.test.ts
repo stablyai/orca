@@ -3,7 +3,7 @@ import {
   makeStructuredAgentStatusSubject,
   type AgentStatusExecutionScope,
   type AgentStatusStructuredSessionSubject
-} from '../../shared/agent-status-subject'
+} from '../../shared/agent-status/contracts/agent-status-subject'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import {
@@ -80,6 +80,12 @@ describe('structured canonical production slice', () => {
     expect(replay).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ paneKey: PANE_KEY, isReplay: true })
     )
+    const tabId = structuredAgentSessionTabId(SESSION)
+    expect(server.getProviderSessionSourceRowsForTab(tabId)).toHaveLength(1)
+    server._resetCanonicalStatusForTests()
+    expect(server.getProviderSessionSourceRowsForTab(tabId)).toEqual([])
+    server.ingestStructuredStatus(summary(), SUBJECT)
+    expect(server.getProviderSessionSourceRowsForTab(tabId)).toHaveLength(1)
   })
 
   it('keeps mixed legacy enumeration in original insertion order through updates and re-admission', () => {
@@ -138,6 +144,9 @@ describe('structured canonical production slice', () => {
       server.ingestStructuredStatus(summary(subject), subject)
     }
     expect(server.getCanonicalStatusSnapshot().parents.map((row) => row.subject)).toEqual(subjects)
+    expect(server.getProviderSessionSourceRowsForTab(structuredAgentSessionTabId(SESSION))).toEqual(
+      server.getStatusSnapshot()
+    )
     server.dropStructuredStatus(SUBJECT)
     expect(server.getCanonicalStatusSnapshot().parents.map((row) => row.subject)).toEqual(
       subjects.slice(1)

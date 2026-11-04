@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { EmulatorSessionInfo } from '../emulator/emulator-types'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { OrcaRuntimeService } from './orca-runtime'
 
 export function registerOrcaRuntimeEmulatorFolderWorkspaceTests(): void {

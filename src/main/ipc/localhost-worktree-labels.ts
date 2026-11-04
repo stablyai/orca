@@ -7,7 +7,7 @@ import {
   type LocalhostWorktreeLabelRoute
 } from '../../shared/localhost-worktree-labels'
 import type { Store } from '../persistence/loading-store/store'
-import { localhostWorktreeLabelProxy } from '../localhost-worktree-label-proxy'
+import { localhostWorktreeLabelProxy } from '../ports/workspace-labels/localhost-worktree-label-proxy'
 import {
   getStoreWorkspacePortProbes,
   scanWorkspacePortProbes

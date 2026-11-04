@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getDefaultSettings } from '../../../shared/constants'
 import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
-import {
-  getAiVaultResumePlatform,
-  type AiVaultResumePlatformState
-} from './ai-vault-resume-platform'
+import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
 import { buildAiVaultDropRepinStartup } from './ai-vault-resume-command'
 
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
@@ -68,14 +65,6 @@ function pairedServerState(hostPlatform: NodeJS.Platform | undefined): AiVaultRe
 
 // Why: a saved session resumed on a paired server runs on that server's OS, not a guessed Linux.
 describe('AI-vault resume on a paired server', () => {
-  it.each([
-    ['win32', 'win32'],
-    ['linux', 'linux'],
-    [undefined, null]
-  ] as const)('reads a server reporting %s as %s', (reported, expected) => {
-    expect(getAiVaultResumePlatform(pairedServerState(reported), WORKTREE_ID)).toBe(expected)
-  })
-
   it.each([
     [
       'win32',

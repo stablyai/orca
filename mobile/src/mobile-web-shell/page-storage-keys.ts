@@ -21,6 +21,13 @@ export const TERMINAL_SHORTCUT_STORAGE_KEYS = [
   'orca:custom-accessory-keys'
 ] as const
 
+export const TERMINAL_SETTINGS_STORAGE_KEYS = [
+  ...TERMINAL_SHORTCUT_STORAGE_KEYS,
+  'orca:terminalTextScale',
+  'orca:terminalAutocompleteEnabled',
+  'orca:terminalLinkOpenMode'
+] as const
+
 export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:last-visited-worktree',
   /** Recent session cards. Also copied onto last-visited so an OTA shell keeps them. */

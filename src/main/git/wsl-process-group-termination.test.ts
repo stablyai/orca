@@ -1,14 +1,14 @@
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as BackgroundDistroGate from '../wsl-background-distro-gate'
+import type * as BackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
 
 const { runWslProcessMock, readWslDistroRunningStateMock } = vi.hoisted(() => ({
   runWslProcessMock: vi.fn(),
   readWslDistroRunningStateMock: vi.fn()
 }))
 
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundDistroGate>()),
   readWslDistroRunningState: readWslDistroRunningStateMock
 }))

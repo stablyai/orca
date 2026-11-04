@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   MIXED_FOLDER,
   MIXED_GROUP
-} from '../../src/shared/folder-workspace-host-routing.test-fixture'
+} from '../../src/shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import type { RuntimePtyController } from '../../src/main/runtime/runtime-pty-controller-contract'
 import { spawnMock } from '../../src/main/ipc/pty/pty-ipc-mock-registry'
@@ -40,10 +40,10 @@ vi.mock('../../src/main/pi/titlebar-extension-service', () =>
     m.piTitlebarExtensionModuleMock()
   )
 )
-vi.mock('../../src/main/pwsh', () =>
+vi.mock('../../src/main/pty/shell-startup/pwsh', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
 )
-vi.mock('../../src/main/wsl', async (importOriginal) =>
+vi.mock('../../src/main/wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('../../src/main/ipc/pty/pty-ipc-mock-registry')).wslModuleMock(
     await importOriginal()
   )

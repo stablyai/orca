@@ -1,4 +1,4 @@
-import { tokenizeCommandLine } from '../../shared/agent-command-line-entrypoint'
+import { tokenizeCommandLine } from '../../shared/agent-status/process/agent-command-line-entrypoint'
 import { describe, expect, it, vi } from 'vitest'
 import { parse as parseJsonc } from 'jsonc-parser'
 import type { SFTPWrapper } from 'ssh2'

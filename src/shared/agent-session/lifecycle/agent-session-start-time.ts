@@ -1,6 +1,6 @@
-import type { AgentStatusEntry } from '../../agent-status-types'
+import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'
 import { agentProviderSessionsEqual } from './agent-session-resume'
-import { sameAgentStatusTerminalOwner } from '../../agent-status-terminal-owner'
+import { sameAgentStatusTerminalOwner } from '../../agent-status/identity/agent-status-terminal-owner'
 
 type SessionIdentity = Pick<
   AgentStatusEntry,

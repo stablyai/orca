@@ -4,6 +4,8 @@ import { dispatchClaudeTurn } from '../claude-structured-dispatch'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
 import { AgentSessionOptionRejectedError } from '../../../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { AgentSessionPreDispatchError } from '../../../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger,
@@ -67,7 +69,6 @@ export async function dispatchClaudeMessage(
 ): ReturnType<StructuredAgentSessionAdapter['dispatch']> {
   let ranOptions: Record<string, string> = {}
   const outcome = await dispatchClaudeTurn(session, input, async () => {
-    await input.beforeDispatch?.()
     try {
       input.signal?.throwIfAborted()
       // Input joining a running turn, and Orca mail notices, run on the choices Claude already has;
@@ -84,6 +85,7 @@ export async function dispatchClaudeMessage(
         await applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
       }
       input.signal?.throwIfAborted()
+      await input.beforeDispatch?.()
       input.onExecutionSnapshot?.()
       ranOptions = claudeExecutionObservations(session)
       if (messageOptions?.model && ranOptions.model !== messageOptions.model) {
@@ -100,6 +102,8 @@ export async function dispatchClaudeMessage(
         }
       )
       throw error instanceof AgentSessionOptionRejectedError ||
+        error instanceof AgentSessionPreDispatchError ||
+        error instanceof StructuredAgentSessionInputNotAdmitted ||
         isAbortSignalReason(input.signal, error)
         ? error
         : new AgentSessionOptionRejectedError(error)
