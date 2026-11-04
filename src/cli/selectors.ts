@@ -175,7 +175,7 @@ async function optionalCurrentWorktreeSelector(
   }
 }
 
-// Remote commands leave worktree unset to use server-side focus.
+/** Prefer explicit targets, then local cwd and terminal identity; paired clients keep server-side focus. */
 export async function getBrowserWorktreeSelector(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -249,6 +249,7 @@ export type EmulatorCliTarget = {
   emulator?: string // Orca id from list
 }
 
+/** Prefer terminal identity over cwd so device commands stay with the terminal after directory changes. */
 export async function getEmulatorWorktreeSelector(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -274,6 +275,7 @@ export async function getEmulatorWorktreeSelector(
   )
 }
 
+/** Resolve terminal identity on its caller host, falling back to a non-Git folder workspace. */
 async function resolveTerminalWorktreeSelector(client: RuntimeClient): Promise<string | undefined> {
   const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
   if (terminalWorktreeId?.trim()) {
