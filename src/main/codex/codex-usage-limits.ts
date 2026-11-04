@@ -2,11 +2,7 @@ import {
   agentSessionFailureFact,
   providerDiagnostic
 } from '../../shared/agent-session/failures/agent-session-failure'
-import {
-  usageLimitResetsAt,
-  type AgentSessionUsageLimit,
-  type AgentSessionUsageLimitWindow
-} from '../../shared/agent-session/failures/agent-session-usage-limit'
+import { codexUsageLimit } from '../../shared/agent-session/failures/provider-usage-limit'
 import type { CodexRateLimitWindowsSnapshot } from '../rate-limits/codex-rate-limit-window-classification'
 import {
   readCodexErrorAdditionalDetails,
@@ -58,61 +54,10 @@ export class CodexUsageLimits {
     const text = [message, additional && additional !== message ? additional : null]
       .filter((part): part is string => part !== null)
       .join('\n')
-    const limit = this.limit()
+    const limit = codexUsageLimit(this.snapshot, this.now())
     return agentSessionFailureFact('usageLimitReached', {
       ...(limit ? { usageLimit: limit } : {}),
       detail: providerDiagnostic(text, 'person')
     })
-  }
-
-  /** All spent windows must reset; report the latest only if every reset is known. */
-  private limit(): AgentSessionUsageLimit | null {
-    const monthlyPlan = this.snapshot.planType === 'free' || this.snapshot.planType === 'go'
-    const spent = (
-      [
-        ['primary', monthlyPlan ? 43200 : 300],
-        ['secondary', 10080]
-      ] as const
-    ).flatMap(([position, fallback]) => {
-      const raw = this.snapshot[position]
-      if (
-        !raw ||
-        typeof raw.usedPercent !== 'number' ||
-        !Number.isFinite(raw.usedPercent) ||
-        raw.usedPercent < 100
-      ) {
-        return []
-      }
-      const duration =
-        raw.windowDurationMins === undefined || raw.windowDurationMins === null
-          ? fallback
-          : raw.windowDurationMins
-      const window =
-        typeof duration === 'number' && Number.isFinite(duration) && duration > 0
-          ? duration >= 43200
-            ? undefined
-            : duration >= 10080
-              ? ('weekly' as const)
-              : ('session' as const)
-          : undefined
-      return [{ window, resetsAt: raw.resetsAt }]
-    })
-    const reached = this.snapshot.rateLimitReachedType
-    const credits = typeof reached === 'string' && reached.endsWith('credits_depleted')
-    const window: AgentSessionUsageLimitWindow | undefined = credits
-      ? 'credits'
-      : spent.length === 1
-        ? spent[0]?.window
-        : undefined
-    const resets = spent.flatMap((entry) =>
-      typeof entry.resetsAt === 'number' ? [entry.resetsAt * 1000] : []
-    )
-    const resetsAt =
-      resets.length > 0 && resets.length === spent.length
-        ? usageLimitResetsAt(Math.max(...resets), this.now())
-        : undefined
-    return window || resetsAt
-      ? { ...(window ? { window } : {}), ...(resetsAt ? { resetsAt } : {}) }
-      : null
   }
 }

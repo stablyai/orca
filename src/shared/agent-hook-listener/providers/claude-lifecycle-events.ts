@@ -17,6 +17,8 @@ import { claudeRowHasUnlistedLiveWork } from './claude-pane-hold-evidence'
 import { readString } from '../tool-input-preview'
 import {
   clearClaudePendingWaitForAgent,
+  clearClaudeMainAgentUsageLimit,
+  setClaudeMainAgentTurnState,
   getOrCreateClaudeSubagentRoster,
   resolveClaudePaneStatus
 } from './claude-roster-state'
@@ -158,5 +160,41 @@ export function buildClaudeCachedLeadStatusPayload(
   return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, {
     ...resolveClaudePaneStatus(state, paneKey, { ...lead, state: leadState }),
     updateToolSnapshot: false
+  })
+}
+
+export function normalizeClaudeSessionStart(
+  state: HookListenerState,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const eventName = 'SessionStart'
+  const eventAgentId = readString(hookPayload, 'agent_id')
+  // SessionStart supplies resume identity before prompts; mark idle/sessionBoundary to avoid phantom work/completion notifications (STA-3386).
+  const sessionStartSource = hookPayload['source']
+  if (
+    eventAgentId !== undefined ||
+    (sessionStartSource !== 'startup' &&
+      sessionStartSource !== 'resume' &&
+      sessionStartSource !== 'clear')
+  ) {
+    if (eventAgentId === undefined && clearClaudeMainAgentUsageLimit(state, paneKey)) {
+      return buildClaudeCachedLeadStatusPayload(state, undefined, paneKey, hookPayload)
+    }
+    // Only known idle sources qualify; compact restarts and child SessionStart cannot settle a live lead.
+    return null
+  }
+  // New sessions must not inherit old child/task/cron gates.
+  state.claudeSubagentRosterByPaneKey.delete(paneKey)
+  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+  state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+  state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
+  // New sessions start a new main-agent clock.
+  setClaudeMainAgentTurnState(state, paneKey, { state: 'done', stateStartedAt: Date.now() })
+  return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
+    stateName: 'done',
+    updateToolSnapshot: true,
+    sessionBoundary: true
   })
 }

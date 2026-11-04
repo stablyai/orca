@@ -67,6 +67,9 @@ export function setCodexMainAgentTurnState(
   const record: CodexLeadTurnState = {
     state: next.state,
     ...(continued.outcome ? { outcome: continued.outcome } : {}),
+    ...(next.state === 'done' && continued.outcome === 'failure' && next.usageLimit
+      ? { usageLimit: next.usageLimit }
+      : {}),
     stateStartedAt: continued.stateStartedAt,
     model: next.model,
     ...(sessionId ? { sessionId } : {}),
@@ -111,6 +114,9 @@ export function codexMainAgentStatusForPayload(
     ? {
         state: record.state,
         ...(record.state === 'done' && record.outcome ? { outcome: record.outcome } : {}),
+        ...(record.state === 'done' && record.outcome === 'failure' && record.usageLimit
+          ? { usageLimit: record.usageLimit }
+          : {}),
         stateStartedAt: record.stateStartedAt
       }
     : undefined
@@ -132,6 +138,7 @@ export function seedCodexStateFromSnapshot(
       setCodexMainAgentTurnState(state, paneKey, {
         state: mainAgent.state,
         ...(mainAgent.outcome ? { outcome: mainAgent.outcome } : {}),
+        ...(mainAgent.usageLimit ? { usageLimit: mainAgent.usageLimit } : {}),
         stateStartedAt: mainAgent.stateStartedAt,
         model: payload.model
       })

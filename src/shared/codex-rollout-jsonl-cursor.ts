@@ -17,6 +17,8 @@ export type JsonlCursor = {
   filePath?: string
   offset: number
   carry: string
+  /** Only consumers retaining per-turn evidence opt into replacement tracking. */
+  fileIdentity?: string
 }
 
 export type JsonRecord = Record<string, unknown>
@@ -55,7 +57,8 @@ export function readJsonlFirstRecord(filePath: string): JsonRecord | undefined {
 /** Undefined distinguishes unreadable/vanished files from no new lines; lineFilter rejects raw substrings before JSON.parse. */
 export function readJsonlCursor(
   cursor: JsonlCursor,
-  lineFilter?: (line: string) => boolean
+  lineFilter?: (line: string) => boolean,
+  onDiscontinuity?: () => void
 ): JsonRecord[] | undefined {
   if (!cursor.filePath) {
     return undefined
@@ -69,9 +72,19 @@ export function readJsonlCursor(
   if (!stats.isFile()) {
     return undefined
   }
+  if (onDiscontinuity) {
+    const identity = `${stats.dev}:${stats.ino}`
+    if (cursor.fileIdentity !== undefined && cursor.fileIdentity !== identity) {
+      cursor.offset = 0
+      cursor.carry = ''
+      onDiscontinuity()
+    }
+    cursor.fileIdentity = identity
+  }
   if (stats.size < cursor.offset) {
     cursor.offset = 0
     cursor.carry = ''
+    onDiscontinuity?.()
   }
   if (stats.size === cursor.offset) {
     return []
@@ -92,6 +105,9 @@ export function readJsonlCursor(
     }
   }
   const skippedPrefix = start !== cursor.offset
+  if (skippedPrefix) {
+    onDiscontinuity?.()
+  }
   const content = `${skippedPrefix ? '' : cursor.carry}${buffer.toString('utf8', 0, bytesRead)}`
   const lines = content.split('\n')
   cursor.offset = start + bytesRead

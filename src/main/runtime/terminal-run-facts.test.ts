@@ -33,6 +33,7 @@ describe('terminal run facts', () => {
     facts.recordSpawnCommit({ id: 'pty-1', incarnationId: 'inc-1', isReattach: true })
 
     expect(facts.read('pty-1', 'inc-1')).toEqual({ freshSpawn: true, firstUserInputAt: 100 })
+    expect(facts.readInputSequence('pty-1')).toBe(2)
   })
 
   it('starts a new process clean', () => {
@@ -44,6 +45,7 @@ describe('terminal run facts', () => {
 
     expect(facts.read('pty-1', 'inc-2')).toEqual({ freshSpawn: true, firstUserInputAt: null })
     expect(facts.read('pty-1', 'inc-1')).toEqual({ freshSpawn: false, firstUserInputAt: null })
+    expect(facts.readInputSequence('pty-1')).toBe(0)
   })
 
   it('dates only the processes main started, across a re-registration of the same one', () => {

@@ -35,6 +35,12 @@ it('skips decoding 1,000 message/token records and unchanged reads, but retains 
     expect(state.rootTurn.interrupted).toBe(true)
     expect(reconcileCodexSubagentTranscript(state, roster, path)).toBe(false)
     expect(parse).toHaveBeenCalledOnce()
+    appendFileSync(
+      path,
+      '{"type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":82}}}}\n'
+    )
+    expect(reconcileCodexSubagentTranscript(state, roster, path)).toBe(false)
+    expect(parse).toHaveBeenCalledTimes(2)
   } finally {
     parse.mockRestore()
     rmSync(directory, { recursive: true, force: true })

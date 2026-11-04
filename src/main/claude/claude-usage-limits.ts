@@ -9,20 +9,11 @@ import {
 } from '../../shared/agent-session/failures/agent-session-failure-words'
 import {
   usageLimitResetsAt,
-  type AgentSessionUsageLimit,
-  type AgentSessionUsageLimitWindow
+  type AgentSessionUsageLimit
 } from '../../shared/agent-session/failures/agent-session-usage-limit'
+import { claudeUsageLimitWindow } from '../../shared/agent-session/failures/provider-usage-limit'
 import type { ClaudeOpenTurn } from './claude-open-turn'
 import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
-
-const CLAUDE_LIMIT_WINDOWS: Record<string, AgentSessionUsageLimitWindow> = {
-  five_hour: 'session',
-  seven_day: 'weekly',
-  seven_day_opus: 'weeklyModel',
-  seven_day_sonnet: 'weeklyModel',
-  seven_day_overage_included: 'weeklyModel',
-  overage: 'credits'
-}
 
 const LIMIT_TERMINAL_REASONS = ['api_error']
 
@@ -159,7 +150,7 @@ export class ClaudeUsageLimits {
     if (this.rejected.size === 0) {
       return null
     }
-    const windows = new Set([...this.rejected.keys()].map((type) => CLAUDE_LIMIT_WINDOWS[type]))
+    const windows = new Set([...this.rejected.keys()].map((type) => claudeUsageLimitWindow(type)))
     const window = windows.size === 1 ? [...windows][0] : undefined
     const resets = [...this.rejected.values()].filter((reset): reset is number => reset !== null)
     const resetsAt = resets.length === this.rejected.size ? Math.max(...resets) : undefined

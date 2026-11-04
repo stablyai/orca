@@ -52,6 +52,17 @@ export function buildCodexStatusPayload(
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
+  const mainAgent = codexMainAgentStatusForPayload(lead)
+  const quota = state.codexSubagentTranscriptByPaneKey.get(paneKey)?.usageLimitTurn
+  if (
+    mainAgent?.state === 'done' &&
+    mainAgent.outcome !== 'cancellation' &&
+    lead?.turnId === quota?.turnId &&
+    quota?.usageLimit
+  ) {
+    mainAgent.outcome = 'failure'
+    mainAgent.usageLimit = quota.usageLimit
+  }
 
   return normalizeAgentStatusPayload({
     state: options.stateName,
@@ -68,7 +79,7 @@ export function buildCodexStatusPayload(
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted: mainAgentTurnInterrupted(lead),
     subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey)),
-    mainAgent: codexMainAgentStatusForPayload(lead)
+    mainAgent
   })
 }
 

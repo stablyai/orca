@@ -3,6 +3,7 @@ import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import { hasCodexTranscriptSubagents } from './providers/codex-state'
 import { hasMuseSessionLog } from './providers/muse-events'
+import { mainAgentStatusEqual } from '../main-agent-status'
 
 export function shouldPollHookTranscript(
   state: HookListenerState,
@@ -53,9 +54,7 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
   }
   const subagentsChanged =
     JSON.stringify(polled.payload.subagents) !== JSON.stringify(original.payload.subagents)
-  const leadChanged =
-    polled.payload.mainAgent?.state !== original.payload.mainAgent?.state ||
-    polled.payload.mainAgent?.outcome !== original.payload.mainAgent?.outcome
+  const leadChanged = !mainAgentStatusEqual(polled.payload.mainAgent, original.payload.mainAgent)
   if (!subagentsChanged && !leadChanged) {
     return undefined
   }

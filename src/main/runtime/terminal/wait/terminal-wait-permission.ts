@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithAgentPromptRequestCorrelation } from '../../orca-runtime-agent-prompt-request-correlation'
+import { OrcaRuntimeWithTerminalUsageLimitContinuation } from '../input/terminal-usage-limit-continuation'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../../runtime-terminal-agent-status-query'
 import type { AgentStatus } from '../../../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
@@ -47,7 +47,7 @@ export type TerminalInteractiveWaitEvidence = {
   unconfirmed: boolean
 }
 
-export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends OrcaRuntimeWithAgentPromptRequestCorrelation {
+export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends OrcaRuntimeWithTerminalUsageLimitContinuation {
   protected abstract getExistingTerminalHandlesForPtyId(
     ...args: Parameters<
       OrcaRuntimeWithStopExactTerminalsForWorktree['getExistingTerminalHandlesForPtyId']

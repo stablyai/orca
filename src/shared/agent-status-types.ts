@@ -8,6 +8,7 @@ import { isAgentTurnOutcome } from './agent-turn-outcome'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
+import { readAgentSessionUsageLimit } from './agent-session/failures/agent-session-usage-limit'
 import type { TerminalAgent } from './terminal-agent'
 import {
   AGENT_MODEL_MAX_LENGTH,
@@ -289,6 +290,13 @@ export function normalizeMainAgentStatusField(value: unknown): AgentMainAgentSta
     state,
     // Why: a verdict belongs to a finished turn; anything riding on a live state is stale.
     ...(state === 'done' && isAgentTurnOutcome(obj.outcome) ? { outcome: obj.outcome } : {}),
+    ...(state === 'done' &&
+    obj.outcome === 'failure' &&
+    typeof obj.usageLimit === 'object' &&
+    obj.usageLimit !== null &&
+    !Array.isArray(obj.usageLimit)
+      ? { usageLimit: readAgentSessionUsageLimit(obj.usageLimit) ?? {} }
+      : {}),
     ...(state === 'working' && obj.stopping === true ? { stopping: true as const } : {}),
     stateStartedAt: obj.stateStartedAt
   }

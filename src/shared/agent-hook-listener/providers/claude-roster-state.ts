@@ -95,6 +95,18 @@ export function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
+export function clearClaudeMainAgentUsageLimit(state: HookListenerState, paneKey: string): boolean {
+  const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+  if (!lead || (!lead.usageLimit && !lead.stateBeforeWait?.usageLimit)) {
+    return false
+  }
+  lead.usageLimit = undefined
+  if (lead.stateBeforeWait) {
+    lead.stateBeforeWait = { ...lead.stateBeforeWait, usageLimit: undefined }
+  }
+  return true
+}
+
 /** Only fresh inventory retires a reported shell; lead verdicts cannot override positive process evidence. */
 export function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
@@ -136,6 +148,9 @@ export function claudeMainAgentStatusForPayload(
   return {
     state: own.state,
     ...(own.state === 'done' && own.outcome ? { outcome: own.outcome } : {}),
+    ...(own.state === 'done' && own.outcome === 'failure' && own.usageLimit
+      ? { usageLimit: own.usageLimit }
+      : {}),
     stateStartedAt: own.stateStartedAt
   }
 }
@@ -214,6 +229,7 @@ export function seedClaudeLeadTurnFromPersistedStatus(
     setClaudeMainAgentTurnState(state, paneKey, {
       state: 'done',
       ...(mainAgent.outcome ? { outcome: mainAgent.outcome } : {}),
+      ...(mainAgent.usageLimit ? { usageLimit: mainAgent.usageLimit } : {}),
       stateStartedAt: mainAgent.stateStartedAt,
       ...(status.payload.turnCompletedAt !== undefined
         ? { turnCompletedAt: status.payload.turnCompletedAt }

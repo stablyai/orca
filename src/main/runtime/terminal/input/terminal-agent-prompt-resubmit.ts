@@ -19,6 +19,33 @@ type HeldAgentPrompt = {
 }
 
 export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntimeWithTitlelessPaneAgentIdentity {
+  protected async writeAgentPromptBytes(
+    ptyId: string,
+    bytes: string,
+    options: RuntimeAgentPromptWriteOptions
+  ): Promise<void> {
+    if (options.requireWriteSettlement && !this.ptyController?.writeWithSettlement) {
+      throw new Error('terminal_not_writable')
+    }
+    options.reserveWrite?.(ptyId)
+    if (options.requireWriteSettlement) {
+      const settlement = await this.ptyController?.writeWithSettlement?.(
+        ptyId,
+        bytes,
+        options.inputKind
+      )
+      if (!settlement || settlement.outcome === 'refused') {
+        throw new Error('terminal_input_refused')
+      }
+      if (settlement.outcome !== 'accepted') {
+        throw new Error('terminal_input_unverifiable')
+      }
+    } else if (!this.ptyController?.write(ptyId, bytes, options.inputKind)) {
+      throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
+    }
+    await options.afterWrite?.(ptyId)
+  }
+
   /** Retry blind Enter and drafts held by Windows input-record pastes or unopened dsh launchpads; retries cannot fail a submitted prompt. */
   protected async resubmitHeldAgentPrompt(
     ptyId: string,
@@ -70,9 +97,7 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         if (await agentPromptSettledWithin(held, 0, options.signal)) {
           return resubmits
         }
-        if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
-          return resubmits
-        }
+        await this.writeAgentPromptBytes(ptyId, AGENT_PROMPT_SUBMIT, options)
         resubmits += 1
         if (blind) {
           blind = false

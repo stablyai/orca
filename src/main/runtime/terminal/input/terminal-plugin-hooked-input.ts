@@ -64,7 +64,10 @@ export abstract class OrcaRuntimeWithPluginHookedTerminalInput extends OrcaRunti
         )
       },
       // Why outside the order: a delivery may wait on a permission answer (`onPermission: 'wait'`).
-      (final) => this.sendAgentPromptAfterPluginHooks(handle, final, options)
+      (final) => {
+        options.onPromptPrepared?.(final)
+        return this.sendAgentPromptAfterPluginHooks(handle, final, options)
+      }
     )
   }
 

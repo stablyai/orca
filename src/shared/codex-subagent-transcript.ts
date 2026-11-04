@@ -8,9 +8,17 @@ import {
   type JsonRecord
 } from './codex-rollout-jsonl-cursor'
 
-import { reconcileCodexTranscriptTurn, type CodexTranscriptTurn } from './codex-turn-transcript'
+import {
+  readCodexTranscriptTurnEnd,
+  reconcileCodexTranscriptTurn,
+  type CodexTranscriptTurn
+} from './codex-turn-transcript'
 
 import { isCodexStatusTranscriptLine } from './codex-status-transcript-line'
+import {
+  reconcileCodexTerminalUsageLimit,
+  type CodexTerminalUsageLimitTurn
+} from './codex-terminal-usage-limit'
 
 import { readApprovalsReviewer } from './codex-subagent-reviewer'
 import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
@@ -38,6 +46,7 @@ type TrackedTranscriptSubagent = JsonlCursor & {
 export type CodexSubagentTranscriptState = {
   parent: JsonlCursor
   rootTurn: CodexTranscriptTurn
+  usageLimitTurn: CodexTerminalUsageLimitTurn
   turnEnds: Map<string, 'completed' | 'failed'>
   subagents: Map<string, TrackedTranscriptSubagent>
   /** Incremental reviewer cursors for child rollouts, which must not replace the parent cursor. */
@@ -159,20 +168,6 @@ function normalizedTranscriptPath(transcriptPath: string | undefined): string | 
     : undefined
 }
 
-function readTurnEnd(
-  recordValue: JsonRecord
-): { turnId: string; end: 'completed' | 'failed' } | undefined {
-  if (recordValue.type !== 'event_msg') {
-    return undefined
-  }
-  const payload = record(recordValue.payload)
-  const turnId = typeof payload?.turn_id === 'string' ? payload.turn_id.trim() : ''
-  if ((payload?.type !== 'task_complete' && payload?.type !== 'turn_complete') || !turnId) {
-    return undefined
-  }
-  return { turnId, end: payload.error == null ? 'completed' : 'failed' }
-}
-
 function childIsComplete(records: JsonRecord[]): boolean {
   let complete = false
   for (const recordValue of records) {
@@ -193,6 +188,7 @@ export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptSta
   return {
     parent: { offset: 0, carry: '' },
     rootTurn: { interrupted: false },
+    usageLimitTurn: {},
     turnEnds: new Map(),
     subagents: new Map(),
     reviewerCursorsByPath: new Map(),
@@ -230,6 +226,7 @@ export function reconcileCodexSubagentTranscript(
     changed = true
     state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
     state.rootTurn = { interrupted: false }
+    state.usageLimitTurn = {}
     state.turnEnds.clear()
     state.subagents.clear()
     state.reviewerCursorsByPath.clear()
@@ -237,11 +234,17 @@ export function reconcileCodexSubagentTranscript(
     // Why: a different rollout is a different session, so its predecessor's reviewer is void.
     state.approvalsReviewer = undefined
   }
-  const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
+  const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine, () => {
+    state.usageLimitTurn = {}
+  })
+  if (parentRecords === undefined) {
+    state.usageLimitTurn = {}
+  }
   changed ||=
-    Boolean(parentRecords?.length) ||
+    Boolean(parentRecords?.some((item) => record(item.payload)?.type !== 'token_count')) ||
     (parentRecords === undefined && state.approvalsReviewer !== undefined)
   reconcileCodexTranscriptTurn(state.rootTurn, parentRecords ?? [])
+  reconcileCodexTerminalUsageLimit(state.usageLimitTurn, parentRecords ?? [])
   // A stale reviewer must never turn an unreadable rollout into a hidden prompt.
   state.approvalsReviewer =
     parentRecords === undefined
@@ -254,7 +257,7 @@ export function reconcileCodexSubagentTranscript(
     }
   }
   for (const recordValue of parentRecords ?? []) {
-    const turnEnd = readTurnEnd(recordValue)
+    const turnEnd = readCodexTranscriptTurnEnd(recordValue)
     if (turnEnd) {
       state.turnEnds.delete(turnEnd.turnId)
       state.turnEnds.set(turnEnd.turnId, turnEnd.end)

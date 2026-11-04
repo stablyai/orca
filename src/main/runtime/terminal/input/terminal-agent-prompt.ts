@@ -146,9 +146,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
       assertTerminalInputAdmitted(this, ptyId, options.inputSource)
-      if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
-        throw new Error('terminal_not_writable')
-      }
+      await this.writeAgentPromptBytes(ptyId, initialWrite, options)
       if (submitWithPaste) {
         options.onSubmitWritten?.()
       }
@@ -184,13 +182,8 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       assertWritable(deliverySignal)
       baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
       this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
-      if (
-        !submitWithPaste &&
-        !this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)
-      ) {
-        throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
-      }
       if (!submitWithPaste) {
+        await this.writeAgentPromptBytes(ptyId, AGENT_PROMPT_SUBMIT, options)
         options.onSubmitWritten?.()
       }
     } catch (error) {
