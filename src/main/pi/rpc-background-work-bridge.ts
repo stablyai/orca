@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { isProcessAlive } from '../daemon/daemon-process-inspection'
+import { inspectProcessLiveness } from '../daemon/daemon-process-inspection'
 import {
   PI_BACKGROUND_WORK_BRIDGE_FILE,
   getPiBackgroundWorkBridgeSource
@@ -10,7 +10,7 @@ import {
 
 export type PiBackgroundWorkLaunch = {
   extension: string
-  /** This child's private request folder, named for the Orca process that owns it. */
+  /** This child's private request folder, named for the Orca process that owns it; the child creates it. */
   directory: string
 }
 
@@ -37,9 +37,7 @@ export async function ensurePiBackgroundWorkBridge(
     }
     const probes = join(directory, 'probes')
     await reclaimAbandonedProbeFolders(probes)
-    const own = join(probes, `${process.pid}-${randomUUID()}`)
-    await mkdir(own, { recursive: true })
-    return { extension: path, directory: own }
+    return { extension: path, directory: join(probes, `${process.pid}-${randomUUID()}`) }
   } catch (error) {
     onFailed(error)
     return null
@@ -52,7 +50,11 @@ async function reclaimAbandonedProbeFolders(probes: string): Promise<void> {
   await Promise.all(
     names.map(async (name) => {
       const owner = Number(name.split('-')[0])
-      if (!Number.isInteger(owner) || owner === process.pid || isProcessAlive(owner)) {
+      if (
+        !Number.isInteger(owner) ||
+        owner === process.pid ||
+        inspectProcessLiveness(owner).status !== 'exited'
+      ) {
         return
       }
       await rm(join(probes, name), { recursive: true, force: true }).catch(() => {})

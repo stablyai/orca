@@ -26,14 +26,22 @@ export class PiRpcBackgroundWork {
     if (frame.method !== 'setStatus' || frame.statusKey !== PI_BACKGROUND_WORK_STATUS_KEY) {
       return false
     }
-    const [kind, instance, nonce, state] =
-      typeof frame.statusText === 'string' ? frame.statusText.split(':') : []
-    if (kind === 'ready' && instance) {
+    const parts = typeof frame.statusText === 'string' ? frame.statusText.split(':') : []
+    const [kind, instance, nonce, state] = parts
+    if (kind === 'ready' && parts.length === 2 && instance) {
       this.instance = instance
-    } else if (kind === 'gone') {
+    } else if (kind === 'gone' && parts.length === 1) {
       this.instance = null
-    } else if (kind === 'answer' && instance === this.instance && nonce === this.probe?.nonce) {
-      this.probe.settle(state === 'idle' ? 'idle' : state === 'active' ? 'busy' : 'unknown')
+    } else if (
+      kind === 'answer' &&
+      parts.length === 4 &&
+      this.probe &&
+      instance === this.instance &&
+      nonce === this.probe.nonce &&
+      (state === 'idle' || state === 'active')
+    ) {
+      // Anything malformed or unasked-for is ignored, so it can only time out as unknown.
+      this.probe.settle(state === 'idle' ? 'idle' : 'busy')
     }
     return true
   }

@@ -75,7 +75,8 @@ function piProcess() {
     writeFileSync(join(directory, `${instance}.${nonce}.probe`), '')
     const answer = (): string | undefined =>
       reports.find((report) => report.startsWith(`answer:${instance}:${nonce}:`))
-    await vi.waitFor(() => expect(answer()).toBeDefined())
+    // Orca waits 5s for an answer; file watch events can lag that long on a loaded machine.
+    await vi.waitFor(() => expect(answer()).toBeDefined(), { timeout: 5_000 })
     return answer()
   }
   // pi-subagents 0.84.0 looks the registry up in its own session_start (pi-web-session-liveness.js).

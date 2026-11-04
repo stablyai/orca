@@ -91,6 +91,8 @@ export function getPiBackgroundWorkBridgeSource(): string {
     // Watch events are only hints to rescan; a watcher that cannot start leaves the host without readiness.
     '    let watcher',
     '    try {',
+    // The child makes its own folder, so a launch that never spawned leaves nothing behind.
+    '      fs.mkdirSync(dir, { recursive: true })',
     '      watcher = fs.watch(dir, answer)',
     "      watcher.on('error', () => {})",
     '    } catch {',

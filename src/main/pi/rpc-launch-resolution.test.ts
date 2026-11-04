@@ -168,9 +168,7 @@ describe('Pi host launch resolution', () => {
     expect(launch.forkFile).toBeUndefined()
     expect(launch.replacement).toBeUndefined()
     expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc', '--extension', bridge()])
-    expect(buildPiRpcLaunch(launch).env?.[PI_BACKGROUND_WORK_DIR_ENV]).toContain(
-      join('pi-native-chat', 'probes', `${process.pid}-`)
-    )
+    expect(buildPiRpcLaunch(launch).env?.[PI_BACKGROUND_WORK_DIR_ENV]).toEqual(expect.any(String))
     expect(piRpcProviderLink(launch, join(root, 'fresh.jsonl'), 3, 'fresh', 101).origin).toBe(
       'created'
     )

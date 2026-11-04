@@ -287,6 +287,22 @@ describe('the idle sweep', () => {
     )
   })
 
+  // The provider is asked outside the session lock, so a send can land while its answer is pending.
+  it('keeps an agent whose chat got a message while its provider was answering', async () => {
+    await foundRestTestChat(rig)
+    rig.host.collaboratorsForTests().lifetime.idleSweep.dispose()
+    const answer = Promise.withResolvers<'idle'>()
+    rig.adapter.confirmIdle.mockReturnValueOnce(answer.promise)
+    rig.clock.now += IDLE_MS + 1
+
+    const swept = sweepOnce(rig.host)
+    await vi.waitFor(() => expect(rig.adapter.confirmIdle).toHaveBeenCalledWith(SESSION))
+    expect((await rig.host.send(CALLER, restTestSend('still here', fence()))).ok).toBe(true)
+    answer.resolve('idle')
+    await swept
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+  })
+
   it('keeps a child an unanswered prompt waits on (P2-22 i)', async () => {
     await foundRestTestChat(rig)
     providerEvents().appendItem(

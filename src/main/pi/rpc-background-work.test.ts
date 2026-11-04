@@ -58,13 +58,16 @@ it('stops only on a fresh idle answer from the bridge instance that is ready now
   await expect(new PiRpcBackgroundWork(null).confirmIdle()).resolves.toBe('idle')
 })
 
-it('never reads an unanswered request as idle', async () => {
+it('never reads an unanswered, unasked-for or malformed reply as idle', async () => {
   const folder = probeFolder()
   const work = new PiRpcBackgroundWork(folder)
   work.receive(ready)
+  expect(work.receive({ ...idle, statusText: 'answer:x' })).toBe(true)
   vi.useFakeTimers({ toFake: ['setTimeout'] })
   const unanswered = work.confirmIdle()
   await vi.waitFor(() => expect(readdirSync(folder)).toHaveLength(1))
+  const [instance, nonce] = readdirSync(folder)[0].split('.')
+  work.receive({ ...idle, statusText: `answer:${instance}:${nonce}:idle:extra` })
   vi.advanceTimersByTime(5_000)
   await expect(unanswered).resolves.toBe('unknown')
 })
