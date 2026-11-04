@@ -4,19 +4,31 @@ import type { SpliceRelay } from './splice-relay'
 export interface Env {
   HOST_RELAY: DurableObjectNamespace<HostRelay>
   SPLICE_RELAY: DurableObjectNamespace<SpliceRelay>
-  // Flood guard per splice direction: close 4429 if more than this many bytes reach a peer that
-  // has sent nothing within the window. 0 disables.
-  SPLICE_SILENT_BYTES_MAX?: string
-  SPLICE_SILENT_WINDOW_MS?: string
-  RELAY_JWKS: string
+  // Pooled connection to the relay's Postgres (credentials, invites, devices, assignments).
+  HYPERDRIVE?: Hyperdrive
+  // 'postgres' (MVP and production) or 'spike' (no database: stub credentials, no epoch check).
+  EDGE_BACKEND?: string
+  // The cell id directors write into relay_assignments for hosts placed on the edge.
+  EDGE_CELL_ID?: string
+  // Relay JWTs: verified against the auth service's JWKS (fetched, cached per isolate, served
+  // stale for up to 30 min if auth is unreachable). RELAY_JWKS (inline set) is for local tests and
+  // the spike only.
+  RELAY_JWKS_URL?: string
+  RELAY_JWKS?: string
+  RELAY_AUTH_ISSUER?: string
   RELAY_JWT_AUDIENCE: string
   PING_INTERVAL_MS: string
   SILENCE_TIMEOUT_MS: string
   ORPHAN_GRACE_MS: string
-  // Spike-only stub: comma-separated base64url sha256 hashes of accepted phone resume tokens.
+  // Flood guard per splice direction: close 4429 if more than this many bytes reach a peer that
+  // has sent nothing within the window. 0 disables (default; it cut healthy readers in the spike).
+  SPLICE_SILENT_BYTES_MAX?: string
+  SPLICE_SILENT_WINDOW_MS?: string
+  // Spike backend only: comma-separated `<kind>:<relayDeviceId>:<sha256 b64url>` accepted tokens.
   SPIKE_RESUME_TOKEN_HASHES?: string
+  // Spike/test only: /__spike/abort* reset routes.
   SPIKE_ADMIN?: string
-  // Spike: /__spike/info and /__spike/host/<id> debug endpoints (colo, version).
+  // Spike/test only: /__spike/info and /__spike/host/<id> debug endpoints (colo, version).
   SPIKE_DEBUG?: string
   // Version label baked in per deploy (--var EDGE_VERSION:<tag>), reported by metrics and debug.
   EDGE_VERSION?: string
@@ -29,4 +41,47 @@ export type EdgeClaims = {
   organizationId: string
   relayHostId: string
   exp: number
+}
+
+export type EdgeConfig = {
+  backend: 'postgres' | 'spike'
+  cellId: string
+  pingIntervalMs: number
+  silenceTimeoutMs: number
+  orphanGraceMs: number
+}
+
+const configs = new WeakMap<object, EdgeConfig>()
+
+function positiveInt(name: string, value: string | undefined): number {
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`relay_edge_config_${name}`)
+  return parsed
+}
+
+// Validated once per isolate. A misconfigured deploy fails every request loudly (500) rather than
+// running with a silently wrong backend: the spike backend skips credential and epoch checks.
+export function edgeConfig(env: Env): EdgeConfig {
+  const cached = configs.get(env)
+  if (cached) return cached
+  const backend = env.EDGE_BACKEND ?? 'postgres'
+  if (backend !== 'postgres' && backend !== 'spike') throw new Error('relay_edge_config_backend')
+  if (backend === 'postgres' && !env.HYPERDRIVE) throw new Error('relay_edge_config_hyperdrive')
+  if (backend === 'spike' && env.SPIKE_DEBUG !== '1' && env.SPIKE_ADMIN !== '1') {
+    throw new Error('relay_edge_config_spike_backend_outside_spike')
+  }
+  if (!env.RELAY_JWKS_URL && !env.RELAY_JWKS) throw new Error('relay_edge_config_jwks')
+  if (env.RELAY_JWKS_URL && !env.RELAY_AUTH_ISSUER) throw new Error('relay_edge_config_issuer')
+  if (!env.RELAY_JWT_AUDIENCE) throw new Error('relay_edge_config_audience')
+  const config: EdgeConfig = {
+    backend,
+    cellId: env.EDGE_CELL_ID || 'edge',
+    pingIntervalMs: positiveInt('ping_interval', env.PING_INTERVAL_MS),
+    silenceTimeoutMs: positiveInt('silence_timeout', env.SILENCE_TIMEOUT_MS),
+    orphanGraceMs: positiveInt('orphan_grace', env.ORPHAN_GRACE_MS)
+  }
+  // Shipped desktops close a control that is silent for 75 s; a ping must arrive well inside it.
+  if (config.pingIntervalMs >= config.silenceTimeoutMs) throw new Error('relay_edge_config_ping_interval')
+  configs.set(env, config)
+  return config
 }

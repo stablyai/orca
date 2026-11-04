@@ -2,8 +2,8 @@
 // data sockets live in the host's pooled splice objects.
 import { HostRelay } from './host-relay'
 import { SpliceRelay } from './splice-relay'
-import type { Env } from './env'
-import { HOST_ID, verifyRelayJwt } from './jwt'
+import { edgeConfig, type Env } from './env'
+import { HOST_ID, readBearer, verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 
 export { HostRelay, SpliceRelay }
@@ -34,6 +34,8 @@ function forward(
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    // Fails every request (500) on a misconfigured deploy rather than running with a wrong backend.
+    edgeConfig(env)
     const url = new URL(request.url)
     if (url.pathname === '/health') {
       return Response.json({ ok: true, connectionCapacityProtocol: 2 })
@@ -64,7 +66,7 @@ export default {
 
     if (url.pathname === '/v1/host/control') {
       if (!isUpgrade) return reject(426)
-      const token = request.headers.get('authorization')?.match(/^Bearer (.+)$/)?.[1]
+      const token = readBearer(request.headers.get('authorization'))
       const claims = token ? await verifyRelayJwt(env, token) : null
       if (!claims) return reject(401)
       return forward(env, request, claims.relayHostId, {

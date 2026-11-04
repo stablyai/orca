@@ -9,7 +9,9 @@
     "spike": "tsx spike/run-all.ts"
   },
   "dependencies": {
+    "@types/pg": "^8.23.1",
     "jose": "^6.2.13",
+    "pg": "^8.23.1",
     "tweetnacl": "^1.0.3",
     "zod": "^4.6.7"
   },

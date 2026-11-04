@@ -6,6 +6,10 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat"],
+  // The cells' credential store is imported unchanged; resolve its workspace import to source.
+  "alias": {
+    "@orca-cloud/relay-contract": "../../packages/relay-contract/src/index.ts"
+  },
   "workers_dev": false,
   "durable_objects": {
     "bindings": [
@@ -17,7 +21,17 @@
     { "tag": "v1", "new_sqlite_classes": ["HostRelay"] },
     { "tag": "v2", "new_sqlite_classes": ["SpliceRelay"] }
   ],
+  // Local dev/tests only: Postgres on 127.0.0.1:55432 (see test/mvp.ts). Deployed environments
+  // bind a real Hyperdrive config instead.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "00000000000000000000000000000000",
+      "localConnectionString": "postgres://relay:local-test@127.0.0.1:55432/relay"
+    }
+  ],
   "vars": {
+    "EDGE_CELL_ID": "edge",
     "RELAY_JWT_AUDIENCE": "orca-relay",
     "PING_INTERVAL_MS": "30000",
     "SILENCE_TIMEOUT_MS": "75000",
@@ -41,6 +55,8 @@
       // Analytics Engine is not enabled on the account; metrics fall back to a no-op.
       // "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_spike" }],
       "vars": {
+        // No database on the spike: stub credentials, no epoch check (load tests only).
+        "EDGE_BACKEND": "spike",
         "RELAY_JWT_AUDIENCE": "orca-relay",
         "PING_INTERVAL_MS": "45000",
         "SILENCE_TIMEOUT_MS": "75000",

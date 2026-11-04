@@ -44,7 +44,8 @@ async function main(): Promise<void> {
       `SPIKE_RESUME_TOKEN_HASHES=resume:dev-spike:${phoneTokenHash}`,
       `SPIKE_ADMIN=1`,
       `SPLICE_SILENT_BYTES_MAX=${GUARD ? GUARD_BYTES : 0}`,
-      `SPLICE_SILENT_WINDOW_MS=10000`
+      `SPLICE_SILENT_WINDOW_MS=10000`,
+      `EDGE_BACKEND=spike`
     ].join('\n')
   )
   const host = nacl.box.keyPair()

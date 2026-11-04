@@ -20,7 +20,6 @@ type State = {
   deadline: number
   connTicket?: string
   generation?: number
-  credentialKind?: 'invite' | 'resume'
 }
 type SocketKind = 'phone' | 'data'
 // Per-direction flood guard: bytes forwarded to a peer since that peer last sent anything.
@@ -36,7 +35,7 @@ export class SpliceRelay extends DurableObject<Env> {
 
   async fetch(request: Request): Promise<Response> {
     const kind = request.headers.get('x-edge-kind')
-    if (kind === 'abort') this.ctx.abort('spike reset')
+    if (kind === 'abort' && this.env.SPIKE_ADMIN === '1') this.ctx.abort('spike reset')
     const connId = request.headers.get('x-edge-conn-id') ?? ''
     const parsed = parseConnId(connId)
     if (!parsed) return new Response(null, { status: 404 })
@@ -138,7 +137,7 @@ export class SpliceRelay extends DurableObject<Env> {
     }
     if (this.env.SPIKE_ADMIN === '1') console.log(`spike_rpc_authorize_ms=${Date.now() - started}`)
     if (!result.ok) {
-      this.phoneFail(ws, result.code)
+      this.phoneFail(ws, result.code, result.reason)
       return
     }
     await this.save({
@@ -146,7 +145,6 @@ export class SpliceRelay extends DurableObject<Env> {
       phase: 'pending',
       connTicket: result.connTicket,
       generation: result.generation,
-      credentialKind: result.kind,
       deadline: Date.now() + RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs
     })
     await this.reschedule()
@@ -169,32 +167,29 @@ export class SpliceRelay extends DurableObject<Env> {
         ok = false
       }
     }
-    if (ok) {
-      ok = await this.host(state.relayHostId)
-        .confirmSplice(state.connId, state.generation ?? -1)
-        .catch(() => false)
-    }
     const phone = this.socket(state.connId, 'phone')
     if (!ok || !phone) {
       this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'invalid host data ticket')
       return
     }
+    // The host object persists the connection basis, then hands back the phone's relay-hello.
+    const confirmed = await this.host(state.relayHostId)
+      .confirmSplice(state.connId, state.generation ?? -1)
+      .catch(() => ({ ok: false as const, code: RELAY_CLOSE_CODE.LIMIT_EXCEEDED }))
+    if (!confirmed.ok) {
+      if (confirmed.code === RELAY_CLOSE_CODE.LIMIT_EXCEEDED) {
+        // As the cells when the basis write fails: both legs 4429.
+        this.phoneFail(phone, RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
+        this.close(ws, RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'basis persistence failed')
+        await this.forget(state.connId)
+        await this.reschedule()
+      } else {
+        this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'invalid host data ticket')
+      }
+      return
+    }
     await this.save({ ...state, phase: 'spliced', connTicket: undefined, deadline: NO_DEADLINE })
-    const now = Date.now()
-    this.send(
-      phone,
-      state.credentialKind === 'invite'
-        ? { type: 'relay-hello', ok: true, credentialKind: 'invite', leaseExpiresAt: now + 15_000 }
-        : {
-            type: 'relay-hello',
-            ok: true,
-            credentialKind: 'resume',
-            leaseExpiresAt: now + 10_000,
-            acceptedCredentialVersion: 1,
-            acceptedAs: 'current',
-            resumeExpiresAt: now + RELAY_PROTOCOL_LIMITS.resumeTtlMs
-          }
-    )
+    this.send(phone, { type: 'relay-hello', ...confirmed.hello })
     await this.reschedule()
   }
 
@@ -259,7 +254,8 @@ export class SpliceRelay extends DurableObject<Env> {
       if (now < state.deadline) continue
       const phone = this.socket(state.connId, 'phone')
       if (state.phase === 'pending') {
-        if (phone) this.close(phone, RELAY_CLOSE_CODE.HOST_OFFLINE, 'attach-timeout')
+        // OTA phones redial this edge once, quickly: the control is still seated here.
+        if (phone) this.phoneFail(phone, RELAY_CLOSE_CODE.HOST_OFFLINE, 'attach-timeout')
       } else if (phone) {
         this.close(phone, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame timeout')
       }
@@ -322,9 +318,10 @@ export class SpliceRelay extends DurableObject<Env> {
     return this.ctx.getWebSockets(connId).find((ws) => this.ctx.getTags(ws)[0] === kind) ?? null
   }
 
-  private phoneFail(ws: WebSocket, code: number): void {
+  // As the cells' rejectClient: a strict relay-hello with only ok/code, the reason on the close.
+  private phoneFail(ws: WebSocket, code: number, reason?: string): void {
     this.send(ws, { type: 'relay-hello', ok: false, code })
-    this.close(ws, code, '')
+    this.close(ws, code, reason ?? 'relay connection rejected')
   }
 
   private send(ws: WebSocket, payload: Record<string, unknown>): void {
