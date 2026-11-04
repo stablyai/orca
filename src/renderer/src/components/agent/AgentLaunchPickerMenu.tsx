@@ -20,6 +20,10 @@ import {
 import { applyAgentPickerEdit } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
+import {
+  ClaudeConfigProfileMenuItems,
+  useClaudeConfigProfilePickerRows
+} from './ClaudeConfigProfileMenuItems'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import {
   useAgentPickerInventoryEntries,
@@ -52,6 +56,7 @@ type Launch = (
   surface?: AgentPickerSurface
 ) => boolean | void | Promise<boolean>
 
+/** Searchable agent list with setup submenus; launch mode also lists Claude profile rows. */
 export function AgentLaunchPickerMenu({
   draftScope,
   shortcutLabels,
@@ -120,6 +125,7 @@ export function AgentLaunchPickerMenu({
   const visible = entries.filter((entry) =>
     words.every((word) => `${entry.agent} ${entry.label}`.toLowerCase().includes(word))
   )
+  const profileRows = useClaudeConfigProfilePickerRows(mode === 'select' ? [] : entries, words)
   // Filtering changes presentation; an active owner survives its result row disappearing.
   if (activeSetup) {
     const entry = entries.find((entry) => entry.agent === activeSetup.agent)
@@ -230,7 +236,12 @@ export function AgentLaunchPickerMenu({
             />
           )
         })}
-        {!visible.length && !setups.length ? (
+        <ClaudeConfigProfileMenuItems
+          rows={profileRows}
+          disabled={disabled}
+          runLaunch={runLaunch}
+        />
+        {!visible.length && !setups.length && !profileRows.length ? (
           <DropdownMenuItem disabled>
             {translate(
               'auto.components.agent.AgentCombobox.579c768bde',

@@ -4,6 +4,7 @@ import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import { normalizeClaudeConfigProfiles } from '../../../shared/claude-config-profiles'
 import {
   normalizeAgentDefaultSurface,
   normalizeNativeChatProviderChoices
@@ -54,6 +55,7 @@ export type SettingsMutationOperations = {
   notifySettingsChanged: (updates: Partial<GlobalSettings>, originWebContentsId?: number) => void
 }
 
+/** Apply a settings change from any writer, normalizing each field at this store boundary. */
 export function updateSettings(
   operations: SettingsMutationOperations,
   updates: Partial<GlobalSettings>,
@@ -179,6 +181,11 @@ export function updateSettings(
   stampDefaultOnMigrationGuards(updates, sanitizedUpdates)
   if ('openInApplications' in updates) {
     sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)
+  }
+  if ('claudeConfigProfiles' in updates) {
+    sanitizedUpdates.claudeConfigProfiles = normalizeClaudeConfigProfiles(
+      updates.claudeConfigProfiles
+    )
   }
   if ('terminalShortcutPolicy' in updates) {
     sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(

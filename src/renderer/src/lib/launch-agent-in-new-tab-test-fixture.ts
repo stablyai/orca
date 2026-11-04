@@ -111,9 +111,9 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: vi.fn()
 }))
 vi.mock('@/store', () => ({
-  useAppStore: {
+  useAppStore: Object.assign(<T>(select: (state: typeof store) => T) => select(store), {
     getState: () => store
-  }
+  })
 }))
 
 export const mockToastError = vi.fn<typeof toast.error>()

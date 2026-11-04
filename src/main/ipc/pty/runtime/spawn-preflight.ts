@@ -1,4 +1,6 @@
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
+import { prepareClaudeConfigProfileLaunch } from '../../../claude-accounts/claude-config-profile-launch'
+import { claudeConfigProfileDirFromEnv } from '../../../../shared/claude-config-profiles'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
@@ -25,6 +27,7 @@ import {
   JCODE_RUNTIME_DIR_ENV_KEY
 } from '../../../../shared/jcode-runtime-dir'
 
+/** Resolve provider, cwd, account routing and host binding for a runtime PTY spawn; null means nothing to spawn. */
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
 ): Promise<PtySpawnResult | null> {
@@ -101,10 +104,14 @@ export async function prepareRuntimePtySpawn(
   ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
   args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  const claudeProfileDir = ctx.isClaudeLaunch ? claudeConfigProfileDirFromEnv(args.env) : null
   ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
+    ctx.isClaudeLaunch && !claudeProfileDir && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
       : null
+  if (claudeProfileDir) {
+    await prepareClaudeConfigProfileLaunch(claudeProfileDir, ctx.deps.getSettings?.())
+  }
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
   if (ctx.shouldPersistHostSessionBinding) {

@@ -4,6 +4,7 @@ import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
+import { normalizeClaudeConfigProfiles } from '../../../shared/claude-config-profiles'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
@@ -26,6 +27,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 
+/** Turn a persisted settings row into current GlobalSettings, running one-shot migrations and normalizers. */
 export function normalizeLoadedGlobalSettings(
   parsed: PersistedState,
   terminal: PreparedLoadedTerminalSettings,
@@ -169,6 +171,7 @@ export function normalizeLoadedGlobalSettings(
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
       seedDefaults: true
     }),
+    claudeConfigProfiles: normalizeClaudeConfigProfiles(parsed.settings?.claudeConfigProfiles),
     notifications: normalizedNotifications,
     sourceControlAi: migratedSourceControlAi,
     sourceControlGroupOrder: normalizedSourceControlGroupOrder,

@@ -33,7 +33,8 @@ import {
   claudeProfileHistoryDirs,
   getClaudeObservedConfigDirs,
   installClaudeObservedConfigDirs,
-  installClaudeProfileRouter
+  installClaudeProfileRouter,
+  withClaudeProfileTerminalEnv
 } from './claude-profile-installed-router'
 import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
 import { claudeRoutedHomeAsync } from './claude-profile-routed-home'
@@ -609,6 +610,20 @@ describe('ClaudeProfileRouter', () => {
       expect(claudeProfileHistoryDirs('projects')).toEqual([join(f.home('a'), 'projects')])
     }
   )
+
+  it('leaves a Claude profile launch on its own folder while an account is selected', () => {
+    const f = fixture()
+    mkdirSync(f.home('a'), { recursive: true })
+    installClaudeProfileRouter(f.router)
+    const launch = {
+      CLAUDE_CONFIG_DIR: '/work/claude-a',
+      ORCA_CLAUDE_CONFIG_PROFILE_DIR: '/work/claude-a'
+    }
+    expect(withClaudeProfileTerminalEnv(launch, { runtime: 'host' })).toEqual(launch)
+    expect(withClaudeProfileTerminalEnv({}, { runtime: 'host' })).toMatchObject({
+      CLAUDE_CONFIG_DIR: f.home('a')
+    })
+  })
 
   it('lists history under the CLAUDE_CONFIG_DIR only the login shell exports', () => {
     const configDir = join(tmpdir(), `claude-router-own-${process.pid}`)

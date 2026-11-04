@@ -5,6 +5,7 @@ import type { ClaudeProfileRouter } from './claude-profile-router'
 import type { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 import type { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
+import { claudeConfigProfileDirFromEnv } from '../../shared/claude-config-profiles'
 
 let installed: ClaudeProfileRouter | undefined
 
@@ -37,10 +38,15 @@ export function getClaudeWslProfileRouter(): ClaudeWslProfileRouter | undefined 
   return installedWsl
 }
 
+/** Add the selected Claude account's routing env to a pane, except for a profile launch that names its own folder. */
 export function withClaudeProfileTerminalEnv<Env extends Record<string, string> | undefined>(
   env: Env,
   target: ClaudeAccountSelectionTarget
 ): Env | Record<string, string> {
+  // A profile launch names its own folder; account routing would replace it.
+  if (claudeConfigProfileDirFromEnv(env)) {
+    return env
+  }
   const profileEnv = installed?.terminalEnv(target)
   return profileEnv ? { ...env, ...profileEnv } : env
 }

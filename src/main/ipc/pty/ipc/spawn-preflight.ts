@@ -1,4 +1,6 @@
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
+import { prepareClaudeConfigProfileLaunch } from '../../../claude-accounts/claude-config-profile-launch'
+import { claudeConfigProfileDirFromEnv } from '../../../../shared/claude-config-profiles'
 import { mintPtySessionId } from '../../../daemon/pty-session-id'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import {
@@ -12,6 +14,7 @@ import type { PtyIpcSpawnState } from './spawn-state'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
+/** Resolve provider, cwd and account routing for a renderer PTY spawn before anything starts. */
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
   // Establish local daemon identity before yielding so early output can be hidden; SSH execution is rejected here.
@@ -117,9 +120,13 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
   ctx.codexSelectionTarget = target.codexSelectionTarget
   ctx.spawnTiming.mark('preflight')
   args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  const claudeProfileDir = ctx.isClaudeLaunch ? claudeConfigProfileDirFromEnv(args.env) : null
   ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
+    ctx.isClaudeLaunch && !claudeProfileDir && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
       : null
+  if (claudeProfileDir) {
+    await prepareClaudeConfigProfileLaunch(claudeProfileDir, ctx.deps.getSettings?.())
+  }
   ctx.spawnTiming.mark('auth')
 }

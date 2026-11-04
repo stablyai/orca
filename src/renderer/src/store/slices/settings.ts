@@ -15,6 +15,7 @@ import { assertTerminalQuickCommandsStorable } from '../../../../shared/terminal
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
+import { normalizeClaudeConfigProfiles } from '../../../../shared/claude-config-profiles'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { isRuntimeCatalogListingStale } from './runtime-status-hydration'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
@@ -60,6 +61,7 @@ function normalizeRuntimeEnvironmentId(value: string | null | undefined): string
   return trimmed ? trimmed : null
 }
 
+/** Normalize a renderer settings write the same way main does, so local state never holds a shape main would reject. */
 function normalizeSettingsUpdates(
   updates: Partial<GlobalSettings>,
   currentSettings: GlobalSettings | null
@@ -97,6 +99,11 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications, {
       createId: createBrowserUuid
     })
+  }
+  if ('claudeConfigProfiles' in updates) {
+    sanitizedUpdates.claudeConfigProfiles = normalizeClaudeConfigProfiles(
+      updates.claudeConfigProfiles
+    )
   }
   if ('nativeChatAppearance' in updates) {
     sanitizedUpdates.nativeChatAppearance = normalizeNativeChatAppearanceSettings(

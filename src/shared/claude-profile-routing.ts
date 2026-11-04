@@ -12,3 +12,6 @@ export const CLAUDE_PROFILE_MISSING_MESSAGE =
 
 export const CLAUDE_PROFILE_SETUP_FAILED_MESSAGE =
   'The selected Claude account could not be set up. Try again or choose another account.'
+
+/** Set beside the CLAUDE_CONFIG_DIR of a launch that runs one of the user's own Claude profile folders. */
+export const CLAUDE_CONFIG_PROFILE_DIR_ENV = 'ORCA_CLAUDE_CONFIG_PROFILE_DIR'

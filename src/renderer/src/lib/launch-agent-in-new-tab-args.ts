@@ -17,6 +17,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   groupId?: string
   /** Optional initial prompt; delivery depends on `promptDelivery` and the agent's prompt mode. */
   prompt?: string
+  /** Claude only: run in this saved profile folder instead of the selected Claude account. */
+  claudeConfigProfileId?: string
   /** Optional CLI arguments appended to the selected agent command; a chat has no command line. */
   agentArgs?: string | null
   /** The launch's saved choice; a chat seeds it and a terminal applies it as flags. */

@@ -2,6 +2,7 @@ import type { BrowserExtensionGlobalSettings } from './browser/extensions/browse
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
+import type { ClaudeConfigProfileSettings } from './claude-config-profiles'
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
 import type { EditorTypographySettings } from './editor-typography-settings-types'
@@ -21,6 +22,7 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
   WorktreeDeletionPreferences &
   ClaudeAccountSwitchSettings &
+  ClaudeConfigProfileSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
   BrowserLinkOpeningSettings &

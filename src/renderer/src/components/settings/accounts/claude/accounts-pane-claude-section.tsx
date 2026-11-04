@@ -8,6 +8,7 @@ import { Label } from '../../../ui/label'
 import { ClaudeIcon } from '../../../status-bar/icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
+import { ClaudeConfigProfilesSetting } from './claude-config-profiles-setting'
 import {
   getProviderAccountRuntime,
   providerAccountIsActiveInView
@@ -30,6 +31,7 @@ import {
   trackAccountAddition
 } from '../sign-in/account-add-cancel-target'
 
+/** Settings > AI Provider Accounts > Claude: managed accounts, the running-session policy and Claude profiles. */
 export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const {
     accountRuntime,
@@ -388,6 +390,9 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
       </SearchableSetting>
       {isRemoteAccountScope ? null : (
         <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
+      )}
+      {isRemoteAccountScope ? null : (
+        <ClaudeConfigProfilesSetting settings={settings} updateSettings={updateSettings} />
       )}
     </section>
   )

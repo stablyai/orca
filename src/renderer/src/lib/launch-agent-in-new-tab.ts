@@ -20,6 +20,10 @@ import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution
 import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import {
+  claudeConfigProfileLaunchEnvFor,
+  claudeConfigProfilesRunHere
+} from '@/lib/claude-config-profile-launch'
+import {
   launchOnceHostAnswered,
   routeNewTabLaunch,
   type AgentTabLaunchOutcome,
@@ -76,6 +80,20 @@ export function launchAgentInNewTabWithOutcome(
     return null
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
+  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
+  const profileEnv = claudeConfigProfileLaunchEnvFor({
+    agent,
+    profileId: args.claudeConfigProfileId,
+    profiles: store.settings?.claudeConfigProfiles,
+    local:
+      args.claudeConfigProfileId !== undefined &&
+      !isRemote &&
+      claudeConfigProfilesRunHere(store, worktreeId)
+  })
+  if (profileEnv === null) {
+    args.focusIntent?.cancel()
+    return null
+  }
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -104,6 +122,10 @@ export function launchAgentInNewTabWithOutcome(
   }
   const { plan } = route
   if (plan?.route === 'structured-native-chat') {
+    if (profileEnv) {
+      args.focusIntent?.cancel()
+      return null
+    }
     const structured = launchStructuredAgentFromNewTab({
       plan,
       worktreeId,
@@ -137,22 +159,24 @@ export function launchAgentInNewTabWithOutcome(
     agentLaunchChoices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
   ) =>
     planLaunchAgentStartupPrompt({
-      base: resolveAgentStartupPlanInputs({
-        agent,
-        settings: { ...store.settings, agentLaunchChoices },
-        agentArgs,
-        sessionOptions,
-        sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
-        platform: resolvedLaunchPlatform,
-        shell: queuedShell,
-        isRemote
-      }),
+      base: withClaudeConfigProfileEnv(
+        resolveAgentStartupPlanInputs({
+          agent,
+          settings: { ...store.settings, agentLaunchChoices },
+          agentArgs,
+          sessionOptions,
+          sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+          platform: resolvedLaunchPlatform,
+          shell: queuedShell,
+          isRemote
+        }),
+        profileEnv
+      ),
       prompt: trimmedPrompt,
       promptDelivery,
       isFollowupPath
     })
   args.focusIntent?.cancel()
-  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
       return null
@@ -189,8 +213,10 @@ export function launchAgentInNewTabWithOutcome(
   if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {
     return null
   }
+  // The host-side launch rebuilds its env from settings and would drop the profile folder.
   if (
     pasteDraftAfterLaunch !== null &&
+    !profileEnv &&
     newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote })
   ) {
     const launched = launchNewTabPromptThroughHost({
@@ -283,6 +309,14 @@ export function launchAgentInNewTabWithOutcome(
     pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
     ...(promptDeliveryResult ? { promptDeliveryResult } : {})
   }
+}
+
+/** Layer a profile's CLAUDE_CONFIG_DIR over the configured agent env so the launch and its resume record carry it. */
+function withClaudeConfigProfileEnv<T extends { agentEnv: Record<string, string> }>(
+  inputs: T,
+  profileEnv: Record<string, string> | undefined
+): T {
+  return profileEnv ? { ...inputs, agentEnv: { ...inputs.agentEnv, ...profileEnv } } : inputs
 }
 
 export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {

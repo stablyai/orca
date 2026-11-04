@@ -37,5 +37,24 @@ export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('accounts.claude.switchSessions.keyword.restart', 'restart'),
       ...translateSearchKeyword('accounts.claude.switchSessions.keyword.running', 'running')
     ]
+  },
+  {
+    title: translate('accounts.claude.configProfiles.title', 'Claude Profiles'),
+    description: translate(
+      'accounts.claude.configProfiles.description',
+      'Start Claude with a config folder of your own (CLAUDE_CONFIG_DIR) and its settings, CLAUDE.md, memory, skills and login. Each profile is its own entry in the agent menu and ignores the account selected above. Orca adds only its status hooks to the folder.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e14049e1a8', 'claude'),
+      ...translateSearchKeyword('accounts.claude.configProfiles.keyword.profile', 'profile'),
+      ...translateSearchKeyword('accounts.claude.configProfiles.keyword.folder', 'folder'),
+      ...translateSearchKeyword(
+        'accounts.claude.configProfiles.keyword.configDir',
+        'CLAUDE_CONFIG_DIR',
+        {
+          englishOnly: true
+        }
+      )
+    ]
   }
 ])
