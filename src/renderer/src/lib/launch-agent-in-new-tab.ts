@@ -16,10 +16,14 @@ import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
+import {
+  agentTabLaunchStore,
+  resolveAgentLaunchExecutionContext
+} from '@/lib/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import {
+  notifyAgentTabLaunchFailure,
   launchOnceHostAnswered,
   routeNewTabLaunch,
   type AgentTabLaunchOutcome,
@@ -43,6 +47,23 @@ export { shouldQueueTerminalFocusAfterMenuClose } from '@/lib/launch-agent-in-ne
 export function launchAgentInNewTabWithOutcome(
   args: LaunchAgentInNewTabArgs,
   notifyFailure = true
+): AgentTabLaunchOutcome {
+  const notify = () => notifyAgentTabLaunchFailure(args.agent)
+  try {
+    return openAgentInNewTab(args, notifyFailure, notify)
+  } catch {
+    args.focusIntent?.cancel()
+    if (notifyFailure) {
+      notify()
+    }
+    return { refused: { delivered: false, failureNotified: notifyFailure } }
+  }
+}
+
+function openAgentInNewTab(
+  args: LaunchAgentInNewTabArgs,
+  notifyFailure: boolean,
+  notify: () => void
 ): AgentTabLaunchOutcome {
   args = {
     ...args,
@@ -69,11 +90,15 @@ export function launchAgentInNewTabWithOutcome(
     beforeSurfaceOpen,
     activate
   } = args
-  const store = useAppStore.getState()
-  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
+  const store = agentTabLaunchStore(useAppStore.getState(), args)
+  const executionContext = resolveAgentLaunchExecutionContext(store, {
+    worktreeId,
+    launchPlatform,
+    workspaceExecutionHostId: args.workspaceExecutionHostId
+  })
   if (!executionContext) {
     args.focusIntent?.cancel()
-    return null
+    return { refused: { delivered: false, failureNotified: true } }
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
   const trimmedPrompt = prompt?.trim() ?? ''
@@ -100,7 +125,12 @@ export function launchAgentInNewTabWithOutcome(
     ...(args.promptKeptByCaller ? { promptKeptByCaller: true as const } : {})
   })
   if ('awaited' in route) {
-    return launchOnceHostAnswered(route, args, (next) => launchAgentInNewTabWithOutcome(next))
+    return launchOnceHostAnswered(
+      route,
+      args,
+      (next) => launchAgentInNewTabWithOutcome(next, notifyFailure),
+      notifyFailure ? notify : undefined
+    )
   }
   const { plan } = route
   if (plan?.route === 'structured-native-chat') {
@@ -113,13 +143,16 @@ export function launchAgentInNewTabWithOutcome(
       ...(args.onStructuredHostDeclined ? { onHostDeclined: args.onStructuredHostDeclined } : {}),
       // The host's "no" opens this same launch as a terminal, with the caller's arguments.
       openTerminal: (terminalPlan, terminalActivate) =>
-        launchAgentInNewTabWithOutcome({
-          ...args,
-          beforeSurfaceOpen: undefined,
-          ...(terminalActivate === false ? { prompt: undefined, activate: false } : {}),
-          requestId: undefined,
-          agentSessionLaunchPlan: terminalPlan
-        })
+        launchAgentInNewTabWithOutcome(
+          {
+            ...args,
+            beforeSurfaceOpen: undefined,
+            ...(terminalActivate === false ? { prompt: undefined, activate: false } : {}),
+            requestId: undefined,
+            agentSessionLaunchPlan: terminalPlan
+          },
+          notifyFailure
+        )
     })
     if (!structured) {
       args.focusIntent?.cancel()
@@ -161,6 +194,7 @@ export function launchAgentInNewTabWithOutcome(
       agent,
       worktreeId,
       environmentId: runtimeEnvironmentId,
+      workspaceExecutionHostId: args.workspaceExecutionHostId,
       groupId,
       cwd: initialCwd,
       buildStartup,
@@ -183,7 +217,10 @@ export function launchAgentInNewTabWithOutcome(
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = buildStartup()
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
   if (!startupPlan) {
-    return null
+    if (notifyFailure) {
+      notify()
+    }
+    return { refused: { delivered: false, failureNotified: notifyFailure } }
   }
 
   if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {

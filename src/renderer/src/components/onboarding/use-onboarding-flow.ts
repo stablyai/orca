@@ -35,15 +35,17 @@ export function useOnboardingFlow(
 ) {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
   const pathSource = useAppStore((s) => s.pathSource)
   const pathFailureReason = useAppStore((s) => s.pathFailureReason)
   const openModal = useAppStore((s) => s.openModal)
-  const hasSelectedWorkspace = useAppStore(
-    (s) => selectKnownWorktreeById(s, s.activeWorktreeId) !== null
+  const selectedWorkspaceId = useAppStore((s) =>
+    selectKnownWorktreeById(s, s.activeWorktreeId) ? s.activeWorktreeId : null
   )
+  const hasSelectedWorkspace = selectedWorkspaceId !== null
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
@@ -268,7 +270,7 @@ export function useOnboardingFlow(
     yoloPermissionsChosen,
     theme,
     settings,
-    updateSettings,
+    updateSettings: updateSettingsOrThrow,
     onboardingChecklist: onboarding.checklist,
     onOnboardingChange,
     setError
@@ -283,7 +285,7 @@ export function useOnboardingFlow(
     trackTaskSourcesSnapshot,
     settings,
     persistCurrentStep,
-    hasSelectedWorkspace,
+    selectedWorkspaceId,
     closeWith,
     openModal,
     getNextStepIndex,
@@ -293,7 +295,7 @@ export function useOnboardingFlow(
     selectedAgent,
     themeStepEntryThemeRef,
     setTheme,
-    updateSettings,
+    updateSettings: updateSettingsOrThrow,
     skipOptions
   })
 

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   mockCreateTab,
+  mockSetActiveTabType,
+  mockToastError,
   queuedStartups,
   mockSetAgentStatus,
   mockPasteDraftWhenAgentReady,
@@ -17,9 +19,133 @@ import { planAgentSessionLaunch } from './agent-session-launch-plan'
 import { openDeclinedTerminal } from './agent-session/launch/structured-agent-session-action-launch'
 import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  Object.assign(store, { activeWorkspaceExecutionHostId: null })
+})
 
 describe('launchAgentInNewTab', () => {
+  it.each(['created', 'failed'] as const)(
+    'settles a %s requested host agent beside existing surfaces using its captured owner',
+    async (creation) => {
+      const preferences =
+        await import('@/runtime/agent-launch-settings/use-host-agent-launch-preferences')
+      const transport =
+        await import('@/runtime/agent-launch-settings/agent-launch-settings-transport')
+      const { launchAgentInNewTabWithOutcome } = await import('./launch-agent-in-new-tab')
+      const { settleAgentTabLaunch } = await import('./launch-agent-in-new-tab-host-agents')
+      store.settings.nativeChatProviders = { claude: true }
+      Object.assign(store, {
+        activeWorkspaceExecutionHostId: 'runtime:web-runtime',
+        activeTabId: 'shell'
+      })
+      store.tabsByWorktree['wt-1'] = [
+        { id: 'shell' },
+        Object.assign({ id: 'live-claude' }, { launchAgent: 'claude' })
+      ]
+      const hostStatus = {
+        status: {
+          hostPlatform: 'linux',
+          capabilities: []
+        }
+      }
+      store.runtimeStatusByEnvironmentId.set('web-runtime', hostStatus)
+      Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
+      Object.assign(store.worktreesByRepo['repo-1'][0], { hostId: 'runtime:web-runtime' })
+      mockIsWebRuntimeSessionActive.mockReturnValue(true)
+      const readPreferences = vi
+        .spyOn(preferences, 'ensureAgentLaunchPreferences')
+        .mockResolvedValue({
+          defaultTuiAgent: 'codex',
+          disabledTuiAgents: undefined,
+          agentLaunchChoices: {}
+        })
+      vi.spyOn(transport, 'hostSupportsLaunchChoices').mockResolvedValue(true)
+      const reveal = vi.fn(() => true)
+      if (creation === 'failed') {
+        mockCreateWebRuntimeSessionTerminal.mockResolvedValueOnce({
+          status: 'failed',
+          message: 'host disconnected'
+        })
+      }
+      const result = launchAgentInNewTabWithOutcome({
+        requestId: 'captured-owner',
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        workspaceExecutionHostId: 'runtime:web-runtime',
+        beforeSurfaceOpen: reveal,
+        launchSource: 'onboarding'
+      })
+      expect(result && !('refused' in result) && result.terminalCompletion).toBeDefined()
+      Object.assign(store, {
+        activeWorktreeId: 'different-workspace',
+        activeWorkspaceExecutionHostId: 'runtime:other'
+      })
+      await expect(settleAgentTabLaunch(result)).resolves.toEqual(
+        creation === 'created' ? { kind: 'terminal' } : { kind: 'cancelled', sessionId: null }
+      )
+      expect(mockToastError).toHaveBeenCalledTimes(creation === 'failed' ? 1 : 0)
+      expect(readPreferences).toHaveBeenCalledWith(
+        expect.objectContaining({
+          activeWorktreeId: 'wt-1',
+          activeWorkspaceExecutionHostId: 'runtime:web-runtime'
+        }),
+        expect.objectContaining({ worktreeId: 'wt-1' })
+      )
+      expect(reveal).toHaveBeenCalledOnce()
+      expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          worktreeId: 'wt-1',
+          environmentId: 'web-runtime',
+          launchAgent: 'claude',
+          activate: true
+        })
+      )
+      expect(reveal.mock.invocationCallOrder[0]).toBeLessThan(
+        mockCreateWebRuntimeSessionTerminal.mock.invocationCallOrder[0]
+      )
+      if (creation === 'created') {
+        expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', 'wt-1')
+      } else {
+        expect(mockSetActiveTabType).not.toHaveBeenCalled()
+      }
+      expect(mockCreateTab).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['context', 'command', 'unexpected'] as const)(
+    'reports one notifying launch failure for %s',
+    async (failure) => {
+      const { launchAgentInNewTabWithOutcome } = await import('./launch-agent-in-new-tab')
+      if (failure === 'context') {
+        Object.assign(store, { activeWorkspaceExecutionHostId: 'runtime:unanswered' })
+      } else {
+        const startup = await import('./launch-agent-startup-prompt-plan')
+        const planner = vi.spyOn(startup, 'planLaunchAgentStartupPrompt')
+        if (failure === 'command') {
+          planner.mockReturnValue({
+            startupPlan: null,
+            pasteDraftAfterLaunch: null,
+            submitPastedPrompt: false
+          })
+        } else {
+          planner.mockImplementation(() => {
+            throw new Error('unexpected')
+          })
+        }
+      }
+      const result = launchAgentInNewTabWithOutcome({
+        requestId: 'failed',
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        requestedSurface: 'terminal'
+      })
+      expect(result).toEqual({ refused: { delivered: false, failureNotified: true } })
+      expect(mockToastError).toHaveBeenCalledOnce()
+      expect(mockCreateTab).not.toHaveBeenCalled()
+    }
+  )
+
   it.each(['terminal', 'declined-without-callback'] as const)(
     'keeps canonical saved source and deliberate effort through actual %s startup',
     async (route) => {

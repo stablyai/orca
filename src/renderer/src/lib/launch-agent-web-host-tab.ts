@@ -1,3 +1,5 @@
+import { agentTabLaunchStore } from './launch-agent-execution-context'
+import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import type { AgentLaunchChoices } from '../../../shared/agent-launch-choices'
 import { structuredAgentLabel } from './agent-session/launch/structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
@@ -28,6 +30,7 @@ import {
 export async function launchAgentInWebHostTab(args: {
   agent: TuiAgent
   worktreeId: string
+  workspaceExecutionHostId?: LaunchAgentInNewTabArgs['workspaceExecutionHostId']
   environmentId: string | null
   groupId?: string
   cwd?: string | null
@@ -62,10 +65,13 @@ export async function launchAgentInWebHostTab(args: {
   let startup: LaunchAgentStartupPromptPlan
   try {
     capable = environmentId ? await hostSupportsLaunchChoices({ environmentId }) : false
-    const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
-      kind: 'git-worktree',
-      worktreeId
-    })
+    const preferences = await ensureAgentLaunchPreferences(
+      agentTabLaunchStore(useAppStore.getState(), args),
+      {
+        kind: 'git-worktree',
+        worktreeId
+      }
+    )
     startup = args.buildStartup(
       preferences.agentLaunchChoices ??
         (capable ? {} : useAppStore.getState().settings?.agentLaunchChoices)
