@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const { execute } = vi.hoisted(() => ({ execute: vi.fn() }))
-vi.mock('../git/runner', () => ({ glabExecFileAsync: execute }))
+vi.mock('../git/command-runner/glab-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  glabExecFileAsync: execute
+}))
 
 import {
   _resetKnownHostsCache,
@@ -9,7 +12,7 @@ import {
   KNOWN_HOSTS_FAILURE_INITIAL_BACKOFF_MS,
   rememberGlabKnownHosts
 } from './gitlab-known-host-probe'
-import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
+import { NEGATIVE_ENTRY_TTL_MS } from '../git/remotes/remote-ref-probe-cache'
 
 const RECOVERED = { stdout: 'Logged in to recovered.test as user', stderr: '' }
 

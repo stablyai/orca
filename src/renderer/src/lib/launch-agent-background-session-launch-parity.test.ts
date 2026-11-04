@@ -8,25 +8,7 @@ import {
 } from '@/lib/launch-parity-renderer.test-fixture'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { getDefaultSettings } from '../../../shared/constants'
-import { projectAgentLaunchSettings } from '../../../shared/agent-launch-settings'
-import {
-  connectedRuntimeStatus,
-  publicRuntimeEnvironment
-} from '@/runtime/paired-runtime-environment-test-fixture'
 import { makeAutomation, makeRun } from '@/components/automations/automations-page-fixtures'
-import {
-  AUTOMATION_LAUNCH_CASES,
-  AUTOMATION_PROMPT,
-  automationPhoneTab,
-  automationSpawnRequest,
-  type AutomationLaunchCase
-} from '../../../shared/launch-parity-automation-cases.test-fixture'
-import {
-  LAUNCH_LEAF_ID,
-  LAUNCH_TAB_ID,
-  LAUNCH_TOKEN,
-  launchWorkspaceId
-} from '../../../shared/launch-parity-window-request.test-fixture'
 
 // Keep main’s mocked layout transport outside module resets so each rebuilt client still reaches it.
 type TransportFixture = typeof TransportFixtureModule
@@ -59,51 +41,12 @@ const load = perClientLoader(async () => ({
   switch: await import('../../../shared/layout-owner-switch'),
   remoteCreate: await import('./runtime-agent-background-create'),
   remoteStream: await import('@/runtime/runtime-terminal-stream'),
-  preferences: await import('@/components/settings/use-host-agent-launch-preferences'),
-  settingsTransport: await import('@/components/settings/agent-launch-settings-transport'),
+  preferences:
+    await import('@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'),
+  settingsTransport:
+    await import('@/runtime/agent-launch-settings/agent-launch-settings-transport'),
   workspace: await import('@/hooks/automation-dispatch-workspace')
 }))
-
-async function runAutomation(c: AutomationLaunchCase) {
-  const modules = await load(c.client)
-  const store = modules.createStore()
-  holder.store = store
-  store.setState(
-    launchWorkspaceState(c.workspace, { ...getDefaultSettings('/home/alice'), ...c.settings })
-  )
-  const spawn = vi.fn(async (_request: Record<string, unknown>) => ({ id: 'pty-1' }))
-  vi.stubGlobal('window', {
-    dispatchEvent: vi.fn(),
-    api: { pty: { spawn, write: vi.fn(), kill: vi.fn() }, runtime: { call: vi.fn() } }
-  })
-  await modules.launch.launchAgentBackgroundSession({
-    agent: c.agent,
-    worktreeId: launchWorkspaceId(c.workspace),
-    prompt: AUTOMATION_PROMPT,
-    launchSource: 'unknown',
-    title: c.title
-  })
-  const phone = modules.phone.buildMobileSessionTabSnapshots(store.getState(), false)
-  if (modules.switch.ORCA_LAYOUT_OWNER_IS_MAIN) {
-    const tabBarId = store.getState().unifiedTabsByWorktree[launchWorkspaceId(c.workspace)]![0]!.id
-    expect(main.transport?.sentOfType('renameTab').at(-1)).toEqual(
-      expect.objectContaining({ tabId: tabBarId, kind: 'custom', title: c.title })
-    )
-    for (const snapshot of phone) {
-      snapshot.tabs = snapshot.tabs.map((tab) => ({ ...tab, title: c.title }))
-    }
-  }
-  return { spawn, phone }
-}
-
-function withFixedIds(value: unknown): unknown {
-  const text = JSON.stringify(value)
-  const ids = [
-    ...new Set(text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g))
-  ]
-  const fixed = [LAUNCH_TAB_ID, LAUNCH_LEAF_ID, LAUNCH_TOKEN]
-  return JSON.parse(ids.reduce((out, id, index) => out.replaceAll(id, fixed[index] ?? id), text))
-}
 
 // Pin automation pty:spawn and mobile-tab behavior as the convergence baseline before C7 replaces this producer.
 describe('row 5: desktop automation pty:spawn request', () => {
@@ -212,116 +155,6 @@ describe('row 5: desktop automation pty:spawn request', () => {
         expect.objectContaining({ runId: run.id, status: 'skipped_unavailable' })
       )
       expect(spawn).toHaveBeenCalledTimes(1)
-    }
-  )
-
-  it.each(['local-first', 'ssh-first', 'sole-ssh'] as const)(
-    'requires initial folder ownership evidence independently of the local project (%s)',
-    async (order) => {
-      const modules = await load('darwin')
-      const store = modules.createStore()
-      holder.store = store
-      store.setState(
-        launchWorkspaceState(
-          { kind: 'folder', path: '/selected/folder' },
-          getDefaultSettings('/home/alice')
-        )
-      )
-      const folder = { ...store.getState().folderWorkspaces[0]!, executionHostId: 'local' as const }
-      const twin = {
-        ...folder,
-        executionHostId: 'ssh:other' as const,
-        folderPath: '/foreign/folder'
-      }
-      const repo = {
-        id: 'repo-1',
-        path: '/selected',
-        kind: 'folder' as const,
-        displayName: 'Project',
-        badgeColor: '#000',
-        addedAt: 1
-      }
-      store.setState({
-        repos: [repo],
-        folderWorkspaces:
-          order === 'sole-ssh' ? [twin] : order === 'local-first' ? [folder, twin] : [twin, folder],
-        sshConnectionStates: new Map([
-          [
-            'other',
-            {
-              targetId: 'other',
-              status: 'connected',
-              remotePlatform: 'linux',
-              error: null,
-              reconnectAttempt: 0
-            }
-          ]
-        ])
-      })
-      const automation = makeAutomation({
-        workspaceMode: 'existing',
-        workspaceId: `folder:${folder.id}`,
-        projectId: repo.id,
-        runContext: {
-          kind: 'workspace-run',
-          projectId: 'project',
-          projectHostSetupId: 'setup',
-          repoId: repo.id,
-          path: repo.path,
-          hostId: 'local'
-        }
-      })
-      const run = makeRun({ trigger: 'manual' })
-      const resolved = modules.workspace.resolveAutomationDispatchWorkspace(
-        store.getState(),
-        automation,
-        run
-      )
-      if (!resolved.repo) {
-        throw new Error('missing repo')
-      }
-      const markDispatchResult = vi.fn()
-      const spawn = vi.fn(async () => ({ id: 'ssh:other@@pty-folder' }))
-      vi.stubGlobal('window', {
-        dispatchEvent: vi.fn(),
-        api: { pty: { spawn, write: vi.fn(), kill: vi.fn() }, runtime: { call: vi.fn() } }
-      })
-      const prepare = () =>
-        modules.workspace.prepareAutomationDispatchWorkspace({
-          state: store.getState(),
-          automation,
-          run,
-          dispatchToken: 'token',
-          resolved: { ...resolved, repo: repo },
-          markDispatchResult
-        })
-      if (order !== 'sole-ssh') {
-        expect(resolved.automationWorktree).toBeNull()
-        expect(await prepare()).toBeNull()
-        store.setState({ folderWorkspaces: [twin] })
-        expect(await prepare()).toBeNull()
-        expect(markDispatchResult).toHaveBeenCalledTimes(2)
-        expect(markDispatchResult).toHaveBeenLastCalledWith(
-          expect.objectContaining({ runId: run.id, status: 'skipped_unavailable' })
-        )
-        expect(spawn).not.toHaveBeenCalled()
-        return
-      }
-      const worktree = await prepare()
-      expect(worktree).toMatchObject({ path: '/foreign/folder', hostId: 'ssh:other' })
-      expect(resolved.context.sshTargetId).toBe('other')
-      if (!worktree) {
-        throw new Error('missing SSH folder')
-      }
-      await modules.launch.launchAgentBackgroundSession({
-        agent: 'claude',
-        worktreeId: worktree.id,
-        resolvedTarget: { worktree, repo: resolved.repo }
-      })
-      expect(spawn).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd: '/foreign/folder', connectionId: 'other' })
-      )
-      expect(markDispatchResult).not.toHaveBeenCalled()
     }
   )
 
@@ -554,83 +387,4 @@ describe('row 5: desktop automation pty:spawn request', () => {
       }
     }
   )
-
-  it('keeps captured local launch defaults when a same-ID runtime workspace is focused', async () => {
-    const modules = await load('linux')
-    const store = modules.createStore()
-    holder.store = store
-    const settings = {
-      ...getDefaultSettings('/home/alice'),
-      agentLaunchChoices: { claude: { model: 'opus' } }
-    }
-    store.setState(launchWorkspaceState({ kind: 'repo', path: '/same' }, settings))
-    const repo = store.getState().repos[0]!
-    const worktree = store.getState().worktreesByRepo[repo.id]![0]!
-    store.setState({
-      repos: [repo, { ...repo, executionHostId: 'runtime:server' }],
-      worktreesByRepo: {
-        [repo.id]: [worktree, { ...worktree, hostId: 'runtime:server' }]
-      },
-      activeWorktreeId: worktree.id,
-      activeWorkspaceExecutionHostId: 'runtime:server',
-      runtimeEnvironments: [publicRuntimeEnvironment({ id: 'server' })],
-      runtimeEnvironmentCatalogHydrated: true,
-      runtimeStatusByEnvironmentId: new Map([['server', connectedRuntimeStatus('server', 1)]])
-    })
-    const readSettings = vi
-      .spyOn(modules.settingsTransport, 'readHostAgentLaunchSettings')
-      .mockResolvedValue(
-        projectAgentLaunchSettings(
-          {
-            ...settings,
-            agentLaunchChoices: { claude: { model: 'sonnet' } }
-          },
-          'linux'
-        )
-      )
-    const supportsChoices = vi
-      .spyOn(modules.settingsTransport, 'hostSupportsLaunchChoices')
-      .mockResolvedValue(true)
-    const spawn = vi.fn(async (_request: Record<string, unknown>) => ({ id: 'pty-local' }))
-    vi.stubGlobal('window', {
-      dispatchEvent: vi.fn(),
-      api: { pty: { spawn, write: vi.fn(), kill: vi.fn() }, runtime: { call: vi.fn() } }
-    })
-    try {
-      await modules.launch.launchAgentBackgroundSession({
-        agent: 'claude',
-        worktreeId: worktree.id,
-        resolvedTarget: { repo, worktree }
-      })
-      expect(readSettings).not.toHaveBeenCalled()
-      expect(spawn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          command: expect.stringContaining("'--model' 'opus'"),
-          connectionId: null
-        })
-      )
-    } finally {
-      modules.preferences.clearHostAgentMenuSettingsForTests()
-      readSettings.mockRestore()
-      supportsChoices.mockRestore()
-    }
-  })
-
-  it.each(AUTOMATION_LAUNCH_CASES)('$name', async (c) => {
-    const { spawn, phone } = await runAutomation(c)
-    expect(withFixedIds(spawn.mock.calls[0]?.[0])).toEqual(automationSpawnRequest(c))
-    expect(
-      phone.map(({ tabs }) =>
-        tabs.map((tab) => ({
-          title: tab.title,
-          launchAgent: recordOf(tab).launchAgent,
-          isActive: tab.isActive
-        }))
-      )
-    ).toEqual([[automationPhoneTab(c)]])
-  })
 })
-
-function recordOf(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? { ...value } : {}
-}

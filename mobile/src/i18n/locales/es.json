@@ -840,7 +840,8 @@
     },
     "prSidebar": {
       "loading": "Cargando pull request…",
-      "notPermitted": "Acceso no permitido: tu cuenta de GitHub no está conectada."
+      "notPermitted": "Acceso no permitido: tu cuenta de GitHub no está conectada.",
+      "retryLoading": "Reintentar cargar la pull request"
     },
     "protocolBlockScreen": {
       "backToHosts": "Volver a hosts",
@@ -1568,22 +1569,6 @@
       "showMore": "Mostrar {{count}} más",
       "title": "Comentarios"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_many": "{{count}} commits por detrás (commit base: {{baseCommit}})",
-      "commitsBehind_one": "{{count}} commit por detrás (commit base: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commits por detrás (commit base: {{baseCommit}})",
-      "copyCommands": "Copiar comandos",
-      "copyFailed": "No se pudo copiar el texto",
-      "copyRefreshCommands": "Copiar comandos para actualizar la capacidad de merge",
-      "detailsUnavailable": "Los detalles del archivo en conflicto no están disponibles",
-      "filesHeading": "Archivos con conflictos",
-      "localMergeClean": "GitHub indica que hay conflictos, pero Git no los ha reproducido en local. Actualiza la PR o haz push de la rama para recalcular la capacidad de merge.",
-      "mustResolve": "Esta rama tiene conflictos que deben resolverse",
-      "refreshing": "Actualizando detalles del conflicto…",
-      "resolveWithAi": "Resolver conflictos con IA",
-      "runFromWorktree": "Ejecutar desde este worktree",
-      "title": "Conflictos"
-    },
     "linkPrForm": {
       "linkButton": "Vincular pull request",
       "linkNumber": "Vincular #{{number}}",
@@ -1708,7 +1693,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "La rama actual no está disponible.",
-      "providerUnavailable": "El panel de revisión alojada no está disponible para este proveedor."
+      "githubRemoteRequired": "Esta pestaña necesita un remoto de GitHub para mostrar los detalles de las solicitudes de incorporación. Para otras plataformas compatibles, crea una revisión desde Cambios y ábrela en el navegador."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "No se pudieron cargar las personas",
@@ -1919,6 +1904,7 @@
       "attachmentAtMost": "{{agent}} acepta como máximo {{limit}} imágenes por mensaje, así que este mensaje no se envió.",
       "attachmentEmpty": "Una imagen de este mensaje está vacía, así que el mensaje no se envió.",
       "attachmentInvalid": "Un archivo adjunto de este mensaje no se puede enviar al agente.",
+      "attachmentsExpired": "Caducado: {{names}}.",
       "attachmentLargerThan": "Una imagen de este mensaje supera los {{size}} MB, así que el mensaje no se envió.",
       "attachmentNoSource": "Una imagen de este mensaje no tiene ningún archivo que enviar, así que el mensaje no se envió.",
       "attachmentNotAFile": "Una imagen de este mensaje no es un archivo, así que el mensaje no se envió.",
@@ -1992,6 +1978,7 @@
       "providerRetrying": "{{agent}} tuvo un problema temporal y está reintentando.",
       "providerRetryingQuoted": "{{agent}} está reintentando: {{detail}}.",
       "providerStartFailed": "{{agent}} se detuvo antes de terminar de iniciarse.",
+      "savedConversationMissing": "{{agent}} no pudo encontrar la conversación guardada de este chat.",
       "queueFull": "Había demasiados mensajes esperando al agente, así que este no se envió.",
       "quitTerminalAgent": "Cierre ese agente para continuar el chat aquí.",
       "runCommandAgain": "Vuelva a ejecutar /{{command}}.",
@@ -2122,8 +2109,7 @@
       "promptUnconfirmed": "El agente se inició, pero no se pudo confirmar el envío del prompt."
     },
     "prActionsEngine": {
-      "mergeFailed": "No se pudo hacer merge de la pull request.",
-      "refreshFailed": "No se pudo actualizar la pull request."
+      "mergeFailed": "No se pudo hacer merge de la pull request."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agente iniciado",
@@ -2505,6 +2491,7 @@
       "queueTooLarge": "Hay demasiado texto esperando en la cola.",
       "quitTerminalAgent": "Cierre ese agente para continuar el chat aquí.",
       "reattachFile": "Quítelo y vuelva a adjuntarlo.",
+      "reattachFiles": "Quítelos y vuelva a adjuntarlos.",
       "recordFailed": "Orca no pudo guardar esto en el historial del chat.",
       "recordUnreadable": "Orca no pudo leer el estado guardado de este chat.",
       "reopenChat": "Vuelva a abrir el chat para comprobarlo de nuevo.",
@@ -2580,6 +2567,10 @@
       "terminal": "Terminal",
       "tapToFocusPane": "{{title}}, toca para enfocar",
       "inputPane": "{{title}} · Entrada"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "El worktree se eliminó.",
+      "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
     }
   },
   "settings": {
@@ -2731,6 +2722,9 @@
       "title": "Voz",
       "toggleMode": "Alternar",
       "updateFailed": "No se pudo actualizar"
+    },
+    "agents": {
+      "permissionOwnAll": "Configuración propia de los agentes"
     }
   },
   "sourceControl": {

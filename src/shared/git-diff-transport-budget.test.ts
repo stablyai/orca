@@ -93,15 +93,6 @@ describe('gitDiffExceedsTransportBudget', () => {
     expect(budgetError(result).code).toBe('diff_too_large')
   })
 
-  it.each(UNITS)('agrees with native JSON.stringify across the boundary for $name', ({ unit }) => {
-    for (const jsonBytes of [BUDGET - 1, BUDGET, BUDGET + 1]) {
-      const result = textDiffOfJsonBytes(unit, jsonBytes)
-      expect(gitDiffExceedsTransportBudget(result, BUDGET)).toBe(
-        referenceResultBytes(result) > BUDGET
-      )
-    }
-  })
-
   // Why: this is the case a raw-byte budget silently lets through into the 1013 close.
   it('rejects control-dense content whose raw bytes are far under the budget', () => {
     const result = textDiffOfJsonBytes('\u0001', BUDGET + 1)

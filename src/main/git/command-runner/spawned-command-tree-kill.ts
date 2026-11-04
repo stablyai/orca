@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { admitSelfInitiatedTreeKill } from '../../own-chromium-tree-kill-guard'
+import { admitSelfInitiatedTreeKill } from '../../pty/process-retirement/own-chromium-tree-kill-guard'
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 

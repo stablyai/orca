@@ -22,6 +22,38 @@ afterEach(async () => {
 })
 
 describe('desktop words for a failure fact', () => {
+  it('gives new-chat guidance while keeping a missing conversation diagnostic private', () => {
+    expect(
+      agentSessionFailureSentence(
+        {
+          kind: 'savedConversationMissing',
+          detail: { text: 'No conversation found with session ID: private-id', audience: 'log' }
+        },
+        'row',
+        { agentName: 'Claude' },
+        sayAgentSessionFailureTranslated
+      )
+    ).toBe("Claude couldn't find this chat's saved conversation. Start a new chat to continue.")
+  })
+
+  it.each([
+    ['en', 'Claude hit its session limit.'],
+    ['fr', 'Claude a atteint sa limite de session.']
+  ])(
+    'renders a compact quota cause in %s through existing failure words',
+    async (locale, expected) => {
+      await i18n.changeLanguage(locale)
+      expect(
+        agentSessionFailureSentence(
+          { kind: 'usageLimitReached', usageLimit: { window: 'session' } },
+          'row',
+          { agentName: 'Claude' },
+          sayAgentSessionFailureTranslated
+        )
+      ).toBe(expected)
+    }
+  )
+
   it.each([
     ['en', 'Then send your message again.'],
     ['es', 'Después, envía tu mensaje de nuevo.'],

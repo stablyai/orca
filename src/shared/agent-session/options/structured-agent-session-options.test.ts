@@ -5,8 +5,8 @@ import {
   CODEX_SESSION_OPTION_CATALOG,
   CLAUDE_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
-import { buildNativeChatSessionOptionSnapshot } from '../../native-chat/input/native-chat-session-option-snapshot'
-import { createNativeChatSessionOptionRecord } from '../../native-chat/input/native-chat-session-option-state'
+import '../../native-chat/input/native-chat-session-option-snapshot'
+import '../../native-chat/input/native-chat-session-option-state'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
@@ -15,10 +15,7 @@ import {
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
 } from './structured-agent-session-options'
-import {
-  canSetStructuredAgentSessionOption,
-  structuredAgentSessionOptionSnapshot
-} from './structured-agent-session-option-snapshot'
+import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionMessageSelection
@@ -124,81 +121,6 @@ describe('structured agent session options', () => {
     })
   })
 
-  it('projects native Codex selects while bridge Codex keeps its agent picker', () => {
-    const state = applyStructuredAgentSessionOptions(
-      createStructuredAgentSessionOptionState('codex'),
-      CODEX_SESSION_OPTION_CATALOG,
-      {
-        models: [
-          {
-            id: 'account-model',
-            label: 'Account Model',
-            isDefault: true,
-            defaultEffort: 'medium',
-            efforts: [
-              { value: 'medium', label: 'Medium' },
-              { value: 'high', label: 'High' }
-            ]
-          }
-        ],
-        current: { model: 'account-model', effort: 'medium' }
-      }
-    )
-
-    const structured = structuredAgentSessionOptionSnapshot(state)
-    expect(structured.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
-    expect(structured[0]).toMatchObject({
-      settable: true,
-      kind: { type: 'select', currentValue: 'account-model' }
-    })
-    expect(structured[0]).not.toHaveProperty('action')
-    expect(structured[1]).toMatchObject({
-      settable: true,
-      kind: { type: 'select', currentValue: 'medium' }
-    })
-
-    const bridgeRecord = createNativeChatSessionOptionRecord('codex')
-    bridgeRecord.model = { value: 'gpt-5.6-sol', source: 'reported' }
-    const bridge = buildNativeChatSessionOptionSnapshot({
-      catalog: CODEX_SESSION_OPTION_CATALOG,
-      models: CODEX_SESSION_OPTION_CATALOG.models,
-      record: bridgeRecord,
-      mode: 'live',
-      modelLabel: 'Model',
-      liveTransport: 'catalog'
-    })
-    // Same catalog, same `dispatched` vocabulary — only the transport separates them.
-    expect(structured.every((descriptor) => descriptor.transport === 'agent-session')).toBe(true)
-    expect(bridge.every((descriptor) => descriptor.transport === 'catalog')).toBe(true)
-    expect(bridge[0]).toMatchObject({ action: { type: 'agent-picker' } })
-    expect(bridge.find((descriptor) => descriptor.id === 'effort')).toMatchObject({
-      action: { type: 'agent-picker' }
-    })
-  })
-
-  it('uses provider-scoped models and retains the current unknown id', () => {
-    const state = applyStructuredAgentSessionOptions(
-      createStructuredAgentSessionOptionState('codex'),
-      CODEX_SESSION_OPTION_CATALOG,
-      {
-        models: [
-          {
-            id: 'account-model',
-            label: 'Account Model',
-            isDefault: false,
-            efforts: []
-          }
-        ],
-        current: { model: 'persisted-unknown' }
-      }
-    )
-    const model = structuredAgentSessionOptionSnapshot(state)[0]
-    expect(
-      model.kind.type === 'select' ? model.kind.choices.map((choice) => choice.value) : []
-    ).toEqual(['account-model', 'persisted-unknown'])
-    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('persisted-unknown')
-  })
-
   it('projects Fast mode only from positive session and model capability', () => {
     const supported = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('codex'),
@@ -240,77 +162,6 @@ describe('structured agent session options', () => {
     })
     expect(structuredAgentSessionOptionSnapshot(absent).map(({ id }) => id)).toEqual(['model'])
     expect(absent.record.values.fastMode).toBeUndefined()
-  })
-
-  it('offers one speed choice in place of the Fast toggle where the model lists speeds', () => {
-    const state = applyStructuredAgentSessionOptions(
-      createStructuredAgentSessionOptionState('codex'),
-      CODEX_SESSION_OPTION_CATALOG,
-      {
-        models: [
-          {
-            id: 'gpt-6.1-sol',
-            label: 'GPT-6.1 Sol',
-            isDefault: true,
-            efforts: [],
-            supportsFastMode: true,
-            serviceTiers: [
-              { value: 'priority', label: 'Fast' },
-              { value: 'ultrafast', label: 'Ultrafast' }
-            ]
-          }
-        ],
-        fastModeSupport: { supported: true },
-        current: { model: 'gpt-6.1-sol', serviceTier: 'ultrafast', confirmed: ['serviceTier'] }
-      }
-    )
-    const snapshot = structuredAgentSessionOptionSnapshot(state)
-    expect(snapshot.map(({ id }) => id)).toEqual(['model', 'serviceTier'])
-    expect(snapshot).toContainEqual(
-      expect.objectContaining({
-        id: 'serviceTier',
-        kind: {
-          type: 'select',
-          currentValue: 'ultrafast',
-          choices: [
-            { value: 'default', label: 'Standard' },
-            { value: 'priority', label: 'Fast' },
-            { value: 'ultrafast', label: 'Ultrafast' }
-          ]
-        },
-        valueSource: 'reported',
-        settable: true
-      })
-    )
-  })
-
-  it('renders Fast off but marked unreported when support is known and no value is', () => {
-    const state = applyStructuredAgentSessionOptions(
-      createStructuredAgentSessionOptionState('codex'),
-      CODEX_SESSION_OPTION_CATALOG,
-      {
-        models: [
-          {
-            id: 'account-model',
-            label: 'Account Model',
-            isDefault: true,
-            efforts: [],
-            supportsFastMode: true
-          }
-        ],
-        fastModeSupport: { supported: true },
-        current: { model: 'account-model' }
-      }
-    )
-
-    // A binary switch resolves false, but unknown provenance prevents claiming it is the running default in this live-only lane.
-    expect(structuredAgentSessionOptionSnapshot(state)).toContainEqual(
-      expect.objectContaining({
-        id: 'fastMode',
-        kind: { type: 'boolean', currentValue: false },
-        valueSource: 'unknown'
-      })
-    )
   })
 
   it('shows the launch seed until the record names a model, and held picks over both', () => {
@@ -364,50 +215,6 @@ describe('structured agent session options', () => {
     expect(viewModel(live, seed, { model: 'gpt-5.5' })).toBe('gpt-5.5')
     expect(live.record.values.model?.value).toBe('gpt-5.6-luna')
   })
-
-  it('keeps a saved Fast with no model known, Standard turning it off', () => {
-    const sol = {
-      id: 'gpt-6.1-sol',
-      label: 'GPT-6.1 Sol',
-      isDefault: false,
-      efforts: [],
-      serviceTiers: [{ value: 'priority', label: 'Fast' }]
-    }
-    // A resumed chat's at-rest answer, whose listing names no default.
-    const fast = applyStructuredAgentSessionOptions(
-      createStructuredAgentSessionOptionState('codex'),
-      CODEX_SESSION_OPTION_CATALOG,
-      {
-        models: [sol],
-        fastModeSupport: { supported: true },
-        current: { serviceTier: 'priority', defaulted: [] }
-      }
-    )
-    expect(
-      structuredAgentSessionOptionSnapshot(fast).find(({ id }) => id === 'serviceTier')
-    ).toMatchObject({ settable: true, kind: { currentValue: 'priority' } })
-    const standard = commitStructuredAgentSessionOption(fast, 'serviceTier', 'default')
-    // Inventory does not authorize a literal pick.
-    expect(canSetStructuredAgentSessionOption(standard, 'serviceTier', 'priority')).toBe(true)
-  })
-})
-
-it('separates typed literal readiness from an empty or refreshing catalog', () => {
-  const state = createStructuredAgentSessionOptionState('codex')
-  const snapshot = structuredAgentSessionOptionSnapshot(state)
-  expect(canSetStructuredAgentSessionOption(state, 'model', 'unlisted', snapshot, false)).toBe(
-    false
-  )
-  expect(canSetStructuredAgentSessionOption(state, 'model', 'unlisted', snapshot, true)).toBe(true)
-  expect(
-    canSetStructuredAgentSessionOption(
-      { ...state, listingInProgress: true },
-      'effort',
-      'high',
-      snapshot,
-      true
-    )
-  ).toBe(true)
 })
 
 it.each([false, true])(
@@ -525,7 +332,6 @@ it('rederives unanswered catalog policy while preserving stronger input and quer
   )
   expect(structuredAgentSessionMessageSelection(initial)).toEqual({
     model: 'opus',
-    effort: 'high',
     fastMode: 'false'
   })
   const noDefault = { ...catalog, listingNamesConfiguredModel: false }

@@ -4,8 +4,8 @@ import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/journal-row-builders'
@@ -32,7 +32,10 @@ export type {
   StructuredAgentSessionLinkageJournal,
   StructuredAgentSessionRevisionResolver
 } from './structured-agent-session-journal-views'
-import { StructuredAgentSessionExitObservation } from './structured-agent-session-exit-observation'
+import {
+  StructuredAgentSessionExitObservation,
+  StructuredAgentSessionRootExitReceipt
+} from './structured-agent-session-exit-observation'
 
 export type StructuredAgentSessionSinkAdmission =
   | { accepted: true }
@@ -72,6 +75,9 @@ export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAp
 
 export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
   observeExit?: StructuredAgentSessionExitObservation['record']
+  /** Adapters report only their acquisition's own spontaneous root exit, never a requested close. */
+  observeRootExit?: StructuredAgentSessionRootExitReceipt['observe']
+  onRootExit?: StructuredAgentSessionRootExitReceipt['listen']
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -190,6 +196,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
   onBackpressureChange?: (backpressured: boolean, state: StructuredAgentSessionSinkState) => void
 }): DeferredStructuredAgentSessionEventSink {
   const exit = new StructuredAgentSessionExitObservation()
+  const rootExit = new StructuredAgentSessionRootExitReceipt()
   const watermarks = { ...DEFAULT_WATERMARKS, ...deps.watermarks }
   const failed = (error: unknown): void => {
     deps.logger.error('writing provider events to the chat journal failed', {
@@ -260,6 +267,8 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     exitObservation: () => exit,
     sink: {
       observeExit: exit.record,
+      observeRootExit: rootExit.observe,
+      onRootExit: rootExit.listen,
       appendItem: (identity, body, options) => void appendItem(identity, body, options),
       tryAppendItem: appendItem,
       ...resolvedAppend,

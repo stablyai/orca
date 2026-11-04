@@ -803,7 +803,8 @@
     },
     "prSidebar": {
       "loading": "Pull Request wird geladen…",
-      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden."
+      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden.",
+      "retryLoading": "Pull Request erneut laden"
     },
     "protocolBlockScreen": {
       "backToHosts": "Zurück zu Hosts",
@@ -1525,21 +1526,6 @@
       "showMore": "{{count}} weitere anzeigen",
       "title": "Kommentare"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} Commit im Rückstand (Basis-Commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} Commits im Rückstand (Basis-Commit: {{baseCommit}})",
-      "copyCommands": "Befehle kopieren",
-      "copyFailed": "Text konnte nicht kopiert werden",
-      "copyRefreshCommands": "Befehle zum Aktualisieren der Merge-Fähigkeit kopieren",
-      "detailsUnavailable": "Details zu Dateien mit Konflikten sind nicht verfügbar",
-      "filesHeading": "Dateien mit Konflikten",
-      "localMergeClean": "GitHub meldet Konflikte, die mit lokalem Git nicht reproduziert werden konnten. PR aktualisieren oder Branch pushen, um die Merge-Fähigkeit neu zu berechnen.",
-      "mustResolve": "Dieser Branch enthält Konflikte, die gelöst werden müssen",
-      "refreshing": "Konfliktdetails werden aktualisiert…",
-      "resolveWithAi": "Konflikte mit KI lösen",
-      "runFromWorktree": "Aus diesem Worktree ausführen",
-      "title": "Konflikte"
-    },
     "linkPrForm": {
       "linkButton": "Pull Request verknüpfen",
       "linkNumber": "#{{number}} verknüpfen",
@@ -1658,7 +1644,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Aktueller Branch nicht verfügbar.",
-      "providerUnavailable": "Gehostetes Review-Panel für diesen Anbieter nicht verfügbar."
+      "githubRemoteRequired": "Dieser Tab benötigt ein GitHub-Remote, um Pull-Request-Details anzuzeigen. Für andere unterstützte Plattformen kannst du unter Änderungen ein Review erstellen und im Browser öffnen."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Personen konnten nicht geladen werden.",
@@ -1853,6 +1839,7 @@
       "attachmentAtMost": "{{agent}} akzeptiert höchstens {{limit}} Bilder pro Nachricht, daher wurde diese Nachricht nicht gesendet.",
       "attachmentEmpty": "Ein Bild in dieser Nachricht ist leer, daher wurde die Nachricht nicht gesendet.",
       "attachmentInvalid": "Ein Anhang dieser Nachricht kann nicht an den Agenten gesendet werden.",
+      "attachmentsExpired": "Abgelaufen: {{names}}.",
       "attachmentLargerThan": "Ein Bild in dieser Nachricht ist größer als {{size}} MB, daher wurde die Nachricht nicht gesendet.",
       "attachmentNoSource": "Für ein Bild in dieser Nachricht fehlt die zu sendende Datei, daher wurde die Nachricht nicht gesendet.",
       "attachmentNotAFile": "Ein Bild in dieser Nachricht ist keine Datei, daher wurde die Nachricht nicht gesendet.",
@@ -1926,6 +1913,7 @@
       "providerRetrying": "{{agent}} ist auf ein vorübergehendes Problem gestoßen und versucht es erneut.",
       "providerRetryingQuoted": "{{agent}} versucht es erneut: {{detail}}.",
       "providerStartFailed": "{{agent}} wurde beendet, bevor der Start abgeschlossen war.",
+      "savedConversationMissing": "{{agent}} konnte den gespeicherten Verlauf dieses Chats nicht finden.",
       "queueFull": "Zu viele Nachrichten warteten auf den Agenten, daher wurde diese Nachricht nicht gesendet.",
       "quitTerminalAgent": "Diesen Agenten beenden, um den Chat hier fortzusetzen.",
       "runCommandAgain": "/{{command}} erneut ausführen.",
@@ -2055,8 +2043,7 @@
       "promptUnconfirmed": "Der Agent wurde gestartet, aber der Versand des Prompts konnte nicht bestätigt werden."
     },
     "prActionsEngine": {
-      "mergeFailed": "Pull Request konnte nicht gemergt werden.",
-      "refreshFailed": "Pull Request konnte nicht aktualisiert werden."
+      "mergeFailed": "Pull Request konnte nicht gemergt werden."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent gestartet",
@@ -2437,6 +2424,7 @@
       "queueTooLarge": "In der Warteschlange befindet sich zu viel Text.",
       "quitTerminalAgent": "Diesen Agenten beenden, um den Chat hier fortzusetzen.",
       "reattachFile": "Den Anhang entfernen und erneut anhängen.",
+      "reattachFiles": "Die Anhänge entfernen und erneut anhängen.",
       "recordFailed": "Orca konnte dies nicht im Chatverlauf speichern.",
       "recordUnreadable": "Orca konnte den gespeicherten Zustand dieses Chats nicht lesen.",
       "reopenChat": "Den Chat erneut öffnen, um dies nochmals zu prüfen.",
@@ -2512,6 +2500,10 @@
       "terminal": "Terminal",
       "tapToFocusPane": "{{title}}, zum Fokussieren tippen",
       "inputPane": "{{title}} · Eingabe"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "Der Worktree wurde gelöscht.",
+      "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
     }
   },
   "settings": {
@@ -2659,6 +2651,9 @@
       "title": "Spracheingabe",
       "toggleMode": "Umschalten",
       "updateFailed": "Aktualisierung fehlgeschlagen"
+    },
+    "agents": {
+      "permissionOwnAll": "Eigene Einstellungen der Agenten"
     }
   },
   "sourceControl": {

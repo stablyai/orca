@@ -19,6 +19,12 @@ export type AgentProcessPresence = {
   sessionOwner?: true
   /** Positive host observation of suspension, distinct from an unavailable process read. */
   suspended?: true
+  /** Recorded into an empty pane without proof that the process is the pane's own job; a
+   *  proved root replaces it. Saved; older builds drop it and keep main's captured owner. */
+  fallback?: true
+  /** A relay's echo of the pane-root binding its desktop issued for this proved owner; volatile,
+   *  so the shared decoder never reads it and nothing saves it. */
+  paneRoot?: string
 }
 
 export type AgentProcessVerdict = 'live' | 'unverifiable' | 'exited'
@@ -53,12 +59,14 @@ export function readAgentProcessIdentity(value: unknown): AgentProcessIdentity |
   return { pid, platform, startTime }
 }
 
-// Why: only Claude's hook command captures its agent's process; other hooks cannot speak for liveness.
+// Only installed Claude and Antigravity commands capture the agent process before the managed shell.
 export function readHookAgentProcess(
   source: string,
   value: unknown
 ): AgentProcessIdentity | undefined {
-  return source === 'claude' ? readAgentProcessIdentity(value) : undefined
+  return source === 'claude' || source === 'antigravity'
+    ? readAgentProcessIdentity(value)
+    : undefined
 }
 
 export function readAgentProcessPresence(value: unknown): AgentProcessPresence | undefined {
@@ -90,8 +98,22 @@ export function readAgentProcessPresence(value: unknown): AgentProcessPresence |
     ...('sessionOwner' in value && value.sessionOwner === true
       ? { sessionOwner: true as const }
       : {}),
-    ...('suspended' in value && value.suspended === true ? { suspended: true as const } : {})
+    ...('suspended' in value && value.suspended === true ? { suspended: true as const } : {}),
+    ...(process && 'fallback' in value && value.fallback === true
+      ? { fallback: true as const }
+      : {})
   }
+}
+
+/** The binding a relay echoed on its proved owner, read only at the relay's ingest boundary. */
+export function readAgentPaneRootBinding(value: unknown): string | undefined {
+  return value &&
+    typeof value === 'object' &&
+    'paneRoot' in value &&
+    typeof value.paneRoot === 'string' &&
+    value.paneRoot.length <= 256
+    ? value.paneRoot
+    : undefined
 }
 
 export function isSameAgentProcess(a: AgentProcessIdentity, b: AgentProcessIdentity): boolean {

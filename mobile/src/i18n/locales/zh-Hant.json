@@ -799,7 +799,8 @@
     },
     "prSidebar": {
       "loading": "正在載入 PR…",
-      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。"
+      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。",
+      "retryLoading": "重新嘗試載入 PR"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主機清單",
@@ -1521,21 +1522,6 @@
       "showMore": "再顯示 {{count}} 則",
       "title": "留言"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "落後 {{count}} 個提交（基底提交：{{baseCommit}}）",
-      "commitsBehind_other": "落後 {{count}} 個提交（基底提交：{{baseCommit}}）",
-      "copyCommands": "複製命令",
-      "copyFailed": "無法複製文字",
-      "copyRefreshCommands": "複製重新判斷是否可合併的命令",
-      "detailsUnavailable": "無法取得衝突檔案的詳細資訊",
-      "filesHeading": "衝突的檔案",
-      "localMergeClean": "GitHub 回報有衝突，但本機 Git 未重現這些衝突。請重新整理 PR 或推送分支，以重新判斷是否可合併。",
-      "mustResolve": "此分支有必須解決的衝突",
-      "refreshing": "正在重新整理衝突詳細資訊…",
-      "resolveWithAi": "使用 AI 解決衝突",
-      "runFromWorktree": "從此工作樹執行",
-      "title": "衝突"
-    },
     "linkPrForm": {
       "linkButton": "連結 PR",
       "linkNumber": "連結 #{{number}}",
@@ -1654,7 +1640,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "無法取得目前分支。",
-      "providerUnavailable": "此提供者無法使用託管審查面板。"
+      "githubRemoteRequired": "此分頁需要 GitHub 遠端儲存庫才能顯示提取要求詳情。對於其他支援的平台，請在「變更」中建立審查，然後在瀏覽器中開啟。"
     },
     "reviewerPickerDrawer": {
       "loadFailed": "載入人員失敗",
@@ -1849,6 +1835,7 @@
       "attachmentAtMost": "{{agent}} 每則訊息最多接受 {{limit}} 張圖片，因此此訊息未傳送。",
       "attachmentEmpty": "此訊息中的一張圖片為空，因此訊息未傳送。",
       "attachmentInvalid": "此訊息中的附件無法傳送給代理程式。",
+      "attachmentsExpired": "{{names}} 已過期。",
       "attachmentLargerThan": "此訊息中的一張圖片超過 {{size}} MB，因此訊息未傳送。",
       "attachmentNoSource": "此訊息中的一張圖片沒有可傳送的檔案，因此訊息未傳送。",
       "attachmentNotAFile": "此訊息中的一張圖片不是檔案，因此訊息未傳送。",
@@ -1922,6 +1909,7 @@
       "providerRetrying": "{{agent}} 遇到暫時性問題，正在重試。",
       "providerRetryingQuoted": "{{agent}} 正在重試：{{detail}}。",
       "providerStartFailed": "{{agent}} 在完成啟動前已停止。",
+      "savedConversationMissing": "{{agent}} 找不到此聊天已儲存的對話。",
       "queueFull": "等待代理程式處理的訊息過多，因此此訊息未傳送。",
       "quitTerminalAgent": "請結束該代理程式，以便在此處繼續聊天。",
       "runCommandAgain": "請重新執行 /{{command}}。",
@@ -2051,8 +2039,7 @@
       "promptUnconfirmed": "代理程式已啟動，但無法確認提示詞是否已傳送。"
     },
     "prActionsEngine": {
-      "mergeFailed": "合併 PR 失敗。",
-      "refreshFailed": "重新整理 PR 失敗。"
+      "mergeFailed": "合併 PR 失敗。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "代理程式已啟動",
@@ -2433,6 +2420,7 @@
       "queueTooLarge": "佇列中等待的文字過多。",
       "quitTerminalAgent": "請結束該代理程式，以便在此處繼續聊天。",
       "reattachFile": "請將其移除後重新附加。",
+      "reattachFiles": "請將它們移除後重新附加。",
       "recordFailed": "Orca 無法將此內容儲存到聊天歷史記錄中。",
       "recordUnreadable": "Orca 無法讀取此聊天的已儲存狀態。",
       "reopenChat": "請重新開啟聊天以再次檢查。",
@@ -2508,6 +2496,10 @@
       "terminal": "終端機",
       "tapToFocusPane": "{{title}}，點一下以聚焦",
       "inputPane": "{{title}} · 輸入"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "工作樹已刪除。",
+      "folderWorkspaceRemoved": "資料夾工作區已移除。"
     }
   },
   "settings": {
@@ -2655,6 +2647,9 @@
       "title": "語音",
       "toggleMode": "切換",
       "updateFailed": "無法更新"
+    },
+    "agents": {
+      "permissionOwnAll": "各代理程式自身的設定"
     }
   },
   "sourceControl": {

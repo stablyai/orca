@@ -8,7 +8,7 @@ import { mobileStructuredSendQueues } from './use-mobile-structured-send-with-ou
 import {
   nativeChatSendFollowUp,
   type NativeChatSendFollowUp
-} from '../../../src/shared/native-chat-follow-up-behavior'
+} from '../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 
 export function useMobileStructuredTurnIndicator(input: {
   state: StructuredAgentSessionState

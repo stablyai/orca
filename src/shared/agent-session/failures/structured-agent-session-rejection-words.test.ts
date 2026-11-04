@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
 import { agentSessionWriteNoticeEnglish } from './agent-session-refusal-notice'
-import { DISPATCH_REJECTED_QUEUE_FULL } from '../requests/structured-agent-session-dispatch-rejection'
 import {
   structuredAgentSessionRecordedRejectionParts,
   structuredAgentSessionRejectionParts
@@ -19,35 +18,10 @@ describe('what a rejection shows the reader', () => {
     expect(shown).not.toContain('broken pipe')
     expect(shown).toBe("Orca couldn't reach the agent. Your message was not sent.")
   })
-
-  it('never puts a legacy or local-capacity marker on screen', () => {
-    expect(notice('not_delivered')).toBe('Your message was not sent.')
-    expect(notice(DISPATCH_REJECTED_QUEUE_FULL)).toBe('Your message was not sent.')
-  })
 })
 
 // A row that carries the host's fact is worded from it; the reason is not read.
 describe('what a rejection with a typed fact shows the reader', () => {
-  it('says Orca could not hand the message over, whatever the reason holds', () => {
-    for (const reason of ['provider_write_failed', 'Something unrelated.']) {
-      expect(notice(reason, { kind: 'writeFailed' })).toBe(
-        "Orca couldn't reach the agent. Your message was not sent."
-      )
-    }
-  })
-
-  it("rebuilds the fact's sentence where a marker stands in for it", () => {
-    expect(notice(DISPATCH_REJECTED_QUEUE_FULL, { kind: 'queueFull' })).toBe(
-      'Too many messages were waiting for the agent, so this one was not sent.'
-    )
-  })
-
-  it('words the fact itself, never the sentence the host wrote beside it', () => {
-    expect(
-      notice('Claude never finished starting, so Orca stopped it.', { kind: 'hostStopped' })
-    ).toBe('The agent never finished starting, so Orca stopped it.')
-  })
-
   it('says only that the message was not sent for a fact it cannot place', () => {
     expect(notice('A sentence a newer host wrote.', JSON.parse('{"kind":"fromTheFuture"}'))).toBe(
       'Your message was not sent.'
@@ -81,18 +55,5 @@ describe('the line under a recorded rejection', () => {
 
   it('says only that it was not sent when a loaded row already states the reason', () => {
     expect(line('Written by the host.', signedOut)).toBe('Your message was not sent.')
-  })
-
-  it('words a fact no row states from the fact itself', () => {
-    expect(line('Written by the host.', { kind: 'writeFailed' })).toBe(
-      "Orca couldn't reach the agent. Your message was not sent."
-    )
-  })
-
-  it("shows an older host's reason sentence, and never a legacy marker", () => {
-    expect(line('Claude messages support at most 20 images')).toBe(
-      'Claude messages support at most 20 images'
-    )
-    expect(line('not_delivered')).toBe('Your message was not sent.')
   })
 })

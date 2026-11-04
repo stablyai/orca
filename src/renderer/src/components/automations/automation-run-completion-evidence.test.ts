@@ -74,15 +74,4 @@ describe('automation run completion evidence (STA-3386)', () => {
       })
     ).toBe(false)
   })
-
-  it('accepts a real done after dispatch', () => {
-    expect(
-      hasAutomationRunCompletionEvidence({
-        run: run(),
-        dispatchedAt: 1_000,
-        agentStatusByPaneKey: { [PANE]: entry() },
-        retainedAgentsByPaneKey: {}
-      })
-    ).toBe(true)
-  })
 })

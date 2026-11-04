@@ -12,7 +12,7 @@ import { vi } from 'vitest'
 import { useMobileNativeChatController } from '../native-chat/use-mobile-native-chat-controller'
 import { MobileNativeChatOverlay } from '../native-chat/MobileNativeChatOverlay'
 import { MobileNativeChatAsk } from '../native-chat/input/MobileNativeChatAsk'
-import type { AskAnswerSelection } from '../../../../src/shared/native-chat-ask-answer'
+import type { AskAnswerSelection } from '../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import { mobileNativeChatPromptDismissals } from '../native-chat/input/mobile-native-chat-prompt-dismissals'
 import { setMobileNativeChatDraftText } from '../native-chat/composer/mobile-native-chat-draft-store'
 export const visible = { value: true }
@@ -139,6 +139,7 @@ function Harness(props: HarnessProps) {
   const { tab = baseTab, tabId = 'tab-1', connState = 'connected', hostId = 'host' } = props
   const current = useMobileNativeChatController({
     client,
+    pairedHostClient: client,
     hostId,
     worktreeId: 'folder:work',
     activeSessionTab: tab,

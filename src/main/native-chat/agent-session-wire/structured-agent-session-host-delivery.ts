@@ -1,5 +1,4 @@
 import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
-import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
 // Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
 
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -76,6 +75,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   /** Stops a child the chat outgrew, so the start after it reads a new login, account or permission
    *  mode. */
   stopOutgrownAgent: (sessionId: string) => Promise<void>
+  stopPermissionTransitionChild: (sessionId: string) => Promise<void>
   clientDelivery: Pick<
     StructuredAgentSessionClientDelivery,
     | 'publishRestored'
@@ -107,6 +107,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     serialize: input.serialize,
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
+    stopPermissionTransitionChild: input.stopPermissionTransitionChild,
     retireOutgrownChild: async (sessionId, continuingId, next) => {
       // Defer retirement while personal Stop holds handover; its next step decides.
       const session = input.clientDelivery.readStopping(sessionId)
@@ -130,7 +131,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
           )
         },
         permissionRequiresAcquisition: (mode) =>
-          continuingId
+          structuredAgentSessionInputCompilerPermission(session?.journal, continuingId)
             ? true
             : (deps.adapter.permissionModeRequiresAcquisition?.(sessionId, mode) ??
               mode !== session?.child?.permissionMode),
@@ -140,17 +141,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         },
         launchAccountHome: async () => {
           const record = deps.store.getRecord(sessionId)
-          return record
-            ? (
-                await structuredAgentSessionReceivingAccount(
-                  deps,
-                  record,
-                  session,
-                  next,
-                  'identity'
-                )
-              ).home
-            : null
+          return record ? ((await deps.launchAccountHome?.(record, 'identity')) ?? null) : null
         },
         logger: deps.logger
       })

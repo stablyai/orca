@@ -711,7 +711,7 @@ it('phone captures accepted echoed inputs, preserves false, and freezes empty vs
   await harness.unmount()
 })
 
-it('refuses a typed literal at an unresolved fence and accepts it when that fence is ready with no menu', async () => {
+it('accepts a typed literal at an attached fence while options refresh with no menu', async () => {
   const pending = deferred<AgentSessionOptionsResult>()
   let reads = 0
   const client = optionsClient(() =>
@@ -726,19 +726,19 @@ it('refuses a typed literal at an unresolved fence and accepts it when that fenc
   await act(async () => {
     result = await view.current().setStructuredOption('model', 'literal')
   })
-  expect(result).toBe(false)
-  expect(calls).toHaveLength(0)
+  expect(result).toBe(true)
+  expect(calls).toHaveLength(1)
   await act(async () => pending.resolve({ models: [], current: {} }))
   await settle()
   await act(async () => {
     result = await view.current().setStructuredOption('model', 'literal')
   })
   expect(result).toBe(true)
-  expect(calls).toHaveLength(1)
+  expect(calls).toHaveLength(2)
   await view.unmount()
 })
 
-import type { PiRefreshFixtureModule } from '../../../src/shared/structured-agent-session-option-refresh.test-fixture-contract'
+import type { PiRefreshFixtureModule } from '../../../src/shared/agent-session/options/structured-agent-session-option-refresh.test-fixture-contract'
 const { piOptionRefreshContract } = await vi.importActual<PiRefreshFixtureModule>(
   '../../../src/main/native-chat/agent-session-wire/structured-agent-session-option-refresh.test-fixture'
 )

@@ -1,7 +1,7 @@
 /** Rehydrate worker identity from durable rows after restart; records, tab index and orchestration state decide custody.
  * Mail reaches agents at rest and starts them, so routing ignores process liveness. Resolve clear successors for every worker-level operation. */
 
-import type { AgentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../shared/orchestration-session-caller-codes'
 import type { RuntimeTerminalState } from '../../shared/runtime-types'
@@ -22,8 +22,8 @@ import {
   structuredSessionTabRetired,
   structuredWorkerAddressable
 } from './structured-worker-custody'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import type { TuiAgent } from '../../shared/tui-agent'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import {
   structuredWorkerIdentities,
@@ -192,6 +192,20 @@ export function holdStructuredWorker(
     }
   }
   return { kind: addressable ? 'held' : 'not-held', identity, running: located.running }
+}
+
+/** Who holds a worker handle's mail: this runtime's held worker; someone else (a terminal, a released
+ *  or unknown worker); or a session that cannot be verified now. */
+export function structuredWorkerCustody(
+  handle: string,
+  db: OrchestrationDb | null | undefined
+): StructuredWorkerAuthority | 'elsewhere' | 'unverifiable' {
+  const identity = resolveStructuredWorkerIdentity(handle, db)
+  const hold = identity ? holdStructuredWorker(identity, db) : null
+  if (hold?.kind === 'unverifiable') {
+    return 'unverifiable'
+  }
+  return hold?.kind === 'held' ? { identity: hold.identity, running: hold.running } : 'elsewhere'
 }
 
 /** A worker this runtime owns and its orchestration has not released, with its running session. */

@@ -2,10 +2,10 @@ import { describe, expect, vi } from 'vitest'
 import { forgetRefusedPaneResumeMock, spawnMock } from './pty/pty-ipc-mock-registry'
 import { posixOnlyIt } from './pty/pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty/pty-ipc-test-harness'
-import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/shell-startup/posix-shell-startup-command'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionLeaseFixture,
@@ -30,8 +30,10 @@ vi.mock('../agent-hooks/server', () =>
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../pwsh', () => import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../wsl', async (importOriginal) =>
+vi.mock('../pty/shell-startup/pwsh', () =>
+  import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty/pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../telemetry/client', () =>

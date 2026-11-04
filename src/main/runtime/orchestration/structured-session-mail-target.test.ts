@@ -1,5 +1,5 @@
 import { CrewChanges } from './crew/crew-changes'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -91,6 +91,7 @@ function probe(extra: Record<string, unknown> = {}): MailTargetProbe {
     _orchestrationDb: db,
     crewChanges: new CrewChanges(),
     ptysById: new Map(),
+    orchestrationStructuredMailboxPointerDelivery: { statusChanged: () => true },
     ...extra
   })
 }

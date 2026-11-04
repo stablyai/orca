@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { planCommitMessageGeneration, planAgentBinary } from './commit-message-plan'
+import { planCommitMessageGeneration } from './commit-message-plan'
+import { planAgentBinary } from './agent-launch/startup/agent-command-plan'
 
 describe('planCommitMessageGeneration', () => {
   it('keeps extension-provided Pi models available in generated Git text plans', () => {
@@ -45,8 +46,12 @@ describe('planCommitMessageGeneration', () => {
           'text',
           '--model',
           'sonnet',
+          '--tools',
+          'Read,Grep,Glob',
+          '--allowedTools',
+          'Read,Grep,Glob',
           '--permission-mode',
-          'plan',
+          'dontAsk',
           '--effort',
           'high',
           '--strict-mcp-config',

@@ -98,6 +98,7 @@ const preview: PluginMarketplaceHostInstallPreview = {
       panels: [],
       commands: [],
       events: [],
+      hooks: [],
       languagePacks: [],
       keybindings: [],
       vmRecipes: [],
@@ -108,7 +109,8 @@ const preview: PluginMarketplaceHostInstallPreview = {
       syntaxes: [],
       customEditors: [],
       newFiles: [],
-      settings: []
+      settings: [],
+      statusBarItems: []
     },
     capabilities: [{ kind: 'workspace:read' }]
   }

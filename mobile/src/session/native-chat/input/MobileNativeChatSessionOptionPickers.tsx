@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   type LucideIcon
 } from 'lucide-react-native'
-import { BottomDrawer } from '../../../components/BottomDrawer'
+import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, LIST_LEADING_INSET, SectionHeader } from '../../../components/list/ListGroup'
 import { NavBarButton } from '../../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
@@ -28,7 +28,7 @@ import {
   nativeChatOptionValuesLabel,
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
-} from '../../../../../src/shared/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
 import {
@@ -46,7 +46,7 @@ import {
   AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   isAgentChatPermissionMode
-} from '../../../../../src/shared/agent-chat-permission-mode'
+} from '../../../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
 import { sessionOptionPickerStyles as styles } from './mobile-native-chat-session-option-picker-styles'
 

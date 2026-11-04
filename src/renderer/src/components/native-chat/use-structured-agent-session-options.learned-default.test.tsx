@@ -32,7 +32,10 @@ import type { StructuredAgentSessionMutate } from './use-structured-agent-sessio
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 import type { AcpDeclaredEffortFixtureModule } from '../../../../shared/acp-declared-effort.test-fixture-contract'
-import { structuredAgentSessionMessageSelection } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
+import {
+  structuredAgentSessionMessageSelection,
+  structuredAgentSessionShownSnapshot
+} from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { firstFrameOptionState } from './structured-agent-session-option-first-frame'
 
 // Only the first chat without a saved pick may wait to name its model; later launches use the host’s learned default.
@@ -179,10 +182,10 @@ describe('a second new chat after one that named no model', () => {
       const first = await firstChatRuns(agent, 'id:wt-1')
 
       const second = renderChat(agent, `${agent}-2`, 'id:wt-1')
-      expect(second.frames[0]).toEqual({ model: CASES[agent].runs, effort: 'high' })
+      expect(second.frames[0]).toEqual({ model: CASES[agent].runs, effort: null })
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(
-        second.frames.every((frame) => frame.model === CASES[agent].runs && frame.effort === 'high')
+        second.frames.every((frame) => frame.model === CASES[agent].runs && frame.effort === null)
       ).toBe(true)
       first.unmount()
       second.unmount()
@@ -193,7 +196,7 @@ describe('a second new chat after one that named no model', () => {
     hostFor('grok')
     const first = await firstChatRuns('grok', 'id:wt-1')
     const elsewhere = renderChat('grok', 'grok-2', 'id:wt-2')
-    expect(elsewhere.frames[0]).toEqual({ model: 'grok-4.6', effort: 'high' })
+    expect(elsewhere.frames[0]).toEqual({ model: 'grok-4.6', effort: null })
     first.unmount()
     elsewhere.unmount()
   })
@@ -205,9 +208,9 @@ const { recordedEffortCase } = await vi.importActual<AcpDeclaredEffortFixtureMod
 
 describe('declared context at the desktop consumer', () => {
   it.each(['low', 'max', 'opencode', 'absent'] as const)(
-    'keeps %s policy on first frame and actual live/rest context out of input',
+    'shows %s configured context without turning it into first-send effort',
     async (input) => {
-      const { agent, model, policy, display, catalog, live, resting } =
+      const { agent, model, display, catalog, live, resting, launch } =
         await recordedEffortCase(input)
       resetHostModelCatalogSnapshotsForTests()
       recordHostModelCatalogSnapshot(LOCAL, agent, '/declared-folder', catalog)
@@ -216,8 +219,12 @@ describe('declared context at the desktop consumer', () => {
         seedsModel: false,
         worktree: '/declared-folder'
       })
-      expect(structuredAgentSessionMessageSelection(first)).toEqual({ model, effort: policy })
-      for (const answer of [live, resting]) {
+      expect(structuredAgentSessionMessageSelection(first)).toEqual({ model })
+      expect(pill(structuredAgentSessionShownSnapshot(first))).toEqual({
+        model,
+        effort: display ?? null
+      })
+      for (const answer of [live, resting, launch]) {
         mocks.call.mockReset()
         resetHostModelCatalogSnapshotsForTests()
         mocks.call.mockImplementation(async (_target: unknown, method: string) =>
@@ -238,9 +245,12 @@ describe('declared context at the desktop consumer', () => {
             true
           )
         )
-        expect(chat.frames.at(-1)).toEqual({ model, effort: display ?? null })
+        // A readback without this model's effort menu shows no effort, whatever the declaration.
+        const offersEffort = answer.models.find((row) => row.id === model)!.efforts.length > 0
+        const shown = offersEffort ? display : null
+        expect(chat.frames.at(-1)).toEqual({ model, effort: shown ?? null })
         const effort = chat.result.current.optionSnapshot.find((o) => o.id === 'effort')
-        if (answer.models.find((row) => row.id === model)!.efforts.length > 0) {
+        if (offersEffort) {
           expect(effort?.valueSource).toBe(display ? 'default' : 'unknown')
         } else {
           expect(effort).toBeUndefined()
@@ -248,7 +258,7 @@ describe('declared context at the desktop consumer', () => {
         expect(chat.result.current.capture()).toEqual({ selection: { model } })
         mocks.call.mockImplementation(() => new Promise(() => {}))
         chat.rerender({ running: { fence: 2 } })
-        expect(chat.frames.at(-1)).toEqual({ model, effort: display ?? null })
+        expect(chat.frames.at(-1)).toEqual({ model, effort: shown ?? null })
         expect(chat.result.current.capture()).toEqual({ selection: { model } })
         chat.unmount()
       }

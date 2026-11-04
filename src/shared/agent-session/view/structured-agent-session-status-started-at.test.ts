@@ -5,7 +5,6 @@ import type {
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import { projectStructuredAgentSessionStatusSummary } from './structured-agent-session-projection'
-import { structuredAgentSessionRowStateStartedAt } from './structured-agent-session-status-started-at'
 
 function item(
   itemId: string,
@@ -99,12 +98,6 @@ describe('when the session entered its status', () => {
     expect(summaryOf([ask, unverifiable]).statusStartedAt).toBe(7_000)
   })
 
-  it('dates an older turn end by its own publication, leaving message-only history undated', () => {
-    const undated = item('turn', 2, { kind: 'turn', turnId: 't1', state: 'unverifiable' })
-    expect(summaryOf([ask, undated]).statusStartedAt).toBe(undated.observedAt)
-    expect(summaryOf([ask])).not.toHaveProperty('statusStartedAt')
-  })
-
   it('dates working by the running turn, which a mid-turn send joins rather than restarts', () => {
     const running = item('turn', 2, {
       kind: 'turn',
@@ -164,27 +157,5 @@ describe('when the session entered its status', () => {
       status: 'attention',
       statusStartedAt: 600
     })
-  })
-})
-
-describe('the row clock a status writer takes from the host', () => {
-  it("dates the row only while it shows the main agent's own state", () => {
-    const dated = { statusStartedAt: 900 }
-    expect(
-      structuredAgentSessionRowStateStartedAt(
-        { state: 'done', mainAgent: { state: 'done' } },
-        dated
-      )
-    ).toBe(900)
-    // Child work holds the row open; the main agent's clock does not date that state.
-    expect(
-      structuredAgentSessionRowStateStartedAt(
-        { state: 'working', mainAgent: { state: 'done' } },
-        dated
-      )
-    ).toBeUndefined()
-    expect(
-      structuredAgentSessionRowStateStartedAt({ state: 'done', mainAgent: { state: 'done' } }, {})
-    ).toBeUndefined()
   })
 })

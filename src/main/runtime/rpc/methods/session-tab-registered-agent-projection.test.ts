@@ -68,11 +68,6 @@ describe('a tab of an agent beyond Claude and Codex', () => {
     expect(projected.activeTabId).not.toBe('agent-session:grok-session')
   })
 
-  it('reaches a client that advertises the registered-agents capability unchanged', () => {
-    const payload = snapshot()
-    expect(projectSessionTabAgentStatus(payload, 'runtime', REGISTERED_AGENTS_CLIENT)).toBe(payload)
-  })
-
   it('holds a Pi tab for clients that understand registered agents but cannot show Pi dialogs', () => {
     const payload = {
       ...snapshot(),

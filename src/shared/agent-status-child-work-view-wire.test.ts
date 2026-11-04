@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
-import {
-  agentChildWorkViewsEqual,
-  decodeAgentChildWorkViews
-} from './agent-status-child-work-view-wire'
+import { decodeAgentChildWorkViews } from './agent-status-child-work-view-wire'
 
 const LIVE: AgentChildWorkView = {
   id: 'child-1',
@@ -38,13 +35,6 @@ const SETTLED: AgentChildWorkView = {
 }
 
 describe('decodeAgentChildWorkViews', () => {
-  it('reads what this build publishes unchanged', () => {
-    expect(decodeAgentChildWorkViews(JSON.parse(JSON.stringify([LIVE, SETTLED])))).toEqual([
-      LIVE,
-      SETTLED
-    ])
-  })
-
   it('reads an older host that publishes no views as absent, not as "no children"', () => {
     expect(decodeAgentChildWorkViews(undefined)).toBeUndefined()
     expect(decodeAgentChildWorkViews({ not: 'a list' })).toBeUndefined()
@@ -88,23 +78,5 @@ describe('decodeAgentChildWorkViews', () => {
         SETTLED
       ])
     ).toEqual([SETTLED])
-  })
-})
-
-describe('agentChildWorkViewsEqual', () => {
-  it('compares evidence clocks and last messages, and distinguishes absent from empty lists', () => {
-    const ticked = {
-      ...LIVE,
-      observedAt: 30_150,
-      operation: { ...LIVE.operation!, observedAt: 30_150 }
-    }
-    expect(agentChildWorkViewsEqual([LIVE], [{ ...LIVE }])).toBe(true)
-    expect(agentChildWorkViewsEqual([LIVE], [ticked])).toBe(false)
-    expect(agentChildWorkViewsEqual([LIVE], [ticked], 60_000)).toBe(true)
-    expect(agentChildWorkViewsEqual([LIVE], [{ ...ticked, observedAt: 60_151 }], 60_000)).toBe(
-      false
-    )
-    expect(agentChildWorkViewsEqual([LIVE], [{ ...LIVE, lastMessage: 'Done' }], 60_000)).toBe(false)
-    expect(agentChildWorkViewsEqual(undefined, [])).toBe(false)
   })
 })

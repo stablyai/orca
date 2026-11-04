@@ -91,6 +91,7 @@ export class RpcDispatcher {
       if (featureWait) {
         await featureWait
       }
+      options?.beforeInvoke?.()
       return successResponse(request.id, meta, await this.invokeUnary(admission, options))
     } catch (error) {
       if (probeEmulator) {
@@ -263,6 +264,15 @@ export class RpcDispatcher {
       callerFingerprint,
       context.orchestrationCaller?.orcaSessionId
     )
+    if (request.method.startsWith('orchestration.')) {
+      queueMicrotask(() => {
+        try {
+          runtime.refreshAgentSenderAssociations?.()
+        } catch (error) {
+          console.warn('[runtime] Sender identity publication failed', error)
+        }
+      })
+    }
     recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
     return result
   }

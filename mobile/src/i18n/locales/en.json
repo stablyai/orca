@@ -145,6 +145,9 @@
       "speechModelHeading": "SPEECH MODEL",
       "speechModel": "Speech Model",
       "loading": "Loading voice settings…"
+    },
+    "agents": {
+      "permissionOwnAll": "Agents' own settings"
     }
   },
   "common": {
@@ -535,7 +538,6 @@
     },
     "bottomBar": {
       "connectFirst": "Connect a desktop to start new work.",
-      "tasks": "Tasks",
       "newWorkspace": "New workspace"
     },
     "desktops": {
@@ -545,6 +547,10 @@
       "heading": "Jump back in",
       "lastOpened": "Last opened",
       "connectToOpen": "Connect {{desktop}} to open"
+    },
+    "sections": {
+      "tasks": "Tasks",
+      "tasksSubtitle": "Browse your issues and reviews"
     }
   },
   "hooks": {
@@ -1053,7 +1059,8 @@
     },
     "prSidebar": {
       "loading": "Loading pull request…",
-      "notPermitted": "Not permitted — your GitHub account is not connected."
+      "notPermitted": "Not permitted — your GitHub account is not connected.",
+      "retryLoading": "Retry loading pull request"
     },
     "richMarkdownEditor": {
       "linkUrl": "Link URL",
@@ -1336,7 +1343,7 @@
       "linkButton": "Link pull request"
     },
     "prViewPanel": {
-      "providerUnavailable": "Hosted review panel unavailable for this provider.",
+      "githubRemoteRequired": "This tab needs a GitHub remote to show pull request details. For other supported hosts, create a review from Changes and open it in your browser.",
       "branchUnavailable": "Current branch unavailable."
     },
     "prActionsSection": {
@@ -1413,21 +1420,6 @@
       "resolvedCommentSingle": "Resolved comment by {{author}}",
       "resolvedCommentCount": "Resolved comment by {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Could not load comments."
-    },
-    "conflictingFilesSection": {
-      "detailsUnavailable": "Conflict file details are unavailable",
-      "refreshing": "Refreshing conflict details…",
-      "localMergeClean": "GitHub reports conflicts, but local Git did not reproduce them. Refresh the PR or push the branch to recalculate mergeability.",
-      "copyFailed": "Failed to copy text",
-      "copyCommands": "Copy commands",
-      "commitsBehind_one": "{{count}} commit behind (base commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commits behind (base commit: {{baseCommit}})",
-      "title": "Conflicts",
-      "mustResolve": "This branch has conflicts that must be resolved",
-      "runFromWorktree": "Run from this worktree",
-      "copyRefreshCommands": "Copy mergeability refresh commands",
-      "filesHeading": "Conflicting files",
-      "resolveWithAi": "Resolve conflicts with AI"
     },
     "reviewersSection": {
       "requested": "Requested",
@@ -2311,8 +2303,8 @@
       "notesSent": "Notes sent"
     },
     "prActionsEngine": {
-      "refreshFailed": "Failed to refresh pull request.",
-      "mergeFailed": "Failed to merge pull request."
+      "mergeFailed": "Failed to merge pull request.",
+      "refreshFailed": "Failed to refresh pull request."
     },
     "prAiTriageLaunch": {
       "promptNotSent": "The agent started, but the prompt wasn't sent.",
@@ -2503,6 +2495,7 @@
       "attachmentNotAFile": "An image on this message isn't a file, so the message was not sent.",
       "attachmentNoSource": "An image on this message has no file to send, so the message was not sent.",
       "attachmentInvalid": "An attachment on this message can't be sent to the agent.",
+      "attachmentsExpired": "{{names}} expired.",
       "attachmentUnreadable": "An attachment on this message couldn't be read, so the message was not sent.",
       "emptyMessage": "This message is empty, so it was not sent.",
       "commandUnavailable": "This command isn't available in {{agent}} chats, so it was not sent.",
@@ -2517,6 +2510,7 @@
       "commandRefusedTryAgain": "This command didn't run. Try it again.",
       "theAgent": "The agent",
       "providerStartFailed": "{{agent}} stopped before it finished starting.",
+      "savedConversationMissing": "{{agent}} couldn't find this chat's saved conversation.",
       "runCommandAgain": "Run /{{command}} again.",
       "sendToTryAgain": "Send your message to try again.",
       "sendAgainToTryOnceMore": "Send your message again to try once more.",
@@ -2600,6 +2594,7 @@
       "recordFailed": "Orca couldn't save this to the chat's history.",
       "attachmentExpired": "This attachment expired.",
       "reattachFile": "Remove it and attach it again.",
+      "reattachFiles": "Remove them and attach them again.",
       "conversationCleared": "This conversation has been cleared.",
       "openCurrentConversation": "Open the current conversation to continue.",
       "clearUnfinished": "The last /clear didn't finish.",
@@ -2639,6 +2634,7 @@
       "hostReconciling": "Orca is still checking on this chat after restarting.",
       "waitMoment": "Wait a moment.",
       "recordUnreadable": "Orca couldn't read this chat's saved state.",
+      "mailOwnerUnconfirmed": "Orca couldn't confirm this message is still meant for this chat.",
       "chatNotFound": "Orca can't find this chat.",
       "startNewChat": "Start a new chat to continue.",
       "tryAgain": "Try again."
@@ -2702,7 +2698,9 @@
       "unknown": "{{agent}}'s chat could not be found on this host. Reconnect to its computer and try again.",
       "unsupported": "{{agent}}'s chat can't be reopened until Orca is updated.",
       "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment.",
-      "paneUnavailable": "Agent's pane is no longer available."
+      "paneUnavailable": "Agent's pane is no longer available.",
+      "worktreeDeleted": "The worktree was deleted.",
+      "folderWorkspaceRemoved": "The folder workspace was removed."
     },
     "nativeChatView": {
       "loading": "Loading conversation…"
@@ -2903,7 +2901,8 @@
       "plan": "Plan",
       "permissionDenied": "{{agent}} denied permission. View details.",
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
-      "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes)."
+      "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
+      "modelFallback": "Claude switched models: {{from}} → {{to}}."
     },
     "nativeChatProse": {
       "attachedImage": "Attached image",
@@ -3066,7 +3065,10 @@
       "resolved": "Resolved",
       "cancelled": "Cancelled",
       "resolver": "Answered on {{device}}",
-      "cancelledBy": "Cancelled on {{device}}"
+      "cancelledBy": "Cancelled on {{device}}",
+      "thisPhone": "this phone",
+      "computer": "the computer",
+      "otherDevice": "another device"
     },
     "subagentGroup": {
       "stateCompleted": "completed",
@@ -3090,6 +3092,24 @@
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
       "tokens": "{{value0}} tokens"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "Unreadable attachment reply. Try again.",
+      "incompleteReply": "Attachment changed or its reply was incomplete. Close it and try again.",
+      "notText": "This file cannot be previewed as text. Save it to open it in another app.",
+      "openFailed": "Unable to open attachment. Try again.",
+      "hostUpdate": "This host cannot open text attachments yet. Update Orca on that host, then retry.",
+      "copyTooLarge": "This file is too large to copy. Save it instead.",
+      "connectionChanged": "Connection changed. Retry to reopen the attachment.",
+      "hostChanged": "The attachment host changed. Close it and reopen it.",
+      "readFailed": "Unable to read this attachment. Reconnect and try again. The file may have been removed or changed.",
+      "copyFrame": "Full Copy for this attachment needs the upcoming phone update.",
+      "copyFailed": "Unable to copy attachment. Try again.",
+      "pastedText": "Pasted text",
+      "textAttachment": "Text attachment",
+      "byteSize": "{{size}} bytes",
+      "saveUpdate": "Save will be available in a phone update.",
+      "fullCopySaveUpdate": "Full Copy and Save for this attachment will be available in a phone update."
     },
     "agentMessage": {
       "startedWorker": "Started worker",

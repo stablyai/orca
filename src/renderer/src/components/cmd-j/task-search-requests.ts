@@ -21,7 +21,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PaletteFilterState } from './palette-filter'
 import { getTaskEligibleRepos } from '../task-page/task-page-default-repo-selection'
 import { getRepoBackedProviderAvailability } from '../task-source-provider-availability'
-import { getTaskPageRepoSourceContext } from '../task-page/task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
 import { searchJiraIssuesByKeyOrText } from '../jira-key-or-text-search'
 import { bindTaskPageJiraItemSourceContext } from '../task-page/jira/task-page-jira-item-source-context'
 import { makeCmdJTaskSearchResult, type CmdJTaskSearchResult } from './task-search-results'
@@ -81,15 +81,28 @@ export function createCmdJTaskSearchRequests(args: {
             return []
           }
           if (provider === 'github') {
-            const items = await state.fetchWorkItems(
-              repo.id,
-              repo.path,
-              RESULT_LIMIT,
-              `is:issue is:open ${query}`,
-              { sourceContext: source, requireComplete: true }
+            // Why: a search held by a pending source save is obsolete, not empty; re-read once it settles.
+            const items = await state.githubSourceCollections.readCurrent(
+              [repo],
+              () =>
+                state.fetchWorkItems(
+                  repo.id,
+                  repo.path,
+                  RESULT_LIMIT,
+                  `is:issue is:open ${query}`,
+                  {
+                    sourceContext: source,
+                    requireComplete: true
+                  }
+                ),
+              signal
             )
+            if (!items) {
+              throw new Error('GitHub search did not settle.')
+            }
+            // Open-only is applied to what Cmd-J shows, after pending edits (a reopen) are added.
             return items
-              .filter((issue) => issue.type === 'issue' && issue.state === 'open')
+              .filter((issue) => issue.type === 'issue')
               .map((issue) =>
                 makeCmdJTaskSearchResult({ provider, issue }, source, repo.id, hostLabel)
               )

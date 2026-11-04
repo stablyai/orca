@@ -9,6 +9,8 @@ export type SkillSourceKind = 'home' | 'repo' | 'bundled' | 'plugin'
 export type DiscoveredSkill = {
   id: string
   name: string
+  /** Hash-verified bundled identity for an installation under a former name. */
+  bundledName?: string
   description: string | null
   providers: SkillProvider[]
   sourceKind: SkillSourceKind

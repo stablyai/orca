@@ -1,10 +1,11 @@
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import { journalQueueReopenRowBuilder } from './journal-stop-and-resume-rows'
 import type { JournalQueuedMessages, JournalQueuePlan } from './journal-queued-messages'
+import { QueuedMessageNotOwedError } from './queued-message-consume-error'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalReducerState } from './journal-reducer'
 import { journalDispatchRowBuilder, journalSubmissionRowBuilder } from './journal-row-builders'
@@ -56,6 +57,11 @@ export class JournalSubmissionWriter {
             consumedAs: input.clientMessageId,
             fingerprint: input.payloadFingerprint
           })
+          // Asked on the write lane, so nothing it depends on can change before the handoff row lands.
+          const owed = consume.owed?.() ?? 'owed'
+          if (owed !== 'owed') {
+            throw new QueuedMessageNotOwedError(consume.messageId, owed)
+          }
           // Adopt legacy cards in the handoff transaction.
           card = queuedMessages.plan([{ messageId: consume.messageId }])
           return [...reopen, ...card.rows, submission]

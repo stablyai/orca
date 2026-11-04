@@ -1,10 +1,10 @@
-import { analyzeAgentChoiceArgs } from './agent-choice-args'
-import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
-import type { AgentDedicatedChoices } from './agent-launch-choices'
-import { PERMISSION_LAUNCH_GRAMMARS } from './agent-permission-args'
-import { tokenizeStartupCommand } from './tui-agent-startup-shell'
-import { isTuiAgent } from './tui-agent-config'
-import type { TuiAgent } from './tui-agent'
+import { analyzeAgentChoiceArgs } from './agent-launch/choices/agent-choice-args'
+import { reconcileAgentChoiceArgsDetailed } from './agent-launch/choices/agent-choice-reconciliation'
+import type { AgentDedicatedChoices } from './agent-launch/choices/agent-launch-choices'
+import { PERMISSION_LAUNCH_GRAMMARS } from './agent-launch/permissions/agent-permission-args'
+import { tokenizeStartupCommand } from './agent-launch/startup/tui-agent-startup-shell'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { SourceControlActionRecipe } from './source-control-ai-actions'
 
 export type ActionArgumentChoices = {

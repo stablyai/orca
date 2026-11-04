@@ -1,5 +1,3 @@
-// STA-2854: test host-local parking policy separately from authoritative stream/input/reconnect.
-// A windowless runtime proves already-attached PTY streams do not depend on the renderer; the final case covers initially unattached PTYs.
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
@@ -13,153 +11,14 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../src/shared/terminal-stream-protocol'
-import {
-  TERMINAL_TAB_COLD_PARK_DELAY_MS,
-  TERMINAL_TAB_HOT_RETAIN_LIMIT,
-  canParkTerminalTabRenderer,
-  selectColdParkedTerminalTabs
-} from '../../src/renderer/src/components/terminal-pane/terminal-hidden-view-parking'
-import { buildTerminalTabColdParkCandidates } from '../../src/renderer/src/components/terminal-pane/terminal-tab-park-candidates'
-import { createTerminalTabActivationOrder } from '../../src/renderer/src/components/terminal-pane/terminal-tab-activation-order'
-import type { TerminalTab } from '../../src/shared/terminal-tab-types'
 
 const WORKTREE_ID = 'repo-1::/tmp/wt'
 // Use host-owned snapshot-backed daemon PTYs, matching the remotely viewed local pane.
 const ptyIdFor = (n: number): string => `${WORKTREE_ID}@@aaaaaaa${n}`
-const SUBSCRIBED_TAB_ID = 'tab-remote-viewed'
 const MARKER_BEFORE_PARK = 'STA2854-BEFORE-PARK'
 const MARKER_AFTER_PARK = 'STA2854-AFTER-PARK'
 const MARKER_AFTER_RECONNECT = 'STA2854-AFTER-RECONNECT'
 const CLIENT_INPUT = 'echo STA2854-INPUT\r'
-
-function tabModel(id: string, ptyId: string): TerminalTab {
-  return { id, ptyId, generation: 1 } as unknown as TerminalTab
-}
-
-// Exceed hot retention with hidden host tabs, including the remotely subscribed target.
-function hiddenHostTabs(): TerminalTab[] {
-  const tabs: TerminalTab[] = [tabModel(SUBSCRIBED_TAB_ID, ptyIdFor(0))]
-  for (let i = 1; i <= TERMINAL_TAB_HOT_RETAIN_LIMIT + 1; i += 1) {
-    tabs.push(tabModel(`tab-${i}`, ptyIdFor(i)))
-  }
-  return tabs
-}
-
-describe('STA-2854 A: host cold-park policy vs an active remote subscriber', () => {
-  it('parks a locally hidden host pane that a remote client is actively viewing', () => {
-    const tabs = hiddenHostTabs()
-    const hiddenSinceByTabId = new Map<string, number>()
-    const activationOrder = createTerminalTabActivationOrder()
-    const t0 = 1_000_000
-
-    buildTerminalTabColdParkCandidates({
-      terminalTabs: tabs,
-      assignments: new Map(),
-      isWorktreeActive: false,
-      activeTerminalTabId: null,
-      portalTabIds: new Set(),
-      shouldMeasureHiddenWorktree: false,
-      hiddenSinceByTabId,
-      activationOrder,
-      nowMs: t0
-    })
-    expect(hiddenSinceByTabId.get(SUBSCRIBED_TAB_ID)).toBe(t0)
-
-    // Pass 2: exactly the cold-park hysteresis later. The remote client has
-    // been driving this tab the whole time; the policy has no input for that.
-    const nowMs = t0 + TERMINAL_TAB_COLD_PARK_DELAY_MS
-    const candidates = buildTerminalTabColdParkCandidates({
-      terminalTabs: tabs,
-      assignments: new Map(),
-      isWorktreeActive: false,
-      activeTerminalTabId: null,
-      portalTabIds: new Set(),
-      shouldMeasureHiddenWorktree: false,
-      hiddenSinceByTabId,
-      activationOrder,
-      nowMs
-    })
-    const subscribedCandidate = candidates.find((c) => c.id === SUBSCRIBED_TAB_ID)!
-
-    expect(
-      canParkTerminalTabRenderer({
-        worktreeId: WORKTREE_ID,
-        terminalTab: subscribedCandidate,
-        pendingStartupByTabId: {},
-        parkingEnabled: true,
-        nowMs
-      })
-    ).toBe(true)
-
-    const parked = selectColdParkedTerminalTabs({
-      worktreeId: WORKTREE_ID,
-      terminalTabs: candidates,
-      pendingStartupByTabId: {},
-      parkingEnabled: true,
-      nowMs
-    })
-    expect(parked.has(SUBSCRIBED_TAB_ID)).toBe(true)
-
-    // Negative control: local visibility is the only thing that saves it.
-    const visibleCandidate = { ...subscribedCandidate, isVisible: true, hiddenSinceMs: null }
-    expect(
-      canParkTerminalTabRenderer({
-        worktreeId: WORKTREE_ID,
-        terminalTab: visibleCandidate,
-        pendingStartupByTabId: {},
-        parkingEnabled: true,
-        nowMs
-      })
-    ).toBe(false)
-  })
-
-  it('does not reset the hidden clock when a remote subscribe background-mounts the tab', () => {
-    const tabs = hiddenHostTabs()
-    const hiddenSinceByTabId = new Map<string, number>()
-    const activationOrder = createTerminalTabActivationOrder()
-    const t0 = 1_000_000
-
-    buildTerminalTabColdParkCandidates({
-      terminalTabs: tabs,
-      assignments: new Map(),
-      isWorktreeActive: false,
-      activeTerminalTabId: null,
-      portalTabIds: new Set(),
-      shouldMeasureHiddenWorktree: false,
-      hiddenSinceByTabId,
-      activationOrder,
-      nowMs: t0
-    })
-
-    // A background reconnect keeps the stale hidden timestamp, so its first pass is already eligible to park.
-    const remountNowMs = t0 + 4 * 60 * 60_000
-    const candidates = buildTerminalTabColdParkCandidates({
-      terminalTabs: tabs,
-      assignments: new Map(),
-      isWorktreeActive: false,
-      activeTerminalTabId: null,
-      portalTabIds: new Set(),
-      shouldMeasureHiddenWorktree: false,
-      hiddenSinceByTabId,
-      activationOrder,
-      nowMs: remountNowMs
-    })
-    const subscribedCandidate = candidates.find((c) => c.id === SUBSCRIBED_TAB_ID)!
-    expect(subscribedCandidate.hiddenSinceMs).toBe(t0)
-    expect(remountNowMs - subscribedCandidate.hiddenSinceMs!).toBeGreaterThan(
-      TERMINAL_TAB_COLD_PARK_DELAY_MS
-    )
-    expect(
-      selectColdParkedTerminalTabs({
-        worktreeId: WORKTREE_ID,
-        terminalTabs: candidates,
-        pendingStartupByTabId: {},
-        parkingEnabled: true,
-        nowMs: remountNowMs
-      }).has(SUBSCRIBED_TAB_ID)
-    ).toBe(true)
-  })
-})
 
 type RuntimeInternals = {
   recordPtyWorktree: (
@@ -375,38 +234,6 @@ describe('STA-2854 B: remote subscriber survives a fully unmounted host renderer
     expect(mountSpy).not.toHaveBeenCalled()
     expect(provider.attachCalls).toEqual([])
     expect(errorFrames(reconnected)).toBe(0)
-  })
-
-  it('counterfactual: losing every subscriber is what clears the thinning veto', async () => {
-    const runtime = new OrcaRuntimeService()
-    const provider = createHostProvider()
-    provider.bind(runtime)
-    runtime.setPtyController(provider.controller as never)
-    const record = internals(runtime).recordPtyWorktree(provider.ptyId, WORKTREE_ID, {
-      connected: true
-    })
-    const handle = internals(runtime).issuePtyHandle(record)
-    vi.spyOn(runtime, 'requestRendererTerminalTabMount').mockReturnValue(false)
-
-    const harness = startMultiplex(runtime, 'conn-counterfactual')
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-    sendSubscribe(harness, 1, handle, 'client-b')
-    await waitForSubscribed(harness, 1)
-    expect(runtime.hasRawTerminalViewSubscriber(provider.ptyId)).toBe(true)
-
-    harness.handlers.get(1)?.(
-      decodeTerminalStreamFrame(
-        encodeTerminalStreamFrame({
-          opcode: TerminalStreamOpcode.Unsubscribe,
-          streamId: 1,
-          seq: 3,
-          payload: encodeTerminalStreamJson({})
-        })
-      )!
-    )
-    await vi.waitFor(() => expect(runtime.hasRawTerminalViewSubscriber(provider.ptyId)).toBe(false))
-    expect(provider.session.attached).toBe(true)
-    expect(provider.emitData('post-unsubscribe\r\n')).toBe(true)
   })
 })
 

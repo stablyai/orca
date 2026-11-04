@@ -1,6 +1,6 @@
 // Centralize placement bookkeeping so client-created pages retain targetGroupId.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import {
@@ -27,16 +27,16 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
-vi.mock('../ipc/browser-tab-registration-wait', () => ({
+vi.mock('../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: waitForTabRegistrationMock,
   waitForWorktreeTabRegistration: vi.fn()
 }))
 
-vi.mock('../browser/browser-main-window-readiness', () => ({
+vi.mock('../browser/guest-lifecycle/browser-main-window-readiness', () => ({
   whenBrowserMainWindowReady: async () => null
 }))
 
-vi.mock('../browser/browser-session-registry', () => ({
+vi.mock('../browser/sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     getDefaultProfile: () => ({ id: 'default', partition: 'persist:orca-browser' }),
     getProfile: () => null,

@@ -3,7 +3,7 @@ import { expect, vi } from 'vitest'
 import type { WebSocket } from 'ws'
 import { deriveSharedKey, decrypt, encrypt, generateKeyPair } from '../../../../shared/e2ee-crypto'
 import type { RuntimeCapability } from '../../../../shared/protocol-version'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES,

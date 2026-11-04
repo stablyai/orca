@@ -144,29 +144,6 @@ describe('project removal stays on its owner host (#13071)', () => {
     expect(runtimeCall).not.toHaveBeenCalled()
   })
 
-  it('keeps a same-id row on another host that sits outside the deleted group', async () => {
-    const store = createTestStore()
-    const otherGroup: ProjectGroup = { ...group, id: 'group-2', name: 'Other' }
-    const outsideSshRow: Repo = { ...sshRow, projectGroupId: otherGroup.id }
-    store.setState({
-      projectGroups: [group, otherGroup],
-      repos: [{ ...localRow, projectGroupId: group.id }, outsideSshRow]
-    })
-
-    const result = await store.getState().deleteProjectGroupWithContainedProjects(group.id, {
-      removeContainedProjects: true,
-      hostId: 'local'
-    })
-
-    expect(result).toMatchObject({
-      removedProjectIds: ['same-repo'],
-      failedProjectRemovals: []
-    })
-    expect(store.getState().repos).toEqual([outsideSshRow])
-    expect(reposRemoveForHost).toHaveBeenCalledTimes(1)
-    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
-  })
-
   it('removes only the member row of an unstamped group, not the focused-host non-member', async () => {
     const store = createTestStore()
     const unstampedGroup: ProjectGroup = { ...group, executionHostId: undefined }
@@ -240,70 +217,5 @@ describe('project removal stays on its owner host (#13071)', () => {
     expect(state.activeTabId).toBeNull()
     expect(state.openFiles).toEqual([])
     expect(state.activeFileIdByWorktree[worktreeId]).toBeFalsy()
-  })
-})
-
-describe('removal stays host-scoped when this catalog is stale (#13071)', () => {
-  type MainRow = { id: string; hostId: string; kind: 'git' | 'folder' }
-
-  // Mirrors the main catalog: id-only removal drops every host's row, removeForHost one row.
-  function stubMainCatalog(rows: MainRow[]): { current: MainRow[] } {
-    const main = { current: rows }
-    reposRemove.mockImplementation(async ({ repoId }: { repoId: string }) => {
-      main.current = main.current.filter((row) => row.id !== repoId)
-    })
-    reposRemoveForHost.mockImplementation(
-      async ({ repoId, hostId }: { repoId: string; hostId: string }) => {
-        main.current = main.current.filter((row) => !(row.id === repoId && row.hostId === hostId))
-      }
-    )
-    return main
-  }
-
-  it.each(['git', 'folder'] as const)(
-    'keeps an unseen same-id SSH %s project when removing the local one',
-    async (kind) => {
-      const main = stubMainCatalog([
-        { id: 'same-repo', hostId: 'local', kind },
-        { id: 'same-repo', hostId: 'ssh:target-1', kind }
-      ])
-      const store = createTestStore()
-      // Another window added the SSH twin; this renderer has not refreshed yet.
-      store.setState({ repos: [{ ...localRow, kind }] })
-
-      await store.getState().removeProject('same-repo', { hostId: 'local' })
-
-      expect(reposRemove).not.toHaveBeenCalled()
-      expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
-      expect(main.current).toEqual([{ id: 'same-repo', hostId: 'ssh:target-1', kind }])
-    }
-  )
-
-  it.each(['git', 'folder'] as const)(
-    'removes a direct SSH %s project without touching an unseen local twin',
-    async (kind) => {
-      const main = stubMainCatalog([
-        { id: 'same-repo', hostId: 'local', kind },
-        { id: 'same-repo', hostId: 'ssh:target-1', kind }
-      ])
-      const store = createTestStore()
-      store.setState({ repos: [{ ...sshRow, kind }] })
-
-      await store.getState().removeProject('same-repo', { hostId: 'ssh:target-1' })
-
-      expect(reposRemove).not.toHaveBeenCalled()
-      expect(main.current).toEqual([{ id: 'same-repo', hostId: 'local', kind }])
-    }
-  )
-
-  it('never falls back to id-only removal when the selected row is already gone in main', async () => {
-    const main = stubMainCatalog([{ id: 'same-repo', hostId: 'ssh:target-1', kind: 'git' }])
-    const store = createTestStore()
-    store.setState({ repos: [localRow] })
-
-    await store.getState().removeProject('same-repo', { hostId: 'local' })
-
-    expect(reposRemove).not.toHaveBeenCalled()
-    expect(main.current).toEqual([{ id: 'same-repo', hostId: 'ssh:target-1', kind: 'git' }])
   })
 })

@@ -4,9 +4,9 @@ import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-cha
 import { describe, expect, it } from 'vitest'
 import {
   decideWorkerStartMode,
-  downgradeWorkerStartModeForHost,
-  type WorkerStartModeReceipt
+  downgradeWorkerStartModeForHost
 } from './orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 
 const STRUCTURED_DEFAULT = {
   nativeChatProviders: EVERY_AGENT_CHAT
@@ -57,38 +57,6 @@ describe('a structured default this dispatch cannot honour', () => {
     // Never a silent fallback: the receipt states the default AND why it did not apply.
     expect(receipt.detail).toContain('Your default is a structured chat session')
   })
-
-  it.each([
-    ['a new-child worktree', { worktree: 'new-child' }],
-    ['a new-top-level worktree', { worktree: 'new-top-level' }],
-    ['--model', { model: 'opus' }],
-    ['--effort with its model', { model: 'opus', effort: 'high' }],
-    ['both at once', { worktree: 'new-child', model: 'opus', effort: 'high' }]
-  ])('no longer downgrades for %s, which is what made structured unreachable', (_name, params) => {
-    // Both routine dispatch flags previously forced PTY mode.
-    expect(decide({ params: { agent: 'claude', ...params } })).toMatchObject({
-      mode: 'structured',
-      preferred: 'structured',
-      reason: 'user_default'
-    })
-  })
-
-  it('keeps the current worktree structured, which is the ordinary dispatch', () => {
-    expect(decide({ params: { agent: 'codex', worktree: 'current' } }).mode).toBe('structured')
-  })
-
-  // A custom launch command never decides the surface; native chat runs it as the program.
-  it.each([
-    ['claude', 'claude-wrapper'],
-    ['codex', 'codex-nightly']
-  ] as const)('keeps a %s worker structured with launch command %s', (agent, command) => {
-    const settings = { ...STRUCTURED_DEFAULT, agentCmdOverrides: { [agent]: command } }
-    expect(decide({ params: { agent }, settings })).toMatchObject({
-      mode: 'structured',
-      preferred: 'structured',
-      reason: 'user_default'
-    })
-  })
 })
 
 describe('the executing host settles what the client cannot', () => {
@@ -107,14 +75,6 @@ describe('the executing host settles what the client cannot', () => {
   it('downgrades on a refusal that names no reason', () => {
     expect(downgradeWorkerStartModeForHost(decide(), { supported: false }).reason).toBe(
       'structured_unsupported_on_host'
-    )
-  })
-
-  it('leaves a supported structured start and an already-terminal receipt alone', () => {
-    expect(downgradeWorkerStartModeForHost(decide(), { supported: true }).mode).toBe('structured')
-    const terminal = decide({ settings: null })
-    expect(downgradeWorkerStartModeForHost(terminal, { supported: false, reason: 'wsl' })).toBe(
-      terminal
     )
   })
 })

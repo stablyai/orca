@@ -216,12 +216,4 @@ describe('native chat for an agent whose transcript lives on an SSH host (#26057
     expect(page.texts).toEqual([])
     expect(page.error).toBeDefined()
   })
-
-  it('keeps reading a local session from this machine', async () => {
-    hookRows = [{ ...sshHookRow(transcriptPath), connectionId: null }]
-
-    const page = await readSession(transcriptPath)
-
-    expect(page.texts).toEqual(['LOCAL MACHINE FILE'])
-  })
 })

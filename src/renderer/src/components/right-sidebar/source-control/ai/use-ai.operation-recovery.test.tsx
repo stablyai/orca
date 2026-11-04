@@ -2,9 +2,9 @@ import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-
 import { runtimeStatusEntry } from '@/runtime/server-layout-frames.test-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
-import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import {
   launchSourceControlRecoveryAgentWithDefault,
   getDefaultSourceControlRecoveryLaunchCopy
@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { useSourceControlAi } from './use-ai'
 import type { SourceControlAiControllerParams } from './controller-types'
 import { deferred } from '../../source-control-hook-test-harness'

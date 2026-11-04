@@ -1,3 +1,4 @@
+import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
 import { describe, expect, it, vi } from 'vitest'
 import {
   acquired,
@@ -34,6 +35,44 @@ const MODELS = [
     supportedEffortLevels: ['low', 'high']
   }
 ]
+
+it('checks the latest permission after model preparation without admitting a stale frame', async () => {
+  const claude = fakeClaude()
+  const adapter = adapterFor(claude)
+  await adapter.acquire({
+    identity: identityFor(),
+    fence: 7,
+    spawnToken: 'permission-race',
+    events: recordingJournalSink()
+  })
+  const connection = claude.connections[0]!
+  claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-sonnet-5' })
+  const preparing = Promise.withResolvers<void>()
+  const resume = Promise.withResolvers<void>()
+  connection.setModel = async () => {
+    preparing.resolve()
+    await resume.promise
+  }
+  let changed = false
+  const admitted = vi.fn()
+  const sending = adapter.dispatch({
+    sessionId: 'session-1',
+    clientMessageId: 'permission-race',
+    body: USER_MESSAGE,
+    executionOptions: { model: 'custom[1m]' },
+    fence: 7,
+    admitFreshInput: async (enqueue) =>
+      changed ? { kind: 'acquire', reason: 'permission' } : enqueue('ask', false)
+  })
+  const result = sending.then(admitted, (error) => error)
+  await preparing.promise
+  changed = true
+  resume.resolve()
+  expect(await result).toBeInstanceOf(StructuredAgentSessionInputNotAdmitted)
+  expect(admitted).not.toHaveBeenCalled()
+  expect(connection.sent).toHaveLength(0)
+  await adapter.closeAll()
+})
 
 describe('Claude accepted message choices', () => {
   it.each([false, true])(
@@ -115,6 +154,112 @@ describe('Claude accepted message choices', () => {
       } finally {
         warn.mockRestore()
       }
+    }
+  )
+
+  it.each(['free', 'extra_usage_disabled', 'preference', 'future_entitlement_rule'])(
+    'sends a new message with saved Fast on despite initialize reporting %s',
+    async (reason) => {
+      const claude = fakeClaude({ holdInit: true })
+      const adapter = adapterFor({
+        ...claude,
+        openConnection: async (...args) => {
+          const connection = await claude.openConnection(...args)
+          claude.connections[0]!.initialization.resolve({
+            models: MODELS,
+            fast_mode_state: 'off',
+            fast_mode_disabled_reason: reason
+          })
+          return connection
+        }
+      })
+      await adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'new',
+        options: { fastMode: 'true' },
+        events: recordingJournalSink()
+      })
+      const connection = claude.connections[0]!
+      await expect(
+        adapter.dispatch({
+          sessionId: 'session-1',
+          clientMessageId: 'fast',
+          body: USER_MESSAGE,
+          executionOptions: { fastMode: 'true' },
+          fence: 7
+        })
+      ).resolves.toMatchObject({ state: 'admitted' })
+      expect(connection.calls).toContainEqual({
+        subtype: 'apply_flag_settings',
+        params: { settings: { fastMode: true } }
+      })
+      expect(connection.sent).toHaveLength(1)
+      await adapter.closeAll()
+    }
+  )
+
+  it.each([false, true])(
+    'never records earlier Fast on as dispatch execution (resume: %s)',
+    async (resume) => {
+      const claude = fakeClaude({ holdInit: true })
+      const adapter = adapterFor(
+        {
+          ...claude,
+          openConnection: async (...args) => {
+            const connection = await claude.openConnection(...args)
+            claude.connections[0]!.initialization.resolve({ models: MODELS, fast_mode_state: 'on' })
+            return connection
+          }
+        },
+        { resumesTranscript: resume }
+      )
+      await adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'resume',
+        options: {},
+        events: recordingJournalSink()
+      })
+      const connection = claude.connections[0]!
+      if (!resume) {
+        await adapter.dispatch({
+          sessionId: 'session-1',
+          clientMessageId: 'previous',
+          body: USER_MESSAGE,
+          executionOptions: {},
+          fence: 7
+        })
+        claudeFrame(connection, {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          fast_mode_state: 'on'
+        })
+        claudeTurnEnds(connection)
+      }
+      const outcome = await adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'next',
+        body: USER_MESSAGE,
+        executionOptions: {},
+        fence: 7
+      })
+      expect(outcome).toMatchObject({ state: 'admitted', ranOptions: { effort: 'high' } })
+      expect('ranOptions' in outcome ? outcome.ranOptions : undefined).not.toHaveProperty(
+        'fastMode'
+      )
+      expect(
+        (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current.fastModeState
+      ).toBe('on')
+      claudeFrame(connection, {
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        fast_mode_state: 'off',
+        fast_mode_disabled_reason: 'preference'
+      })
+      await adapter.closeAll()
     }
   )
 

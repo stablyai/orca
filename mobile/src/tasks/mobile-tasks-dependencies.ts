@@ -48,8 +48,6 @@ export {
 export { classifyConnection } from '../transport/connection-health'
 export { StatusDot } from '../components/StatusDot'
 export { ActionSheetModal } from '../components/ActionSheetModal'
-export { BottomDrawer } from '../components/BottomDrawer'
-export { BottomDrawerModalHost } from '../components/bottom-drawer-modal-host'
 export { ConfirmModal } from '../components/ConfirmModal'
 export { MobileMarkdown } from '../components/MobileMarkdown'
 export { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -143,7 +141,7 @@ export { hasSettledHostRepoList } from './host-repo-list'
 export { useHostRepoList } from './use-host-repo-list'
 export { isHostedTaskRepo, reconcileRepoSelection } from './hosted-repo-selection'
 export type { LinearMobileIssue } from './linear-mobile-issue-read'
-export { MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from './mobile-tui-agents'
+
 export { resolveComposerBranchSelection } from './mobile-composer-branch-selection'
 export {
   clearMobileTaskCopyFeedbackTimer,
@@ -156,7 +154,7 @@ export type {
 } from '../../../src/shared/github/pull-request-types'
 export type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 export type { SparsePreset } from '../../../src/shared/worktree/create-types'
-export type { TuiAgent } from '../../../src/shared/tui-agent'
+
 export type { SshConnectionState } from '../../../src/shared/ssh-types'
 export type { HostedReviewDecision } from '../../../src/shared/hosted-review'
 export {

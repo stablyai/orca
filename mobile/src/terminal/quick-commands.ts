@@ -1,5 +1,5 @@
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import {
   applyTerminalQuickCommandMutation,
   flattenTerminalQuickCommand,
@@ -18,7 +18,7 @@ import {
   terminalQuickCommandAgentPromptMaxLength
 } from '../../../src/shared/terminal-quick-command-prompt-limit'
 import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
+import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 
 // Reuse the pure desktop command logic; renderer-only labels and native truncation stay here.
 export {

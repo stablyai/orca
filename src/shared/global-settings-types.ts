@@ -1,4 +1,4 @@
-import type { AgentLaunchChoices } from './agent-launch-choices'
+import type { AgentLaunchChoices } from './agent-launch/choices/agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
@@ -17,7 +17,7 @@ import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { GlobalWindowsRuntimeDefault } from './project-execution-runtime'
 import type { PersistedNativeChatSessionOptions } from './native-chat/input/native-chat-session-options'
-import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
+import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
 import type { HostSettingOverrides } from './host-setting-overrides'
@@ -30,7 +30,7 @@ import type {
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { ZcodePlanSite } from './zcode-plan-sites'
 import type {
   AgentDashboardMode,
@@ -81,6 +81,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
+  /** Days a release must be public before Orca offers it; absent/0 offers releases immediately. */
+  updateDelayDays?: number
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
@@ -205,6 +207,9 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatResumeWorkOnRestart?: boolean
   /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
+  /** Opt-in: when a chat stops on a usage limit with a known reset time, send it "Continue where
+   *  you left off." once the limit resets, unless that chat was told not to. */
+  nativeChatAutoContinueAfterUsageLimit?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
@@ -443,6 +448,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
   experimentalAgentDashboardPopout?: boolean
+  /** Experimental: panel beside chats and terminals listing the agents each agent works with; off mounts nothing. */
+  experimentalOrchestrationPanel?: boolean
   /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
   agentsSidebarIntroShown?: boolean
   /** True when the profile previously opted into the legacy Agents view. */
@@ -494,6 +501,4 @@ export type GlobalSettings = GlobalSettingsBase & {
   aiVaultSearch?: AiVaultSearchSettings
 }
 
-// Retain one import entry point while keeping feature shapes separate from the max-lines-limited settings module.
-export type { GhosttyImportPreview } from './ghostty-import-preview'
 export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

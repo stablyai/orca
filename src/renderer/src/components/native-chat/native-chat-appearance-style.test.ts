@@ -31,6 +31,22 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
     ).toBeUndefined()
   })
 
+  it('prefers editorFontFamily for code blocks unless matchTerminalInterface is enabled', () => {
+    const settings = makeSettings({
+      editorFontFamily: 'D2CodingLigature Nerd Font',
+      terminalFontFamily: 'D2CodingLigature Nerd Font Mono'
+    })
+    expect(nativeChatAppearanceStyle(settings)['--chat-code-font-family']).toBe(
+      buildFontFamily('D2CodingLigature Nerd Font')
+    )
+    expect(
+      nativeChatAppearanceStyle({
+        ...settings,
+        nativeChatAppearance: { matchTerminalInterface: true }
+      })['--chat-code-font-family']
+    ).toBe(buildFontFamily('D2CodingLigature Nerd Font Mono'))
+  })
+
   it('uses the selected theme and live overrides as the two palette sources', () => {
     const settings = makeSettings({
       nativeChatAppearance: { matchTerminalInterface: true, contrast: 150 },

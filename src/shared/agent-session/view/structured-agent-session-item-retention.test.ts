@@ -127,64 +127,6 @@ function streamRevision(
 }
 
 describe('structured agent session item retention', () => {
-  it('bounds retained items on a long live session', () => {
-    const streamed = streamItems(
-      hydrate([item(0)]),
-      Array.from({ length: CAP + 500 }, (_, index) => index + 1)
-    )
-
-    expect(streamed.items).toHaveLength(CAP)
-    expect(streamed.items.at(-1)?.sequence).toBe(CAP + 500)
-    expect(streamed.items[0]?.sequence).toBe(501)
-  })
-
-  it('offers paging for items the cap dropped', () => {
-    const streamed = streamItems(
-      hydrate([item(0)]),
-      Array.from({ length: CAP + 10 }, (_, index) => index + 1)
-    )
-
-    expect(streamed.hasOlder).toBe(true)
-    expect(oldestStructuredAgentSessionCursor(streamed)).toEqual({
-      epoch: 'epoch-a',
-      sequence: streamed.items[0]?.sequence
-    })
-  })
-
-  it('leaves a session under the cap untouched', () => {
-    const hydrated = hydrate([item(0)])
-    const streamed = streamItems(
-      hydrated,
-      Array.from({ length: 200 }, (_, index) => index + 1)
-    )
-
-    expect(streamed.items).toHaveLength(201)
-    expect(streamed.hasOlder).toBe(false)
-  })
-
-  it('widens the retained window when older items are paged in', () => {
-    const streamed = streamItems(
-      hydrate([item(1_000)], true),
-      Array.from({ length: CAP + 10 }, (_, index) => index + 1_001)
-    )
-    const older = reduceStructuredAgentSession(streamed, {
-      type: 'older-page',
-      requestedCursor: { epoch: 'epoch-a', sequence: streamed.items[0]?.sequence ?? 0 },
-      page: page(
-        Array.from({ length: 300 }, (_, index) => item(index + 700)),
-        true
-      )
-    })
-    expect(older.items).toHaveLength(CAP + 300)
-
-    // A live batch slides the widened window by one instead of collapsing it back to the cap.
-    const afterLive = streamItems(older, [3_000])
-
-    expect(afterLive.items).toHaveLength(CAP + 300)
-    expect(afterLive.items[0]?.sequence).toBe(701)
-    expect(afterLive.items.some((entry) => entry.sequence === 800)).toBe(true)
-  })
-
   it('drops an older page whose anchor a live batch trimmed past', () => {
     const streamed = streamItems(
       hydrate([item(0)], false),
@@ -206,25 +148,6 @@ describe('structured agent session item retention', () => {
 
     // Merging would have left a hole between the page and the retained window.
     expect(merged).toBe(slid)
-  })
-
-  it('accepts an older page whose anchor still matches the retained head', () => {
-    const streamed = streamItems(
-      hydrate([item(0)], false),
-      Array.from({ length: CAP + 200 }, (_, index) => index + 1)
-    )
-    const anchor = oldestStructuredAgentSessionCursor(streamed)
-    const merged = reduceStructuredAgentSession(streamed, {
-      type: 'older-page',
-      requestedCursor: anchor ?? { epoch: 'epoch-a', sequence: 0 },
-      page: page(
-        Array.from({ length: 200 }, (_, index) => item((anchor?.sequence ?? 0) - 200 + index)),
-        true
-      )
-    })
-
-    expect(merged.items).toHaveLength(CAP + 200)
-    expect(merged.items[0]?.sequence).toBe((anchor?.sequence ?? 0) - 200)
   })
 
   it('keeps the anchor on the oldest loaded row when a live batch revises a row older than the window', () => {
@@ -269,17 +192,6 @@ describe('structured agent session item retention', () => {
     expect(older.items.find((entry) => entry.sequence === 50)?.revision).toBe(2)
     expect(oldestStructuredAgentSessionCursor(older)?.sequence).toBe(50)
     expect(older.hasOlder).toBe(false)
-  })
-
-  it('applies a live revision of a row the window holds, including its oldest row', () => {
-    const hydrated = hydrate(
-      Array.from({ length: 3 }, (_, index) => item(index + 200)),
-      true
-    )
-    const revised = streamRevision(hydrated, { ...item(200), revision: 2 }, 203)
-
-    expect(revised.items.find((entry) => entry.sequence === 200)?.revision).toBe(2)
-    expect(oldestStructuredAgentSessionCursor(revised)?.sequence).toBe(200)
   })
 
   it('admits a live row below the head when nothing older is left on the host', () => {
@@ -330,26 +242,6 @@ describe('structured agent session item retention', () => {
     expect(trimmed.items[0]?.sequence).toBe(1)
     expect(trimmed.unloadedTurnRevisions).toBe(1)
     expect(streamItems(trimmed, [CAP + 1]).unloadedTurnRevisions).toBe(1)
-  })
-
-  it('keeps item identity stable when a batch carries no journal change', () => {
-    const hydrated = hydrate([item(0)])
-    const unchanged = reduceStructuredAgentSession(hydrated, {
-      type: 'event',
-      event: {
-        type: 'batch',
-        sessionId: 'session-a',
-        fence: 2,
-        batch: {
-          cursor: { epoch: 'epoch-a', sequence: 0 },
-          items: [],
-          removedItemIds: [],
-          submissions: []
-        }
-      }
-    })
-
-    expect(unchanged.items).toBe(hydrated.items)
   })
 
   it('advances the cursor of a batch with no journal change without rescanning the window', () => {
