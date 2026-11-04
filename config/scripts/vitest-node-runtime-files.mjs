@@ -6,8 +6,9 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/codex/codex-form-transport-envelope.test.ts',
   'src/main/codex/codex-url-opener-contract.test.ts',
   'src/renderer/src/components/native-chat/NativeChatForm.contract.test.tsx',
-  // V8's regexp backtrack stack is what overflowed on a maximum frame; prove the decoder on that engine.
+  // V8's regexp backtrack stack is what overflowed on a maximum frame; prove the decoder and relayed hop on that engine.
   'src/main/runtime/rpc/mobile-e2ee-v2-desktop-session.test.ts',
+  'src/main/runtime/mobile-desktop-relay/mobile-desktop-relay.integration.test.ts',
   // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
   'src/main/linear/linear-request-recovery.test.ts',
   'src/main/linear/linear-issue-detail-deadline.test.ts',

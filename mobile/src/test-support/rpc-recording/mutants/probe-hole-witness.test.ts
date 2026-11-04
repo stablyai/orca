@@ -83,7 +83,7 @@ const changedParams: Partial<
     ...params
   }),
   'display-mode-unmeasured-viewport': (params) => ({ ...params, viewport: null }),
-  'create-after-tab-id-null': (params) => ({ ...params, afterTabId: null }),
+  'create-after-tab-id-null': ({ worktree, ...rest }) => ({ worktree, afterTabId: null, ...rest }),
   'create-quick-command-keys': (params) =>
     Object.fromEntries(
       Object.entries(params).map(([key, value]) => [
