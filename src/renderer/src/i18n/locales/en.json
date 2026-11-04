@@ -4711,7 +4711,6 @@
             "5c938d39ac": "wk",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "No other accounts",
             "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
@@ -4741,6 +4740,8 @@
             "zcodeUsageMenu": "ZCode Usage",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "signedOutAccounts": "Signed out",
+            "addAnotherAccount": "Add another account…",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
             "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account."
           },
