@@ -17,6 +17,7 @@ import {
 import { canOpenAutomationRunAgent } from './automation-run-agent'
 import type { MobileAutomationRun } from './automation-reply-schema'
 import type { AutomationRunObservation } from './use-automation-runs'
+import { useFullAutomationRun } from './use-full-automation-run'
 import { automationStyles as styles } from './automation-styles'
 
 export function AutomationRunDetails(props: {
@@ -31,7 +32,12 @@ export function AutomationRunDetails(props: {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const history = props.history
-  const run = history.selected ?? props.run
+  const run = useFullAutomationRun(
+    props.client,
+    props.connected,
+    history.selected ?? props.run,
+    history.scope
+  )
   const runError = automationRunErrorText(run)
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)

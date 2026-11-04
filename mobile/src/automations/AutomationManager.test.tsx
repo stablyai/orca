@@ -507,7 +507,8 @@ describe('mobile automation navigation and setup', () => {
       loading: false,
       error: null,
       loadMore: vi.fn(),
-      reload: vi.fn()
+      reload: vi.fn(),
+      scope: null
     }
     await act(async () => {
       tree = create(

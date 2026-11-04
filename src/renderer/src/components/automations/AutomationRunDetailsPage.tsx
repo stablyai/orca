@@ -10,6 +10,8 @@ import { getAutomationRunContent } from './automation-run-content'
 import { automationRunErrorText } from './automation-run-error-copy'
 import type { AutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
+import { useFullAutomationRun } from './use-full-automation-run'
+import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
 import {
   AutomationRunErrorNotice,
   formatAutomationDateTimeWithRelative,
@@ -19,7 +21,8 @@ import {
 
 export function AutomationRunDetailsPage({
   automation,
-  run,
+  run: listedRun,
+  history,
   relativeNow,
   workspaceDisplay,
   viewState,
@@ -31,6 +34,8 @@ export function AutomationRunDetailsPage({
 }: {
   automation: Automation | null
   run: AutomationRun
+  /** The read that listed `run`; Details re-reads its full row through the same owner. */
+  history: SelectedAutomationRunHistoryOutcome
   relativeNow: number
   workspaceDisplay: AutomationRunWorkspaceDisplay | null
   viewState: AutomationRunViewState | null
@@ -40,6 +45,7 @@ export function AutomationRunDetailsPage({
   onOpenWorkspace: () => void
   onBack: () => void
 }): React.JSX.Element {
+  const run = useFullAutomationRun(listedRun, history)
   const content = getAutomationRunContent(run)
   const errorText = automationRunErrorText(run)
   return (

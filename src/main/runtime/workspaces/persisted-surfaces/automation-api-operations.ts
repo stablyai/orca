@@ -55,6 +55,20 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
     )
   }
 
+  showAutomationRun(
+    automationId: string,
+    runId: string,
+    expectedOwner?: AutomationOwnerPrecondition
+  ): AutomationRun {
+    const run = this.readAutomationRuns(automationId, expectedOwner, () =>
+      this.automation.listRuns(automationId).find((entry) => entry.id === runId)
+    )
+    if (!run) {
+      throw new Error('Automation run not found.')
+    }
+    return run
+  }
+
   showAutomation(id: string, expectedOwner?: AutomationOwnerPrecondition): Automation {
     const automation = this.automation.show(id)
     this.automation.assertOwner(id, expectedOwner, 'read')

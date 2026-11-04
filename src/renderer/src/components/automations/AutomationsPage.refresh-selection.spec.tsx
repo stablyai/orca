@@ -119,7 +119,11 @@ describe('AutomationsPage refresh', () => {
             ? { kind: 'environment', environmentId: 'gpu' }
             : { kind: 'local' }
         )
-        expect(params).toEqual({ automationId: automation.id, expectedOwner: SELF_PRECONDITION })
+        expect(params).toEqual({
+          automationId: automation.id,
+          expectedOwner: SELF_PRECONDITION,
+          preview: true
+        })
         if (authority === 'runtime') {
           expect(options).toMatchObject({ expectedEnvironmentPairingRevision: 4 })
         }
@@ -317,7 +321,8 @@ describe('AutomationsPage selection', () => {
     // Fence history reads too so moved rows refuse rather than answer from a former host.
     expect(api.automations.listRuns).toHaveBeenCalledWith({
       automationId: 'a-2',
-      expectedOwner: SELF_PRECONDITION
+      expectedOwner: SELF_PRECONDITION,
+      preview: true
     })
     expect(mocks.detailPane?.selected?.id).toBe('a-2')
   })

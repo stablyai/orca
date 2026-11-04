@@ -88,6 +88,7 @@ export function useAutomationRuns(
           }
           const reply = await automationRunsRead.request(client, {
             limit: 30,
+            preview: true,
             ...requestScope,
             ...(cursor ? { cursor } : {})
           })
@@ -184,7 +185,9 @@ export function useAutomationRuns(
         void load(history.cursor)
       }
     },
-    reload: () => void load()
+    reload: () => void load(),
+    /** The scope these runs were listed under; its owner fences full-row reads. */
+    scope: query
   }
 }
 export type AutomationRunObservation = ReturnType<typeof useAutomationRuns>

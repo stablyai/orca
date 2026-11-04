@@ -385,7 +385,7 @@ describe('orphan-fenced mutations', () => {
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'automation.runs',
-      { automationId: 'a1', expectedOwner: { selector: { kind: 'orphan' } } },
+      { automationId: 'a1', expectedOwner: { selector: { kind: 'orphan' } }, preview: true },
       expect.objectContaining({ expectedEnvironmentPairingRevision: 4 })
     )
   })
@@ -397,7 +397,22 @@ describe('orphan-fenced mutations', () => {
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'local' },
       'automation.runs',
-      { automationId: 'a1', expectedOwner: { selector: { kind: 'orphan' } } },
+      { automationId: 'a1', expectedOwner: { selector: { kind: 'orphan' } }, preview: true },
+      expect.anything()
+    )
+  })
+
+  // A byte-cut preview page must not hide the rest of the history from all-runs callers.
+  it('reads every preview page of a history', async () => {
+    const { listOrphanAutomationRuns } = await client()
+    callRuntimeRpc
+      .mockResolvedValueOnce({ runs: [{ id: 'r1' }], nextCursor: '9:r1' })
+      .mockResolvedValueOnce({ runs: [{ id: 'r2' }], nextCursor: null })
+    expect(await listOrphanAutomationRuns(RUNTIME, 'a1')).toEqual([{ id: 'r1' }, { id: 'r2' }])
+    expect(callRuntimeRpc).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'automation.runs',
+      expect.objectContaining({ cursor: '9:r1', preview: true }),
       expect.anything()
     )
   })

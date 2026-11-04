@@ -21,6 +21,11 @@ function decodeAutomationRunCursor(cursor: string | undefined): AutomationRunCur
   return Number.isFinite(createdAt) && id ? { kind: 'key', createdAt, id } : null
 }
 
+/** The keyset cursor that resumes after `run`. */
+export function automationRunCursor(run: Pick<AutomationRun, 'createdAt' | 'id'>): string {
+  return `${run.createdAt}:${run.id}`
+}
+
 /** Order by createdAt then id so pruning a boundary cannot hide tied runs. */
 export function compareAutomationRunsNewestFirst(
   left: Pick<AutomationRun, 'createdAt' | 'id'>,
@@ -62,6 +67,6 @@ export function paginateAutomationRuns(
   const last = page.at(-1)
   return {
     runs: page,
-    nextCursor: last && start + page.length < runs.length ? `${last.createdAt}:${last.id}` : null
+    nextCursor: last && start + page.length < runs.length ? automationRunCursor(last) : null
   }
 }

@@ -77,6 +77,16 @@ export const automationRunsRead = bindDeferredRpcOperation(
     read: rpcResultVariant('runs-page', runsPageSchema)
   })
 )
+// An old host ignores `runId` and lists instead, which reads as no `run`.
+export const automationRunRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'automation.mobile-run',
+    method: 'automation.runs',
+    acceptance: 'require-result-or-throw',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('run', z.object({ run: runSchema.optional() }))
+  })
+)
 export const automationProjectsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'project.mobile-automation-inventory',
