@@ -315,13 +315,22 @@ export function NativeChatMessageList({
     onScrollGesture: transcriptScroll.forwardedGesture
   })
   // Off keeps a reader who scrolled up in place; one at the end still follows the reply.
-  const revealSent = useCallback(() => {
-    if (!nativeChatScrollsToLatestOnSend(useAppStore.getState().settings) && !readerAtEnd()) {
-      return
-    }
-    jumpToLatest()
-  }, [jumpToLatest, readerAtEnd])
-  useNativeChatMessageListHandle(ref, revealSent, readerInput.revealFindMatch, allSlots)
+  const revealSent = useCallback(
+    (readerWasAtEnd = readerAtEnd()) => {
+      if (!nativeChatScrollsToLatestOnSend(useAppStore.getState().settings) && !readerWasAtEnd) {
+        return
+      }
+      jumpToLatest()
+    },
+    [jumpToLatest, readerAtEnd]
+  )
+  useNativeChatMessageListHandle(
+    ref,
+    revealSent,
+    readerInput.revealFindMatch,
+    allSlots,
+    readerAtEnd
+  )
   useNativeChatRailJumpLanding({
     railJump,
     slots,

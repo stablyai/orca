@@ -18,11 +18,12 @@ export function useStructuredNativeChatSubmitReveal(
 ): {
   messageListRef: React.RefObject<NativeChatMessageListHandle | null>
   revealLatest: () => void
+  captureRevealLatest: () => () => void
   retryLaunch: () => void
   respond: StructuredController['respond']
   queuedMessages: StructuredAgentSessionQueuedMessagesController
 } {
-  const { messageListRef, revealLatest } = useNativeChatRevealLatest()
+  const { messageListRef, revealLatest, captureRevealLatest } = useNativeChatRevealLatest()
   const { respond, queuedMessages, capturePresentation } = controller
   const revealingRetryLaunch = useCallback(() => {
     if (startsHeld) {
@@ -75,6 +76,7 @@ export function useStructuredNativeChatSubmitReveal(
   return {
     messageListRef,
     revealLatest,
+    captureRevealLatest,
     retryLaunch: revealingRetryLaunch,
     respond: revealingRespond,
     queuedMessages: revealingQueue

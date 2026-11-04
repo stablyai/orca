@@ -7,7 +7,6 @@ import {
   geometryOf,
   hasMeasurableViewport,
   isNearBottom,
-  NATIVE_CHAT_BOTTOM_THRESHOLD_PX,
   NATIVE_CHAT_FOLLOW_REARM_PX,
   nextFollowingEnd,
   readerGestureDirection,
@@ -234,12 +233,12 @@ export function useNativeChatTranscriptScroll({
     setShowJump(false)
   }, [clearForwardedScroll, scrollToEndWhenMeasurable])
 
-  // Where the reader last left the view; growth since then (an echo of the send) does not move them away.
-  const readerAtEnd = useCallback(
-    () =>
-      followingRef.current || previousDistanceFromEndRef.current <= NATIVE_CHAT_BOTTOM_THRESHOLD_PX,
-    []
-  )
+  const readerAtEnd = useCallback(() => {
+    const element = scrollRef.current
+    return (
+      followingRef.current || (hasMeasurableViewport(element) && isNearBottom(geometryOf(element)))
+    )
+  }, [scrollRef])
 
   const scrollMessageToTop = useCallback(
     (element: HTMLElement) => {

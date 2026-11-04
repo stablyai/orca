@@ -115,7 +115,7 @@ function Chat({
     optionPickerRequest: null,
     setOptionPickerRequest: () => {},
     onError: vi.fn(),
-    onSubmitted: () => {}
+    reveal: { revealLatest: () => {}, captureRevealLatest: () => () => {} }
   })
   return (
     <NativeChatComposer

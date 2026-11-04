@@ -173,7 +173,10 @@ describe('reader navigation', () => {
       useAppStore.setState({ settings: originalSettings })
     })
 
-    function sendFrom(readerTop: (scroller: HTMLElement) => number): HTMLElement {
+    function sendFrom(
+      readerTop: (scroller: HTMLElement) => number,
+      replyRowsBeforeSend = 0
+    ): HTMLElement {
       const handle = createRef<NativeChatMessageListHandle>()
       const view = (messages: NativeChatMessage[]) => (
         <NativeChatMessageList
@@ -183,16 +186,23 @@ describe('reader navigation', () => {
           expandSignal={false}
         />
       )
+      const reply = Array.from({ length: replyRowsBeforeSend }, (_, index) =>
+        marker(TRANSCRIPT_LENGTH + index)
+      )
       const { container, rerender } = render(view(transcript))
       paint(container)
       scrollTranscript(container, readerTop(scrollRoot(container)))
       paint(container)
-      // The send's echo lands before its reveal, as a structured send's does.
-      const sent = [...transcript, userMessage(TRANSCRIPT_LENGTH, 'follow-up question')]
+      rerender(view([...transcript, ...reply]))
+      paint(container)
+      // A structured send reads the reader at the press; its echo lands before the host admits it.
+      const readerWasAtEnd = handle.current?.readerAtEnd()
+      const sentAt = TRANSCRIPT_LENGTH + reply.length
+      const sent = [...transcript, ...reply, userMessage(sentAt, 'follow-up question')]
       rerender(view(sent))
       paint(container)
-      act(() => handle.current?.revealLatest())
-      rerender(view([...sent, marker(TRANSCRIPT_LENGTH + 1)]))
+      act(() => handle.current?.revealLatest(readerWasAtEnd))
+      rerender(view([...sent, marker(sentAt + 1)]))
       paint(container)
       return container
     }
@@ -207,6 +217,15 @@ describe('reader navigation', () => {
       const container = sendFrom((scroller) => scroller.scrollHeight - scroller.clientHeight - 20)
       expect(distanceFromBottom(container)).toBe(0)
       expect(offersJumpToLatest()).toBe(false)
+    })
+
+    it('leaves a reader in place once output has grown past them', () => {
+      const container = sendFrom(
+        (scroller) => scroller.scrollHeight - scroller.clientHeight - 20,
+        10
+      )
+      expect(distanceFromBottom(container)).toBeGreaterThan(ROW_PX * 10)
+      expect(offersJumpToLatest()).toBe(true)
     })
   })
 

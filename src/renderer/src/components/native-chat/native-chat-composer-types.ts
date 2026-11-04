@@ -72,6 +72,8 @@ export type NativeChatStructuredComposerTransport = {
   onError: (message: string | null, detail?: NativeChatComposerErrorDetail) => void
   /** A local send: brings the latest into view at the press, not when the host answers. */
   onSubmitted?: () => void
+  /** At the press, the reveal to run once the host admits the message. */
+  captureAdmittedReveal?: () => () => void
   runtime: 'local' | 'remote'
   /** The session behind this composer; a real user send relinquishes orchestration ownership. */
   sessionId: string
