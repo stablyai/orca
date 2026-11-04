@@ -157,15 +157,26 @@ function detectTerminalComposer(
   }
   const cursorIndex = context.rows.length - 1
   const codexFooterIndex = findCodexFooterIndex(context)
-  // Why the raw fallback only when undimmed text is empty everywhere: an agent's dim suggestion
-  // text after the caret (Claude's ghost prompt) is not a draft. Falling back whenever the
-  // undimmed-after-caret slice is empty would read that suggestion as the user's input and hold
-  // delivery until the cap (#38015). Undimmed text below the caret still proves a wrapped draft.
+  // Why the raw fallback only for real evidence: an agent's dim suggestion after the caret
+  // (Claude's ghost prompt) is not a draft, and falling back whenever the undimmed slice is
+  // empty would read it as the user's input, holding delivery until the cap (#38015). The
+  // fallback stays for what it was added for: a wrapped draft's tail below the caret, and a
+  // stock placeholder that the placeholder check can retire.
   const hasUndimmedAfterCursor = context.afterCursor.trim().length > 0
+  const hasTypedContinuationBelow = context.typedRowsBelow.some(
+    (row, index) => row.trim() && !COMPOSER_FRAME_LINE.test(context.rowsBelow[index] ?? '')
+  )
+  const rawContinuationRows = composerContinuationRows(
+    context,
+    context.rawAfterCursor,
+    codexFooterIndex,
+    false
+  )
   const rawFallbackEligible =
     !typedOnly &&
     !hasUndimmedAfterCursor &&
-    (context.afterCursor.trim().length === 0 || context.typedRowsBelow.some((row) => row.trim()))
+    (hasTypedContinuationBelow ||
+      isStockPlaceholder(context.rawAfterCursor, rawContinuationRows))
   let afterCursor = typedOnly
     ? context.afterCursor
     : hasUndimmedAfterCursor || rawFallbackEligible

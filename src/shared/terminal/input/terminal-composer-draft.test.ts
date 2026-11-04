@@ -131,11 +131,12 @@ describe('detectTerminalComposerDraft', () => {
   it('does not read a dim ghost suggestion as the draft (#38015)', () => {
     // Claude draws its next-prompt suggestion as dim text after the caret; only
     // the raw slice sees it. A draft verdict here holds orchestration delivery
-    // until the user types or the input-hold cap passes.
+    // until the user types or the input-hold cap passes. The closing rule row
+    // is not typed-continuation evidence either.
     const ghost = {
-      rows: ['❯'],
-      typedRows: ['❯'],
-      promptGlyphBoldRows: [false],
+      rows: ['────────', '❯'],
+      typedRows: ['────────', '❯'],
+      promptGlyphBoldRows: [false, false],
       rowsBelow: ['────────'],
       typedRowsBelow: ['────────'],
       beforeCursor: '❯',
@@ -149,9 +150,9 @@ describe('detectTerminalComposerDraft', () => {
 
   it('still reads a wrapped draft whose only undimmed text sits below the caret', () => {
     const wrapped = {
-      rows: ['❯ fix the'],
-      typedRows: ['❯ fix the'],
-      promptGlyphBoldRows: [false],
+      rows: ['────────', '❯ fix the'],
+      typedRows: ['────────', '❯ fix the'],
+      promptGlyphBoldRows: [false, false],
       rowsBelow: ['failing test', '────────'],
       typedRowsBelow: ['failing test', '────────'],
       rowsBelowWrapped: [true, false],
