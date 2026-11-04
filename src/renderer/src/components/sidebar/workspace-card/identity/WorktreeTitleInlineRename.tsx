@@ -34,8 +34,8 @@ type WorktreeTitleInlineRenameProps = {
   disabled?: boolean
   showUnreadEmphasis?: boolean
   dimReadTitle?: boolean
-  /** Idle workspaces (no terminal, no agent) recede. */
-  activityEmphasis?: 'idle'
+  /** Idle workspaces (no terminal, no agent) recede; running ones gain weight. */
+  activityEmphasis?: 'idle' | 'running'
   editingPresentation?: 'text' | 'field'
   className?: string
   editingClassName?: string
@@ -330,9 +330,11 @@ export function WorktreeTitleInlineRename({
     ? 'font-semibold text-foreground'
     : activityEmphasis === 'idle'
       ? 'font-normal text-muted-foreground'
-      : dimReadTitle
-        ? 'font-normal text-foreground/80'
-        : 'font-normal text-foreground'
+      : activityEmphasis === 'running'
+        ? 'font-medium text-foreground'
+        : dimReadTitle
+          ? 'font-normal text-foreground/80'
+          : 'font-normal text-foreground'
 
   const title = (
     <span
