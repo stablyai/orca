@@ -1,8 +1,6 @@
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
-import {
-  TUI_AGENT_CONFIG,
-  type DraftPasteReadySignal
-} from './agent-launch/catalog/tui-agent-config'
+import { TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
+import type { DraftPasteReadySignal } from './agent-launch/catalog/tui-agent-config-types'
 import { resolvePasteReadySignal } from './draft-paste-ready-scanner'
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from './agent-launch/startup/agent-prompt-injection'
 import { signalAllowsCompatibilityEvidence } from './generated-agent-input-readiness'

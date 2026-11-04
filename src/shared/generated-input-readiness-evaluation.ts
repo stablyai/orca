@@ -1,8 +1,6 @@
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
-import {
-  TUI_AGENT_CONFIG,
-  type DraftPasteReadySignal
-} from './agent-launch/catalog/tui-agent-config'
+import { TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
+import type { DraftPasteReadySignal } from './agent-launch/catalog/tui-agent-config-types'
 import { showsAgentComposer } from './agent-input-dialog'
 import { isExpectedAgentProcess } from './agent-process-recognition'
 import { showsOpenCodeAgentRow } from './opencode-agent-row-scanner'
