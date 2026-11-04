@@ -193,31 +193,33 @@ function NativeChatApprovalDetail({ detail }: { detail: string }): React.JSX.Ele
   const hasMore = preview !== detail
   const textClassName = 'whitespace-pre-wrap break-words font-mono text-chat-code'
   return (
-    <Collapsible open={expanded} onOpenChange={setExpanded} className="space-y-2">
-      {hasMore ? (
-        <CollapsibleTrigger className="group flex items-center gap-1 rounded-sm text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <ChevronDown className="size-4 group-data-[state=open]:rotate-180" />
-          {translate('components.native-chat.notices.details', 'Details')}
-        </CollapsibleTrigger>
-      ) : null}
-      {!expanded ? (
-        <div
-          data-native-chat-approval-detail="true"
-          data-native-chat-code-content
-          className={textClassName}
-        >
-          {preview}
-        </div>
-      ) : null}
-      <CollapsibleContent>
-        <div
-          data-native-chat-approval-detail="true"
-          data-native-chat-code-content
-          className={textClassName}
-        >
-          {detail}
-        </div>
-      </CollapsibleContent>
+    <Collapsible open={expanded} onOpenChange={setExpanded}>
+      <div className="space-y-2">
+        {hasMore ? (
+          <CollapsibleTrigger variant="row">
+            {translate('components.native-chat.notices.details', 'Details')}
+            <ChevronDown className="size-4 group-data-[state=open]:rotate-180" />
+          </CollapsibleTrigger>
+        ) : null}
+        {!expanded ? (
+          <div
+            data-native-chat-approval-detail="true"
+            data-native-chat-code-content
+            className={textClassName}
+          >
+            {preview}
+          </div>
+        ) : null}
+        <CollapsibleContent>
+          <div
+            data-native-chat-approval-detail="true"
+            data-native-chat-code-content
+            className={textClassName}
+          >
+            {detail}
+          </div>
+        </CollapsibleContent>
+      </div>
     </Collapsible>
   )
 }
