@@ -4,8 +4,9 @@ import { useAppStore } from '@/store'
 import { hasAwakeStructuredChat } from '@/store/slices/structured-chat-slept-at'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
-import StatusIndicator from '@/components/sidebar/StatusIndicator'
-import { FilledBellIcon } from '@/components/sidebar/WorktreeCardHelpers'
+import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
+import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
+import { FilledBellIcon } from '@/components/sidebar/workspace-card/identity/worktree-card-glyphs'
 import {
   buildExplicitEntriesByTabId,
   type TabPaneInputSources

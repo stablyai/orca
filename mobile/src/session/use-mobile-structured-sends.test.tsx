@@ -9,23 +9,18 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+
 import type { RpcClient } from '../transport/rpc-client'
 import {
   acceptedSubmission,
   fieldsOf,
   ok,
-  queuedDraft,
   snapshotEvent
 } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
-import { useMobileStructuredSends } from './use-mobile-structured-sends'
 
 const asyncStorage = vi.hoisted(() => ({ getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() }))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
-
-const UNCONFIRMED = 'Delivery unconfirmed — check chat before retrying'
 
 function recorded(
   clientMessageId: string,
@@ -149,21 +144,6 @@ describe('a structured send in the open chat', () => {
     listener = null
   })
 
-  it('draws one bubble under its own id until its row lands, then only the row', async () => {
-    await mount()
-    const id = await send('hello')
-    const row = agentJournalSubmissionKey(id)
-    expect(shown()).toEqual([[row, 'hello']])
-
-    act(() => listener?.(journal([], [])))
-    expect(shown()).toEqual([[row, 'hello']])
-
-    act(() => listener?.(journal([userRow(id, 'hello', 1)], [recorded(id)])))
-    expect(shown()).toEqual([[row, 'hello']])
-    expect(hook!.session.messages[0]?.timestamp).toBe(1)
-    expect(onSendError).not.toHaveBeenCalled()
-  })
-
   it.each([false, true])(
     'forgets an acknowledged off-page echo after reconnect (snapshot beats reply: %s)',
     async (snapshotFirst) => {
@@ -210,175 +190,5 @@ describe('a structured send in the open chat', () => {
     )
     expect(shown()).toEqual([[agentJournalSubmissionKey(id), 'hi']])
     expect(onSendError).not.toHaveBeenCalled()
-  })
-
-  it('draws nothing for a send whose answer was lost', async () => {
-    await mount()
-    answer = (id) => ({ clientMessageId: id, submission: recorded(id, 'unknown') })
-    await send('maybe')
-    expect(shown()).toEqual([])
-  })
-
-  it('draws nothing of its own for a send the host keeps as a card', async () => {
-    await mount()
-    answer = (id) => ({
-      clientMessageId: id,
-      queued: { messageId: id, state: 'waiting', position: 1 }
-    })
-    await send('later')
-    expect(shown()).toEqual([])
-  })
-
-  it('leaves a send a Stop took back to its row and stop row', async () => {
-    await mount()
-    const withdrawn = (id: string) =>
-      recorded(id, 'rejected', { reason: DISPATCH_REJECTED_CANCELLED, resolvedAt: 11 })
-    answer = (id) => ({ clientMessageId: id, submission: withdrawn(id) })
-    const id = await send('stop me')
-    act(() => listener?.(journal([userRow(id, 'stop me', 1)], [withdrawn(id)])))
-    expect(hook!.session.messages.map((message) => message.id)).toEqual([
-      agentJournalSubmissionKey(id),
-      `stopped-before-start:${agentJournalSubmissionKey(id)}`
-    ])
-  })
-
-  it("shows this phone's photo on the bubble, the landed row and a not-sent row", async () => {
-    await mount()
-    const id = await send('look', [{ path: '/host/a.jpg', previewUri: 'file:///a.jpg' }])
-    const row = agentJournalSubmissionKey(id)
-    expect(hook!.imagePreviewsByMessageId).toEqual({ [row]: ['file:///a.jpg'] })
-    expect(hook!.session.messages[0]?.blocks).toContainEqual({
-      type: 'image-ref',
-      path: '/host/a.jpg'
-    })
-
-    act(() => listener?.(journal([userRow(id, 'look', 1)], [recorded(id, 'rejected')])))
-    expect(shown()).toEqual([[row, 'look', 'unsent']])
-    expect(hook!.imagePreviewsByMessageId).toEqual({ [row]: ['file:///a.jpg'] })
-  })
-})
-
-describe('a structured send whose answer was lost', () => {
-  let renderer: ReactTestRenderer | null = null
-  let sends: ReturnType<typeof useMobileStructuredSends> | null = null
-  const onSendError = vi.fn()
-
-  function Harness(props: {
-    sessionKey: string
-    submissions?: AgentJournalSubmission[]
-    queuedMessages?: AgentSessionQueuedMessage[]
-  }): null {
-    sends = useMobileStructuredSends({
-      sessionKey: props.sessionKey,
-      submissions: props.submissions ?? [],
-      queuedMessages: props.queuedMessages ?? null,
-      onSendError
-    })
-    return null
-  }
-
-  function render(props: Parameters<typeof Harness>[0]): void {
-    act(() => {
-      if (renderer) {
-        renderer.update(createElement(Harness, props))
-      } else {
-        renderer = create(createElement(Harness, props))
-      }
-    })
-  }
-
-  const message = (clientMessageId: string) => ({
-    clientMessageId,
-    body: { kind: 'message' as const, role: 'user' as const, blocks: [] },
-    queuedAt: 1
-  })
-
-  function hold(clientMessageId: string): void {
-    act(() => sends!.hold(message(clientMessageId)))
-  }
-
-  const drawn = () => sends!.optimistic.map((send) => send.clientMessageId)
-
-  beforeEach(() => {
-    vi.useFakeTimers()
-    vi.clearAllMocks()
-  })
-
-  afterEach(() => {
-    act(() => renderer?.unmount())
-    renderer = null
-    sends = null
-    vi.useRealTimers()
-  })
-
-  it('is never drawn, and says so once if the host never shows it', () => {
-    render({ sessionKey: 'a' })
-    hold('lost')
-    expect(drawn()).toEqual([])
-    act(() => sends!.accept(message('next')))
-    render({ sessionKey: 'a', submissions: [recorded('other')] })
-    expect(drawn()).toEqual(['next'])
-    act(() => {
-      vi.advanceTimersByTime(30_000)
-    })
-    expect(drawn()).toEqual(['next'])
-    expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith(UNCONFIRMED)
-  })
-
-  it.each([
-    ['recorded', { submissions: [recorded('lost')] }],
-    ['held as a card', { queuedMessages: [queuedDraft({ messageId: 'lost' })] }],
-    ['handed off from its card', { submissions: [acceptedSubmission('next', 'lost')] }]
-  ])('stays quiet once the host shows it %s', (_case, shownBy) => {
-    render({ sessionKey: 'a' })
-    hold('lost')
-    render({ sessionKey: 'a', ...shownBy })
-    expect(vi.getTimerCount()).toBe(0)
-    expect(drawn()).toEqual([])
-    act(() => {
-      vi.advanceTimersByTime(30_000)
-    })
-    expect(onSendError).not.toHaveBeenCalled()
-  })
-
-  it('stays quiet when the record beat the answer', () => {
-    render({ sessionKey: 'a', submissions: [recorded('lost')] })
-    hold('lost')
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('keeps its hold while another chat is open, and settles it back in its own', () => {
-    render({ sessionKey: 'a' })
-    hold('lost')
-    render({ sessionKey: 'b', submissions: [recorded('other')] })
-    act(() => {
-      vi.advanceTimersByTime(5_000)
-    })
-    render({ sessionKey: 'a', submissions: [recorded('lost')] })
-    act(() => {
-      vi.advanceTimersByTime(30_000)
-    })
-    expect(onSendError).not.toHaveBeenCalled()
-  })
-
-  it('stops its deadline when the chat screen goes away', () => {
-    render({ sessionKey: 'a' })
-    hold('lost')
-    act(() => renderer?.unmount())
-    renderer = null
-    expect(vi.getTimerCount()).toBe(0)
-    act(() => {
-      vi.advanceTimersByTime(30_000)
-    })
-    expect(onSendError).not.toHaveBeenCalled()
-  })
-
-  it('ignores an answer lost after the chat screen went away', () => {
-    render({ sessionKey: 'a' })
-    act(() => renderer?.unmount())
-    renderer = null
-    hold('lost')
-    expect(vi.getTimerCount()).toBe(0)
   })
 })

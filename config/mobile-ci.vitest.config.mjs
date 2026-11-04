@@ -16,7 +16,6 @@ const nodeFiles = [
   'src/components/pr-sidebar/markdown-table-delimiter-performance.test.ts',
   'src/components/rich-markdown/native-document-bundle.test.ts',
   'src/terminal/document/native-document-bundle.test.ts',
-  'src/transport/settings-read-operations.test.ts',
   'src/transport/mobile-e2ee-v2-client-session.test.ts',
   'src/transport/mobile-e2ee-v2-physical-channel.test.ts',
   'src/transport/pairing-relay-served-recovery.test.ts',

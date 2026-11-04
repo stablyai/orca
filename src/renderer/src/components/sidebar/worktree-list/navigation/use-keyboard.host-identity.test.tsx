@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeNavHistoryEntry } from '@/store/slices/worktree-nav-history'
-import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
+import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 
