@@ -10166,14 +10166,6 @@
               "extension": "Erweiterung",
               "chrome": "chrome",
               "password": "Passwortmanager"
-            },
-            "orchestrationPanel": {
-              "title": "Orchestrierungs-Panel",
-              "description": "Zeigt neben dem Chat oder Terminal jedes Agenten, mit welchen Agenten er zusammenarbeitet.",
-              "orchestration": "Orchestrierung",
-              "agents": "Agenten",
-              "workers": "Worker",
-              "manager": "Manager"
             }
           }
         },
