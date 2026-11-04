@@ -22,6 +22,7 @@ import {
 } from '../applying-settings/onboarding-normalization'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
+import { resolvePersistedFilterAgentIds } from '../../../shared/workspace-agent-filter'
 
 export function normalizeLoadedUiState(
   parsed: PersistedState,
@@ -198,12 +199,22 @@ export function normalizeLoadedUiState(
   ) {
     markNeedsSave()
   }
+  const rawUi = stripMainOwnedTelemetryMarkerFromUI(parsed.ui)
+  // Why: leftovers must not survive the defaults spread; defaults.ui already
+  // has filterAgentIds: null, so resolve from the raw payload first.
+  delete rawUi.filterAgentId
+  delete rawUi.filterHarnessId
+  const filterAgentIds = resolvePersistedFilterAgentIds(parsed.ui ?? {})
+  if (parsed.ui?.filterAgentId !== undefined || parsed.ui?.filterHarnessId !== undefined) {
+    markNeedsSave()
+  }
   return {
     ...defaults.ui,
     worktreeCardProperties: getWorktreeCardModeProperties(
       loadedCompactWorktreeCards ? 'Compact' : 'Default'
     ),
-    ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
+    ...rawUi,
+    filterAgentIds,
     // The retired Appearance setting seeds chrome only without an explicit preference.
     rightSidebarOpen,
     rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),

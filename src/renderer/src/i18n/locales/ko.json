@@ -5687,8 +5687,10 @@
           "e029a2d775": "상태",
           "c2c7a45cda": "없음",
           "hosts": "호스트",
+          "agents": "에이전트",
           "showSection": "표시",
           "allHostsDetail": "모든 호스트 표시",
+          "allAgentsDetail": "모든 에이전트 표시",
           "configuredSshHost": "구성된 SSH",
           "projectSshHost": "프로젝트 SSH",
           "activeRuntimeHost": "새 프로젝트 기본값",
@@ -6257,6 +6259,17 @@
           "hosts": "호스트",
           "visibleHosts_other": "호스트 {{count}}개"
         },
+        "sidebarAgentOptions": {
+          "allAgents": "모든 에이전트",
+          "visibleAgentsCount": "에이전트 {{value0}}개"
+        },
+        "SidebarAgentFilterSection": {
+          "agent": "에이전트"
+        },
+        "SidebarAgentScopeStrip": {
+          "scopedTo": "{{value0}} 표시 중",
+          "backToAll": "모든 에이전트"
+        },
         "HostRemoveDialog": {
           "1a2b3c4d5e": "{{value0}} 제거됨",
           "2b3c4d5e6f": "호스트를 제거하지 못했습니다.",
@@ -6308,7 +6321,8 @@
           "f0a1b2c3d4": "Linear 이슈 {{value0}}을(를) 건너뛰었습니다: 이 워크스페이스가 둘 이상의 호스트에 있습니다.",
           "c7d8e9f0a1": "{{value0}}개 업데이트됨",
           "d8e9f0a1b2": "{{value0}}개 건너뜀",
-          "e9f0a1b2c3": "{{value0}}개 실패"
+          "e9f0a1b2c3": "{{value0}}개 실패",
+          "noWorkspacesMatchFilters": "현재 필터와 일치하는 워크스페이스가 없습니다"
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "상위 워크트리를 설정하지 못했습니다",

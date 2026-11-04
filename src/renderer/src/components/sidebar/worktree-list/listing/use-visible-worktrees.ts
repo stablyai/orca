@@ -9,6 +9,7 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import './visible-worktrees'
 import { computeVisibleWorktrees } from './compute-visible-worktrees'
+import { collectAgentTypesByWorktree } from '../../workspace-agent-filter-evidence'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
@@ -70,6 +71,7 @@ export function useVisibleSidebarWorktrees(args: {
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
     alwaysShowDefaultBranchWorkspace,
+    filterAgentIds,
     visibleWorkspaceHostIds,
     workspaceHostScope
   } = filterState
@@ -84,8 +86,49 @@ export function useVisibleSidebarWorktrees(args: {
   const pairedDeviceIdsByEnvironment = useAppStore(selectPairedDevices)
 
   const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
-  const tabsByWorktree = useAppStore((s) =>
-    needsActivityMaps ? getVisibleWorktreeTerminalActivityTabs(s.tabsByWorktree) : null
+  const needsAgentFilterMaps = filterAgentIds != null
+  const tabsByWorktree = useAppStore((s) => {
+    if (needsAgentFilterMaps) {
+      // Why: agent matching reads launchAgent and title, which the sleeping
+      // activity projection strips down to tab ids.
+      return s.tabsByWorktree
+    }
+    return needsActivityMaps ? getVisibleWorktreeTerminalActivityTabs(s.tabsByWorktree) : null
+  })
+  const agentFilterStatusByPaneKey = useAppStore((s) =>
+    needsAgentFilterMaps ? s.agentStatusByPaneKey : null
+  )
+  const agentFilterRetainedByPaneKey = useAppStore((s) =>
+    needsAgentFilterMaps ? s.retainedAgentsByPaneKey : null
+  )
+  const agentFilterSleepingByPaneKey = useAppStore((s) =>
+    needsAgentFilterMaps ? s.sleepingAgentSessionsByPaneKey : null
+  )
+  const agentTypesByWorktree = useMemo(
+    () =>
+      needsAgentFilterMaps
+        ? collectAgentTypesByWorktree({
+            agentStatusByPaneKey: agentFilterStatusByPaneKey,
+            retainedAgentsByPaneKey: agentFilterRetainedByPaneKey,
+            sleepingAgentSessionsByPaneKey: agentFilterSleepingByPaneKey,
+            tabsByWorktree,
+            worktrees: Object.values(worktreesByRepo).flat()
+          })
+        : null,
+    [
+      needsAgentFilterMaps,
+      agentFilterStatusByPaneKey,
+      agentFilterRetainedByPaneKey,
+      agentFilterSleepingByPaneKey,
+      tabsByWorktree,
+      worktreesByRepo
+    ]
+  )
+  const runtimePaneTitlesByTabId = useAppStore((s) =>
+    needsAgentFilterMaps ? s.runtimePaneTitlesByTabId : null
+  )
+  const terminalLayoutsByTabId = useAppStore((s) =>
+    needsAgentFilterMaps ? s.terminalLayoutsByTabId : null
   )
   const ptyIdsByTabId = useAppStore((s) => (needsActivityMaps ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
@@ -138,6 +181,10 @@ export function useVisibleSidebarWorktrees(args: {
       hideWorkspacesFromOtherDevices,
       pairedDeviceIdsByEnvironment,
       alwaysShowDefaultBranchWorkspace,
+      filterAgentIds: filterAgentIds ?? null,
+      agentTypesByWorktree,
+      runtimePaneTitlesByTabId,
+      terminalLayoutsByTabId,
       repoMap,
       workspaceHostScope,
       visibleWorkspaceHostIds,
@@ -162,6 +209,10 @@ export function useVisibleSidebarWorktrees(args: {
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
     alwaysShowDefaultBranchWorkspace,
+    filterAgentIds,
+    agentTypesByWorktree,
+    runtimePaneTitlesByTabId,
+    terminalLayoutsByTabId,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     defaultHostId,

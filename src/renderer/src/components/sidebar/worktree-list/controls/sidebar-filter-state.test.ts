@@ -135,6 +135,10 @@ describe('sidebarHasActiveFilters', () => {
   it('returns true when only host visibility is narrowed', () => {
     expect(sidebarHasActiveFilters(filterState({ visibleWorkspaceHostIds: ['local'] }))).toBe(true)
   })
+
+  it('returns true when an agent filter is selected', () => {
+    expect(sidebarHasActiveFilters(filterState({ filterAgentIds: ['codex'] }))).toBe(true)
+  })
 })
 
 function clearedSetters(state: FilterState): string[] {
@@ -149,6 +153,7 @@ function clearedSetters(state: FilterState): string[] {
     setHideDetachedHeadWorkspaces: record('setHideDetachedHeadWorkspaces'),
     setHideWorkspacesFromOtherDevices: record('setHideWorkspacesFromOtherDevices'),
     setFilterRepoIds: record('setFilterRepoIds'),
+    setFilterAgentIds: record('setFilterAgentIds'),
     setVisibleWorkspaceHostIds: record('setVisibleWorkspaceHostIds')
   }
   clearSidebarFilters(state, store)
@@ -173,6 +178,12 @@ describe('clearSidebarFilters', () => {
     expect(clearedSetters(filterState(overrides))).toEqual(expected)
   })
 
+  it('resets only the agent filter when it is the sole filter', () => {
+    expect(clearedSetters(filterState({ filterAgentIds: ['claude'] }))).toEqual([
+      'setFilterAgentIds'
+    ])
+  })
+
   it('resets every active filter at once, and nothing already at its default', () => {
     expect(
       clearedSetters(
@@ -181,6 +192,7 @@ describe('clearSidebarFilters', () => {
           filterRepoIds: ['repo1', 'repo2'],
           hideDefaultBranchWorkspace: true,
           hideAutomationGeneratedWorkspaces: true,
+          filterAgentIds: ['claude'],
           visibleWorkspaceHostIds: ['local']
         })
       )
@@ -189,7 +201,8 @@ describe('clearSidebarFilters', () => {
       'setHideDefaultBranchWorkspace',
       'setHideAutomationGeneratedWorkspaces',
       'setFilterRepoIds',
-      'setVisibleWorkspaceHostIds'
+      'setVisibleWorkspaceHostIds',
+      'setFilterAgentIds'
     ])
   })
 })
