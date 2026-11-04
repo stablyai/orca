@@ -4,11 +4,6 @@ import {
   createAutomationRunOutputSnapshotFromText,
   selectAutomationRunOutputSnapshot
 } from './automation-run-output-snapshot'
-import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { normalizeOptionalMultilineField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
-
-const capped = (raw: string): string =>
-  normalizeOptionalMultilineField(raw, AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH) ?? ''
 
 describe('automation run output snapshot buffer', () => {
   beforeEach(() => {
@@ -167,27 +162,13 @@ describe('automation run output snapshot buffer', () => {
       'q;\u2834 orca q\u2022Working q q'
     )
 
-    expect(selectAutomationRunOutputSnapshot('Posted to #releases.', rawTerminalSnapshot)).toEqual({
+    expect(
+      selectAutomationRunOutputSnapshot({ text: 'Posted to #releases.' }, rawTerminalSnapshot)
+    ).toEqual({
       format: 'plain_text',
       content: 'Posted to #releases.',
       capturedAt: new Date('2026-05-16T12:00:00Z').getTime(),
       truncated: false
     })
-  })
-
-  it('marks a final message cut at the status cap as truncated', () => {
-    const cut = capped('a'.repeat(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH + 500))
-    expect(selectAutomationRunOutputSnapshot(cut, null)?.truncated).toBe(true)
-  })
-
-  it('marks a cut that dropped half a surrogate pair as truncated', () => {
-    const cut = capped(`${'a'.repeat(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH - 1)}😀 more`)
-    expect(cut).toHaveLength(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH - 1)
-    expect(selectAutomationRunOutputSnapshot(cut, null)?.truncated).toBe(true)
-  })
-
-  it('keeps a final message under the cap untruncated', () => {
-    const whole = capped('a'.repeat(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH - 2))
-    expect(selectAutomationRunOutputSnapshot(whole, null)?.truncated).toBe(false)
   })
 })

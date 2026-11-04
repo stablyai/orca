@@ -148,7 +148,10 @@ export async function handleAutomationDispatchRequest({
                   runId: run.id,
                   onData: completion.appendOutput,
                   onAgentStatus: (payload) => {
-                    completion.captureAssistantMessage(payload.lastAssistantMessage)
+                    completion.captureAssistantMessage(
+                      payload.lastAssistantMessage,
+                      payload.lastAssistantMessageTruncated
+                    )
                     handleReusableAgentStatus(payload)
                   },
                   onExit: completion.handleExit
@@ -198,7 +201,10 @@ export async function handleAutomationDispatchRequest({
       title: run.title,
       onData: completion.appendOutput,
       onAgentStatus: (payload) => {
-        completion.captureAssistantMessage(payload.lastAssistantMessage)
+        completion.captureAssistantMessage(
+          payload.lastAssistantMessage,
+          payload.lastAssistantMessageTruncated
+        )
         // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
         if (payload.state !== 'done' || payload.sessionBoundary === true) {
           return

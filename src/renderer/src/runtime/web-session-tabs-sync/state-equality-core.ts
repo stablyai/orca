@@ -62,6 +62,7 @@ export function agentStatusEntryEqual(
     a.interactivePrompt === b.interactivePrompt &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.lastAssistantMessageIsToolOutput === b.lastAssistantMessageIsToolOutput &&
+    a.lastAssistantMessageTruncated === b.lastAssistantMessageTruncated &&
     a.interrupted === b.interrupted &&
     mainAgentStatusEqual(a.mainAgent, b.mainAgent) &&
     a.promptInteractionKey === b.promptInteractionKey &&

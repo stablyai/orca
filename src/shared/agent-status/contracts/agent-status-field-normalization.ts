@@ -87,15 +87,16 @@ function normalizeSingleLinePreview(value: string, maxLength: number): string {
 }
 
 // Preserve pre-wrap paragraph structure; normalize CRLF and cap paragraph gaps at one blank line.
-function normalizeMultilineField(value: unknown, maxLength: number): string {
-  if (typeof value !== 'string') {
-    return ''
-  }
+function normalizeMultilineField(
+  value: string,
+  maxLength: number
+): { text: string; truncated: boolean } {
   // Fold U+2028/U+2029 before capping blank lines: pre-wrap renders them as breaks, otherwise paragraph-separator runs bypass the cap. Order: CRLF, bare CR, Unicode separators, blank-line collapse.
   const { start, end } = getTrimmedStringBounds(value)
   let normalized = ''
   let newlineRun = 0
-  for (let index = start; index < end && normalized.length < maxLength; index++) {
+  let index = start
+  for (; index < end && normalized.length < maxLength; index++) {
     const code = value.charCodeAt(index)
     if (code === 13 || code === 10 || code === 0x2028 || code === 0x2029) {
       if (code === 13 && value.charCodeAt(index + 1) === 10) {
@@ -111,7 +112,9 @@ function normalizeMultilineField(value: unknown, maxLength: number): string {
     normalized += value[index]
     newlineRun = 0
   }
-  return truncatePreservingSurrogates(normalized, maxLength)
+  const text = truncatePreservingSurrogates(normalized, maxLength)
+  // Trimmed source ends in non-whitespace, so any unread source is lost content.
+  return { text, truncated: index < end || text.length < normalized.length }
 }
 
 function getTrimmedStringBounds(value: string): { start: number; end: number } {
@@ -241,15 +244,16 @@ export function normalizeOptionalField(value: unknown, maxLength: number): strin
   return normalized.length > 0 ? normalized : undefined
 }
 
+/** `truncated` says the cap cut content, which the bounded text alone cannot show. */
 export function normalizeOptionalMultilineField(
   value: unknown,
   maxLength: number
-): string | undefined {
+): { text: string; truncated: boolean } | undefined {
   if (typeof value !== 'string') {
     return undefined
   }
   const normalized = normalizeMultilineField(value, maxLength)
-  return normalized.length > 0 ? normalized : undefined
+  return normalized.text.length > 0 ? normalized : undefined
 }
 
 /** Keep a lead turn's end time only on the gated `working` row and that turn's later all-clear `done`. */

@@ -149,15 +149,15 @@ vi.mock('@/components/automations/automation-run-output-snapshot', () => ({
     snapshot: () => null
   }),
   selectAutomationRunOutputSnapshot: (
-    assistantMessage: string | null | undefined,
+    assistantMessage: { text: string; truncated?: boolean } | null,
     terminalSnapshot: unknown
   ) =>
     assistantMessage
       ? {
           format: 'plain_text',
-          content: assistantMessage,
+          content: assistantMessage.text,
           capturedAt: 1,
-          truncated: false
+          truncated: assistantMessage.truncated === true
         }
       : terminalSnapshot
 }))
@@ -536,7 +536,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
   })
 
-  it('skips unchanged status and persists batched working→done→working output', async () => {
+  it('skips unchanged status and persists batched working→done→working output with its cut mark', async () => {
     const paneKey = 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d'
 
     await registerAndDispatch()
@@ -551,6 +551,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
         updatedAt: transitionStartedAt + 2,
         stateStartedAt: transitionStartedAt + 2,
         lastCompletedAssistantMessage: 'Summary.\n\nDetails.',
+        lastCompletedAssistantMessageTruncated: true,
         stateHistory: [
           { state: 'working', prompt: 'first turn', startedAt: transitionStartedAt },
           { state: 'done', prompt: 'first turn', startedAt: transitionStartedAt + 1 }
@@ -571,7 +572,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
           format: 'plain_text',
           content: 'Summary.\n\nDetails.',
           capturedAt: 1,
-          truncated: false
+          truncated: true
         }
       })
     )

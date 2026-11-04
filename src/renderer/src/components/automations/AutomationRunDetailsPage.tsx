@@ -55,8 +55,8 @@ export function AutomationRunDetailsPage({
         detail={
           run.outputSnapshot?.truncated
             ? translate(
-                'auto.components.automations.AutomationsPage.latestSavedOutput',
-                'Latest saved output'
+                'auto.components.automations.AutomationsPage.outputTruncated',
+                'Output truncated'
               )
             : null
         }

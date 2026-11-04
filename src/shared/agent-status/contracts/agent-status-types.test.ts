@@ -256,6 +256,26 @@ Fix dispatch fallback preview for normalized status prompts`
     }
   })
 
+  it('marks lastAssistantMessage truncated only when the cap cut content', () => {
+    const cap = AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
+    const truncatedOf = (lastAssistantMessage: string): boolean | undefined =>
+      normalizeAgentStatusPayload({ state: 'done', lastAssistantMessage })
+        ?.lastAssistantMessageTruncated
+
+    expect(truncatedOf('a'.repeat(cap))).toBeUndefined()
+    expect(truncatedOf('a'.repeat(cap + 1))).toBe(true)
+    // Why: the kept text ends in a whitespace run, so its trimmed length is well under the cap.
+    expect(truncatedOf(`${'a'.repeat(cap - 20)}${' '.repeat(50)}TAIL`)).toBe(true)
+  })
+
+  it('keeps an upstream truncated mark when re-normalizing capped text', () => {
+    const capped = normalizeAgentStatusPayload({
+      state: 'done',
+      lastAssistantMessage: 'a'.repeat(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH + 1)
+    })!
+    expect(normalizeAgentStatusPayload(capped)?.lastAssistantMessageTruncated).toBe(true)
+  })
+
   it('normalizes the subagents field, dropping invalid entries and keeping every valid one', () => {
     const result = parseAgentStatusPayload(
       JSON.stringify({

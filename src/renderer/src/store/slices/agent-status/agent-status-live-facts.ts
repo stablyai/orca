@@ -79,6 +79,7 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
       entry.toolInput !== existing.toolInput ||
       entry.lastAssistantMessage !== existing.lastAssistantMessage ||
       entry.lastAssistantMessageIsToolOutput !== existing.lastAssistantMessageIsToolOutput ||
+      entry.lastAssistantMessageTruncated !== existing.lastAssistantMessageTruncated ||
       entry.orchestration !== existing.orchestration ||
       entry.subagents !== existing.subagents ||
       entry.children !== existing.children ||

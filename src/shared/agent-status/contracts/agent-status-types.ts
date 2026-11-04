@@ -104,8 +104,11 @@ export type AgentStatusEntry = {
   lastAssistantMessage?: string
   /** Dashboard may show tool output, but native-chat streaming must not present tool stdout as assistant prose. */
   lastAssistantMessageIsToolOutput?: boolean
+  /** True when the status cap cut lastAssistantMessage; set only with its message. */
+  lastAssistantMessageTruncated?: boolean
   /** Retain the last completed non-boundary output across working: batched done→working publication may already clear lastAssistantMessage. */
   lastCompletedAssistantMessage?: string
+  lastCompletedAssistantMessageTruncated?: boolean
   /** True when this `done` was reached via interrupt, not normal completion
    *  (agent-reported or Orca's guarded fallback). Undefined otherwise. */
   interrupted?: boolean
@@ -155,6 +158,8 @@ export type AgentStatusPayload = {
   lastAssistantMessage?: string
   /** See the AgentStatusEntry field for semantics. */
   lastAssistantMessageIsToolOutput?: boolean
+  /** See the AgentStatusEntry field; older hosts omit it. */
+  lastAssistantMessageTruncated?: boolean
   interrupted?: boolean
   /** done session boundaries (connect/resume/clear) are not turn completions; notifications/automations/badges/end clocks must ignore them (STA-3386). */
   sessionBoundary?: boolean
@@ -194,6 +199,7 @@ export function pickParsedAgentStatusPayload(
     ...(row.lastAssistantMessageIsToolOutput !== undefined
       ? { lastAssistantMessageIsToolOutput: row.lastAssistantMessageIsToolOutput }
       : {}),
+    ...(row.lastAssistantMessageTruncated ? { lastAssistantMessageTruncated: true } : {}),
     ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
@@ -280,6 +286,10 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
   if (!VALID_STATES.has(state)) {
     return null
   }
+  const lastAssistantMessage = normalizeOptionalMultilineField(
+    obj.lastAssistantMessage,
+    AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
+  )
   return {
     state: state as AgentStatusState,
     workingMode: state === 'working' && obj.workingMode === 'monitoring' ? 'monitoring' : undefined,
@@ -296,13 +306,15 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
       obj.interactivePrompt,
       AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH
     ),
-    lastAssistantMessage: normalizeOptionalMultilineField(
-      obj.lastAssistantMessage,
-      AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
-    ),
+    lastAssistantMessage: lastAssistantMessage?.text,
     // Only explicit true means known tool output; absent/false retain older-host behavior without suppressing prose.
     lastAssistantMessageIsToolOutput:
       obj.lastAssistantMessageIsToolOutput === true ? true : undefined,
+    // Why: re-normalizing already-capped text cannot see the cut, so keep an upstream true.
+    ...(lastAssistantMessage &&
+    (lastAssistantMessage.truncated || obj.lastAssistantMessageTruncated === true)
+      ? { lastAssistantMessageTruncated: true }
+      : {}),
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,

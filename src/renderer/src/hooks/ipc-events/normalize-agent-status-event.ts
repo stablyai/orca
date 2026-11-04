@@ -19,6 +19,7 @@ export function normalizeAgentStatusEvent(
     interactivePrompt: data.interactivePrompt,
     lastAssistantMessage: data.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: data.lastAssistantMessageIsToolOutput,
+    lastAssistantMessageTruncated: data.lastAssistantMessageTruncated,
     interrupted: data.interrupted,
     sessionBoundary: data.sessionBoundary,
     turnCompletedAt: data.turnCompletedAt,

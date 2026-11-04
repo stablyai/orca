@@ -17920,7 +17920,7 @@
           "usageUnavailable": "Usage unavailable",
           "noRunUsageYet": "No run usage yet",
           "noWorkspace": "No workspace",
-          "latestSavedOutput": "Latest saved output",
+          "outputTruncated": "Output truncated",
           "backToList": "All automations",
           "tableName": "Name",
           "tableProject": "Project",

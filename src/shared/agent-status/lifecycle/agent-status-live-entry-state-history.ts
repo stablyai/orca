@@ -2,18 +2,31 @@ import { AGENT_STATE_HISTORY_MAX, type AgentStateHistoryEntry } from './agent-st
 import type { AgentStatusEntry, ParsedAgentStatusPayload } from '../contracts/agent-status-types'
 import { agentVerdictFields } from './agent-main-agent-verdict'
 
+type CompletedAssistantMessage = Pick<
+  AgentStatusEntry,
+  'lastCompletedAssistantMessage' | 'lastCompletedAssistantMessageTruncated'
+>
+type CurrentAssistantMessage = Pick<
+  AgentStatusEntry,
+  'lastAssistantMessage' | 'lastAssistantMessageIsToolOutput' | 'lastAssistantMessageTruncated'
+>
+
 /** Move the previous state into history on switches and retain its first-observed clock; never record session boundaries. */
 export function resolveAgentStatusLiveEntryStateHistory(
   existing: AgentStatusEntry | undefined,
-  payload: Pick<ParsedAgentStatusPayload, 'state' | 'sessionBoundary'>,
+  payload: Pick<ParsedAgentStatusPayload, 'state' | 'sessionBoundary'> & CurrentAssistantMessage,
   updatedAt: number
 ): {
   history: AgentStateHistoryEntry[]
-  lastCompletedAssistantMessage: string | undefined
+  /** Each message keeps its own flags; a done message moves to the completed slot on a switch. */
+  assistantMessageFields: CurrentAssistantMessage & CompletedAssistantMessage
   stateObservedAt: number | undefined
 } {
   let history: AgentStateHistoryEntry[] = existing?.stateHistory ?? []
-  let lastCompletedAssistantMessage = existing?.lastCompletedAssistantMessage
+  let completedAssistantMessage = completedAssistantMessageOf(
+    existing?.lastCompletedAssistantMessage,
+    existing?.lastCompletedAssistantMessageTruncated
+  )
   const boundaryLandsOnRealDone =
     existing?.state === 'done' &&
     existing.sessionBoundary !== true &&
@@ -39,12 +52,30 @@ export function resolveAgentStatusLiveEntryStateHistory(
       history = history.slice(history.length - AGENT_STATE_HISTORY_MAX)
     }
     if (existing.state === 'done') {
-      lastCompletedAssistantMessage = existing.lastAssistantMessage
+      completedAssistantMessage = completedAssistantMessageOf(
+        existing.lastAssistantMessage,
+        existing.lastAssistantMessageTruncated
+      )
     }
   }
   return {
     history,
-    lastCompletedAssistantMessage,
+    assistantMessageFields: {
+      lastAssistantMessage: payload.lastAssistantMessage,
+      lastAssistantMessageIsToolOutput: payload.lastAssistantMessageIsToolOutput,
+      ...(payload.lastAssistantMessageTruncated ? { lastAssistantMessageTruncated: true } : {}),
+      ...completedAssistantMessage
+    },
     stateObservedAt: switchesState ? updatedAt : existing?.stateObservedAt
+  }
+}
+
+function completedAssistantMessageOf(
+  message: string | undefined,
+  truncated: boolean | undefined
+): CompletedAssistantMessage {
+  return {
+    ...(message ? { lastCompletedAssistantMessage: message } : {}),
+    ...(message && truncated ? { lastCompletedAssistantMessageTruncated: true } : {})
   }
 }

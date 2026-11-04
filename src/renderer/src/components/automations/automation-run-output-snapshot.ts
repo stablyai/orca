@@ -4,7 +4,6 @@ import {
   TERMINAL_CONTROL_CHARACTER_PATTERN
 } from '../../../../shared/ansi-escape-sequences'
 import { copyUtf16SuffixToOwnedString } from '../../../../shared/owned-utf16-suffix'
-import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 const MAX_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
 const OUTPUT_SNAPSHOT_COMPACTION_HEAD_THRESHOLD = 64
@@ -30,21 +29,19 @@ export function createAutomationRunOutputSnapshotFromText(
   }
 }
 
+export type AutomationAssistantMessage = { text: string; truncated?: boolean }
+
 export function selectAutomationRunOutputSnapshot(
-  assistantMessage: string | null | undefined,
+  assistantMessage: AutomationAssistantMessage | null,
   terminalSnapshot: AutomationRunOutputSnapshot | null
 ): AutomationRunOutputSnapshot | null {
   // Prefer hook transcript text over hidden-PTY captures containing full-screen TUI redraws.
-  const message = assistantMessage ?? ''
   return (
-    createAutomationRunOutputSnapshotFromText(message, isAtAssistantMessageCap(message)) ??
-    terminalSnapshot
+    createAutomationRunOutputSnapshotFromText(
+      assistantMessage?.text ?? '',
+      assistantMessage?.truncated === true
+    ) ?? terminalSnapshot
   )
-}
-
-// Status normalization cuts silently at the cap, dropping one more unit to keep a surrogate pair whole.
-function isAtAssistantMessageCap(message: string): boolean {
-  return message.trim().length >= AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH - 1
 }
 
 function stripTerminalControls(value: string): string {

@@ -117,10 +117,15 @@ export function buildMirroredAgentStatusPatch(
             lastAssistantMessage:
               (hostIdentityPredatesCurrentTurn ? undefined : entry.lastAssistantMessage) ??
               existing.lastAssistantMessage,
-            lastAssistantMessageIsToolOutput:
-              hostIdentityPredatesCurrentTurn || entry.lastAssistantMessage === undefined
-                ? existing.lastAssistantMessageIsToolOutput
-                : entry.lastAssistantMessageIsToolOutput
+            ...(hostIdentityPredatesCurrentTurn || entry.lastAssistantMessage === undefined
+              ? {
+                  lastAssistantMessageIsToolOutput: existing.lastAssistantMessageIsToolOutput,
+                  lastAssistantMessageTruncated: existing.lastAssistantMessageTruncated
+                }
+              : {
+                  lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput,
+                  lastAssistantMessageTruncated: entry.lastAssistantMessageTruncated
+                })
           }
         : entry
     const accepted =

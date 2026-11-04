@@ -85,7 +85,7 @@ export function buildAgentStatusLiveEntry(
     return { entry: null, reason: 'stale' }
   }
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle
-  const { history, lastCompletedAssistantMessage, stateObservedAt } =
+  const { history, assistantMessageFields, stateObservedAt } =
     resolveAgentStatusLiveEntryStateHistory(existing, payload, updatedAt)
   const identity = resolveAgentStatusIdentity({
     existing:
@@ -250,9 +250,7 @@ export function buildAgentStatusLiveEntry(
     toolName: payload.toolName,
     toolInput: payload.toolInput,
     interactivePrompt: payload.interactivePrompt,
-    lastAssistantMessage: payload.lastAssistantMessage,
-    lastAssistantMessageIsToolOutput: payload.lastAssistantMessageIsToolOutput,
-    ...(lastCompletedAssistantMessage ? { lastCompletedAssistantMessage } : {}),
+    ...assistantMessageFields,
     orchestration,
     ...(payload.subagentObservation ? { subagentObservation: payload.subagentObservation } : {}),
     ...liveEntryChildFields(existing, payload),
