@@ -1,24 +1,18 @@
-import { randomUUID } from 'node:crypto'
-import { existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import {
-  resolveClaudeGlobalConfigFile,
-  updateClaudeGlobalConfig
-} from '../claude/claude-folder-trust-file'
-import { getManagedScriptFileName, removeManagedHooks } from '../claude/hook-settings'
-import { publishFileWithoutOverwrite } from '../codex-accounts/fs-utils'
+import { resolveClaudeGlobalConfigFile } from '../claude/claude-folder-trust-file'
 import { CLAUDE_PROFILE_HISTORY_DIRS, mergeClaudeProfileDirectory } from './claude-profile-history'
-import { readClaudeProfileObject, resolveClaudeDefaultHome } from './claude-profile-paths'
+import { resolveClaudeDefaultHome } from './claude-profile-paths'
 import { lstatIfPresent } from './claude-profile-prompt-history'
 import {
-  ClaudeProfileSurfaceError,
   createClaudeProfileReport,
   runClaudeProfileSurface,
   warnClaudeProfile,
-  type ClaudeProfileReport,
-  type ClaudeProfileSurfaceOutcome
+  type ClaudeProfileReport
 } from './claude-profile-report'
+import { refreshClaudeProfileSharedConfig } from './claude-profile-shared-refresh'
+import { isPlainRecord } from './claude-profile-shared-units'
 import { copyClaudeProfileFile, linkClaudeProfileDirectory } from './claude-profile-sharing'
 
 const CLAUDE_PROFILE_MEMORY_IMPORT = '@~/.claude/CLAUDE.md\n'
@@ -98,6 +92,18 @@ const UNSHARED_ENTRIES: ReadonlySet<string> = new Set<string>([
   ...CLAUDE_PROFILE_HISTORY_DIRS
 ])
 
+// Folders of the user's own Claude content; an unknown folder may be runtime state of a newer Claude.
+const CLAUDE_USER_CONTENT_DIRS = [
+  'agents',
+  'commands',
+  'output-styles',
+  'plugins',
+  'rules',
+  'skills',
+  'themes',
+  'workflows'
+] as const
+
 function isSharedEntry(name: string): boolean {
   // Match Claude seeding exclusions for hidden state, daemon files, and per-folder memory.
   return (
@@ -153,100 +159,33 @@ function isAccountBoundState(key: string): boolean {
   )
 }
 
-// Ignore managed hooks to avoid copy/install churn on every launch.
-function settingsWithoutOrcaHooks(value: Record<string, unknown>): string {
-  return JSON.stringify(removeManagedHooks(value, getManagedScriptFileName()).config)
-}
-
-// Keep proxy addresses and credentials together in the settings copy.
-function copySettings(source: string, target: string): ClaudeProfileSurfaceOutcome {
-  const input = readClaudeProfileObject(source)
-  const current = readClaudeProfileObject(target)
-  // Compare values because hook installation changes serialization.
-  if (
-    input.kind === 'present' &&
-    current.kind === 'present' &&
-    !lstatIfPresent(target)?.isSymbolicLink() &&
-    settingsWithoutOrcaHooks(input.value) === settingsWithoutOrcaHooks(current.value)
-  ) {
-    return 'unchanged'
-  }
-  const outcome = copyClaudeProfileFile(source, target)
-  if (outcome === 'absent' && lstatIfPresent(target)?.isFile()) {
-    rmSync(target, { force: true })
-    return 'synced'
-  }
-  return outcome
-}
-
-// Preserve account-only project and server entries during merging.
-const MERGED_BY_ENTRY: ReadonlySet<string> = new Set(['projects', 'mcpServers'])
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function mergeEntries(key: string, current: unknown, source: unknown): unknown {
+// Trust granted in this account stays when the user's entry for that folder is copied in.
+function mergeProjects(current: unknown, source: unknown): unknown {
   if (!isPlainRecord(current) || !isPlainRecord(source)) {
     return source
   }
   const merged: Record<string, unknown> = { ...current, ...source }
-  if (key === 'projects') {
-    for (const [path, entry] of Object.entries(source)) {
-      const own = current[path]
-      // Preserve trust granted in this account, including just before launch.
-      if (isPlainRecord(own) && own.hasTrustDialogAccepted === true && isPlainRecord(entry)) {
-        merged[path] = { ...entry, hasTrustDialogAccepted: true }
-      }
+  for (const [path, entry] of Object.entries(source)) {
+    const own = current[path]
+    if (isPlainRecord(own) && own.hasTrustDialogAccepted === true && isPlainRecord(entry)) {
+      merged[path] = { ...entry, hasTrustDialogAccepted: true }
     }
   }
   return merged
 }
 
-async function copyState(source: string, target: string): Promise<ClaudeProfileSurfaceOutcome> {
-  if (lstatIfPresent(target)?.isSymbolicLink()) {
-    return 'user-owned'
-  }
-  const input = readClaudeProfileObject(source)
-  if (input.kind === 'unavailable') {
-    throw new ClaudeProfileSurfaceError('unreadable', 'Personal Claude state is unreadable')
-  }
-  if (input.kind === 'absent') {
-    return 'absent'
-  }
-  const shared = Object.entries(input.value).filter(([key]) => !isAccountBoundState(key))
-  if (!lstatIfPresent(target)) {
-    const staged = `${target}.${process.pid}.${randomUUID()}.tmp`
-    try {
-      writeFileSync(staged, `${JSON.stringify(Object.fromEntries(shared), null, 2)}\n`, {
-        flag: 'wx',
-        mode: 0o600
-      })
-      // Publish atomically without replacing a file Claude created concurrently.
-      if (publishFileWithoutOverwrite(staged, target)) {
-        return 'synced'
-      }
-    } finally {
-      rmSync(staged, { force: true })
+// Keys other than the reconciled values copy one way from the user, as before.
+function copyStateRest(
+  user: Record<string, unknown>,
+  account: Record<string, unknown>
+): Record<string, unknown> {
+  const config = { ...account }
+  for (const [key, value] of Object.entries(user)) {
+    if (!isAccountBoundState(key) && key !== 'mcpServers') {
+      config[key] = key === 'projects' ? mergeProjects(account.projects, value) : value
     }
   }
-  // Preserve keys Claude added only in this account folder.
-  const outcome = await updateClaudeGlobalConfig(target, (current) => {
-    const config = { ...current }
-    for (const [key, value] of shared) {
-      config[key] = MERGED_BY_ENTRY.has(key) ? mergeEntries(key, current[key], value) : value
-    }
-    return JSON.stringify(config) === JSON.stringify(current)
-      ? { kind: 'unchanged' }
-      : { kind: 'changed', config }
-  })
-  if (outcome === 'locked' || outcome === 'unreadable' || outcome === 'missing-config') {
-    throw new ClaudeProfileSurfaceError(
-      outcome === 'locked' ? 'locked' : 'unreadable',
-      `Profile Claude state is ${outcome}`
-    )
-  }
-  return outcome === 'updated' ? 'merged' : 'unchanged'
+  return config
 }
 
 /** Call after ownership checks on the execution host; preserve account-bound state and credentials. */
@@ -258,6 +197,8 @@ export async function provisionClaudeProfile(args: {
   platform?: NodeJS.Platform
   /** Before the setup marker, a folder in the profile is one Claude made, not one the user owns. */
   firstSetup?: boolean
+  /** Orca's data folder; its other prepared accounts are reconciled first, under one host lock. */
+  dataRoot?: string
 }): Promise<ClaudeProfileReport> {
   const platform = args.platform ?? process.platform
   const defaultHome = resolveClaudeDefaultHome(args.userHome, args.userConfigDir)
@@ -270,6 +211,14 @@ export async function provisionClaudeProfile(args: {
   } catch (error) {
     if (!isDefinitiveAbsence(error)) {
       warnClaudeProfile(report, 'profile', error)
+    }
+  }
+  // Why: a shared folder Claude made here while the user's folder had none would stay private.
+  for (const name of CLAUDE_USER_CONTENT_DIRS) {
+    if (!names.includes(name) && lstatIfPresent(join(args.profileHome, name))?.isDirectory()) {
+      await runClaudeProfileSurface(report, name, () =>
+        mergeClaudeProfileDirectory(args.profileHome, defaultHome, name, platform, report)
+      )
     }
   }
   for (const name of names) {
@@ -293,9 +242,6 @@ export async function provisionClaudeProfile(args: {
         : copyClaudeProfileFile(source, target)
     })
   }
-  await runClaudeProfileSurface(report, 'settings.json', () =>
-    copySettings(join(defaultHome, 'settings.json'), join(args.profileHome, 'settings.json'))
-  )
   const statePath = (configDir: string | undefined): string =>
     resolveClaudeGlobalConfigFile({
       env: { CLAUDE_CONFIG_DIR: configDir },
@@ -303,8 +249,15 @@ export async function provisionClaudeProfile(args: {
       style: platform === 'win32' ? 'win32' : 'posix',
       exists: existsSync
     })
-  await runClaudeProfileSurface(report, '.claude.json', () =>
-    copyState(statePath(args.userConfigDir), statePath(args.profileHome))
-  )
+  await refreshClaudeProfileSharedConfig({
+    profileHome: args.profileHome,
+    defaultHome,
+    userState: statePath(args.userConfigDir),
+    statePath,
+    dataRoot: args.dataRoot,
+    firstSetup: args.firstSetup,
+    report,
+    copyRest: copyStateRest
+  })
   return report
 }
