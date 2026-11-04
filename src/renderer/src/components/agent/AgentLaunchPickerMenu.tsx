@@ -48,6 +48,9 @@ export function AgentLaunchPickerMenu({
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
 }) {
   useEffect(() => {
+    if (setupDisabled) {
+      return
+    }
     const state = useAppStore.getState()
     const workspaces = new Set([
       ...Object.values(selectWorktreesByRepo(state) ?? {})
@@ -71,7 +74,7 @@ export function AgentLaunchPickerMenu({
       },
       mode
     )
-  }, [entries, draftScope, mode])
+  }, [entries, draftScope, mode, setupDisabled])
   const [query, setQuery] = useState(initialQuery)
   const [activeSetup, setActiveSetup] = useState<{
     id: string

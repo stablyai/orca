@@ -7,6 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { TerminalQuickCommandDialog } from './TerminalQuickCommandDialog'
+import { useAppStore } from '@/store'
+import {
+  makeFolderWorkspace,
+  makeWorktree,
+  TEST_REPO
+} from '@/store/slices/worktrees-slice-test-fixtures'
 
 const mountedRoots: Root[] = []
 
@@ -307,4 +313,63 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       scope: { type: 'global' }
     })
   })
+
+  it.each([100, 1000])(
+    'opens the agent-only picker without visiting %i unrelated records',
+    async (count) => {
+      const before = useAppStore.getState()
+      let visits = 0
+      const tracked = <T extends { id: string }>(record: T): T => {
+        const id = record.id
+        return Object.defineProperty(record, 'id', {
+          get: () => {
+            visits++
+            return id
+          }
+        })
+      }
+      useAppStore.setState({
+        worktreesByRepo: {
+          'repo-1': Array.from({ length: count }, (_, i) =>
+            tracked(makeWorktree({ id: `wt-${i}`, repoId: 'repo-1' }))
+          )
+        },
+        folderWorkspaces: Array.from({ length: count }, (_, i) =>
+          tracked(makeFolderWorkspace({ id: `folder-${i}` }))
+        ),
+        repos: Array.from({ length: count }, (_, i) => tracked({ ...TEST_REPO, id: `repo-${i}` }))
+      })
+      try {
+        await renderDialog({
+          id: 'qc-perf',
+          label: 'Review',
+          action: 'agent-prompt',
+          agent: 'claude',
+          prompt: 'Review',
+          scope: { type: 'global' }
+        })
+        visits = 0
+        await act(async () =>
+          fireEvent.keyDown(getByRole(document.body, 'button', { name: 'Select agent' }), {
+            key: 'Enter'
+          })
+        )
+        expect(visits).toBe(0)
+        await act(async () =>
+          fireEvent.keyDown(getByRole(document.body, 'menuitem', { name: 'Codex' }), {
+            key: 'Enter'
+          })
+        )
+        expect(getByRole(document.body, 'button', { name: 'Select agent' }).textContent).toContain(
+          'Codex'
+        )
+      } finally {
+        useAppStore.setState({
+          worktreesByRepo: before.worktreesByRepo,
+          folderWorkspaces: before.folderWorkspaces,
+          repos: before.repos
+        })
+      }
+    }
+  )
 })

@@ -175,6 +175,10 @@ export function TerminalQuickCommandContentSection({
               model={QUICK_COMMAND_PICKER_MODEL}
               entries={entries}
               agent={selectedAgent}
+              emptyLabel={translate(
+                'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.346d409ab2',
+                'Choose agent'
+              )}
               setupDisabled
               disabled={disabled || !isAgentAction}
               onPick={selectAgent}
