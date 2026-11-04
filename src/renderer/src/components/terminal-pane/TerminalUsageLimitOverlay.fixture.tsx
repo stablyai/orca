@@ -61,7 +61,7 @@ async function germanReady() {
 }
 export const translatedPending = defineFixture({
   width: 320,
-  store: { settings: { ...getDefaultSettings(), uiLanguage: 'de' } },
+  store: { settings: { ...getDefaultSettings('/home/fixture'), uiLanguage: 'de' } },
   render: () => <TranslatedPending />,
   interact: germanReady
 })
