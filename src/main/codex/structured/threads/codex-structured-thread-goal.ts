@@ -38,6 +38,23 @@ export function codexThreadGoalRequests(
   ]
 }
 
+/** After Codex refuses a status change, whether it had no goal to change; unknown counts as a goal. */
+async function codexThreadGoalMissing(
+  session: Pick<CodexSession, 'connection' | 'threadId'>,
+  timeoutMs: number | undefined
+): Promise<boolean> {
+  try {
+    const read = await session.connection.request(
+      'thread/goal/get',
+      { threadId: session.threadId },
+      { timeoutMs }
+    )
+    return typeof read === 'object' && read !== null && 'goal' in read && read.goal === null
+  } catch {
+    return false
+  }
+}
+
 export async function changeCodexThreadGoal(
   session: Pick<CodexSession, 'connection' | 'threadId'>,
   change: AgentSessionThreadGoalChange,
@@ -54,6 +71,10 @@ export async function changeCodexThreadGoal(
     }
   } catch (error) {
     if (isCodexAppServerRequestError(error)) {
+      // Codex words a missing goal with internal ids; say it as the CLI's /goal pause does.
+      if (change.kind === 'status' && (await codexThreadGoalMissing(session, timeoutMs))) {
+        return { ok: false, rejected: AGENT_SESSION_GOAL_CONTROL_COPY.noGoal }
+      }
       return {
         ok: false,
         rejected: cleared

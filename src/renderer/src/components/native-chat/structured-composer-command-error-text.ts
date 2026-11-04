@@ -11,7 +11,6 @@ const COPY: Record<StructuredComposerFailureCode, (name: string, value: string) 
       'components.native-chat.composerErrors.goalObjectiveMissing',
       EN.goalObjectiveMissing
     ),
-  goalMissing: () => translate('components.native-chat.composerErrors.goalMissing', EN.goalMissing),
   commandUnavailable: (name) =>
     translate('components.native-chat.composerErrors.commandUnavailable', EN.commandUnavailable, {
       name

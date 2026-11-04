@@ -96,7 +96,7 @@ export function useNativeChatStructuredComposerTransport(args: {
           conversationCommands: controller.conversationCommands,
           compactInstructions: controller.compactInstructions,
           runConversationCommand: controller.runConversationCommand,
-          ...(changeThreadGoal ? { changeThreadGoal, hasThreadGoal: threadGoal?.goal != null } : {})
+          ...(changeThreadGoal ? { changeThreadGoal } : {})
         }).then(localizeStructuredComposerOutcome),
       ...(changeThreadGoal
         ? {

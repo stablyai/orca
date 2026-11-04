@@ -100,6 +100,30 @@ describe('codex thread goal requests', () => {
     ])
   })
 
+  it('says there is no goal when Codex refuses a status change for a thread without one', async () => {
+    const request = vi.fn(async (method: unknown) => {
+      if (method === 'thread/goal/set') {
+        throw new CodexAppServerRequestError(
+          'thread/goal/set',
+          -32600,
+          `cannot update goal for thread ${THREAD}: no goal exists`
+        )
+      }
+      return { goal: null }
+    })
+    await expect(
+      changeCodexThreadGoal(session(request), { kind: 'status', status: 'paused' }, false, 5_000)
+    ).resolves.toEqual({
+      ok: false,
+      rejected:
+        'This chat has no goal to pause or resume. Set one with /goal followed by the objective.'
+    })
+    expect(request.mock.calls.map(([method]) => method)).toEqual([
+      'thread/goal/set',
+      'thread/goal/get'
+    ])
+  })
+
   it('awaits a revoked clear and never activates the replacement', async () => {
     const clear = Promise.withResolvers<unknown>()
     const authority = new AbortController()

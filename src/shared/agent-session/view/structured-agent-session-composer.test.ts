@@ -103,12 +103,7 @@ describe('agent-implemented commands pass through to the agent', () => {
 
   it('pauses, resumes or clears the current goal instead of setting it to that word', async () => {
     const changeThreadGoal = vi.fn(async () => true)
-    const goalHost = {
-      ...controller,
-      agent: 'codex' as const,
-      changeThreadGoal,
-      hasThreadGoal: true
-    }
+    const goalHost = { ...controller, agent: 'codex' as const, changeThreadGoal }
     for (const text of ['/goal pause', '/goal Resume', '/goal clear']) {
       expect(await dispatchStructuredAgentSessionComposerCommand(text, goalHost)).toEqual({
         handled: true,
@@ -121,13 +116,6 @@ describe('agent-implemented commands pass through to the agent', () => {
       [{ kind: 'status', status: 'active' }],
       [{ kind: 'clear' }]
     ])
-    expect(
-      await dispatchStructuredAgentSessionComposerCommand('/goal pause', {
-        ...goalHost,
-        hasThreadGoal: false
-      })
-    ).toMatchObject({ handled: true, accepted: false, errorCode: 'goalMissing' })
-    expect(changeThreadGoal).toHaveBeenCalledTimes(3)
   })
 
   it('asks for an objective when a goal-capable host gets a bare /goal', async () => {

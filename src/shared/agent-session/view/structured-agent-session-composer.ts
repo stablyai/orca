@@ -56,8 +56,6 @@ export type StructuredAgentSessionComposerOptions = {
   ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
   /** Without host goal support, /goal remains agent-handled text. */
   changeThreadGoal?: (change: AgentSessionThreadGoalChange) => Promise<boolean>
-  /** Whether the session has a goal for /goal pause, resume or clear to act on. */
-  hasThreadGoal?: boolean
 }
 
 /** Visible condition holding a refusal: agent/prompt/background work, an in-flight send or a Retry card. */
@@ -245,14 +243,12 @@ export async function dispatchStructuredAgentSessionComposerCommand(
         ...structuredComposerFailure('goalObjectiveMissing')
       }
     }
-    const change = structuredAgentSessionGoalChange(command.argument)
-    if (change.kind !== 'set' && !controller.hasThreadGoal) {
-      return { handled: true, accepted: false, ...structuredComposerFailure('goalMissing') }
-    }
     // A refusal reaches the user through the session's own error surface.
     return {
       handled: true,
-      accepted: await controller.changeThreadGoal(change),
+      accepted: await controller.changeThreadGoal(
+        structuredAgentSessionGoalChange(command.argument)
+      ),
       error: null
     }
   }
