@@ -45,7 +45,7 @@ it('imports recorded repair results without inventing outside work or duplicate 
       type: 'message',
       sessionId: SESSION,
       message: frame(row),
-      startsTurn,
+      ...(startsTurn ? { startsTurn: true } : {}),
       observedAt: 4_000
     })
   live({
@@ -138,8 +138,8 @@ it('imports recorded repair results without inventing outside work or duplicate 
         )
     )!
   const outsideScope = outside.turnScope
-  expect(outsideScope.kind).toBe('turn')
-  if (outsideScope.kind !== 'turn') {
+  expect(outsideScope?.kind).toBe('turn')
+  if (outsideScope?.kind !== 'turn') {
     throw new Error('outside turn missing')
   }
   expect(c.journal.item(outsideScope.turnItemId)?.body).toMatchObject({
@@ -224,8 +224,8 @@ it('preserves a task boundary without inventing a successor until real output ar
       item.body.blocks.some((block) => block.type === 'text' && block.text === 'wake answer')
   )!
   const scope = answer.turnScope
-  expect(scope.kind).toBe('turn')
-  if (scope.kind !== 'turn') {
+  expect(scope?.kind).toBe('turn')
+  if (scope?.kind !== 'turn') {
     throw new Error('wake turn missing')
   }
   expect(scope.turnItemId).not.toBe(turn.itemId)
@@ -286,7 +286,7 @@ it('keeps mixed task results with their saved caller before an independent reply
     )!
   expect(answer.turnScope).not.toEqual(tool.turnScope)
   const scope = answer.turnScope
-  if (scope.kind !== 'turn') {
+  if (scope?.kind !== 'turn') {
     throw new Error('independent turn missing')
   }
   expect(c.journal.item(scope.turnItemId)?.body).toMatchObject({ kind: 'turn', state: 'completed' })
@@ -297,7 +297,12 @@ describe('internal content keeps live settlement and semantic siblings', () => {
     const c = await chat()
     const translator = createClaudeJournalTranslator({ sink: c.deferred.sink })
     const live = (row: Record<string, unknown>, startsTurn = false) =>
-      translator.handle({ type: 'message', sessionId: SESSION, message: frame(row), startsTurn })
+      translator.handle({
+        type: 'message',
+        sessionId: SESSION,
+        message: frame(row),
+        ...(startsTurn ? { startsTurn: true } : {})
+      })
     live(synthetic)
     live(task, true)
     expect(translator.currentTurnId).toBeNull()
@@ -373,7 +378,7 @@ it.each(['real-model', 'missing-usage', 'nonzero-usage', 'error'] as const)(
     const c = await chat()
     await c.live()
     const nested = message(synthetic)
-    const variant = {
+    const variant: Record<string, unknown> = {
       ...synthetic,
       parentUuid: 'a1',
       ...(kind === 'error' ? { isApiErrorMessage: true } : {}),
