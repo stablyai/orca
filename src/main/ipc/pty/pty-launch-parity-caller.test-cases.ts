@@ -84,7 +84,7 @@ const PAIRED_PLAN_CASES: PairedPlanCase[] = [
     os: 'darwin',
     agent: 'claude',
     prompt: LONG_PROMPT,
-    provider: { command: `${POSIX_CLAUDE} '${LONG_PROMPT}'`, ...ZSH }
+    provider: { command: `${POSIX_CLAUDE} -- '${LONG_PROMPT}'`, ...ZSH }
   },
   {
     name: 'aider prompt, starts clean',
@@ -101,7 +101,7 @@ const PAIRED_PLAN_CASES: PairedPlanCase[] = [
     os: 'win32',
     agent: 'claude',
     prompt: "Bob's fix",
-    provider: { command: `claude '--dangerously-skip-permissions' 'Bob''s fix'`, ...POWERSHELL }
+    provider: { command: `claude '--dangerously-skip-permissions' -- 'Bob''s fix'`, ...POWERSHELL }
   }
 ]
 

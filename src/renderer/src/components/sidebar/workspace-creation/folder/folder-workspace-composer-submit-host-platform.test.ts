@@ -48,7 +48,7 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
       'folder-workspace-1',
       expect.objectContaining({
         startup: expect.objectContaining({
-          command: `claude 'Use Bob'"'"'s POSIX startup'`
+          command: `claude -- 'Use Bob'"'"'s POSIX startup'`
         })
       })
     )
@@ -97,7 +97,7 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
       'folder-workspace-1',
       expect.objectContaining({
         startup: expect.objectContaining({
-          command: "claude 'Use Bob''s Windows startup'"
+          command: "claude -- 'Use Bob''s Windows startup'"
         })
       })
     )
@@ -151,7 +151,7 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
       'folder-workspace-1',
       expect.objectContaining({
-        startup: expect.objectContaining({ command: "claude 'Use Bob''s server startup'" })
+        startup: expect.objectContaining({ command: "claude -- 'Use Bob''s server startup'" })
       })
     )
   })

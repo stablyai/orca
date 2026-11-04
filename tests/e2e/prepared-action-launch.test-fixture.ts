@@ -30,6 +30,12 @@ type PreparedTerminalCreateMethod = {
   handler(params: unknown, context: PreparedTerminalCreateContext): unknown
 }
 
+/**
+ * Assert the prepared launch an independent action builds for `agent`.
+ *
+ * Pins the whole command, so a change to how the prompt rides argv — Claude's `--` terminator,
+ * Codex's `-c` flags — shows up here rather than only in the planner's own unit tests.
+ */
 export function independentActionEffortPlan(agent: 'claude' | 'codex') {
   const recipe = normalizeSourceControlAiActionDefaults({
     fixChecks: {
@@ -69,7 +75,7 @@ export function independentActionEffortPlan(agent: 'claude' | 'codex') {
   expect(plan.sessionOptions).toEqual({ effort: 'high' })
   expect(plan.launchCommand).toBe(
     agent === 'claude'
-      ? "claude '--verbose' '--effort' 'high' 'Fix checks'"
+      ? "claude '--verbose' '--effort' 'high' -- 'Fix checks'"
       : "codex '-c' 'disable_paste_burst=true' '--verbose' '-c' 'model_reasoning_effort=high' 'Fix checks'"
   )
   expect(agentLaunchNeedsPreparedCommand(agent, plan.sessionOptions)).toBe(true)

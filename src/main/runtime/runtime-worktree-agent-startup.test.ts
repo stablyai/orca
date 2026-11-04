@@ -270,7 +270,7 @@ describe('buildWorktreeStartupForAgent extra agent args', () => {
     })
 
     expect(result.startup.command).toBe(
-      "claude '--dangerously-skip-permissions' '--model' 'opus' 'go'"
+      "claude '--dangerously-skip-permissions' '--model' 'opus' -- 'go'"
     )
   })
 

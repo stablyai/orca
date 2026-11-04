@@ -128,7 +128,7 @@ export const WORKSPACE_START_LAUNCH_CASES: WindowLaunchCase[] = [
     'darwin',
     folder(POSIX_PATH),
     note(BOB),
-    { command: `${POSIX_CLAUDE} 'fix Bob'"'"'s bug'`, agentCommand: POSIX_CLAUDE },
+    { command: `${POSIX_CLAUDE} -- 'fix Bob'"'"'s bug'`, agentCommand: POSIX_CLAUDE },
     ZSH
   ),
   // Unlike the work item, the composer quotes for the Windows shell it runs in.
@@ -139,7 +139,7 @@ export const WORKSPACE_START_LAUNCH_CASES: WindowLaunchCase[] = [
     note(BOB),
     // A folder has no project, so no project runtime is sent.
     {
-      command: `${CMD_CLAUDE} "fix Bob's bug"`,
+      command: `${CMD_CLAUDE} -- "fix Bob's bug"`,
       agentCommand: CMD_CLAUDE,
       shellOverride: 'cmd.exe'
     },
@@ -153,7 +153,7 @@ export const WORKSPACE_START_LAUNCH_CASES: WindowLaunchCase[] = [
     folder(WIN_PATH),
     note(BOB),
     {
-      command: `${POSIX_CLAUDE} 'fix Bob'"'"'s bug'`,
+      command: `${POSIX_CLAUDE} -- 'fix Bob'"'"'s bug'`,
       agentCommand: POSIX_CLAUDE,
       shellOverride: 'wsl.exe'
     },
@@ -168,7 +168,7 @@ export const WORKSPACE_START_LAUNCH_CASES: WindowLaunchCase[] = [
     folder(POSIX_PATH),
     note(LONG_NOTE),
     {
-      command: `${POSIX_CLAUDE} '${LONG_NOTE}'`,
+      command: `${POSIX_CLAUDE} -- '${LONG_NOTE}'`,
       agentCommand: POSIX_CLAUDE
     },
     ZSH

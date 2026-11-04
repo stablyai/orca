@@ -200,6 +200,7 @@ it.each(['global', 'repo'] as const)(
       'docs',
       '--permission-mode',
       'default',
+      '--',
       'fix'
     ])
 

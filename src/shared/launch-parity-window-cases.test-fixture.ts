@@ -16,9 +16,9 @@ const SKIP = '--dangerously-skip-permissions'
 const POSIX_CLAUDE = `claude '${SKIP}'`
 const CMD_CLAUDE = `claude "${SKIP}"`
 // The auto-submitted prompt rides on argv.
-const posix = { command: `${POSIX_CLAUDE} 'fix Bob'"'"'s bug'`, agentCommand: POSIX_CLAUDE }
-const ps = { command: `${POSIX_CLAUDE} 'fix Bob''s bug'`, agentCommand: POSIX_CLAUDE }
-const cmd = { command: `${CMD_CLAUDE} "fix Bob's bug"`, agentCommand: CMD_CLAUDE }
+const posix = { command: `${POSIX_CLAUDE} -- 'fix Bob'"'"'s bug'`, agentCommand: POSIX_CLAUDE }
+const ps = { command: `${POSIX_CLAUDE} -- 'fix Bob''s bug'`, agentCommand: POSIX_CLAUDE }
+const cmd = { command: `${CMD_CLAUDE} -- "fix Bob's bug"`, agentCommand: CMD_CLAUDE }
 
 const BRAIN = '.gemini/antigravity-ide/brain/ide-id/transcript_full.jsonl'
 const MAC_T = `/Users/alice/${BRAIN}`
