@@ -76,6 +76,7 @@ jobs:
             /config/.bun-version
             /config/scripts/check-readme-local-links.mjs
             /config/scripts/pr-code-change-scope.mjs
+            /config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs
             /config/scripts/pr-shell-contract-prefixes.mjs
             /.oxfmtrc.json
             /config/scripts/pr-package-test-paths.mjs
