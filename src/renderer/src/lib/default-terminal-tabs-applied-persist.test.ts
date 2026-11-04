@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../../../main/persistence/runtime-authored-workspace-session-fields'
-import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
+import { parseWorkspaceSession } from '../../../shared/workspace-session/workspace-session-schema'
 import { useAppStore, type AppState } from '@/store'
 import { applyDefaultTerminalTabs } from './worktree-default-terminal-tabs'
 import {

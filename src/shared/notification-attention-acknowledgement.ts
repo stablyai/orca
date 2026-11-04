@@ -7,7 +7,7 @@ import type {
   NotificationAttentionAcknowledgement,
   NotificationDispatchRequest
 } from './notification-settings-types'
-import { toHostSessionPaneKey } from './terminal-surface-id'
+import { toHostSessionPaneKey } from './workspace-layout/terminal-surface-id'
 
 type Announcement = Pick<
   NotificationDispatchRequest,

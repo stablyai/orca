@@ -17,7 +17,7 @@ import {
   getVisibleHostedReviewWorkspaces,
   visibleHostedReviewRefreshInputsChanged
 } from './visible-hosted-review-refresh-targets'
-import '@/components/sidebar/workspace-reference-details'
+import '@/components/sidebar/workspace-card/review/workspace-reference-details'
 import { createVisibleHostedReviewRefreshScheduler } from './visible-hosted-review-refresh-scheduler'
 import '../slices/hosted-review-card-refresh'
 

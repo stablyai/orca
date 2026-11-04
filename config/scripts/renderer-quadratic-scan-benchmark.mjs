@@ -106,7 +106,7 @@ function compare({ label, scale, drives, before, after }) {
 }
 
 const { buildWorkspaceBoardPaletteDocuments, matchWorkspaceBoardWorktrees } = await importRenderer(
-  'components/sidebar/workspace-kanban-search.ts'
+  'components/sidebar/workspace-board/search/workspace-kanban-search.ts'
 )
 
 const repoMap = new Map([
@@ -214,7 +214,7 @@ compare({
 })
 
 const { getRepoHeaderSectionEndByRepoId } = await importRenderer(
-  'components/sidebar/worktree-header-section-boundaries.ts'
+  'components/sidebar/worktree-list/viewport/worktree-header-section-boundaries.ts'
 )
 const { estimateRenderRowSize } = await importRenderer(
   'components/sidebar/worktree-list/viewport/virtual-rows.ts'

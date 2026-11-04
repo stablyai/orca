@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab } from '../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 
 function tab(input: Partial<Tab> & Pick<Tab, 'id'>): Tab {

@@ -4,7 +4,7 @@ import {
   TERMINAL_PASTE_CHUNK_MAX_BYTES,
   TERMINAL_PASTE_DIRECT_MAX_BYTES
 } from './terminal-paste-limits'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {

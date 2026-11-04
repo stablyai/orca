@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { PairedTerminalTabCloseIntent } from '../../../shared/paired-terminal-tab-close-intent'
+import type { PairedTerminalTabCloseIntent } from '../../../shared/workspace-layout/paired-terminal-tab-close-intent'
 
 import { useAppStore, type AppState } from '@/store'
 import { resetDeferredPeerChecksForTests } from '@/store/slices/runtime-environment-peer-replacement'

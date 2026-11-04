@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { resolveWorkspaceCleanupRemovalHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
+import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
 
 export function openWorkspaceCleanupForgetLocally(candidate: WorkspaceCleanupCandidate): void {
   runWorktreeDelete(candidate.worktreeId, {

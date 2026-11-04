@@ -31,7 +31,7 @@ import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/
 import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
-import type { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
+import type { createCodexSessionMigrationScheduler } from '../codex/history/backfill/codex-session-migration-scheduler'
 import type { getDevInstanceIdentity } from './dev-instance-identity'
 import type { createServeDesktopActivationGate } from './serve-desktop-activation'
 import type { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'

@@ -66,6 +66,7 @@ export function buildDefaultSettings(args: {
     editorFontFamily: '',
     editorWordWrap: true,
     richMarkdownSpellcheckEnabled: true,
+    markdownDefaultViewMode: 'rich',
     markdownReviewToolsEnabled: true,
     primarySelectionMiddleClickPaste: args.primarySelectionMiddleClickPaste,
     primarySelectionMiddleClickPasteDefaultedForLinux: args.primarySelectionDefaultedForLinux,

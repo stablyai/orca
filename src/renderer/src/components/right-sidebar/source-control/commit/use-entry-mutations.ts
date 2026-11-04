@@ -3,12 +3,15 @@ import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
-import { editorFileHoldKey, pathMutationHoldKeys } from '@/components/editor/editor-autosave-holds'
+import {
+  editorFileHoldKey,
+  pathMutationHoldKeys
+} from '@/components/editor/autosave/editor-autosave-holds'
 import {
   notifyEditorExternalFileChange,
   requestEditorFileSave,
   requestEditorSaveQuiesce
-} from '@/components/editor/editor-autosave'
+} from '@/components/editor/autosave/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
 import { useAppStore } from '@/store'

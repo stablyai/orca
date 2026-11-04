@@ -1,23 +1,14 @@
 import { useCallback, useLayoutEffect } from 'react'
 import { View, type TextInput } from 'react-native'
+import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { hostOs } from '../platform/host-os'
 import { ComposerSendButton } from '../components/composer-input/ComposerSendButton'
 import { MessageBox } from '../components/composer-input/MessageBox'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
-import {
-  getTerminalCommandKeyboardType,
-  getTerminalLiveInputKeyboardType
-} from '../terminal/terminal-keyboard-type'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
-import { MobileTerminalCommandDictationPreview } from './MobileTerminalCommandDictationPreview'
-import { readMobileDictationAnchor } from '../dictation/mobile-dictation-text-insertion'
-import {
-  MobileTerminalAttachButton,
-  MobileTerminalDictationButton,
-  MobileTerminalInputActions
-} from './MobileTerminalInputActions'
+import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { MobileNativeChatStopButton } from './native-chat/input/MobileNativeChatStopButton'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
 import { MobileTerminalMoreKeysSheet } from './MobileTerminalMoreKeysSheet'
@@ -29,6 +20,7 @@ import {
   resolveMobileTerminalTabOwnedAgentId
 } from './mobile-terminal-tab-agent'
 import { terminalDockStyles as dockStyles } from './terminal-dock-styles'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
@@ -38,6 +30,12 @@ const ESC = '\x1b'
 
 // Both fields stay mounted so a mode switch can move focus before the keyboard drops.
 const inactiveFieldStyle = { position: 'absolute', left: 0, right: 0, opacity: 0 } as const
+
+const commandComposerStyle = {
+  marginHorizontal: spacing.md,
+  marginTop: spacing.sm,
+  marginBottom: spacing.sm
+} as const
 
 // Keys mode types straight into the terminal; Message mode writes in the chat composer and sends on tap.
 // Return inserts a newline; the send button submits the whole buffer.
@@ -63,10 +61,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     canCompose,
     liveInputEnabled,
     dictation,
-    commandDictationPreview,
     liveDictationText,
-    commandFieldAnchorRef,
-    activeHandle,
     activeSessionTab,
     dockKeys,
     handleAccessoryKey,
@@ -128,6 +123,14 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     onDictationPressOut: handleDictationPressOut,
     onDictationCancel: cancelDictation
   }
+  const inputActions = (
+    <MobileTerminalInputActions
+      {...attachProps}
+      {...dictationProps}
+      buttonStyle={inputStyles.controlButton}
+      disabledButtonStyle={inputStyles.disabled}
+    />
+  )
   return (
     <View
       style={[
@@ -135,9 +138,18 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
       ]}
     >
+      {rail.keysInRail ? (
+        <MobileTerminalMoreKeysSheet
+          controller={controller}
+          visible={rail.moreKeysVisible}
+          onClose={rail.closeMoreKeys}
+        />
+      ) : (
+        <MobileSessionAccessoryKeys controller={controller} />
+      )}
       <View>
         <View
-          style={[dockStyles.keysBar, !liveInputEnabled && inactiveFieldStyle]}
+          style={[dockStyles.inputBar, !liveInputEnabled && inactiveFieldStyle]}
           pointerEvents={liveInputEnabled ? 'auto' : 'none'}
           aria-hidden={!liveInputEnabled}
           accessibilityElementsHidden={!liveInputEnabled}
@@ -147,6 +159,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             inputRef={bindLiveInputField}
             monospace
             style={dockStyles.liveField}
+            leading={<KeyboardIcon size={17} color={colors.textSecondary} strokeWidth={2} />}
+            label={t('session.terminalLiveInputStatus.liveInput', 'Live input')}
             trailing={
               liveInputEnabled ? (
                 <MobileTerminalLiveInputStatus
@@ -159,7 +173,9 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             }
             value={liveInputCapture}
             onChange={(event) => {
+              // A ctrl/alt/shift held on the Duo rail turns the next typed letter into a combo, while the rail shows it.
               if (
+                !rail.keysInRail ||
                 !dockKeys.interceptTypedCharacter(
                   liveInputCapture,
                   event.nativeEvent.text,
@@ -171,7 +187,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             }}
             onKeyPress={handleLiveInputKeyPress}
             onSubmitEditing={submitLiveInput}
-            placeholder={t('session.terminalLiveInputStatus.liveInput', 'Live input')}
+            placeholder={t('session.commandDock.tapToShowKeyboard', 'Tap to show keyboard')}
             accessibilityLabel={t('session.commandDock.liveInputLabel', 'Live terminal input')}
             accessibilityHint={t(
               'session.commandDock.liveInputHint',
@@ -184,19 +200,15 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             smartInsertDelete={false}
             // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
             autoComplete="off"
-            keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
+            // Why: ASCII-only keyboard types hide non-Latin IMEs.
+            keyboardType="default"
             returnKeyType="default"
             blurOnSubmit={false}
             editable={canSend}
             importantForAutofill="no"
             tabIndex={liveInputEnabled ? 0 : -1}
           />
-          <MobileTerminalInputActions
-            {...attachProps}
-            {...dictationProps}
-            buttonStyle={inputStyles.ghostButton}
-            disabledButtonStyle={inputStyles.disabled}
-          />
+          {inputActions}
         </View>
         <View
           style={liveInputEnabled && inactiveFieldStyle}
@@ -215,38 +227,23 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             }
             inputRef={commandInputRef}
             monospace={!runsAgent}
-            style={dockStyles.composer}
+            style={commandComposerStyle}
             value={draft}
             // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
             onChangeText={(text) => {
-              if (!dockKeys.interceptTypedCharacter(draft, text, commandInputRef)) {
+              if (
+                !rail.keysInRail ||
+                !dockKeys.interceptTypedCharacter(draft, text, commandInputRef)
+              ) {
                 bufferedTerminalDraftState.setInput(text)
               }
             }}
-            onSelectionChange={(e) => {
-              commandFieldAnchorRef.current = {
-                handle: activeHandle,
-                anchor: readMobileDictationAnchor(e, draft)
-              }
-            }}
-            inputOverlay={
-              !liveInputEnabled && commandDictationPreview ? (
-                <MobileTerminalCommandDictationPreview
-                  draft={draft}
-                  preview={commandDictationPreview}
-                  monospace={!runsAgent}
-                />
-              ) : undefined
-            }
-            // The preview stands in for an empty draft, so its placeholder must not show through.
             placeholder={
-              commandDictationPreview
-                ? undefined
-                : runsAgent
-                  ? t('session.commandDock.messageAgentPlaceholder', 'Message {{agent}}', {
-                      agent: agentName ?? t('session.commandDock.theAgent', 'the agent')
-                    })
-                  : t('session.commandDock.writeCommandPlaceholder', 'Write a command, then send')
+              runsAgent
+                ? t('session.commandDock.messageAgentPlaceholder', 'Message {{agent}}', {
+                    agent: agentName ?? t('session.commandDock.theAgent', 'the agent')
+                  })
+                : t('session.commandDock.writeCommandPlaceholder', 'Write a command, then send')
             }
             autoCapitalize="none"
             autoCorrect={autocompleteEnabled}
@@ -255,7 +252,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             dataDetectorTypes="none"
             // Why: not autofill content, but keyboard must stay default so non-Latin IMEs remain selectable.
             autoComplete="off"
-            keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
+            keyboardType="default"
             returnKeyType="default"
             multiline
             submitBehavior="newline"
@@ -266,47 +263,24 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             onSubmitEditing={() => void handleSend()}
             onFocus={onCommandFieldFocus}
             onBlur={onCommandFieldBlur}
-            leading={
-              <MobileTerminalAttachButton
-                {...attachProps}
-                buttonStyle={inputStyles.controlButton}
-                disabledButtonStyle={inputStyles.disabled}
-              />
-            }
+            leading={inputActions}
             trailing={
-              <>
-                <MobileTerminalDictationButton
-                  {...dictationProps}
-                  meterHalo={dictation.meter}
-                  buttonStyle={inputStyles.ghostButton}
-                  disabledButtonStyle={inputStyles.disabled}
+              showStop ? (
+                <MobileNativeChatStopButton
+                  held={false}
+                  onStop={() => void handleAccessoryKey({ bytes: ESC })}
                 />
-                {showStop ? (
-                  <MobileNativeChatStopButton
-                    held={false}
-                    onStop={() => void handleAccessoryKey({ bytes: ESC })}
-                  />
-                ) : (
-                  <ComposerSendButton
-                    onPress={() => void handleSend()}
-                    canSend={canSend && draft.trim().length > 0}
-                    label={t('session.commandDock.sendCommand', 'Send command')}
-                  />
-                )}
-              </>
+              ) : (
+                <ComposerSendButton
+                  onPress={() => void handleSend()}
+                  canSend={canSend && draft.trim().length > 0}
+                  label={t('session.commandDock.sendCommand', 'Send command')}
+                />
+              )
             }
           />
         </View>
       </View>
-      {rail.keysInRail ? (
-        <MobileTerminalMoreKeysSheet
-          controller={controller}
-          visible={rail.moreKeysVisible}
-          onClose={rail.closeMoreKeys}
-        />
-      ) : (
-        <MobileSessionAccessoryKeys controller={controller} />
-      )}
     </View>
   )
 }

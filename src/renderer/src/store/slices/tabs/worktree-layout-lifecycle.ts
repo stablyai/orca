@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 import { getTerminalActivationSpawnSuppression } from '../terminal-activation-spawn-suppression'
 import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'

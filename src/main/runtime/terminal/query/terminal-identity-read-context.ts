@@ -6,7 +6,7 @@ import {
   createStructuredWorkerReadContext,
   type StructuredWorkerReadContext
 } from '../../structured-worker-authority'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type {
   OrchestrationCompatibilitySshTerminal,
   TerminalHandleRecord

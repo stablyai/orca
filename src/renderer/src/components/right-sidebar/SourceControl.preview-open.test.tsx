@@ -91,7 +91,7 @@ vi.mock('@/runtime/runtime-git-working-tree-client', async (importOriginal) => {
   }
 })
 
-vi.mock('@/components/editor/editor-autosave', () => ({
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   requestEditorSaveQuiesce: mocks.calls.requestEditorSaveQuiesce,
   notifyEditorExternalFileChange: mocks.calls.notifyEditorExternalFileChange
 }))

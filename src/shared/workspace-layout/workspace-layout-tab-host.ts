@@ -4,7 +4,7 @@ import {
   type ExecutionHostId
 } from '../execution-host'
 import type { TabContentType } from '../tab-types'
-import type { PersistedOpenFile } from '../workspace-session-state-types'
+import type { PersistedOpenFile } from '../workspace-session/workspace-session-state-types'
 import { editorTabFile } from './workspace-layout-editor-tab-file'
 
 type FileOwner = Pick<
