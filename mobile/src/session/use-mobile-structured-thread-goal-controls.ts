@@ -58,6 +58,7 @@ export function useMobileStructuredThreadGoalControls(args: {
           return false
         }
         if (result.status === 'unknown') {
+          reread()
           onSendError(
             mobileAgentSessionWriteNoticeText(
               agentSessionWriteNoticeParts({ kind: 'unconfirmed' }, 'goal')
