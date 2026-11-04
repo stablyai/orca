@@ -2,6 +2,7 @@ import { NativeChatCrewFrame, NativeChatCrewPanel } from '../orchestration-crew/
 import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
 import { cn } from '@/lib/utils'
+import { ImageActionsScope } from '@/components/editor/ImageActions'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
 import { useRef, useState } from 'react'
@@ -252,11 +253,11 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     notices.push(hostNotice)
   }
   return (
-    <div
+    <ImageActionsScope
+      enabled={props.isVisible}
       ref={rootRef}
       data-native-chat-root="true"
       data-native-chat-working={controller.isWorking ? 'true' : 'false'}
-      tabIndex={-1}
       onPointerDownCapture={(event) => {
         paneCommands.onPointerDownCapture(event)
         rootInput.onPointerDownCapture(event)
@@ -409,6 +410,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       {paneCommands.menu}
       {handOff.dialog}
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
-    </div>
+    </ImageActionsScope>
   )
 }
