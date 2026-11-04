@@ -36,6 +36,7 @@ import {
 } from '../../../automations/automation-run-operation'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentHookEventPayload } from '../../../../shared/agent-hook-listener/listener-event'
 import { _internals as hookListener } from '../../../agent-hooks/server'
 import type * as WorkspaceAgentDetection from '../../../preflight/workspace-agent-detection'
 import type * as WindowsForegroundProcessRows from '../../../providers/windows-foreground-process-rows'
@@ -79,15 +80,17 @@ describe('qualified discovery at the runtime RPC boundary', () => {
       const agent = scenario.startsWith('windows-codex') ? 'codex' : 'claude'
       const connectionId = windows ? null : 'a/b'
       const hostId = windows ? 'local' : 'ssh:a%2Fb'
-      const row: AgentStatusIpcPayload = {
-        paneKey: '',
-        terminalHandle: '',
-        agentType: agent,
-        state: 'done',
-        prompt: '',
-        receivedAt: Date.now(),
-        connectionId: null
-      }
+      const row: AgentStatusIpcPayload & Pick<AgentHookEventPayload, 'claudeRunningNonAgentTask'> =
+        {
+          paneKey: '',
+          terminalHandle: '',
+          agentType: agent,
+          state: 'done',
+          prompt: '',
+          receivedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          connectionId: null
+        }
       vi.useFakeTimers({ toFake: ['Date'] })
       vi.setSystemTime(Date.UTC(2026, 10, 3))
       const directory = await mkdtemp(join(tmpdir(), 'pr-33492-selected-folder-'))

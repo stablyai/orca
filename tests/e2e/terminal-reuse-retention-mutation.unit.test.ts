@@ -9,6 +9,7 @@ import { rpcCallerOperationKey } from '../../src/main/runtime/rpc/rpc-caller-ide
 import { RUN_TERMINAL_GRACE_MS } from '../../src/main/automations/headless-run-terminal-retention'
 import { fleet } from './terminal-retention-fleet.test-fixture'
 import { observeFleet } from './terminal-retention-observation.test-fixture'
+// Real Store/journal setup and publication checks run the four 10/100-resource trigger populations.
 it('bounds added derivation from real drain and timer triggers while preserving every Store publication', async () => {
   const results: { trigger: string; population: number; added: number; ordering: number }[] = []
   for (const trigger of ['drain', 'timer', 'sleep', 'dead'] as const) {
@@ -101,6 +102,7 @@ it('bounds added derivation from real drain and timer triggers while preserving 
   }
 }, 120_000)
 
+// Both 10/100-row populations persist and prune creation operations before checking safe retention.
 it('groups dead negative ancestry only until the next await/source, with expired and actually pruned creation proof', async () => {
   const results: { population: number; expired: number; pruned: number }[] = []
   for (const population of [10, 100]) {
@@ -159,6 +161,7 @@ it('groups dead negative ancestry only until the next await/source, with expired
   expect(results[1].pruned).toBeLessThanOrEqual(results[0].pruned * 11)
 }, 120_000)
 
+// Real Store flush reentry includes a 205-row creator eviction plus the other final-boundary cases.
 it('invalidates canonical derivation for reentrant flush writes, eviction and throws, with fresh final authority', async () => {
   for (const scenario of [
     'pending-owner',

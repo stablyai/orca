@@ -15,7 +15,7 @@ export class RunTerminalRetentionIndex {
   readonly byId = new Map<string, AutomationRun>()
   readonly byAutomation = new Map<string, Set<string>>()
   private readonly byResource = new Map<string, Set<string>>()
-  private readonly byPane = new Map<string, AutomationRun[]>()
+  private readonly byPane = new Map<AutomationRun['terminalPaneKey'], AutomationRun[]>()
   private readonly creators = new Map<string, string>()
 
   constructor(runs: readonly AutomationRun[]) {
@@ -73,7 +73,7 @@ export class RunTerminalRetentionIndex {
     heap[index] = run
   }
 
-  latest(pane: string): AutomationRun | undefined {
+  latest(pane: AutomationRun['terminalPaneKey']): AutomationRun | undefined {
     const heap = this.byPane.get(pane)
     while (heap?.length) {
       const first = heap[0]

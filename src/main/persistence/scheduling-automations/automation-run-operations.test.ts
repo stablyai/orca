@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { automationRunFailure } from '../../../shared/automation-run-failure-copy'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   snapshotAutomationRunWorkspaceDisplayName,
   type AutomationRunMutation,
@@ -180,6 +181,10 @@ it('certifies only the actual unique canonical replacement before flush reentry,
   expect(mutations.at(-1)).toBeUndefined()
   expect(state.automationRuns.every((row) => row.status === 'completed')).toBe(true)
   state.automationRuns = state.automationRuns.map((row) => ({ ...row, workspaceId: 'wt' }))
-  snapshotAutomationRunWorkspaceDisplayName(operations, { id: 'wt', hostId: 'local' }, 'renamed')
+  snapshotAutomationRunWorkspaceDisplayName(
+    operations,
+    hostWorktreeTarget({ id: 'wt', hostId: 'local' }),
+    'renamed'
+  )
   expect(mutations.at(-1)).toBeUndefined()
 })
