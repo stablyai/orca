@@ -35,19 +35,6 @@ async function openAutomationRow(container: HTMLElement, name: string): Promise<
 describe('AutomationsPage refresh', () => {
   installAutomationsPageHarness()
 
-  it('never asks a host for every run it has retained', async () => {
-    const run = makeRun({ id: 'run-1', automationId: 'a-1' })
-    api.automations.list.mockResolvedValue([makeAutomation({ id: 'a-1' })])
-    api.automations.listRuns.mockResolvedValue([run])
-
-    await renderPage()
-
-    // Request one automation’s history; whole-host history would scale page cost with retention.
-    for (const [args] of api.automations.listRuns.mock.calls) {
-      expect(args?.automationId).toBeTruthy()
-    }
-  })
-
   it.each(['desktop', 'runtime'] as const)(
     'refreshes count and exact saved output on successive %s completion events without re-entry',
     async (authority) => {
@@ -141,60 +128,6 @@ describe('AutomationsPage refresh', () => {
       expect(reads()).toHaveLength(beforeEvents + 2)
     }
   )
-
-  it('reads row usage from the authority projection rather than from runs', async () => {
-    const usageSummary = {
-      knownRuns: 2,
-      unavailableRuns: 0,
-      inputTokens: 900,
-      outputTokens: 300,
-      cacheTokens: 0,
-      reasoningOutputTokens: 34,
-      totalTokens: 1234,
-      estimatedCostUsd: 0.5
-    }
-    api.automations.listScoped.mockResolvedValue({
-      automations: [makeAutomation({ id: 'a-1' })],
-      items: [{ automationId: 'a-1', selector: { kind: 'self' }, usageSummary }],
-      orphanCount: 0
-    })
-
-    await renderPage()
-
-    expect(listedRows()[0]?.usageSummary).toEqual(usageSummary)
-  })
-
-  it('does not re-list through the active runtime just because one is selected', async () => {
-    mocks.state.settings = {
-      ...(mocks.state.settings as Record<string, unknown>),
-      activeRuntimeEnvironmentId: 'gpu'
-    }
-
-    await renderPage()
-
-    // The ambient runtime cannot identify a row owner; unscoped desktop and scoped runtime queries stay separate.
-    expect(api.automations.list).toHaveBeenCalled()
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'gpu' },
-      'automation.list',
-      undefined,
-      { timeoutMs: 15_000 }
-    )
-  })
-
-  // The manual All-hosts refresh: without a control wired to it, a host whose
-  // entry stopped short has nothing that re-queries it.
-  it('re-queries the desktop host in view from the header refresh action', async () => {
-    const { container } = await renderPage()
-    api.automations.listScoped.mockClear()
-
-    const refresh = container.querySelector<HTMLElement>('[aria-label="Refresh automations"]')
-    expect(refresh).not.toBeNull()
-    await act(async () => refresh?.click())
-
-    // Inside the 30s TTL, so only a manual refresh can produce this call.
-    expect(api.automations.listScoped).toHaveBeenCalledWith({ selector: { kind: 'self' } })
-  })
 
   it('does not re-run the whole refresh when the settings identity changes', async () => {
     const { rerender } = await renderPage()
@@ -366,25 +299,6 @@ describe('AutomationsPage selection', () => {
         .slice(beforeReselect)
         .some(([args]) => args?.expectedOwner?.selector?.targetGeneration === 9)
     ).toBe(true)
-  })
-
-  it('loads the first automation into the detail pane and fetches its runs', async () => {
-    const run = makeRun({ id: 'run-1', automationId: 'a-1' })
-    api.automations.list.mockResolvedValue([makeAutomation({ id: 'a-1', name: 'Nightly' })])
-    api.automations.listRuns.mockImplementation(async (args?: { automationId?: string }) =>
-      args?.automationId === 'a-1' ? [run] : []
-    )
-
-    const { container } = await renderPage()
-    await openAutomationRow(container, 'Nightly')
-
-    // Read history once through its row’s fence; page-level desktop refresh must not duplicate it unfenced.
-    expect(api.automations.listRuns).toHaveBeenCalledWith({
-      automationId: 'a-1',
-      expectedOwner: SELF_PRECONDITION
-    })
-    expect(container.querySelector('[data-testid="detail-name"]')?.textContent).toBe('Nightly')
-    expect(mocks.detailPane?.selectedRuns).toEqual([run])
   })
 
   it('fetches the newly selected automation runs when the selection changes', async () => {

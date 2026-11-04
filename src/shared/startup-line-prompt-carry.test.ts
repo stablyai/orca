@@ -5,7 +5,7 @@ import {
   TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES,
   ZSH_MULTI_LINE_STARTUP_LINE_BUDGET_BYTES
 } from './startup-line-prompt-carry'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 function offer(
   agent: TuiAgent,

@@ -14,7 +14,7 @@ import {
   type KeybindingInput,
   type KeybindingOverrides
 } from '../../shared/keybindings'
-import { wslHostsWindowArguments } from '../wsl/wsl-host-gate'
+import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 
 const MIN_WIDTH = 480
 const MIN_HEIGHT = 360

@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
 import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automation-workspace-provenance'
-import { isTuiAgent } from '../tui-agent-config'
-import type { TuiAgent } from '../tui-agent'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -160,6 +160,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
   isArchived: OptionalBoolean,
   isUnread: OptionalBoolean,
+  // Explicit whole-workspace read intent; older hosts strip this field.
+  acknowledgeAttention: z.boolean().optional(),
   isPinned: OptionalBoolean,
   sortOrder: OptionalFiniteNumber,
   manualOrder: OptionalFiniteNumber,

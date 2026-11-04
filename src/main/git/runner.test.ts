@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   appendGitConfigEnv,
+  mergeGitConfigEnvProtocol
+} from '../../shared/git/commands/git-credential-prompt-env'
+import {
   extractExecError,
   isTransientGhError,
   nonInteractiveGitEnv,
@@ -10,7 +13,6 @@ import {
   redirectPortedHostnameToEnv,
   untranslatedGitOutputEnv
 } from './runner'
-import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 
 function readGitConfigEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   const count = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10)

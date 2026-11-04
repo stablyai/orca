@@ -1,4 +1,4 @@
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import { shouldLoadCombinedDiffOnDemand } from './combined-diff-on-demand-load'
 import type { DiffSection } from './diff-section-types'
 import { countLinesLikeSplit, type DiffLineCounts } from './large-diff-render-limit'

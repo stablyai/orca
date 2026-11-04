@@ -1,5 +1,5 @@
 import type { Repo } from '../../../shared/repo-types'
-import { normalizeGitRemoteUrl } from '../../../shared/git-remote-identity'
+import { normalizeGitRemoteUrl } from '../../../shared/git/remotes/git-remote-identity'
 import { getWorkspaceAttachmentUrlScope } from '../../../shared/workspace-attachment-normalization'
 import { parseGitHubIssueOrPRLink } from '../../../shared/github/links'
 import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'

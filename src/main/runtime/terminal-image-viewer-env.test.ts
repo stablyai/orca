@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
-import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from '../../shared/terminal-image-viewer-capability'
+import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from '../../shared/terminal/images/terminal-image-viewer-capability'
 import {
   applyClaudeTerminalImageViewerEnv,
   terminalImageViewerSupported

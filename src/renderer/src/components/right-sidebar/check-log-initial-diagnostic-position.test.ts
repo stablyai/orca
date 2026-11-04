@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import { PR_CHECK_LOG_TAIL_EARLIER_SEPARATOR as separator } from '../../../../shared/check-job-log-tail-slice'
+import { PR_CHECK_LOG_TAIL_EARLIER_SEPARATOR as separator } from '../../../../shared/source-control/checks/logs/check-job-log-tail-slice'
 import {
   findInitialCheckLogDiagnostic,
   measureInitialCheckLogScrollTop

@@ -4,20 +4,20 @@ import {
   isWindowsOnlyAgentCommand,
   windowsOnlyCliMessage
 } from '../codex-cli/windows-only-agent-cli'
-import type { AgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import type { AgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import {
   getTuiAgentDetectCommands,
   getTuiAgentLaunchCommand,
   TUI_AGENT_CONFIG
-} from '../../shared/tui-agent-config'
+} from '../../shared/agent-launch/catalog/tui-agent-config'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
-import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
+import { hasExplicitTuiLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import {
   quoteStartupArg,
   resolveStartupShell,
   type AgentStartupShell
-} from '../../shared/tui-agent-startup-shell'
-import type { TuiAgent } from '../../shared/tui-agent'
+} from '../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 export type WslHostAgentProbe = {
   isWslHost?: boolean

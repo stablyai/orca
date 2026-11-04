@@ -4,7 +4,7 @@ import { setMigrationUnsupportedPtyListener } from '../agent-hooks/migration-uns
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
 import { stopSyntheticTitleSpinnerTimer } from './synthetic-title-runtime'
 import { mainProcessState as state } from './main-process-state'
-import { pickHostTurnEnd } from '../../shared/agent-status-types'
+import { pickHostTurnEnd } from '../../shared/agent-status/contracts/agent-status-types'
 
 export type MainWindowAgentStatusOptions = {
   window: BrowserWindow

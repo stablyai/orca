@@ -1,11 +1,37 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type SetStateAction
+} from 'react'
 import { AppState } from 'react-native'
+import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { hostStatusProbe } from '../transport/host-status-probe-operations'
 import { subscribeConnectionRevival } from '../transport/connection-revival-signal'
 import { automationListRead } from './automation-operations'
 import { automationOutcomeUnknownMessage, automationErrorMessage } from './automation-error'
 import type { MobileAutomationRow } from './automation-reply-schema'
+
+type CatalogBatch = {
+  promise: Promise<void>
+  finish: () => void
+  warning?: number
+}
+type CatalogReadScope = {
+  current: () => boolean
+  pending: (CatalogBatch & { controller: AbortController }) | null
+  trailing: CatalogBatch | null
+}
+function catalogBatch(warning?: number): CatalogBatch {
+  let finish = () => {}
+  const promise = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  return { promise, finish, warning }
+}
 
 export function useAutomationCatalog(client: RpcClient | null, server: boolean) {
   const [rows, setRows] = useState<MobileAutomationRow[]>([])
@@ -22,55 +48,119 @@ export function useAutomationCatalog(client: RpcClient | null, server: boolean) 
   }, [client])
   const snapshotCurrent = useRef<() => boolean>(() => false)
   const epoch = useRef(0)
-  const readId = useRef(0)
+  const readScope = useRef<CatalogReadScope | null>(null)
+  const warningAuthority = useRef(0)
+  const setActionWarning = useCallback((value: SetStateAction<string | null>) => {
+    warningAuthority.current++
+    setActionError(value)
+  }, [])
+  const retireReads = useCallback(() => {
+    const scope = readScope.current
+    readScope.current = null
+    snapshotCurrent.current = () => false
+    scope?.pending?.finish()
+    scope?.trailing?.finish()
+    scope?.pending?.controller.abort()
+  }, [])
   const locked = useRef(false)
   const mounted = useRef(false)
   const streamReady = useRef(false)
 
   const refresh = useCallback(
-    async (explicit = false) => {
-      if (!client || client.getState() !== 'connected') {
-        return
+    (explicit = false, periodic = false): Promise<void> => {
+      if (
+        !mounted.current ||
+        latestClient.current !== client ||
+        !client ||
+        client.getState() !== 'connected'
+      ) {
+        return Promise.resolve()
       }
-      const id = ++readId.current
-      const at = epoch.current
-      const generation = client.getGeneration?.()
-      const current = () =>
-        mounted.current &&
-        latestClient.current === client &&
-        at === epoch.current &&
-        generation === client.getGeneration?.() &&
-        id === readId.current
-      try {
-        const [list, status] = await Promise.all([
-          automationListRead.request(client, {}),
-          hostStatusProbe.request(client)
-        ])
-        if (!current()) {
-          return
+      if (readScope.current && !readScope.current.current()) {
+        retireReads()
+      }
+      if (!readScope.current) {
+        const at = epoch.current
+        const generation = client.getGeneration?.()
+        const scope: CatalogReadScope = {
+          current: () =>
+            mounted.current &&
+            latestClient.current === client &&
+            at === epoch.current &&
+            generation === client.getGeneration?.() &&
+            readScope.current === scope,
+          pending: null,
+          trailing: null
         }
-        const parsed = automationListRead.interpret(list)
-        const host = hostStatusProbe.interpret(status)
-        snapshotCurrent.current = () =>
-          mounted.current &&
-          latestClient.current === client &&
-          at === epoch.current &&
-          generation === client.getGeneration?.()
-        setRows(parsed)
-        setCapabilities(host.accepted ? (host.value.capabilities ?? []) : [])
-        setLoaded(true)
-        setRevision((value) => value + 1)
-        setError(null)
+        readScope.current = scope
+      }
+      const scope = readScope.current
+      const warning = explicit ? warningAuthority.current : undefined
+      if (scope.pending) {
+        if (periodic) {
+          return scope.pending.promise
+        }
+        scope.trailing ??= catalogBatch(warning)
         if (explicit) {
-          setActionError(null)
+          scope.trailing.warning = warning
         }
-      } catch (failure) {
-        if (current()) {
-          setError(automationErrorMessage(failure))
+        return scope.trailing.promise
+      }
+      const run = async (batch: CatalogBatch): Promise<void> => {
+        const controller = new AbortController()
+        const pending = { ...batch, controller }
+        scope.pending = pending
+        const requests: Promise<RpcResponse>[] = []
+        try {
+          const listRequest = automationListRead.request(client, {}, { signal: controller.signal })
+          requests.push(listRequest)
+          const statusRequest = hostStatusProbe.request(client, undefined, {
+            signal: controller.signal
+          })
+          requests.push(statusRequest)
+          const [parsed, host] = await Promise.all([
+            listRequest.then(automationListRead.interpret),
+            statusRequest.then(hostStatusProbe.interpret)
+          ])
+          if (!scope.current()) {
+            return
+          }
+          snapshotCurrent.current = scope.current
+          setRows(parsed)
+          setCapabilities(host.accepted ? (host.value.capabilities ?? []) : [])
+          setLoaded(true)
+          setRevision((value) => value + 1)
+          setError(null)
+          if (batch.warning !== undefined && batch.warning === warningAuthority.current) {
+            setActionWarning(null)
+          }
+        } catch (failure) {
+          controller.abort()
+          await Promise.allSettled(requests)
+          if (scope.current()) {
+            setError(automationErrorMessage(failure))
+          }
+        } finally {
+          batch.finish()
+          if (scope.pending === pending) {
+            scope.pending = null
+            const trailing = scope.trailing
+            scope.trailing = null
+            if (trailing) {
+              if (scope.current()) {
+                void run(trailing)
+              } else {
+                trailing.finish()
+              }
+            }
+          }
         }
       }
+      const batch = catalogBatch(warning)
+      void run(batch)
+      return batch.promise
     },
-    [client]
+    [client, retireReads, setActionWarning]
   )
 
   useEffect(() => {
@@ -101,6 +191,7 @@ export function useAutomationCatalog(client: RpcClient | null, server: boolean) 
     setConnected(client?.getState() === 'connected')
     const stateChanged = () => {
       epoch.current++
+      retireReads()
       streamReady.current = false
       setConnected(client?.getState() === 'connected')
       void refresh()
@@ -115,19 +206,20 @@ export function useAutomationCatalog(client: RpcClient | null, server: boolean) 
     // Server automation events are not relayed; visible reads also recover an interrupted stream.
     const poll = setInterval(() => {
       if (AppState.currentState === 'active' && (server || !streamReady.current)) {
-        void refresh()
+        void refresh(false, true)
       }
     }, 15000)
     void refresh()
     return () => {
       mounted.current = false
       epoch.current++
+      retireReads()
       stopState?.()
       stopRevival()
       appState.remove()
       clearInterval(poll)
     }
-  }, [client, server, refresh])
+  }, [client, server, refresh, retireReads])
 
   async function perform<T>(
     action: (port: RpcClient, current: () => boolean) => Promise<T>,
@@ -138,7 +230,7 @@ export function useAutomationCatalog(client: RpcClient | null, server: boolean) 
     }
     locked.current = true
     setBusy(true)
-    setActionError(null)
+    setActionWarning(null)
     const at = epoch.current
     const generation = client.getGeneration?.()
     const current = () =>
@@ -149,13 +241,17 @@ export function useAutomationCatalog(client: RpcClient | null, server: boolean) 
     try {
       const value = await action(client, current)
       if (current()) {
+        retireReads()
         accept(value)
       } else if (mounted.current) {
-        setActionError(automationOutcomeUnknownMessage())
+        setActionWarning(automationOutcomeUnknownMessage())
       }
     } catch (failure) {
+      if (current()) {
+        retireReads()
+      }
       if (mounted.current) {
-        setActionError(
+        setActionWarning(
           current() ? automationErrorMessage(failure) : automationOutcomeUnknownMessage()
         )
       }
@@ -173,7 +269,7 @@ export function useAutomationCatalog(client: RpcClient | null, server: boolean) 
     capabilities,
     loaded,
     error: actionError ?? error,
-    setError: setActionError,
+    setError: setActionWarning,
     busy,
     connected,
     revision,

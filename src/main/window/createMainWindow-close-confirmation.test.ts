@@ -12,7 +12,7 @@ vi.mock('./desktop-integration/app-icon', async () =>
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
-vi.mock('../browser/browser-route-session-runtime', async () => {
+vi.mock('../browser/routing/sessions/browser-route-session-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
   return {
     browserRouteSessionRegistry: { isAllowedPartition: harness.routePartitionAllowedMock },
@@ -22,7 +22,7 @@ vi.mock('../browser/browser-route-session-runtime', async () => {
     }
   }
 })
-vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
+vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
   return {
     attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,

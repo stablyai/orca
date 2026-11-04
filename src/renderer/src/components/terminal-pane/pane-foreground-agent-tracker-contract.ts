@@ -1,4 +1,4 @@
-import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
+import type { RecognizedAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 

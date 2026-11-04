@@ -5,7 +5,10 @@ import {
   type LargeDiffRenderLimit
 } from '@/components/editor/large-diff-render-limit'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { GitBranchChangeEntry, GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type {
+  GitBranchChangeEntry,
+  GitDiffResult
+} from '../../../../shared/git/diff/git-diff-compare-types'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import type {
   GitHubOwnerRepo,

@@ -32,7 +32,7 @@ export type ResolvedWorktreeRepoScans = Map<
 export type ResolvedWorktreeScanJoin = ResolvedWorktreeSnapshot & {
   /** Git repos the scans predate, which list no rows until scanned. */
   unscannedRepoKeys: ReadonlySet<HostScopedRepoKey>
-  /** Rows a scan that reached a verdict listed, by their git run; a stalled scan's carry no branch. */
+  /** Rows a scan that reached a verdict listed, by their git run; stalled scans remain degraded. */
   gitRunById: ReadonlyMap<HostScopedWorktreeKey, object | null>
   /** Repos whose scan reached a verdict, so a row they no longer list is gone. */
   scannedRepoKeys: ReadonlySet<HostScopedRepoKey>

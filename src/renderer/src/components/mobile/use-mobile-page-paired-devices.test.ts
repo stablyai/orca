@@ -21,7 +21,7 @@ vi.mock('sonner', () => ({
 }))
 
 // Disable polling to isolate the listDevices calls made directly by this hook.
-vi.mock('../settings/mobile-pairing-device-polling', () => ({
+vi.mock('../settings/mobile/pairing/mobile-pairing-device-polling', () => ({
   useMobilePairingDevicePolling: (): void => {}
 }))
 

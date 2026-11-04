@@ -1,12 +1,12 @@
 /** One fact consumer per local-main/SSH PTY, mounted or parked. Never-consumed PTYs drop attention facts; recently unregistered consumers alone open a bounded handoff buffer. */
-import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
+import type { AgentIdleEdgeMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalGitHubPRLink } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
-} from '../../../../shared/terminal-side-effect-facts'
+} from '../../../../shared/terminal/output/terminal-side-effect-facts'
 
 // Cache the blocking persisted-switch read at startup, never per pane bind.
 let persistedAuthorityFlagCache: boolean | null | undefined

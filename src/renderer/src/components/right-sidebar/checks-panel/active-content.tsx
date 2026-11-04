@@ -9,7 +9,10 @@ import { ChecksPanelUpdatedAtMetadata } from '../checks-panel-updated-at-metadat
 import { getChecksPanelRefreshErrorBannerLine } from '../github-refresh-error-copy'
 import { resolveChecksPanelHostedReviewModifierDestination } from '../checks-panel-hosted-review-click-routing'
 import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
-import { getBrokenChecks, isBrokenCheck } from '../../../../../shared/pr-checks-fix-prompt'
+import {
+  getBrokenChecks,
+  isBrokenCheck
+} from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { PRTriageStrip } from './triage-strip'
 import { ConflictingFilesSection, MergeConflictNotice } from './conflict-summary'
 import { ChecksList } from './checks-list'

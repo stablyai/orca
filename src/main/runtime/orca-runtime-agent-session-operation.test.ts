@@ -8,8 +8,9 @@ import type {
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
-import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
-import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
+import { buildAgentStartupPlan } from '../../shared/agent-launch/startup/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { tokenizeStartupCommand } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 

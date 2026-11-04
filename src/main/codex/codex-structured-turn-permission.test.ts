@@ -9,7 +9,7 @@ import {
 } from './codex-structured-session-adapter-fixture'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { expect, it, vi } from 'vitest'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionMode } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   acquiredCodexAdapter,
   CODEX_TEST_THREAD_ID,

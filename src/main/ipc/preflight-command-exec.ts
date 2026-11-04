@@ -10,7 +10,7 @@ import {
   beginLocalCommandSelection,
   isCommandOnLocalPath,
   listLocalCommandPaths
-} from './command-path-resolver'
+} from './command-path/command-path-resolver'
 import { buildLocalPreflightEnv } from './preflight-local-env'
 import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import type { WslPreflightTarget } from './preflight-wsl-agent-detection'

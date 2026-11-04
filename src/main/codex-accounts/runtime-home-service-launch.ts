@@ -20,8 +20,8 @@ import { resolveCodexSessionBackfillPaths } from '../codex/codex-session-backfil
 import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { CodexRuntimeHomeRouting } from './runtime-home-service-home-routing'
-import { blockedWslDistroForExec } from '../wsl/wsl-background-exec-gate'
-import { getWslHomeAsync } from '../wsl'
+import { blockedWslDistroForExec } from '../wsl/discovery/wsl-background-exec-gate'
+import { getWslHomeAsync } from '../wsl/discovery/distro-catalog'
 
 export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   protected initializeLastSyncedState(): void {

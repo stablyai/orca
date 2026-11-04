@@ -1,22 +1,23 @@
-import { detectAgentStatusFromTitle } from '../agent-detection'
-import { isAgentStatusFresh } from '../agent-status-freshness'
-import { agentEntryCompletionAt } from '../agent-completion-time'
-import { agentTurnEndedOnPurpose } from '../agent-main-agent-verdict'
+import { detectAgentStatusFromTitle } from '../agent-status/title/agent-title-status'
+import {
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS,
+  agentStatusEvidenceObservedAt
+} from '../agent-status/contracts/agent-status-freshness'
+import { agentEntryCompletionAt } from '../agent-status/lifecycle/agent-completion-time'
+import { agentTurnEndedOnPurpose } from '../agent-status/lifecycle/agent-main-agent-verdict'
 import { migrationUnsupportedToAgentStatusEntry } from '../migration-unsupported-agent-entry'
-import { resolveDecayedAgentRowState } from '../agent-row-decay-state'
+import { resolveDecayedAgentRowState } from '../agent-status/presentation/agent-row-decay-state'
 import { tabHasLivePty } from '../tab-has-live-pty'
-import { isSyntheticAgentPermissionTitle } from '../synthetic-agent-title'
+import { isSyntheticAgentPermissionTitle } from '../agent-status/title/synthetic-agent-title'
 import { resolveRuntimePaneTitleLeafId } from '../runtime-pane-title-leaf-id'
-import type { AgentStatus } from '../agent-detection'
+import type { AgentStatus } from '../agent-status/title/agent-title-core'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
 import type { Worktree } from '../worktree/types'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  agentStatusEvidenceObservedAt,
-  type AgentStateHistoryEntry,
-  type AgentStatusEntry,
-  type MigrationUnsupportedPtyEntry
-} from '../agent-status-types'
+
+import type { AgentStateHistoryEntry } from '../agent-status/lifecycle/agent-state-history'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../agent-status/contracts/agent-status-ipc-payload'
 import { parsePaneKey } from '../stable-pane-id'
 
 /** Attention priority: 1 Needs you; 2 recent unrequested Done; 3 Working; 4 stale evidence with a live PTY;

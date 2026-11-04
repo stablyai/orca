@@ -40,6 +40,7 @@ import type { CodexStructuredSessionTeardown } from './codex-structured-session-
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { deliverCodexServerRequest } from './codex-structured-provider-events'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
+import { codexStartFailure } from './app-server/codex-startup-outcome'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -76,6 +77,9 @@ export async function acquireCodexStructuredSession(input: {
   let account: AgentSessionAccountKind | undefined
   // Frame row identities include this generation.
   const acquisitionGeneration = mintCodexAcquisitionGeneration(deps)
+  acquisitions.endings.admit(sessionId, acquisitionGeneration)
+  // Codex ending on its own before acquire returns; acquire fails with it, not a generic error.
+  let exitedOnItsOwn: Error | undefined
   const translator = createCodexSessionJournalTranslator({
     sink: acquireInput.events,
     account: () => account,
@@ -163,6 +167,17 @@ export async function acquireCodexStructuredSession(input: {
         onExit: (error, exit) => {
           acquisition.appliedSettings.end()
           try {
+            // Orca's own close or cancel ends no start; Codex ending on its own does, from the
+            // moment its process is seen, before spawn bookkeeping finishes.
+            if (!exit?.expected && !attempt.cancelled) {
+              exitedOnItsOwn ??= error
+              acquireInput.events?.observeRootExit?.()
+              acquisitions.endings.record(
+                sessionId,
+                acquisitionGeneration,
+                codexStartFailure(error)
+              )
+            }
             if (attempt.acquisitionGeneration && !sessions.has(sessionId)) {
               attempt.exitProven = true
               attempt.exitError = error
@@ -222,6 +237,9 @@ export async function acquireCodexStructuredSession(input: {
     acquisitions.assertCurrent(sessionId, attempt)
     const process = await spawnIdentity.read(connection.pid)
     acquisitions.assertCurrent(sessionId, attempt)
+    if (connection.closed && exitedOnItsOwn) {
+      throw exitedOnItsOwn
+    }
     assertCodexConnectionOpen(connection, sessionId)
     attempt.acquisitionGeneration = acquisitionGeneration
     let disposed = false
@@ -265,6 +283,7 @@ export async function acquireCodexStructuredSession(input: {
         : {})
     }
   } catch (error) {
+    acquisitions.endings.retire(sessionId, acquisitionGeneration)
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {
       return closeFailedCodexAcquisition({
         sessionId,

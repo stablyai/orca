@@ -2,7 +2,7 @@ import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
-} from '../../../../shared/terminal-input'
+} from '../../../../shared/terminal/input/terminal-input'
 import {
   isCoalesciblePtyInput,
   PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES,
@@ -12,7 +12,7 @@ import {
   type PtyInputWriteQueue,
   type PtyInputWriteQueueDeps
 } from './pty-input-write-queue-contract'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import {
   createHeadQueue,
   peekHeadQueue,

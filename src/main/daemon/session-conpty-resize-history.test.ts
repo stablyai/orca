@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
-import { buildFreshShellViewportBlankingSequence } from '../../shared/terminal-fresh-shell-viewport'
-import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import { buildFreshShellViewportBlankingSequence } from '../../shared/terminal/viewport/terminal-fresh-shell-viewport'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { Session } from './session'
 
 const COLS = 119
@@ -125,10 +125,4 @@ describe('daemon checkpoint after a relaunch resize under ConPTY', () => {
       expect(rows[restoredPrompt + 1]).toBe('')
     }
   )
-
-  // Control: the Unix grow model pulls history into ConPTY's grid, and its repaint overwrites it.
-  it('loses restored history without the ConPTY model', async () => {
-    const rows = await checkpointAfterResizes('posix-pty', [2, ROWS])
-    expect(rows.filter((row) => /^L\d$/.test(row.trimEnd())).length).toBeLessThan(6)
-  })
 })

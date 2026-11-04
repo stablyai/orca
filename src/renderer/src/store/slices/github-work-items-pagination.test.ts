@@ -1,3 +1,4 @@
+import { answered } from '../github/answered-request.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -50,11 +51,13 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       errors: { issues: { type: 'permission_denied', message: 'no access' } }
     })
 
-    const result = await store
-      .getState()
-      .fetchWorkItemsNextPage([{ repoId: 'repo-1', path: '/repo' }], 24, 100, '', 2, {
-        requireComplete: true
-      })
+    const result = answered(
+      await store
+        .getState()
+        .fetchWorkItemsNextPage([{ repoId: 'repo-1', path: '/repo' }], 24, 100, '', 2, {
+          requireComplete: true
+        })
+    )
 
     expect(result.items).toEqual([])
     expect(result.failedCount).toBe(1)

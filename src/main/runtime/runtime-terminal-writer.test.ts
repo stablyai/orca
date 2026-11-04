@@ -8,7 +8,7 @@ import {
   writeUnverifiable,
   type WriteSettlement
 } from '../../shared/pty-write-settlement'
-import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../shared/terminal-input'
+import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../shared/terminal/input/terminal-input'
 
 afterEach(() => vi.useRealTimers())
 
@@ -270,5 +270,90 @@ describe('submit settle before Enter', () => {
     await vi.advanceTimersByTimeAsync(1000)
     await rejected
     expect(writes).toEqual(['ls'])
+  })
+})
+
+describe('Enter after text for a Windows input-record agent', () => {
+  // Windows Codex reads typed text as key events and takes an Enter that lands mid-burst as a newline.
+  it('waits out the key-event burst before Enter on a mobile-sized message', async () => {
+    vi.useFakeTimers()
+    const raw = vi.fn((_id: string, _data: string) => true)
+    const writer = new RuntimeTerminalWriter(
+      raw,
+      () => 'win32',
+      () => 'codex'
+    )
+    const text = 'm'.repeat(2_015)
+    const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
+      inputKind: 'driving'
+    })
+    await vi.advanceTimersByTimeAsync(2_015 * 3)
+    expect(raw.mock.calls.map((call) => call[1])).toEqual([text])
+    await vi.runAllTimersAsync()
+    await pending
+    expect(raw.mock.calls.map((call) => call[1])).toEqual([text, '\r'])
+  })
+
+  it('keeps the ingest-only delay for agents that read a VT stream', async () => {
+    vi.useFakeTimers()
+    const raw = vi.fn((_id: string, _data: string) => true)
+    const writer = new RuntimeTerminalWriter(
+      raw,
+      () => 'win32',
+      () => 'claude'
+    )
+    const text = 'm'.repeat(2_015)
+    const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
+      inputKind: 'driving'
+    })
+    await vi.advanceTimersByTimeAsync(1_000)
+    await pending
+    expect(raw.mock.calls.map((call) => call[1])).toEqual([text, '\r'])
+  })
+
+  it('caps the burst wait so a long message still answers inside a phone RPC timeout', async () => {
+    vi.useFakeTimers()
+    const startedAt = Date.now()
+    let enterAt: number | undefined
+    const writer = new RuntimeTerminalWriter(
+      (_id, data) => {
+        if (data === '\r') {
+          enterAt = Date.now() - startedAt
+        }
+        return true
+      },
+      () => 'win32',
+      () => 'codex'
+    )
+    // 10k chars would be a 30 s burst wait uncapped, past the phone's 30 s terminal.send timeout.
+    const text = 'm'.repeat(10_000)
+    const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
+      inputKind: 'driving'
+    })
+    await vi.runAllTimersAsync()
+    await pending
+    expect(enterAt).toBeGreaterThanOrEqual(19_000)
+    expect(enterAt).toBeLessThanOrEqual(20_000)
+  })
+
+  it('does not submit when the send is cancelled during the burst wait', async () => {
+    vi.useFakeTimers()
+    const raw = vi.fn((_id: string, _data: string) => true)
+    const controller = new AbortController()
+    const writer = new RuntimeTerminalWriter(
+      raw,
+      () => 'win32',
+      () => 'codex'
+    )
+    const text = 'm'.repeat(2_015)
+    const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
+      inputKind: 'driving',
+      signal: controller.signal
+    })
+    const rejected = expect(pending).rejects.toThrow('request_aborted')
+    await vi.advanceTimersByTimeAsync(3_000)
+    controller.abort()
+    await rejected
+    expect(raw.mock.calls.map((call) => call[1])).toEqual([text])
   })
 })

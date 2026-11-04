@@ -18,7 +18,10 @@ import {
   type PRCommentPresentationClasses
 } from '../pr-comment-presentation'
 import type { GitHubReactionContent, PRComment } from '../../../../../shared/github/comment-types'
-import { getPRCommentGroupId, type PRCommentGroup } from '../../../../../shared/pr-comment-groups'
+import {
+  getPRCommentGroupId,
+  type PRCommentGroup
+} from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
 import {
   RightPanelCommentComposer,

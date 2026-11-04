@@ -10,7 +10,7 @@ import { CLIPBOARD_IMAGE_MAX_BASE64_CHARS } from '../../shared/clipboard-image'
 import { isLinuxWaylandSession } from '../../shared/linux-wayland-session'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { stageClipboardPublisher } from './clipboard-publisher-executable'
-import { envWithoutAppImageRuntime } from '../pty/appimage-terminal-env'
+import { envWithoutAppImageRuntime } from '../pty/shell-startup/appimage-terminal-env'
 import { isLegacyAppImageRuntimeIdentity } from '../updater/linux-package/linux-update-package-type'
 
 const WAYLAND_CLIPBOARD_WRITE_FAILED_ERROR = 'Wayland clipboard write failed'

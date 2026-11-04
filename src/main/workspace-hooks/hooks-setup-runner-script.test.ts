@@ -443,7 +443,7 @@ describe('resolveSetupRunnerShell', () => {
 
   it('classifies an installed explicit Git Bash executable as a POSIX runner', async () => {
     const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
-    const { resolveWindowsGitBashShellPath } = await import('../git-bash')
+    const { resolveWindowsGitBashShellPath } = await import('../pty/shell-startup/git-bash')
 
     expect(
       resolveSetupRunnerShell(
@@ -459,7 +459,7 @@ describe('resolveSetupRunnerShell', () => {
 
   it('falls back to the cmd runner when the explicit Git Bash path no longer exists', async () => {
     const { resolveSetupRunnerShell } = await import('./worktree-runner-script')
-    const { resolveWindowsGitBashShellPath } = await import('../git-bash')
+    const { resolveWindowsGitBashShellPath } = await import('../pty/shell-startup/git-bash')
 
     // Reject stale shells before setup waits on a runner the PTY cannot spawn.
     expect(

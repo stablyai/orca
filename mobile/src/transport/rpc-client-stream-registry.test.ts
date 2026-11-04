@@ -3,7 +3,7 @@ import { RpcClientStreamRegistry } from './rpc-client-stream-registry'
 import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 import type { ConnectionState, RpcResponse } from './types'
 
 type SentRequest = {

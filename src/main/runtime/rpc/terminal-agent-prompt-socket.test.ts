@@ -1,5 +1,5 @@
-import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
-import type * as WorktreeListingModule from '../../git/worktree-listing'
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import './unused-default-rpc-methods.test-fixture'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
@@ -22,27 +22,37 @@ import * as inputAdmission from '../terminal-input-admission'
 import { writePtyFromRuntimeController } from '../../ipc/pty/runtime/operations'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
 
-vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
-    listWorktrees: facade.listWorktrees
+    listWorktrees: listings.listWorktrees
   }
 })
 
-vi.mock('../../git/worktree-listing', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
-    listWorktreesStrict: facade.listWorktreesStrict
+    listWorktreesStrict: listings.listWorktreesStrict
   }
 })
 
-vi.mock('../../git/worktree', () => {
-  const read = async () => [
-    { path: '/tmp/worktree-a', head: 'abc', branch: 'prompt', isBare: false, isMainWorktree: false }
-  ]
-  return { listWorktrees: read, listWorktreesStrict: read }
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const read = async () => [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'prompt',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return { listWorktrees: read, listWorktreesStrict: read }
+  }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 it.each(['before', 'after', 'paired', 'orchestration'] as const)(

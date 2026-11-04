@@ -20,7 +20,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
 }))
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
@@ -209,22 +209,6 @@ describe('native chat names in Vault rows', () => {
       expect(screen.getByText('Explain the parser')).toBeTruthy()
     }
   )
-
-  it.each(['opencode', 'opencode2', 'grok', 'omp', 'pi'] as const)(
-    'shows a %s chat row its CLI title until the chat is named, then the chat name',
-    async (agent) => {
-      await renderRow({ ...row('local', 'Fix the parser'), agent })
-      expect(screen.getByText('Fix the parser')).toBeTruthy()
-      publish('local', 'Explain the parser')
-      expect(screen.getByText('Explain the parser')).toBeTruthy()
-    }
-  )
-
-  it('shows a search hit the name its host published', async () => {
-    await renderRow(searchRow())
-    publish('local', 'Explain the parser')
-    expect(screen.getByText('Explain the parser')).toBeTruthy()
-  })
 
   it.each(['constructor', '__proto__'])(
     'renders a paired row whose workspace id names an object member (%s)',

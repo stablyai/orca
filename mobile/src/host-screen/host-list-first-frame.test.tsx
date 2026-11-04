@@ -36,6 +36,7 @@ import { useHostListSections } from './use-host-list-sections'
 import type { HostScreenState } from './use-host-screen-state'
 import { forgetRememberedSidebarFeeds, useHostSidebarFeed } from './use-host-sidebar-feed'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import { NO_WORKTREE_HOST_CONTEXT } from '../worktree/worktree-host-context-labels'
 
 // Use worktree.ps order and flat rows, which differ from the desktop’s rendered sidebar.
 const LISTED = [
@@ -85,6 +86,7 @@ function List({ hostId }: { hostId: string }) {
     hostId,
     feed,
     displayWorktrees: LISTED,
+    hostContextOf: NO_WORKTREE_HOST_CONTEXT,
     hostPlatform: 'darwin',
     state: STATE
   }).sections
@@ -102,7 +104,7 @@ const SNAPSHOT = installSidebarFeedSnapshot(INSTALLED, null)
 async function read(next: Omit<SidebarFeedReaderRead, 'settledBy'>): Promise<void> {
   await act(async () => readers.onRead.at(-1)?.({ ...next, settledBy: null }))
 }
-const rowIds = () => drawn.flatMap((section) => section.data.map((row) => row.worktreeId))
+const rowIds = () => drawn.flatMap((section) => section.data.map((item) => item.row.worktreeId))
 
 describe("the host list's first frame under the feed", () => {
   beforeEach(() => {

@@ -1,5 +1,5 @@
-import { sourceControlActionRecipeEntry } from '../../../../shared/source-control-action-selection'
-import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
+import { sourceControlActionRecipeEntry } from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
+import type { SourceControlActionRecipe } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type * as RuntimeGitStatusClientModule from '@/runtime/runtime-git-status-client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -32,14 +32,14 @@ vi.mock('sonner', () => ({
 
 import { runSourceControlAgentActionStart } from './runSourceControlAgentActionStart'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { saveSourceControlActionRecipe } from '../../../../shared/source-control-ai-recipe-save'
-import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
+import { saveSourceControlActionRecipe } from '../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { saveSourceControlAiActionRecipeForTarget } from './source-control/ai/recipe-persistence'
-import { sourceControlActionLaunchOptions } from '../../../../shared/source-control-action-launch-preferences'
+import { sourceControlActionLaunchOptions } from '../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import {
   resolveAgentLaunchCommand,
   terminalSessionOptionInputs
-} from '../../../../shared/tui-agent-launch-command'
+} from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import type { Repo } from '../../../../shared/repo-types'
 
 function buildArgs(
@@ -181,6 +181,37 @@ describe('runSourceControlAgentActionStart', () => {
     expect(mocks.onClose).not.toHaveBeenCalled()
   })
 
+  it('keeps injected onStart successes immediate', async () => {
+    const onStart = vi.fn().mockResolvedValue(true)
+
+    await expect(
+      runSourceControlAgentActionStart(
+        buildArgs({
+          onStart,
+          worktreeId: undefined,
+          groupId: undefined
+        })
+      )
+    ).resolves.toBe(true)
+
+    expect(onStart).toHaveBeenCalledWith({
+      signal: undefined,
+      onCreateAccepted: undefined,
+      onFailureNotified: expect.any(Function),
+      agent: 'codex',
+      commandInput: 'Fix the bug',
+      agentArgs: '--model gpt-5',
+      agentLaunchPreferences: undefined,
+      chatSessionOptions: { model: 'gpt-5' },
+      preferredSurface: undefined
+    })
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
+    expect(mocks.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  // onStart awaits no delivery result, so acceptance is terminal for that route.
+
   // Recipe persistence can fail while prompt delivery succeeds; report each outcome independently.
   it('completes the launch and reports a failed repository recipe write', async () => {
     const onLaunchAborted = vi.fn()
@@ -306,7 +337,7 @@ it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
     })
     const next = resolveSourceControlActionRecipe({ settings, repo, actionId: 'fixCommitFailure' })
     const nextOptions = sourceControlActionLaunchOptions(next, 'codex')
-    expect(nextOptions).toEqual({})
+    expect(nextOptions).toEqual({ chatSessionOptions: { model: agentArgs.split(' ')[1] } })
     const command = resolveAgentLaunchCommand({
       agent: 'codex',
       cmdOverrides: {},

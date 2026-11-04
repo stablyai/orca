@@ -10,7 +10,10 @@ import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../lifecycle/agent-session-turn-record'
-import { agentTurnVerdict, type AgentTurnOutcome } from '../../agent-turn-outcome'
+import {
+  agentTurnVerdict,
+  type AgentTurnOutcome
+} from '../../agent-status/lifecycle/agent-turn-outcome'
 import { structuredAgentTurnAnchors } from '../../native-chat/transcript/native-chat-turn-membership'
 import type {
   NativeChatSettledTurn,

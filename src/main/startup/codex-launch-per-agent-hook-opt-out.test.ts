@@ -37,9 +37,10 @@ vi.mock('../codex/codex-hook-reconcile', () => ({
 // Keep the real predicate without importing every agent hook service.
 vi.mock(
   '../agent-hooks/managed-agent-hook-controls',
-  async () => await import('../../shared/agent-status-hooks-setting')
+  async () =>
+    await import('../../shared/agent-hook-listener/configuration/agent-status-hooks-setting')
 )
-vi.mock('../wsl', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
+vi.mock('../wsl/discovery/distro-catalog', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
 vi.mock('../codex/codex-home-paths', () => ({
   getSystemCodexHomePath: () => SYSTEM_HOME,
   getOrcaManagedCodexHomePath: () => '/managed/.codex'

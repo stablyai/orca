@@ -1,6 +1,6 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as DistroGateModule from '../wsl-background-distro-gate'
+import type * as DistroGateModule from '../wsl/discovery/wsl-background-distro-gate'
 import type { Repo } from '../../shared/repo-types'
 import type { RpcRequest } from './rpc/core'
 import type { OrcaRuntimeService } from './orca-runtime'
@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
     })
   }
 })
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof DistroGateModule>()),
   readWslDistroRunningState: vi.fn(async () => mocks.state.distro)
 }))

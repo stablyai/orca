@@ -1,5 +1,6 @@
+import { getProviderChecksOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
 import type { CheckStatus } from '../../../../shared/github/pull-request-types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { translate } from '@/i18n/i18n'
 import type {
   ParentPrChecksGroupKey,
@@ -60,13 +61,17 @@ export function classifyKnownReviewStatus(review: HostedReviewInfo): ParentPrChe
   if (review.state === 'draft') {
     return 'draft'
   }
-  if (review.status === 'failure') {
+  const outcome = getProviderChecksOutcome(review.checksSummary, review.status)
+  if (outcome === 'cancelled') {
+    return 'cancelled'
+  }
+  if (outcome === 'failure') {
     return 'failing'
   }
-  if (review.status === 'pending') {
+  if (outcome === 'pending') {
     return 'pending'
   }
-  if (review.status === 'success') {
+  if (outcome === 'success') {
     return 'success'
   }
   return 'neutral'
@@ -86,6 +91,7 @@ export function groupForRowStatus(status: ParentPrChecksRowStatus): ParentPrChec
       return 'merged'
     case 'success':
       return 'passing'
+    case 'cancelled':
     case 'draft':
     case 'neutral':
       return 'draftOrNoChecks'
@@ -102,7 +108,7 @@ export function groupForRowStatus(status: ParentPrChecksRowStatus): ParentPrChec
 export function getRowCheckTone(
   status: ParentPrChecksRowStatus,
   review: HostedReviewInfo | null | undefined
-): CheckStatus {
+): CheckStatus | 'cancelled' {
   if (
     ['failing', 'conflict', 'closed', 'linkedDetailsUnavailable', 'refreshError'].includes(status)
   ) {
@@ -114,7 +120,7 @@ export function getRowCheckTone(
   if (status === 'success' || status === 'merged') {
     return 'success'
   }
-  return review?.status ?? 'neutral'
+  return status === 'cancelled' ? 'cancelled' : (review?.status ?? 'neutral')
 }
 
 export function getRowSummary(
@@ -136,6 +142,8 @@ export function getRowSummary(
         )
   }
   switch (status) {
+    case 'cancelled':
+      return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
     case 'failing':
       return translate(
         'auto.components.rightSidebar.parentPrChecks.rowSummary.checksFailing',

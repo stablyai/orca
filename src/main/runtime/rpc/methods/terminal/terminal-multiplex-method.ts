@@ -1,10 +1,10 @@
 import { defineStreamingMethod } from '../../core'
-import { TerminalStreamOpcode } from '../../../../../shared/terminal-stream-protocol'
+import { TerminalStreamOpcode } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
   TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,
   TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION
-} from '../../../../../shared/terminal-multiplex-flow-control'
+} from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { TerminalMultiplex } from '../../../../../shared/rpc-contract/terminal-stream-params'
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'

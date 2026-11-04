@@ -1,8 +1,9 @@
 import { RuntimeClientError } from '../runtime-client'
 
-export function getOptionalWorktreeUnreadFlag(
-  flags: Map<string, string | boolean>
-): boolean | undefined {
+export function getWorktreeReadFlags(flags: Map<string, string | boolean>): {
+  isUnread?: boolean
+  acknowledgeAttention?: true
+} {
   const unread = flags.get('unread')
   const read = flags.get('read')
   // Reject valued booleans instead of silently ignoring --unread=x or --read x.
@@ -18,7 +19,7 @@ export function getOptionalWorktreeUnreadFlag(
     throw new RuntimeClientError('invalid_argument', 'Choose either --unread or --read, not both.')
   }
   if (unread === true) {
-    return true
+    return { isUnread: true }
   }
-  return read === true ? false : undefined
+  return read === true ? { isUnread: false, acknowledgeAttention: true } : {}
 }

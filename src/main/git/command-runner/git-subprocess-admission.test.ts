@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { GENERAL_CAP } from '../../../shared/git/admission/git-admission-state'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
 import {
-  GENERAL_CAP,
-  GitAdmissionScheduler,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests,
   acquireGitAdmission
 } from './git-subprocess-admission'
-import type { GitAdmissionEvent } from '../../../shared/git-admission-state'
+import type { GitAdmissionEvent } from '../../../shared/git/admission/git-admission-state'
 
 const local = (tier: 'interactive' | 'status' | 'background' = 'status') => ({
   args: ['status'],
