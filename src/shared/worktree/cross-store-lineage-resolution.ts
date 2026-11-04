@@ -1,10 +1,9 @@
 import { parseExecutionHostId } from '../execution-host'
-import type { WorkspaceKey } from '../folder-workspaces/folder-workspace-types'
 import {
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus
 } from '../remote-runtime/host-status/runtime-host-status'
-import { worktreeWorkspaceKey } from '../workspace-scope'
+import { worktreeWorkspaceKey, type WorkspaceKey } from '../workspace-scope'
 import { validCrossStoreLineage } from './cross-store-lineage-records'
 import type { Worktree } from './types'
 
