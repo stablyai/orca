@@ -15,11 +15,11 @@ import {
 } from '../../../../shared/runtime-file-contracts'
 import { HostFileRefusal, hostAbsentRefusal } from './host-file-refusal'
 import {
-  grantExceedsDesktopBudget,
+  grantServesInPlace,
   hostOpensGrantedFilesInPlace,
-  hostSavesGrantedFiles
+  hostSavesGrantedFiles,
+  isSshWorkspaceGrantRefusal
 } from '@/runtime/runtime-terminal-artifact-grant'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { useAppStore } from '@/store'
 
@@ -107,9 +107,9 @@ async function resolveInClickedWorkspace(
   try {
     inPlace = await resolveOnHost(false)
   } catch (error) {
-    // Why: only a host that answered it can't grant here (its own SSH workspaces) opens it where it
-    // lives; a timeout or lost connection would just wait twice.
-    if (isHostRefusal(error)) {
+    // Why: only the host's SSH refusal opens it where it lives; a timeout or a passing file error
+    // would just wait twice or switch the user's workspace.
+    if (isSshWorkspaceGrantRefusal(error)) {
       return resolveOnHost(true)
     }
     throw error
@@ -118,8 +118,7 @@ async function resolveInClickedWorkspace(
     return inPlace
   }
   if (inPlace.openTarget?.kind === 'absolute-file') {
-    // Why: a file too large for one grant reply opens where it lives, which pages it.
-    return grantExceedsDesktopBudget(inPlace.openTarget.byteLength) ? resolveOnHost(true) : inPlace
+    return grantServesInPlace(inPlace.openTarget) ? inPlace : resolveOnHost(true)
   }
   // Why: hosts grant files, not folders, and a missing file a workspace holds must read as missing on
   // its host, never as this computer's same-path file; the holding workspace answers both.
@@ -133,10 +132,6 @@ async function opensInPlace(environmentId: string): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-function isHostRefusal(error: unknown): boolean {
-  return error instanceof RuntimeRpcCallError && error.code === 'runtime_error'
 }
 
 /** For paired paths outside the source workspace, ask the server for an owning workspace or a file grant; only paths the host lacks fall to this computer. Null when inapplicable; rejects when neither can open. */

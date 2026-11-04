@@ -9,10 +9,10 @@ import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-wor
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import {
-  grantExceedsDesktopBudget,
-  hostOpensGrantedFilesInPlace
+  grantServesInPlace,
+  hostOpensGrantedFilesInPlace,
+  isSshWorkspaceGrantRefusal
 } from '@/runtime/runtime-terminal-artifact-grant'
 import { grantRestoredHostFile } from './restored-host-file-grant'
 
@@ -61,13 +61,12 @@ export async function placeAbsoluteTab(
     if (await hostOpensGrantedFilesInPlace(readTarget.environmentId)) {
       try {
         const granted = await grantHere(args.readTarget, worktreeId, tab.filePath)
-        // Why: a file too large for one grant reply opens where it lives, which pages it.
-        if (!grantExceedsDesktopBudget(granted.byteLength)) {
+        if (grantServesInPlace(granted)) {
           return granted
         }
       } catch (error) {
-        // Why: only a host that answered it cannot grant here (its own SSH workspaces) serves the holding workspace.
-        if (!(error instanceof RuntimeRpcCallError && error.code === 'runtime_error')) {
+        // Why: moving is permanent, so only the SSH refusal moves; anything else fails retryably.
+        if (!isSshWorkspaceGrantRefusal(error)) {
           throw error
         }
       }
@@ -85,7 +84,9 @@ async function grantHere(
   readTarget: RuntimeClientTarget,
   worktreeId: string | null | undefined,
   filePath: string
-): Promise<Extract<AbsoluteTabPlacement, { kind: 'grant' }> & { byteLength?: number }> {
+): Promise<
+  Extract<AbsoluteTabPlacement, { kind: 'grant' }> & { byteLength?: number; binary?: true }
+> {
   const pairing =
     readTarget.kind === 'environment'
       ? captureRuntimeEnvironmentRequestRevision(readTarget.environmentId)

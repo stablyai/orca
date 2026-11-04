@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import * as filePreview from '@/lib/file-preview'
-import { TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES } from '../../../../shared/runtime-file-contracts'
+import { TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES } from '../../../../shared/runtime-file-contracts'
 
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -281,7 +281,7 @@ describe('a paired-server link outside its own workspace', () => {
       isDirectory: false,
       openTarget: {
         kind: 'absolute-file',
-        byteLength: TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES + 1,
+        byteLength: TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES + 1,
         provider: 'local',
         absolutePath: '/repo/package-lock.json',
         grantId: 'grant-main'

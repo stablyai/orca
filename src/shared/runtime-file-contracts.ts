@@ -64,6 +64,8 @@ export type RuntimeTerminalPathOpenTarget =
       readOnly?: true
       /** The file's size when granted; hosts with in-place files report it. */
       byteLength?: number
+      /** Hosts with in-place files mark a file a grant can't serve as text. */
+      binary?: true
     }
   | { kind: 'unsupported'; reason: string }
 
@@ -80,13 +82,17 @@ export const TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY =
 export const TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY =
   'files.resolve-terminal-path.absolute-files.v1' as const
 
-// Why: older hosts cap a grant's reads and saves at 512 KB, so a desktop client opens a larger
-// file another workspace holds there, as before.
+// Why: older hosts report neither a grant's size nor binary content, so their grant can't be
+// proven to read and save; a file another workspace holds opens there, as before.
 export const TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY =
   'files.resolve-terminal-path.in-place-files.v1' as const
 
-/** Text a desktop client reads or saves through a grant; half the 4 MB reply leaves room for JSON escaping. */
-export const TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES = 2 * 1024 * 1024
+/** The largest file a grant both reads and saves: hosts cap grants here, and a save must fit one request frame. */
+export const TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES = 512 * 1024
+
+/** SSH workspaces on a server grant no file outside them; the one refusal that means "open it where it lives". */
+export const SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE =
+  "Files outside an SSH workspace can't be opened from another device yet."
 
 export type RuntimeTerminalPathResolution = {
   worktree: string

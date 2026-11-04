@@ -1,6 +1,7 @@
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
-  TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES,
+  SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE,
+  TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES,
   TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY,
   TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY,
   type RuntimeTerminalPathResolution
@@ -44,6 +45,8 @@ export type RenewedTerminalArtifactGrant = {
   readOnly: boolean
   /** The file's size when granted; older hosts omit it. */
   byteLength?: number
+  /** Set when the grant can't serve the file as text. */
+  binary?: true
 }
 
 /** A grant for a restored tab's host file, which never kept its grant; rejects when the host lacks it. */
@@ -70,7 +73,8 @@ export async function renewTerminalArtifactGrant(
     ? {
         grantId: granted.grantId,
         readOnly: granted.readOnly,
-        ...(granted.byteLength === undefined ? {} : { byteLength: granted.byteLength })
+        ...(granted.byteLength === undefined ? {} : { byteLength: granted.byteLength }),
+        ...(granted.binary ? { binary: true as const } : {})
       }
     : null
 }
@@ -98,7 +102,8 @@ export async function acquireTerminalArtifactGrant(
       absolutePath: openTarget.absolutePath,
       grantId: openTarget.grantId,
       readOnly: openTarget.readOnly === true,
-      ...(openTarget.byteLength === undefined ? {} : { byteLength: openTarget.byteLength })
+      ...(openTarget.byteLength === undefined ? {} : { byteLength: openTarget.byteLength }),
+      ...(openTarget.binary ? { binary: true as const } : {})
     }
   }
   if (!resolved.exists) {
@@ -141,7 +146,23 @@ export function hostOpensGrantedFilesInPlace(environmentId: string): Promise<boo
   )
 }
 
-/** A grant too large to read or save in one reply; the workspace holding the file pages it instead. */
-export function grantExceedsDesktopBudget(byteLength: number | undefined): boolean {
-  return byteLength === undefined || byteLength > TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES
+/**
+ * Whether a grant can stand in for the workspace holding its file: it reads and saves only text
+ * within 512 KB, while the holder pages large files, stages large saves and serves bytes editors.
+ */
+export function grantServesInPlace(grant: { byteLength?: number; binary?: true }): boolean {
+  return (
+    grant.byteLength !== undefined &&
+    grant.byteLength <= TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES &&
+    !grant.binary
+  )
+}
+
+/** The host's refusal to grant outside its SSH workspaces; any other failure may be transient. */
+export function isSshWorkspaceGrantRefusal(error: unknown): boolean {
+  return (
+    error instanceof RuntimeRpcCallError &&
+    error.code === 'runtime_error' &&
+    error.message === SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE
+  )
 }

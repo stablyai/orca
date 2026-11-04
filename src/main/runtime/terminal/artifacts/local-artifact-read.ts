@@ -21,18 +21,17 @@ const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOF
 
 export async function readLocalTerminalArtifactFileFromHandle(
   handle: FileHandle,
-  grant: TerminalFileGrant,
-  maxTextBytes: number = MOBILE_FILE_READ_MAX_BYTES
+  grant: TerminalFileGrant
 ): Promise<string> {
   const fileStat = await handle.stat()
   if (fileStat.isDirectory()) {
     throw new Error('Cannot read a directory')
   }
-  if (fileStat.size > maxTextBytes) {
+  if (fileStat.size > MOBILE_FILE_READ_MAX_BYTES) {
     throw new Error('file_too_large')
   }
   assertTerminalFileGrantFresh(grant, fileStat)
-  const buffer = await readFileHandleBufferBounded(handle, maxTextBytes + 1)
+  const buffer = await readFileHandleBufferBounded(handle, MOBILE_FILE_READ_MAX_BYTES + 1)
   assertTerminalArtifactContentUnchanged(grant, buffer)
   if (isBinaryBuffer(buffer)) {
     throw new Error('binary_file')

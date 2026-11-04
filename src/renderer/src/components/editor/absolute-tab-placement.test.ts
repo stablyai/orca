@@ -3,7 +3,8 @@ import type { AppState } from '@/store'
 import { placeAbsoluteTab } from './absolute-tab-placement'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import {
-  TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES,
+  SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE,
+  TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES,
   TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY
 } from '../../../../shared/runtime-file-contracts'
 
@@ -76,22 +77,32 @@ describe('an absolute-path tab whose file another workspace holds', () => {
   it.each([
     ['predates in-place files', () => mocks.supportsCapability.mockResolvedValue(false)],
     [
-      'grants a file too large for one reply',
+      'grants a file too large to save through a grant',
       () =>
         mocks.grantRestoredHostFile.mockResolvedValue({
           grantId: 'g-1',
           readOnly: false,
-          byteLength: TERMINAL_ARTIFACT_DESKTOP_MAX_BYTES + 1
+          byteLength: TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES + 1
         })
     ],
     [
-      'refuses the grant',
+      'grants a binary file its bytes editors need the workspace for',
+      () =>
+        mocks.grantRestoredHostFile.mockResolvedValue({
+          grantId: 'g-1',
+          readOnly: false,
+          byteLength: 1024,
+          binary: true
+        })
+    ],
+    [
+      'refuses a grant outside its SSH workspaces',
       () =>
         mocks.grantRestoredHostFile.mockRejectedValue(
           new RuntimeRpcCallError({
             id: 'r',
             ok: false,
-            error: { code: 'runtime_error', message: 'SSH workspace' },
+            error: { code: 'runtime_error', message: SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE },
             _meta: { runtimeId: 'host' }
           })
         )
@@ -118,6 +129,18 @@ describe('an absolute-path tab whose file another workspace holds', () => {
             id: 'r',
             ok: false,
             error: { code: 'runtime_timeout', message: 'offline' },
+            _meta: { runtimeId: 'host' }
+          })
+        )
+    ],
+    [
+      'a passing file error on the host',
+      () =>
+        mocks.grantRestoredHostFile.mockRejectedValue(
+          new RuntimeRpcCallError({
+            id: 'r',
+            ok: false,
+            error: { code: 'runtime_error', message: 'offline: EIO' },
             _meta: { runtimeId: 'host' }
           })
         )

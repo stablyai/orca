@@ -30,7 +30,7 @@ export class RuntimeTerminalArtifacts {
   }): Promise<RuntimeTerminalPathResolution> {
     // Why: the grant binds the canonical path so later reads cannot be redirected through a symlink.
     const canonicalPath = await canonicalPathForArtifactComparison(args.absolutePath)
-    const { stats, contentDigest } = await statLocalTerminalArtifact(canonicalPath)
+    const { stats, contentDigest, binary } = await statLocalTerminalArtifact(canonicalPath)
     const isDirectory = stats.isDirectory()
     const grant = isDirectory
       ? null
@@ -53,7 +53,9 @@ export class RuntimeTerminalArtifacts {
             provider: grant.provider,
             absolutePath: canonicalPath,
             grantId: grant.id,
-            byteLength: stats.size
+            byteLength: stats.size,
+            // Why: a grant serves text only; a binary file opens where its bytes editors page it.
+            ...(binary || isMobileBinaryPath(canonicalPath) ? { binary: true as const } : {})
           }
         : undefined
     }
@@ -63,8 +65,7 @@ export class RuntimeTerminalArtifacts {
     worktreeSelector: string,
     grantId: string,
     absolutePath: string,
-    clientId?: string,
-    maxTextBytes?: number
+    clientId?: string
   ): Promise<RuntimeFileReadResult> {
     const { grant, target } = await this.grants.requireTerminalFileGrant(
       worktreeSelector,
@@ -78,12 +79,12 @@ export class RuntimeTerminalArtifacts {
     let content: string
     const handle = await openLocalTerminalArtifactGrant(grant, constants.O_RDONLY)
     try {
-      content = await readLocalTerminalArtifactFileFromHandle(handle, grant, maxTextBytes)
+      content = await readLocalTerminalArtifactFileFromHandle(handle, grant)
     } finally {
       await handle.close()
     }
     this.grants.refreshTerminalFileGrant(grant)
-    const truncated = truncateMobileFilePreview(content, maxTextBytes)
+    const truncated = truncateMobileFilePreview(content)
 
     return {
       worktree: target.worktree.id,
@@ -130,8 +131,7 @@ export class RuntimeTerminalArtifacts {
     grantId: string,
     absolutePath: string,
     content: string,
-    clientId?: string,
-    maxTextBytes?: number
+    clientId?: string
   ): Promise<{ ok: true }> {
     return writeTerminalArtifactFile(
       this.grants,
@@ -139,8 +139,7 @@ export class RuntimeTerminalArtifacts {
       grantId,
       absolutePath,
       content,
-      clientId,
-      maxTextBytes
+      clientId
     )
   }
 }
