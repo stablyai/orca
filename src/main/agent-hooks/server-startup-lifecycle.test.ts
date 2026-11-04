@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer } from './server'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
-import type { drainAgentHookSpoolAsync } from '../../shared/agent-hook-spool'
-import type * as HookSpoolModule from '../../shared/agent-hook-spool'
-import { getEndpointFileName } from '../../shared/agent-hook-listener/endpoint-publication'
+import type { drainAgentHookSpoolAsync } from '../../shared/agent-hook-listener/transport/agent-hook-spool'
+import type * as HookSpoolModule from '../../shared/agent-hook-listener/transport/agent-hook-spool'
+import { getEndpointFileName } from '../../shared/agent-hook-listener/transport/endpoint-publication'
 
 const drain = vi.hoisted(() => vi.fn<typeof drainAgentHookSpoolAsync>())
-vi.mock('../../shared/agent-hook-spool', async (importOriginal) => ({
+vi.mock('../../shared/agent-hook-listener/transport/agent-hook-spool', async (importOriginal) => ({
   ...(await importOriginal<typeof HookSpoolModule>()),
   drainAgentHookSpoolAsync: drain
 }))

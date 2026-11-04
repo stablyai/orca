@@ -1,5 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
 import { codexCommandLineJoinsSharedServer } from '../../shared/codex-shared-server-command'
 import {
   collectDescendantsFromIndex,

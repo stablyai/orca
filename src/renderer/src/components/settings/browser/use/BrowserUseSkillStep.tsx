@@ -1,5 +1,5 @@
 import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import { AgentSkillSetupPanel } from '../../AgentSkillSetupPanel'
+import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'
 import { StepBadge } from '../../setup-guide/SetupStepBadge'
 import { translate } from '@/i18n/i18n'
 

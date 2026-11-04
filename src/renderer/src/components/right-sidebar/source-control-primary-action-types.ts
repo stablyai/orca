@@ -1,10 +1,10 @@
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { HostedReviewCreationEligibility } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { GitUpstreamStatus } from '../../../../shared/git/status/git-status-types'
 import type { PRState } from '../../../../shared/github/pull-request-types'
 import type {
   SourceControlPrimaryActionKind,
   SourceControlRemoteOpKind
-} from '../../../../shared/source-control-primary-action-decision-types'
+} from '../../../../shared/source-control/decisions/source-control-primary-action-decision-types'
 
 // Exclude dropdown-only compound kinds so primary dispatch remains exhaustive over actions it can emit.
 export type PrimaryActionKind = SourceControlPrimaryActionKind

@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   terminalLimitInputMaximum,
   type TerminalLimitStatus
-} from '../../../../../../shared/terminal-limit-policy'
+} from '../../../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import { Input } from '../../../ui/input'
 import { Button } from '../../../ui/button'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import type { SettingsHostScope } from '../../settings-host-scope'
+import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
 import { readTerminalLimit, saveTerminalLimit } from './terminal-limit-transport'
 import { useAppStore } from '@/store/index'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'

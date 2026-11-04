@@ -1,6 +1,6 @@
-import type { AgentStatusEntry } from './agent-status-types'
-import { isAgentStatusFresh } from './agent-status-freshness'
-import { isLiveChildWork } from './agent-status-child-work-liveness'
+import type { AgentStatusEntry } from './agent-status/contracts/agent-status-types'
+import { isAgentStatusFresh } from './agent-status/contracts/agent-status-freshness'
+import { isLiveChildWork } from './agent-status/child-work/agent-status-child-work-liveness'
 
 export function hasHoldQuitActiveWork(
   entries: Record<string, AgentStatusEntry>,

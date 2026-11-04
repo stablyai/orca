@@ -4,7 +4,7 @@ import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { HoldQuitWatchEvent } from './hold-quit-gesture'
 import type { KeybindingOverrides } from '../../shared/keybindings'
-import { registerNativePopupQuitSurface } from '../browser/native-browser-popup-windows'
+import { registerNativePopupQuitSurface } from '../browser/guest-lifecycle/popups/native-browser-popup-windows'
 
 const mocks = vi.hoisted(() => {
   const watches: { emit: (event: HoldQuitWatchEvent) => void; cancel: ReturnType<typeof vi.fn> }[] =
@@ -67,7 +67,9 @@ vi.mock('electron', () => ({
     fromWebContents: (contents: Contents) => windowOwners.get(contents) ?? null
   }
 }))
-vi.mock('../browser/agent-input-injection', () => ({ isAgentInjectingInput: () => mocks.injected }))
+vi.mock('../browser/cdp/input/agent-input-injection', () => ({
+  isAgentInjectingInput: () => mocks.injected
+}))
 vi.mock('./macos-quit-chord-watch', () => ({
   watchMacQuitChord: (_code: string, emit: (event: HoldQuitWatchEvent) => void) => {
     const cancel = vi.fn()

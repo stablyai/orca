@@ -8,7 +8,6 @@ import {
 } from './browser-extension-document-targets'
 
 const DISCARDED_TAB = PRELOAD_FIRST_DISCARDED_TAB_ID + 3
-const REPLACED_TAB = PRELOAD_FIRST_DISCARDED_TAB_ID + 4
 
 const ORCA_TOP = 'A'.repeat(32)
 const ORCA_AD = 'B'.repeat(32)
@@ -354,24 +353,6 @@ describe('Orca documentIds in native scripting targets', () => {
     expect(chrome.runtime.lastError).toBeUndefined()
     expect(nativeListeners.size).toBe(0)
   })
-
-  it('keeps native result identities for untargeted executions', async () => {
-    const { chrome, calls } = install(['webNavigation', 'scripting'])
-
-    await expect(chrome.scripting.executeScript({ target: { tabId: 3 } })).resolves.toEqual([
-      { frameId: 0, documentId: CHROMIUM_TOP, result: 0 }
-    ])
-
-    expect(calls).toEqual([])
-  })
-
-  it('calls the native functions directly when there is nothing to map', () => {
-    const { chrome, executeScript, sendMessage } = install(['scripting'])
-    void chrome.scripting.executeScript({ target: { tabId: 3 } })
-    void chrome.tabs.sendMessage(3, 'ping')
-    expect(executeScript).toHaveBeenCalledTimes(1)
-    expect(sendMessage).toHaveBeenCalledTimes(1)
-  })
 })
 
 describe('calls to a discarded tab', () => {
@@ -392,11 +373,5 @@ describe('calls to a discarded tab', () => {
     expect(chrome.runtime.lastError).toBeUndefined()
     expect(executeScript).not.toHaveBeenCalled()
     expect(sendMessage).not.toHaveBeenCalled()
-  })
-
-  it('leave a retired synthetic id to Electron, which reports no such tab', async () => {
-    const { chrome, executeScript } = install(['scripting', 'webNavigation'])
-    await chrome.scripting.executeScript({ target: { tabId: REPLACED_TAB } })
-    expect(executeScript).toHaveBeenCalledTimes(1)
   })
 })

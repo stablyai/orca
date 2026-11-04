@@ -1,13 +1,13 @@
 import { app, ipcMain, webContents, type BaseWindow, type WebContents } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { isAgentInjectingInput } from '../browser/agent-input-injection'
+import { isAgentInjectingInput } from '../browser/cdp/input/agent-input-injection'
 import { HoldQuitGesture } from './hold-quit-gesture'
 import { watchMacQuitChord } from './macos-quit-chord-watch'
 import type { HoldQuitInput, HoldQuitNotice } from '../../shared/mac-hold-quit'
 import { isHoldQuitChord } from '../../shared/mac-hold-quit'
 import { keybindingMatchesInput, type KeybindingOverrides } from '../../shared/keybindings'
-import { readDevToolsShortcutInput } from '../browser/browser-guest-devtools-close-shortcut'
-import { onNativePopupQuitSurfaceChanged } from '../browser/native-browser-popup-windows'
+import { readDevToolsShortcutInput } from '../browser/guest-lifecycle/browser-guest-devtools-close-shortcut'
+import { onNativePopupQuitSurfaceChanged } from '../browser/guest-lifecycle/popups/native-browser-popup-windows'
 import {
   getDesktopHoldQuitInspectee as inspecteeFor,
   getDesktopHoldQuitSurface as ownerFor,

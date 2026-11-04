@@ -34,8 +34,8 @@ import {
   buildSettingsProjectList,
   removeSettingsProjectFromAllHosts
 } from '../navigation/settings-project-list'
-import { resolveSettingsHostScope } from '../settings-host-scope'
-import { useSettingsHostNavigation } from '../use-settings-host-navigation'
+import { resolveSettingsHostScope } from '../host-scope/settings-host-scope'
+import { useSettingsHostNavigation } from '../host-scope/use-settings-host-navigation'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import {
   blockRemovalForUnsavedFiles,

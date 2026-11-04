@@ -19,9 +19,9 @@ import {
 import {
   buildNewTabAgentMenuRows,
   type HostChatAnswer
-} from '../../../../shared/agent-launch-picker-rows'
-import type * as picker from '../../../../shared/agent-launch-picker'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
+import type * as picker from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
 import {
@@ -38,7 +38,7 @@ const mocks = vi.hoisted(() => ({
   session: vi.fn(),
   store: { repos: [{ id: 'repo-prospective', path: '/host/repo' }] }
 }))
-vi.mock('../settings/agent-launch-settings-transport', () => ({
+vi.mock('../../runtime/agent-launch-settings/agent-launch-settings-transport', () => ({
   readHostAgentLaunchSettings: mocks.settings
 }))
 vi.mock('@/store', () => ({

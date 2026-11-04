@@ -2,7 +2,7 @@ import {
   getCommandTokenPathBasename,
   getFirstCommandToken
 } from '../../../shared/command-token-scanner'
-import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { selectForegroundProcessCandidate } from '../../../shared/foreground-process-selection'
 import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
 import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'

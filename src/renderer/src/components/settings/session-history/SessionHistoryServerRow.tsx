@@ -8,7 +8,7 @@ import {
   getRuntimeServerConnectionState,
   isRuntimeServerTransportConnected,
   type RuntimeHostDetails
-} from '../runtime-environment-host-details'
+} from '../runtime-environments/catalog/runtime-environment-host-details'
 import { SessionHistoryComputerRow } from './SessionHistoryComputerRow'
 import type { SessionSearchComputerState } from './session-search-computer-rollup'
 import {

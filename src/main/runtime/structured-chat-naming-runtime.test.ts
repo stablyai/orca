@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { toSshExecutionHostId } from '../../shared/execution-host'
-import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai-settings'
+import { normalizeSourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings'
 import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
 import { STRUCTURED_AGENT_RUNTIME_CATALOG } from './structured-agent-runtime-metadata'
 import type {

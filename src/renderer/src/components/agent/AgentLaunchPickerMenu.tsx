@@ -1,6 +1,6 @@
 import { selectWorktreesByRepo, selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import { memo, useEffect, useId, useRef, useState, type ComponentProps } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -17,21 +17,21 @@ import {
   retireAgentPickerDrafts,
   type AgentPickerSetupIdentity
 } from './AgentLaunchSetupButton'
-import { applyAgentPickerEdit } from '../../../../shared/agent-launch-picker-edits'
+import { applyAgentPickerEdit } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
-import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch-picker-rows'
+import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource
 } from './use-agent-launch-picker-inventory'
+import { searchAgentPickerSetups } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
 import {
-  searchAgentPickerSetups,
   agentPickerDraft,
   type AgentPickerDraft,
   type AgentPickerEntry,
   type AgentPickerSurface
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 export function pickerLaunchRow(
   entry: AgentPickerEntry,
@@ -321,7 +321,7 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         if (next || openSetup === setupId) {
           onSetupOpenChange(next ? { id: setupId, agent: entry.agent, preset, label } : null)
         }
-        if (next) {
+        if (next && openSetup !== setupId) {
           onSelectAgent?.(entry.agent)
         }
       }}

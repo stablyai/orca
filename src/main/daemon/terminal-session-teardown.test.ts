@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import type { Session } from './session'
 import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 const terminateShutdownDescendantsMock = vi.hoisted(() => vi.fn())

@@ -12,7 +12,7 @@ import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 export function buildWorktreeJumpPaletteDocumentIndex({

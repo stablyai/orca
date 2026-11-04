@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { PtyStartupIngress, type PtyIngressEmission } from './pty-startup-ingress'
 import { parsePtyStartupIngressIntent } from './pty-startup-ingress-intent'
-import type { TerminalViewAttributes, TerminalViewRgb } from './terminal-view-attributes'
+import type {
+  TerminalViewAttributes,
+  TerminalViewRgb
+} from './terminal/protocol/queries/terminal-view-attributes'
 
 // The host window is dark; the remote client that launched the PTY is light (#34340).
 const HOST = { foreground: '#ffffff', background: '#000000' }

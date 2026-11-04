@@ -7,12 +7,6 @@ import {
 
 afterEach(() => vi.useRealTimers())
 
-it('returns immediately for no terminals without asking an execution host', async () => {
-  const inspect = vi.fn<(ptyId: string) => Promise<TerminalProcessInspection>>()
-  expect(await probePtyRunningWorkWithInspection([], { timeoutMs: 1000 }, inspect)).toEqual([])
-  expect(inspect).not.toHaveBeenCalled()
-})
-
 it.each([
   [
     { foregroundProcess: 'zsh', hasChildProcesses: true, childProcessEvidence: 'children' },

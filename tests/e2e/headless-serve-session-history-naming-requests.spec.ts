@@ -5,7 +5,7 @@ import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { pairMobileClient } from './helpers/paired-mobile-client'
-import { buildConversationNamePrompt } from '../../src/shared/conversation-name-generation'
+import { buildConversationNamePrompt } from '../../src/shared/source-control/ai/generation/conversation-name-generation'
 
 function transcript(sessionId: string, cwd: string, turns: [string, string][]): string {
   return turns

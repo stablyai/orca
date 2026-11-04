@@ -23,7 +23,7 @@ import { cleanupUnusedWorktreePushTargetRemote } from '../../worktree-remote'
 import { findExistingWorktreeSymlinkPaths } from '../../../git/worktrees/content-paths/worktree-symlink-detection'
 import { removeWorktreeLinkedPaths } from '../../worktree-symlinks'
 import { invalidateAuthorizedRootsCacheForRepo } from './registered-worktree-roots-scoped-invalidation'
-import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
+import { runWorktreeChangeInvalidators } from '../listing/worktree-change-invalidators'
 import { formatWorktreeRemovalError, isOrphanedWorktreeError } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
@@ -36,7 +36,7 @@ import {
   removeWorktreeMetadataAndTransientState,
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
-import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   removesInBackground,
   startBackgroundWorktreeRemoval

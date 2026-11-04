@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { getRequestedPageUrl } from '../browser/browser-expected-page-url'
+import { getRequestedPageUrl } from '../browser/cdp/input/browser-expected-page-url'
 import type { RuntimeBrowserCommands } from './browser/browser-commands'
 import { setRuntimeBrowserCommandsFactory } from './runtime-browser-commands-factory'
 import { RuntimeEdgeCommandController } from './runtime-edge-command-controller'

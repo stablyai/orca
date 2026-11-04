@@ -1,4 +1,3 @@
-import type { AgentPickerRetainedSetup as RetainedSetup } from '../../../../shared/agent-launch-picker-authority'
 import {
   useCallback,
   useEffect,
@@ -8,16 +7,19 @@ import {
   useRef,
   useSyncExternalStore
 } from 'react'
-import { sameSourceControlSetupSelection } from '../settings/source-control-agent-launch-picker'
+import { sameSourceControlSetupSelection } from '../../lib/source-control-agent-launch-picker'
 import { shallow } from 'zustand/shallow'
 import {
   agentPickerDraft,
   type AgentPickerDraft,
   type AgentPickerDraftOwner,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
-import { currentAgentPickerDraft } from '../../../../shared/agent-launch-picker-authority'
+import {
+  type AgentPickerRetainedSetup as RetainedSetup,
+  currentAgentPickerDraft
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import { retireAgentPickerSetups } from './agent-launch-picker-retirement'
 import {
   launchDraftSource,
@@ -28,7 +30,6 @@ import {
   writeLaunchSetupOptions
 } from '../native-chat/native-chat-composer-draft-store'
 
-export type { AgentPickerDraftOwner } from '../../../../shared/agent-launch-picker'
 export type AgentPickerSetupIdentity = { model: string; effort?: string }
 const appSession: AgentPickerDraftOwner = {}
 const sessionDrafts = new WeakMap<AgentPickerDraftOwner, Map<string, RetainedSetup>>()

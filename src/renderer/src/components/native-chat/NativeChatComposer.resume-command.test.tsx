@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 // @vitest-environment happy-dom
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 import { act, cleanup, render } from '@testing-library/react'
 import type { RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -34,7 +35,7 @@ const mocks = vi.hoisted(() => {
   return Object.assign(captured, fns, { sendNativeChatTypedCommand: vi.fn() })
 })
 
-vi.mock('../../store', () => {
+vi.mock('../../store/index', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
@@ -355,7 +356,9 @@ describe('/resume in the native chat composer', () => {
     act(() => mocks.fieldProps?.onSend?.())
 
     expect(mocks.openHistory).not.toHaveBeenCalled()
-    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/resume', undefined)
+    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/resume', {
+      clearInput: AGENT_TUI_CLEAR_INPUT_MAX
+    })
   })
 
   it('derives inline catalog from the same action boundary before resolving namesake skills', () => {

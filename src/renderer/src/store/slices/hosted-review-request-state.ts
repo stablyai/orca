@@ -1,4 +1,4 @@
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { slowTaskRequiredIdleMs } from '@/components/right-sidebar/coalesced-poll-runner'
 
 const HOSTED_REVIEW_REVALIDATION_IDLE_MULTIPLIER = 5

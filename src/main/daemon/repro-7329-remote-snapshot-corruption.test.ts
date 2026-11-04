@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { HeadlessEmulator } from './headless-emulator'
-import { POST_REPLAY_REATTACH_RESET } from '../../shared/terminal-mode-reset-profiles'
+import { POST_REPLAY_REATTACH_RESET } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 
 // Exercise daemon serialization and xterm replay; the remote transport itself is outside this fixture.
 

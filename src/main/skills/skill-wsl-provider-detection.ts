@@ -3,7 +3,7 @@ import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
-} from '../../shared/tui-agent-detection-commands'
+} from '../../shared/agent-launch/catalog/tui-agent-detection-commands'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 

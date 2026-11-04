@@ -15,7 +15,7 @@ import {
   isGhAccountBindingEnforced,
   listRepositoryGhBindableAccounts,
   validateRepositoryGhAccountBinding
-} from './identity/repository-github-account'
+} from '../../../runtime/repository-github/repository-github-account'
 
 type RepositoryGitHubAccountSectionProps = {
   repo: Repo

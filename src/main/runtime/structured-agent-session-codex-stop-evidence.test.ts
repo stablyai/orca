@@ -23,7 +23,7 @@ import {
 import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import type { AgentSessionStopOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
-import { agentVerdictDisplayMark } from '../../shared/agent-main-agent-verdict'
+import { agentVerdictDisplayMark } from '../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { activeProviderContext } from '../../shared/agent-session/agent-session-provider-context'
 
 const os = vi.hoisted(() => ({

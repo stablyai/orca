@@ -1,7 +1,5 @@
-import {
-  ensureAgentLaunchPreferences,
-  type AgentLaunchPreferences
-} from '@/components/settings/use-host-agent-launch-preferences'
+import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import {
   resolveChecksActionAgent,
   sourceControlRepoAgentRows
@@ -23,23 +21,23 @@ import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspac
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
-import { readSourceControlLaunchRecipeAgentId } from '../../../shared/source-control-launch-agent-selection'
+import { readSourceControlLaunchRecipeAgentId } from '../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
-import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
+import { resolveSourceControlActionRecipe } from '../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   type SourceControlActionRecipe,
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   renderSourceControlActionCommandTemplate
-} from '../../../shared/source-control-ai-actions'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+} from '../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
-import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 
 type StartFixChecksAgentArgs = {
   repoId: string

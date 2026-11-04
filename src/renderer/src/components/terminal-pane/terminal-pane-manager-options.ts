@@ -2,15 +2,16 @@ import type { IDisposable } from '@xterm/xterm'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
-import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
-import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
-import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
-import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
+import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal/appearance/terminal-ligatures'
+import { resolveTerminalFontWeights } from '../../../../shared/terminal/appearance/terminal-fonts'
+import { normalizeTerminalLineHeight } from '../../../../shared/terminal/appearance/terminal-line-height-settings'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
-  resolveTerminalCursorInactiveStyle
+  resolveTerminalCursorInactiveStyle,
+  resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
@@ -28,7 +29,7 @@ import {
 } from './terminal-pane-lifecycle-primitives'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
-import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { layoutOwnerPaneGestures } from './terminal-pane-layout-owner-gestures'
 
@@ -162,6 +163,9 @@ export function createTerminalPaneManagerOptions(
         ),
         fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
           currentSettings?.terminalFastScrollSensitivity
+        ),
+        scrollOnUserInput: resolveTerminalScrollOnUserInput(
+          currentSettings?.terminalScrollOnUserInput
         ),
         macOptionIsMeta: context.deps.effectiveMacOptionAsAltRef.current === 'true',
         lineHeight: normalizeTerminalLineHeight(currentSettings?.terminalLineHeight),

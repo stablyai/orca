@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildAppFontFamily } from '@/lib/app-font-family'
-import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
+import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 
 const makeSettings = createGlobalSettingsFixture

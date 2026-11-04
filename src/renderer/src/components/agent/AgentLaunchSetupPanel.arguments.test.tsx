@@ -16,10 +16,10 @@ import { readPiRpcModelOptions } from '../../../../main/pi/rpc-model-options'
 
 import {
   agentPickerDraft,
-  agentPickerModels,
   agentPickerLaunchInputs,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { agentPickerModels } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 
 it.each([`--settings '{"fastMode":true}' --settings ./team.json`, `--settings '{broken'`])(
   'keeps opaque effective settings literal and Fast unclaimed: %s',
@@ -115,7 +115,8 @@ it.each(['direct Use', 'blur then Use'] as const)(
 it.each(['pending click', 'blur then click'] as const)(
   'removes the current model domain after accepting newer text through %s',
   async (transition) => {
-    const reconcile = await import('../../../../shared/agent-choice-reconciliation')
+    const reconcile =
+      await import('../../../../shared/agent-launch/choices/agent-choice-reconciliation')
     const accepted = vi.spyOn(reconcile, 'reconcileAgentChoiceArgsDetailed')
     const own: AgentPickerEntry = {
       ...entry,
@@ -234,9 +235,10 @@ it('explains no-flag choices from the recorded Pi catalog and keeps them usable 
 })
 
 it('bounds whole current-snapshot work on rendered replacement, acceptance and chip removal', async () => {
-  const args = await import('../../../../shared/agent-choice-args')
-  const reconcile = await import('../../../../shared/agent-choice-reconciliation')
-  const profile = await import('../../../../shared/agent-launch-profile')
+  const args = await import('../../../../shared/agent-launch/choices/agent-choice-args')
+  const reconcile =
+    await import('../../../../shared/agent-launch/choices/agent-choice-reconciliation')
+  const profile = await import('../../../../shared/agent-launch/choices/agent-launch-profile')
   const catalog =
     await import('../../../../shared/agent-session/options/agent-session-option-catalog')
   const reconciliation = vi.spyOn(reconcile, 'reconcileAgentChoiceArgsDetailed')
@@ -247,7 +249,7 @@ it('bounds whole current-snapshot work on rendered replacement, acceptance and c
     vi.spyOn(catalog, 'getAgentSessionOptionLaunchCatalog')
   ]
   const counts = () => spies.map((spy) => spy.mock.calls.length)
-  const chips = await import('../settings/agent-model-choice-chips')
+  const chips = await import('./launch-settings/agent-model-choice-chips')
   const buildChips = chips.agentModelChoiceChips
   const projectionPasses: { counts: number[]; permission: boolean }[] = []
   const chipBuilder = vi.spyOn(chips, 'agentModelChoiceChips').mockImplementation((...input) => {

@@ -4,10 +4,47 @@
   "family": "nativeChat.image-paste",
   "namedDeltas": [],
   "values": {
-    "098c51e345e3": {
+    "0f02c1a90f93": {
       "name": "terminal.send#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "15a9fbee07a2": {
+      "name": "terminal.read#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 1,
+            "screen": true,
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 2000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "terminal": {}
+          }
+        }
+      }
     },
     "47a22f9d0047": {
       "failure": {
@@ -15,9 +52,20 @@
       },
       "pasted": true
     },
-    "7e7356ce5972": {
+    "65f9f1bdd4b7": {
+      "name": "terminal.send#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~@/tmp/a.png\\u001b[201~\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "a3e305c984c6": {
       "name": "terminal.send#1",
-      "ordinal": 1,
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -32,7 +80,7 @@
             },
             "enter": false,
             "terminal": "terminal-1",
-            "text": "\u0015"
+            "text": "\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b"
           }
         },
         {
@@ -48,7 +96,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "send": {
@@ -58,15 +106,14 @@
         }
       }
     },
-    "84e5ca07cb7a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": true
+    "abebd0f45ba2": {
+      "name": "terminal.read#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.read\",\"params\":{\"terminal\":\"terminal-1\",\"screen\":true,\"limit\":1}}"
     },
-    "8b35db3a1207": {
+    "ed61f4f27eb6": {
       "name": "terminal.send#2",
-      "ordinal": 3,
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -97,7 +144,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
+          "id": "frame-3",
           "ok": true,
           "result": {
             "send": {
@@ -106,11 +153,6 @@
           }
         }
       }
-    },
-    "9bb75628a561": {
-      "name": "terminal.send#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~@/tmp/a.png\\u001b[201~\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     }
   },
   "recording": {
@@ -119,8 +161,8 @@
       {
         "id": "pasted",
         "observation": {
-          "sender": ["7e7356ce5972", "8b35db3a1207"],
-          "payloads": ["098c51e345e3", "9bb75628a561"],
+          "sender": ["15a9fbee07a2", "a3e305c984c6", "ed61f4f27eb6"],
+          "payloads": ["abebd0f45ba2", "0f02c1a90f93", "65f9f1bdd4b7"],
           "settlements": {
             "trailing": "84e5ca07cb7a"
           },

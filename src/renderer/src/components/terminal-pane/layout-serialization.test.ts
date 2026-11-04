@@ -37,7 +37,7 @@ import {
   replayPayloadEndsWithCursorHidden,
   RESET_GRAPHIC_RENDITION,
   RESET_TERMINAL_CURSOR_STYLE
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   restoreScrollbackBuffers,
   serializePaneTree,

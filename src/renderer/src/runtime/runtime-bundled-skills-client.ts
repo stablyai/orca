@@ -5,13 +5,25 @@ import type {
 } from '../../../shared/bundled-skill-plan'
 import {
   BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY,
-  BUNDLED_ORCA_SKILL_CAPABILITY
+  BUNDLED_ORCA_SKILL_CAPABILITY,
+  BUNDLED_ORCA_SKILL_RENAMES_CAPABILITY
 } from '../../../shared/skill-install-capability'
+import { bundledSkillNames } from '../../../shared/bundled-skill-names'
 import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 
 const BUNDLED_SKILL_PLAN_TIMEOUT_MS = 60_000
 const BUNDLED_SKILL_EXECUTE_TIMEOUT_MS = 5 * 60_000
+
+async function supportsSelectedNames(
+  environmentId: string,
+  names?: readonly string[]
+): Promise<boolean> {
+  return (
+    !names?.some((name) => bundledSkillNames(name).length > 1) ||
+    runtimeEnvironmentSupportsCapability(environmentId, BUNDLED_ORCA_SKILL_RENAMES_CAPABILITY)
+  )
+}
 
 /** `unsupported`: the host answered its status and predates the capability ("Update Orca on
  *  the server"). A failed probe is not this; it rejects like any other error. */
@@ -38,7 +50,8 @@ export async function planBundledSkillsOnTarget(
     !(await runtimeEnvironmentSupportsCapability(
       target.environmentId,
       BUNDLED_ORCA_SKILL_CAPABILITY
-    ))
+    )) ||
+    !(await supportsSelectedNames(target.environmentId, request.names))
   ) {
     return { kind: 'unsupported', reason: 'update-server' }
   }
@@ -52,19 +65,22 @@ export async function planBundledSkillsOnTarget(
 }
 
 /** Runs the plan `request` produced on `target`, identified by its digest. */
-export function executeBundledSkillsOnTarget(
+export async function executeBundledSkillsOnTarget(
   target: BundledSkillTarget,
   planDigest: string,
   request: BundledSkillPlanRequest
 ): Promise<BundledSkillInstallResult> {
   if (target.kind === 'ssh') {
-    return Promise.reject(new Error('skill-install-ssh-host-not-served'))
+    throw new Error('skill-install-ssh-host-not-served')
   }
   if (target.kind !== 'environment') {
     return window.api.skills.bundledExecute({
       planDigest,
       request
     })
+  }
+  if (!(await supportsSelectedNames(target.environmentId, request.names))) {
+    throw new Error('Update Orca on the server to install renamed Orca skills.')
   }
   return callRuntimeRpc<BundledSkillInstallResult>(
     { kind: 'environment', environmentId: target.environmentId },
@@ -89,7 +105,8 @@ export async function autoUpdateBundledSkillsOnTarget(
     !(await runtimeEnvironmentSupportsCapability(
       target.environmentId,
       BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY
-    ))
+    )) ||
+    !(await supportsSelectedNames(target.environmentId, names))
   ) {
     return null
   }

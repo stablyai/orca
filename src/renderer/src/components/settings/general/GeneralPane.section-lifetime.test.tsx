@@ -45,7 +45,7 @@ vi.mock('@/store/index', () => ({
 vi.mock('@/components/settings/general/GeneralWorkspaceSettingsSection', () => ({
   GeneralWorkspaceSettingsSection: () => null
 }))
-vi.mock('@/components/settings/CliSection', () => ({ CliSection: () => null }))
+vi.mock('@/components/settings/cli/install/CliSection', () => ({ CliSection: () => null }))
 vi.mock('@/components/settings/general/GeneralSupportSection', () => ({
   GeneralSupportSection: () => null
 }))

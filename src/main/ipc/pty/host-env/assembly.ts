@@ -1,5 +1,5 @@
 import { applyClaudeAgentViewEnv } from './claude-agent-view'
-import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
 import {
   detectExplicitPiAgentKindFromCommand,
@@ -19,7 +19,7 @@ import { mergePersistedWindowsPath } from '../../../pty/environment/windows-envi
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/shell-startup/codex-shell-launch-preflight'
 import { scheduleCodexHookReconcile } from '../../../codex/codex-hook-reconcile'
 import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { BuildPtyHostEnvOptions } from './types'
 import { stripInheritedOrcaCodexHomeOverride } from './codex-home'
 import {
@@ -30,7 +30,7 @@ import {
   resolvePiAgentSourceDir,
   resolveScopedPiAgentSourceDir
 } from './pi-agent'
-import { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
+import { restoreOrStripOverlayEnv } from '../../../../shared/agent-launch/startup/agent-overlay-env'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
 import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'

@@ -8,7 +8,7 @@ import {
   resolveStepOutcome,
   summarizeJobSteps,
   type StepOutcome
-} from '../../../../shared/pr-check-step-status'
+} from '../../../../shared/source-control/checks/pr-check-step-status'
 import { formatJobsForClipboard } from './check-run-clipboard-text'
 import { CheckRunCopyButton } from './CheckRunCopyButton'
 import { Badge } from '@/components/ui/badge'

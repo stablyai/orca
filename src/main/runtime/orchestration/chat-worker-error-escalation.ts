@@ -5,7 +5,7 @@ import { agentSessionFailureFact } from '../../../shared/agent-session/failures/
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../shared/orca-session-address'
 import type { StructuredAgentSessionRequestFailure } from '../../native-chat/agent-session-wire/structured-agent-session-request-failures'
-import { tuiAgentDisplayName } from '../../../shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { resolveStructuredWorkerIdentityForSession } from '../structured-worker-authority'
 import { canonicalOrcaSessionId } from './canonical-orca-session-id'
 import { chatRequestError, isSenderOwnRejection } from './chat-worker-error-words'

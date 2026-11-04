@@ -10,13 +10,13 @@ import { act } from 'react'
 import { fireEvent } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import * as shell from '../../../../shared/tui-agent-startup-shell'
-import { resolveAgentLaunchCommand } from '../../../../shared/tui-agent-launch-command'
+import * as shell from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { resolveAgentLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import {
   agentPickerDraft,
   agentPickerLaunchInputs,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 it('uses chat-style permission icons and separated own settings while keeping raw CLI text selected', () => {
   act(() =>

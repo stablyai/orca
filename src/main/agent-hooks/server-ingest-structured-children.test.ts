@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   makeStructuredAgentStatusSubject,
   type AgentStatusStructuredSessionSubject
-} from '../../shared/agent-status-subject'
+} from '../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer } from './server'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))

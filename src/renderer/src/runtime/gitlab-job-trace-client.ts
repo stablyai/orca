@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   gitLabJobCanHaveTrace,
   gitLabJobTraceToCheckRunDetails
-} from '../../../shared/gitlab-job-trace-check-details'
+} from '../../../shared/source-control/checks/gitlab/gitlab-job-trace-check-details'
 import type { GitLabProjectRef } from '../../../shared/gitlab-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
 import { gitLabApiFor, JOB_TRACE_TIMEOUT_MS } from './gitlab-owner-api'
