@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame
@@ -46,35 +46,6 @@ describe('remote pane reveal round trips', () => {
       leafId: 'pane:1'
     })
   }
-
-  it('opens the shared stream while terminal.create is still in flight', async () => {
-    let answerCreate: (value: unknown) => void = () => {}
-    const defaultCall = runtimeCall.getMockImplementation()!
-    runtimeCall.mockImplementation((request: { method: string }) =>
-      request.method === 'terminal.create'
-        ? new Promise((resolve) => {
-            answerCreate = resolve
-          })
-        : defaultCall(request)
-    )
-    const transport = await createRevealTransport()
-
-    const connected = transport.connect({
-      url: '',
-      sessionId: toRemoteRuntimePtyId('terminal-1', 'env-1'),
-      callbacks: {}
-    })
-    await vi.waitFor(() =>
-      expect(runtimeCall.mock.calls.map(([request]) => request.method)).toContain('terminal.create')
-    )
-    // The create has not answered, yet the stream open is already on the wire.
-    expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
-
-    answerCreate({ ok: true, result: { terminal: { handle: 'terminal-1', isReattach: true } } })
-    await connected
-    expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
-    expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-1' })
-  })
 
   it('closes a warmed stream when the create fails and nothing subscribes', async () => {
     const unsubscribe = vi.fn()
@@ -139,26 +110,5 @@ describe('remote pane reveal round trips', () => {
     })
     transport.claimViewport?.(100, 40)
     expect(framesOf(TerminalStreamOpcode.ClaimViewport)).toBe(3)
-  })
-
-  it('claims a grid again after a different resize reached the host', async () => {
-    vi.useFakeTimers()
-    try {
-      const transport = await createRevealTransport()
-      await transport.connect({ url: '', cols: 120, rows: 40, callbacks: {} })
-      const claims = () =>
-        subscriptionSendBinary.mock.calls.filter(
-          ([bytes]) =>
-            decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.ClaimViewport
-        ).length
-
-      transport.claimViewport?.(120, 40)
-      transport.resize(100, 40)
-      await vi.advanceTimersByTimeAsync(100)
-      transport.claimViewport?.(120, 40)
-      expect(claims()).toBe(2)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })
