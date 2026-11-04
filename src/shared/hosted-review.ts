@@ -4,7 +4,8 @@ import type {
   GitHubRepositoryIdentity,
   PRConflictSummary,
   PRMergeableState,
-  PRReviewDecision
+  PRReviewDecision,
+  PRInfo
 } from './github/pull-request-types'
 
 export type HostedReviewProvider =
@@ -44,6 +45,8 @@ export type HostedReviewInfo = {
   headSha?: string
   /** GitHub repository that owns the PR; absent on older runtimes and other providers. */
   githubRepository?: GitHubRepositoryIdentity
+  /** Full lookup result for the checks panel; older hosts omit it. */
+  githubPullRequest?: PRInfo
   // Mirror PRInfo containment proof so merged-review cache checks retain confirmed worktree heads.
   confirmedContainedHeadOid?: string
   /** Target branch name for review-created worktree compare-base repair. */
@@ -226,6 +229,8 @@ export type HostedReviewLookupOutcome = 'found' | 'not_found' | 'unavailable'
 export type HostedReviewCreationEligibility = {
   provider: HostedReviewProvider
   review: HostedReviewSummary | null
+  /** Reuse the existing-review lookup without a second GitHub request. */
+  githubPullRequest?: PRInfo
   canCreate: boolean
   blockedReason: HostedReviewCreationBlockedReason
   nextAction: HostedReviewCreationNextAction

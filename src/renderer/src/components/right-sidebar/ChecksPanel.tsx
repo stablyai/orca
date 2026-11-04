@@ -11,6 +11,7 @@ import { useChecksPanelPolling } from './checks-panel/use-checks-panel-polling'
 import { useChecksPanelReviewData } from './checks-panel/use-checks-panel-review-data'
 import { useChecksPanelManualRefresh } from './checks-panel/use-checks-panel-manual-refresh'
 import { useChecksPanelEntryRefreshAndTitleActions } from './checks-panel/use-checks-panel-entry-refresh-and-title-actions'
+import { useChecksPanelGitHubReviewHydration } from './checks-panel/use-checks-panel-github-review-hydration'
 import { useChecksPanelCommentResolution } from './checks-panel/use-checks-panel-comment-resolution'
 import { useChecksPanelCommentMutations } from './checks-panel/use-checks-panel-comment-mutations'
 import { useChecksPanelAiQueue } from './checks-panel/use-checks-panel-ai-queue'
@@ -32,6 +33,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const pollingModel = Object.assign(composerModel, useChecksPanelPolling(composerModel))
   const dataModel = Object.assign(pollingModel, useChecksPanelReviewData(pollingModel))
   const refreshModel = Object.assign(dataModel, useChecksPanelManualRefresh(dataModel))
+  useChecksPanelGitHubReviewHydration(refreshModel)
   const entryModel = Object.assign(
     refreshModel,
     useChecksPanelEntryRefreshAndTitleActions(refreshModel)

@@ -7,7 +7,7 @@ import type { BitbucketPullRequestInfo } from '../bitbucket/pull-request-mappers
 import type { GiteaPullRequestInfo } from '../gitea/pull-request-mappers'
 
 export function mapGitHubReview(pr: PRInfo): HostedReviewInfo {
-  return hostedReviewInfoFromGitHubPRInfo(pr)
+  return { ...hostedReviewInfoFromGitHubPRInfo(pr), githubPullRequest: pr }
 }
 
 function mapGitLabReviewState(state: MRInfo['state']): HostedReviewInfo['state'] {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mapGitHubReview } from './forge-review-mappers'
 
 const {
   createGitHubPullRequestMock,
@@ -465,18 +466,25 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('reports reviewLookupOutcome: found when an existing review is returned', async () => {
-    getHostedReviewForBranchMock.mockResolvedValue({ number: 7, url: 'https://x/pull/7' })
-    await expect(
-      getHostedReviewCreationEligibility({
-        ...LOCAL_REPO_ARGS,
-        branch: 'feature/x',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({ blockedReason: 'existing_review', reviewLookupOutcome: 'found' })
+  it('returns the full GitHub result from the existing-review lookup', async () => {
+    const review = mapGitHubReview({
+      number: 7,
+      title: 'Existing PR',
+      url: 'https://github.com/acme/orca/pull/7',
+      state: 'open',
+      checksStatus: 'success',
+      updatedAt: '2026-11-01T00:00:00Z',
+      mergeable: 'MERGEABLE'
+    })
+    getHostedReviewForBranchMock.mockResolvedValue(review)
+    const result = await getHostedReviewCreationEligibility({
+      ...LOCAL_REPO_ARGS,
+      branch: 'feature/x'
+    })
+    expect(result.githubPullRequest).toEqual(review.githubPullRequest)
+    expect(result.review).toEqual({ number: 7, url: review.url })
+    expect(result.reviewLookupOutcome).toBe('found')
+    expect(result.blockedReason).toBe('existing_review')
   })
 
   it('reports reviewLookupOutcome: not_found when the lookup accepts no review', async () => {

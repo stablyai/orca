@@ -145,12 +145,52 @@ describe('getChecksPanelReviewState — precedence', () => {
     expect(state.title).toBe('Checking pull request status')
   })
 
-  it('existing_review with no active fetch keeps the terminal already-exists card', () => {
+  it.each(['https://x/pull/1', null])(
+    'existing_review can retry missing details with URL %s',
+    (url) => {
+      const state = getChecksPanelReviewState(
+        input({
+          eligibilityBlockedReason: 'existing_review',
+          openReviewUrl: url,
+          confirmedReadiness: true
+        })
+      )
+      expect(state.title).toBe('Pull request details unavailable')
+      expect(state.recovery).toEqual(url ? ['open_review', 'retry'] : ['retry'])
+      expect(state.openReviewUrl).toBe(url)
+      expect(state.composerMode).toBe('hidden')
+      expect(state.workflowAction).toBeNull()
+    }
+  )
+
+  it.each(['existing_review', undefined] as const)(
+    'preserves retry timing for unresolved details with blocker %s',
+    (blockedReason) => {
+      const state = getChecksPanelReviewState(
+        input({
+          reviewLookup: 'positive_unresolved',
+          eligibilityBlockedReason: blockedReason,
+          refresh: {
+            status: 'paused',
+            nextAutoRetryAt: 10_000,
+            retryDisabledUntil: 5_000
+          }
+        })
+      )
+      expect(state.recovery).toContain('retry')
+      expect(state.autoRetryAt).toBe(10_000)
+      expect(state.retryDisabledUntil).toBe(5_000)
+      expect(state.composerMode).toBe('hidden')
+      expect(state.workflowAction).toBeNull()
+    }
+  )
+
+  it('renders loaded details even when eligibility still reports an existing review', () => {
     const state = getChecksPanelReviewState(
-      input({ eligibilityBlockedReason: 'existing_review', openReviewUrl: 'https://x/pull/1' })
+      input({ reviewLookup: 'found', eligibilityBlockedReason: 'existing_review' })
     )
-    expect(state.title).toBe('Pull request already exists')
-    expect(state.recovery).toContain('open_review')
+    expect(state.renderReview).toBe(true)
+    expect(state.recovery).toEqual([])
   })
 
   it('a concurrent branch blocker still owns the copy over an in-flight fetch', () => {
