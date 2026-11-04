@@ -95,6 +95,8 @@ import type { BranchPrefixSettings } from '../../shared/git/branches/branch-pref
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
 import { CrossStoreParentRefSchema } from '../../shared/rpc-contract/cross-store-parent-params'
+import { assertParentInAnotherStore } from '../runtime/cross-store-parent-store-check'
+import { recordCreatedWorktreeLineage } from '../runtime/runtime-worktree-lineage-recording'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
@@ -243,13 +245,17 @@ export function recordWorkspaceLineageForCreatedWorktree(
   worktree: Worktree,
   createdAt: number
 ): CreatedWorktreeLineageRecords {
-  if (args.crossStoreParent && worktree.instanceId) {
-    return recordCrossStoreLineageForCreatedWorktree(
-      store,
-      args.crossStoreParent,
-      { ...worktree, instanceId: worktree.instanceId },
-      createdAt
-    )
+  if (args.crossStoreParent) {
+    const { crossStoreLineage, warnings } = recordCreatedWorktreeLineage(store, worktree, {
+      kind: 'crossStore',
+      parent: args.crossStoreParent,
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' }
+    })
+    for (const warning of warnings) {
+      console.warn(`[worktree-create] ${warning.message}`)
+    }
+    return { ...NO_CREATED_WORKTREE_LINEAGE, crossStoreLineage: crossStoreLineage ?? null }
   }
   if (!args.parentWorkspace || !worktree.instanceId) {
     return NO_CREATED_WORKTREE_LINEAGE
@@ -331,30 +337,19 @@ export function recordWorkspaceLineageForCreatedWorktree(
   return { lineage, workspaceLineage }
 }
 
-/** A parent on another machine that its own store named; the renderer refused the create when it couldn't. */
-function recordCrossStoreLineageForCreatedWorktree(
-  store: Store,
-  parent: NonNullable<CreateWorktreeArgs['crossStoreParent']>,
-  worktree: Pick<Worktree, 'id' | 'hostId'> & { instanceId: string },
-  createdAt: number
-): CreatedWorktreeLineageRecords {
-  const target = worktreeRowTarget(store, worktree)
-  // IPC args are unchecked: only a well-formed ref may be saved.
-  const crossStoreLineage =
-    target && CrossStoreParentRefSchema.safeParse(parent).success
-      ? store.setCrossStoreWorkspaceLineage(
-          {
-            childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
-            childInstanceId: worktree.instanceId,
-            parent,
-            origin: 'manual',
-            capture: { source: 'manual-action', confidence: 'explicit' },
-            createdAt
-          },
-          target.hostId
-        )
-      : undefined
-  return { ...NO_CREATED_WORKTREE_LINEAGE, crossStoreLineage: crossStoreLineage ?? null }
+/** Same refusal as the RPC create, before any checkout exists: a well-formed ref from another store. */
+async function assertCreatableCrossStoreParent(
+  runtime: OrcaRuntimeService,
+  parent: CreateWorktreeArgs['crossStoreParent']
+): Promise<void> {
+  if (parent === undefined) {
+    return
+  }
+  // IPC args are unchecked.
+  if (!CrossStoreParentRefSchema.safeParse(parent).success) {
+    throw new Error('The parent on another machine is malformed.')
+  }
+  await assertParentInAnotherStore(parent, () => runtime.readStoreInstallationId())
 }
 
 async function spawnLocalStartupAndSetupTerminals(args: {
@@ -994,6 +989,7 @@ async function performLocalWorktreeCreate(
   pathClaim: WorktreeCreatePathClaim,
   onWorkspaceCreated?: (worktreeId: string) => void
 ): Promise<CreateWorktreeResult> {
+  await assertCreatableCrossStoreParent(runtime, args.crossStoreParent)
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(
     repo,
