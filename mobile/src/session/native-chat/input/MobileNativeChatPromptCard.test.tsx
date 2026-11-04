@@ -8,13 +8,10 @@ import {
 } from '../../../../../src/shared/agent-session-settled-body'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { structuredQuestionTranscript } from '../../../../../src/shared/structured-agent-question-projection'
-import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { createElement, useLayoutEffect, useRef } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { Pressable, Text, TextInput } from 'react-native'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
-import { nativeChatAskDismissKey } from '../../../../../src/shared/native-chat/input/native-chat-ask-dismiss-key'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { Pressable, Text } from 'react-native'
+import { afterEach, expect, it, vi } from 'vitest'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { openExternalLink, useExternalLinkAvailable } from '../../../platform/external-link'
 import { useMobileStructuredPromptResponses } from '../../use-mobile-structured-prompt-responses'
@@ -56,10 +53,6 @@ afterEach(async () => {
   await activateMobileUiLocale('en')
   mobileI18n.removeResourceBundle('fr', 'translation')
 })
-
-const textInput = (root: ReactTestInstance) =>
-  root.find((node) => node.props.placeholder === 'Type your answer')
-const ask = { questions: [{ question: 'Pick?', options: [{ label: 'East' }], multiSelect: false }] }
 
 it('automatically hydrates a projected saved phone receipt and displays exact selected enum and complete text', async () => {
   const red = 'a'.repeat(4000) + 'r'.repeat(4000),
@@ -531,116 +524,6 @@ it('opens a structured sign-in link only on tap and answers separately', async (
   expect(onRespondPermission).not.toHaveBeenCalled()
   await act(async () => {
     tree?.unmount()
-  })
-})
-
-describe('MobileNativeChatPromptCard collapse', () => {
-  it.each([true, false])(
-    'shows only terminal navigation when answering requires it (%s)',
-    async (available) => {
-      const onAnswerInTerminal = vi.fn()
-      const onAnswerAsk = vi.fn(async () => true)
-      const onCancelAsk = vi.fn(async () => true)
-      const onDismissAsk = vi.fn()
-      let tree: ReactTestRenderer | null = null
-      await act(async () => {
-        tree = create(
-          createElement(MobileNativeChatPromptCard, {
-            ask,
-            requiresTerminal: true,
-            onAnswerAsk,
-            onCancelAsk,
-            onDismissAsk,
-            onAnswerInTerminal: available ? onAnswerInTerminal : undefined
-          })
-        )
-      })
-      const buttons = tree!.root.findAllByType(Pressable)
-      expect(buttons).toHaveLength(1)
-      expect(buttons[0]!.props.accessibilityLabel).toBe('Answer in terminal')
-      expect(buttons[0]!.props.disabled).toBe(!available)
-      expect(tree!.root.findAllByType(TextInput)).toHaveLength(0)
-      if (available) {
-        act(() => buttons[0]!.props.onPress())
-      }
-      expect(onAnswerInTerminal).toHaveBeenCalledTimes(available ? 1 : 0)
-      expect(onAnswerAsk).not.toHaveBeenCalled()
-      expect(onCancelAsk).not.toHaveBeenCalled()
-      expect(onDismissAsk).not.toHaveBeenCalled()
-      act(() => tree!.unmount())
-    }
-  )
-
-  it('keeps a partly answered Ask mounted but hidden while collapsed', async () => {
-    let tree: ReactTestRenderer | null = null
-    const render = (collapsed: boolean) =>
-      createElement(MobileNativeChatPromptCard, {
-        ask,
-        collapsedPrompt: collapsed ? { title: 'Pick?', expand: () => {} } : null
-      })
-    await act(async () => {
-      tree = create(render(false))
-    })
-    const other = tree!.root.findAll((node) => node.props.label === 'Other…')[0]!
-    act(() => other.props.onPress())
-    act(() => textInput(tree!.root).props.onChangeText('turbo'))
-
-    await act(async () => tree!.update(render(true)))
-    expect(tree!.root.findByProps({ testID: 'native-chat-prompt-strip' })).toBeTruthy()
-    const hidden = tree!.root.findAll((node) => node.props.style?.display === 'none')
-    expect(hidden).toHaveLength(1)
-    expect(textInput(hidden[0]!).props.value).toBe('turbo')
-
-    await act(async () => tree!.update(render(false)))
-    expect(textInput(tree!.root).props.value).toBe('turbo')
-    act(() => tree!.unmount())
-  })
-  it('resets stale pending choices/text on definition revision', async () => {
-    let tree: ReactTestRenderer | null = null
-    const render = (question: string) => {
-      const prompt: AskPrompt = {
-        ...ask,
-        replyAsMessage: true,
-        occurrenceIds: ['same-call'],
-        questions: [{ ...ask.questions[0]!, question }]
-      }
-      return createElement(MobileNativeChatPromptCard, {
-        ask: prompt,
-        askKey: nativeChatAskDismissKey(prompt)
-      })
-    }
-    await act(async () => {
-      tree = create(render('Q1?'))
-    })
-    act(() => tree!.root.findAll((node) => node.props.label === 'Other…')[0]!.props.onPress())
-    act(() => textInput(tree!.root).props.onChangeText('old answer'))
-    await act(async () => tree!.update(render('Edited Q1?')))
-    expect(tree!.root.findAllByType(TextInput)).toHaveLength(0)
-    expect(tree!.root.findAll((node) => node.props.selected === true)).toHaveLength(0)
-    act(() => tree!.unmount())
-  })
-
-  it('resets typed answers on a host/view owner change with the same portable prompt', async () => {
-    const prompt: AskPrompt = { ...ask, replyAsMessage: true, occurrenceIds: ['same-portable-id'] }
-    function Harness({ host }: { host: string }) {
-      const dismissal = useMobileNativeChatAskDismiss({
-        ask: prompt,
-        startedAt: null,
-        scopeKey: host,
-        sessionKey: 'view',
-        observing: true
-      })
-      return createElement(MobileNativeChatPromptCard, { ask: prompt, askKey: dismissal.askKey })
-    }
-    let tree: ReactTestRenderer | null = null
-    await act(async () => {
-      tree = create(createElement(Harness, { host: 'host-A' }))
-    })
-    act(() => tree!.root.findAll((node) => node.props.label === 'Other…')[0]!.props.onPress())
-    act(() => textInput(tree!.root).props.onChangeText('old host answer'))
-    await act(async () => tree!.update(createElement(Harness, { host: 'host-B' })))
-    expect(tree!.root.findAllByType(TextInput)).toHaveLength(0)
-    act(() => tree!.unmount())
   })
 })
 

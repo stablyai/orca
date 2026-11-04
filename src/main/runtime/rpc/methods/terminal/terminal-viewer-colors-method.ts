@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { normalizeColorQueryReplyColors } from '../../../../../shared/pty-owner-color-query-colors'
+import { normalizeColorQueryReplyColors } from '../../../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import {
   setPairedViewAttributes,
   setPairedViewerColors

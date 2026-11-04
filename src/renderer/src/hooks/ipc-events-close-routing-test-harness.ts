@@ -1,7 +1,7 @@
 import type * as UIZoomLevelModule from '../../../shared/ui-zoom-level'
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
-import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surface-close-target'
 import { createIdleSshApiStub } from './ipc-events-ssh-api-test-fixtures'
 
 export type RequestTabCloseListener = (data: {

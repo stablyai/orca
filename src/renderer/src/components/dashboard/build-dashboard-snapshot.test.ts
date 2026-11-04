@@ -9,8 +9,8 @@ import type {
   AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { DASHBOARD_MAX_LABEL_LENGTH } from '../../../../shared/dashboard-snapshot'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { selectRuntimeAgentOrchestrationBatch } from '../sidebar/worktree-agent-orchestration-batch'
 import { selectRuntimeAgentOrchestrationForWorktree } from '../sidebar/worktree-agent-row-selectors'

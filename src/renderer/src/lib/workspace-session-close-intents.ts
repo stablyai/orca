@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 /** The closes this client still owes runtime environments; optional for partial fixtures. */
 export type CloseIntentFields = Pick<

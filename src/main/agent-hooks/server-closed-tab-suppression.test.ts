@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { AgentHookServer, _internals } from './server'
 import { CLOSED_AGENT_STATUS_TAB_IDS_MAX } from './server/server-constants'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   buildBody,
   PANE,

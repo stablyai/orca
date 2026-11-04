@@ -6,7 +6,7 @@ import {
 import { createHookListenerState, type HookListenerState } from '../listener-state'
 import { normalizeHookPayload } from './normalize-hook-payload'
 import { clearGrokSessionPathLookupCacheForTests } from '../../grok-session-paths'
-import '../../stable-pane-id'
+import '../../workspace-layout/stable-pane-id'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
 describe('shared agent-hook-listener', () => {

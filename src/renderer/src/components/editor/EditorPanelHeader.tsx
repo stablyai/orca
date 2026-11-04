@@ -9,15 +9,15 @@ import EditorViewToggle, {
   CUSTOM_EDITOR_SOURCE_METADATA,
   NOTEBOOK_VIEW_MODE_METADATA,
   SVG_VIEW_MODE_METADATA
-} from './EditorViewToggle'
-import type { CustomEditorToggleValue, EditorToggleValue } from './EditorViewToggle'
+} from './view-mode/EditorViewToggle'
+import type { CustomEditorToggleValue, EditorToggleValue } from './view-mode/EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
-import { DiffNotesSendMenu } from './DiffNotesSendMenu'
+import { DiffNotesSendMenu } from './diff/review/DiffNotesSendMenu'
 import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'
 import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
 import { translate } from '@/i18n/i18n'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
-import { useDiffNavigation } from './diff-navigation-context'
+import { useDiffNavigation } from './diff/review/diff-navigation-context'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import type { ArtifactWriteRequest } from '../../../../shared/artifacts'

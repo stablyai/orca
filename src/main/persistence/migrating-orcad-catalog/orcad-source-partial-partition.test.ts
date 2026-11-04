@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import { collectOrcadMigrationSourceDormantState } from './orcad-source-dormant-state'
 

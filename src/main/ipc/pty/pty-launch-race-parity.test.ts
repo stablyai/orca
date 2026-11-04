@@ -1,7 +1,7 @@
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { TerminalCreateOptions } from '../../runtime/runtime-terminal-contracts'
 import { registerPtyHandlers } from './register-handlers'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { launchWorkspaceId } from '../../../shared/launch-parity-window-request.test-fixture'
 import { POSIX_PATH } from '../../../shared/launch-parity-window-cases.test-fixture'
 import { statSyncMock, forgetRefusedPaneResumeMock } from './pty-ipc-mock-registry'

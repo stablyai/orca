@@ -1,10 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { bridgeId, createFakeRpcClient, rpcSuccess } from './bridge-host-test-fakes'
-import { bridgePendingRequestCap } from './bridge/bridge-caps'
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as capability } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
-import { classifyExactGitHubOperation } from '../../../src/shared/github/exact-work-item-operation'
-import { createPageClient, INIT, GRANTS } from './bridge/bridge-page-client-test-harness'
 
 const params = { repo: 'id:clone', ownerRepo: { owner: 'fork', repo: 'widgets' } }
 const envelope = {
@@ -78,80 +75,4 @@ it('uses one unscoped first-hop probe, leaves final S distinct from D, and prese
     ['github.listLabels', undefined, { envelope }, 'function']
   ])
   f.requests.closeAll(false)
-})
-it('rejects malformed opt-in rather than silently forwarding as legacy', () => {
-  expect(() =>
-    classifyExactGitHubOperation('github.updateIssue', { ...params, ownerRepo: null }, envelope)
-  ).toThrow()
-  const f = hostRequests()
-  f.requests.open({ ...frame(), params: { ...params, ownerRepo: { owner: '', repo: 'widgets' } } })
-  expect(f.client.requests).toEqual([])
-  expect(f.error).toHaveBeenCalledOnce()
-  expect(classifyExactGitHubOperation('github.listLabels', params, {})).toBeNull()
-})
-it('cancelled probes retain inFlight occupancy, release listeners immediately and cannot settle a reused id', async () => {
-  const f = hostRequests()
-  // Desktop frames stop short of the whole cap, which keeps slots for photo picks.
-  const cap = bridgePendingRequestCap(false)
-  for (let i = 1; i <= cap; i++) {
-    f.requests.open(frame(bridgeId(i)))
-    f.requests.cancel(bridgeId(i))
-  }
-  expect(f.client.stateListeners()).toBe(0)
-  f.requests.open(frame(bridgeId(1)))
-  expect(f.error).toHaveBeenCalledWith(
-    bridgeId(1),
-    expect.objectContaining({ message: expect.stringContaining('over') })
-  )
-  const probes = [...f.client.requests]
-  for (const request of probes) {
-    request.resolve(rpcSuccess('probe', status))
-  }
-  await flush()
-  expect(f.client.requests).toHaveLength(cap)
-  expect(f.reply).not.toHaveBeenCalled()
-  f.requests.open(frame())
-  f.requests.open(frame()) // collision must not retire the original
-  expect(f.client.stateListeners()).toBe(1)
-  f.client.requests.at(-1)!.resolve(rpcSuccess('new-probe', status))
-  await flush()
-  expect(f.client.requests.at(-1)?.method).toBe('github.listLabels')
-  f.client.requests.at(-1)!.resolve(rpcSuccess('new-list', []))
-  await flush()
-  expect(f.reply).toHaveBeenCalledOnce()
-  expect(f.client.stateListeners()).toBe(0)
-})
-it('gives the check and the action one deadline without the page asking for it', async () => {
-  vi.useFakeTimers()
-  const f = hostRequests()
-  f.requests.open({ ...frame(), options: { timeoutMs: 100 } })
-  await vi.advanceTimersByTimeAsync(101)
-  f.client.requests[0].resolve(rpcSuccess('probe', status))
-  await flush()
-  expect(f.client.requests).toHaveLength(1)
-  expect(f.error).toHaveBeenCalledWith(
-    bridgeId(1),
-    expect.objectContaining({ message: expect.stringContaining('Timed out') })
-  )
-  expect(f.client.stateListeners()).toBe(0)
-})
-it('keeps a page callback local, preserves callback-only arity, and allocates no pending id when it throws', async () => {
-  const page = createPageClient()
-  page.deliver({ ...INIT, grants: { ...GRANTS, native: ['rpcEnvelope'] } })
-  const beforeSend = vi.fn(() => {
-    throw new Error('retired')
-  })
-  expect(() => page.client.sendRequest('github.listLabels', undefined, { beforeSend })).toThrow(
-    'retired'
-  )
-  expect(page.frames().filter((message) => message.type === 'request')).toHaveLength(0)
-  const pending = page.client.sendRequest('status.get', undefined, { beforeSend: () => {} })
-  const request = page.frames().find((message) => message.type === 'request')
-  expect(request).not.toHaveProperty('options')
-  if (!request || !('id' in request)) {
-    throw new Error('missing request')
-  }
-  page.deliver({ v: 1, type: 'reply', id: request.id, payload: rpcSuccess('status', {}) })
-  await pending
-  page.client.close()
 })

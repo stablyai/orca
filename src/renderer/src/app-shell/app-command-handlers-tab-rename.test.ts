@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '@/store/types'
 import { createTabsFocusActions } from '../store/slices/tabs/tabs-focus-actions'
 import type { TabsSliceGet, TabsSliceSet } from '../store/slices/tabs/tabs-slice-contract'
 import { buildActiveSurfacePatch } from '../store/slices/tabs/tabs-surface'
-import type { AppShortcutState, ShortcutDispatchInput } from './app-command-handlers'
 
 const mocks = vi.hoisted(() => ({
   requestTerminalTabRename: vi.fn(),
@@ -28,7 +27,11 @@ vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
 }))
 
-import { createAppCommandHandlers } from './app-command-handlers'
+import {
+  type AppShortcutState,
+  type ShortcutDispatchInput,
+  createAppCommandHandlers
+} from './app-command-handlers'
 
 const WORKTREE_ID = 'repo::/feature'
 const GROUP_ID = 'group-1'

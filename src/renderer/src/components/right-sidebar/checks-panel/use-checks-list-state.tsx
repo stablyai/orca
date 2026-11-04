@@ -6,7 +6,7 @@ import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../shared/git
 import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
 import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
 import { summarizeProviderChecks } from '../../../../../shared/source-control/checks/provider-check-summary'
-import { createCheckRunDetailsRequestId } from '@/components/editor/check-run-details-tab'
+import { createCheckRunDetailsRequestId } from '@/components/editor/check-details/actions/check-run-details-tab'
 import { translate } from '@/i18n/i18n'
 import { useCheckDetailsResize } from '../check-details-resize'
 import {

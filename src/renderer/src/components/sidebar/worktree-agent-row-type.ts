@@ -2,7 +2,7 @@ import type {
   AgentStatusEntry,
   AgentType
 } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolveAgentTypeFromTerminalTitle } from './worktree-title-derived-agent-rows'
 

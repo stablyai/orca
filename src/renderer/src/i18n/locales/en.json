@@ -4711,7 +4711,6 @@
             "5c938d39ac": "wk",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "No other accounts",
             "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
@@ -4741,6 +4740,8 @@
             "zcodeUsageMenu": "ZCode Usage",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "signedOutAccounts": "Signed out",
+            "addAnotherAccount": "Add another account…",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
             "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account."
           },
@@ -8123,9 +8124,6 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -10336,14 +10334,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
-            },
-            "orchestrationPanel": {
-              "title": "Orchestration panel",
-              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
-              "orchestration": "orchestration",
-              "agents": "agents",
-              "workers": "workers",
-              "manager": "manager"
             }
           }
         },
@@ -15312,7 +15302,6 @@
           "ae3b00ca82": "Set up GitHub tasks",
           "ff92d15436": "Orca will notify you when agents are done or need help.",
           "b054332836": "Set up notifications",
-          "04ae28d8ca": "Pick the look you want to stare at for hours.",
           "f396db9f20": "Make it feel like home",
           "322fc50a18": "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time.",
           "198b148b3c": "Pick your default agent",
@@ -19387,7 +19376,32 @@
           "system": "Match OS",
           "dark": "Easy on the eyes",
           "light": "Bright & crisp"
-        }
+        },
+        "looks": {
+          "activeNow": "now",
+          "browsePlugins": "Browse plugins",
+          "browseThemePlugins": "Browse theme plugins",
+          "colorMode": "Color mode",
+          "colorModeCaption": "Light, dark, or follow your OS.",
+          "darkLook": "Dark look",
+          "darkLooks": "Dark looks",
+          "lightLook": "Light look",
+          "lightLooks": "Light looks",
+          "moreThemes": "More themes",
+          "next": "More looks",
+          "orcaDark": "Orca Dark",
+          "orcaLight": "Orca Light",
+          "pluginsHint": "More themes are available as plugins.",
+          "previous": "Previous looks",
+          "showsWhenDark": "Shows when your system is dark",
+          "showsWhenLight": "Shows when your system is light",
+          "slotLabel": "Look to edit",
+          "sourceBuiltIn": "Built in",
+          "sourceCommunity": "Terminal palette",
+          "themes": "Theme",
+          "themesCaption": "Optional. Go further with app themes and terminal palettes."
+        },
+        "subtitle": "Choose light or dark, then optionally a theme. Change either any time in Settings."
       },
       "integrations": {
         "capabilities": {
@@ -19775,6 +19789,7 @@
         "availableAfterSessionStarts": "Available after the session starts.",
         "optionUpdateFailed": "Could not update option",
         "optionValue": {
+          "ultracode": "Ultracode",
           "fast": "Fast",
           "minimal": "Minimal",
           "low": "Low",
@@ -19987,8 +20002,6 @@
         "stateUnverifiableCount_other": "{{value0}} with status unavailable"
       },
       "jumpToLatest": "Jump to latest",
-      "newRowsAnnouncement": "New messages arrived while you were away",
-      "newRowsMarker": "New",
       "find": {
         "label": "Find in chat",
         "noResults": "No results",

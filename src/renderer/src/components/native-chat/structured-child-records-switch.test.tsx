@@ -15,7 +15,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/con
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AppState } from '@/store/types'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'

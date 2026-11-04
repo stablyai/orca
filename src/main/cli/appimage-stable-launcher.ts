@@ -16,7 +16,7 @@ import {
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { LINUX_CLI_COMMAND_NAME } from './bundled-cli-launcher-path'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 
 const LAUNCHER_DIRECTORY_NAME = 'launcher'
 const LIVE_ENDPOINT_NAME = 'live'

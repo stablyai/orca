@@ -81,7 +81,7 @@ vi.mock('./WorkspaceKanbanDrawer', () => ({
   )
 }))
 
-vi.mock('./useSidebarProjectDrop', () => ({
+vi.mock('./project-admission/drop/useSidebarProjectDrop', () => ({
   useSidebarProjectDrop: () => ({
     dropOwnerRef: mocks.dropOwnerRef,
     dropHandlers: {},

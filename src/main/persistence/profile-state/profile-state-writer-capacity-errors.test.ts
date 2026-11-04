@@ -7,7 +7,7 @@ import {
 import {
   createTerminalSessionStateSaveFailureMessage,
   isTerminalSessionStorageCapacityFailure
-} from '../../../shared/terminal-session-state-save-failure'
+} from '../../../shared/workspace-session/terminal-session-state-save-failure'
 
 it.each(['ENOSPC', 'EDQUOT', 'SQLITE_FULL', 'EACCES', 'SQLITE_BUSY'])(
   'preserves capacity evidence across the writer boundary for %s',

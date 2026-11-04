@@ -1,8 +1,8 @@
 // Client OSC ownership once discarded mirrored lastAssistantMessage, which only host hooks know (#12906/STA-3596). OSC writes lack that field, so wholesale client precedence blanked every paired row. Drive real mirror/store/sidebar builder and assert entry.lastAssistantMessage, the field both row renderers consume.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'

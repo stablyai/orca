@@ -1,6 +1,6 @@
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { TerminalCreateOptions } from '../../runtime/runtime-terminal-contracts'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { createPaneBindingStore, launchRacePane } from './pty-launch-race-test-fixture'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import { describe, expect, it, vi } from 'vitest'

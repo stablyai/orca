@@ -2,7 +2,7 @@ import { useDiffCommentView } from '@/components/diff-comments/use-diff-comment-
 import type { AppState } from '@/store'
 import React from 'react'
 import { Check, ChevronDown, Copy, MessageSquare, MoreHorizontal, Trash2 } from 'lucide-react'
-import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'
+import { DiffNotesSendMenu } from '@/components/editor/diff/review/DiffNotesSendMenu'
 import {
   DropdownMenu,
   DropdownMenuContent,

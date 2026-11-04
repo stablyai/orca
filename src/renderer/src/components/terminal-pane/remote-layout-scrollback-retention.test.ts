@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { retainLocalScrollbackInRemoteLayout } from './remote-layout-scrollback-retention'
 
 const LEAF_A = 'leaf-a'

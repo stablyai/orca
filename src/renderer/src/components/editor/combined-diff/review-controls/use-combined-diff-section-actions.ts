@@ -7,20 +7,20 @@ import { joinPath } from '@/lib/path'
 import { openFilePreviewToSide } from '@/lib/file-preview'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
-import { getLargeDiffRenderLimit } from '../../large-diff-render-limit'
+import { canOpenDiffSectionPreviewToSide } from '../../diff/sections/diff-section-preview'
+import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
 import {
   getStoredTextDiffContent,
   getStoredTextDiffResult,
   isPrunedTextDiffResult
-} from '../../large-diff-section-content'
-import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
-import type { DiffSection } from '../../diff-section-types'
-import type { DiffSectionItemProps } from '../../diff-section-item-props'
+} from '../../diff/large-files/large-diff-section-content'
+import { removeDiffSectionMeasuredHeight } from '../../diff/sections/diff-section-height-cache'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
+import type { DiffSectionItemProps } from '../../diff/sections/diff-section-item-props'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
-import { writeEditorSave } from '../../editor-save-disk-precondition'
-import { withEditorFileWriteLock } from '../../editor-file-write-lock'
-import { editorPathHoldKey } from '../../editor-autosave-holds'
+import { writeEditorSave } from '../../save/queue/editor-save-disk-precondition'
+import { withEditorFileWriteLock } from '../../save/queue/editor-file-write-lock'
+import { editorPathHoldKey } from '../../autosave/editor-autosave-holds'
 
 export type CombinedDiffSectionActions = {
   handleSectionSaveRef: DiffSectionItemProps['handleSectionSaveRef']

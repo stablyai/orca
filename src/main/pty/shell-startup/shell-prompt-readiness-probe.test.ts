@@ -8,11 +8,11 @@ const resolveExecutablePath = vi.hoisted(() => vi.fn((value: string) => Promise.
 const resolveInstalledExecutablePaths = vi.hoisted(() =>
   vi.fn((): Promise<string[]> => Promise.resolve([]))
 )
-vi.mock('../../../shared/pty-slave-line-discipline-echo', () => ({
+vi.mock('../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo', () => ({
   createPtySlaveLineEditorProbe: (ttyPath: string) =>
     ttyPath === '/dev/ttys099' ? relayedLineEditorProbe : lineEditorProbe
 }))
-vi.mock('../../../shared/shell-process-readiness', () => ({
+vi.mock('../../../shared/terminal/pty/native-process/shell-process-readiness', () => ({
   readShellProcessReadiness: processReadinessProbe,
   listChildProcessIds: listChildPids,
   resolveShellExecutablePath: resolveExecutablePath,
