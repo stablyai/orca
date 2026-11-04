@@ -18,10 +18,14 @@ import type {
 import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import {
   _resetPreparationPoolForTests,
+  discardRepoPreparations,
   hasPendingPreparations,
   startPreparation,
   type PreparationEntry
 } from './worktree-create-preparation-pool'
+import { preparationPathKey } from './worktree-create-preparation-claim'
+import { preparationHostKey } from './worktree-preparation-discard-retry'
+import { startStalePreparationCleanup } from './worktree-create-preparation-stale-cleanup'
 import {
   releasePreparationClaim,
   type DeferredPreparation,
@@ -137,6 +141,26 @@ async function prepareWorktreeCreateInBackground(
     options,
     beforeMaterialization
   })
+}
+
+/** Removal is the last point Orca knows this repo, so reclaim its armed and crash-left checkouts now. */
+export function releaseWorktreeCreatePreparationsForRepo(
+  store: Parameters<typeof getLocalProjectWorktreeGitOptions>[0],
+  repo: Repo
+): void {
+  if (getRepoRoutingConnectionId(repo) || isFolderRepo(repo)) {
+    return
+  }
+  const repoPathKey = preparationPathKey(repo.path)
+  discardRepoPreparations(repoPathKey)
+  const options = getLocalProjectWorktreeGitOptions(store, repo)
+  void worktreePreparationGit.run(() =>
+    startStalePreparationCleanup(
+      preparationHostKey(repoPathKey, options.wslDistro ?? ''),
+      repo.path,
+      options
+    )
+  )
 }
 
 type ClaimedPreparation =

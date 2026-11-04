@@ -13,7 +13,8 @@ import {
   _resetWorktreeCreatePreparationsForTests,
   consumePreparedWorktreeCreate,
   hasPendingWorktreeCreatePreparations,
-  prepareWorktreeCreateForRepo
+  prepareWorktreeCreateForRepo,
+  releaseWorktreeCreatePreparationsForRepo
 } from './worktree-create-preparation'
 
 describe('worktree create preparation registry', () => {
@@ -297,6 +298,45 @@ describe('worktree create preparation registry', () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/release')
     await prepareWorktreeCreateForRepo(store, repo, 'main')
 
+    await expect(
+      consumePreparedWorktreeCreate({
+        repoPath: otherRepo.path,
+        workspaceRoot: '/workspace',
+        worktreePath: '/workspace/other',
+        branch: 'feature/other',
+        baseBranch: 'origin/main'
+      })
+    ).resolves.toMatchObject({ status: 'hit' })
+  })
+
+  it("discards a removed project's armed checkout and reclaims its crash leftovers", async () => {
+    const otherRepo = { id: 'repo-2', path: '/other-repo' } as Repo
+    await prepareWorktreeCreateForRepo(store, otherRepo, 'origin/main')
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    await flushBackgroundWork()
+    const armedPath = mocks.prepareCheckout.mock.calls[1]?.[1]
+    const stalePath = '/workspace/.orca-preparing/999999999-11111111-1111-4111-8111-111111111111'
+    mocks.listWorktreeGraph.mockResolvedValueOnce([
+      {
+        path: stalePath,
+        branch: undefined,
+        lockReason: 'orca-create-preparation:v1:999999999:stale',
+        head: 'deadbeef',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    releaseWorktreeCreatePreparationsForRepo(store, repo)
+    await flushBackgroundWork()
+
+    expect(mocks.discard).toHaveBeenCalledWith(repo.path, armedPath, {}, expect.any(String))
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      stalePath,
+      { admissionTier: 'background' },
+      'orca-create-preparation:v1:999999999:stale'
+    )
     await expect(
       consumePreparedWorktreeCreate({
         repoPath: otherRepo.path,

@@ -2,11 +2,53 @@ import { realpath } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import { toWindowsWslPath } from '../../../shared/wsl-paths'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
 type InFlightWorktreeCreate = { repoId: string; paths: string[] }
 
 const inFlightCreates = new Set<InFlightWorktreeCreate>()
 const claimedCreatePaths = new Set<string>()
+const openCreatesByProject = new Map<string, number>()
+
+type ProjectRow = { id: string; connectionId?: string | null; executionHostId?: string | null }
+
+function projectCreateKey(repo: ProjectRow): string {
+  return `${getRepoExecutionHostId(repo)}\0${repo.id}`
+}
+
+export class ProjectWorktreeCreateInProgressError extends Error {
+  readonly code = 'worktree_create_in_progress'
+  constructor() {
+    super('A workspace is still being created in this project. Try again when it finishes.')
+    this.name = 'ProjectWorktreeCreateInProgressError'
+  }
+}
+
+/** Call in the same tick the create reads its project row, so removal sees every create that could land a workspace. */
+export async function withProjectWorktreeCreate<T>(
+  repo: ProjectRow,
+  create: () => Promise<T>
+): Promise<T> {
+  const key = projectCreateKey(repo)
+  openCreatesByProject.set(key, (openCreatesByProject.get(key) ?? 0) + 1)
+  try {
+    return await create()
+  } finally {
+    const remaining = (openCreatesByProject.get(key) ?? 1) - 1
+    if (remaining > 0) {
+      openCreatesByProject.set(key, remaining)
+    } else {
+      openCreatesByProject.delete(key)
+    }
+  }
+}
+
+/** A create that outlives its project lands a workspace no project owns. */
+export function assertNoProjectWorktreeCreate(repo: ProjectRow): void {
+  if (openCreatesByProject.has(projectCreateKey(repo))) {
+    throw new ProjectWorktreeCreateInProgressError()
+  }
+}
 
 export type WorktreeCreatePathClaim = {
   /** Synchronous, so the path check that calls it cannot interleave with another create's. */

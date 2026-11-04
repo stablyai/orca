@@ -6,6 +6,7 @@ import { findRepoRowForHostScopedWrite } from '../persistence/tracking-repos/rep
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { RepoHostTarget } from '../../shared/repo-host-identity'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { withProjectWorktreeCreate } from '../workspaces/creation/worktree-create-in-flight'
 
 export function registerRuntimeRemoveProjectHostScopeTests(): void {
   function makeRepos(): Repo[] {
@@ -89,6 +90,34 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
       await expect(runtime.removeProject('dup')).rejects.toThrow('selector_ambiguous')
       expect(removeProjectForHost).not.toHaveBeenCalled()
       expect(repos).toHaveLength(2)
+    })
+  })
+
+  describe('repo.rm while a workspace create is open', () => {
+    it('refuses the host row whose create is open, not its same-id twin', async () => {
+      const { runtime, repos, removeProjectForHost } = createRuntime()
+      let finishRemoteCreate!: () => void
+      const remoteCreate = withProjectWorktreeCreate(
+        repos[1],
+        () => new Promise<void>((resolve) => (finishRemoteCreate = resolve))
+      )
+
+      await expect(runtime.removeProject('path:/remote/dup')).rejects.toThrow(
+        'A workspace is still being created in this project.'
+      )
+      expect(removeProjectForHost).not.toHaveBeenCalled()
+
+      finishRemoteCreate()
+      await remoteCreate
+      let finishLocalCreate!: () => void
+      const localCreate = withProjectWorktreeCreate(
+        repos[0],
+        () => new Promise<void>((resolve) => (finishLocalCreate = resolve))
+      )
+      await runtime.removeProject('path:/remote/dup')
+      finishLocalCreate()
+      await localCreate
+      expect(repos.map((repo) => repo.path)).toEqual(['/laptop/dup'])
     })
   })
 
