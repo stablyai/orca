@@ -290,7 +290,10 @@
       "loadingAccounts": "Loading accounts…",
       "manageAccountsHint": "Add or re-authenticate accounts from desktop Settings → Accounts.",
       "useReset": "Use reset",
-      "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts."
+      "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts.",
+      "otherAgents": "Other agents",
+      "fableWindow": "Fable",
+      "mcpWindow": "MCP"
     }
   },
   "agentHistory": {
