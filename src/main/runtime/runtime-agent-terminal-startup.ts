@@ -21,7 +21,7 @@ import {
   launchHostProvesAgentInFront,
   nameLocalTypedLineShell
 } from './agent-launch-typed-line-shell'
-import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
+import { resolveTerminalStartupCwd } from '../../shared/shell/launch/terminal-startup-cwd'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
@@ -185,6 +185,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
         platform: runtime.platform,
         isRemote,
         ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
+        ...(opts.extraAgentArgs !== undefined ? { extraAgentArgs: opts.extraAgentArgs } : {}),
         shell: agentLaunchQuotingShell(runtime),
         sessionOptions: sessionOptions ?? host.toSessionOptions(opts.launchPreferences),
         ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})

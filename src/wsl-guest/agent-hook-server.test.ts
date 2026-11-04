@@ -6,7 +6,7 @@ import { RelayAgentHookServer } from './agent-hook-server'
 import type { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
 import { endpointDirForRelaySocket } from './agent-hook-endpoint-coordinates'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
-import { makePaneKey } from '../shared/stable-pane-id'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
 import * as agentHookListener from '../shared/agent-hook-listener/grok-result-discovery'
 import { HOOK_REQUEST_MAX_BYTES } from '../shared/agent-hook-listener/request-body'
 

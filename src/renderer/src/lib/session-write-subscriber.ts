@@ -1,6 +1,6 @@
 import type { AppState } from '../store'
 import { isDecorativeAgentTitleFrameChange } from '../../../shared/agent-status/title/agent-decorative-title-signature'
-import type { WorkspaceSessionPatch } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionPatch } from '../../../shared/workspace-session/workspace-session-state-types'
 import { SESSION_RELEVANT_FIELDS, shouldPersistWorkspaceSession } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 import { createWorktreeTabBucketProjection } from './worktree-tab-bucket-projection'

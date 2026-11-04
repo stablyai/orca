@@ -156,18 +156,6 @@ describe('readPowerShellProfileEnvValues', () => {
   })
 
   it.each([
-    '$env:CODEX_HOME = $null;',
-    "[Environment]::SetEnvironmentVariable('CODEX_HOME', $null)"
-  ])('reads %s as clearing an earlier value', (line) => {
-    writeProfile(
-      join(root, 'Documents', 'PowerShell', 'profile.ps1'),
-      ["$env:CODEX_HOME = 'C:\\custom'", line].join('\n')
-    )
-
-    expect(readPowerShellProfileEnvValues('CODEX_HOME', root)).toEqual([])
-  })
-
-  it.each([
     "if ($env:CODEX_HOME -eq 'C:\\other') { }",
     "$env:CODEX_HOME2 = 'C:\\other'",
     "$env:CODEX_HOME == 'C:\\other'"

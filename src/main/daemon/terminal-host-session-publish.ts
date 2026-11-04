@@ -1,5 +1,5 @@
-import { terminalStartError } from '../../shared/terminal-start-failure'
-import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
+import { terminalStartError } from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import type { PtyCreationDisposition } from '../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { WslGuestRoot } from '../../shared/wsl-guest-root-marker'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
@@ -8,7 +8,7 @@ import {
   startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../../shared/startup-command-staging'
-import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
+import { resolvePtyOwnerBackend } from '../../shared/terminal/pty/lifecycle/pty-owner-backend'
 import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result'
 import { Session } from './session'
 import {

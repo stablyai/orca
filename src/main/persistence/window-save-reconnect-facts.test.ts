@@ -8,7 +8,7 @@ import {
   leaf,
   SSH_KEY
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { deriveShutdownReconnectFacts } from '../runtime/terminal/recovery/shutdown-reconnect-facts'
 import { windowViewPatchForMain, windowViewSaveForMain } from './window-save-view'
 

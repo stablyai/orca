@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
+import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type { ConnectPanePtySession } from './pty-connection/connect-pane-pty-session'
 import type { AgentLaunchConfigRegistryEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { bindCaptureTransportOutputCallbacks } from './pty-connection/transport-output-callbacks'

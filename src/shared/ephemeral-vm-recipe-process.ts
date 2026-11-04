@@ -1,4 +1,4 @@
-import { quoteCmdDoubleQuoted, quotePosixShell } from './shell-argument-quoting'
+import { quoteCmdDoubleQuoted, quotePosixShell } from './shell/launch/shell-argument-quoting'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'

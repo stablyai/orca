@@ -23,7 +23,6 @@ const execFileAsync = promisify(execFile)
 const GUIDE_REFERENCES = {
   orchestration: [
     'coordinator-loop.md',
-    'legacy-contract-migration.md',
     'low-level-topology.md',
     'messaging-and-gates.md',
     'placement-and-remote.md',

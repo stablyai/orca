@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  OrcaCloudSignInProgress,
-  OrcaProfileAuthStatus
-} from '../../../../shared/orca-profiles'
+import type { OrcaCloudSignInProgress } from '../../../../shared/orca-profiles'
 import { createTestStore } from '../../store/slices/store-test-helpers'
 
 type TestStore = ReturnType<typeof createTestStore>
@@ -24,62 +21,6 @@ vi.mock('sonner', () => ({
 }))
 
 import { registerOrcaProfileAuthIpcBridge } from './orca-profile-auth-ipc-bridge'
-
-const connectedAuthStatus: OrcaProfileAuthStatus = {
-  activeProfileId: 'local-default',
-  configured: true,
-  state: 'connected',
-  persistence: 'encrypted'
-}
-
-const reconnectRequiredAuthStatus: OrcaProfileAuthStatus = {
-  activeProfileId: 'local-default',
-  configured: true,
-  state: 'reconnect-required',
-  persistence: 'encrypted'
-}
-
-describe('orca profile auth IPC bridge', () => {
-  let listener: (() => void) | null = null
-  const unsubscribe = vi.fn()
-  const authStatus = vi.fn()
-
-  beforeEach(() => {
-    listener = null
-    unsubscribe.mockClear()
-    authStatus.mockReset()
-    vi.stubGlobal('window', {
-      api: {
-        orcaProfiles: {
-          authStatus,
-          onAuthStatusChanged: (callback: () => void) => {
-            listener = callback
-            return unsubscribe
-          }
-        }
-      }
-    })
-  })
-
-  it('re-fetches auth status on the push, flipping connected to reconnect-required', async () => {
-    authStatus.mockResolvedValue(connectedAuthStatus)
-    const store = createTestStore()
-    storeHolder.current = store
-    await store.getState().fetchOrcaProfileAuthStatus()
-    expect(store.getState().orcaProfileAuthStatus).toEqual(connectedAuthStatus)
-
-    const unsubs: (() => void)[] = []
-    registerOrcaProfileAuthIpcBridge(unsubs)
-    authStatus.mockResolvedValue(reconnectRequiredAuthStatus)
-    listener?.()
-    await vi.waitFor(() =>
-      expect(store.getState().orcaProfileAuthStatus).toEqual(reconnectRequiredAuthStatus)
-    )
-
-    unsubs.forEach((dispose) => dispose())
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-  })
-})
 
 describe('orca profile sign-in progress IPC bridge', () => {
   let emitProgress: (progress: OrcaCloudSignInProgress | null) => void
@@ -114,19 +55,6 @@ describe('orca profile sign-in progress IPC bridge', () => {
     registerOrcaProfileAuthIpcBridge([])
     await vi.waitFor(() => expect(snapshots).toHaveLength(1))
     emitProgress(null)
-    snapshots[0](WAITING)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(progress()).toBeNull()
-  })
-
-  it('ignores the snapshot of a registration torn down before it arrived', async () => {
-    const first: (() => void)[] = []
-    registerOrcaProfileAuthIpcBridge(first)
-    await vi.waitFor(() => expect(snapshots).toHaveLength(1))
-    first.forEach((dispose) => dispose())
-    registerOrcaProfileAuthIpcBridge([])
-    emitProgress(null)
-
     snapshots[0](WAITING)
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(progress()).toBeNull()

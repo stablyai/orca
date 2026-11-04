@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useAppStore } from '@/store'
 import {
   getContextualTour,
+  hasUndoneContextualTourAction,
   type ContextualTourId,
   type ContextualTourStepAction
 } from '../../../../shared/contextual-tours'
@@ -20,13 +21,13 @@ import {
 } from './contextual-tour-overlay-measurement'
 import {
   ContextualTourOverlaySurface,
-  getContextualTourFocusableElements,
   handleContextualTourOverlayKeyDown,
   type ActiveTourRenderState
 } from './ContextualTourOverlaySurface'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
+import { useContextualTourFocus } from './use-contextual-tour-focus'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
 import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 
@@ -42,6 +43,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const blockingSurfaceVisible = useAppStore((s) => s.contextualToursBlockingSurfaceVisible)
   const activeTourSuppressed = useAppStore((s) => s.activeContextualTourSuppressed)
   const keybindings = useAppStore((s) => s.keybindings)
+  const activeTourHasUndoneAction = useAppStore((s) =>
+    s.activeContextualTourId
+      ? hasUndoneContextualTourAction(
+          getContextualTour(s.activeContextualTourId),
+          s.featureInteractions
+        )
+      : false
+  )
   const activeTabId = useAppStore((s) => s.activeTabId)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const markContextualToursSeen = useAppStore((s) => s.markContextualToursSeen)
@@ -60,8 +69,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const panelRef = useRef<HTMLElement | null>(null)
   const measuredTargetRef = useRef<MeasuredContextualTourTarget | null>(null)
   const markedTourIdRef = useRef<string | null>(null)
-  const previousFocusRef = useRef<HTMLElement | null>(null)
-  const focusedStepRef = useRef<string | null>(null)
+  const renderedStepIndexRef = useRef<number | null>(null)
   const telemetryTourIdRef = useRef<ContextualTourId | null>(null)
   const telemetryOutcomeSentRef = useRef(false)
   const telemetryStepsSeenRef = useRef<Set<number>>(new Set())
@@ -183,6 +191,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
       element: measurement.renderState.targetElement,
       rect: measurement.renderState.rect
     }
+    renderedStepIndexRef.current = activeStepIndex
     setRenderState((previous) =>
       areContextualTourRenderStatesEqual(previous, measurement.renderState)
         ? previous
@@ -244,13 +253,27 @@ export function ContextualTourOverlay(): JSX.Element | null {
   }, [measureTourOverlay])
 
   useEffect(() => {
-    if (!activeTourId || !renderState || markedTourIdRef.current === activeTourId) {
+    if (
+      !activeTourId ||
+      !renderState ||
+      activeTourHasUndoneAction ||
+      // A step change keeps the previous step's renderState until the new step measures.
+      renderedStepIndexRef.current !== activeStepIndex ||
+      markedTourIdRef.current === activeTourId
+    ) {
       return
     }
-    // Mark seen only after the first measured target paints so missing surfaces may retry.
+    // Mark seen only after the first measured target paints so missing surfaces may retry; a step
+    // waiting for its action stays pending through interruptions until it succeeds or is dismissed.
     markedTourIdRef.current = activeTourId
     markContextualToursSeen([activeTourId])
-  }, [activeTourId, markContextualToursSeen, renderState])
+  }, [
+    activeStepIndex,
+    activeTourHasUndoneAction,
+    activeTourId,
+    markContextualToursSeen,
+    renderState
+  ])
 
   useEffect(() => {
     if (!activeTourId || !renderState || telemetryTourIdRef.current === activeTourId) {
@@ -297,44 +320,12 @@ export function ContextualTourOverlay(): JSX.Element | null {
     }
   }, [activeTourId, emitContextualTourOutcome])
 
-  useEffect(() => {
-    if (!activeTourId || !renderState) {
-      return
-    }
-    const focusKey = `${activeTourId}:${activeStepIndex}`
-    if (focusedStepRef.current === focusKey) {
-      return
-    }
-    focusedStepRef.current = focusKey
-
-    const currentFocus = document.activeElement
-    if (
-      !previousFocusRef.current &&
-      currentFocus instanceof HTMLElement &&
-      !panelRef.current?.contains(currentFocus)
-    ) {
-      previousFocusRef.current = currentFocus
-    }
-
-    const timeout = window.setTimeout(() => {
-      const panel = panelRef.current
-      const firstFocusable = panel ? getContextualTourFocusableElements(panel)[0] : null
-      ;(firstFocusable ?? panel)?.focus({ preventScroll: true })
-    }, 0)
-    return () => window.clearTimeout(timeout)
-  }, [activeStepIndex, activeTourId, renderState])
-
-  useEffect(() => {
-    if (activeTourId) {
-      return
-    }
-    focusedStepRef.current = null
-    const previousFocus = previousFocusRef.current
-    previousFocusRef.current = null
-    if (previousFocus?.isConnected) {
-      previousFocus.focus({ preventScroll: true })
-    }
-  }, [activeTourId])
+  useContextualTourFocus({
+    activeTourId,
+    activeStepIndex,
+    rendered: renderState !== null,
+    panelRef
+  })
 
   if (!activeTourId || !renderState) {
     return null

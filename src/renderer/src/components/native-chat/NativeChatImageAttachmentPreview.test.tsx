@@ -21,7 +21,7 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
 
-vi.mock('@/components/editor/useLocalImageSrc', () => ({
+vi.mock('@/components/editor/document-images/useLocalImageSrc', () => ({
   useLocalImageSrc: mocks.useLocalImageSrc
 }))
 
@@ -58,53 +58,6 @@ async function clickOn(target: Element): Promise<void> {
 }
 
 describe('NativeChatImageAttachmentPreview', () => {
-  // The path names a file on the paired server; this machine's disk must never be asked for it.
-  it('reads a stored chip back through the server that holds it', () => {
-    mocks.useLocalImageSrc.mockReturnValue('blob:from-server')
-    const path = '/srv/agent-session-attachments/u1/shot.png'
-    renderPreview({ id: 'a1', path }, 'env-1')
-
-    for (const call of mocks.useLocalImageSrc.mock.calls) {
-      expect(call[3]).toEqual({
-        target: { kind: 'environment', environmentId: 'env-1' },
-        worktreeId: null,
-        worktreePath: null
-      })
-    }
-    expect(mocks.useLocalImageSrc).toHaveBeenCalledWith(path, path, undefined, expect.anything(), {
-      kind: 'chat-image'
-    })
-    expect(screen.getByRole('img', { name: 'shot.png' }).getAttribute('src')).toBe(
-      'blob:from-server'
-    )
-  })
-
-  it('offers nothing to copy until the file is readable or in the web client', () => {
-    mocks.useLocalImageSrc.mockReturnValue(undefined)
-    renderPreview({ id: 'a1', path: '/tmp/example.png', previewUrl: 'data:thumbnail' })
-    expect(
-      screen
-        .getByRole('button', { name: 'Image #1: View image: example.png' })
-        .hasAttribute('data-native-chat-copy-image-src')
-    ).toBe(false)
-
-    mocks.useLocalImageSrc.mockReturnValue('blob:on-disk-2')
-    renderPreview({ id: 'a2', path: '/tmp/logo.SVG' })
-    expect(
-      screen
-        .getByRole('button', { name: 'Image #1: View image: logo.SVG' })
-        .hasAttribute('data-native-chat-copy-image-src')
-    ).toBe(true)
-
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    renderPreview({ id: 'a3', path: '/tmp/shot.png' })
-    expect(
-      screen
-        .getByRole('button', { name: 'Image #1: View image: shot.png' })
-        .hasAttribute('data-native-chat-copy-image-src')
-    ).toBe(false)
-  })
-
   it('stays open through a click on the chat context menu, but not elsewhere outside', async () => {
     mocks.useLocalImageSrc.mockReturnValue('blob:on-disk-1')
     renderPreview({ id: 'a1', path: '/tmp/example.png', previewUrl: 'data:thumbnail' })

@@ -77,14 +77,6 @@ type FocusTerminalLiveInputTargetOptions = {
   readonly reopenFocusedInputWhenKeyboardHidden: boolean
 }
 
-export type TerminalLiveInputDefaultResult = {
-  enabledHandles: ReadonlySet<string>
-  defaultedHandles: ReadonlySet<string>
-  changed: boolean
-}
-
-export type TerminalLiveInputPruneResult = TerminalLiveInputDefaultResult
-
 export function getTerminalLiveSpecialKeyId(key: string): TerminalLiveSpecialKeyId | null {
   return TERMINAL_LIVE_SPECIAL_KEY_IDS.get(key) ?? null
 }
@@ -102,112 +94,6 @@ export function isTerminalLiveInputWithinByteLimit(
   maxBytes = TERMINAL_LIVE_INPUT_MAX_BYTES
 ): boolean {
   return encoder.encode(text).byteLength <= maxBytes
-}
-
-export function defaultTerminalLiveInputHandles(
-  enabledHandles: ReadonlySet<string>,
-  defaultedHandles: ReadonlySet<string>,
-  terminalHandles: readonly string[]
-): TerminalLiveInputDefaultResult {
-  let nextEnabledHandles: Set<string> | null = null
-  let nextDefaultedHandles: Set<string> | null = null
-
-  for (const handle of terminalHandles) {
-    if (defaultedHandles.has(handle)) {
-      continue
-    }
-    nextEnabledHandles ??= new Set(enabledHandles)
-    nextDefaultedHandles ??= new Set(defaultedHandles)
-    nextEnabledHandles.add(handle)
-    nextDefaultedHandles.add(handle)
-  }
-
-  if (!nextEnabledHandles || !nextDefaultedHandles) {
-    return { enabledHandles, defaultedHandles, changed: false }
-  }
-
-  return {
-    enabledHandles: nextEnabledHandles,
-    defaultedHandles: nextDefaultedHandles,
-    changed: true
-  }
-}
-
-export function filterTerminalLiveInputDefaultCandidates(
-  terminalHandles: readonly string[],
-  disabledHandles: ReadonlySet<string>
-): string[] {
-  return terminalHandles.filter((handle) => !disabledHandles.has(handle))
-}
-
-export function applyDisabledTerminalLiveInputHandles(
-  enabledHandles: ReadonlySet<string>,
-  defaultedHandles: ReadonlySet<string>,
-  disabledHandles: ReadonlySet<string>
-): TerminalLiveInputDefaultResult {
-  let nextEnabledHandles: Set<string> | null = null
-  let nextDefaultedHandles: Set<string> | null = null
-
-  for (const handle of enabledHandles) {
-    if (!disabledHandles.has(handle)) {
-      continue
-    }
-    nextEnabledHandles ??= new Set(enabledHandles)
-    nextEnabledHandles.delete(handle)
-  }
-
-  for (const handle of disabledHandles) {
-    if (defaultedHandles.has(handle)) {
-      continue
-    }
-    nextDefaultedHandles ??= new Set(defaultedHandles)
-    nextDefaultedHandles.add(handle)
-  }
-
-  if (!nextEnabledHandles && !nextDefaultedHandles) {
-    return { enabledHandles, defaultedHandles, changed: false }
-  }
-
-  return {
-    enabledHandles: nextEnabledHandles ?? enabledHandles,
-    defaultedHandles: nextDefaultedHandles ?? defaultedHandles,
-    changed: true
-  }
-}
-
-export function pruneTerminalLiveInputHandles(
-  enabledHandles: ReadonlySet<string>,
-  defaultedHandles: ReadonlySet<string>,
-  liveTerminalHandles: ReadonlySet<string>
-): TerminalLiveInputPruneResult {
-  let nextEnabledHandles: Set<string> | null = null
-  let nextDefaultedHandles: Set<string> | null = null
-
-  for (const handle of enabledHandles) {
-    if (liveTerminalHandles.has(handle)) {
-      continue
-    }
-    nextEnabledHandles ??= new Set(enabledHandles)
-    nextEnabledHandles.delete(handle)
-  }
-
-  for (const handle of defaultedHandles) {
-    if (liveTerminalHandles.has(handle)) {
-      continue
-    }
-    nextDefaultedHandles ??= new Set(defaultedHandles)
-    nextDefaultedHandles.delete(handle)
-  }
-
-  if (!nextEnabledHandles && !nextDefaultedHandles) {
-    return { enabledHandles, defaultedHandles, changed: false }
-  }
-
-  return {
-    enabledHandles: nextEnabledHandles ?? enabledHandles,
-    defaultedHandles: nextDefaultedHandles ?? defaultedHandles,
-    changed: true
-  }
 }
 
 export function clearTerminalLiveInputFocusTimer(timerRef: TerminalLiveInputFocusTimerRef): void {

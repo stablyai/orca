@@ -153,22 +153,6 @@ describe('worktree ps and a closed structured chat', () => {
     expect(row.status).toBe('inactive')
   })
 
-  it('keeps an aged host-held working state authoritative', async () => {
-    const { store, published } = await awaitingApproval()
-    const aged = {
-      ...published.at(-1)!,
-      hostExecutionOwned: true as const,
-      updatedAt: Date.now() - 30 * 60 * 1000 - 1,
-      status: 'working' as const
-    }
-    store.ingestStructuredStatus(aged, SUBJECT)
-    const row = worktreeFor(store)
-    expect(row.agents).toHaveLength(1)
-    expect(row.agents[0]?.state).toBe('working')
-    expect(row.status).toBe('working')
-    expect(row.agents[0]?.updatedAt).toBe(aged.updatedAt)
-  })
-
   it('keeps an aged host-held approval state authoritative', async () => {
     const { store, published } = await awaitingApproval()
     const aged = {

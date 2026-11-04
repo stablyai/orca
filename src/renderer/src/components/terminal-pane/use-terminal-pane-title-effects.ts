@@ -20,7 +20,7 @@ import {
 } from './shutdown-buffer-captures'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
 import { resolveLeafScrollbackBuffers } from './leaf-scrollback-resolution'
-import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
+import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
 export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseController): void {

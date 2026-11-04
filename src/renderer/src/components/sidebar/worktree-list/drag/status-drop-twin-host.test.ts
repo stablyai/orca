@@ -13,7 +13,7 @@ import {
   makeWorktree
 } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { buildWorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'
+import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { useWorktreeStatusMutations } from './use-status-mutations'

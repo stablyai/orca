@@ -3,7 +3,7 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import type { SidebarHostOption } from '../../sidebar-host-options'
+import type { SidebarHostOption } from '../controls/sidebar-host-options'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { addHostSectionRows } from '../../../../../../shared/sidebar-list/host-section-rows'
 import {
@@ -14,7 +14,7 @@ import {
   remoteRepo,
   remoteWorktree,
   worktree
-} from '../../worktree-list-groups-test-fixtures'
+} from '../grouping/worktree-list-groups-test-fixtures'
 import { getProjectHeaderHostContexts } from './project-header-host-context'
 
 const { local, paired, hosts, header, repoMap, rows } = collapsedSameNameProjectHeaders()

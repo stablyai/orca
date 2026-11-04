@@ -4554,7 +4554,6 @@
             "5c938d39ac": "hf",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Başka hesap yok",
             "d450654fa2": "Claude Hesabı",
             "11e2354daf": "Claude kullanım çalışma zamanı",
             "3dd7ddfae1": "Claude ayrıntılarını ve hesap değiştiriciyi aç",
@@ -7952,9 +7951,6 @@
           "browserExtensions": {
             "copy": "Yerel tarayıcı profilleri için Ayarlar › Tarayıcı › Uzantılar bölümünü ekler.",
             "toggleLabel": "Tarayıcı uzantılarını aç/kapat"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Orkestrasyon panelini aç veya kapat"
           }
         },
         "FloatingWorkspacePane": {
@@ -10155,14 +10151,6 @@
               "extension": "eklenti",
               "chrome": "chrome",
               "password": "parola yöneticisi"
-            },
-            "orchestrationPanel": {
-              "title": "Orkestrasyon paneli",
-              "description": "Her ajanın birlikte çalıştığı ajanları sohbetinin veya terminalinin yanında gösterir.",
-              "orchestration": "orkestrasyon",
-              "agents": "ajanlar",
-              "workers": "çalışanlar",
-              "manager": "yönetici"
             }
           }
         },
@@ -15059,7 +15047,6 @@
           "ae3b00ca82": "GitHub görevlerini ayarla",
           "ff92d15436": "Orca, ajanlar işlerini bitirdiğinde veya yardıma ihtiyaç duyduğunda size bildirim gönderecek.",
           "b054332836": "Bildirimleri ayarla",
-          "04ae28d8ca": "Saatlerce bakacağınız görünümü seçin.",
           "f396db9f20": "Kendi evinizdeymiş gibi hissettirin",
           "322fc50a18": "Orca her CLI ajanıyla çalışır. En sık kullanacağınızı seçin. İstediğiniz zaman değiştirin.",
           "198b148b3c": "Varsayılan ajanınızı seçin",
@@ -18006,6 +17993,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "Kaydedilen çalıştırma ana makinesi artık bu proje kurulumuyla eşleşmiyor."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Aracı başlatma ayarları her çalıştırmada yeni bir oturum gerektirir."
         }
       },
       "agent": {
@@ -19075,7 +19065,32 @@
           "system": "İşletim sistemiyle eşleştir",
           "dark": "Gözü yormaz",
           "light": "Parlak ve net"
-        }
+        },
+        "looks": {
+          "activeNow": "şimdi",
+          "browsePlugins": "Eklentilere göz at",
+          "browseThemePlugins": "Tema eklentilerine göz at",
+          "colorMode": "Renk modu",
+          "colorModeCaption": "Açık, koyu veya sisteminize uygun.",
+          "darkLook": "Koyu görünüm",
+          "darkLooks": "Koyu görünümler",
+          "lightLook": "Açık görünüm",
+          "lightLooks": "Açık görünümler",
+          "moreThemes": "Daha fazla tema",
+          "next": "Daha fazla görünüm",
+          "orcaDark": "Orca Koyu",
+          "orcaLight": "Orca Açık",
+          "pluginsHint": "Daha fazla tema eklenti olarak sunulur.",
+          "previous": "Önceki görünümler",
+          "showsWhenDark": "Sisteminiz koyu olduğunda gösterilir",
+          "showsWhenLight": "Sisteminiz açık olduğunda gösterilir",
+          "slotLabel": "Düzenlenecek görünüm",
+          "sourceBuiltIn": "Yerleşik",
+          "sourceCommunity": "Terminal paleti",
+          "themes": "Tema",
+          "themesCaption": "İsteğe bağlı. Uygulama temaları ve terminal paletleriyle daha ileri gidin."
+        },
+        "subtitle": "Açık veya koyu seçin, isterseniz bir tema da seçin. İkisini de istediğiniz zaman Ayarlar’dan değiştirebilirsiniz."
       },
       "integrations": {
         "capabilities": {
@@ -19632,8 +19647,6 @@
         "stateUnverifiableCount_other": "Durum bilgisi alınamıyor: {{value0}}"
       },
       "jumpToLatest": "En son öğeye git",
-      "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",
-      "newRowsMarker": "Yeni",
       "find": {
         "label": "Sohbette bul",
         "noResults": "Sonuç yok",
@@ -19830,7 +19843,6 @@
       "dismissDeliveryNotice": "Kapat",
       "addSelectionToChat": "Sohbete ekle",
       "messageNotSent": "Mesaj gönderilmedi",
-      "deliveryUnconfirmed": "İletim doğrulanamadı — tekrar denemeden önce sohbeti kontrol edin",
       "messageSending": "Gönderiliyor…",
       "userMessage": {
         "showFull": "Mesajın tamamını göster",
@@ -19899,8 +19911,7 @@
       "interruptedContinue": {
         "continue": "Devam et",
         "failed": "Bu sohbete devam edilemedi. Yeniden deneyin veya bir mesaj gönderin.",
-        "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder.",
-        "unconfirmed": "{{agent}} ajanının Devam et isteğini alıp almadığı doğrulanamadı. Yeniden denemeden önce sohbeti kontrol edin."
+        "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity'de oturum açılmamış. <settings>Ayarlar → Hesaplar → Antigravity</settings> bölümünden oturum açın. Ardından mesajınızı yeniden gönderin."
@@ -20466,6 +20477,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Takip mesajlarını sıraya al",
+        "scrollToLatestOnSendTitle": "Gönderirken en son mesaja kaydır",
+        "scrollToLatestOnSendCopy": "Yukarı kaydırılmışken göndermek en son mesaja atlar ve yanıtı takip eder. Konumunuzu korumak için kapatın.",
+        "scrollToLatestOnSendSearchPosition": "konum",
         "inlineVisualsTitle": "Yanıtlarda görseller",
         "inlineVisualsCopy": "Ajanın yanıtlarında grafikler, diyagramlar ve taslaklar göstermesine izin verin. Yeni başlatılan sohbetlere uygulanır.",
         "inlineVisualsToggleLabel": "Yanıtlardaki görselleri aç/kapat",
@@ -20477,7 +20491,13 @@
         "queueSearchSteer": "yönlendir",
         "shellEnvSearchVariables": "ortam değişkenleri",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "vekil sunucu"
+        "shellEnvSearchProxy": "vekil sunucu",
+        "idleStopTitle": "Boştaki ajanları şu süre sonra durdur",
+        "idleStopCopy": "Bellek boşaltmak için, sohbet bu kadar süre boşta kaldığında sohbetin ajanını sonlandırır. Sohbet kalır ve bir sonraki mesajınız ajanı yeniden başlatır. Turlar arasında arka planda çalışmaya devam eden ajanlar için Asla seçeneğini seçin.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "zaman aşımı",
+        "idleStopSearchKeepAlive": "canlı tut",
+        "idleStopNever": "Asla"
       }
     },
     "agentChildRow": {

@@ -2,7 +2,7 @@ import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
 } from '../../../../../../shared/orchestration-worker-output'
-import type { PtyLivenessVerdict } from '../../../../../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type {

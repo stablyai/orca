@@ -3,7 +3,7 @@ import {
   getBrokenChecks,
   getCheckDetailsPromptKey
 } from '../../../../../../shared/source-control/checks/pr-checks-fix-prompt'
-import { gitHubPRToChecksPanelReview } from '@/components/right-sidebar/checks-panel-review'
+import { hostedReviewInfoFromGitHubPRInfo as gitHubPRToChecksPanelReview } from '../../../../../../shared/source-control/hosted-review/hosted-review-github'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { useAppStore } from '@/store/index'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
