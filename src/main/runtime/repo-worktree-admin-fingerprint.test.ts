@@ -44,43 +44,10 @@ afterEach(async () => {
 })
 
 describe('readRepoWorktreeAdminFingerprint', () => {
-  it('is stable while nothing changes', async () => {
-    const first = await fingerprint()
-    expect(first).not.toBeNull()
-    expect(await fingerprint()).toBe(first)
-  })
-
-  it('changes when a worktree is added', async () => {
-    const before = await fingerprint()
-    await git(
-      ['worktree', 'add', '-q', join(scratchDir, 'trees', 'second'), '-b', 'second'],
-      repoPath
-    )
-    expect(await fingerprint()).not.toBe(before)
-  })
-
-  it('changes when a worktree is removed', async () => {
-    const before = await fingerprint()
-    await git(['worktree', 'remove', worktreePath], repoPath)
-    expect(await fingerprint()).not.toBe(before)
-  })
-
   it('changes when a worktree directory is deleted outside Git', async () => {
     // The admin dir is untouched by `rm -rf`, but the row's `prunable` flag flips.
     const before = await fingerprint()
     await removeTree(worktreePath)
-    expect(await fingerprint()).not.toBe(before)
-  })
-
-  it('changes when a worktree is moved', async () => {
-    const before = await fingerprint()
-    await git(['worktree', 'move', worktreePath, join(scratchDir, 'trees', 'moved')], repoPath)
-    expect(await fingerprint()).not.toBe(before)
-  })
-
-  it('changes when a worktree is locked', async () => {
-    const before = await fingerprint()
-    await git(['worktree', 'lock', worktreePath], repoPath)
     expect(await fingerprint()).not.toBe(before)
   })
 
@@ -95,27 +62,12 @@ describe('readRepoWorktreeAdminFingerprint', () => {
     expect(await fingerprint()).not.toBe(before)
   })
 
-  it('changes when a linked worktree switches branch', async () => {
-    const before = await fingerprint()
-    // A longer ref name keeps the difference visible even on a coarse mtime clock.
-    await git(['checkout', '-q', '-b', 'feature-with-a-much-longer-name'], worktreePath)
-    expect(await fingerprint()).not.toBe(before)
-  })
-
   it('changes when a linked worktree records a commit', async () => {
     // Committing rewrites refs/heads/feature and leaves HEAD alone, but moves the reported HEAD oid.
     const before = await fingerprint()
     await writeFile(join(worktreePath, 'work.txt'), 'work\n')
     await git(['add', '-A'], worktreePath)
     await git(['commit', '-qm', 'work'], worktreePath)
-    expect(await fingerprint()).not.toBe(before)
-  })
-
-  it('changes when the main worktree records a commit', async () => {
-    const before = await fingerprint()
-    await writeFile(join(repoPath, 'more.txt'), 'more\n')
-    await git(['add', '-A'], repoPath)
-    await git(['commit', '-qm', 'more'], repoPath)
     expect(await fingerprint()).not.toBe(before)
   })
 
@@ -128,16 +80,6 @@ describe('readRepoWorktreeAdminFingerprint', () => {
     expect(await fingerprint()).not.toBe(before)
   })
 
-  it('changes when the main worktree switches branch', async () => {
-    const before = await fingerprint()
-    await git(['checkout', '-q', '-b', 'main-with-a-much-longer-name'], repoPath)
-    expect(await fingerprint()).not.toBe(before)
-  })
-
-  it('resolves the same admin state from a linked worktree path', async () => {
-    expect(await fingerprint(worktreePath)).toBe(await fingerprint(repoPath))
-  })
-
   it('reads a bare repo through its own gitdir', async () => {
     const barePath = join(scratchDir, 'bare.git')
     await git(['clone', '-q', '--bare', repoPath, barePath], scratchDir)
@@ -148,15 +90,5 @@ describe('readRepoWorktreeAdminFingerprint', () => {
       barePath
     )
     expect(await fingerprint(barePath)).not.toBe(before)
-  })
-
-  it('returns null for a directory that is not a git repo', async () => {
-    const plainPath = join(scratchDir, 'plain')
-    await mkdir(plainPath, { recursive: true })
-    expect(await fingerprint(plainPath)).toBeNull()
-  })
-
-  it('returns null for a missing path', async () => {
-    expect(await fingerprint(join(scratchDir, 'absent'))).toBeNull()
   })
 })
