@@ -192,6 +192,7 @@ export function activateAndRevealWorktree(
     state.setActiveView('terminal')
     return { primaryTabId: null }
   }
+  // Why: seedStartupIfEmpty is not launch work — the gate must still adopt live/unverifiable surfaces.
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
   )
@@ -249,7 +250,8 @@ export function activateAndRevealWorktree(
     gateAndReseedEmptyWorkspace(worktreeId, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
-      ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
+      ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {}),
+      ...(opts?.seedStartupIfEmpty ? { seedStartupIfEmpty: opts.seedStartupIfEmpty } : {})
     })
   }
 
@@ -269,6 +271,7 @@ export function activateAndRevealWorktree(
             ...(opts?.createNewTerminalForStartup ? { createNewTerminalForStartup: true } : {}),
             ...(providesInitialSurface ? { callerProvidesSurface: true } : {}),
             ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {}),
+            ...(opts?.seedStartupIfEmpty ? { seedStartupIfEmpty: opts.seedStartupIfEmpty } : {}),
             reseedEmptiedWorkspace: !providesInitialSurface
           }
         )
@@ -299,11 +302,12 @@ export function activateAndRevealWorktree(
     !opts?.backendStartupTerminalSpawned &&
     opts?.providesInitialSurface !== true
   ) {
+    // Why: runtime hosts skip local seed-if-empty; the wake helper is the remaining surface path.
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
       ...(opts && 'runtimeEnvironmentId' in opts
         ? { runtimeEnvironmentId: ownerRuntimeEnvironmentId }
         : {}),
-      startup: opts?.startup,
+      startup: opts?.startup ?? opts?.seedStartupIfEmpty,
       agent: opts?.agent
     })
   }
