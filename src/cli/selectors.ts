@@ -196,7 +196,10 @@ export async function getBrowserWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  return optionalCurrentWorktreeSelector(cwd, client, purpose)
+  return (
+    (await optionalCurrentWorktreeSelector(cwd, client, purpose)) ??
+    (await resolveTerminalWorktreeSelector(client))
+  )
 }
 
 export async function getTerminalHandle(
@@ -265,6 +268,13 @@ export async function getEmulatorWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
+  return (
+    (await resolveTerminalWorktreeSelector(client)) ??
+    (await optionalCurrentWorktreeSelector(cwd, client))
+  )
+}
+
+async function resolveTerminalWorktreeSelector(client: RuntimeClient): Promise<string | undefined> {
   const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
   if (terminalWorktreeId?.trim()) {
     const scoped = await resolveCallerPaneWorktreeSelector(terminalWorktreeId, client)
@@ -276,7 +286,7 @@ export async function getEmulatorWorktreeSelector(
   if (folderWorkspaceId?.startsWith('folder:')) {
     return folderWorkspaceId
   }
-  return optionalCurrentWorktreeSelector(cwd, client)
+  return undefined
 }
 
 export async function getEmulatorCommandTarget(
