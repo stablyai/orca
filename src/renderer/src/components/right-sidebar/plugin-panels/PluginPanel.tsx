@@ -1,16 +1,19 @@
 import React, { useEffect, useMemo, useRef } from 'react'
-import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
-import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
-import { fillPluginPanelShell } from './plugin-panel-design-token-css'
+import { isPluginPanelTabKey } from '../../../../../shared/plugins/manifest/plugin-manifest'
+import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
+import { fillPluginPanelShell } from '../../plugins/frames/plugin-panel-design-token-css'
 import {
   PluginFrameView,
   usablePluginFrameGuest,
   type PluginFrameElement
-} from './plugin-frame-element'
-import { PluginDeclarativePanel } from './PluginDeclarativePanel'
-import { usePluginFrameHost } from './use-plugin-frame-host'
-import { usePluginFrameEntry } from './use-plugin-frame-entry'
-import { reportPluginPanelFailure, useReportFramePanelDraw } from './use-plugin-panel-draw-report'
+} from '../../plugins/frames/plugin-frame-element'
+import { PluginDeclarativePanel } from './declarative/PluginDeclarativePanel'
+import { usePluginFrameHost } from '../../plugins/frames/use-plugin-frame-host'
+import { usePluginFrameEntry } from '../../plugins/frames/use-plugin-frame-entry'
+import {
+  reportPluginPanelFailure,
+  useReportFramePanelDraw
+} from './health/use-plugin-panel-draw-report'
 import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'

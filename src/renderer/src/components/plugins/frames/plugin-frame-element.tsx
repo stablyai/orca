@@ -1,8 +1,9 @@
 import React from 'react'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
-import type { PluginFrameGuest } from '../../../../shared/plugins/frames/plugin-frame-bridge'
+import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
+import type { PluginFrameGuest } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { pluginWebviewFrameWindow, type PluginFrameWindow } from './plugin-frame-host'
+import './plugin-frame-host'
+import { pluginWebviewFrameWindow, type PluginFrameWindow } from './plugin-frame-host-lanes'
 
 /** A mounted plugin frame: a srcdoc `<iframe>` (browser clients) or an isolated `<webview>` guest. */
 export type PluginFrameElement = HTMLElement

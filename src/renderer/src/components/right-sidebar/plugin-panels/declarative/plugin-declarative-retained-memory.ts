@@ -1,7 +1,7 @@
 import {
   pluginDeclarativeRetainPayloadSchema,
   type PluginDeclarativeStoredValue
-} from '../../../../shared/plugins/declarative/plugin-declarative-messages'
+} from '../../../../../../shared/plugins/declarative/plugin-declarative-messages'
 
 // Why a cap: retained values live in the renderer for as long as the panel stays open.
 const MAX_RETAINED_KEYS = 512

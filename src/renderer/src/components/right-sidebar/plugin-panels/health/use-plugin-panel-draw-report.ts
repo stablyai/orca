@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { reportPluginPanelDraw } from './plugin-panel-draw-status'
-import type { PluginFrameElement } from './plugin-frame-element'
+import type { PluginFrameElement } from '../../../plugins/frames/plugin-frame-element'
 
 /** A components panel: drawn once a tree from the current guest is on screen. */
 export function useReportDeclarativePanelDraw(

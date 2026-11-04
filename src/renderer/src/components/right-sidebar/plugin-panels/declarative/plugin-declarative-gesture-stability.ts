@@ -1,7 +1,7 @@
 import type {
   PluginDeclarativeChild,
   PluginDeclarativeNode
-} from '../../../../shared/plugins/declarative/plugin-declarative-catalog'
+} from '../../../../../../shared/plugins/declarative/plugin-declarative-catalog'
 import { pluginDeclarativeGestureId } from '@/components/plugins/declarative/plugin-declarative-gesture-geometry'
 
 /**

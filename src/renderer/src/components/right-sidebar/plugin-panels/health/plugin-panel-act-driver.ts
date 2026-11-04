@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { PluginDeclarativeNode } from '../../../../shared/plugins/declarative/plugin-declarative-catalog'
-import type { PluginDeclarativeEventArg } from '../../../../shared/plugins/declarative/plugin-declarative-messages'
-import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../shared/plugins/declarative/plugin-declarative-message-names'
+import type { PluginDeclarativeNode } from '../../../../../../shared/plugins/declarative/plugin-declarative-catalog'
+import type { PluginDeclarativeEventArg } from '../../../../../../shared/plugins/declarative/plugin-declarative-messages'
+import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../../../shared/plugins/declarative/plugin-declarative-message-names'
 
 /**
  * What `orca plugin shot` drives and waits on in a mounted components panel: the tree on screen,

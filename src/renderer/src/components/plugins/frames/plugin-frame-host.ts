@@ -2,7 +2,7 @@ import {
   FRAME_EVENTS,
   PANEL_CONTROL_MESSAGE_MAX_BYTES,
   readPanelPongId
-} from '../../../../shared/plugins/frames/plugin-frame-bridge'
+} from '../../../../../shared/plugins/frames/plugin-frame-bridge'
 import {
   pluginError,
   pluginEvent,
@@ -15,14 +15,14 @@ import {
   type PluginHostCallOutcome,
   type PluginRequest,
   type PluginResponse
-} from '../../../../shared/plugins/frames/plugin-protocol'
-import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../shared/plugins/declarative/plugin-declarative-message-names'
+} from '../../../../../shared/plugins/frames/plugin-protocol'
+import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../../shared/plugins/declarative/plugin-declarative-message-names'
 import {
   createPanelControlMessageBudget,
   createPanelMessageBudget,
   structuredCloneMessageBytes,
   type PanelMessageBudget
-} from '../../../../shared/plugins/frames/plugin-panel-message-budget'
+} from '../../../../../shared/plugins/frames/plugin-panel-message-budget'
 import { translate } from '@/i18n/i18n'
 import {
   createPluginFrameGestureGate,
@@ -30,13 +30,6 @@ import {
   PLUGIN_FRAME_RENDER_WALK_LIMITS,
   pluginFrameHello,
   pluginFrameLaneFor,
-  type PluginFrameMessageContext,
-  type PluginFrameWindow
-} from './plugin-frame-host-lanes'
-
-export {
-  pluginFrameHello,
-  pluginWebviewFrameWindow,
   type PluginFrameMessageContext,
   type PluginFrameWindow
 } from './plugin-frame-host-lanes'

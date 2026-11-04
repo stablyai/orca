@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { FRAME_EVENTS } from '../../../../shared/plugins/frames/plugin-frame-bridge'
+import { FRAME_EVENTS } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
 import {
   PLUGIN_FRAME_IPC_CHANNEL,
   PLUGIN_FRAME_KEY_CHANNEL
-} from '../../../../shared/plugins/frames/plugin-frame-guest'
-import { pluginEvent } from '../../../../shared/plugins/frames/plugin-protocol'
-import { pluginPanelPushSchema } from '../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
+} from '../../../../../shared/plugins/frames/plugin-frame-guest'
+import { pluginEvent } from '../../../../../shared/plugins/frames/plugin-protocol'
+import { pluginPanelPushSchema } from '../../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import {
   createPluginFrameEnvelopeHandler,
   createPluginFrameMessageHandler,
@@ -17,7 +17,7 @@ import {
   readPluginGuestMessage,
   type PluginFrameElement
 } from './plugin-frame-element'
-import { createPanelWatchdog } from './plugin-panel-watchdog'
+import { createPanelWatchdog } from '../../right-sidebar/plugin-panels/health/plugin-panel-watchdog'
 import { usePluginFrameThemeSync } from './use-plugin-panel-theme-revision'
 
 /** Wires one plugin frame (panel or editor, iframe or guest): message host, watchdog and live theme. */

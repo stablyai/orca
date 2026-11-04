@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../shared/plugins/declarative/plugin-declarative-message-names'
+import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../../../shared/plugins/declarative/plugin-declarative-message-names'
 import {
   pluginDeclarativePersistPayloadSchema,
   pluginDeclarativeReadyPayloadSchema,
   type PluginDeclarativeHydratePayload,
   type PluginDeclarativeStoredValue
-} from '../../../../shared/plugins/declarative/plugin-declarative-messages'
-import type { PluginPanelStateSnapshot } from '../../../../shared/plugins/declarative/plugin-declarative-panel-state'
-import { useAppStore } from '@/store'
+} from '../../../../../../shared/plugins/declarative/plugin-declarative-messages'
+import type { PluginPanelStateSnapshot } from '../../../../../../shared/plugins/declarative/plugin-declarative-panel-state'
+import { useAppStore } from '@/store/index'
 import { createPluginDeclarativeRetainedMemory } from './plugin-declarative-retained-memory'
 
 type SendToGuest = (event: string, payload: unknown) => void

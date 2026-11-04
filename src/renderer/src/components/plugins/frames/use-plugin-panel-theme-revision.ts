@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PluginFrameWindow } from './plugin-frame-host'
+import type { PluginFrameWindow } from './plugin-frame-host-lanes'
 import {
   buildPanelDesignTokenCss,
   currentPanelColorScheme,
