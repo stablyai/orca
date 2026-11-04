@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ComponentProps } from 'react'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import { toast } from 'sonner'
 import type { Project, ProjectUpdateArgs } from '../../../../shared/project-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -16,9 +17,27 @@ type ProjectDefaultAgentSettingProps = {
   globalDefault: GlobalSettings['defaultTuiAgent'] | undefined
   executionHostId?: ExecutionHostId
   updateProject: (projectId: string, updates: ProjectUpdateArgs['updates']) => unknown
+} & Pick<ComponentProps<typeof SearchableSetting>, 'keywords' | 'forceVisible'>
+
+export function ProjectDefaultAgentSetting(
+  props: ProjectDefaultAgentSettingProps
+): React.JSX.Element {
+  return (
+    <SearchableSetting
+      title={translate('settings.projectDefaultAgent.title', 'Default agent')}
+      description={translate(
+        'settings.projectDefaultAgent.description',
+        'Choose the agent used for new workspaces in this project.'
+      )}
+      keywords={props.keywords}
+      forceVisible={props.forceVisible}
+    >
+      <ProjectDefaultAgentControl {...props} />
+    </SearchableSetting>
+  )
 }
 
-export function ProjectDefaultAgentSetting({
+function ProjectDefaultAgentControl({
   project,
   globalDefault,
   executionHostId,

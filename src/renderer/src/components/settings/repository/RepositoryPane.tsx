@@ -1,6 +1,6 @@
 import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
 import { useCallback, useRef, useState } from 'react'
-import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
@@ -150,12 +150,6 @@ export function RepositoryPane({
     [clearCopiedTemplateResetTimer]
   )
 
-  const updateSelectedRepoHookSettings = (nextSettings: RepoHookSettings) => {
-    updateSelectedRepo(repo.id, {
-      hookSettings: nextSettings
-    })
-  }
-
   const handleCopyTemplate = async () => {
     // Make missing-orca.yaml migration a one-click copy of the expected shared-template shape.
     await window.api.ui.writeClipboardText(`scripts:
@@ -225,7 +219,7 @@ export function RepositoryPane({
         copiedTemplate={copiedTemplate}
         forceVisible={forceFullPaneForRepoMatch}
         onCopyTemplate={() => void handleCopyTemplate()}
-        onUpdateHookSettings={updateSelectedRepoHookSettings}
+        onUpdateHookSettings={(hookSettings) => updateSelectedRepo(repo.id, { hookSettings })}
       />
     ) : null
 
@@ -311,22 +305,14 @@ export function RepositoryPane({
         </SearchableSetting>
 
         {project && updateProject ? (
-          <SearchableSetting
-            title={translate('settings.projectDefaultAgent.title', 'Default agent')}
-            description={translate(
-              'settings.projectDefaultAgent.description',
-              'Choose the agent used for new workspaces in this project.'
-            )}
+          <ProjectDefaultAgentSetting
+            project={project}
+            globalDefault={settings?.defaultTuiAgent}
+            executionHostId={selectedHostId}
+            updateProject={updateProject}
             keywords={defaultAgentEntry?.keywords}
             forceVisible={forceFullPaneForRepoMatch}
-          >
-            <ProjectDefaultAgentSetting
-              project={project}
-              globalDefault={settings?.defaultTuiAgent}
-              executionHostId={selectedHostId}
-              updateProject={updateProject}
-            />
-          </SearchableSetting>
+          />
         ) : null}
 
         <RepositoryJiraProjectSection

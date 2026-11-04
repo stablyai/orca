@@ -94,11 +94,10 @@ export function createProjectHostSetupActions(
           const nextProjects = s.projects.some((entry) => entry.id === project.id)
             ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
             : [...s.projects, project]
-          const nextSetups = upsertProjectHostSetup(s.projectHostSetups, setup)
           return {
             repos: nextRepos,
             projects: nextProjects,
-            projectHostSetups: nextSetups
+            projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
           }
         })
         toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
