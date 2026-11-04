@@ -222,14 +222,50 @@ it('keeps legacy workspace alerts on a session-specific acknowledgement', async 
   expect(dismissedMobile).toEqual(['session-read'])
 })
 
-it('keeps direct SSH host identity on legacy desktop and phone copies', async () => {
-  await dispatch('ssh-read', { workspaceExecutionHostId: 'ssh:host-a' })
-  await dispatch('local-copy', { workspaceExecutionHostId: 'local' })
-  await dispatch('other-ssh', { workspaceExecutionHostId: 'ssh:host-b' })
-  publish({ worktree: { ...location, executionHostId: 'ssh:host-a' }, reads: [] })
-  expect([...activeNotificationsById.keys()].sort()).toEqual(['local-copy', 'other-ssh'])
-  expect(dismissedMobile).toEqual(['ssh-read'])
-})
+it.each([
+  { executionHost: undefined, localExecutionHostId: 'local' },
+  { executionHost: 'runtime:remote', localExecutionHostId: 'local' },
+  { executionHost: 'runtime:remote', localExecutionHostId: 'runtime:remote' }
+] as const)(
+  'keeps physical host identity through $executionHost with local alias $localExecutionHostId',
+  async ({ executionHost, localExecutionHostId }) => {
+    await dispatch('ssh-read', { executionHost, workspaceExecutionHostId: 'ssh:host-a' })
+    await dispatch('local-copy', {
+      executionHost,
+      workspaceExecutionHostId: executionHost ?? 'local'
+    })
+    await dispatch('host-local-copy', { executionHost })
+    await dispatch('unknown-physical', { executionHost, workspaceExecutionHostId: null })
+    await dispatch('other-ssh', { executionHost, workspaceExecutionHostId: 'ssh:host-b' })
+    const handler: unknown = handleMock.mock.calls.find(
+      ([channel]) => channel === 'notifications:acknowledgeAttention'
+    )?.[1]
+    if (typeof handler !== 'function') {
+      throw new Error('acknowledgement IPC not installed')
+    }
+    const accept = (accepted: NotificationAttentionAcknowledgement): void => {
+      if (executionHost === undefined) {
+        publish(accepted)
+      } else {
+        handler({}, accepted, executionHost)
+      }
+    }
+    const deliveryId = (id: string): string =>
+      executionHost ? JSON.stringify([executionHost, id]) : id
+
+    accept({ worktree: { ...location, executionHostId: 'ssh:host-a' }, reads: [] })
+    expect([...activeNotificationsById.keys()].sort()).toEqual(
+      ['host-local-copy', 'local-copy', 'other-ssh', 'unknown-physical'].map(deliveryId)
+    )
+    expect(dismissedMobile).toEqual([deliveryId('ssh-read')])
+
+    accept({ worktree: { ...location, executionHostId: localExecutionHostId }, reads: [] })
+    expect([...activeNotificationsById.keys()].sort()).toEqual(
+      ['other-ssh', 'unknown-physical'].map(deliveryId)
+    )
+    expect(dismissedMobile).toEqual(['ssh-read', 'local-copy', 'host-local-copy'].map(deliveryId))
+  }
+)
 
 it('cancels a legacy delivery already awaiting macOS authorization without suppressing later alerts', async () => {
   Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })

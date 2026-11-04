@@ -4,6 +4,7 @@ import {
 } from '@/attention/notification-subject-owner'
 import {
   notificationExecutionHostForOwner,
+  notificationWorkspaceExecutionHostForOwner,
   notificationSourceForOwner
 } from '../../../../shared/notification-source'
 import { useCallback } from 'react'
@@ -192,7 +193,7 @@ export function dispatchTerminalNotification(
         source: event.source,
         ...(notificationId ? { notificationId } : {}),
         worktreeId: request.workspaceId,
-        workspaceExecutionHostId: owner?.executionHostId ?? undefined,
+        workspaceExecutionHostId: notificationWorkspaceExecutionHostForOwner(owner),
         ...(executionHost ? { executionHost } : {}),
         paneKey: request.subjectKey ?? undefined,
         ...getNotificationWorkspaceLabels(state, request.workspaceId, event.terminalTitle),

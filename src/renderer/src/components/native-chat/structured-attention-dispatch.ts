@@ -1,6 +1,7 @@
 /** Use host journal facts instead of PTY inference, sharing neutral unread/delivery policy; unknown outcomes and already-read prompts stay quiet. */
 import {
   notificationExecutionHostForOwner,
+  notificationWorkspaceExecutionHostForOwner,
   notificationSourceForOwner
 } from '../../../../shared/notification-source'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -118,7 +119,7 @@ function dispatchStructuredAttention(
           // A local session's host is this app's own main, which already pushed its phones.
           ...(subscriptionTarget?.kind === 'local' ? { mobileDeliveredByHost: true } : {}),
           worktreeId: request.workspaceId,
-          workspaceExecutionHostId: owner?.executionHostId ?? undefined,
+          workspaceExecutionHostId: notificationWorkspaceExecutionHostForOwner(owner),
           ...(executionHost ? { executionHost } : {}),
           paneKey: request.subjectKey ?? undefined,
           ...getNotificationWorkspaceLabels(state, request.workspaceId, tab.label),

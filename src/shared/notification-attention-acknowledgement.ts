@@ -33,13 +33,20 @@ export function notificationWasAcknowledged(
         attentionOriginWasRead(entry.origin, read)
     )
   }
+  if (entry.workspaceExecutionHostId === null) {
+    return false
+  }
   const workspace = acknowledgement.worktree
+  const workspaceExecutionHostId =
+    entry.workspaceExecutionHostId === executionHost
+      ? 'local'
+      : (entry.workspaceExecutionHostId ?? 'local')
+  const acknowledgedExecutionHostId =
+    workspace?.executionHostId === executionHost ? 'local' : workspace?.executionHostId
   return (
     workspace !== undefined &&
     entry.worktreeId === workspace.workspaceId &&
-    // Paired transports already qualify the producer location.
-    (executionHost !== undefined ||
-      (entry.workspaceExecutionHostId ?? 'local') === workspace.executionHostId)
+    workspaceExecutionHostId === acknowledgedExecutionHostId
   )
 }
 

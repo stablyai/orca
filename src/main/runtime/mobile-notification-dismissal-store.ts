@@ -14,7 +14,7 @@ export type DeliveredNotificationRecord = DeliveredNotificationIdentity & {
   structuredOrigin?: StructuredAttentionOrigin
   worktreeId?: string
   paneKey?: string
-  workspaceExecutionHostId?: ExecutionHostId
+  workspaceExecutionHostId?: ExecutionHostId | null
   executionHost?: `runtime:${string}`
 }
 type RecordEntry = DeliveredNotificationRecord & { dismissedThrough: number; expiresAt: number }
@@ -77,7 +77,7 @@ export class MobileNotificationDismissalStore {
           notificationId: event.notificationId,
           notificationEpoch: event.notificationEpoch,
           notificationSeq: event.notificationSeq,
-          ...(event.workspaceExecutionHostId
+          ...(event.workspaceExecutionHostId !== undefined
             ? { workspaceExecutionHostId: event.workspaceExecutionHostId }
             : {}),
           ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
@@ -162,7 +162,7 @@ export class MobileNotificationDismissalStore {
           ...(structuredOrigin ? { structuredOrigin } : {}),
           ...(worktreeId ? { worktreeId } : {}),
           ...(paneKey ? { paneKey } : {}),
-          ...(workspaceExecutionHostId ? { workspaceExecutionHostId } : {}),
+          ...(workspaceExecutionHostId !== undefined ? { workspaceExecutionHostId } : {}),
           ...(executionHost ? { executionHost } : {})
         })
       )

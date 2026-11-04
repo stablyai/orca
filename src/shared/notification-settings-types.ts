@@ -74,7 +74,8 @@ export type NotificationDispatchRequest = {
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
-  workspaceExecutionHostId?: ExecutionHostId
+  /** Null means routing did not establish the physical workspace host. */
+  workspaceExecutionHostId?: ExecutionHostId | null
   /** Configured notification source; independent of physical execution location. */
   notificationSourceId?: NotificationSourceId
   /** The server the workspace runs on, so a paired phone opens it there; absent for this desktop's own work. */

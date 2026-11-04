@@ -71,8 +71,12 @@ export function resolveNotificationTabOwner(
 function explicitControllerOwner(
   hostId: ExecutionHostId | undefined
 ): NotificationWorkspaceOwner | null {
-  // Local and paired tab stamps identify the controller even before its catalog arrives.
-  return hostId === 'local' || hostId?.startsWith('runtime:') ? routeForOwner({ hostId }) : null
+  if (hostId === 'local') {
+    return routeForOwner({ hostId })
+  }
+  // A paired stamp proves the controller, not the workspace's physical host.
+  const owner = hostId?.startsWith('runtime:') ? routeForOwner({ hostId }) : null
+  return owner ? { ...owner, workspaceExecutionHostId: null } : null
 }
 
 export function captureNotificationTransportOwner(
@@ -131,7 +135,9 @@ export function resolveTerminalNotificationOwner(
       return null
     }
     // A currently bound, unprefixed PTY belongs to this client's IPC transport.
-    const transportOwner = routeForOwner({ hostId: transportHost ?? 'local' })
+    const transportOwner = transportHost?.startsWith('runtime:')
+      ? explicitControllerOwner(transportHost)
+      : routeForOwner({ hostId: transportHost ?? 'local' })
     const workspaceOwner = resolveNotificationTabOwner(state, {
       worktreeId: workspaceId,
       executionHostId: transportHost ?? 'local'

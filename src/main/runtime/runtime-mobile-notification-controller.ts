@@ -33,7 +33,7 @@ export type MobileNotificationDispatchEvent = {
   title: string
   body: string
   worktreeId?: string
-  workspaceExecutionHostId?: ExecutionHostId
+  workspaceExecutionHostId?: ExecutionHostId | null
   /** The pane the phone opens on tap; old phones ignore it and open the workspace's default tab. */
   paneKey?: string
   /** See `NotificationDispatchRequest.executionHost`; old phones ignore it and open the desktop's. */

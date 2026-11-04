@@ -69,7 +69,7 @@ it('lists only live deliveries across a restart', async () => {
     notificationEpoch: 'e',
     notificationSeq
   })
-  h.store.record(keyed('subject:prompt:a1', 1))
+  h.store.record({ ...keyed('subject:prompt:a1', 1), workspaceExecutionHostId: null })
   h.store.record(keyed('subject:prompt:a10', 2))
   h.store.record(keyed('other:prompt:a1', 3))
   h.store.record({
@@ -84,6 +84,7 @@ it('lists only live deliveries across a restart', async () => {
     'subject:prompt:a1',
     'other:prompt:a1'
   ])
+  expect(restarted.liveDeliveries()[0]).toMatchObject({ workspaceExecutionHostId: null })
 })
 
 it('keeps a record whose origin a newer build wrote, losing only that origin', () => {

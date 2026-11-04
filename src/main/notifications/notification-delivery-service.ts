@@ -139,7 +139,7 @@ export function createNotificationDeliveryService(
             title: notificationOptions.title,
             body: notificationOptions.body,
             worktreeId: request.worktreeId,
-            ...(request.workspaceExecutionHostId
+            ...(request.workspaceExecutionHostId !== undefined
               ? { workspaceExecutionHostId: request.workspaceExecutionHostId }
               : {}),
             // The phone asks the execution host for tabs, which never name this window's mirror tabs.
