@@ -8,6 +8,7 @@ vi.mock('../../../../runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
 
 import { mintCrossStoreParentRef } from './cross-store-parent-ref'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mint reads only id, hostId and instanceId.
 const PARENT = {
   id: 'srv::/work/parent',
   hostId: 'runtime:env-1',
@@ -15,6 +16,7 @@ const PARENT = {
 } as unknown as Worktree
 
 function stateWithServerInstall(installationId: string): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mint reads only these slices.
   return {
     runtimeEnvironments: [],
     crossStoreLineageByStoreKey: {},

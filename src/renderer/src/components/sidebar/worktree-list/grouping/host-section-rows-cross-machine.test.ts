@@ -19,6 +19,7 @@ function item(
     type: 'item',
     rowKey: id,
     sectionKey: 'all',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: host sections read only id, repoId and hostId.
     worktree: {
       id,
       repoId: repo.id,
