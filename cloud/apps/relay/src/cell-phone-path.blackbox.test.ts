@@ -214,12 +214,13 @@ describe('the memory phone path', () => {
     await reserve.relay.assignments.reconcileCells([...reserve.config.cells, OTHER_CELL])
     const dial = async (row: 'elsewhere' | 'here' | 'none') => {
       const host = await reserve.host()
-      if (row !== 'none')
+      if (row !== 'none') {
         await reserve.insertRow(
           host.hostId,
           3,
           row === 'here' ? reserve.config.cellId : OTHER_CELL.id
         )
+      }
       await reserve.installDevice(host.hostId, TOKEN)
       reserve.database.statements.length = 0
       const phone = await reserve.dialPhone(host.hostId, TOKEN)
