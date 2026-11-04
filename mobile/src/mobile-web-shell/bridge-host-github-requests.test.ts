@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { bridgeId, createFakeRpcClient, rpcSuccess } from './bridge-host-test-fakes'
 import { bridgePendingRequestCap } from './bridge/bridge-caps'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as capability } from '../../../src/shared/source-control-runtime-capabilities'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as capability } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 import { classifyExactGitHubOperation } from '../../../src/shared/github/exact-work-item-operation'
 import { createPageClient, INIT, GRANTS } from './bridge/bridge-page-client-test-harness'
 

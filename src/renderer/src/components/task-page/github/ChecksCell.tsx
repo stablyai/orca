@@ -1,4 +1,4 @@
-import { getProviderChecksOutcome } from '../../../../../shared/provider-check-summary'
+import { getProviderChecksOutcome } from '../../../../../shared/source-control/checks/provider-check-summary'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import React, { useRef, useEffect } from 'react'
 import { translate } from '@/i18n/i18n'

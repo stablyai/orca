@@ -1,14 +1,14 @@
 import { useCallback, useState } from 'react'
-import type { CommitMessageAiSettings } from '../../../../shared/commit-message-ai-types'
+import type { CommitMessageAiSettings } from '../../../../shared/source-control/ai/generation/commit-message-ai-types'
 import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentCapability,
   isCustomAgentId,
   resolveCommitMessageAgentChoice
-} from '../../../../shared/commit-message-agent-spec'
-import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../shared/commit-message-host-key'
-import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
-import { getTextGenerationModels } from '../../../../shared/source-control-ai-model-selection'
+} from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../shared/source-control/ai/generation/commit-message-host-key'
+import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import { getTextGenerationModels } from '../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getAgentCatalog } from '@/lib/agent-catalog'

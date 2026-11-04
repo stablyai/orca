@@ -67,6 +67,7 @@ const GLOBAL_FORCE_FILES = new Set(['package.json', 'pnpm-lock.yaml'])
 const GIT_COMPAT_PREFIXES = [
   '.github/actions/prepare-git-compatibility/',
   'src/shared/git-',
+  'src/shared/git/',
   'src/shared/review-head-tracking-ref',
   'src/shared/worktree/local-base-branch-fast-forward',
   'src/main/git/',
@@ -186,7 +187,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'config/scripts/check-runtime-launcher-protocol-ratchet',
   'src/main/daemon/daemon-protocol-version.ts',
   'src/shared/protocol-version',
-  'src/shared/terminal-stream-protocol',
+  'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser-client-host-protocol',
   'src/shared/browser-network-tunnel-protocol',
   // Both released/current WebSocket transports must accept web upgrade marker (cross-version-web-upgrade-marker).

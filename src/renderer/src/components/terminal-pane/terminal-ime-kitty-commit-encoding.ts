@@ -2,7 +2,7 @@ import {
   KITTY_DISAMBIGUATE_ESCAPE_CODES,
   KITTY_REPORT_EVENT_TYPES,
   kittyReportsAllKeysAsEscapeCodes
-} from '../../../../shared/terminal-kitty-keyboard-flags'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import {
   encodeTerminalOptionKittyEvent,
   kittyFunctionalNumpadCodePointForEvent,

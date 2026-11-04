@@ -2,7 +2,8 @@ import type { JSX } from 'react'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
-import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
+import { STATUS_COLORS } from '../right-sidebar/status-display'
+import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
 import type {
   DeleteWorktreeChangeCheckState,
   DeleteWorktreeDirtyChangePreview

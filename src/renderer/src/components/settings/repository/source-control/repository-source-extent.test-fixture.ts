@@ -6,9 +6,9 @@ import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { TooltipProvider } from '../../../ui/tooltip'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { createRepoActionTextDraftEditors } from './repository-source-control-ai-text-draft'
-import { saveSourceControlActionRecipe } from '../../../../../../shared/source-control-ai-recipe-save'
-import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control-action-launch-preferences'
-import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control-ai-operation-policy'
+import { saveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
+import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   computeActionDirtyById,
   withRepoAiActionMode,

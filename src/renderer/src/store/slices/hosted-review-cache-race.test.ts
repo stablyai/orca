@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import type { AppState } from '../types'
 import { createHostedReviewSlice } from './hosted-review'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
 const runtimeRpc = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()

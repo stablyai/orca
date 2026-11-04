@@ -1,4 +1,4 @@
-import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
+import { summarizeProviderChecks } from '../../../src/shared/source-control/checks/provider-check-summary'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'

@@ -22,7 +22,7 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
-import type { PtyModelRestoreReason } from '../../../../shared/pty-model-restore-marker'
+import type { PtyModelRestoreReason } from '../../../../shared/terminal/replay/pty-model-restore-marker'
 
 // Shared visible-pane driver for the hidden-restore flood/unhide suites (STA-4869).
 

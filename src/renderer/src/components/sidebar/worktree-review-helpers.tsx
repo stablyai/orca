@@ -1,7 +1,7 @@
 import {
   getProviderChecksOutcome,
   type CheckPresentationOutcome
-} from '../../../../shared/provider-check-summary'
+} from '../../../../shared/source-control/checks/provider-check-summary'
 import { createElement } from 'react'
 import { GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'

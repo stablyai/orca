@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as GitObjectQuarantineModule from '../../shared/git-object-quarantine'
-import type { GitObjectQuarantine, GitObjectsDirectory } from '../../shared/git-object-quarantine'
+import type * as GitObjectQuarantineModule from '../../shared/git/objects/git-object-quarantine'
+import type {
+  GitObjectQuarantine,
+  GitObjectsDirectory
+} from '../../shared/git/objects/git-object-quarantine'
 import {
   createLocalGitObjectQuarantine,
   inheritedLocalObjectStore,
@@ -18,7 +21,7 @@ const { readRepoCommonDirFromGitMock } = vi.hoisted(() => ({
 vi.mock('./worktrees/catalog/worktree-list-reader', () => ({
   readRepoCommonDirFromGit: readRepoCommonDirFromGitMock
 }))
-vi.mock('../../shared/git-object-quarantine', async (importOriginal) => ({
+vi.mock('../../shared/git/objects/git-object-quarantine', async (importOriginal) => ({
   ...(await importOriginal<typeof GitObjectQuarantineModule>()),
   createGitObjectQuarantine: (
     resolve: () => Promise<GitObjectsDirectory | undefined>

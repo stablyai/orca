@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { TerminalViewAttributes, TerminalViewRgb } from '../../shared/terminal-view-attributes'
+import type {
+  TerminalViewAttributes,
+  TerminalViewRgb
+} from '../../shared/terminal/protocol/queries/terminal-view-attributes'
 import {
   _resetTerminalViewAttributesForTest,
   admitPairedCreateColors,
