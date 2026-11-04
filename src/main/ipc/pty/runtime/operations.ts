@@ -5,10 +5,8 @@ import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provide
 import { ptyOwnership } from '../provider/ownership-state'
 import { isRendererViewShowingPty, ptySizes } from '../delivery/visibility-state'
 import { isHiddenRendererPty } from '../delivery/pty-hidden-delivery-gate'
-import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
-import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-restore'
-import { commitRuntimeAttachedPtySize } from '../delivery/attached-pty-size'
 import { hideRuntimeOwnedRendererDelivery } from './spawn-hidden-delivery'
+import { seedAttachedRuntimeTerminal } from './seed-attached-runtime-terminal'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider, resolvePtyExecutionHost } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
@@ -148,13 +146,7 @@ export async function attachPtyFromRuntimeController(
       )
     }
     if (attachResult) {
-      commitRuntimeAttachedPtySize(
-        attachResult,
-        deps.runtime?.reflowHeadlessTerminalToPtyGrid.bind(deps.runtime)
-      )
-      // A restarted runtime has never seen this screen; an idle agent may print nothing after attach.
-      seedHeadlessTerminalFromSpawnResult(deps.runtime, attachResult, null)
-      seedTerminalRestoreRecordsFromSpawnResult(deps.runtime, attachResult)
+      seedAttachedRuntimeTerminal(deps.runtime, attachResult)
     }
     deps.syncPtyBackgroundedDelivery?.(ptyId, 'main-attach')
     return true
