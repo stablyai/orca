@@ -38,7 +38,7 @@ describe('conservative unit selection', () => {
       ['config/scripts/setup-forward.ts', "export * from '../../src/input'"],
       [
         runtime,
-        `import '${runtime === 'config/vitest.config.ts' ? './scripts' : '.'}/setup-forward'`
+        `import '${runtime === 'config/vitest.config.ts' ? './scripts' : '../..'}/setup-forward'`
       ],
       ['src/direct.test.ts', "import './input'"],
       ['src/unrelated.test.ts', 'export const value = 1']
