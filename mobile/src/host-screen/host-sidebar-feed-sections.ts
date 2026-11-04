@@ -20,6 +20,7 @@ import {
   type WorktreeHostContextOf
 } from '../worktree/worktree-host-context-labels'
 import { filterWorktrees } from '../worktree/workspace-list-sections'
+import { buildFloatingWorkspaceSection } from '../worktree/floating-workspace-section'
 import { rowFiltersForView, type MobileViewState } from '../worktree/workspace-view-settings'
 
 export type HostFeedListSources = {
@@ -30,6 +31,8 @@ export type HostFeedListSources = {
   hostContextOf: WorktreeHostContextOf
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
   search: string
+  collapsedGroups?: ReadonlySet<string>
+  filterRepoIds?: readonly string[]
 }
 
 // Clients name Pinned/All/PR lanes themselves; the builder names data headers.
@@ -257,7 +260,16 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
         break
     }
   }
-  return query ? narrowSections(sections, query) : sections
+  const narrowed = query ? narrowSections(sections, query) : sections
+  const floating = buildFloatingWorkspaceSection({
+    liveRows: sources.liveRows,
+    lastVisited: sources.lastVisited,
+    hostContextOf: sources.hostContextOf,
+    collapsedGroups: sources.collapsedGroups,
+    search: sources.search,
+    filterRepoIds: sources.filterRepoIds
+  })
+  return floating ? [...narrowed, floating.section] : narrowed
 }
 
 // Older hosts with unreadable feeds still list filtered worktree.ps rows in served order without headers.
@@ -268,6 +280,7 @@ export function buildPreFeedSections(sources: {
   search: string
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
   lastVisited: LastVisitedWorktreeOnHost | null
+  collapsedGroups?: ReadonlySet<string>
 }): Section[] {
   const rows = filterWorktrees(
     sources.rows,
@@ -279,7 +292,16 @@ export function buildPreFeedSections(sources: {
     row: { ...row, isActive: isLastVisitedWorktreeRow(row, sources.lastVisited) },
     view: { ...sources.hostContextOf(row) }
   }))
-  return rows.length > 0 ? [{ key: 'all', title: '', data: rows }] : []
+  const base: Section[] = rows.length > 0 ? [{ key: 'all', title: '', data: rows }] : []
+  const floating = buildFloatingWorkspaceSection({
+    liveRows: sources.rows,
+    lastVisited: sources.lastVisited,
+    hostContextOf: sources.hostContextOf,
+    collapsedGroups: sources.collapsedGroups,
+    search: sources.search,
+    filterRepoIds: sources.view.filters.filterRepoIds
+  })
+  return floating ? [...base, floating.section] : base
 }
 
 function narrowSections(sections: readonly Section[], query: string): Section[] {

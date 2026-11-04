@@ -43,6 +43,7 @@ import {
   type WorkspaceRowFactReader
 } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { translate } from '../i18n/mobile-i18n'
+import { isFloatingWorktreeRow } from './floating-workspace-section'
 
 export type { FilterState, Section, SectionRepo, Worktree } from './workspace-list-types'
 
@@ -69,6 +70,9 @@ export function buildSectionRepoMap(
 ): Map<string, SectionRepo> {
   const repoMap = new Map(catalogRepos.map((repo) => [repo.id, repo]))
   for (const w of worktrees) {
+    if (isFloatingWorktreeRow(w)) {
+      continue
+    }
     if (!repoMap.has(w.repoId)) {
       repoMap.set(w.repoId, {
         id: w.repoId,
@@ -146,7 +150,8 @@ export function filterWorktrees(
   search: string,
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map()
 ): Worktree[] {
-  const result = filterWorkspaceRows(worktrees, filters, phoneRowFacts(repoHostIdByRepoId))
+  const nonFloating = worktrees.filter((w) => !isFloatingWorktreeRow(w))
+  const result = filterWorkspaceRows(nonFloating, filters, phoneRowFacts(repoHostIdByRepoId))
   const q = search.trim().toLowerCase()
   if (!q) {
     return result

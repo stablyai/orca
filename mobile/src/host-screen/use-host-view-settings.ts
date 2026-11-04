@@ -22,6 +22,7 @@ import { hostListSettingsRead } from '../transport/settings-read-operations'
 import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
+  SubagentDisplayMode,
   WorktreeCardProperty
 } from '../../../src/shared/ui-chrome-types'
 import { getWorktreeCardModeUpdates } from '../../../src/shared/worktree/card-properties'
@@ -193,6 +194,16 @@ export function useHostViewSettings(args: {
     [persistViewSettings]
   )
 
+  const setShowSubagents = useCallback(
+    (value: boolean) => persistViewSettings({ showSubagents: value }),
+    [persistViewSettings]
+  )
+
+  const setSubagentDisplayMode = useCallback(
+    (value: SubagentDisplayMode) => persistViewSettings({ subagentDisplayMode: value }),
+    [persistViewSettings]
+  )
+
   const toggleCardProperty = useCallback(
     (property: WorktreeCardProperty) => {
       const current = viewRef.current.worktreeCardProperties
@@ -267,6 +278,8 @@ export function useHostViewSettings(args: {
     clearFilters,
     pendingViewChanges: pendingViewChanges?.status ?? NOTHING_PENDING,
     setAgentActivityDisplayMode,
+    setShowSubagents,
+    setSubagentDisplayMode,
     setCardLayout,
     setProjectOrderBy,
     toggleCardProperty,

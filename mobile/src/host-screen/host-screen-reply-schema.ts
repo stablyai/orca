@@ -25,6 +25,9 @@ const WORKSPACE_PROJECT_ORDER_ARMS = hostUnionArms<PersistedUIState['projectOrde
 const WORKSPACE_AGENT_ACTIVITY_LAYOUT_ARMS = hostUnionArms<
   NonNullable<PersistedUIState['agentActivityDisplayMode']>
 >({ compact: true, full: true })
+const WORKSPACE_SUBAGENT_DISPLAY_ARMS = hostUnionArms<
+  NonNullable<PersistedUIState['subagentDisplayMode']>
+>({ flat: true, tree: true })
 
 const repoIconBranches = {
   lucide: z.looseObject({ type: z.literal('lucide'), name: z.string() }),
@@ -134,6 +137,11 @@ export const hostViewSettingsSchema = z
       agentActivityDisplayMode: salvagedOptional(
         'agentActivityDisplayMode',
         z.enum(WORKSPACE_AGENT_ACTIVITY_LAYOUT_ARMS)
+      ),
+      showSubagents: salvagedOptional('showSubagents', z.boolean()),
+      subagentDisplayMode: salvagedOptional(
+        'subagentDisplayMode',
+        z.enum(WORKSPACE_SUBAGENT_DISPLAY_ARMS)
       ),
       alwaysShowDefaultBranchWorkspace: salvagedOptional(
         'alwaysShowDefaultBranchWorkspace',

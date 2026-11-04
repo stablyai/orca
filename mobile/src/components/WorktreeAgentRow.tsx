@@ -1,4 +1,5 @@
 import { agentNoUpdateLabel } from '../../../src/shared/agent-status/presentation/agent-row-decay-state'
+import { CornerDownRight } from 'lucide-react-native'
 import { memo, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
@@ -67,8 +68,9 @@ function WorktreeAgentRowComponent({
   const content = (
     <View style={[styles.row, { paddingLeft: depth * AGENT_ROW_INDENT_PER_DEPTH }]}>
       <AgentStateDot state={dotState} />
-      {/* Use desktop-style agent identity logo instead of two-letter code. */}
-      {!childRow && agent.agentType ? (
+      {childRow ? (
+        <CornerDownRight size={11} color={colors.textMuted} />
+      ) : agent.agentType ? (
         <MobileAgentIcon agentId={agent.agentType} size={13} />
       ) : null}
       <Text style={[styles.label, unvisited && styles.labelUnvisited]} numberOfLines={1}>

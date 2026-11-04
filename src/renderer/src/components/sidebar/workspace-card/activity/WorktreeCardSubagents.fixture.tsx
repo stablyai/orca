@@ -94,14 +94,21 @@ const wait = () => new Promise((resolve) => setTimeout(resolve, 300))
 
 export const atRest = defineFixture({
   width: 300,
-  store: { agentActivityDisplayMode: 'compact' },
+  store: { agentActivityDisplayMode: 'compact', subagentDisplayMode: 'tree' },
   setup,
   render: () => render('fixture-subagents-rest')
 })
 
+export const flatMode = defineFixture({
+  width: 300,
+  store: { agentActivityDisplayMode: 'full', subagentDisplayMode: 'flat' },
+  setup,
+  render: () => render('fixture-subagents-flat')
+})
+
 export const userExpanded = defineFixture({
   width: 300,
-  store: { agentActivityDisplayMode: 'compact' },
+  store: { agentActivityDisplayMode: 'compact', subagentDisplayMode: 'tree' },
   setup,
   render: () => render('fixture-subagents-expanded'),
   interact: async (frame) => {
@@ -112,7 +119,7 @@ export const userExpanded = defineFixture({
 
 export const idleGroupExpanded = defineFixture({
   width: 300,
-  store: { agentActivityDisplayMode: 'compact' },
+  store: { agentActivityDisplayMode: 'compact', subagentDisplayMode: 'tree' },
   setup,
   render: () => render('fixture-subagents-idle-open'),
   interact: async (frame) => {
@@ -125,7 +132,7 @@ export const idleGroupExpanded = defineFixture({
 
 export const fullMode = defineFixture({
   width: 300,
-  store: { agentActivityDisplayMode: 'full' },
+  store: { agentActivityDisplayMode: 'full', subagentDisplayMode: 'tree' },
   setup,
   render: () => render('fixture-subagents-full'),
   interact: async (frame) => {
@@ -136,7 +143,7 @@ export const fullMode = defineFixture({
 
 export const fullModeCollapsed = defineFixture({
   width: 300,
-  store: { agentActivityDisplayMode: 'full' },
+  store: { agentActivityDisplayMode: 'full', subagentDisplayMode: 'tree' },
   setup,
   render: () => render('fixture-subagents-full-rest')
 })

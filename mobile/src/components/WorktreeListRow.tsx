@@ -1,16 +1,22 @@
 import { memo } from 'react'
 import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../platform/haptics'
-import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceListItem, Worktree, WorktreeRowView } from '../worktree/workspace-list-types'
 import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
-import type { AgentActivityDisplayMode } from '../../../src/shared/ui-chrome-types'
+import {
+  DEFAULT_SHOW_SUBAGENTS,
+  DEFAULT_SUBAGENT_DISPLAY_MODE
+} from '../../../src/shared/constants'
+import type {
+  AgentActivityDisplayMode,
+  SubagentDisplayMode
+} from '../../../src/shared/ui-chrome-types'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import { areStructurallyEqual } from '../worktree/structural-equality'
 import { projectGroupRowIndent } from '../worktree/project-group-indent'
@@ -20,7 +26,7 @@ import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
-import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
+import { worktreeListRowStyles as styles } from './worktree-list-row-styles'
 
 // Match desktop formatBranchName by hiding refs/heads/ prefix.
 function displayBranch(branch: string): string {
@@ -39,6 +45,8 @@ type Props = {
   /** What the desktop's shared Card layout and properties show, and where identity goes. */
   cardDetails: WorktreeCardDetails
   agentActivityDisplayMode: AgentActivityDisplayMode
+  showSubagents?: boolean
+  subagentDisplayMode?: SubagentDisplayMode
   status: WorktreeStatus
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
@@ -57,6 +65,8 @@ function WorktreeListRowComponent({
   hideRepo = false,
   cardDetails,
   agentActivityDisplayMode,
+  showSubagents = DEFAULT_SHOW_SUBAGENTS,
+  subagentDisplayMode = DEFAULT_SUBAGENT_DISPLAY_MODE,
   status,
   onPress,
   onAgentPress,
@@ -67,15 +77,22 @@ function WorktreeListRowComponent({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
+  const isFloatingWorkspace = item.workspaceKind === 'floating'
   const folderMeta =
     item.comment?.trim() || item.path || t('components.worktreeListRow.folder', 'Folder')
-  const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
+  const floatingMeta = item.path || t('components.worktreeListRow.floating', 'Floating terminal')
+  const metaText = isFloatingWorkspace
+    ? floatingMeta
+    : isFolderWorkspace
+      ? folderMeta
+      : displayBranch(item.branch)
   const lineageDepth = Math.max(0, view.lineageDepth ?? 0)
   const indent = projectGroupRowIndent(item, view) + lineageDepth * 18
   const count = view.lineageChildCount ?? 0
   const shouldHideRepo = hideRepo && !view.showProjectName
-  const showRepoChip = cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace
-  const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo
+  const showRepoChip =
+    cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace && !isFloatingWorkspace
+  const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo && !isFloatingWorkspace
   const hostId = view.hostContextHostId ?? item.hostId
   const hostAccessibilityLabel = [view.hostContextLabel, view.hostContextHealthLabel]
     .filter(Boolean)
@@ -230,6 +247,8 @@ function WorktreeListRowComponent({
             onAgentPress={onAgentPress ? (paneKey) => onAgentPress(item, paneKey) : undefined}
             onAgentLongPress={openActions}
             fullList={agentActivityDisplayMode === 'full'}
+            showSubagents={showSubagents}
+            subagentDisplayMode={subagentDisplayMode}
           />
         ) : null}
         {count > 0 && onToggleLineage ? (
@@ -263,159 +282,3 @@ export const WorktreeListRow = memo(WorktreeListRowComponent, areStructurallyEqu
 
 // Grows the 20 pt pill to a 44 pt target without pushing the row apart.
 const LINEAGE_TOGGLE_HIT_SLOP = { top: 12, bottom: 12, left: 8, right: 8 } as const
-
-const styles = themedStyleSheet(() => ({
-  worktreeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.lg,
-    // Reserve the active accent bar width so active/inactive rows align.
-    borderLeftWidth: WORKTREE_ROW_LAYOUT.accentWidth,
-    borderLeftColor: 'transparent'
-  },
-  worktreeRowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  // The active row already wears bgPanel, so its press needs a wash that reads over it.
-  worktreeRowActivePressed: {
-    backgroundColor: colors.translucentFill
-  },
-  // Match desktop focused-worktree card with raised fill and left accent.
-  worktreeRowActive: {
-    backgroundColor: colors.bgPanel,
-    // Use desktop active-tab neutral accent, not blue.
-    borderLeftColor: colors.textSecondary
-  },
-  indicatorCol: {
-    width: WORKTREE_ROW_LAYOUT.indicatorWidth,
-    alignItems: 'center',
-    paddingTop: 6,
-    marginRight: spacing.sm,
-    gap: 4
-  },
-  unreadBell: {
-    marginTop: 2
-  },
-  worktreeMain: {
-    flex: 1
-  },
-  worktreeNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  worktreeName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    flexShrink: 1
-  },
-  worktreeNameUnread: {
-    fontWeight: '700'
-  },
-  textReadOnly: {
-    opacity: 0.5
-  },
-  prBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: radii.pill
-  },
-  prNumber: {
-    fontSize: 10,
-    color: colors.textSecondary
-  },
-  // Why: matches the desktop's compact repo chip, a small framed icon ahead of the title.
-  repoChip: {
-    width: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.mark,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised
-  },
-  folderBadge: {
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: radii.pill
-  },
-  folderBadgeText: {
-    fontSize: 10,
-    color: colors.textSecondary
-  },
-  worktreeMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-    gap: spacing.xs
-  },
-  repoName: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    maxWidth: 100
-  },
-  branchName: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    // Why: path takes only leftover space so badges truncate last.
-    flex: 1
-  },
-  childBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: radii.pill
-  },
-  childBadgeText: {
-    fontSize: 10,
-    color: colors.textMuted
-  },
-  // Why the cap is on the name, not the badge: a health word after a long name must stay readable.
-  hostBadge: {
-    flexShrink: 1
-  },
-  hostBadgeText: {
-    flexShrink: 1,
-    maxWidth: 100
-  },
-  hostHealthText: {
-    flexShrink: 0
-  },
-  lineageToggle: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.control
-  },
-  lineageTogglePressed: {
-    opacity: feedback.pressedOpacity
-  },
-  lineageToggleText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '600'
-  },
-  terminalCount: {
-    marginLeft: 'auto',
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  }
-}))

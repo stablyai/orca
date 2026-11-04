@@ -699,7 +699,12 @@
       "searchProjectsPlaceholder": "Search projects…",
       "searchProjects": "Search projects",
       "hover": "Hover",
-      "agentActivityLayout": "Agent activity layout"
+      "agentActivityLayout": "Agent activity layout",
+      "subagentDisplayFlat": "Alongside agents",
+      "subagentDisplayTree": "Tree under parent",
+      "subagentsSection": "Subagents",
+      "showSubagents": "Show subagents",
+      "subagentDisplay": "Subagent display"
     },
     "workspaceOptionsSheet": {
       "hosts": "Hosts",
@@ -899,7 +904,8 @@
       "inReview": "In review",
       "inProgress": "In progress",
       "closed": "Closed",
-      "done": "Done"
+      "done": "Done",
+      "floating": "Floating"
     }
   },
   "components": {
@@ -1292,7 +1298,8 @@
       "project": "Project {{repo}}",
       "child": "Child",
       "children_one": "{{count}} child",
-      "children_other": "{{count}} children"
+      "children_other": "{{count}} children",
+      "floating": "Floating terminal"
     },
     "accountsSnapshot": {
       "invalidSnapshot": "Invalid accounts snapshot from host"

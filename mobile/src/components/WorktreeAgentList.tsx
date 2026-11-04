@@ -2,6 +2,7 @@ import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import type { AgentChildRowModel } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { SubagentDisplayMode } from '../../../src/shared/ui-chrome-types'
 import {
   buildAgentRowLineageTree,
   flattenAgentRowLineage,
@@ -29,6 +30,8 @@ type Props = {
   onAgentLongPress?: () => void
   /** The desktop's "Full list" agent activity layout: every row, no summary. */
   fullList?: boolean
+  showSubagents?: boolean
+  subagentDisplayMode?: SubagentDisplayMode
 }
 
 // A parent's direct children: its sub-agent rows, then its spawned lineage agents.
@@ -40,6 +43,20 @@ type ChildItem =
 const parentDisclosureKey = (paneKey: string) => `parent:${paneKey}`
 const idleDisclosureKey = (paneKey: string) => `idle:${paneKey}`
 
+function summaryStateForChildRow(childRow: AgentChildRowModel): RuntimeWorktreeAgentRow['state'] {
+  if (childRow.displayState === 'waiting' || childRow.displayState === 'blocked') {
+    return childRow.displayState
+  }
+  if (
+    childRow.displayState === 'done' ||
+    childRow.displayState === 'failed' ||
+    childRow.displayState === 'interrupted'
+  ) {
+    return 'done'
+  }
+  return 'working'
+}
+
 // Nest spawn lineage under its parent, matching desktop WorktreeCardAgents: children start collapsed.
 export function WorktreeAgentList({
   agents,
@@ -49,16 +66,34 @@ export function WorktreeAgentList({
   isReadOnly = false,
   onAgentPress,
   onAgentLongPress,
-  fullList = false
+  fullList = false,
+  showSubagents = true,
+  subagentDisplayMode = 'tree'
 }: Props) {
   const roots = useMemo(
     () => flattenAgentRowLineage(agents).filter((node) => node.depth === 0),
     [agents]
   )
+  const subagentsOf = useCallback(
+    (row: RuntimeWorktreeAgentRow): AgentChildRowModel[] =>
+      showSubagents ? worktreeAgentChildRows(row, statusLive) : [],
+    [showSubagents, statusLive]
+  )
   const summaryAgents = useMemo(() => {
     const lineage = buildAgentRowLineageTree(agents)
-    return lineage.childrenByParentPaneKey.size > 0 ? lineage.rootRows : agents
-  }, [agents])
+    const base = lineage.childrenByParentPaneKey.size > 0 ? lineage.rootRows : agents
+    if (!showSubagents || subagentDisplayMode !== 'flat') {
+      return base
+    }
+    return base.flatMap((row) => [
+      row,
+      ...worktreeAgentChildRows(row, statusLive).map((childRow): RuntimeWorktreeAgentRow => ({
+        ...row,
+        paneKey: `${row.paneKey}\0subagent:${childRow.id}`,
+        state: summaryStateForChildRow(childRow)
+      }))
+    ])
+  }, [agents, showSubagents, statusLive, subagentDisplayMode])
   const [expanded, setExpanded] = useState(false)
   // Disclosure state lives in a module cache; this counter only re-renders after a toggle.
   const [, setDisclosureRevision] = useState(0)
@@ -67,13 +102,18 @@ export function WorktreeAgentList({
     setDisclosureRevision((revision) => revision + 1)
   }, [])
   const usesSummary = !fullList && summaryAgents.length > 1
+  const flatSubagents = showSubagents && subagentDisplayMode === 'flat'
 
-  const renderSubagent = (node: AgentRowNode, childRow: AgentChildRowModel): ReactNode => (
+  const renderSubagent = (
+    node: AgentRowNode,
+    childRow: AgentChildRowModel,
+    depth: number
+  ): ReactNode => (
     <WorktreeAgentRow
       key={childRow.id}
       agent={node.row}
       childRow={childRow}
-      depth={node.depth + 1}
+      depth={depth}
       now={now}
       unvisited={unvisited}
       isReadOnly={isReadOnly}
@@ -83,12 +123,14 @@ export function WorktreeAgentList({
   )
 
   const childItemsOf = (node: AgentRowNode): ChildItem[] => [
-    ...worktreeAgentChildRows(node.row, statusLive).map((childRow): ChildItem => ({
-      kind: 'subagent',
-      key: childRow.id,
-      dotState: childRow.displayState,
-      childRow
-    })),
+    ...(flatSubagents
+      ? []
+      : subagentsOf(node.row).map((childRow): ChildItem => ({
+          kind: 'subagent',
+          key: childRow.id,
+          dotState: childRow.displayState,
+          childRow
+        }))),
     ...node.children.map((child): ChildItem => ({
       kind: 'agent',
       key: child.row.paneKey,
@@ -105,9 +147,12 @@ export function WorktreeAgentList({
   const renderNode = (node: AgentRowNode): ReactNode => {
     const parentKey = node.row.paneKey
     const children = childItemsOf(node)
+    const promotedSubagents = flatSubagents ? subagentsOf(node.row) : []
     const childrenExpanded = isDisclosureOpen(parentDisclosureKey(parentKey))
     const renderChild = (child: ChildItem): ReactNode =>
-      child.kind === 'subagent' ? renderSubagent(node, child.childRow) : renderNode(child.node)
+      child.kind === 'subagent'
+        ? renderSubagent(node, child.childRow, node.depth + 1)
+        : renderNode(child.node)
     const { activeChildren, idleChildren } = partitionIdleChildren(children)
     const idleExpanded = isDisclosureOpen(idleDisclosureKey(parentKey))
     return (
@@ -135,6 +180,7 @@ export function WorktreeAgentList({
             ) : undefined
           }
         />
+        {promotedSubagents.map((childRow) => renderSubagent(node, childRow, node.depth))}
         {childrenExpanded ? (
           <>
             {activeChildren.map(renderChild)}
