@@ -10,14 +10,14 @@ import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { getGitCloneFailureMessage } from '../../../shared/git/remotes/git-clone-failure-message'
 import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../../git/runner'
 import { reuseSavedCloneTarget } from '../../git/saved-clone-target'
-import { getRepoName } from '../../git/repo'
+import { getRepoName, inspectGitRepoForRegistrationAsync } from '../../git/repo'
 import type { ClaimedCloneTarget } from '../../git/repo-clone-path'
 import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
   deriveValidatedClonePath,
   getClonePathComparisonKey,
-  resolveExistingParentSymlinks
+  getSavedProjectPathKeys
 } from '../../git/repo-clone-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
@@ -118,15 +118,9 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
   ipcMain.handle(
     'repos:clone',
     async (_event, args: { url: string; destination: string }): Promise<Repo> => {
-      // Validate the typed destination before resolving it.
-      const typedClonePath = deriveValidatedClonePath(args)
-      const clonePath = deriveValidatedClonePath({
-        ...args,
-        destination: await resolveExistingParentSymlinks(args.destination)
-      })
+      const clonePath = deriveValidatedClonePath(args)
       const clonePathKey = getClonePathComparisonKey(clonePath)
-      // Projects saved before symlink resolution keep the typed spelling.
-      const savedPathKeys = [clonePathKey, getClonePathComparisonKey(typedClonePath)]
+      let savedPathKeys = await getSavedProjectPathKeys(clonePath)
       // Remote projects can share this path string without belonging to this clone host.
       const findSaved = (): Repo | undefined =>
         store
@@ -258,6 +252,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
 
         try {
           // Clone may land in an existing folder project; upgrade it instead of duplicating registration.
+          savedPathKeys = await getSavedProjectPathKeys(clonePath)
           const existing = findSaved()
           if (existing) {
             const conversion = await resolveClonedFolderConversion(store, existing)
@@ -294,14 +289,16 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
             }
           }
 
+          // Register Git's checkout path so the clone stays its own selected checkout.
+          const repoPath = (await inspectGitRepoForRegistrationAsync(clonePath)).rootPath
           const detected = await detectRepoIconAndUpstream({
-            repoPath: clonePath,
+            repoPath,
             kind: 'git',
             executionHostId: LOCAL_EXECUTION_HOST_ID
           })
           const repo: Repo = {
             id: randomUUID(),
-            path: clonePath,
+            path: repoPath,
             displayName: getRepoName(clonePath),
             badgeColor: DEFAULT_REPO_BADGE_COLOR,
             ...detected,

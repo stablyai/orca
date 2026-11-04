@@ -1,14 +1,4 @@
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  posix,
-  relative,
-  resolve,
-  sep,
-  win32
-} from 'node:path'
+import { isAbsolute, join, posix, relative, resolve, sep, win32 } from 'node:path'
 import type { Stats } from 'node:fs'
 import { lstat, mkdir, realpath, rm } from 'node:fs/promises'
 import {
@@ -16,7 +6,6 @@ import {
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
 } from '../../shared/cross-platform-path'
-import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type ClaimedCloneTarget = {
   canCleanup: boolean
@@ -70,28 +59,12 @@ export function deriveValidatedClonePath(args: { url: string; destination: strin
   return clonePath
 }
 
-/** Git reports checkout paths with symlinks resolved; registering the same spelling keeps a new
- *  project's own checkout selected instead of hidden as a discovered worktree. */
-export async function resolveExistingParentSymlinks(path: string): Promise<string> {
-  // Windows Git reports the typed spelling (resolving would turn mapped drives into UNC paths),
-  // and WSL UNC paths must keep their spelling so later Git calls route through the WSL runner.
-  if (process.platform === 'win32' || !isAbsolute(path) || parseWslUncPath(path)) {
-    return path
-  }
-  const missingTail: string[] = []
-  let current = resolve(path)
-  for (;;) {
-    try {
-      return join(await realpath(current), ...missingTail)
-    } catch {
-      const parent = dirname(current)
-      if (parent === current) {
-        return path
-      }
-      missingTail.unshift(basename(current))
-      current = parent
-    }
-  }
+/** Git-registered projects save Git's resolved checkout path, so a folder reached through a
+ *  symlink matches by its resolved spelling as well as the typed one. */
+export async function getSavedProjectPathKeys(path: string): Promise<string[]> {
+  const typedKey = getClonePathComparisonKey(path)
+  const resolved = await realpath(path).catch(() => null)
+  return resolved ? [...new Set([typedKey, getClonePathComparisonKey(resolved)])] : [typedKey]
 }
 
 export function getClonePathComparisonKey(clonePath: string): string {

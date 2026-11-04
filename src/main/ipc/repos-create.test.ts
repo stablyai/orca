@@ -55,6 +55,8 @@ vi.mock('fs/promises', () => ({
   mkdir: mkdirMock,
   access: accessMock,
   readdir: readdirMock,
+  // Fixture paths are not symlinks.
+  realpath: async (path: string) => path,
   rm: rmMock
 }))
 
@@ -73,7 +75,12 @@ vi.mock('../git/repo', () => ({
   isGitRepo: vi.fn().mockReturnValue(true),
   getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
   getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
-  searchBaseRefs: vi.fn().mockResolvedValue([])
+  searchBaseRefs: vi.fn().mockResolvedValue([]),
+  inspectGitRepoForRegistrationAsync: vi.fn().mockImplementation(async (path: string) => ({
+    isRepo: true,
+    rootPath: path,
+    mainRepoPath: null
+  }))
 }))
 
 vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({

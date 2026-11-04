@@ -10,7 +10,7 @@ import {
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
-import { resolveExistingParentSymlinks } from '../git/repo-clone-path'
+import { getClonePathComparisonKey, getSavedProjectPathKeys } from '../git/repo-clone-path'
 import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../workspaces/catalog/project-realpath-identity'
@@ -170,9 +170,8 @@ export class RuntimeRepositoryRegistrationController {
         ? { error: error.message, windowsDriveRefusal: error.data }
         : { error: error instanceof Error ? error.message : String(error) }
     }
-    const targetPath = join(await resolveExistingParentSymlinks(trimmedParentPath), trimmedName)
-    // Projects saved before symlink resolution keep the typed spelling.
-    const typedTargetPath = join(trimmedParentPath, trimmedName)
+    const targetPath = join(trimmedParentPath, trimmedName)
+    let targetPathKeys = await getSavedProjectPathKeys(targetPath)
     // Qualify by host: identical SSH paths name another machine's directory.
     const findLocalAtTarget = (): Repo | undefined =>
       store
@@ -180,8 +179,7 @@ export class RuntimeRepositoryRegistrationController {
         .find(
           (repo) =>
             runtimeRepoIsRegistrationCandidate(repo) &&
-            (runtimePathsEqual(repo.path, targetPath) ||
-              runtimePathsEqual(repo.path, typedTargetPath))
+            targetPathKeys.includes(getClonePathComparisonKey(repo.path))
         )
     const existing = findLocalAtTarget()
     if (existing) {
@@ -219,18 +217,24 @@ export class RuntimeRepositoryRegistrationController {
         return failure
       }
     }
+    targetPathKeys = await getSavedProjectPathKeys(targetPath)
     const raceWinner = findLocalAtTarget()
     if (raceWinner) {
       return { repo: raceWinner }
     }
+    // Register Git's checkout path so the new project stays its own selected checkout.
+    const repoPath =
+      repoKind === 'git'
+        ? (await inspectGitRepoForRegistrationAsync(targetPath)).rootPath
+        : targetPath
     const detected = await detectRepoIconAndUpstream({
-      repoPath: targetPath,
+      repoPath,
       kind: repoKind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
     const repo: Repo = {
       id: randomUUID(),
-      path: targetPath,
+      path: repoPath,
       displayName: trimmedName,
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       ...detected,

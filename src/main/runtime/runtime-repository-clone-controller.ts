@@ -11,14 +11,14 @@ import {
   claimCloneTarget,
   deriveValidatedClonePath,
   getClonePathComparisonKey,
-  resolveExistingParentSymlinks
+  getSavedProjectPathKeys
 } from '../git/repo-clone-path'
 import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../git/runner'
 import { reuseSavedCloneTarget } from '../git/saved-clone-target'
 import { runWithGitReadCacheInvalidation } from '../git/source-control/git-read-cache-invalidation'
 import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { detectRepoIconAndUpstream } from '../repository-icons/repo-icon-autodetect'
-import { getRepoName } from '../git/repo'
+import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
 import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
@@ -50,15 +50,7 @@ export class RuntimeRepositoryCloneController {
     if (!trimmedDestination) {
       throw new Error('Clone destination is required')
     }
-    // Validate the typed destination before resolving it.
-    const typedClonePath = deriveValidatedClonePath({
-      url: trimmedUrl,
-      destination: trimmedDestination
-    })
-    const clonePath = deriveValidatedClonePath({
-      url: trimmedUrl,
-      destination: await resolveExistingParentSymlinks(trimmedDestination)
-    })
+    const clonePath = deriveValidatedClonePath({ url: trimmedUrl, destination: trimmedDestination })
     await refuseWslHostWindowsDrivePath(trimmedDestination)
     const clonePathKey = getClonePathComparisonKey(clonePath)
     const previous = this.inFlightByPath.get(clonePathKey) ?? Promise.resolve()
@@ -74,14 +66,7 @@ export class RuntimeRepositoryCloneController {
     try {
       await previous
       return await runWithGitReadCacheInvalidation(() =>
-        this.cloneAfterPathLock(
-          trimmedUrl,
-          trimmedDestination,
-          clonePath,
-          // Projects saved before symlink resolution keep the typed spelling.
-          [clonePathKey, getClonePathComparisonKey(typedClonePath)],
-          executionHostId
-        )
+        this.cloneAfterPathLock(trimmedUrl, trimmedDestination, clonePath, executionHostId)
       )
     } finally {
       release()
@@ -95,13 +80,13 @@ export class RuntimeRepositoryCloneController {
     trimmedUrl: string,
     trimmedDestination: string,
     clonePath: string,
-    savedPathKeys: readonly string[],
     executionHostId?: ExecutionHostId | null
   ): Promise<Repo> {
     const store = this.deps.getStore()
     if (!store) {
       throw new Error('runtime_unavailable')
     }
+    let savedPathKeys = await getSavedProjectPathKeys(clonePath)
     // Git runs here; an SSH row with the same path refers to another machine.
     const findSaved = (): Repo | undefined =>
       store.getRepos().find((repo) => {
@@ -163,6 +148,7 @@ export class RuntimeRepositoryCloneController {
       proc.on('close', (code, signal) => void finish(code, signal))
     })
 
+    savedPathKeys = await getSavedProjectPathKeys(clonePath)
     const existing = findSaved()
     if (existing) {
       const conversion = await resolveClonedFolderConversion(store, existing)
@@ -192,14 +178,16 @@ export class RuntimeRepositoryCloneController {
       }
     }
     // cloneRepo validated and cloned locally; runtime row stamps do not change where files live.
+    // Register Git's checkout path so the clone stays its own selected checkout.
+    const repoPath = (await inspectGitRepoForRegistrationAsync(clonePath)).rootPath
     const detected = await detectRepoIconAndUpstream({
-      repoPath: clonePath,
+      repoPath,
       kind: 'git',
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
     const repo: Repo = {
       id: randomUUID(),
-      path: clonePath,
+      path: repoPath,
       displayName: getRepoName(clonePath),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       ...(executionHostId != null ? { executionHostId } : {}),

@@ -12,7 +12,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
 import { probeGitAvailability } from '../../git/git-availability'
 import { gitExecFileAsync } from '../../git/runner'
-import { resolveExistingParentSymlinks } from '../../git/repo-clone-path'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repo'
+import { getClonePathComparisonKey, getSavedProjectPathKeys } from '../../git/repo-clone-path'
 import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
@@ -101,10 +102,10 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         return repoCreateFailure('parentNotAbsolute')
       }
 
-      const targetPath = join(await resolveExistingParentSymlinks(parentPath), name)
-      // Projects saved before symlink resolution keep the typed spelling.
-      const typedTargetPath = join(parentPath, name)
-      const isTargetRepo = (r: Repo): boolean => r.path === targetPath || r.path === typedTargetPath
+      const targetPath = join(parentPath, name)
+      let targetPathKeys = await getSavedProjectPathKeys(targetPath)
+      const isTargetRepo = (r: Repo): boolean =>
+        targetPathKeys.includes(getClonePathComparisonKey(r.path))
 
       // Repeated Create requests must share one registration.
       const existing = store.getRepos().find(isTargetRepo)
@@ -206,6 +207,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
 
       // IPC calls interleave while awaiting filesystem and Git work; recheck before registration.
+      targetPathKeys = await getSavedProjectPathKeys(targetPath)
       const raceWinner = store.getRepos().find(isTargetRepo)
       if (raceWinner) {
         // A concurrent winner owns the directory even if this request created it.
@@ -213,14 +215,19 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         return { repo: raceWinner }
       }
 
+      // Register Git's checkout path so the new project stays its own selected checkout.
+      const repoPath =
+        repoKind === 'git'
+          ? (await inspectGitRepoForRegistrationAsync(targetPath)).rootPath
+          : targetPath
       const detected = await detectRepoIconAndUpstream({
-        repoPath: targetPath,
+        repoPath,
         kind: repoKind,
         executionHostId: LOCAL_EXECUTION_HOST_ID
       })
       const repo: Repo = {
         id: randomUUID(),
-        path: targetPath,
+        path: repoPath,
         displayName: name,
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
         ...detected,
