@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -17,7 +18,19 @@ import {
   formatTerminalStartFailure,
   terminalStartError
 } from '../../../../shared/terminal-start-failure'
-import { appendPaneTerminalError, terminalErrorForPane } from './terminal-error-accumulation'
+import {
+  appendPaneTerminalError,
+  clearPaneTerminalError,
+  terminalErrorForPane,
+  type TerminalErrorsByPaneId
+} from './terminal-error-accumulation'
+import {
+  LEGACY_PTY_ALLOCATION_HINT,
+  LEGACY_TERMINAL_PROCESS_LIMIT_HINT,
+  PTY_ALLOCATION_HINT,
+  TERMINAL_HOST_CAP_HINT,
+  TERMINAL_PROCESS_LIMIT_HINT
+} from '../../../../shared/terminal-spawn-error-copy'
 
 import {
   TerminalErrorToast,
@@ -93,14 +106,14 @@ describe('humanizeTerminalError', () => {
             rows.slice(midpoint).join('\n')
           )
           const error = terminalErrorForPane(null, errors, 1)
-          expect(error).toBe(rows.join('\n'))
+          expect(error?.error).toBe(rows.join('\n'))
           if (error === null) {
             throw new Error('Accumulated error missing')
           }
           tokenMatches.mockClear()
           translations.mockClear()
           const toast = React.createElement(TerminalErrorToast, {
-            error,
+            ...error,
             agentId: 'codex',
             paneOnClient: false,
             onDismiss: vi.fn()
@@ -746,4 +759,101 @@ it('offers Close Pane only for a pane whose remote terminal was closed', () => {
     })
   )
   expect(view.queryByText('Close Pane')).toBeNull()
+})
+
+describe('TerminalErrorToast resource-limit styling', () => {
+  const allocationError = `${PTY_ALLOCATION_HINT}\nnode-pty: posix_openpt failed: Device not configured (errno 6)`
+
+  function renderPaneError(
+    errors: TerminalErrorsByPaneId,
+    tabError: string | null = null,
+    paneId = 1
+  ): string {
+    const surface = terminalErrorForPane(tabError, errors, paneId)
+    if (!surface) {
+      throw new Error('Missing pane error surface')
+    }
+    return renderToStaticMarkup(
+      React.createElement(TerminalErrorToast, {
+        ...surface,
+        paneOnClient: false,
+        onDismiss: vi.fn()
+      })
+    )
+  }
+
+  it.each([
+    allocationError,
+    `${LEGACY_PTY_ALLOCATION_HINT}\nnode-pty: open_slave failed: EMFILE (errno 24)`,
+    `${TERMINAL_PROCESS_LIMIT_HINT}\nnode-pty: posix_spawn failed: EAGAIN (errno 35)`,
+    `${LEGACY_TERMINAL_PROCESS_LIMIT_HINT}\nnode-pty: posix_spawn failed: EAGAIN (errno 35)`,
+    TERMINAL_HOST_CAP_HINT
+  ])('renders a resource refusal neutrally: %s', (message) => {
+    const html = renderPaneError(appendPaneTerminalError({}, 1, message))
+    expect(html).not.toContain('linear-gradient')
+    expect(html).toContain('border:1px solid var(--border)')
+  })
+
+  it.each([true, false])('keeps mixed pane errors red, resource first: %s', (resourceFirst) => {
+    let errors = appendPaneTerminalError({}, 1, resourceFirst ? allocationError : 'Paste failed.')
+    errors = appendPaneTerminalError(errors, 1, resourceFirst ? 'Paste failed.' : allocationError)
+
+    const html = renderPaneError(errors)
+    expect(html).toContain('Paste failed.')
+    expect(html).toContain('node-pty: posix_openpt failed')
+    expect(html).toContain('var(--destructive)')
+  })
+
+  it.each([
+    'x'.repeat(4_500),
+    Array.from({ length: 30 }, (_, index) => `diagnostic ${index}`).join('\n')
+  ])('retains resource styling after oversized diagnostics discard the hint', (diagnostics) => {
+    let errors = appendPaneTerminalError({}, 1, `${allocationError}\n${diagnostics}`)
+    expect(terminalErrorForPane(null, errors, 1)?.error).not.toContain(PTY_ALLOCATION_HINT)
+    expect(renderPaneError(errors)).toContain('border:1px solid var(--border)')
+
+    errors = appendPaneTerminalError(errors, 1, 'Paste failed.')
+    expect(renderPaneError(errors)).toContain('var(--destructive)')
+    errors = clearPaneTerminalError(errors, 1, 'Paste failed.')
+    expect(renderPaneError(errors)).toContain('border:1px solid var(--border)')
+  })
+
+  it('keeps a tab-wide error red beside a pane resource refusal', () => {
+    const errors = appendPaneTerminalError({}, 1, allocationError)
+    const html = renderPaneError(errors, 'Paste failed.')
+    expect(html).toContain('Paste failed.')
+    expect(html).toContain('node-pty: posix_openpt failed')
+    expect(html).toContain('var(--destructive)')
+  })
+
+  it.each([true, false])(
+    'keeps legacy combined tab errors red, resource first: %s',
+    (resourceFirst) => {
+      const tabError = resourceFirst
+        ? `${allocationError}\nPaste failed.`
+        : `Paste failed.\n${allocationError}`
+      const html = renderPaneError({}, tabError)
+      expect(html).toContain('Paste failed.')
+      expect(html).toContain('var(--destructive)')
+    }
+  )
+
+  it('restores neutral styling when the unrelated pane error clears', () => {
+    let errors = appendPaneTerminalError({}, 1, allocationError)
+    errors = appendPaneTerminalError(errors, 1, 'Paste failed.')
+    expect(renderPaneError(errors)).toContain('var(--destructive)')
+
+    const cleared = clearPaneTerminalError(errors, 1, 'Paste failed.')
+    const html = renderPaneError(cleared)
+    expect(html).not.toContain('linear-gradient')
+    expect(html).not.toContain('Paste failed.')
+    expect(html).toContain('border:1px solid var(--border)')
+  })
+
+  it('styles each pane from its own errors', () => {
+    let errors = appendPaneTerminalError({}, 1, allocationError)
+    errors = appendPaneTerminalError(errors, 2, 'Paste failed.')
+    expect(renderPaneError(errors, null, 1)).not.toContain('linear-gradient')
+    expect(renderPaneError(errors, null, 2)).toContain('var(--destructive)')
+  })
 })

@@ -6,7 +6,7 @@ import {
   BrowserClientPageRendererRequest,
   type BrowserClientPageRendererOutcome as RendererOutcome,
   type BrowserClientPageRendererRequest as RendererRequest
-} from '../shared/browser-client-page-renderer-protocol'
+} from '../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 
 const DEFAULT_MAX_PENDING = 512
 const DEFAULT_TIMEOUT_MS = 10_000

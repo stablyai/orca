@@ -17,8 +17,8 @@ import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsBadge } from '../../form-controls/SettingsFormControls'
-import { matchesSettingsSearch } from '../../search/settings-search'
-import type { SettingsSearchEntry } from '../../search/settings-search'
+import { matchesSettingsSearch, type SettingsSearchEntry } from '../../search/settings-search'
+
 import { translate } from '@/i18n/i18n'
 import { buildSetupHostOptions, getSetupStateLabel } from './repository-host-setup-options'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
@@ -26,10 +26,8 @@ import {
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel
 } from '@/store/slices/runtime-environment-ssh-selectors'
-import {
-  isConnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { isConnectedRuntimeHostState } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 
 type RepositoryHostSetupsSectionProps = {
   repo: Repo

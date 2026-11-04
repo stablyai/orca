@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult
-} from '../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import { routeRuntimeBrowserClientAutomation } from './runtime-browser-client-automation'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import { createProjectGroup } from '../../../shared/project-groups'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'

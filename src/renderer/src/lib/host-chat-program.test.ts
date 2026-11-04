@@ -1,7 +1,7 @@
 import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { agentMenuShortcutLabels } from '../components/tab-bar/agent-menu-shortcut-labels'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { getDefaultSourceControlAiSettings } from '../../../shared/source-control-ai-settings'
+import { getDefaultSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { pr } from '@/hooks/composer-state/composer-review-base-test-fixture'

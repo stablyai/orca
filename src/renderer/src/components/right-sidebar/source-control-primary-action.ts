@@ -1,8 +1,8 @@
 import {
   resolveSourceControlCommitAreaPrimaryActionDecision,
   resolveSourceControlPrimaryActionDecision
-} from '../../../../shared/source-control-primary-action-decision'
-import type { SourceControlPrimaryActionDecision } from '../../../../shared/source-control-primary-action-decision-types'
+} from '../../../../shared/source-control/decisions/source-control-primary-action-decision'
+import type { SourceControlPrimaryActionDecision } from '../../../../shared/source-control/decisions/source-control-primary-action-decision-types'
 import { translate } from '@/i18n/i18n'
 import {
   localizedHostedReviewCopy,

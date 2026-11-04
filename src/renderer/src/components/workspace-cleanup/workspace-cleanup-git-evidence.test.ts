@@ -1,4 +1,4 @@
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { describe, expect, it } from 'vitest'
 import { makeFacetCandidate } from './workspace-cleanup-facet.test.fixture'
 import {

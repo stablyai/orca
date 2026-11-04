@@ -3,19 +3,20 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type {
-  AiVaultListArgs,
-  AiVaultListResult,
-  AiVaultSession
-} from '../../../../shared/ai-vault-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import {
-  isAiVaultScanCancellation,
   resetAiVaultForcedRescanThrottleForTest,
   useAiVaultSessionRefresh
 } from './ai-vault-session-refresh'
+import {
+  type AiVaultListArgs,
+  type AiVaultListResult,
+  type AiVaultSession,
+  isAiVaultScanCancelledError as isAiVaultScanCancellation
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT, type AiVaultSessionLimit } from './ai-vault-session-limit'
 import { withNonSecureContextCrypto } from '@/lib/non-secure-context-crypto-stub'
 

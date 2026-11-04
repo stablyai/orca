@@ -22,7 +22,7 @@ export function TaskPageGitHubList({
   const {
     selectedRepos,
     githubEmptyState,
-    tasksLoading,
+    githubListPending,
     tasksError,
     failedCount,
     githubUnavailable,
@@ -172,7 +172,7 @@ export function TaskPageGitHubList({
                   variant="outline"
                   size="sm"
                   onClick={() => handleRetryIssuesFetch(s.sourceKey)}
-                  disabled={tasksLoading || retryingSourceKeys.has(s.sourceKey)}
+                  disabled={githubListPending || retryingSourceKeys.has(s.sourceKey)}
                 >
                   {retryingSourceKeys.has(s.sourceKey) ? (
                     <span className="flex items-center gap-1">
@@ -210,7 +210,7 @@ export function TaskPageGitHubList({
               variant="outline"
               size="sm"
               onClick={() => handleRetryIssuesFetch(r.sourceKey)}
-              disabled={tasksLoading || retryingSourceKeys.has(r.sourceKey)}
+              disabled={githubListPending || retryingSourceKeys.has(r.sourceKey)}
             >
               {retryingSourceKeys.has(r.sourceKey) ? (
                 <span className="flex items-center gap-1">

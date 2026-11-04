@@ -1,7 +1,11 @@
+import {
+  getProviderChecksOutcome,
+  summarizeProviderChecks
+} from './source-control/checks/provider-check-summary'
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceAttachment } from './worktree/types'
-import type { HostedReviewState } from './hosted-review'
-import { getWorkspaceAttachmentKey } from './workspace-attachment-normalization'
+import type { HostedReviewState } from './source-control/hosted-review/hosted-review-contracts'
+import { getWorkspaceAttachmentKey } from './workspace-attachments/workspace-attachment-normalization'
 import {
   summarizeWorkspaceReviewChecks,
   type WorkspaceReviewCheckDetails
@@ -161,4 +165,45 @@ describe('all workspace review checks', () => {
     ).toMatchObject({ total: 2, failed: 1, state: 'failure' })
     expect(summarizeWorkspaceReviewChecks([task], {})).toMatchObject({ state: 'none', total: 0 })
   })
+})
+
+it('counts nested cancelled and pending review outcomes once per review', () => {
+  const first = attachment(1)
+  const second = attachment(2)
+  const summaryFor = (...conclusions: string[]) =>
+    summarizeProviderChecks(conclusions.map((conclusion) => ({ status: 'completed', conclusion })))
+  const mixed = {
+    ...details(first, 'failure'),
+    review: {
+      ...details(first, 'failure').review!,
+      checksSummary: summaryFor('cancelled', 'pending')
+    }
+  }
+  const cancelled = {
+    ...details(second, 'failure'),
+    review: {
+      ...details(second, 'failure').review!,
+      checksSummary: summaryFor('cancelled', 'cancelled')
+    }
+  }
+  const alone = summarizeWorkspaceReviewChecks([first], map([[first, mixed]]))
+  expect(alone).toMatchObject({ total: 1, pending: 1, failed: 0, cancelled: 0 })
+  expect(getProviderChecksOutcome(alone)).toBe('pending')
+  const combined = summarizeWorkspaceReviewChecks(
+    [first, second],
+    map([
+      [first, mixed],
+      [second, cancelled]
+    ])
+  )
+  expect(combined).toMatchObject({ total: 2, failed: 1, cancelled: 1, pending: 1 })
+  expect(getProviderChecksOutcome(combined)).toBe('pending')
+  expect(
+    getProviderChecksOutcome(summarizeWorkspaceReviewChecks([second], map([[second, cancelled]])))
+  ).toBe('cancelled')
+  expect(
+    getProviderChecksOutcome(
+      summarizeWorkspaceReviewChecks([first, second], map([[second, cancelled]]))
+    )
+  ).not.toBe('success')
 })

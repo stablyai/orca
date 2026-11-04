@@ -1,10 +1,10 @@
-import type { AgentStatus } from './agent-title-core'
-import type { ParsedAgentStatusPayload } from './agent-status-types'
+import type { AgentStatus } from './agent-status/title/agent-title-core'
+import type { ParsedAgentStatusPayload } from './agent-status/contracts/agent-status-types'
 import {
   createAgentStatusOscProcessor,
   type ProcessedAgentStatusChunk,
   type ProgramActivityChange
-} from './agent-status-osc'
+} from './agent-status/transport/agent-status-osc'
 import { programStatusActivity } from './program-status/activity'
 import {
   createProgramStatusProjector,

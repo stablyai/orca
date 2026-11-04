@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { BrowserExtensionSource } from '../../../shared/browser-extension-types'
+import type { BrowserExtensionSource } from '../../../shared/browser/extensions/browser-extension-types'
 
 /** One wording for every remove prompt (Settings, toolbar, store page): Orca removes it everywhere. */
 export function browserExtensionRemovalDescription(source: BrowserExtensionSource): string {

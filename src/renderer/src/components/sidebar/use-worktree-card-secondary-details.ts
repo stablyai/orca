@@ -1,9 +1,9 @@
 import React, { useCallback } from 'react'
 import type { WorkspaceAttachment } from '../../../../shared/worktree/types'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { buildWorkspaceAttachmentEdits } from './worktree-attachment-editing'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { toast } from 'sonner'
 
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'

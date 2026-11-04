@@ -5,7 +5,7 @@ import {
   automationLaunchWorkspace
 } from './automation-launch-surface'
 import { toast } from 'sonner'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
 import { translate } from '@/i18n/i18n'
 import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../shared/terminal-multiplex-flow-control'
+import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import {
   iterateTerminalOutputFrameChunks,
   type TerminalOutputMeta

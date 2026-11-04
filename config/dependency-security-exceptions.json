@@ -40,19 +40,6 @@
   },
   {
     "workspace": "mobile",
-    "package": "node-forge",
-    "version": "1.4.0",
-    "advisory": "GHSA-86w9-cpqp-85rv",
-    "owner": "Orca maintainers",
-    "reason": "RSA DigestAlgorithm rejects extra nested elements via the patch merged in #31681, covered by mobile/scripts/dependency-security-patches.test.ts. Remove when a fixed upstream release is available.",
-    "expires": "2026-11-20",
-    "patch": {
-      "path": "patches/node-forge@1.4.0.patch",
-      "sha256": "2798686e4488058ad81c3b8e32eb763c0feff21f4c717ce4d13b6ef2432cd5b8"
-    }
-  },
-  {
-    "workspace": "mobile",
     "package": "zod",
     "version": "3.25.76",
     "advisory": "GHSA-mrhx-c7xc-m3w5",

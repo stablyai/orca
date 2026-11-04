@@ -6,6 +6,7 @@ import { ScrollSpeedSlider } from './TerminalScrollSpeedSlider'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
+import { getTerminalScrollOnUserInputSearchEntry } from './appearance/terminal-pane-appearance-search'
 import { getTerminalRightClickToPasteSearchEntry } from './platform/terminal-windows-search'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../../terminal-pane/osc52-clipboard-setting-anchor'
 import { isMacPlatform } from '../../terminal-pane/terminal-link-open-hints'
@@ -14,7 +15,8 @@ import {
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
   DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
   normalizeTerminalFastScrollSensitivity,
-  normalizeTerminalScrollSensitivity
+  normalizeTerminalScrollSensitivity,
+  resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
@@ -61,7 +63,7 @@ export function TerminalInteractionSection({
         )}
         description={translate(
           'auto.components.settings.TerminalPane.96fe15def8',
-          'Mouse and clipboard behavior for terminal panes.'
+          'Scrolling, mouse, and clipboard behavior for terminal panes.'
         )}
       />
 
@@ -181,6 +183,27 @@ export function TerminalInteractionSection({
               />
             </div>
           </div>
+        </SearchableSetting>
+
+        <SearchableSetting {...getTerminalScrollOnUserInputSearchEntry()[0]}>
+          <SettingsSwitchRow
+            label={translate(
+              'components.settings.TerminalInteraction.scrollOnUserInput',
+              'Scroll to Bottom on Input'
+            )}
+            description={translate(
+              'components.settings.TerminalInteraction.scrollOnUserInputDescription',
+              'Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place.'
+            )}
+            checked={resolveTerminalScrollOnUserInput(settings.terminalScrollOnUserInput)}
+            onChange={() =>
+              updateSettings({
+                terminalScrollOnUserInput: !resolveTerminalScrollOnUserInput(
+                  settings.terminalScrollOnUserInput
+                )
+              })
+            }
+          />
         </SearchableSetting>
 
         {matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry()) ? (

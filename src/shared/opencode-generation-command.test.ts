@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planCommitMessageGeneration } from './commit-message-plan'
+import { planCommitMessageGeneration } from './source-control/ai/generation/commit-message-plan'
 import { openCodeVariantRetryPlan } from './opencode-generation-command'
 
 const rejection = 'Unrecognized flag: --variant in command opencode run'

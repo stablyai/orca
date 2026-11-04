@@ -19,12 +19,7 @@ export { ActionButton } from './source-control/listing/action-button'
 export { BRANCH_REFRESH_INTERVAL_MS } from './source-control/sync/use-branch-compare'
 export { CommitArea } from './source-control/commit/commit-area'
 export { handleSourceControlCommitShortcut } from './source-control/commit/commit-shortcut'
-export {
-  resolveSourceControlBaseRef,
-  resolveSourceControlCompareBaseRef,
-  resolveSourceControlPickerBaseRef,
-  shouldClearBranchCompareForMissingBase
-} from '../../../../shared/source-control-base-ref-resolution'
+
 export {
   normalizeSourceControlViewMode,
   readCommitDraftForWorktree,
@@ -39,16 +34,6 @@ export {
   refreshSourceControlAfterRemoteAction
 } from './source-control/sync/remote-refresh'
 
-export {
-  appendCommitFailureCustomInstruction,
-  appendPushFailureCustomInstruction,
-  buildCommitFailureAgentCommandInput,
-  buildFixCommitFailurePrompt,
-  buildFixPushFailurePrompt,
-  buildPushFailureAgentCommandInput,
-  buildResolveConflictsPrompt,
-  buildResolvePullRequestConflictsPrompt
-} from './source-control/ai/prompts'
 export {
   hasConfiguredCommitMessageGenerationDefaults,
   hasConfiguredSourceControlTextGenerationDefaults

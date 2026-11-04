@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
+import type { AiVaultScanWork } from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import {
   AI_VAULT_SCAN_PROGRESS_INTERVAL_MS,
   noteAiVaultScanFileFound,

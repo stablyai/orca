@@ -3,24 +3,24 @@ import {
   type SourceControlAiRepoUpdate,
   saveSourceControlActionRecipe,
   toSourceControlAiRepoUpdate
-} from '../../../../../../shared/source-control-ai-recipe-save'
+} from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 // @vitest-environment happy-dom
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, cleanup, fireEvent, screen, within, waitFor } from '@testing-library/react'
 import { pickerLocaleFixture } from '../../__fixtures__/settings-persistence-test-fixture'
 import React from 'react'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { createRepoActionTextDraftEditors } from './repository-source-control-ai-text-draft'
-import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
-import { setSourceControlActionAgentDefault } from '../../../../../../shared/source-control-ai-actions'
+import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { setSourceControlActionAgentDefault } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   computeActionDirtyById,
   withRepoAiActionMode,
   withRepoAiActionRecipeText
 } from './repository-source-control-ai-draft'
 import { withRepoAiActionAgent } from './repository-source-control-ai-action-agent-draft'
-import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control-ai-operation-policy'
+import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 
 import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control-action-recipe-match'
 import { SourceControlActionAgentPicker } from '../../source-control/SourceControlActionAgentPicker'
@@ -30,16 +30,16 @@ import { SourceControlAiActionRecipeDefaults } from '../../source-control/Source
 import { useAppStore } from '../../../../store/index'
 import { TooltipProvider } from '../../../ui/tooltip'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control-action-launch-preferences'
-import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch-settings'
+import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { clearHostAgentMenuSettingsForTests } from '../../../../runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { mutateHostAgentLaunchSettings } from '../../../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
-import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-startup-plan-inputs'
-import { buildAgentStartupPlan } from '../../../../../../shared/tui-agent-startup'
-import { tokenizeStartupCommand } from '../../../../../../shared/tui-agent-startup-shell'
+import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
+import { tokenizeStartupCommand } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 const rpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: rpc,
@@ -511,8 +511,9 @@ it.each([1, 10])(
       expect(
         deadlines().every((id) => cleared.mock.calls.some(([clearedId]) => clearedId === id))
       ).toBe(true)
+      // Five launch rows plus the three text cards' pickers.
       const previews = () => view.queryAllByRole('button', { name: 'Select agent' })
-      expect(previews()).toHaveLength(5 * sections)
+      expect(previews()).toHaveLength(8 * sections)
       fireEvent.change(view.container.querySelector('textarea')!, { target: { value: 'edited' } })
       expect(gets()).toHaveLength(1)
       view.rerender(tree(1))
@@ -531,7 +532,7 @@ it.each([1, 10])(
       await act(async () =>
         refresh.resolve({ settings: projectAgentLaunchSettings({ defaultTuiAgent: 'claude' }) })
       )
-      expect(previews()).toHaveLength(5)
+      expect(previews()).toHaveLength(8)
       rpc.mockImplementation((_target, method) =>
         method === 'settings.getAgentLaunch'
           ? new Promise(() => {})

@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path'
 import {
   RuntimeHostDescriptorSchema,
   type RuntimeHostDescriptor
-} from '../../shared/runtime-host-descriptor'
+} from '../../shared/remote-runtime/host-status/runtime-host-descriptor'
 import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
 import { withFileTransactionLock } from '../filesystem/file-transaction-lock'
 import type { RuntimeSourceStamp } from '../../shared/runtime-source-env'

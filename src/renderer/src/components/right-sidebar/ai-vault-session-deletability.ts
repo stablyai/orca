@@ -1,12 +1,13 @@
-import { isAiVaultDeletableAgent } from '../../../../shared/ai-vault-session-deletion'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import {
+  isAiVaultDeletableAgent,
+  isAiVaultSyntheticSessionPath as isSyntheticAiVaultSessionPath
+} from '../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseRoutableExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
-import { agentLabel } from './ai-vault-session-filters'
-import {
-  canUseLocalAiVaultSessionPathActions,
-  isSyntheticAiVaultSessionPath
-} from './ai-vault-session-path-actions'
+import './ai-vault-session-filters'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
+import { canUseLocalAiVaultSessionPathActions } from './ai-vault-session-path-actions'
 
 /** How the row's owning host answers delete; null support means not yet probed, so the click checks. */
 export type AiVaultSessionDeleteHost = {

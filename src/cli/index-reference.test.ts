@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -42,9 +45,9 @@ vi.mock('child_process', async () => {
 
 import { main } from './index'
 import { buildWorktree, okFixture } from './test-fixtures'
-import { getWorkspaceReferenceIdentity } from '../shared/workspace-reference-identity'
+import { getWorkspaceReferenceIdentity } from '../shared/workspace-attachments/workspace-reference-identity'
 import type { WorkspaceAttachment } from '../shared/worktree/types'
-import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachment-capabilities'
+import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachments/workspace-attachment-capabilities'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 const PR = 'https://github.com/acme/api/pull/5123'

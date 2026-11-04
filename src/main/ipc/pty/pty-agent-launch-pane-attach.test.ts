@@ -9,7 +9,7 @@ import {
   resetAgentLaunchPanesForTests,
   trackRunningAgentLaunchPane
 } from '../../agent-launch/agent-launch-pane-attachment'
-import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../shared/agent-launch-pane-verdict'
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { endPaneAgentLaunch } from './ipc/spawn-agent-launch-end'
 import { createPtyIpcSpawnState } from './ipc/spawn-state'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -57,10 +57,10 @@ vi.mock('../../memory/pty-registry', () =>
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../../codex/codex-pane-account-registry', () =>
+vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 

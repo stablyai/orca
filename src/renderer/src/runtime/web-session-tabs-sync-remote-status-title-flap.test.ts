@@ -1,14 +1,12 @@
 /** Paired panes receive both client byte-derived status/titles and host snapshot echoes. Proven client ownership must fence stale echoes despite cross-machine clocks; teardown returns authority and host-only states pierce the fence. Drive real mirror/store logic with controlled clocks and assert transition order/count, including generatedLabel and epoch stability. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../shared/agent-status-types'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import { deriveGeneratedTabTitle } from '../../../shared/agent-tab-title'
+import { deriveGeneratedTabTitle } from '../../../shared/agent-status/presentation/agent-tab-title'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'

@@ -10,7 +10,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     disposition: 'rewrite-desktop',
     item: 42
   },
-  'src/renderer/src/components/editor/ipynb-kernel-store.ts': {
+  'src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-store.ts': {
     disposition: 'rewrite-desktop',
     item: 43
   },
@@ -112,7 +112,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/ai-vault-search/session-search-write-buffer.ts': 'ai-vault-search-staging',
   'src/main/ai-vault/parse-cache/session-parse-cache-database.ts': 'ai-vault-parse-cache',
   'src/main/ai-vault/parse-cache/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
-  'src/main/browser/cookies/browser-cookie-staged-import.ts': 'browser-cookie-import',
+  'src/main/browser/cookies/staging/browser-cookie-staged-import.ts': 'browser-cookie-import',
   'src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts':
     'agent-session-journal',
   'src/main/native-chat/agent-session-journal/command-receipt-schema.ts': 'agent-session-journal',
@@ -137,7 +137,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
     'test-fixture',
   'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
-  'src/main/codex/codex-state-db-test-fixture.ts': 'test-fixture',
+  'src/main/codex/history/index/codex-state-db-test-fixture.ts': 'test-fixture',
   'src/main/opencode-usage/opencode-usage-sqlite-fixture.ts': 'test-fixture'
 }
 

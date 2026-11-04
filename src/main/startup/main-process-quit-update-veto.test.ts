@@ -22,13 +22,13 @@ const dependencyExports: [string, string[]][] = [
   ['../runtime/files/watch/file-watcher-leases', ['awaitRuntimeFileWatcherUnsubscribes']],
   ['../runtime/runtime-metadata', ['clearRuntimeMetadataIfOwned']],
   [
-    '../browser/paired-runtime-browser-client-host-runtime',
+    '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime',
     ['shutdownPairedRuntimeBrowserClientHosts']
   ],
-  ['../ipc/desktop-browser-bridge-wiring', ['disposeDesktopBrowserBridge']],
+  ['../ipc/browser/desktop-browser-bridge-wiring', ['disposeDesktopBrowserBridge']],
   ['../orca-profiles/profile-cloud-session-owner', ['flushUnsavedCloudSessions']],
   ['../browser/browser-manager', ['browserManager']],
-  ['../browser/browser-session-registry', ['browserSessionRegistry']],
+  ['../browser/sessions/browser-session-registry', ['browserSessionRegistry']],
   ['../codex/codex-state-db-backfill-recovery', ['stopCodexStateDbBackfillRecoveries']],
   ['../codex/codex-account-session-bridge', ['stopCodexAccountSessionBridges']],
   ['../git/refs/maintenance/local-repo-ref-maintenance', ['awaitPackedRefsLockRelease']],

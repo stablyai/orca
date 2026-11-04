@@ -26,7 +26,7 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', as
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
@@ -482,7 +482,7 @@ describe('a new chat picker’s first frame', () => {
     expect(next.frames[0]).toEqual({
       model: 'grok-build',
       label: 'Grok Build',
-      effort: 'high',
+      effort: null,
       usable: true
     })
     next.unmount()

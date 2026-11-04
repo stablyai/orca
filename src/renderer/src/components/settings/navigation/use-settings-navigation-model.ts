@@ -11,7 +11,7 @@ import {
 import { getProjectHostSetupProjectionFromState } from '../../../store/project-host-setup-selector'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from '../search/settings-search'
 import { deriveNeededSectionIds } from '../page/settings-load-performance'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS as SCROLLBACK_PRESETS_ROWS } from '../../../../../shared/terminal-scrollback-policy'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS as SCROLLBACK_PRESETS_ROWS } from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
 import type { SettingsStoreModel } from '../page/use-settings-store-model'
 import type { SettingsInteractionController } from '../page/use-settings-interaction-controller'
 import { hasReadyVoiceModel } from './settings-navigation-foundations'

@@ -17,9 +17,12 @@ import {
 import { AgentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { StructuredAgentSessionMutationContext } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-context'
 import { readStructuredAgentSessionOptions } from '../../native-chat/agent-session-wire/structured-agent-session-options-read'
-import { structuredAgentSessionSendSelection } from '../../../shared/agent-session/options/structured-agent-session-option-view'
+import {
+  structuredAgentSessionSendSelection,
+  structuredAgentSessionShownSnapshot
+} from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import { claudeAndCodexAgents } from '../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
-import { composeCodexSessionOptionCatalog } from '../../codex/codex-structured-model-catalog'
+import { composeCodexSessionOptionCatalog } from '../../codex/structured/catalog/codex-structured-model-catalog'
 import { listedModels } from './launch/claude-structured-model-catalog'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
@@ -242,7 +245,7 @@ function pickerEffortRow(result: Awaited<ReturnType<typeof readAtRest>>, agent =
     seed,
     result
   )
-  return structuredAgentSessionOptionSnapshot(state).find((row) => row.id === 'effort')
+  return structuredAgentSessionShownSnapshot(state).find((row) => row.id === 'effort')
 }
 
 function pickerEffort(result: Awaited<ReturnType<typeof readAtRest>>, agent = 'claude') {
@@ -271,7 +274,8 @@ describe('Claude effort default at rest', () => {
 
     const result = await readAtRest(store, restingRecord({ model: 'opus[1m]' }))
 
-    expect(result.current).toMatchObject({ model: 'opus[1m]', effort: 'medium' })
+    expect(result.current).toMatchObject({ model: 'opus[1m]' })
+    expect(result.current.effort).toBeUndefined()
     expect(pickerEffort(result)).toBe('medium')
   })
 
@@ -290,7 +294,7 @@ describe('Claude effort default at rest', () => {
       return { shown, sends: structuredAgentSessionSendSelection(state)?.model }
     }
     const reopened = await readAtRest(store, restingRecord({}, [{ origin: 'adopted' }]))
-    expect(reopened.current).toMatchObject({ model: 'opus[1m]', defaulted: ['model', 'effort'] })
+    expect(reopened.current).toMatchObject({ model: 'opus[1m]', defaulted: ['model'] })
     expect(picker(reopened)).toEqual({ shown: 'opus[1m]', sends: undefined })
 
     const ran = (await child.readOptions({ sessionId: SESSION, fence: 7 })).current
@@ -498,7 +502,9 @@ describe('Claude effort default at rest', () => {
     expect(reported).not.toHaveProperty('effort')
     const record = restingRecord({ model: 'opus[1m]' })
     expect(record.options).toEqual({ model: 'opus[1m]' })
-    expect((await readAtRest(store, record)).current.effort).toBe('medium')
+    const result = await readAtRest(store, record)
+    expect(result.current.effort).toBeUndefined()
+    expect(pickerEffort(result)).toBe('medium')
     expect(record.options).toEqual({ model: 'opus[1m]' })
   })
 })

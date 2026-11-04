@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
 import { useAppStore } from '@/store'
 import { structuredChatTabBySessionId } from '@/lib/structured-chat-tab-index'
