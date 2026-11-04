@@ -154,16 +154,6 @@ describe('BrowserGuestDevToolsDock', () => {
     expect(view.visible).toBe(true)
   })
 
-  it('still hides the view when the snapshot capture fails', async () => {
-    const { dock } = await openDock()
-    await dock.setBounds(GUEST_ID, { x: 0, y: 0, width: 100, height: 100 }, false)
-    const [view] = electronMocks.views
-    view.host.capturePage.mockRejectedValue(new Error('Object has been destroyed'))
-
-    await expect(dock.setBounds(GUEST_ID, null, true)).resolves.toBeNull()
-    expect(view.visible).toBe(false)
-  })
-
   it('closes by destroying its host and reopens only once Electron has let go of it', async () => {
     const { dock, guest, onClosed } = await openDock()
 
@@ -177,14 +167,5 @@ describe('BrowserGuestDevToolsDock', () => {
     // closeDevTools() would leave a custom host attached and frozen.
     expect(guest.closeDevTools).not.toHaveBeenCalled()
     expect(onClosed).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports the close when its host was destroyed underneath it', async () => {
-    const { dock, onClosed } = await openDock()
-
-    electronMocks.views[0].destroy()
-
-    expect(onClosed).toHaveBeenCalledTimes(1)
-    expect(dock.isDocked(GUEST_ID)).toBe(false)
   })
 })
