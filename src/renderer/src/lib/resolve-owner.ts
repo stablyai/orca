@@ -1,3 +1,4 @@
+import { floatingWorkspaceEnvironmentId } from '../../../shared/floating-workspace-id'
 /**
  * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone.
  */
@@ -100,6 +101,13 @@ export function resolveOwner(
   state: WorktreeOperationRouteState,
   ref: WorkspaceOwnerRef
 ): ExecutionHostOwnerMatch<HostAuthority> {
+  const floatingOwner = floatingWorkspaceEnvironmentId(ref.workspaceId)
+  if (floatingOwner) {
+    if (ref.hostId && ref.hostId !== toRuntimeExecutionHostId(floatingOwner)) {
+      return { kind: 'ambiguous' }
+    }
+    return toOwnerMatch(resolveWorktreeOperationRouteResult(state, ref.workspaceId))
+  }
   if (getFloatingWorkspaceOperationRoute(ref.workspaceId)) {
     return { kind: 'resolved', owner: SELF_LOCAL_AUTHORITY }
   }

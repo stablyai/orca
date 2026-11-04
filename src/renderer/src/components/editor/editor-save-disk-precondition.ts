@@ -1,3 +1,5 @@
+import { floatingWorkspaceEnvironmentId } from '../../../../shared/floating-workspace-id'
+import { writeFloatingMarkdownFile } from '@/runtime/floating-markdown-write'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { toEditorModelUri } from './editor-model-uri'
@@ -133,6 +135,9 @@ export function editorSaveGrant(
   context: RuntimeFileOperationArgs,
   getState: () => Pick<AppState, 'setTerminalArtifactGrant'>
 ): EditorSaveGrant | Promise<EditorSaveGrant> | undefined {
+  if (floatingWorkspaceEnvironmentId(file.worktreeId)) {
+    return undefined
+  }
   const onRenewed = (renewed: string): void => getState().setTerminalArtifactGrant(file.id, renewed)
   const expectedEnvironmentPairingRevision =
     context.target.kind === 'environment'
@@ -184,6 +189,9 @@ export function writeEditorSave(
           ...(write.requireLosslessUtf8 ? { requireLosslessUtf8: true } : {})
         }
       : undefined
+  if (floatingWorkspaceEnvironmentId(context.worktreeId)) {
+    return writeFloatingMarkdownFile(context, filePath, content, precondition, beforeSend)
+  }
   if (grant) {
     // Why: a granted host file must never fall through to a write of this computer's same path.
     if (context.target.kind !== 'environment' || !context.worktreeId) {

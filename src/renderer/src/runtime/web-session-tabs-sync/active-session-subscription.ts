@@ -7,10 +7,7 @@ import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
 import { mirroredRuntimeEnvironmentIdForWorkspace } from './mirrored-workspace-owner'
 import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
 import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
-import {
-  installWindowVisibilitySubscriptionParking,
-  type WindowVisibilitySubscriptionParking
-} from '../window-visibility-subscription-parking'
+import { installWindowVisibilitySubscriptionParking } from '../window-visibility-subscription-parking'
 import { shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
 import {
   decideWebSessionTabsSnapshot,
@@ -37,32 +34,21 @@ import {
   endWebRuntimeWakeTerminalRespawn,
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from '../web-runtime-wake-terminal-respawn'
-import { createWebRuntimeSessionTerminal } from '../web-runtime-terminal-creation'
+import { createWebRuntimeSessionTerminalForHost } from '../web-runtime-terminal-creation'
 import { releaseWebRuntimeInitialTerminalBootstrapOnMirrorFrame } from '../web-runtime-initial-terminal-bootstrap'
 import { createInitialTerminalSeeder } from './initial-terminal-seeder'
 import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
 import { isSessionTabsStreamEnd, type SessionTabsStreamEvent } from './state'
-import type { SessionTabsSnapshotHandler } from './visibility-resume-types'
+import type {
+  ActiveSubscriptionArgs,
+  ActiveSessionTabsSubscription
+} from './active-session-subscription-types'
+export type {
+  ActiveSubscriptionArgs,
+  ActiveSessionTabsSubscription
+} from './active-session-subscription-types'
 import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
-
-type Ref<T> = { current: T }
-
-export type ActiveSubscriptionArgs = {
-  activeWorktreeId: string | null
-  activeWorktreeRuntimeEnvironmentId: string | null | undefined
-  activeWorktreeRuntimeConnectionGeneration: number
-  activeWorktreeRuntimePairingRevision: number | undefined
-  workspaceSessionReady: boolean
-  visibilitySnapshotReceipt: Ref<SessionTabsSnapshotHandler<void>>
-  visibilitySnapshotApply: Ref<SessionTabsSnapshotHandler<boolean>>
-  visibilitySnapshotAccepted: Ref<SessionTabsSnapshotHandler<void>>
-}
-
-export type ActiveSessionTabsSubscription = WindowVisibilitySubscriptionParking & {
-  /** The worktree became selected again while its stream stayed warm. */
-  reconsiderSelected: () => void
-}
 
 export function installActiveSessionTabsSubscription({
   activeWorktreeId,
@@ -70,6 +56,8 @@ export function installActiveSessionTabsSubscription({
   activeWorktreeRuntimeConnectionGeneration,
   activeWorktreeRuntimePairingRevision,
   workspaceSessionReady,
+  projectSnapshot,
+  onError,
   visibilitySnapshotReceipt,
   visibilitySnapshotApply,
   visibilitySnapshotAccepted
@@ -202,7 +190,7 @@ export function installActiveSessionTabsSubscription({
         beginWebRuntimeWakeTerminalRespawn(activeWorktreeId)
       ) {
         requestedRespawnAfterWake = true
-        await createWebRuntimeSessionTerminal({
+        await createWebRuntimeSessionTerminalForHost({
           worktreeId: activeWorktreeId,
           environmentId,
           activate: true,
@@ -238,6 +226,7 @@ export function installActiveSessionTabsSubscription({
                 return
               }
               if (response.ok === false) {
+                onError?.(new Error(response.error.message))
                 console.warn('[web-session-tabs-sync] subscription failed:', response.error.message)
                 ended()
                 return
@@ -246,8 +235,15 @@ export function installActiveSessionTabsSubscription({
                 ended()
                 return
               }
-              const event = response.result as SessionTabsStreamEvent
-              if (event.type !== 'snapshot' && event.type !== 'updated') {
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: session.tabs.subscribe returns SessionTabsStreamEvent; the discriminant is checked below.
+              const received = response.result as SessionTabsStreamEvent
+              if (received.type !== 'snapshot' && received.type !== 'updated') {
+                return
+              }
+              const event = projectSnapshot
+                ? { ...projectSnapshot(received), type: received.type }
+                : received
+              if (event.worktree !== activeWorktreeId) {
                 return
               }
               const runtimeId = getSessionTabsRuntimeIdFromResponse(response)
@@ -259,6 +255,7 @@ export function installActiveSessionTabsSubscription({
               void applyActiveSnapshot(event, response, isCurrent, frame, runtimeId)
                 .catch((error) => {
                   if (isCurrent()) {
+                    onError?.(error)
                     console.warn('[web-session-tabs-sync] active snapshot recovery failed:', error)
                   }
                   return null
@@ -271,6 +268,7 @@ export function installActiveSessionTabsSubscription({
             },
             onError: (error) => {
               if (isCurrent()) {
+                onError?.(error)
                 console.warn('[web-session-tabs-sync] subscription error:', error.message)
               }
             },
@@ -282,6 +280,7 @@ export function installActiveSessionTabsSubscription({
           }
         ),
       onSubscribeError: (error) => {
+        onError?.(error)
         console.warn(
           '[web-session-tabs-sync] failed to subscribe:',
           error instanceof Error ? error.message : String(error)

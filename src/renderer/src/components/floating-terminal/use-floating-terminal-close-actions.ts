@@ -3,7 +3,7 @@ import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-v
 import { useTabGroupCloseScopeCommands } from '@/components/tab-group/useTabGroupCloseScopeCommands'
 import { useTabGroupTabCloseCommands } from '@/components/tab-group/useTabGroupTabCloseCommands'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { useFloatingWorkspaceId } from '@/lib/floating-workspace-host'
 import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 
 type FloatingTerminalCloseActionsInput = Pick<
@@ -15,7 +15,7 @@ export function useFloatingTerminalCloseActions({
   activeGroup,
   groupTabs
 }: FloatingTerminalCloseActionsInput) {
-  const worktreeId = FLOATING_TERMINAL_WORKTREE_ID
+  const worktreeId = useFloatingWorkspaceId()
   const { closeItem, closeMany } = useTabGroupTabCloseCommands({ worktreeId })
   const scope = useTabGroupCloseScopeCommands({
     groupId: activeGroup?.id ?? '',

@@ -22149,6 +22149,14 @@
     "openFailed": "Could not open this file in the default app.",
     "openDefault": "Open in Default App"
   },
+  "remoteFloatingTerminal": {
+    "unpaired": "Host is no longer paired.",
+    "local": "Local",
+    "host": "Remote host",
+    "loading": "Loading remote sessions…",
+    "reconnect": "Reconnect",
+    "unavailableHost": "Unavailable host"
+  },
   "workspace": {
     "branchChoice": {
       "title": "Branch for this worktree",

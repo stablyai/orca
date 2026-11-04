@@ -1,3 +1,5 @@
+import { floatingWorkspaceId } from '../../../../shared/floating-workspace-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
@@ -73,66 +75,72 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
   })
 
-  it('resolves a HUB-native SSH PTY wake hint to its runtime terminal handle', async () => {
-    const leafId = '11111111-1111-4111-8111-111111111111'
-    runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
-      if (request.method === 'terminal.resolvePane') {
-        return {
-          ok: true,
-          result: {
-            terminal: {
-              handle: 'hub-terminal-1',
-              tabId: 'tab-1',
-              leafId,
-              ptyId: 'ssh:hub-private@@pty-2',
-              worktreeId: 'wt-1',
-              executionHostId: 'ssh:hub-private',
-              hostPlatform: 'win32'
+  it.each([
+    ['regular workspace', 'wt-1', 'wt-1'],
+    ['remote floating workspace', floatingWorkspaceId('hub-env'), FLOATING_TERMINAL_WORKTREE_ID]
+  ])(
+    'resolves a HUB-native SSH PTY wake hint in a %s',
+    async (_name, clientWorktreeId, hostWorktreeId) => {
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
+        if (request.method === 'terminal.resolvePane') {
+          return {
+            ok: true,
+            result: {
+              terminal: {
+                handle: 'hub-terminal-1',
+                tabId: 'tab-1',
+                leafId,
+                ptyId: 'ssh:hub-private@@pty-2',
+                worktreeId: hostWorktreeId,
+                executionHostId: 'ssh:hub-private',
+                hostPlatform: 'win32'
+              }
             }
           }
         }
-      }
-      throw new Error(`Unexpected method ${request.method}`)
-    })
-    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-    const transport = createRemoteRuntimePtyTransport('hub-env', {
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      leafId
-    })
-
-    const result = await transport.connect({
-      url: '',
-      cols: 120,
-      rows: 40,
-      sessionId: 'ssh:hub-private@@pty-2',
-      callbacks: {}
-    })
-
-    expect(result).toEqual({
-      id: 'remote:hub-env@@hub-terminal-1',
-      replay: '',
-      isReattach: true
-    })
-    expect(transport.getPtyId()).toBe('remote:hub-env@@hub-terminal-1')
-    expect(transport.getExecutionHostId?.()).toBe('ssh:hub-private')
-    expect(transport.getRemotePlatform?.()).toBe('win32')
-    expect(runtimeCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'hub-env',
-        method: 'terminal.resolvePane',
-        params: {
-          paneKey: `tab-1:${leafId}`,
-          worktreeId: 'wt-1'
-        }
+        throw new Error(`Unexpected method ${request.method}`)
       })
-    )
-    expect(runtimeCall).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'terminal.create' })
-    )
-    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
-    expect(latestSubscribePayload()).toMatchObject({ terminal: 'hub-terminal-1' })
-  })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('hub-env', {
+        worktreeId: clientWorktreeId,
+        tabId: 'tab-1',
+        leafId
+      })
+
+      const result = await transport.connect({
+        url: '',
+        cols: 120,
+        rows: 40,
+        sessionId: 'ssh:hub-private@@pty-2',
+        callbacks: {}
+      })
+
+      expect(result).toEqual({
+        id: 'remote:hub-env@@hub-terminal-1',
+        replay: '',
+        isReattach: true
+      })
+      expect(transport.getPtyId()).toBe('remote:hub-env@@hub-terminal-1')
+      expect(transport.getExecutionHostId?.()).toBe('ssh:hub-private')
+      expect(transport.getRemotePlatform?.()).toBe('win32')
+      expect(runtimeCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'hub-env',
+          method: 'terminal.resolvePane',
+          params: {
+            paneKey: `tab-1:${leafId}`,
+            worktreeId: hostWorktreeId
+          }
+        })
+      )
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'terminal.create' })
+      )
+      await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+      expect(latestSubscribePayload()).toMatchObject({ terminal: 'hub-terminal-1' })
+    }
+  )
 
   it('verifies a legacy pane response against the requested worktree session', async () => {
     runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {

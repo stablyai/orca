@@ -1,5 +1,7 @@
+import { floatingWorkspaceEnvironmentId } from '../../../shared/floating-workspace-id'
 // Resolve operation routes from worktree/detected rows and repos; owner disagreements remain ambiguous.
 import {
+  toRuntimeExecutionHostId,
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -47,6 +49,23 @@ export function resolveExplicitWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
+  const environmentId = floatingWorkspaceEnvironmentId(worktreeId)
+  if (environmentId) {
+    if (
+      state.removedRuntimeEnvironmentIds?.has(environmentId) ||
+      (state.runtimeEnvironmentCatalogHydrated &&
+        !state.runtimeEnvironments?.some((host) => host.id === environmentId))
+    ) {
+      return { kind: 'missing' }
+    }
+    return {
+      kind: 'resolved',
+      route: {
+        executionHostId: toRuntimeExecutionHostId(environmentId),
+        runtimeEnvironmentId: environmentId
+      }
+    }
+  }
   const known = findIndexedWorktrees(selectWorktreesByRepo(state), worktreeId)
   const detected = findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), worktreeId)
   const rows = known.length ? known : detected

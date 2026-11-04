@@ -1,3 +1,5 @@
+import { getSelectedFloatingWorkspaceId, useFloatingWorkspaceHost } from './floating-workspace-host'
+import { floatingWorkspaceEnvironmentId } from '../../../shared/floating-workspace-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { createUntitledMarkdownFileWithTemplateSelection } from './create-untitled-markdown'
 import { getConnectionId } from './connection-context'
@@ -23,11 +25,11 @@ export async function createFloatingWorkspaceTerminalTab(
   /** A split group's own "+"; omitted, the tab lands in the focused group. */
   groupId?: string
 ): Promise<void> {
-  const targetGroupId = groupId ?? store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+  const targetGroupId = groupId ?? store.activeGroupIdByWorktree[getSelectedFloatingWorkspaceId()]
 
-  // Floating scratchpad terminals stay local; focused remote runtimes must not own or snapshot-prune them.
+  // The floating host selector owns these tabs independently of sidebar focus.
   const tabId = createBrowserUuid()
-  store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride, { id: tabId })
+  store.createTab(getSelectedFloatingWorkspaceId(), targetGroupId, shellOverride, { id: tabId })
   focusTerminalTabSurface(tabId)
 }
 
@@ -36,18 +38,18 @@ export async function createFloatingWorkspaceBrowserTab(
 ): Promise<void> {
   assertClientCreationActionAvailable(
     store as AppState,
-    FLOATING_TERMINAL_WORKTREE_ID,
+    getSelectedFloatingWorkspaceId(),
     'managed-browser'
   )
-  const targetGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+  const targetGroupId = store.activeGroupIdByWorktree[getSelectedFloatingWorkspaceId()]
   const url = store.browserDefaultUrl ?? 'about:blank'
 
-  // Floating browsers follow terminals’ local-only ownership rule.
-  store.createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
+  // Browsers follow the selected floating host.
+  store.createBrowserTab(getSelectedFloatingWorkspaceId(), url, {
     title: translate('auto.lib.floating.workspace.tab.creation.f3785eddc2', 'New Browser Tab'),
     focusAddressBar: true,
     targetGroupId,
-    browserRuntimeEnvironmentId: null
+    browserRuntimeEnvironmentId: floatingWorkspaceEnvironmentId(getSelectedFloatingWorkspaceId())
   })
 }
 
@@ -70,6 +72,7 @@ export async function createFloatingWorkspaceMarkdownTab(
   if (!fileInfo) {
     return
   }
+  useFloatingWorkspaceHost.getState().selectHost(null)
   store.openFile(
     {
       ...fileInfo,

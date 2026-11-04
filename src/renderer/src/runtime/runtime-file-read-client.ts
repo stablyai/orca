@@ -1,3 +1,5 @@
+import { floatingWorkspaceEnvironmentId } from '../../../shared/floating-workspace-id'
+import { assertFloatingFileOwner, readFloatingMarkdownTab } from './floating-markdown-client'
 import type { RuntimeFilePreviewResult, RuntimeFileReadResult } from '../../../shared/runtime-types'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
@@ -74,6 +76,7 @@ async function readRuntimeFileContentAsStored({
   pageOversizedBinary,
   wakeWslDistro
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
+  assertFloatingFileOwner({ target, worktreeId })
   assertExternalSshReadOwnership(target, connectionId, expectedExternalSshTargetId)
   if (target.kind !== 'environment' || !worktreeId) {
     return window.api.fs.readFile({
@@ -85,6 +88,12 @@ async function readRuntimeFileContentAsStored({
       // A viewer reads images and PDFs by URL; baseline checks keep base64.
       ...(pageOversizedBinary && !connectionId ? { rangePreview: true } : {})
     })
+  }
+  if (floatingWorkspaceEnvironmentId(worktreeId)) {
+    const document = await readFloatingMarkdownTab({ target, worktreeId, filePath })
+    if (document) {
+      return { content: document.document.content, isBinary: false }
+    }
   }
   // Why: decided synchronously so ordinary reads pin their pairing without an extra await.
   if (isHostFileOutsideWorkspaces({ filePath, relativePath, grantId: terminalArtifactGrantId })) {

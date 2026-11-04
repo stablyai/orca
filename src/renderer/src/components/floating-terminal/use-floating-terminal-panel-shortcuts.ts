@@ -11,7 +11,7 @@ import { requestTerminalTabRename } from '@/components/tab-bar/terminal-tab-rena
 import { resolveTerminalAgentTabShortcut } from '@/components/terminal-agent-tab-shortcut'
 import { launchFloatingWorkspaceAgentShortcut } from '@/components/agent-tab-shortcut-launch'
 import { useAppStore } from '@/store'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { useFloatingWorkspaceId } from '@/lib/floating-workspace-host'
 import {
   keybindingMatchesAction,
   type KeybindingContext,
@@ -57,6 +57,7 @@ export function useFloatingTerminalPanelShortcuts({
   open,
   onOpenChange
 }: FloatingTerminalPanelShortcutsInput) {
+  const worktreeId = useFloatingWorkspaceId()
   // Terminal focus delegates pane closing to terminal dispatch; other panel focus closes the whole tab.
   const closeActiveFloatingTerminalPane = useCallback(() => {
     if (activeClosableTab) {
@@ -99,7 +100,7 @@ export function useFloatingTerminalPanelShortcuts({
         return { kind: 'close', focusedFloatingTerminal }
       }
       const agentShortcut = resolveTerminalAgentTabShortcut({
-        activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        activeWorktreeId: worktreeId,
         keybindings: state.keybindings,
         matchShortcut: (actionId) =>
           keybindingMatchesAction(actionId, input, platform, state.keybindings, matchOptions)
@@ -121,7 +122,7 @@ export function useFloatingTerminalPanelShortcuts({
         ? { kind: 'index', index: panelShortcut.index }
         : { kind: 'chrome', action: panelShortcut.action }
     },
-    [activeTab]
+    [activeTab, worktreeId]
   )
 
   const applyFloatingPanelShortcut = useCallback(
@@ -135,9 +136,7 @@ export function useFloatingTerminalPanelShortcuts({
         if (resolution.action === 'tab.newTerminal') {
           createFloatingTerminalTab()
         } else if (resolution.action === 'tab.newBrowser') {
-          if (
-            !ensureClientCreationActionAllowed(FLOATING_TERMINAL_WORKTREE_ID, 'managed-browser')
-          ) {
+          if (!ensureClientCreationActionAllowed(worktreeId, 'managed-browser')) {
             return 'handled'
           }
           createFloatingBrowserTab()
@@ -206,7 +205,8 @@ export function useFloatingTerminalPanelShortcuts({
       onOpenChange,
       openFloatingMarkdownTab,
       toggleMaximized,
-      visibleFloatingTabOrder
+      visibleFloatingTabOrder,
+      worktreeId
     ]
   )
 

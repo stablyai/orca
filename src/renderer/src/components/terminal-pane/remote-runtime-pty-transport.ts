@@ -79,6 +79,7 @@ import type {
   RemoteRuntimeSnapshotOutcome
 } from '../../runtime/remote-runtime-terminal-multiplexer-types'
 import {
+  toRuntimeWorktreeId,
   toRuntimeTerminalWorktreeSelector,
   toRuntimeWorktreeSelector
 } from '../../runtime/runtime-worktree-selector'
@@ -1149,7 +1150,7 @@ export function createRemoteRuntimePtyTransport(
     try {
       const resolved = await callRuntime<{ terminal: RuntimeTerminalResolvePane }>(
         'terminal.resolvePane',
-        { paneKey: `${hostTabId}:${leafId}`, worktreeId }
+        { paneKey: `${hostTabId}:${leafId}`, worktreeId: toRuntimeWorktreeId(worktreeId) }
       )
       // Why: wire data; an answer without a pane must read as unresolved, not throw past this catch.
       return resolved.terminal ?? null
@@ -1216,7 +1217,7 @@ export function createRemoteRuntimePtyTransport(
       terminal.handle === hostHandle &&
       terminal.tabId === hostTabId &&
       terminal.leafId === leafId &&
-      (!terminal.worktreeId || terminal.worktreeId === worktreeId)
+      (!terminal.worktreeId || terminal.worktreeId === toRuntimeWorktreeId(worktreeId ?? ''))
     let resolvedPane = await earlyPaneResolution
     const activationIncarnationId = authoritativePtyIncarnationId
     if (
@@ -1469,7 +1470,7 @@ export function createRemoteRuntimePtyTransport(
     try {
       const resolved = await callRuntime<{ terminal: RuntimeTerminalResolvePane }>(
         'terminal.resolvePane',
-        { paneKey, worktreeId }
+        { paneKey, worktreeId: toRuntimeWorktreeId(worktreeId) }
       )
       terminal = resolved.terminal
     } catch (error) {
@@ -1490,7 +1491,8 @@ export function createRemoteRuntimePtyTransport(
     if (
       terminal.tabId !== tabId ||
       terminal.leafId !== leafId ||
-      (terminal.worktreeId !== undefined && terminal.worktreeId !== worktreeId)
+      (terminal.worktreeId !== undefined &&
+        terminal.worktreeId !== toRuntimeWorktreeId(worktreeId ?? ''))
     ) {
       throw new Error('terminal_owner_mismatch')
     }
@@ -1684,7 +1686,7 @@ export function createRemoteRuntimePtyTransport(
     const hostTabId = isWebTerminalSurfaceTabId(tabId) ? toHostSessionTabId(tabId) : tabId
     void callRuntime<{ terminal: RuntimeTerminalResolvePane }>('terminal.recoverPane', {
       paneKey: `${hostTabId}:${leafId}`,
-      worktreeId,
+      worktreeId: toRuntimeWorktreeId(worktreeId),
       expectedTerminal: expiredHandle
     })
       .then(async ({ terminal }) => {
@@ -2428,7 +2430,7 @@ export function createRemoteRuntimePtyTransport(
       }
       const resolved = await callRuntime<{ terminal?: RuntimeTerminalResolvePane }>(
         'terminal.resolvePane',
-        { paneKey: `${paneTabId}:${leafId}`, worktreeId }
+        { paneKey: `${paneTabId}:${leafId}`, worktreeId: toRuntimeWorktreeId(worktreeId) }
       )
       const pane = resolved.terminal
       return (

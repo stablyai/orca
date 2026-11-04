@@ -10,7 +10,9 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { useFloatingWorkspaceId, useFloatingWorkspaceHost } from '@/lib/floating-workspace-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { floatingWorkspaceEnvironmentId } from '../../../../shared/floating-workspace-id'
 import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelStoreState } from './use-floating-terminal-panel-store-state'
@@ -41,6 +43,7 @@ export function useFloatingTerminalCreateActions({
   groupTabs,
   markdownCwd
 }: FloatingTerminalCreateActionsInput) {
+  const worktreeId = useFloatingWorkspaceId()
   const activateFloatingItem = useCallback(
     (visibleId: string) => {
       const item = resolveGroupTabFromVisibleId(groupTabs, visibleId)
@@ -54,41 +57,39 @@ export function useFloatingTerminalCreateActions({
       } else if (item.contentType === 'browser') {
         const workspace = useAppStore
           .getState()
-          .browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.find(
-            (tab) => tab.id === item.entityId
-          )
+          .browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === item.entityId)
         if (workspace?.activePageId && window.api?.browser) {
           void window.api.browser.notifyActiveTabChanged({ browserPageId: workspace.activePageId })
         }
       }
     },
-    [activateTab, groupTabs, setActiveTab]
+    [activateTab, groupTabs, setActiveTab, worktreeId]
   )
 
   const createFloatingTerminalTab = useCallback(
     (shellOverride?: string) => {
       const tabId = createBrowserUuid()
-      createTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id, shellOverride, { id: tabId })
+      createTab(worktreeId, activeGroup?.id, shellOverride, { id: tabId })
       focusTerminalTabSurface(tabId)
     },
-    [activeGroup, createTab]
+    [activeGroup, createTab, worktreeId]
   )
 
   const createFloatingBrowserTab = useCallback(() => {
-    if (!ensureClientCreationActionAllowed(FLOATING_TERMINAL_WORKTREE_ID, 'managed-browser')) {
+    if (!ensureClientCreationActionAllowed(worktreeId, 'managed-browser')) {
       return
     }
     const url = browserDefaultUrl ?? 'about:blank'
-    createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
+    createBrowserTab(worktreeId, url, {
       title: translate(
         'auto.components.floating.terminal.FloatingTerminalPanel.8b14ba6c17',
         'New Browser Tab'
       ),
       focusAddressBar: true,
       targetGroupId: activeGroup?.id,
-      browserRuntimeEnvironmentId: null
+      browserRuntimeEnvironmentId: floatingWorkspaceEnvironmentId(worktreeId)
     })
-  }, [activeGroup, browserDefaultUrl, createBrowserTab])
+  }, [activeGroup, browserDefaultUrl, createBrowserTab, worktreeId])
 
   const createFloatingMarkdownTab = useCallback(() => {
     if (!markdownCwd) {
@@ -105,16 +106,17 @@ export function useFloatingTerminalCreateActions({
         if (!fileInfo) {
           return
         }
+        useFloatingWorkspaceHost.getState().selectHost(null)
         openFile(fileInfo, {
           preview: false,
-          targetGroupId: activeGroup?.id,
+          targetGroupId: floatingWorkspaceEnvironmentId(worktreeId) ? undefined : activeGroup?.id,
           suppressActiveRuntimeFallback: true
         })
       } catch (error) {
         toast.error(extractIpcErrorMessage(error, 'Failed to create untitled markdown file.'))
       }
     })()
-  }, [activeGroup, markdownCwd, openFile])
+  }, [activeGroup, markdownCwd, openFile, worktreeId])
 
   const openFloatingMarkdownTab = useCallback(() => {
     void (async () => {
@@ -123,14 +125,15 @@ export function useFloatingTerminalCreateActions({
         if (!document) {
           return
         }
+        useFloatingWorkspaceHost.getState().selectHost(null)
         openDocumentInFloatingWorkspace(openFile, document, {
-          targetGroupId: activeGroup?.id
+          targetGroupId: floatingWorkspaceEnvironmentId(worktreeId) ? undefined : activeGroup?.id
         })
       } catch (error) {
         toast.error(extractIpcErrorMessage(error, 'Failed to open markdown file.'))
       }
     })()
-  }, [activeGroup, openFile])
+  }, [activeGroup, openFile, worktreeId])
 
   return {
     activateFloatingItem,

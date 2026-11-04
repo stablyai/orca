@@ -1,3 +1,4 @@
+import { useFloatingRuntimeSession } from './use-floating-runtime-session'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { createFloatingTerminalPanelDragActions } from './floating-terminal-panel-drag-actions'
 import type { FloatingTerminalPanelProps } from './floating-terminal-panel-types'
@@ -23,6 +24,7 @@ export function useFloatingTerminalPanelController({
   onOpenChange,
   tourInteractionSnapshot
 }: FloatingTerminalPanelProps) {
+  const remoteSession = useFloatingRuntimeSession(open)
   const storeState = useFloatingTerminalPanelStoreState()
   const shortcutDetails = useFloatingTerminalShortcutDetails()
   const localState = useFloatingTerminalPanelLocalState()
@@ -75,6 +77,7 @@ export function useFloatingTerminalPanelController({
   const orchestrationDismissal = useFloatingTerminalOrchestrationDismissal(localState)
 
   return {
+    remoteSession,
     open,
     onOpenChange,
     ...storeState,

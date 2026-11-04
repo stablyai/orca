@@ -3,7 +3,10 @@ import {
   deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab
 } from '../lib/agent-launch-prompt-delivery'
-import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
+import {
+  createWebRuntimeSessionTerminalResult,
+  createWebRuntimeSessionTerminalResultForHost
+} from './web-runtime-terminal-create-operation'
 import { notifyWebRuntimeTerminalCreateFailure } from './web-runtime-terminal-create-failure-notice'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { startStoppedWslHostForUserAct, stoppedWslHostMessage } from '../lib/wsl-host-user-start'
@@ -33,6 +36,20 @@ export async function createWebRuntimeSessionTerminal(
   ) {
     notifyWebRuntimeTerminalCreateFailure(created.outcome.message, {
       environmentId: args.environmentId ?? null,
+      worktreeId: args.worktreeId
+    })
+  }
+  return created.outcome
+}
+
+/** Background recovery must keep its captured host even if the user's selection changes. */
+export async function createWebRuntimeSessionTerminalForHost(
+  args: CreateWebRuntimeSessionTerminalArgs & { environmentId: string }
+): Promise<WebRuntimeTerminalCreateOutcome> {
+  const created = await createWebRuntimeSessionTerminalResultForHost(args)
+  if (created.hostFailed && created.outcome.status === 'failed') {
+    notifyWebRuntimeTerminalCreateFailure(created.outcome.message, {
+      environmentId: args.environmentId,
       worktreeId: args.worktreeId
     })
   }

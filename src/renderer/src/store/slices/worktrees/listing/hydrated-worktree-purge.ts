@@ -1,3 +1,4 @@
+import { floatingWorkspaceId } from '../../../../../../shared/floating-workspace-id'
 import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
@@ -62,6 +63,9 @@ export function purgeHydratedWorktrees(
     }
   }
   const validIds = new Set<string>([FLOATING_TERMINAL_WORKTREE_ID])
+  for (const environment of state.runtimeEnvironments ?? []) {
+    validIds.add(floatingWorkspaceId(environment.id))
+  }
   for (const workspace of selectFolderWorkspaces(state) ?? []) {
     validIds.add(folderWorkspaceKey(workspace.id))
   }

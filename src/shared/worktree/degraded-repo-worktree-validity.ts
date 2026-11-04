@@ -1,3 +1,4 @@
+import { isFloatingWorkspaceId } from '../floating-workspace-id'
 import type { Repo } from '../repo-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import type { DetectedWorktreeListResult, Worktree } from './types'
@@ -59,6 +60,10 @@ export function buildValidWorktreeIdsForSessionHydration(
   )
 
   for (const worktreeId of persistedWorktreeIds) {
+    if (isFloatingWorkspaceId(worktreeId)) {
+      validWorktreeIds.add(worktreeId)
+      continue
+    }
     if (validWorktreeIds.has(worktreeId) || parseWorkspaceKey(worktreeId)?.type === 'folder') {
       continue
     }

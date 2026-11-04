@@ -4,23 +4,26 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useTabGroupWorkspaceModel } from '@/components/tab-group/useTabGroupWorkspaceModel'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { useFloatingWorkspaceId } from '@/lib/floating-workspace-host'
 import { resolveFloatingWorkspaceSurfaceModel } from './floating-workspace-surface-model'
 
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
 
 /** Project the focused group into the panel’s single titlebar; the body still renders all groups through the shared tree. */
 export function useFloatingWorkspaceChromeModel() {
-  const surface = useAppStore(useShallow(resolveFloatingWorkspaceSurfaceModel))
+  const worktreeId = useFloatingWorkspaceId()
+  const surface = useAppStore(
+    useShallow((state) => resolveFloatingWorkspaceSurfaceModel(state, worktreeId))
+  )
   const focusedGroupId = surface.kind === 'workspace' ? surface.focusedGroupId : ''
   const model = useTabGroupWorkspaceModel({
     groupId: focusedGroupId,
-    worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    worktreeId: worktreeId
   })
   const { activeTab, group, groupTabs } = model
   // Exclude stale tabs without entities so the strip and empty state agree.
   const terminalEntities = useAppStore(
-    (state) => state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TERMINAL_TABS
+    (state) => state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS
   )
   const terminalItems = useMemo(() => {
     const entityIds = new Set(terminalEntities.map((tab) => tab.id))
@@ -88,6 +91,7 @@ export function useFloatingWorkspaceChromeModel() {
       : null
 
   return {
+    worktreeId,
     surface,
     model,
     terminalItems,

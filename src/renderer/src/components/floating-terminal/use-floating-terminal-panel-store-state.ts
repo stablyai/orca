@@ -1,11 +1,18 @@
+import { floatingWorkspaceEnvironmentId } from '../../../../shared/floating-workspace-id'
+import { useMemo } from 'react'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { useAppStore } from '@/store'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
+import { useFloatingWorkspaceId } from '@/lib/floating-workspace-host'
+import { createFloatingTerminalPanelInputsSelector } from './floating-terminal-panel-inputs'
 
 export function useFloatingTerminalPanelStoreState() {
+  const worktreeId = useFloatingWorkspaceId()
+  const selectInputs = useMemo(
+    () => createFloatingTerminalPanelInputsSelector({}, worktreeId),
+    [worktreeId]
+  )
   const { tabs, browserTabs, groups, unifiedTabs, floatingFiles, expandedPaneByTabId } =
-    useAppStore(selectFloatingTerminalPanelInputs)
+    useAppStore(selectInputs)
   const createTab = useAppStore((state) => state.createTab)
   const createBrowserTab = useAppStore((state) => state.createBrowserTab)
   const closeTab = useAppStore((state) => state.closeTab)
@@ -29,8 +36,7 @@ export function useFloatingTerminalPanelStoreState() {
   )
   const managedBrowserCreationEnabled = useAppStore(
     (state) =>
-      getClientCreationActionPolicy(state, FLOATING_TERMINAL_WORKTREE_ID)['managed-browser']
-        .state === 'enabled'
+      getClientCreationActionPolicy(state, worktreeId)['managed-browser'].state === 'enabled'
   )
 
   return {
@@ -55,7 +61,7 @@ export function useFloatingTerminalPanelStoreState() {
     openFile,
     browserDefaultUrl,
     floatingTerminalCwd,
-    cwd,
+    cwd: floatingWorkspaceEnvironmentId(worktreeId) ? '~' : cwd,
     setFloatingWorkspacePath,
     generatedTabTitlesEnabled,
     managedBrowserCreationEnabled

@@ -1,3 +1,5 @@
+import { floatingWorkspaceId } from '../../../../shared/floating-workspace-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
@@ -75,74 +77,80 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.getRecoveryState?.().phase).toBe('ended')
   })
 
-  it('asks the HUB to recover an expired SSH pane and rebinds the host identity', async () => {
-    const onError = vi.fn()
-    const onPtyExit = vi.fn()
-    const onPtyRebind = vi.fn()
-    resolvedPaneHandle = 'terminal-expired'
-    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-    const transport = createRemoteRuntimePtyTransport('hub-env', {
-      worktreeId: 'wt-1',
-      tabId: 'web-terminal-host-tab-1',
-      leafId: 'pane:1',
-      onPtyExit,
-      onPtyRebind
-    })
-    transport.attach({
-      existingPtyId: 'remote:hub-env@@terminal-expired',
-      cols: 80,
-      rows: 24,
-      callbacks: { onError }
-    })
-    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
-    runtimeCall.mockImplementation(async (args: { method: string }) => {
-      if (args.method === 'terminal.recoverPane') {
-        return {
-          ok: true,
-          result: {
-            terminal: {
-              handle: 'terminal-replacement',
-              tabId: 'host-tab-1',
-              leafId: 'pane:1',
-              ptyId: 'ssh-private-pty',
-              worktreeId: 'wt-1'
+  it.each([
+    ['regular workspace', 'wt-1', 'wt-1'],
+    ['remote floating workspace', floatingWorkspaceId('hub-env'), FLOATING_TERMINAL_WORKTREE_ID]
+  ])(
+    'recovers an expired SSH pane in a %s and rebinds the host identity',
+    async (_name, clientWorktreeId, hostWorktreeId) => {
+      const onError = vi.fn()
+      const onPtyExit = vi.fn()
+      const onPtyRebind = vi.fn()
+      resolvedPaneHandle = 'terminal-expired'
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('hub-env', {
+        worktreeId: clientWorktreeId,
+        tabId: 'web-terminal-host-tab-1',
+        leafId: 'pane:1',
+        onPtyExit,
+        onPtyRebind
+      })
+      transport.attach({
+        existingPtyId: 'remote:hub-env@@terminal-expired',
+        cols: 80,
+        rows: 24,
+        callbacks: { onError }
+      })
+      await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'terminal.recoverPane') {
+          return {
+            ok: true,
+            result: {
+              terminal: {
+                handle: 'terminal-replacement',
+                tabId: 'host-tab-1',
+                leafId: 'pane:1',
+                ptyId: 'ssh-private-pty',
+                worktreeId: hostWorktreeId
+              }
             }
           }
         }
-      }
-      return { ok: true, result: {} }
-    })
+        return { ok: true, result: {} }
+      })
 
-    subscriptionCallbacks?.onResponse({
-      ok: true,
-      result: {
-        type: 'error',
-        streamId: latestSubscribePayload().streamId,
-        message: 'SSH_SESSION_EXPIRED: relay identity changed'
-      }
-    })
+      subscriptionCallbacks?.onResponse({
+        ok: true,
+        result: {
+          type: 'error',
+          streamId: latestSubscribePayload().streamId,
+          message: 'SSH_SESSION_EXPIRED: relay identity changed'
+        }
+      })
 
-    await vi.waitFor(() =>
-      expect(transport.getPtyId()).toBe('remote:hub-env@@terminal-replacement')
-    )
-    expect(runtimeCall).toHaveBeenCalledWith({
-      selector: 'hub-env',
-      method: 'terminal.recoverPane',
-      params: {
-        paneKey: 'host-tab-1:pane:1',
-        worktreeId: 'wt-1',
-        expectedTerminal: 'terminal-expired'
-      },
-      timeoutMs: 15_000
-    })
-    expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-replacement' })
-    expect(onPtyRebind).toHaveBeenCalledWith(
-      'remote:hub-env@@terminal-replacement',
-      'remote:hub-env@@terminal-expired'
-    )
-    expect(onPtyExit).not.toHaveBeenCalled()
-    expect(onError).not.toHaveBeenCalled()
-  })
+      await vi.waitFor(() =>
+        expect(transport.getPtyId()).toBe('remote:hub-env@@terminal-replacement')
+      )
+      expect(runtimeCall).toHaveBeenCalledWith({
+        selector: 'hub-env',
+        method: 'terminal.recoverPane',
+        params: {
+          paneKey: 'host-tab-1:pane:1',
+          worktreeId: hostWorktreeId,
+          expectedTerminal: 'terminal-expired'
+        },
+        timeoutMs: 15_000
+      })
+      expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-replacement' })
+      expect(onPtyRebind).toHaveBeenCalledWith(
+        'remote:hub-env@@terminal-replacement',
+        'remote:hub-env@@terminal-expired'
+      )
+      expect(onPtyExit).not.toHaveBeenCalled()
+      expect(onError).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not recover a pane whose relay reply was an identity mismatch', async () => {
     // Owner mismatch proves another pane’s PTY is live, not this one absent; bare expiry matching would cold-resume a duplicate despite main’s refusal.

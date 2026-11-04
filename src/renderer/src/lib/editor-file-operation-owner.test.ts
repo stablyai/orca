@@ -4,6 +4,7 @@ import {
 } from './editor-file-operation-owner-interpretation.spec'
 // @vitest-environment happy-dom
 
+import { floatingWorkspaceId } from '../../../shared/floating-workspace-id'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -392,6 +393,49 @@ describe('editor file operation owner', () => {
     expect(useAppStore.getState().editorDrafts[reconnected.id]).toBe('queued revised draft')
     expect(() => assertEditorFileOperationCurrent(useAppStore.getState(), id, provenance)).toThrow(
       'Reopen the file'
+    )
+  })
+
+  it('keeps remote floating file operations on their paired host across focus changes', () => {
+    useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment('hub-a', 1)])
+    const id = floatingWorkspaceId('hub-a')
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      id,
+      'hub-a',
+      true
+    )
+    const context = getEditorFileOperationContext(
+      useAppStore.getState(),
+      {
+        worktreeId: id,
+        runtimeEnvironmentId: 'hub-a',
+        operationProvenance: provenance
+      },
+      null
+    )
+    expect(context.target.kind === 'environment' ? context.target.environmentId : null).toBe(
+      'hub-a'
+    )
+    expect(context.expectedExecutionHostId).toBe('local')
+    useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment('hub-a', 2)])
+    expect(() => assertEditorFileOperationCurrent(useAppStore.getState(), id, provenance)).toThrow(
+      'owns this file'
+    )
+  })
+
+  it('rejects a remote floating file after its pairing is removed', () => {
+    useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment('hub-a', 1)])
+    const id = floatingWorkspaceId('hub-a')
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      id,
+      'hub-a',
+      true
+    )
+    useAppStore.getState().setRuntimeEnvironments([])
+    expect(() => assertEditorFileOperationCurrent(useAppStore.getState(), id, provenance)).toThrow(
+      'owns this file'
     )
   })
 

@@ -1,3 +1,4 @@
+import { floatingWorkspaceEnvironmentId } from '../../../shared/floating-workspace-id'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -45,6 +46,10 @@ export function getKnownExecutionHostIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
 ): ExecutionHostId | null {
+  const floatingOwner = floatingWorkspaceEnvironmentId(worktreeId)
+  if (floatingOwner) {
+    return `runtime:${encodeURIComponent(floatingOwner)}`
+  }
   if (!worktreeId) {
     return 'local'
   }
