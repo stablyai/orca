@@ -1,10 +1,7 @@
 import { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
 import type { BrowserNetworkTunnelSourceFlowStream } from './browser-network-tunnel-source-flow'
 import type { BrowserNetworkTunnelSourceReceiveStream } from './browser-network-tunnel-source-receive-flow'
-import {
-  BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
-  BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
-} from './browser-network-tunnel-stream-state'
+import { BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS } from './browser-network-tunnel-stream-state'
 
 export type BrowserNetworkTunnelClientStream = BrowserNetworkTunnelSourceFlowStream &
   BrowserNetworkTunnelSourceReceiveStream & {
@@ -50,7 +47,8 @@ export function createBrowserNetworkTunnelClientStream(
     remoteClosed: false,
     readableEnded: false,
     sendCredit: 0,
-    receiveCredit: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+    // Granted at Opened alongside the initial WindowUpdate; tracking must match the announcement.
+    receiveCredit: 0,
     pendingToSocket: [],
     pendingToSocketBytes: 0,
     unsettledToSocket: [],
