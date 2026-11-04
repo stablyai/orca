@@ -65,6 +65,27 @@ function mount(props = conversationListProps()) {
   )
 }
 describe('Projects containing conversations', () => {
+  it('does not report empty projects until their chat scan has finished', () => {
+    const props = {
+      ...conversationListProps(),
+      groups: [],
+      sessionsCount: 0,
+      filteredSessionsCount: 0,
+      loading: true
+    }
+    const view = mount(props)
+    expect(screen.getByRole('region', { name: 'Orca' })).toBeTruthy()
+    expect(screen.queryAllByText('No chats yet')).toHaveLength(0)
+    expect(screen.getByRole('status').textContent).toBe('Loading chats…')
+    view.rerender(
+      <TooltipProvider>
+        <ProjectConversationList {...props} loading={false} />
+      </TooltipProvider>
+    )
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.getAllByText('No chats yet').length).toBeGreaterThan(0)
+  })
+
   it('shows five recent chats with project icons, then progressively reveals more', () => {
     mount()
     const project = screen.getByRole('region', { name: 'Orca' })

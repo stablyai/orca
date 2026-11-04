@@ -239,6 +239,11 @@ export function ProjectConversationList(props: ProjectConversationListProps): Re
             : translate('projectConversations.archived', 'Archived')}
         </Button>
       </div>
+      {props.loading && visibleGroups.length > 0 ? (
+        <p role="status" className="px-3 py-2 text-xs text-muted-foreground">
+          {translate('projectConversations.loading', 'Loading chats…')}
+        </p>
+      ) : null}
       <div className="flex justify-end px-3">
         <HiddenConversationProjects
           projects={preferences.hiddenProjects}
@@ -344,7 +349,7 @@ export function ProjectConversationList(props: ProjectConversationListProps): Re
                   onPreference={(patch) => setPreference(conversationPreferenceKey(session), patch)}
                 />
               ))}
-              {group.sessions.length === 0 ? (
+              {group.sessions.length === 0 && !props.loading ? (
                 <p className="py-1 pl-7 text-xs text-muted-foreground">
                   {translate('projectConversations.noChats', 'No chats yet')}
                 </p>

@@ -22,9 +22,15 @@ const discoveredKey = JSON.stringify(['local', 'folder:/notes'])
 
 function fixture(
   width = 320,
-  state: 'default' | 'discovered' | 'hidden' | 'registered' = 'default'
+  state: 'default' | 'discovered' | 'hidden' | 'registered' | 'loading' = 'default'
 ) {
   const props = conversationListProps()
+  if (state === 'loading') {
+    props.groups = []
+    props.loading = true
+    props.sessionsCount = 0
+    props.filteredSessionsCount = 0
+  }
   if (state === 'discovered' || state === 'hidden') {
     props.groups = [...props.groups, { key: 'notes', label: 'Notes', sessions: [discovered] }]
     props.sessionProjects = new Map([
@@ -123,3 +129,5 @@ export const discoveredProjectActions = fixture(320, 'discovered')
 export const hiddenProjectRestore = fixture(320, 'hidden')
 
 export const registeredProjectActions = fixture(320, 'registered')
+
+export const loadingProjects = fixture(320, 'loading')
