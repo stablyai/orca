@@ -321,6 +321,41 @@ describe('opt-in reuse of an existing browser tab', () => {
     })
   })
 
+  it('prefers a more recently focused hidden tab over a visible tab in an unfocused group', async () => {
+    enableReuse()
+    const visible = browser('b', 'https://visible.example/')
+    const hidden = browser('c', 'https://hidden.example/')
+    store.setState((state) => {
+      const tabs = state.unifiedTabsByWorktree[WORKSPACE]!
+      const visibleTabId = tabs.find((tab) => tab.entityId === visible.id)!.id
+      return {
+        activeGroupIdByWorktree: { [WORKSPACE]: 'a' },
+        groupsByWorktree: {
+          [WORKSPACE]: state.groupsByWorktree[WORKSPACE]!.map((group) =>
+            group.id === 'b'
+              ? { ...group, activeTabId: visibleTabId }
+              : group.id === 'c'
+                ? { ...group, activeTabId: 'terminal-c' }
+                : group
+          )
+        },
+        unifiedTabsByWorktree: {
+          [WORKSPACE]: tabs.map((tab) =>
+            tab.entityId === visible.id
+              ? { ...tab, lastFocusedAt: 1 }
+              : tab.entityId === hidden.id
+                ? { ...tab, lastFocusedAt: 2 }
+                : tab
+          )
+        }
+      }
+    })
+    expect(await open()).toMatchObject({
+      status: 'opened',
+      result: { browserWorkspaceId: hidden.id, groupId: 'c' }
+    })
+  })
+
   it('keeps an explicit open-in-this-group request on its own new tab', async () => {
     const existing = singleGroupWithHiddenBrowser()
     enableReuse()

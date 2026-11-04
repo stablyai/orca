@@ -24,7 +24,7 @@ function canReuseBrowserLinkTab(
   )
 }
 
-/** The browser tab a link navigates in place: the focused visible one, else the most recently focused. */
+/** The browser tab a link navigates in place: the focused group's visible one, else the most recently focused. */
 export function findReusableBrowserLinkTab(
   state: AppState,
   destination: BrowserLinkDestination,
@@ -71,8 +71,11 @@ export function findReusableBrowserLinkTab(
   const visibleGroupId = findVisibleBrowserLinkTarget(state, worktreeId, (tab) =>
     candidates.has(tab.id)
   )?.targetGroupId
+  // Only the focused group's tab skips the recency check; other visible tabs compete with hidden ones.
+  const focusedGroupId =
+    visibleGroupId === state.activeGroupIdByWorktree[worktreeId] ? visibleGroupId : undefined
   const visibleTabId = (state.groupsByWorktree[worktreeId] ?? []).find(
-    (group) => group.id === visibleGroupId
+    (group) => group.id === focusedGroupId
   )?.activeTabId
   let best = visibleTabId ? candidates.get(visibleTabId) : undefined
   if (!best) {
