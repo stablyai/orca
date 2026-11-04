@@ -74,8 +74,14 @@ describe('Claude plugin UI frames', () => {
     translator.handle(userTurn('user-1', 'Reply with exactly PROBE_OK and nothing else.'))
     translator.handle(pluginUi('ui_status', 'ui-1', { text: 'PR 6 · 진행 13 · 대기 6   /board' }))
     translator.handle(assistantReply('assistant-1', 'PROBE_OK'))
-    // Reporter-described toast shape, not a separately captured frame.
-    translator.handle(pluginUi('ui_toast', 'ui-2', { text: 'Board synced', timeout_ms: 3000 }))
+    // Captured from Claude Code 2.1.316 with an isolated test plugin.
+    translator.handle(
+      pluginUi('ui_toast', 'ui-2', {
+        plugin: 'qa-plugin-ui',
+        text: 'QA plugin toast: prompt seen',
+        timeout_ms: 4000
+      })
+    )
     translator.handle(pluginUi('ui_status', 'ui-3', { text: null }))
     translator.handle({
       type: 'message',
