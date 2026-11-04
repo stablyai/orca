@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   workspaceKindForWorktreeId,
@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 
 export type SourceControlLaunchAgentArgsApplicabilityInput = {
   agent: TuiAgent | null
+  preferredSurface?: 'chat'
   worktreeId?: string | null
   repoId?: string | null
   executionHostId?: ExecutionHostId
@@ -39,6 +40,7 @@ export function sourceControlLaunchAppliesAgentArgs(
   return (
     resolveAgentSessionLaunchRoute(useAppStore.getState(), {
       agent: input.agent,
+      preferredSurface: input.preferredSurface,
       workspace: sourceControlLaunchWorkspace(input)
     }) !== 'structured-native-chat'
   )

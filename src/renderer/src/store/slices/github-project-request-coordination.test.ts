@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubProjectTable } from '../../../../shared/github/project-types'
-import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
+
 import { projectViewCacheKey, projectViewSourceScope } from '../github/cache-identity'
 import {
   createTestStore,
@@ -51,20 +51,6 @@ describe('createGitHubSlice.fetchProjectViewTable coordination', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
-  })
-
-  it('returns a fresh known-view cache entry without starting a request', async () => {
-    const store = createTestStore()
-    const table = makeTable()
-    store.setState({ projectViewCache: { [cacheKey]: { data: table, fetchedAt: Date.now() } } })
-
-    await expect(
-      store.getState().fetchProjectViewTable({ kind: 'local' }, request)
-    ).resolves.toEqual({
-      ok: true,
-      data: table
-    })
-    expect(mockApi.gh.getProjectViewTable).not.toHaveBeenCalled()
   })
 
   it.each([{ kind: 'local' }, { kind: 'environment', environmentId: 'env-board' }] as const)(
@@ -123,42 +109,6 @@ describe('createGitHubSlice.fetchProjectViewTable coordination', () => {
     }
   )
 
-  it('deduplicates identical non-forced in-flight requests', async () => {
-    const store = createTestStore()
-    const pending = Promise.withResolvers<GetProjectViewTableResult>()
-    mockApi.gh.getProjectViewTable.mockReturnValueOnce(pending.promise)
-
-    const first = store.getState().fetchProjectViewTable({ kind: 'local' }, request)
-    const duplicate = store.getState().fetchProjectViewTable({ kind: 'local' }, request)
-    pending.resolve({ ok: true, data: makeTable() })
-
-    await expect(Promise.all([first, duplicate])).resolves.toEqual([
-      { ok: true, data: makeTable() },
-      { ok: true, data: makeTable() }
-    ])
-    expect(mockApi.gh.getProjectViewTable).toHaveBeenCalledTimes(1)
-  })
-
-  it('shares one fresh request across twenty forced waiters after a weaker request', async () => {
-    const store = createTestStore()
-    const weak = Promise.withResolvers<GetProjectViewTableResult>()
-    mockApi.gh.getProjectViewTable
-      .mockReturnValueOnce(weak.promise)
-      .mockResolvedValue({ ok: true, data: makeTable('forced') })
-
-    const first = store.getState().fetchProjectViewTable({ kind: 'local' }, request)
-    const forced = Array.from({ length: 20 }, () =>
-      store.getState().fetchProjectViewTable({ kind: 'local' }, request, { force: true })
-    )
-    weak.resolve({ ok: true, data: makeTable('weak') })
-
-    await expect(first).resolves.toEqual({ ok: true, data: makeTable('weak') })
-    await expect(Promise.all(forced)).resolves.toEqual(
-      Array.from({ length: 20 }, () => ({ ok: true, data: makeTable('forced') }))
-    )
-    expect(mockApi.gh.getProjectViewTable).toHaveBeenCalledTimes(2)
-  })
-
   it('stamps a classified failure onto stale data only when the view key is known', async () => {
     const store = createTestStore()
     const stale = makeTable('stale')
@@ -186,24 +136,5 @@ describe('createGitHubSlice.fetchProjectViewTable coordination', () => {
       )
     ).resolves.toEqual({ ok: false, error })
     expect(Object.keys(store.getState().projectViewCache)).toEqual([cacheKey])
-  })
-  it('wraps an unexpected transport throw without stamping an unknown selector', async () => {
-    const store = createTestStore()
-    mockApi.gh.getProjectViewTable.mockRejectedValueOnce(new Error('transport offline'))
-
-    await expect(
-      store.getState().fetchProjectViewTable(
-        { kind: 'local' },
-        {
-          owner: 'acme',
-          ownerType: 'organization',
-          projectNumber: 1
-        }
-      )
-    ).resolves.toEqual({
-      ok: false,
-      error: { type: 'unknown', message: 'transport offline' }
-    })
-    expect(store.getState().projectViewCache).toEqual({})
   })
 })

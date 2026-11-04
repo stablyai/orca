@@ -1,10 +1,10 @@
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal'
 import { formatWorktreeRemovalError } from '../../ipc/worktree-logic'
-import { usesNativeWindowsRemoval } from '../../git/windows-worktree-removal'
-import { isPrunableGitFileWorktree } from '../../worktree-prunable-git-file'
+import { usesNativeWindowsRemoval } from '../../git/worktrees/removal/windows-worktree-removal'
+import { isPrunableGitFileWorktree } from '../../workspaces/removal/worktree-prunable-git-file'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { isLocalRuntimeWorktreePathMissing } from '../runtime-worktree-filesystem'
 

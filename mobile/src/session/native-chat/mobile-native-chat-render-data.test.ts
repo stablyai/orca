@@ -78,6 +78,13 @@ function build(
 }
 
 describe('buildMobileNativeChatTransientData', () => {
+  it('places an idle send before the streaming reply it caused', () => {
+    const data = build([assistant('a1', 'Earlier answer')], 'Starting the tests', [
+      { id: 'p1', text: 'Run the tests', sentAt: 100 }
+    ])
+    expect(data.map((message) => message.id)).toEqual(['a1', 'p1', 'streaming'])
+  })
+
   it('appends pending optimistic messages at the tail as user turns', () => {
     const data = build([assistant('a1', 'hello')], null, [{ id: 'p1', text: 'queued' }])
     const last = data[data.length - 1]
@@ -240,8 +247,10 @@ describe('buildMobileNativeChatTransientData', () => {
     expect(result.data[0]?.blocks).toEqual([{ type: 'image-ref', url: 'file:///phone-photo.jpg' }])
   })
 
-  it('appends a synthetic bubble for gated streaming text, between transcript and pending', () => {
-    const data = build([user('u1', 'hi')], 'thinking out loud', [{ id: 'p1', text: 'queued' }])
+  it('keeps a queued follow-up after the current streaming reply', () => {
+    const data = build([user('u1', 'hi')], 'thinking out loud', [
+      { id: 'p1', text: 'queued', pendingSend: 'queued' }
+    ])
     expect(data.map((message) => message.id)).toEqual(['u1', 'streaming', 'p1'])
     expect(data[1].blocks).toEqual([{ type: 'text', text: 'thinking out loud' }])
   })

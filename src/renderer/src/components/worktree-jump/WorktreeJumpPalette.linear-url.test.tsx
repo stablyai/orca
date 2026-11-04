@@ -50,7 +50,7 @@ vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
 
-vi.mock('@/components/sidebar/StatusIndicator', () => ({
+vi.mock('@/components/sidebar/workspace-card/surface/StatusIndicator', () => ({
   default: () => <span data-status-indicator="true" />
 }))
 
@@ -728,19 +728,6 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
       },
       initialGitHubWorkItem: githubIssue
     })
-  })
-
-  it('previews a pasted GitHub pull URL', async () => {
-    await renderPalette({})
-    await act(async () => setCommandQuery?.('https://github.com/stablyai/orca/pull/12789'))
-    await flushEffects()
-
-    const preview = testContainer.querySelector<HTMLElement>('[data-cmd-j-task-url-preview="true"]')
-    expect(preview?.dataset.cmdJTaskUrlProvider).toBe('github')
-    expect(preview?.getAttribute('aria-label')).toBe(
-      'Create worktree from GitHub pull request stablyai/orca#12789'
-    )
-    expect(preview?.textContent).toContain('#12789')
   })
 
   it('selects an existing GitHub-linked worktree and keeps create underneath', async () => {

@@ -1,6 +1,6 @@
 /** Release conversion setups stranded before staging by refused SSH forwarding. Stop any activated slot, unregister, then use undeployed-fence release; source rows remain intact for retry. */
-import { listEnvironments } from '../../shared/runtime-environment-store'
-import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { removeManagedOrcadEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { findOrcadMigrationSourceCutoverForTarget } from './orcad-migration-cutover-journal'
 import { releaseUndeployedMigrationFence } from './orcad-migration-source-fence'
 import { closeOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'

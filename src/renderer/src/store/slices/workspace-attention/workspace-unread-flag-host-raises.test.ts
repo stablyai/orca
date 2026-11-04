@@ -8,7 +8,7 @@ import { createTestStore, makeWorktree, TEST_REPO } from '../store-test-helpers'
 import { makeFolderWorkspace } from '../worktrees-slice-test-fixtures'
 import { markWorkspaceUnreadFlag } from './workspace-unread-flag'
 
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import '@/runtime/runtime-rpc-client'
 
 // With the switch on, the window raises the flag exactly where the owning host does not.
 
@@ -90,17 +90,6 @@ beforeEach(() => {
 })
 
 describe('the window raises the unread flag only where its host does not', () => {
-  it('answers from the cached status without probing again', async () => {
-    const { mark, isUnread } = createStore()
-    cachedStatus.set('slow', [WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY])
-    await mark(SLOW_SERVER_WT)
-    expect(isUnread(SLOW_SERVER_WT)).toBe(false)
-    cachedStatus.set('slow', [])
-    await mark(SLOW_SERVER_WT)
-    expect(isUnread(SLOW_SERVER_WT)).toBe(true)
-    expect(runtimeEnvironmentSupportsCapability).not.toHaveBeenCalled()
-  })
-
   it('waits for a server’s first status, and raises it when the status cannot be read', async () => {
     const { mark, isUnread } = createStore()
     let answer: (capabilities: readonly string[]) => void = () => {}

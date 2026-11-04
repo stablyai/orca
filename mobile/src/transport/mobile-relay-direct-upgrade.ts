@@ -3,7 +3,7 @@ import type {
   DeviceCredentialInstalled,
   MobileRelayEndpoint,
   PairingGetEndpointsResult
-} from '../../../src/shared/mobile-relay-credential-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { RelayRoutingHostRemovedError, setRelayRouting } from './host-store'
 import {
   MobileRelayCredentialBundleSchema,

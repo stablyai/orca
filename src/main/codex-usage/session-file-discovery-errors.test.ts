@@ -6,16 +6,16 @@ import { join } from 'node:path'
 
 const state = vi.hoisted(() => ({ managed: '', system: '', blocked: '', code: '' }))
 
-vi.mock('../codex/codex-home-paths', () => ({
+vi.mock('../codex/configuration/homes/codex-home-paths', () => ({
   getOrcaManagedCodexHomePath: () => state.managed,
   getSystemCodexHomePath: () => state.system
 }))
 
-vi.mock('../codex/codex-account-home-discovery', () => ({
+vi.mock('../codex/history/rollouts/codex-account-home-discovery', () => ({
   getCodexAccountHomeSessionDirectories: () => []
 }))
 
-vi.mock('../codex/codex-session-bridge', () => ({
+vi.mock('../codex/history/bridges/codex-session-bridge', () => ({
   getLegacyCopiedCodexSessionBridgeScanPreference: () => null
 }))
 

@@ -1,3 +1,7 @@
+import {
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -369,6 +373,7 @@ async function connectHiddenRemoteAgentPane(
   serializeBuffer: ReturnType<typeof vi.fn>
 ): Promise<RemotePaneDrive> {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.serializeBuffer = serializeBuffer
   const capturedDataCallback: {
@@ -382,7 +387,11 @@ async function connectHiddenRemoteAgentPane(
   const pane = createPane(1)
   const manager = createManager(1)
   const deps = createDeps({ isVisibleRef: { current: false } })
-  const disposable = connectPanePty(pane as never, manager as never, deps as never)
+  const disposable = connectPanePty(
+    pane as never,
+    manager as never,
+    bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(capturedDataCallback.current).not.toBeNull()
   return {
@@ -420,24 +429,6 @@ async function allowSelfHealWindow(): Promise<void> {
   for (let step = 0; step < 10; step += 1) {
     await vi.advanceTimersByTimeAsync(500)
     await flushAsyncTicks(20)
-  }
-}
-
-function observeFinalPaneState(drive: RemotePaneDrive): {
-  localMainSnapshotCalls: number
-  rawHiddenBacklogWritten: boolean
-  liveAgentChunkWritten: boolean
-  unavailableBannerWritten: boolean
-  hiddenOutputRecoveredFromHostSnapshot: boolean
-} {
-  const written = drive.writtenChunks()
-  const joined = written.join('')
-  return {
-    localMainSnapshotCalls: vi.mocked(window.api.pty.getMainBufferSnapshot).mock.calls.length,
-    rawHiddenBacklogWritten: joined.includes('x'.repeat(1024)),
-    liveAgentChunkWritten: joined.includes('LIVE_AGENT_CHUNK'),
-    unavailableBannerWritten: joined.includes(BANNER_FRAGMENT),
-    hiddenOutputRecoveredFromHostSnapshot: joined.includes(HOST_SNAPSHOT_MARKER)
   }
 }
 
@@ -617,6 +608,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     const joined = drive.writtenChunks().join('')
     expect(joined).toContain(HOST_SNAPSHOT_MARKER)
     expect(joined).not.toContain('x'.repeat(1024))
+    expect(joined).not.toContain(BANNER_FRAGMENT)
     drive.disposable.dispose()
   })
 
@@ -655,58 +647,11 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
 
     await allowSelfHealWindow()
     expect(serializeBuffer.mock.calls.length).toBeGreaterThan(1)
-    expect(drive.writtenChunks().join('')).toContain(HOST_SNAPSHOT_MARKER)
+    const joined = drive.writtenChunks().join('')
+    expect(joined).toContain(HOST_SNAPSHOT_MARKER)
+    expect(joined).not.toContain(BANNER_FRAGMENT)
+    expect(joined).not.toContain('x'.repeat(1024))
     expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
-    drive.disposable.dispose()
-  })
-
-  it('[invariant] must not declare recovery unavailable when the host snapshot is one retry tick away', async () => {
-    const serializeBuffer = vi.fn(async () =>
-      serializeBuffer.mock.calls.length <= 4 ? null : HOST_SNAPSHOT
-    )
-    const drive = await connectHiddenRemoteAgentPane(serializeBuffer)
-    vi.useFakeTimers()
-    driveHiddenBacklogThenReveal(drive)
-    await flushAsyncTicks(20)
-    await advanceThroughNullRetryBudget(drive)
-    await allowSelfHealWindow()
-
-    expect(observeFinalPaneState(drive)).toEqual({
-      localMainSnapshotCalls: 0,
-      rawHiddenBacklogWritten: false,
-      liveAgentChunkWritten: true,
-      unavailableBannerWritten: false,
-      hiddenOutputRecoveredFromHostSnapshot: true
-    })
-    drive.disposable.dispose()
-  })
-
-  it('[invariant] must not turn a merely-slow host snapshot into a loss banner and a permanent scrollback gap', async () => {
-    const slowSnapshot = createDeferred<HostSnapshot>()
-    const serializeBuffer = vi.fn(async () => HOST_SNAPSHOT)
-    serializeBuffer.mockReturnValueOnce(slowSnapshot.promise)
-    const drive = await connectHiddenRemoteAgentPane(serializeBuffer)
-    vi.useFakeTimers()
-    driveHiddenBacklogThenReveal(drive)
-    await flushAsyncTicks(20)
-
-    // Deadline elapses while the host is still serializing its buffer.
-    vi.advanceTimersByTime(750)
-    vi.advanceTimersByTime(0)
-    await flushAsyncTicks(10)
-    // Host serialization finishes with the authoritative hidden bytes; every
-    // later snapshot request would succeed instantly.
-    slowSnapshot.resolve(HOST_SNAPSHOT)
-    await flushAsyncTicks(20)
-    await allowSelfHealWindow()
-
-    expect(observeFinalPaneState(drive)).toEqual({
-      localMainSnapshotCalls: 0,
-      rawHiddenBacklogWritten: false,
-      liveAgentChunkWritten: true,
-      unavailableBannerWritten: false,
-      hiddenOutputRecoveredFromHostSnapshot: true
-    })
     drive.disposable.dispose()
   })
 

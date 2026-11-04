@@ -116,7 +116,8 @@ export async function sendOrcadSidecarRequest(
           return
         }
         if (!parsed.data.ok) {
-          finish(new BrowserError(parsed.data.error.code, parsed.data.error.message))
+          const { code, message, data } = parsed.data.error
+          finish(new BrowserError(code, message, data))
           return
         }
         finish(null, parsed.data.result)

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const notify = vi.hoisted(() => vi.fn())
-vi.mock('@/components/editor/editor-autosave', async (importOriginal) => ({
+vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   notifyEditorExternalFileChange: notify
 }))

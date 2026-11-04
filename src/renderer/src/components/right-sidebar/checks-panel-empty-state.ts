@@ -1,4 +1,4 @@
-import type { HostedReviewCreationBlockedReason } from '../../../../shared/hosted-review'
+import type { HostedReviewCreationBlockedReason } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { translate } from '@/i18n/i18n'
 import {
   autoRetrySchedule,

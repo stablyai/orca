@@ -12,7 +12,10 @@ import {
 } from '../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { AiVaultListResult, AiVaultSession } from '../../src/shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   projectStructuredAiVaultSessions,
   OPENS_EVERY_STRUCTURED_CHAT

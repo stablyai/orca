@@ -4,9 +4,9 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import { getDefaultSourceControlAiSettings } from '../../../../shared/source-control-ai-settings'
-import { normalizeCreateReviewBaseSearchResults } from '../../../../shared/hosted-review-refs'
+import type { HostedReviewCreationEligibility } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { getDefaultSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import { normalizeCreateReviewBaseSearchResults } from '../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 
 describe('normalizeCreateReviewBaseSearchResults', () => {

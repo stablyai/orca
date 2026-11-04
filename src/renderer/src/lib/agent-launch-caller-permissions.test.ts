@@ -1,7 +1,7 @@
 // Permission bypass lives only in the arguments string; verify each caller’s final argv so it cannot be silently lost.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 import {
   createLaunchFunnelStore,

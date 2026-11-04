@@ -21,8 +21,8 @@ import {
   isGitHubPRStackMergeQueueRequired,
   resolveGitHubPRStackMergeDecision
 } from '../../../../shared/github/pull-request-stack-merge'
-import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
-import { getDeleteStateForWorktreeHost } from '../sidebar/worktree-delete-state-host-match'
+import { runWorktreeDelete } from '../sidebar/workspace-actions/deletion/delete-worktree-flow'
+import { getDeleteStateForWorktreeHost } from '../sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
 import {
   ClosedReviewActions,
@@ -93,6 +93,7 @@ export default function HostedReviewActions({
       mergeStateStatus: review.mergeStateStatus,
       reviewDecision: review.reviewDecision,
       checksStatus: review.status,
+      checksSummary: review.checksSummary,
       autoMergeEnabled: review.autoMergeEnabled,
       autoMergeAllowed: review.autoMergeAllowed,
       mergeQueueRequired: review.mergeQueueRequired
@@ -337,12 +338,16 @@ export default function HostedReviewActions({
     )
   }
   if (review.state === 'merged') {
+    // Why: a merge can report failure yet land; the reread then shows merged and the write's error must stay visible.
     return (
-      <MergedReviewActions
-        isMainWorktree={worktree.isMainWorktree}
-        isDeletingWorktree={isDeletingWorktree}
-        onDeleteWorktree={handleDeleteWorktree}
-      />
+      <div className="flex flex-col items-start gap-1.5">
+        <MergedReviewActions
+          isMainWorktree={worktree.isMainWorktree}
+          isDeletingWorktree={isDeletingWorktree}
+          onDeleteWorktree={handleDeleteWorktree}
+        />
+        <HostedReviewActionError message={actionError} />
+      </div>
     )
   }
 

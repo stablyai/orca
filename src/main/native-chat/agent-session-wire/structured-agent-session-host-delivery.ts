@@ -75,6 +75,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   /** Stops a child the chat outgrew, so the start after it reads a new login, account or permission
    *  mode. */
   stopOutgrownAgent: (sessionId: string) => Promise<void>
+  stopPermissionTransitionChild: (sessionId: string) => Promise<void>
   clientDelivery: Pick<
     StructuredAgentSessionClientDelivery,
     | 'publishRestored'
@@ -82,6 +83,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     | 'childWorkOpen'
     | 'readStopping'
     | 'publishStatus'
+    | 'publishStatusAndSettlement'
     | 'publishGenerationEnded'
   >
 }): StructuredAgentSessionConversationDelivery {
@@ -106,6 +108,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     serialize: input.serialize,
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
+    stopPermissionTransitionChild: input.stopPermissionTransitionChild,
     retireOutgrownChild: async (sessionId, continuingId, next) => {
       // Defer retirement while personal Stop holds handover; its next step decides.
       const session = input.clientDelivery.readStopping(sessionId)
@@ -129,7 +132,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
           )
         },
         permissionRequiresAcquisition: (mode) =>
-          continuingId
+          structuredAgentSessionInputCompilerPermission(session?.journal, continuingId)
             ? true
             : (deps.adapter.permissionModeRequiresAcquisition?.(sessionId, mode) ??
               mode !== session?.child?.permissionMode),
@@ -285,7 +288,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     loop,
     afterCommit,
     afterSettleEdge: (sessionId, journal) => {
-      input.clientDelivery.publishStatus(sessionId)
+      input.clientDelivery.publishStatusAndSettlement(sessionId)
       afterCommit(sessionId, journal)
     },
     adoptOpened,

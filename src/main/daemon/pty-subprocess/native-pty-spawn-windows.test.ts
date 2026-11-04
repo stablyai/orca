@@ -19,7 +19,7 @@ import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from '../immediate-kill-reply
 import { createDaemonPtySubprocessHandle } from './subprocess-handle'
 import { spawnNativeDaemonPty } from './native-pty-spawn'
 import { Session } from '../session'
-import { readTerminalStartFailure } from '../../../shared/terminal-start-failure'
+import { readTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { mapRuntimeError } from '../../runtime/rpc/errors'
 import {
   _resetConptyStartupTrustForTest,

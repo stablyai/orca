@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { createTestStore } from './store-test-helpers'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 

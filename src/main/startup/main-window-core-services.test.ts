@@ -59,16 +59,20 @@ vi.mock('../window/attach-main-window-services', () => ({
 vi.mock('../ipc/ssh/ssh-host-user-disconnect', () => ({
   holdLaunchReconnectOptOuts: holdLaunchReconnectOptOutsMock
 }))
-vi.mock('../macos-tcc-prompt-notice', () => ({ initTccPromptNotice: initTccPromptNoticeMock }))
-vi.mock('../updater', () => ({ resolveUpdateInstallMode: vi.fn(() => 'interactive') }))
+vi.mock('../macos-permissions/macos-tcc-prompt-notice', () => ({
+  initTccPromptNotice: initTccPromptNoticeMock
+}))
+vi.mock('../updater/updater-service', () => ({
+  resolveUpdateInstallMode: vi.fn(() => 'interactive')
+}))
 vi.mock('./main-process-state', () => ({ mainProcessState: state }))
-vi.mock('../agent-auth-restart-preservation', () => ({
+vi.mock('../providers/accounts/agent-auth-restart-preservation', () => ({
   preserveAgentAuthBeforeRestart: preserveAgentAuthBeforeRestartMock
 }))
-vi.mock('../codex/codex-ai-vault-session-resume', () => ({
+vi.mock('../codex/history/resume/codex-ai-vault-session-resume', () => ({
   prepareCodexAiVaultSessionResume: vi.fn()
 }))
-vi.mock('../codex/codex-session-source-home', () => ({
+vi.mock('../codex/history/rollouts/codex-session-source-home', () => ({
   resolveHostCodexSessionSourceHome: vi.fn()
 }))
 vi.mock('./main-process-pty-startup', () => ({

@@ -11,7 +11,7 @@ import { dirname, join, resolve } from 'node:path'
 import {
   hasAppImagePathEnvironment,
   resolveAppImageRuntimeIdentity
-} from '../appimage-runtime-identity'
+} from '../updater/linux-package/appimage-runtime-identity'
 import {
   getAppImageCacheRootPath,
   isAppImageInstalledLauncherCurrent
@@ -22,7 +22,7 @@ import {
 } from './appimage-stable-launcher'
 import { getBundledLauncherPath } from './bundled-cli-launcher-path'
 import { buildBareOrcaCliScript } from './linux-bare-orca-dispatcher'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 
 const SHIM_DIR_NAME = 'linux-orca-cli-shim'
 

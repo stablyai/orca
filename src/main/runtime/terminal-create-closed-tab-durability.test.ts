@@ -7,7 +7,7 @@ import { getDefaultWorkspaceSession } from '../../shared/constants'
 import {
   CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS,
   hasClosedTerminalTabRecord
-} from '../../shared/closed-terminal-tab-tombstones'
+} from '../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { Store } from '../persistence/loading-store/store'
 import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'

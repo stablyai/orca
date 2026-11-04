@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as quality from './check-changed-code-quality.mjs'
+import { createExistingTypeAssertionMatcher } from './existing-type-assertions.mjs'
 
 const processCalls = vi.hoisted(() => ({ execFileSync: vi.fn(), spawnSync: vi.fn() }))
 vi.mock('node:child_process', () => processCalls)
@@ -16,6 +17,85 @@ afterEach(() => {
 })
 
 describe('moved-code matcher and changed-line gate', () => {
+  it('keeps an existing cast exempt when a changed call reflows its line', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-reflowed-cast-'))
+    const file = join(root, 'fixture.ts')
+    const source = 'const label = "🙂";\nconnect(\n  pane as never,\n  bind(deps)\n)\n'
+    writeFileSync(file, source)
+    const existing = createExistingTypeAssertionMatcher([
+      { file: 'fixture.ts', source: 'connect(pane as never, deps as never)\n' }
+    ])
+    const fragment = 'pane as never'
+    const diagnostic = {
+      filename: file,
+      code: 'typescript(consistent-type-assertions)',
+      labels: [
+        {
+          span: {
+            line: 3,
+            offset: Buffer.byteLength(source.split(fragment)[0]),
+            length: fragment.length
+          }
+        }
+      ]
+    }
+    try {
+      expect(
+        quality.diagnosticTouchesAddedLines(
+          diagnostic,
+          new Map([['fixture.ts', [{ start: 3, end: 3 }]]]),
+          root,
+          [],
+          () => false,
+          existing
+        )
+      ).toBe(false)
+      const changed = source.replace(fragment, 'other as never')
+      writeFileSync(file, changed)
+      diagnostic.labels[0].span.length = 'other as never'.length
+      expect(
+        quality.diagnosticTouchesAddedLines(
+          diagnostic,
+          new Map([['fixture.ts', [{ start: 3, end: 3 }]]]),
+          root,
+          [],
+          () => false,
+          existing
+        )
+      ).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('requires a complete existing assertion with unchanged operand, type and literal data', () => {
+    const existing = createExistingTypeAssertionMatcher([
+      {
+        file: 'fixture.ts',
+        source:
+          'const x = value as Thing; const y = "a  b" as string; // fake as never\nconst z = "text as never"'
+      }
+    ])
+    expect(existing('value\n as Thing')).toBe(true)
+    for (const source of [
+      'other as Thing',
+      'value as Other',
+      'fake as never',
+      'text as never',
+      '"a b" as string',
+      'value as Thing | undefined'
+    ]) {
+      expect(existing(source)).toBe(false)
+    }
+  })
+
+  it('does not exempt assertions recovered from malformed baseline source', () => {
+    const existing = createExistingTypeAssertionMatcher([
+      { file: 'fixture.ts', source: 'const broken = ; const x = value as Thing' }
+    ])
+    expect(existing('value as Thing')).toBe(false)
+  })
+
   it('keeps exemption decisions across different highlights in one matcher', () => {
     const body = Array.from({ length: 20 }, (_, index) => `line${index}()`)
     const blocks = [['  a()  ', '', '\tb()'], body, ['first()', 'last()']]
@@ -35,17 +115,6 @@ describe('moved-code matcher and changed-line gate', () => {
     for (const { lines, moved } of observations) {
       expect(matcher(lines)).toBe(moved)
     }
-  })
-
-  it('reads changed base blocks when creating the next matcher', () => {
-    const blocks = [['first()']]
-    const matcher = quality.createMovedCodeMatcher(blocks)
-    expect(matcher([])).toBe(false)
-    expect(matcher(['first()'])).toBe(true)
-    blocks[0][0] = 'changed()'
-    const nextMatcher = quality.createMovedCodeMatcher(blocks)
-    expect(nextMatcher(['changed()'])).toBe(true)
-    expect(nextMatcher(['first()'])).toBe(false)
   })
 
   it('reports a new added-line finding from every configured scan in main', () => {

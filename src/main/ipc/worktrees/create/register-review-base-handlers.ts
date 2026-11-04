@@ -7,7 +7,7 @@ import {
   getLocalProjectGhExecOptions,
   getLocalProjectGitExecOptions,
   getWorktreeCreatePrefetchGitOptions
-} from '../../../project-runtime-git-options'
+} from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   SSH_GIT_RECONNECT_MESSAGE,
   SshHostNotServedError

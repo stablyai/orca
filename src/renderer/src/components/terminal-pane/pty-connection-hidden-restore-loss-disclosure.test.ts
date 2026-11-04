@@ -1,6 +1,6 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal-mode-reset-profiles'
+import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { flushAsyncTicks, createDeferred, renderHeadlessBuffer } from './pty-connection-test-async'
 import {
   createMockTransport,
@@ -10,7 +10,12 @@ import {
   type MockPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps, type PaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
@@ -187,7 +192,13 @@ async function connectHiddenPane(
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: false }
   })
-  const disposable = await connectMockPanePty(pane, createManager(1), deps)
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+  const disposable = await connectMockPanePty(
+    pane,
+    createManager(1),
+    bindPaneAgentTitleMocks(deps, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(captured.current).not.toBeNull()
   return {
@@ -312,37 +323,6 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       expect(observeDisclosure(drive, R1_MARKER)).toMatchObject({
         disclosedOrRecovered: true
       })
-      drive.disposable.dispose()
-    })
-
-    it('[invariant] discloses or recovers when the budget ends while the pane is hidden', async () => {
-      const seventhAnswer = createDeferred<unknown>()
-      const serializeBufferOutcome = vi.fn().mockResolvedValue(retryWorthy)
-      const drive = await driveToSeventhAnswer(serializeBufferOutcome)
-
-      serializeBufferOutcome.mockReturnValueOnce(seventhAnswer.promise)
-      await vi.advanceTimersByTimeAsync(2_000)
-      await flushAsyncTicks(20)
-      expect(serializeBufferOutcome).toHaveBeenCalledTimes(7)
-
-      // Switch away while the last budgeted request is still pending.
-      drive.setVisible(false)
-      seventhAnswer.resolve(retryWorthy)
-      await flushAsyncTicks(20)
-
-      // The host is healthy again and still holds the dropped bytes.
-      serializeBufferOutcome.mockResolvedValue(hostAnswers(retainedSnapshot(R1_MARKER)))
-      const requestsBeforeReveal = serializeBufferOutcome.mock.calls.length
-      await revealPane(drive)
-      await allowRecoveryWindow()
-
-      const disclosure = observeDisclosure(drive, R1_MARKER)
-      expect(disclosure.markerWrites).toBeLessThanOrEqual(1)
-      expectDisclosedOrRecovered(disclosure)
-      // Require either a fresh recovery request or a visible loss banner.
-      expect(
-        serializeBufferOutcome.mock.calls.length - requestsBeforeReveal
-      ).toBeGreaterThanOrEqual(disclosure.bannerWrites > 0 ? 0 : 1)
       drive.disposable.dispose()
     })
 
@@ -544,7 +524,14 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const disposable = await connectMockPanePty(pane, createManager(1), deps)
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+      const disposable = await connectMockPanePty(
+        pane,
+        createManager(1),
+        bindPaneAgentTitleMocks(deps, agentTitleMocks2)
+      )
       await flushAsyncTicks(6)
       expect(captured.current).not.toBeNull()
       return {

@@ -3,7 +3,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/workspace-session-state-types'
 import { withWslMoveSeededViewState } from './wsl-move-seeded-view-state'
 
 const UNC_ROOT = '\\\\wsl.localhost\\Ubuntu\\home\\dev\\app'

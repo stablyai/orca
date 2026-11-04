@@ -8,15 +8,21 @@ import { makeTab, makeWorktree, TEST_REPO } from '@/store/slices/store-test-help
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
-import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/runtime-host-status'
+import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import * as presentation from '@/lib/program-status/agent-row-presentation'
 import * as cache from '@/components/dashboard/worktree-agent-rows-cache'
-import * as selectors from '@/components/sidebar/worktree-agent-row-selectors'
-import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
-import { useAgentMessageSenderSource } from './native-chat-agent-message-sender-source'
+import '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import {
+  useAgentMessageSenderView,
+  useAgentMessageSenderViews
+} from './native-chat-agent-message-sender-view'
+import {
+  useAgentMessageSenderSource,
+  agentMessageSenderRowBuildsForTest
+} from './native-chat-agent-message-sender-source'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import {
   initialStore,
@@ -25,6 +31,7 @@ import {
   status,
   resetSenderStore
 } from './native-chat-agent-sender.test-fixture'
+import * as selectorsOwner1 from '@/components/sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 
 const renders = new Map<number, number>()
 const views = new Map<number, AgentMessageSenderView>()
@@ -259,7 +266,7 @@ it('uses the child row own glyph even when its parent program needs permission',
     worktreeId: 'workspace',
     now: 2_000_000,
     generation: '',
-    orchestration: selectors.selectRuntimeAgentOrchestrationForWorktree(state, 'workspace')
+    orchestration: selectorsOwner1.selectWorktreeAgentOrchestration(state, 'workspace')
   })
   const child = projected.find((row) => row.childRow)!
   expect(child).toBeDefined()
@@ -307,13 +314,61 @@ it('refuses a target-less ambiguous workspace twin while an explicit local targe
   expect(explicit.result.current.dot).toBe('working')
 })
 
-it('prefers the live row to saved kind and falls back without retaining its status', () => {
+it('keeps the saved kind, without the status, when its terminal runs a different agent', () => {
   const view = renderHook(() =>
     useAgentMessageSenderView({ ...from.senders[0], agent: 'codex' }, 'workspace', {
       kind: 'local'
     })
   )
-  expect(view.result.current).toEqual({ agentType: 'claude', dot: 'working', progress: undefined })
+  expect(view.result.current).toEqual({ agentType: 'codex', dot: undefined, progress: undefined })
   act(() => useAppStore.setState({ agentStatusByPaneKey: {}, agentStatusEpoch: 2 }))
   expect(view.result.current).toEqual({ agentType: 'codex', dot: undefined, progress: undefined })
+})
+
+it('resolves batched senders through published identity and leases replaced rows under one subscription', () => {
+  useAppStore.setState({
+    tabsByWorktree: {
+      workspace: [0, 1].map((i) => makeTab({ id: `tab-${i}`, worktreeId: 'workspace' }))
+    },
+    agentStatusByPaneKey: {
+      [status(0).paneKey]: status(0),
+      [status(1).paneKey]: { ...status(1), agentType: 'codex' }
+    }
+  })
+  useAppStore.getState().setAgentSenderPublication('local', {
+    associations: [
+      { identity: 'term_0', paneKey: status(0).paneKey, worktreeId: 'workspace' },
+      { identity: 'term_old', paneKey: status(1).paneKey, worktreeId: 'workspace' }
+    ],
+    principals: [],
+    attachments: [],
+    revision: { epoch: 'batch', revision: 1 }
+  })
+  const inputs = [
+    { sender: { ...from.senders[0], agent: 'codex' as const }, worktreeId: 'workspace' },
+    {
+      sender: {
+        name: 'Moved worker',
+        party: { address: 'term_old', terminalHandle: 'term_old', orcaSessionId: null }
+      },
+      worktreeId: 'workspace'
+    }
+  ]
+  const baseline = readStoreListenerCount()
+  const view = renderHook(() => useAgentMessageSenderViews(inputs, { kind: 'local' }))
+  expect(readStoreListenerCount()).toBe((baseline ?? 0) + 1)
+  expect(view.result.current).toEqual([
+    { agentType: 'codex' },
+    expect.objectContaining({ agentType: 'codex', dot: 'working' })
+  ])
+  const unchanged = view.result.current
+  const builds = agentMessageSenderRowBuildsForTest()
+  act(() => useAppStore.setState({ sidebarBody: 'agents' }))
+  act(() => useAppStore.setState({ sidebarBody: 'workspaces' }))
+  expect(view.result.current).toBe(unchanged)
+  expect(agentMessageSenderRowBuildsForTest()).toBe(builds)
+  write(0, { agentType: 'codex' })
+  expect(view.result.current[0]).toMatchObject({ agentType: 'codex', dot: 'working' })
+  view.unmount()
+  expect(readStoreListenerCount()).toBe(baseline)
 })

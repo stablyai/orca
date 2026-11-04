@@ -1,4 +1,4 @@
-import type { WorkspaceCleanupCandidate } from './workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from './workspace-cleanup/workspace-cleanup'
 
 export function makeCleanupCandidate(
   overrides: Pick<WorkspaceCleanupCandidate, 'lastActivityAt' | 'reasons'>

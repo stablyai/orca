@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { createAgentQuestionAnsweredInference } from './agent-question-answered-inference'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'

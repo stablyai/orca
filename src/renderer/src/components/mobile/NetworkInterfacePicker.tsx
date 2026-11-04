@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
-import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
 
 function formatCustomAddressLabel(address: string): string {
   return translate(

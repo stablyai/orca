@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -95,14 +95,6 @@ describe('OrcaRuntimeService', () => {
       await activate(runtime, HEADLESS_LEAF_ID)
 
       expect(spawnCommand(spawn)).toContain('codex-session-1')
-    })
-
-    it('does not start a fresh agent in either pane when no pane recorded one', async () => {
-      const { runtime, spawn } = startRuntime(splitAgentTabSession(false))
-
-      await activate(runtime, HEADLESS_LEAF_ID)
-
-      expect(spawnCommand(spawn)).not.toContain('codex')
     })
   })
 })

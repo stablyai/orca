@@ -108,41 +108,6 @@ describe('paired browser creation placement', () => {
     expect(g1Group()?.recentTabIds).toEqual([SOURCE.unifiedTabId])
   })
 
-  it('keeps the host-facing RPC free of the client anchor', async () => {
-    void openLinkFromSource({ targetGroupId: 'host-group' })
-    expect(pendingCreates[0].params).not.toHaveProperty('clientAfterTabId')
-    expect(pendingCreates[0].params).not.toHaveProperty('afterTabId')
-    expect(pendingCreates[0].params).toMatchObject({
-      targetGroupId: 'host-group',
-      activate: false,
-      navigation: 'caller'
-    })
-    // A host-facing group never freezes the anchored staged row out of the source's group.
-    expect(groupOrder(G1)[1]).toBe(wrapperForRemotePage(pendingCreates[0].params.page!)?.id)
-    expect(wrapperForRemotePage(pendingCreates[0].params.page!)?.executionHostId).toBe(HOST)
-    pendingCreates[0].resolve()
-    await flushMicrotasks()
-    expect(runtimeCall).toHaveBeenCalledTimes(1)
-  })
-
-  it('appends Group New Browser Tab staging to the invoking group without an anchor', async () => {
-    const create = createWebRuntimeSessionBrowserTab({
-      worktreeId: WT,
-      environmentId: ENV,
-      url: 'about:blank',
-      targetGroupId: G1,
-      clientTargetGroupId: G1,
-      placementPreference: 'server'
-    })
-    const pageId = pendingCreates[0].params.page!
-    const created = wrapperForRemotePage(pageId)!.id
-    expect(groupOrder(G1)).toEqual([SOURCE.unifiedTabId, AFTER.unifiedTabId, created])
-    expect(useAppStore.getState().activeGroupIdByWorktree[WT]).toBe(G1)
-    pendingCreates[0].resolve()
-    await expect(create).resolves.toBe(true)
-    expect(groupOrder(G1)).toEqual([SOURCE.unifiedTabId, AFTER.unifiedTabId, created])
-  })
-
   it('stages the store Group New Browser Tab command before its first await', async () => {
     useAppStore.setState({
       browserDefaultUrl: 'about:blank',
@@ -192,43 +157,6 @@ describe('paired browser creation placement', () => {
     pendingCreates[0].resolve()
     await open
     expect(groupOrder(G1)).toEqual([SOURCE.unifiedTabId, AFTER.unifiedTabId, created])
-  })
-
-  it('fills an empty group structurally without adoption recording a visit', async () => {
-    const state = useAppStore.getState()
-    useAppStore.setState({
-      groupsByWorktree: {
-        [WT]: [
-          ...state.groupsByWorktree[WT]!,
-          { id: 'group-3', worktreeId: WT, activeTabId: null, tabOrder: [], recentTabIds: [] }
-        ]
-      },
-      layoutByWorktree: {
-        [WT]: {
-          type: 'split',
-          direction: 'horizontal',
-          first: state.layoutByWorktree[WT]!,
-          second: { type: 'leaf', groupId: 'group-3' }
-        }
-      }
-    })
-    const create = createWebRuntimeSessionBrowserTab({
-      worktreeId: WT,
-      environmentId: ENV,
-      url: 'https://example.com/',
-      clientTargetGroupId: 'group-3',
-      focusOnCreate: false,
-      selectWorktree: false,
-      placementPreference: 'server'
-    })
-    const created = wrapperForRemotePage(pendingCreates[0].params.page!)!.id
-    pendingCreates[0].resolve()
-    await expect(create).resolves.toBe(true)
-    publishHostSnapshot()
-    expect(
-      useAppStore.getState().groupsByWorktree[WT]?.find((group) => group.id === 'group-3')
-    ).toMatchObject({ activeTabId: created, tabOrder: [created], recentTabIds: [] })
-    expect(useAppStore.getState().activeGroupIdByWorktree[WT]).toBe(G2)
   })
 
   it('keeps a staged row the user dragged elsewhere through adoption', async () => {

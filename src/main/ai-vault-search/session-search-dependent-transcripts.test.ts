@@ -1,13 +1,11 @@
 import { mkdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import {
-  parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
-} from '../ai-vault/session-scanner-parse-cache'
-import { resetCodexSessionIndexTitleCacheForTests } from '../ai-vault/session-scanner-codex-title-index'
+import { parseAgentSessionFileCached } from '../ai-vault/parse-cache/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
+import { resetCodexSessionIndexTitleCacheForTests } from '../ai-vault/scanners/codex/session-scanner-codex-title-index'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import {
   openSessionSearchIndexFile,

@@ -117,6 +117,35 @@ describe('DshHookService', () => {
     expect(status.detail).toContain('Stop')
   })
 
+  it('reports partial until every DSH profile carries the packages the row imports', () => {
+    const profileDir = (name: string): string => join(home, '.dsh', 'profiles', name)
+    const addPackage = (profile: string, pkg: string): void => {
+      const dir = join(profileDir(profile), 'node_modules', ...pkg.split('/'))
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'package.json'), '{}', 'utf-8')
+    }
+    for (const profile of ['headless', 'web']) {
+      mkdirSync(profileDir(profile), { recursive: true })
+      writeFileSync(join(profileDir(profile), 'package.json'), '{}', 'utf-8')
+    }
+    addPackage('web', '@deepseek-ai/dsh-hooks-claude-code')
+
+    const service = new DshHookService()
+    const status = service.install()
+    expect(status.state).toBe('partial')
+    expect(status.managedHooksPresent).toBe(true)
+    expect(status.detail).toContain(
+      `${profileDir('headless')} (missing @deepseek-ai/dsh-hooks-claude-code, @deepseek-ai/dsh-hook-protocol)`
+    )
+    expect(status.detail).toContain(`${profileDir('web')} (missing @deepseek-ai/dsh-hook-protocol)`)
+
+    for (const profile of ['headless', 'web']) {
+      addPackage(profile, '@deepseek-ai/dsh-hooks-claude-code')
+      addPackage(profile, '@deepseek-ai/dsh-hook-protocol')
+    }
+    expect(service.getStatus()).toMatchObject({ state: 'installed', detail: null })
+  })
+
   it('reports not_installed when the block points somewhere else', () => {
     const service = new DshHookService()
     service.install()

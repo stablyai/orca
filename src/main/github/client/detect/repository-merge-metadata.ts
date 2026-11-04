@@ -6,7 +6,7 @@ import { githubHostExecOptions, type GitHubApiRepository } from '../../github-ap
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
-import { runCoalescedProbe } from '../../../git/coalesced-probe'
+import { runCoalescedProbe } from '../../../git/remotes/coalesced-probe'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import type { GhExecOptions } from './../github-exec-scope'
 import {

@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useHostedReviewStackParent } from './useHostedReviewStackParent'
 
 function makeReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {

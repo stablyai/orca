@@ -13,7 +13,7 @@ import {
   readOpenCodeNativeChatTranscriptTail
 } from './transcript-opencode'
 import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
-import { handleOpenCodeSqliteRequest } from '../ai-vault/session-scanner-opencode-sqlite-dispatch'
+import { handleOpenCodeSqliteRequest } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch'
 
 const cleanups: (() => void)[] = []
 afterEach(() => {

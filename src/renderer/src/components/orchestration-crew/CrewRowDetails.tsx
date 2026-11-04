@@ -25,11 +25,11 @@ export function CrewRowTime({ at, className }: { at?: string; className?: string
 
 export function CrewRowDetails({ row }: { row: OrchestrationCrewRow }) {
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
+    <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs [overflow-wrap:anywhere]">
       <dt className="text-muted-foreground">
         {translate('components.orchestrationCrew.task', 'Task')}
       </dt>
-      <dd>
+      <dd className="min-w-0">
         {row.task ? (
           <>
             <Badge variant="outline" className="mr-1">
@@ -46,7 +46,7 @@ export function CrewRowDetails({ row }: { row: OrchestrationCrewRow }) {
           <dt className="text-status-warning">
             {translate('components.orchestrationCrew.asksYou', 'Asks you')}
           </dt>
-          <dd className="whitespace-pre-wrap break-words">{row.pendingQuestion.preview}</dd>
+          <dd className="min-w-0 whitespace-pre-wrap">{row.pendingQuestion.preview}</dd>
         </>
       ) : row.latest ? (
         <>
@@ -60,7 +60,7 @@ export function CrewRowDetails({ row }: { row: OrchestrationCrewRow }) {
                 : translate('components.orchestrationCrew.from', 'From')}{' '}
               {row.label} · <CrewRowTime at={row.latest.at} />
             </span>
-            <blockquote className="mt-1 whitespace-pre-wrap break-words border-l border-border pl-2">
+            <blockquote className="mt-1 whitespace-pre-wrap border-l border-border pl-2">
               {row.latest.preview}
             </blockquote>
           </dd>

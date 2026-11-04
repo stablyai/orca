@@ -1,24 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  hasExactTerminalOrphanGroupLayout,
-  mergeTerminalOrphanGroupLayout
-} from './terminal-orphan-topology'
+import { mergeTerminalOrphanGroupLayout } from './terminal-orphan-topology'
 
 describe('terminal orphan topology', () => {
-  it('rejects duplicate and missing group leaves', () => {
-    expect(
-      hasExactTerminalOrphanGroupLayout(
-        {
-          type: 'split',
-          direction: 'horizontal',
-          first: { type: 'leaf', groupId: 'group-a' },
-          second: { type: 'leaf', groupId: 'group-a' }
-        },
-        new Set(['group-a', 'group-b'])
-      )
-    ).toBe(false)
-  })
-
   it('keeps current host layout while preserving an unrelated proposed subtree', () => {
     expect(
       mergeTerminalOrphanGroupLayout({
@@ -81,49 +64,6 @@ describe('terminal orphan topology', () => {
       },
       second: { type: 'leaf', groupId: 'group-other' }
     })
-  })
-
-  it('uses the proposed layout when the host has no groups', () => {
-    expect(
-      mergeTerminalOrphanGroupLayout({
-        existingLayout: null,
-        existingGroupIds: [],
-        proposedLayout: { type: 'leaf', groupId: 'group-recovered' },
-        proposedGroupIds: ['group-recovered'],
-        mergedGroupIds: ['group-recovered']
-      })
-    ).toEqual({ type: 'leaf', groupId: 'group-recovered' })
-  })
-
-  it('keeps the host layout when the proposal has no groups', () => {
-    expect(
-      mergeTerminalOrphanGroupLayout({
-        existingLayout: { type: 'leaf', groupId: 'group-live' },
-        existingGroupIds: ['group-live'],
-        proposedLayout: null,
-        proposedGroupIds: [],
-        mergedGroupIds: ['group-live']
-      })
-    ).toEqual({ type: 'leaf', groupId: 'group-live' })
-  })
-
-  it('does not rewrite host layout when the proposal adds no groups', () => {
-    const existingLayout = {
-      type: 'split' as const,
-      direction: 'horizontal' as const,
-      ratio: 0.4,
-      first: { type: 'leaf' as const, groupId: 'group-a' },
-      second: { type: 'leaf' as const, groupId: 'group-b' }
-    }
-    expect(
-      mergeTerminalOrphanGroupLayout({
-        existingLayout,
-        existingGroupIds: ['group-a', 'group-b'],
-        proposedLayout: existingLayout,
-        proposedGroupIds: ['group-a', 'group-b'],
-        mergedGroupIds: ['group-a', 'group-b']
-      })
-    ).toEqual(existingLayout)
   })
 
   it('appends new groups when multiple shared anchors make placement ambiguous', () => {

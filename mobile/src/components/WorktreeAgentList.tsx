@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
-import type { AgentChildRowModel } from '../../../src/shared/agent-child-row-model'
+import type { AgentChildRowModel } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import {
   buildAgentRowLineageTree,

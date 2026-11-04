@@ -1,15 +1,15 @@
 // Share creation blockers so Create and Push-before-PR tooltips cannot disagree.
 
 import { translate } from '@/i18n/i18n'
-import { supportsHostedReviewCreation } from '../../../../shared/hosted-review-creation-providers'
+import { supportsHostedReviewCreation } from '../../../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
 import { canClickBlockedCreateReviewReason } from './source-control-create-review-blocked-action'
 import { hostedReviewSignInHint } from './hosted-review-sign-in-copy'
-import type { DropdownItem } from '../../../../shared/source-control-dropdown-item-types'
-import type { DropdownActionContext } from '../../../../shared/source-control-dropdown-action-context'
+import type { DropdownItem } from '../../../../shared/source-control/dropdown/source-control-dropdown-item-types'
+import type { DropdownActionContext } from '../../../../shared/source-control/dropdown/source-control-dropdown-action-context'
 
 export type HostedReviewDropdownItems = {
   createPR: DropdownItem

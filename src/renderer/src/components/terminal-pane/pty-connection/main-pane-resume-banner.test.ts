@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalPaneResumeOutcome } from '@/store/terminals/terminal-state'
-import type { TerminalLayoutSnapshot } from '../../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { showMainPaneResumeOutcome as ShowOutcome } from './main-pane-resume-banner'
 

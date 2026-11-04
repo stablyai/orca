@@ -3,7 +3,6 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
-  adviceFor,
   collectSyncLaunchUses,
   countSyncSpawnUses,
   gatedSymbolsFor,
@@ -47,10 +46,14 @@ describe('main sync-spawn ratchet', () => {
     ).toEqual({ count: 1, symbols: ['execSync'] })
   })
 
-  it('retains exports whose module name is inherited from the containing directory', () => {
-    expect(uses("export * from '.'", 'src/main/wsl/consumer.ts')).toEqual({
-      count: 4,
-      symbols: ['getWslHome', 'isWslAvailable', 'listWslDistros', 'wslUncDirectoryExists']
+  it.each([
+    ['discovery/distro-catalog', ['getWslHome', 'listWslDistros']],
+    ['discovery/wsl-availability', ['isWslAvailable']],
+    ['filesystem/unc-path-access', ['wslUncDirectoryExists']]
+  ])('retains exports inherited from the containing directory: %s', (owner, symbols) => {
+    expect(uses("export * from '.'", `src/main/wsl/${owner}/consumer.ts`)).toEqual({
+      count: symbols.length,
+      symbols
     })
   })
 
@@ -86,7 +89,7 @@ describe('main sync-spawn ratchet', () => {
       ['runProcessSync']
     ],
     [
-      "import { getWslHome, listWslDistros } from './wsl.ts'\nconst read = sync ? getWslHome : listWslDistros\nread()",
+      "import { getWslHome, listWslDistros } from './wsl/discovery/distro-catalog.ts'\nconst read = sync ? getWslHome : listWslDistros\nread()",
       3,
       ['getWslHome', 'listWslDistros']
     ],
@@ -151,16 +154,34 @@ describe('main sync-spawn ratchet', () => {
       "import { restrictWindowsPathSync } from '../shared/secure-path-windows-acl'\nrestrictWindowsPathSync(p, true)",
       'restrictWindowsPathSync'
     ],
-    ["import { grantDirAcl } from './win32-utils'\ngrantDirAcl(dir)", 'grantDirAcl'],
-    ["import { getWslHome } from './wsl'\ngetWslHome(distro)", 'getWslHome'],
-    ["import { listWslDistros } from './wsl'\nlistWslDistros()", 'listWslDistros'],
     [
-      "import { wslUncDirectoryExists } from './wsl'\nwslUncDirectoryExists(p)",
+      "import { grantDirAcl } from './windows/windows-directory-acl'\ngrantDirAcl(dir)",
+      'grantDirAcl'
+    ],
+    [
+      "import { getWslHome } from './wsl/discovery/distro-catalog'\ngetWslHome(distro)",
+      'getWslHome'
+    ],
+    [
+      "import { listWslDistros } from './wsl/discovery/distro-catalog'\nlistWslDistros()",
+      'listWslDistros'
+    ],
+    [
+      "import { wslUncDirectoryExists } from './wsl/filesystem/unc-path-access'\nwslUncDirectoryExists(p)",
       'wslUncDirectoryExists'
     ],
-    ["import { isWslAvailable } from './wsl'\nisWslAvailable()", 'isWslAvailable'],
-    ["import { isWslAvailable } from './wsl-availability'\nisWslAvailable()", 'isWslAvailable'],
-    ["import { isPwshAvailable } from './pwsh'\nisPwshAvailable()", 'isPwshAvailable']
+    [
+      "import { isWslAvailable } from './wsl/discovery/wsl-availability'\nisWslAvailable()",
+      'isWslAvailable'
+    ],
+    [
+      "import { isWslAvailable } from './wsl/discovery/wsl-availability'\nisWslAvailable()",
+      'isWslAvailable'
+    ],
+    [
+      "import { isPwshAvailable } from './pty/shell-startup/pwsh'\nisPwshAvailable()",
+      'isPwshAvailable'
+    ]
   ])('gates the repo sync wrapper in %s', (source, symbol) => {
     expect(uses(source)).toEqual({ count: 1, symbols: [symbol] })
   })
@@ -175,7 +196,7 @@ describe('main sync-spawn ratchet', () => {
     expect(
       uses(
         'export function listWslDistros() { return [] }\nexport function first() { return listWslDistros()[0] }',
-        'src/main/wsl.ts'
+        'src/main/wsl/discovery/distro-catalog.ts'
       )
     ).toEqual({ count: 1, symbols: ['listWslDistros'] })
   })
@@ -193,7 +214,9 @@ describe('main sync-spawn ratchet', () => {
   })
 
   it('resolves backslash paths in both the importing file and the specifier', () => {
-    expect([...(gatedSymbolsFor('src\\main\\foo\\x.ts', '..\\wsl') ?? [])]).toContain('getWslHome')
+    expect([
+      ...(gatedSymbolsFor('src\\main\\foo\\x.ts', '..\\wsl\\discovery\\distro-catalog') ?? [])
+    ]).toContain('getWslHome')
   })
 
   it.each(['import {', 'const broken = ;'])(
@@ -224,18 +247,6 @@ describe('main sync-spawn ratchet', () => {
       ['src/main/legacy.ts', 2],
       ['src/shared/new.ts', 1]
     ])
-  })
-
-  it('gives each gated family its own advice', () => {
-    expect(adviceFor(['execFileSync', 'runProcessSync'])).toBe(
-      'execFileSync, runProcessSync: use runProcess or spawnProcess from @orca/process-host.'
-    )
-    expect(adviceFor(['restrictWindowsPathSync'])).toContain(
-      "use restrictWindowsDirectory for a directory, or raise this file's count in config/main-sync-spawn-baseline.txt"
-    )
-    expect(adviceFor(['gitExecFileSync', 'grantDirAcl'])).toBe(
-      'gitExecFileSync: use gitExecFileAsync. grantDirAcl: use grantDirAclAsync.'
-    )
   })
 
   it('fails a new file and a rising count, and passes at the baseline count', () => {

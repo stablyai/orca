@@ -1,20 +1,20 @@
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { z } from 'zod'
-import { BROWSER_EXTENSION_EVENT_CHANNEL } from '../../../../shared/browser-extension-channels'
-import { emitBrowserExtensionWorkerStartEvent } from '../browser-extension-api-host'
+import { BROWSER_EXTENSION_EVENT_CHANNEL } from '../../../../shared/browser/extensions/browser-extension-channels'
+import { emitBrowserExtensionWorkerStartEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
-import { killAllNativeHosts } from '../browser-extension-native-host-process'
+} from '../api-runtime/browser-extension-namespace-registry'
+import { killAllNativeHosts } from '../native-messaging/browser-extension-native-host-process'
 import {
   findNativePort,
   openNativePort,
   type NativePortEvent
-} from '../browser-extension-native-ports'
+} from '../native-messaging/browser-extension-native-ports'
 
 /**
  * Backs chrome.runtime.connectNative and sendNativeMessage, which src/preload/

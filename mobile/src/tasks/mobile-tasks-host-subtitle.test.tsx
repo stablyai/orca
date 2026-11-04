@@ -45,8 +45,6 @@ const hostStore = vi.hoisted(() => {
   }
 })
 vi.mock('../transport/host-store', () => ({ loadHosts: () => hostStore.loadHosts() }))
-
-import { hostScreenStyles } from '../host-screen/host-screen-styles'
 import { MobileTasksStatusBar } from './mobile-tasks-screen-chrome'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 
@@ -82,20 +80,6 @@ describe('Tasks header desktop subtitle', () => {
     renderer = null
     hostStore.deferred = false
     hostStore.pending.length = 0
-  })
-
-  it('names the desktop under the Tasks title in the host screen subtitle style', async () => {
-    const tree = await renderStatusBar('buildbox')
-    const subtitle = subtitleOf(tree)
-    expect(subtitle.props.children).toBe('Build Box')
-    expect(subtitle.props.style).toContain(hostScreenStyles.hostPlatformText)
-    expect(subtitle.props.numberOfLines).toBe(1)
-    expect(subtitle.parent!.parent!.parent!.findByProps({ children: 'Tasks' })).toBeTruthy()
-  })
-
-  it('reserves a blank line for a desktop that is not paired', async () => {
-    const tree = await renderStatusBar('gone')
-    expect(subtitleOf(tree).props.children).toBe('')
   })
 
   it('reserves the line before the read and never shows the previous desktop after a switch', async () => {

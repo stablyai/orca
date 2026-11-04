@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveAgentRowPaneLiveTitle } from './agent-row-pane-live-title'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'

@@ -4,7 +4,7 @@ import {
   mintPtySessionId,
   ptySessionIdForAgentCreateOperation
 } from './pty-session-id'
-import { parsePtySessionId } from '../../shared/pty-session-id-format'
+import { parsePtySessionId } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 const USER_DATA = '/tmp/orca-userdata'
 

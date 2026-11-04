@@ -1,5 +1,5 @@
 import { gunzipSync } from 'fflate'
-import { readCompressedFrame } from '../../../src/shared/paired-e2ee-compressed-frame'
+import { readCompressedFrame } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../src/shared/remote-runtime/remote-runtime-memory-limits'
 import { pairedE2EENativeCodec } from './paired-e2ee-native-codec'
 

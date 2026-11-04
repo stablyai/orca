@@ -18,7 +18,7 @@ const { AI_VAULT_METHODS } = await import('./ai-vault')
 const { RuntimeAiVaultCommands } = await import('../../runtime-ai-vault-commands')
 const { RUNTIME_CAPABILITIES } = await import('../../../../shared/protocol-version')
 const { AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY } =
-  await import('../../../../shared/ai-vault-runtime-capabilities')
+  await import('../../../../shared/ai-vault/contracts/ai-vault-runtime-capabilities')
 
 function dispatcher(): InstanceType<typeof RpcDispatcher> {
   const vault = new RuntimeAiVaultCommands(() => null)

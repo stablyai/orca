@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import {
   FOLDER_HOST_CASES,
   MIXED_GROUP,
   MIXED_FOLDER,
   ROUTING_REPOS
-} from '../../shared/folder-workspace-host-routing.test-fixture'
+} from '../../shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import type { ProjectGroup } from '../../shared/project-group-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { LayoutApplyOutcome } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { localDesktopSession } from '../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import {
@@ -81,7 +81,6 @@ describe('a folder whose project group mixes local and SSH repos (layout-owner b
 })
 
 describe('every folder kind routes where the window saves it (layout-owner build)', () => {
-  // The window's side of each case runs in workspace-session-folder-host-twin.test.ts.
   it.each(FOLDER_HOST_CASES)('$name', async ({ folder, groups, expected }) => {
     const { runtime, applyLayoutCommand } = runtimeWithMixedFolder(folder, groups)
     await runtime.applyLayoutCommand(RATIOS)
