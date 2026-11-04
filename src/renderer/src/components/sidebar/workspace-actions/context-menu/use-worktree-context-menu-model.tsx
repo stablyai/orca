@@ -27,7 +27,10 @@ import {
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
-import { useWorktreeParentPickerTransition } from '../parenting/use-worktree-parent-picker-transition'
+import {
+  useWorktreeParentPickerTransition,
+  type PendingParentPicker
+} from '../parenting/use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
@@ -75,15 +78,9 @@ export function useWorktreeContextMenuModel({
   )
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
   const createGroupDialogActiveRef = useRef(false)
-  const [parentPicker, setParentPicker] = useState<{
-    childWorktreeId: string
-    anchorElement: HTMLElement
-  } | null>(null)
+  const [parentPicker, setParentPicker] = useState<PendingParentPicker | null>(null)
   const [parentPickerOpen, setParentPickerOpen] = useState(false)
-  const pendingParentPickerRef = useRef<{
-    childWorktreeId: string
-    anchorElement: HTMLElement
-  } | null>(null)
+  const pendingParentPickerRef = useRef<PendingParentPicker | null>(null)
   const parentPickerFallbackTimerRef = useRef<number | null>(null)
   const parentPickerUnmountTimerRef = useRef<number | null>(null)
   const lifecycleStartedRef = useRef(false)
@@ -302,7 +299,7 @@ export function useWorktreeContextMenuModel({
       setParentPicker,
       setParentPickerOpen,
       unmountTimerRef: parentPickerUnmountTimerRef,
-      worktreeId: worktree.id
+      worktree
     })
   const { handleRemoveParentLink, suppressOpeningPointerEvent } =
     useWorktreeContextMenuSecondaryActions({

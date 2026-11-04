@@ -61,9 +61,9 @@ export function createUpdateWorktreeLineage(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['updateWorktreeLineage'] {
-  return async (worktreeId, args) => {
+  return async (worktreeId, { executionHostId, ...args }) => {
     // User-initiated unresolved routes must reject so both callers can toast, rather than silently skip.
-    const ownerRoute = hostRouteForWorktreeOwner(get(), worktreeId)
+    const ownerRoute = hostRouteForWorktreeOwner(get(), worktreeId, executionHostId)
     try {
       applyWorktreeLineageUpdate(
         set,
@@ -82,8 +82,8 @@ export function createAssignWorktreeParent(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['assignWorktreeParent'] {
-  return async (worktreeId, args) => {
-    const ownerRoute = hostRouteForWorktreeOwner(get(), worktreeId)
+  return async (worktreeId, { executionHostId, ...args }) => {
+    const ownerRoute = hostRouteForWorktreeOwner(get(), worktreeId, executionHostId)
     try {
       applyWorktreeLineageUpdate(
         set,

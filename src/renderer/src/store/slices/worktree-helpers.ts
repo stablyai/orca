@@ -152,11 +152,15 @@ export type WorktreeSlice = {
     forceLocalOwner?: boolean
     executionHostId?: ExecutionHostId
   }) => Promise<void>
+  /** `executionHostId` names the clicked row's host, so a same-id twin elsewhere is never the target. */
   updateWorktreeLineage: (
     worktreeId: string,
-    args: { parentWorktreeId?: string; noParent?: boolean }
+    args: { parentWorktreeId?: string; noParent?: boolean; executionHostId?: ExecutionHostId }
   ) => Promise<void>
-  assignWorktreeParent: (worktreeId: string, args: { parentWorktreeId: string }) => Promise<void>
+  assignWorktreeParent: (
+    worktreeId: string,
+    args: { parentWorktreeId: string; executionHostId?: ExecutionHostId }
+  ) => Promise<void>
   assignCrossStoreWorktreeParent: (child: Worktree, parent: Worktree) => Promise<void>
   createWorktree: (
     repoId: string,

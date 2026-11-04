@@ -21,6 +21,9 @@ import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import { isCrossStoreParent } from '@/store/slices/worktrees/metadata/cross-store-parent-ref'
 import { useParentMachineLabel } from './use-parent-machine-label'
+import { selectWorktreeParent } from './worktree-parent-selection'
+
+export { selectWorktreeParent }
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
@@ -40,20 +43,13 @@ import { i18n, translate } from '@/i18n/i18n'
 
 type WorktreeParentPickerPopoverProps = {
   open: boolean
-  childWorktreeId: string | null
+  /** The row the menu was opened on; its host picks it out from a same-id twin. */
+  clickedChild: Worktree | null
   anchorElement: HTMLElement | null
   onOpenChange: (open: boolean) => void
 }
 
 type AnchorRect = Pick<DOMRect, 'height' | 'left' | 'top' | 'width'>
-
-type SelectParentArgs = {
-  childWorktreeId: string | null
-  parentWorktreeId: string
-  assignWorktreeParent: (worktreeId: string, args: { parentWorktreeId: string }) => Promise<void>
-  close: () => void
-  showError: (message: string) => void
-}
 
 type WorktreeParentPickerKeyboardArgs<Candidate> = {
   event: React.KeyboardEvent<HTMLInputElement>
@@ -78,28 +74,6 @@ export function getWorktreeParentPickerFocusRestoreTarget(
     return null
   }
   return anchorElement.closest<HTMLElement>(FOCUSABLE_ANCHOR_SELECTOR)
-}
-
-export function selectWorktreeParent({
-  childWorktreeId,
-  parentWorktreeId,
-  assignWorktreeParent,
-  close,
-  showError
-}: SelectParentArgs): void {
-  if (!childWorktreeId) {
-    return
-  }
-  close()
-  void assignWorktreeParent(childWorktreeId, { parentWorktreeId }).catch((error) => {
-    console.error('Failed to set parent worktree:', error)
-    showError(
-      translate(
-        'auto.components.sidebar.WorktreeParentPickerPopover.failedSetParent',
-        'Failed to set parent worktree'
-      )
-    )
-  })
 }
 
 export function handleWorktreeParentPickerKeyDown<Candidate>({
@@ -137,7 +111,7 @@ export function handleWorktreeParentPickerKeyDown<Candidate>({
 
 export function WorktreeParentPickerPopover({
   open,
-  childWorktreeId,
+  clickedChild,
   anchorElement,
   onOpenChange
 }: WorktreeParentPickerPopoverProps): React.JSX.Element | null {
@@ -159,7 +133,10 @@ export function WorktreeParentPickerPopover({
     getAnchorRect(anchorElement)
   )
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight)
-  const child = childWorktreeId ? worktreeMap.get(childWorktreeId) : undefined
+  const child = useMemo(() => {
+    const identity = clickedChild ? getWorktreeHostIdentity(clickedChild) : null
+    return identity ? worktrees.find((row) => getWorktreeHostIdentity(row) === identity) : undefined
+  }, [clickedChild, worktrees])
   const candidates = useMemo(
     () =>
       child
@@ -226,14 +203,15 @@ export function WorktreeParentPickerPopover({
         return
       }
       selectWorktreeParent({
-        childWorktreeId,
+        childWorktreeId: child?.id ?? null,
+        childHostId: child?.hostId,
         parentWorktreeId: candidate.id,
         assignWorktreeParent,
         close: () => onOpenChange(false),
         showError: toast.error
       })
     },
-    [assignCrossStoreWorktreeParent, assignWorktreeParent, child, childWorktreeId, onOpenChange]
+    [assignCrossStoreWorktreeParent, assignWorktreeParent, child, onOpenChange]
   )
 
   // Transformed virtual rows offset fixed DOM anchors; pass viewport bounds through a node-free virtual anchor.
