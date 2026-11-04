@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { journalPayload } from '../agent-session-journal/journal-payload-bounds'
 import {
   closeProviderTimelineRigs,
   messageText,
@@ -86,7 +87,7 @@ describe('long-turn event scaling', () => {
           body: {
             ...runningTool('read'),
             state: 'completed',
-            output: { head: 'x'.repeat(4_096), truncated: false }
+            output: journalPayload('x'.repeat(4_096))
           }
         }).admission.accepted
       ).toBe(true)
