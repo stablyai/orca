@@ -15048,7 +15048,6 @@
           "ae3b00ca82": "GitHub görevlerini ayarla",
           "ff92d15436": "Orca, ajanlar işlerini bitirdiğinde veya yardıma ihtiyaç duyduğunda size bildirim gönderecek.",
           "b054332836": "Bildirimleri ayarla",
-          "04ae28d8ca": "Saatlerce bakacağınız görünümü seçin.",
           "f396db9f20": "Kendi evinizdeymiş gibi hissettirin",
           "322fc50a18": "Orca her CLI ajanıyla çalışır. En sık kullanacağınızı seçin. İstediğiniz zaman değiştirin.",
           "198b148b3c": "Varsayılan ajanınızı seçin",
@@ -19069,8 +19068,8 @@
           "activeNow": "şimdi",
           "browsePlugins": "Eklentilere göz at",
           "browseThemePlugins": "Tema eklentilerine göz at",
-          "customize": "Özelleştir",
-          "customizeCaption": "İsteğe bağlı. Temalar ve terminal paletleri tüm Orca’yı yeniden renklendirir.",
+          "colorMode": "Renk modu",
+          "colorModeCaption": "Açık, koyu veya sisteminize uygun.",
           "darkLook": "Koyu görünüm",
           "darkLooks": "Koyu görünümler",
           "lightLook": "Açık görünüm",
@@ -19085,8 +19084,11 @@
           "showsWhenLight": "Sisteminiz açık olduğunda gösterilir",
           "slotLabel": "Düzenlenecek görünüm",
           "sourceBuiltIn": "Yerleşik",
-          "sourceCommunity": "Terminal paleti"
-        }
+          "sourceCommunity": "Terminal paleti",
+          "themes": "Tema",
+          "themesCaption": "İsteğe bağlı. Uygulama temaları ve terminal paletleriyle daha ileri gidin."
+        },
+        "subtitle": "Açık veya koyu seçin, isterseniz bir tema da seçin. İkisini de istediğiniz zaman Ayarlar’dan değiştirebilirsiniz."
       },
       "integrations": {
         "capabilities": {

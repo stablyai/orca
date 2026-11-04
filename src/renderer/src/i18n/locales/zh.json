@@ -14402,7 +14402,6 @@
           "ae3b00ca82": "设置 GitHub 任务",
           "ff92d15436": "Orca 会在智能体完成工作或需要帮助时通知你。",
           "b054332836": "设置通知",
-          "04ae28d8ca": "选择你想盯着看几个小时的主题。",
           "f396db9f20": "让这里有家的感觉",
           "322fc50a18": "Orca 支持所有 CLI 智能体。选择你最常用的一个，随时可切换。",
           "198b148b3c": "选择默认智能体",
@@ -19705,8 +19704,8 @@
           "activeNow": "当前",
           "browsePlugins": "浏览插件",
           "browseThemePlugins": "浏览主题插件",
-          "customize": "自定义",
-          "customizeCaption": "可选。主题和终端调色板会为整个 Orca 重新配色。",
+          "colorMode": "颜色模式",
+          "colorModeCaption": "浅色、深色或跟随系统。",
           "darkLook": "深色外观",
           "darkLooks": "深色外观",
           "lightLook": "浅色外观",
@@ -19721,8 +19720,11 @@
           "showsWhenLight": "系统为浅色时显示",
           "slotLabel": "要编辑的外观",
           "sourceBuiltIn": "内置",
-          "sourceCommunity": "终端调色板"
-        }
+          "sourceCommunity": "终端调色板",
+          "themes": "主题",
+          "themesCaption": "可选。使用应用主题和终端调色板进一步自定义。"
+        },
+        "subtitle": "选择浅色或深色，也可以再选一个主题。两者都可以随时在设置中更改。"
       },
       "integrations": {
         "capabilities": {

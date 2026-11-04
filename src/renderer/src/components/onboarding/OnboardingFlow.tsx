@@ -42,8 +42,8 @@ const stepCopy = {
     },
     get subtitle() {
       return translate(
-        'auto.components.onboarding.OnboardingFlow.04ae28d8ca',
-        'Pick the look you want to stare at for hours.'
+        'components.onboarding.theme.subtitle',
+        'Choose light or dark, then optionally a theme. Change either any time in Settings.'
       )
     }
   },

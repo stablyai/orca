@@ -15062,7 +15062,6 @@
           "ae3b00ca82": "GitHub-Aufgaben einrichten",
           "ff92d15436": "Orca zeigt Benachrichtigungen an, wenn Agenten fertig sind oder Hilfe benötigen.",
           "b054332836": "Benachrichtigungen einrichten",
-          "04ae28d8ca": "Ein Erscheinungsbild auswählen, das auch nach Stunden noch gefällt.",
           "f396db9f20": "Vertraute Umgebung einrichten",
           "322fc50a18": "Orca funktioniert mit jedem CLI-Agenten. Den bevorzugten Agenten auswählen. Ein Wechsel ist jederzeit möglich.",
           "198b148b3c": "Standardagenten auswählen",
@@ -19083,8 +19082,8 @@
           "activeNow": "jetzt",
           "browsePlugins": "Plugins durchsuchen",
           "browseThemePlugins": "Design-Plugins durchsuchen",
-          "customize": "Anpassen",
-          "customizeCaption": "Optional. Designs und Terminal-Paletten färben ganz Orca neu ein.",
+          "colorMode": "Farbmodus",
+          "colorModeCaption": "Hell, dunkel oder wie dein System.",
           "darkLook": "Dunkler Look",
           "darkLooks": "Dunkle Looks",
           "lightLook": "Heller Look",
@@ -19099,8 +19098,11 @@
           "showsWhenLight": "Wird angezeigt, wenn dein System hell ist",
           "slotLabel": "Zu bearbeitender Look",
           "sourceBuiltIn": "Integriert",
-          "sourceCommunity": "Terminal-Palette"
-        }
+          "sourceCommunity": "Terminal-Palette",
+          "themes": "Design",
+          "themesCaption": "Optional. Geh weiter mit App-Designs und Terminal-Paletten."
+        },
+        "subtitle": "Wähle hell oder dunkel und optional ein Design. Beides kannst du jederzeit in den Einstellungen ändern."
       },
       "integrations": {
         "capabilities": {

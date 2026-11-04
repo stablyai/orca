@@ -14402,7 +14402,6 @@
           "ae3b00ca82": "GitHub タスクをセットアップする",
           "ff92d15436": "Orca は、Agent の作業が完了したとき、またはサポートが必要になったときに通知します。",
           "b054332836": "通知を設定する",
-          "04ae28d8ca": "何時間も眺めていたくなるテーマを選んでください。",
           "f396db9f20": "まるで家にいるような気分にさせてくれる",
           "322fc50a18": "Orca はすべての CLI Agent で動作します。最もよく使うものを選択してください。いつでも切り替えられます。",
           "198b148b3c": "デフォルトの Agent を選択",
@@ -18425,8 +18424,8 @@
           "activeNow": "現在",
           "browsePlugins": "プラグインを見る",
           "browseThemePlugins": "テーマプラグインを見る",
-          "customize": "カスタマイズ",
-          "customizeCaption": "任意。テーマとターミナルパレットで Orca 全体の配色が変わります。",
+          "colorMode": "カラーモード",
+          "colorModeCaption": "ライト、ダーク、または OS に合わせる。",
           "darkLook": "ダークルック",
           "darkLooks": "ダークルック",
           "lightLook": "ライトルック",
@@ -18441,8 +18440,11 @@
           "showsWhenLight": "システムがライトのときに表示",
           "slotLabel": "編集するルック",
           "sourceBuiltIn": "組み込み",
-          "sourceCommunity": "ターミナルパレット"
-        }
+          "sourceCommunity": "ターミナルパレット",
+          "themes": "テーマ",
+          "themesCaption": "任意。アプリテーマやターミナルパレットでさらにカスタマイズできます。"
+        },
+        "subtitle": "ライトかダークを選び、必要ならテーマも選びましょう。どちらも設定からいつでも変更できます。"
       },
       "integrations": {
         "capabilities": {

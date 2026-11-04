@@ -15301,7 +15301,6 @@
           "ae3b00ca82": "Set up GitHub tasks",
           "ff92d15436": "Orca will notify you when agents are done or need help.",
           "b054332836": "Set up notifications",
-          "04ae28d8ca": "Pick the look you want to stare at for hours.",
           "f396db9f20": "Make it feel like home",
           "322fc50a18": "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time.",
           "198b148b3c": "Pick your default agent",
@@ -19381,8 +19380,8 @@
           "activeNow": "now",
           "browsePlugins": "Browse plugins",
           "browseThemePlugins": "Browse theme plugins",
-          "customize": "Customize",
-          "customizeCaption": "Optional. Themes and terminal palettes recolor all of Orca.",
+          "colorMode": "Color mode",
+          "colorModeCaption": "Light, dark, or follow your OS.",
           "darkLook": "Dark look",
           "darkLooks": "Dark looks",
           "lightLook": "Light look",
@@ -19397,8 +19396,11 @@
           "showsWhenLight": "Shows when your system is light",
           "slotLabel": "Look to edit",
           "sourceBuiltIn": "Built in",
-          "sourceCommunity": "Terminal palette"
-        }
+          "sourceCommunity": "Terminal palette",
+          "themes": "Theme",
+          "themesCaption": "Optional. Go further with app themes and terminal palettes."
+        },
+        "subtitle": "Choose light or dark, then optionally a theme. Change either any time in Settings."
       },
       "integrations": {
         "capabilities": {

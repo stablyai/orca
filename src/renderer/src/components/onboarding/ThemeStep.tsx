@@ -206,13 +206,22 @@ export function ThemeStep({
 
   return (
     <div className="space-y-5">
-      <ThemeModeTiles
-        value={theme}
-        onChange={(id) => {
-          setSystemSlot(null)
-          applyOnboardingThemeSelection(id, onThemeChange, updateSettings)
-        }}
-      />
+      <section className="space-y-2.5">
+        <ThemeSectionHeading
+          title={translate('components.onboarding.theme.looks.colorMode', 'Color mode')}
+          caption={translate(
+            'components.onboarding.theme.looks.colorModeCaption',
+            'Light, dark, or follow your OS.'
+          )}
+        />
+        <ThemeModeTiles
+          value={theme}
+          onChange={(id) => {
+            setSystemSlot(null)
+            applyOnboardingThemeSelection(id, onThemeChange, updateSettings)
+          }}
+        />
+      </section>
 
       <ThemeLookCarousel
         looks={looks[base]}
@@ -225,10 +234,10 @@ export function ThemeStep({
         }
         header={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <div className="text-sm font-medium text-foreground">
-              {translate('components.onboarding.theme.looks.customize', 'Customize')}
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                {theme === 'system' && base !== osBase
+            <ThemeSectionHeading
+              title={translate('components.onboarding.theme.looks.themes', 'Theme')}
+              caption={
+                theme === 'system' && base !== osBase
                   ? base === 'dark'
                     ? translate(
                         'components.onboarding.theme.looks.showsWhenDark',
@@ -239,11 +248,11 @@ export function ThemeStep({
                         'Shows when your system is light'
                       )
                   : translate(
-                      'components.onboarding.theme.looks.customizeCaption',
-                      'Optional. Themes and terminal palettes recolor all of Orca.'
-                    )}
-              </span>
-            </div>
+                      'components.onboarding.theme.looks.themesCaption',
+                      'Optional. Go further with app themes and terminal palettes.'
+                    )
+              }
+            />
             {theme === 'system' && (
               <div className="w-60 shrink-0">
                 <ThemeSlotControl value={base} osBase={osBase} onChange={setSystemSlot} />
@@ -340,4 +349,19 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
     }
   ]
   return groups.filter(({ keys }) => keys.some((k) => k in diff)).map(({ label }) => label)
+}
+
+function ThemeSectionHeading({
+  title,
+  caption
+}: {
+  title: string
+  caption: string
+}): React.JSX.Element {
+  return (
+    <h3 className="text-sm font-medium text-foreground">
+      {title}
+      <span className="ml-2 text-xs font-normal text-muted-foreground">{caption}</span>
+    </h3>
+  )
 }
