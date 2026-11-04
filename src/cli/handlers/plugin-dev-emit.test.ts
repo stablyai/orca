@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { COMMAND_SPECS } from '../specs'
+import { COMMAND_SPECS } from '../specs/index'
 import { normalizeCommandPositionals, parseArgs, specPaths } from '../args'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'

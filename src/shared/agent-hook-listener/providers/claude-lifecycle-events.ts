@@ -1,9 +1,9 @@
-import type { ParsedAgentStatusPayload } from '../../agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
 import {
   markClaudeBackgroundAgentRunning,
   oweClaudeAgentTaskNotification,
   recordClaudeUnconfirmedAgentEnd
-} from '../../claude-owed-task-notifications'
+} from './claude-owed-task-notifications'
 import {
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasRuntimeWorkingSubagent,

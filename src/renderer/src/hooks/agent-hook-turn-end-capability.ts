@@ -5,7 +5,7 @@ import {
 } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import { AGENT_STATUS_TURN_END_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import type { HostTurnEndFacts } from '../../../shared/agent-status-types'
+import type { HostTurnEndFacts } from '../../../shared/agent-status/contracts/agent-status-types'
 
 // Older paired hosts lack turn-end stamps; local/WSL relay uses this build, while unbound PTYs remain unknown.
 function ptyHostStampsTurnEnds(ptyId: string | null | undefined): boolean {

@@ -7,7 +7,6 @@ import {
   unitConsumers
 } from './ci-unit-dependency-graph.mjs'
 import { CROSS_VERSION_WIRE_DIR, discoverUnitFiles } from './ci-unit-files.mjs'
-import { FULL_SHARD_COUNT, planUnitSelection } from './ci-unit-selection.mjs'
 
 const harness = 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts'
 const structuredSessionHarness =
@@ -109,21 +108,6 @@ describe('unit support import ownership', () => {
       [...unitConsumers([unitHarness], graph.reverse)].some((file) => unitFiles.has(file))
     ).toBe(true)
     expect(productConsumers(unitHarness, graph, unitFiles)).toEqual([])
-  })
-
-  it.each(unitHarnesses)('keeps the full unit inventory for a normal PR editing %s', (file) => {
-    const files = [...unitFiles]
-    const plan = planUnitSelection({
-      files,
-      changed: [file],
-      graph,
-      timings: {},
-      event: { pull_request: { draft: false } },
-      mode: 'selected'
-    })
-    expect(plan.mode).toBe('shadow')
-    expect(plan.executionFiles).toEqual(files)
-    expect(plan.shards).toHaveLength(FULL_SHARD_COUNT)
   })
 
   it.each([

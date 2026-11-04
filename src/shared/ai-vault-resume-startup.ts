@@ -17,15 +17,19 @@ import {
   resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv,
   type AgentLaunchProfileSettings
-} from './tui-agent-launch-defaults'
-import { buildAgentResumeStartupPlan } from './tui-agent-startup'
+} from './agent-launch/choices/tui-agent-launch-defaults'
+import { buildAgentResumeStartupPlan } from './agent-launch/startup/tui-agent-resume-startup'
 import {
   quoteStartupArg,
   resolveStartupShell,
   tokenizeStartupCommand,
   type AgentStartupShell
-} from './tui-agent-startup-shell'
-import { getTuiAgentLaunchCommand, isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
+} from './agent-launch/startup/tui-agent-startup-shell'
+import {
+  getTuiAgentLaunchCommand,
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from './agent-launch/catalog/tui-agent-config'
 import { findOptionOccurrence } from './command-option-occurrence'
 import { assertOpenCodeCopyUsesLocalStore } from './opencode-launch-command'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from './structured-agent-cli-conversation-adoption'

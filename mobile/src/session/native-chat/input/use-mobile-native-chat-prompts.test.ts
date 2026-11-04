@@ -2,7 +2,7 @@ import { asyncQuestionSourceScope } from '../../../../../src/shared/native-chat/
 import { createElement } from 'react'
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { useMobileAsyncQuestionHides } from './use-mobile-native-chat-prompt-dismiss'
 import { mobileNativeChatPromptDismissals } from './mobile-native-chat-prompt-dismissals'
@@ -143,6 +143,7 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
       const message: NativeChatMessage = {
         id: 'ask',
         role: 'assistant',
+        journalPosition: { sequence: 1, index: 0 },
         blocks: [
           { type: 'text', text: 'Which color?\n- Red\n- Blue' },
           { type: 'tool-call', name: 'request_user_input_async', input: { questions } }
@@ -153,6 +154,7 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
       const notice: NativeChatMessage = {
         id: 'mail',
         role: 'user',
+        journalPosition: { sequence: 2, index: 0 },
         blocks: [{ type: 'text', text: 'You have 1 orchestration message.' }],
         timestamp: 2,
         source: 'transcript',
@@ -215,11 +217,32 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
         undefined,
         { alternate: true }
       )
+      if (accepted) {
+        for (const deliveryState of ['pending', 'unknown'] as const) {
+          messages = [
+            message,
+            notice,
+            {
+              id: 'sending-answer',
+              role: 'user',
+              journalPosition: { sequence: 3, index: 0 },
+              source: 'transcript',
+              timestamp: 3,
+              blocks: [{ type: 'text', text: '> Which color?\n\nBlue' }],
+              deliveryState
+            }
+          ]
+          TestRenderer.act(() => renderer.update(createElement(Probe)))
+          expect(captured?.ask).toEqual(initialAsk)
+          expect(captured?.answerPending).toBe(deliveryState === 'pending')
+        }
+      }
       messages = [
         ...messages,
         {
           id: 'human-answer',
           role: 'user',
+          journalPosition: { sequence: 4, index: 0 },
           blocks: [{ type: 'text', text: 'Blue' }],
           timestamp: 3,
           source: 'transcript'

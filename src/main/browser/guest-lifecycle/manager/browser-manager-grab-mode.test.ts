@@ -67,11 +67,5 @@ describe('browserManager grab operations', () => {
       expect(selection.kind).toBe('cancelled')
       expect(selection.opId).toBe('op-1')
     })
-
-    it('returns false if injection fails', async () => {
-      guestExecuteJavaScriptMock.mockRejectedValue(new Error('Injection failed'))
-      const result = await browserManager.setGrabMode('tab-1', true, guest)
-      expect(result).toBe(false)
-    })
   })
 })

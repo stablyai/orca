@@ -1,4 +1,4 @@
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   canonicalSourceControlActionSelection,
@@ -23,7 +23,7 @@ import type { SourceControlLaunchActionId } from '../../../../shared/source-cont
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
 import type {

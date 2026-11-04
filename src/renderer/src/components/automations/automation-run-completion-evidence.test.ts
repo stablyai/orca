@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { hasAutomationRunCompletionEvidence } from './automation-run-completion-evidence'
 

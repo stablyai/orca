@@ -1,16 +1,16 @@
-import type { AgentStatus } from '../../shared/agent-detection'
+import type { AgentStatus } from '../../shared/agent-status/title/agent-title-core'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   isFreshNonDoneAgentStatus
-} from '../../shared/agent-status-freshness'
-import type { AgentStatusState } from '../../shared/agent-status-types'
+} from '../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
-import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
+import { getSyntheticAgentTerminalTitle } from '../../shared/agent-status/title/synthetic-agent-title'
 import { resolveTerminalTitlePolicyAgentType } from '../../shared/terminal-title-agent-type'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../shared/terminal-agent'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { getTuiAgentRestSignal } from '../../shared/agent-status/title/tui-agent-rest-signal'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { isOmpIdleStateTitle } from './omp-terminal-readiness'
 import {

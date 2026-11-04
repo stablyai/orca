@@ -10,7 +10,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalRenderItem
 } from '../../agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
+import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { AgentJournalTurnScope } from '../../agent-session/journal/agent-session-journal-turn-scope'
 import { withNativeChatCutTurnNotices } from './native-chat-cut-turn-notice'
 import { hostStatesTurnScopes, nativeChatTurnMembership } from './native-chat-turn-membership'

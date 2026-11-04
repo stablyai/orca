@@ -281,6 +281,9 @@ export function openDetectedFilePath(
     } else if (
       hostGrant === null &&
       !isFloatingWorkspaceId(worktreeId) &&
+      // Why: a local file opens in the workspace it was clicked in, even if another holds it open;
+      // owner-scoped tab ids keep both tabs, and the editor reads local absolute paths directly.
+      targetExecutionHostId !== LOCAL_EXECUTION_HOST_ID &&
       store.openFiles.some(
         (openFile) => openFile.filePath === mappedFilePath && openFile.worktreeId !== worktreeId
       )

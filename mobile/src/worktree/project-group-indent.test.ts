@@ -12,7 +12,7 @@ describe('project-group indent', () => {
     for (const workspaceKind of ['git', 'folder-workspace', undefined] as const) {
       expect(
         DEPTHS.map((projectGroupDepth) =>
-          projectGroupRowIndent({ workspaceKind, projectGroupDepth })
+          projectGroupRowIndent({ workspaceKind }, { projectGroupDepth })
         )
       ).toEqual([0, 0, 18, 18, 36, 108, 108, 0])
     }
@@ -20,7 +20,7 @@ describe('project-group indent', () => {
 
   it('steps a folder-scanned group’s rows by the header step, its folder workspaces one level less', () => {
     const indent = (workspaceKind: 'git' | 'folder-workspace', projectGroupDepth: number) =>
-      projectGroupRowIndent({ workspaceKind, projectGroupDepth, inFolderScanGroup: true })
+      projectGroupRowIndent({ workspaceKind }, { projectGroupDepth, inFolderScanGroup: true })
     expect([1, 2, 7].map((depth) => indent('git', depth))).toEqual([10, 20, 60])
     expect([1, 2, 7, 9].map((depth) => indent('folder-workspace', depth))).toEqual([0, 10, 60, 60])
   })

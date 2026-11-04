@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { QuickSubmitOptions } from './quick-creation-request'
 import { findPendingLinkedWorkItemCreationId } from '@/lib/pending-worktree-creation'

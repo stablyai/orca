@@ -1,5 +1,5 @@
 import { isShellProcess } from '../../shared/shell-process-detection'
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
 import type { AgentForegroundProcessResolution } from './agent-foreground-process'
 
 /** Unanchored job evidence may outlive console agents; cap it at five renderer confirm ladders (30s).

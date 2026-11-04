@@ -2,7 +2,7 @@ import { memo, useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { shallow } from 'zustand/shallow'
 import { useShallow } from 'zustand/react/shallow'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getIndexedReposById } from '@/store/worktree-repo-index'
 import { translate } from '@/i18n/i18n'
 import {
@@ -45,12 +45,12 @@ import {
   agentPickerEffectiveChoices,
   type AgentPickerEntry,
   type AgentPickerDraft
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { SourceControlActionAgentPicker } from './source-control/SourceControlActionAgentPicker'
 import { getAgentCatalogForAction } from './source-control/source-control-action-recipe-options'
 import { DropdownMenuItem } from '../ui/dropdown-menu'
 import type { ActionRecipeDraftValue } from './source-control/source-control-ai-action-recipe-draft'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 type TextModelChange = (
   choice: SourceControlAiModelChoice | undefined,

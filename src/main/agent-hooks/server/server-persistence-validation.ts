@@ -1,17 +1,17 @@
-import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
+import { readAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
 import { createHash } from 'node:crypto'
 
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   isTurnEndDisposition,
   normalizeAgentStatusPayload,
-  type AgentMainAgentStatus,
   type ParsedAgentStatusPayload
-} from '../../../shared/agent-status-types'
-import { isAgentHookSource } from '../../../shared/agent-hook-relay'
+} from '../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentMainAgentStatus } from '../../../shared/agent-status/lifecycle/main-agent-status'
+import { isAgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { HostTurnRecord } from '../../../shared/agent-hook-listener/listener-event'
-import { isTurnEndedAt } from '../../../shared/agent-hook-turn-end-timing'
-import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
+import { isTurnEndedAt } from '../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import {
   normalizeClaudePromptId,
   normalizeGrokPromptId

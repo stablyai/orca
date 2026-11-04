@@ -1,4 +1,4 @@
-import { agentTypeToIconAgent } from '@/lib/agent-status'
+import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store'
@@ -12,8 +12,11 @@ import { createPaneForegroundAgentTracker } from '../pane-foreground-agent-track
 import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import {
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 
 import {
   paneShouldAnswerOscColorQueries,

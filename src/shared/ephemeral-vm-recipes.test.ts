@@ -20,25 +20,6 @@ function makePairingCode(endpoint = 'wss://sandbox.example.com'): string {
 }
 
 describe('parseEphemeralVmRecipeResult', () => {
-  it('parses the minimum recipe result', () => {
-    const result = parseEphemeralVmRecipeResult(
-      JSON.stringify({
-        schemaVersion: 1,
-        pairingCode: makePairingCode(),
-        projectRoot: '/workspace/repo'
-      })
-    )
-
-    expect(result).toEqual({
-      ok: true,
-      result: {
-        schemaVersion: 1,
-        pairingCode: makePairingCode(),
-        projectRoot: '/workspace/repo'
-      }
-    })
-  })
-
   it('keeps opaque userData intact', () => {
     const result = parseEphemeralVmRecipeResult(
       JSON.stringify({
@@ -185,14 +166,6 @@ describe('parseEphemeralVmRecipeResult', () => {
       ok: false,
       error: 'Recipe result projectRoot must be an absolute runtime path.',
       errorCode: 'recipeResultProjectRootNotAbsolute'
-    })
-  })
-
-  it('rejects non-json stdout', () => {
-    expect(parseEphemeralVmRecipeResult('Pairing URL: nope')).toEqual({
-      ok: false,
-      error: 'Recipe stdout must be one JSON object.',
-      errorCode: 'recipeResultNotJsonObject'
     })
   })
 

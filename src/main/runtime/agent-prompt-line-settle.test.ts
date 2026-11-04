@@ -1,7 +1,7 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
+import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-launch/startup/agent-prompt-injection'
 import { createAgentPromptSubmissionRuntime } from './agent-prompt-submission-runtime-test-fixture'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {

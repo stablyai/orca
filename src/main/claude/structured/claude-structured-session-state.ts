@@ -15,7 +15,7 @@ import type { ClaudeJournalTranslator } from '../claude-journal-translator-contr
 import type { ClaudePromptRegistry } from '../claude-prompt-registry'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
 import type { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'
 import type { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
@@ -120,6 +120,7 @@ export type ClaudeSession = {
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
   reportedOptions: {
+    reportedModel?: string
     model?: string
     effort?: string
     fastMode?: boolean

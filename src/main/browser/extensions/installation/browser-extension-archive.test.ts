@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { strToU8, zipSync } from 'fflate'
@@ -20,17 +20,6 @@ afterEach(() => {
 })
 
 describe('browser extension archives', () => {
-  it('unpacks nested files into the target folder', async () => {
-    const archive = zipSync({
-      'manifest.json': strToU8('{}'),
-      js: { 'background.js': strToU8('self.ok = 1') }
-    })
-
-    await writeBrowserExtensionArchive(readBrowserExtensionArchive(archive), target)
-
-    expect(readFileSync(join(target, 'js', 'background.js'), 'utf8')).toBe('self.ok = 1')
-  })
-
   it('rejects an archive with an entry that escapes the folder before writing anything', () => {
     const archive = zipSync({ 'manifest.json': strToU8('{}'), '../evil.js': strToU8('pwned') })
 

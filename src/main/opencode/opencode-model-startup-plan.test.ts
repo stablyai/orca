@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
 import { probeOpenCodeLaunchCapabilities } from './opencode-launch-capabilities'
 import { resolveOpenCodeDirectModelExecutable } from './opencode-model-executable'
@@ -9,7 +9,7 @@ import {
   OPENCODE_MODEL_CONFIG_REFUSAL,
   OPENCODE_MODEL_TRANSPORT_REFUSAL,
   OPENCODE_MODEL_VERSION_REFUSAL
-} from '../../shared/agent-launch-model-preferences'
+} from '../../shared/agent-launch/choices/agent-launch-model-preferences'
 
 vi.mock('../managed-data-accounts/launch-environment', () => ({
   applyManagedDataAccountEnvironment: vi.fn()

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { agentModelChoiceChips } from './agent-model-choice-chips'
-import * as profile from '../../../../../shared/agent-launch-profile'
-import * as analyzer from '../../../../../shared/agent-choice-args'
+import * as profile from '../../../../../shared/agent-launch/choices/agent-launch-profile'
+import * as analyzer from '../../../../../shared/agent-launch/choices/agent-choice-args'
 
 it('projects the whole selection once and removes actual independent or composed carriers', () => {
   const project = vi.spyOn(profile, 'projectAgentLaunchProfile')

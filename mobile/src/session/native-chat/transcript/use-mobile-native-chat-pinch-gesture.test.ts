@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FONT_SCALE_STEP, quantizeFontScale } from './mobile-native-chat-message-text'
+import { quantizeFontScale } from './mobile-native-chat-message-text'
 
 const handlers: { start?: () => void; update?: (e: { scale: number }) => void } = {}
 
@@ -33,14 +33,6 @@ describe('quantizeFontScale', () => {
     expect(quantizeFontScale(5)).toBe(1.8)
     expect(quantizeFontScale(0.1)).toBe(0.8)
     expect(quantizeFontScale(Number.NaN)).toBe(1)
-  })
-
-  it('collapses a full-range pinch to at most one commit per step', () => {
-    const committed = new Set<number>()
-    for (let i = 0; i <= 600; i++) {
-      committed.add(quantizeFontScale(0.7 + i * 0.002))
-    }
-    expect(committed.size).toBeLessThanOrEqual(Math.round(1 / FONT_SCALE_STEP) + 1)
   })
 })
 

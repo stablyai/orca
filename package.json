@@ -394,7 +394,7 @@
   },
   "lint-staged": {
     "{*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}}": [
-      "oxlint",
+      "oxlint --no-error-on-unmatched-pattern",
       "oxlint --config config/oxlint-js-plugins.json",
       "ast-grep scan --config config/sgconfig.yml --min-severity warning",
       "oxlint --config config/oxlint-react-doctor.json",

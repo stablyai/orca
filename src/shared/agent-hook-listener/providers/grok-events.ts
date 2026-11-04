@@ -1,14 +1,17 @@
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
-import { continueMainAgentStatus, foldAgentLeadStatus } from '../../agent-lead-status-fold'
+} from '../../agent-status/contracts/agent-status-types'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
+import {
+  continueMainAgentStatus,
+  foldAgentLeadStatus
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
 import {
   agentChildWorkLiveness,
   type AgentChildWorkLiveness,
   type AgentChildWorkLivenessCandidate
-} from '../../agent-status-child-work-liveness'
+} from '../../agent-status/child-work/agent-status-child-work-liveness'
 import { clearPaneTurnCacheState, type HookListenerState } from '../listener-state'
 import { normalizeGrokPromptId } from '../listener-limits'
 import { resolvePrompt, resolveToolState, stripGrokUserQueryWrapper } from '../prompt-fields'

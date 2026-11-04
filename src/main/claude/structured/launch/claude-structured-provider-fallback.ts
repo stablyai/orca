@@ -1,4 +1,12 @@
-import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  readClaudeModelFallback,
+  claudeModelFallbackText
+} from '../../../../shared/native-chat/claude-model-fallback'
+import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../../shared/agent-session/journal/agent-session-turn-notice'
+import type {
+  AgentJournalPlainStatusItem,
+  AgentJournalStatusItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionFailureRowWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -117,7 +125,11 @@ export function createClaudeProviderFrameFallback(
   append: (
     kind: string,
     payload: unknown,
-    display?: string | null | (AgentSessionFailureRowWords & { tone: string }),
+    display?:
+      | string
+      | null
+      | Omit<AgentJournalPlainStatusItem, 'kind'>
+      | (AgentSessionFailureRowWords & { tone: string }),
     /** Open a turn only if a row will be written. */
     beforeAppend?: () => void,
     options?: UnhandledProviderFrameJournalItemOptions,
@@ -198,11 +210,18 @@ export function appendUnmodeledContent(
   let changed = false
   for (const part of envelope.content.filter((part) => !isModeledClaudeContent(part))) {
     const partType = claudeText(claudeRecord(part)?.type) ?? 'unknown'
+    const modelFallback = envelope.role === 'assistant' ? readClaudeModelFallback(part) : null
     changed =
       fallback.append(
         `message:${envelope.role}:content:${partType}`,
         part,
-        readableProviderFrameText(part) ?? CLAUDE_UNRENDERABLE_CONTENT_TEXT,
+        modelFallback
+          ? {
+              text: claudeModelFallbackText(modelFallback),
+              tone: 'notice',
+              presentation: AGENT_SESSION_TURN_NOTICE_PRESENTATION
+            }
+          : (readableProviderFrameText(part) ?? CLAUDE_UNRENDERABLE_CONTENT_TEXT),
         beforeAppend,
         undefined,
         stamp
