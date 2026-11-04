@@ -144,6 +144,8 @@ export class BrowserNetworkTunnelSession {
     }
     stream.connected = true
     clearTimeout(stream.connectTimeout)
+    // Track exactly what the grant announces, or in-window data would be rejected as a violation.
+    stream.receiveCredit = this.receiveWindowBytes
     this.frameSender.send(BrowserNetworkTunnelOpcode.Opened, stream.id)
     this.frameSender.send(
       BrowserNetworkTunnelOpcode.WindowUpdate,

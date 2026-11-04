@@ -1,19 +1,31 @@
 import { performance } from 'node:perf_hooks'
-import type { BrowserNetworkTunnelSessionOptions } from './browser-network-tunnel-stream-state'
+import {
+  BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+  type BrowserNetworkTunnelSessionOptions
+} from './browser-network-tunnel-stream-state'
 
 // Rapid browsing across four heavy pages measured 302 opens in 10 s.
 const MAX_OPENS_PER_WINDOW = 1024
 const OPEN_RATE_WINDOW_MS = 10_000
-const MAX_RETAINED_BYTES = 8 * 1024 * 1024
+// On a slow link every active stream can pin a full window of retained bytes, so the session
+// limit scales with the negotiated window to keep the same concurrent-stream headroom. The
+// legacy floor equals the previous fixed 8 MiB limit (32 legacy windows).
+const MIN_RETAINED_BYTES = 8 * 1024 * 1024
+const RETAINED_WINDOWS_PER_SESSION = 16
 
 export function createBrowserNetworkTunnelResourceBudget(
   options: BrowserNetworkTunnelSessionOptions
 ): BrowserNetworkTunnelResourceBudget {
-  return new BrowserNetworkTunnelResourceBudget(options.now, options.claimAggregateRetainedBytes)
+  return new BrowserNetworkTunnelResourceBudget(
+    options.now,
+    options.claimAggregateRetainedBytes,
+    options.receiveWindowBytes
+  )
 }
 
 export class BrowserNetworkTunnelResourceBudget {
   private readonly recentOpenAttempts: number[] = []
+  private readonly maxRetainedBytes: number
   private retainedBytes = 0
   private lastOpenAttemptAt = Number.NEGATIVE_INFINITY
   private readonly aggregateClaims: ({ remaining: number; release: () => void } | undefined)[] = []
@@ -21,8 +33,14 @@ export class BrowserNetworkTunnelResourceBudget {
 
   constructor(
     private readonly now: () => number = () => performance.now(),
-    private readonly claimAggregateRetainedBytes?: (bytes: number) => (() => void) | null
-  ) {}
+    private readonly claimAggregateRetainedBytes?: (bytes: number) => (() => void) | null,
+    receiveWindowBytes: number = BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
+  ) {
+    this.maxRetainedBytes = Math.max(
+      MIN_RETAINED_BYTES,
+      RETAINED_WINDOWS_PER_SESSION * receiveWindowBytes
+    )
+  }
 
   admitOpenAttempt(): boolean {
     const observedAt = this.now()
@@ -43,7 +61,7 @@ export class BrowserNetworkTunnelResourceBudget {
   }
 
   reserveRetainedBytes(bytes: number): boolean {
-    if (bytes < 0 || bytes > MAX_RETAINED_BYTES - this.retainedBytes) {
+    if (bytes < 0 || bytes > this.maxRetainedBytes - this.retainedBytes) {
       return false
     }
     if (bytes === 0) {

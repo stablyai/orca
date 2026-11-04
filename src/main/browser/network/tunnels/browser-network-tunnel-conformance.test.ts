@@ -12,6 +12,7 @@ import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
 import {
   BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+  BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES,
   type BrowserNetworkTunnelSocket
 } from './browser-network-tunnel-stream-state'
 
@@ -176,6 +177,39 @@ describe('browser network tunnel conformance', () => {
     await teardown(tunnel)
   })
 
+  it('carries a full negotiated window in both directions before any settlement', async () => {
+    const tunnel = createConformanceTunnel({
+      receiveWindowBytes: BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
+    })
+    const { duplex, destination } = await openStream(tunnel)
+    const consumer = consumeDuplex(duplex, { autoSettle: false })
+    const windowChunks = BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES / CHUNK_BYTES
+
+    // A full negotiated window outstanding toward the destination, nothing settled yet.
+    destination.autoSettleWrites = false
+    for (let index = 0; index < windowChunks; index += 1) {
+      await writeChunk(duplex, new Uint8Array(CHUNK_BYTES).fill(index))
+    }
+    await settle()
+    expect(totalBytes(destination.written)).toBe(BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES)
+
+    // A full negotiated window outstanding toward the client, no reads settled yet.
+    for (let index = 0; index < windowChunks; index += 1) {
+      destination.emit('data', new Uint8Array(CHUNK_BYTES).fill(index))
+      await settle()
+    }
+    expect(consumer.byteLength()).toBe(BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES)
+
+    // The whole announced window must be usable without tripping credit validation.
+    expect(tunnel.closures).toEqual([])
+    expect(tunnel.onSessionClose).not.toHaveBeenCalled()
+
+    destination.settleWrites()
+    consumer.settleAll()
+    await settle()
+    await teardown(tunnel)
+  })
+
   it('releases retained bytes still queued for a stream the client abandons', async () => {
     const tunnel = createConformanceTunnel()
     const stalled = await openStream(tunnel, 'stalled.internal')
@@ -324,7 +358,7 @@ function createAggregateBudgetProbe(): AggregateBudgetProbe {
   }
 }
 
-function createConformanceTunnel(): ConformanceTunnel {
+function createConformanceTunnel(options: { receiveWindowBytes?: number } = {}): ConformanceTunnel {
   const aggregate = createAggregateBudgetProbe()
   const memory = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
   const lease = memory.acquire('conformance-host')
@@ -357,6 +391,7 @@ function createConformanceTunnel(): ConformanceTunnel {
       tunnel.client.handleBinary(bytes)
       return true
     },
+    receiveWindowBytes: options.receiveWindowBytes,
     onClose: tunnel.onSessionClose,
     claimAggregateRetainedBytes: aggregate.claim
   })
@@ -368,6 +403,7 @@ function createConformanceTunnel(): ConformanceTunnel {
       return true
     },
     outboundMemory: lease,
+    receiveWindowBytes: options.receiveWindowBytes,
     onClosed: (error) => tunnel.closures.push(error)
   })
   return tunnel

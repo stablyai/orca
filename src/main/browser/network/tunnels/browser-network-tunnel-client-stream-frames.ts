@@ -53,6 +53,8 @@ function openedStream(
   }
   stream.opened = true
   clearTimeout(stream.connectTimeout)
+  // Track exactly what the grant announces, or in-window data would be rejected as a violation.
+  stream.receiveCredit = actions.windowBytes
   if (
     !actions.send(
       BrowserNetworkTunnelOpcode.WindowUpdate,
