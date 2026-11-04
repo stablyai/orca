@@ -171,18 +171,18 @@ describe('reordering same-id primaries on separate machines', () => {
     isMainWorktree: false
   }
 
-  it('drops a linked worktree between ranked primaries, writing only that row', () => {
-    const { writes, applied } = dropCard([...twins.slice(0, 2), feature], 'ssh:vm-c', 1)
+  it('drops a ranked primary past a linked worktree, writing only that primary', () => {
+    const { writes, applied } = dropCard([...twins.slice(0, 2), feature], 'ssh:vm-b', 3)
 
-    expect(writes.map((entry) => entry.executionHostId)).toEqual(['ssh:vm-c'])
+    expect(writes.map((entry) => entry.executionHostId)).toEqual(['ssh:vm-b'])
     expect(renderedHosts(applied)).toEqual(['ssh:vm-a', 'ssh:vm-c', 'ssh:vm-b'])
   })
 
-  it('keeps a linked worktree between primaries when unranked rows materialize ranks', () => {
+  it('drops a primary past a linked worktree when unranked rows materialize ranks', () => {
     const unranked = [...twins.slice(0, 2), feature].map(
       ({ manualOrder: _manualOrder, ...row }) => row
     )
-    const { writes, applied } = dropCard(unranked, 'ssh:vm-c', 1)
+    const { writes, applied } = dropCard(unranked, 'ssh:vm-b', 3)
 
     expect(writes.map((entry) => entry.executionHostId).sort()).toEqual([...HOSTS])
     expect(renderedHosts(applied)).toEqual(['ssh:vm-a', 'ssh:vm-c', 'ssh:vm-b'])
