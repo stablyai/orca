@@ -1,23 +1,23 @@
-import { hasExtraAgentArgs } from '../../../shared/automation-extra-agent-args'
-import type { AgentPaneLaunchRequest } from '../../../shared/agent-pane-launch-request'
+import { hasExtraAgentArgs } from '../../../shared/agent-launch/startup/automation-extra-agent-args'
+import type { AgentPaneLaunchRequest } from '../../../shared/agent-launch/contracts/agent-pane-launch-request'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { useAppStore } from '@/store'
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { LaunchAgentBackgroundSessionArgs } from './agent-background-session-contract'
 import type { AgentBackgroundLaunchHost } from './agent-background-session-launch-host'
 import { hostSupportsLaunchChoices } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
+import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   agentLaunchNeedsPreparedCommand,
   toAgentLaunchPreferences
-} from '../../../shared/agent-launch-preferences'
+} from '../../../shared/agent-launch/choices/agent-launch-preferences'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId

@@ -40,7 +40,7 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
-vi.mock('../cdp-ws-proxy', () => ({
+vi.mock('../cdp/transport/cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
 vi.mock('../browser-error', () => ({
@@ -53,7 +53,7 @@ vi.mock('../browser-error', () => ({
   }
 }))
 
-vi.mock('../cdp-bridge', async () => {
+vi.mock('../cdp/commands/cdp-bridge', async () => {
   const { BrowserError } = await vi.importMock<typeof BrowserErrorTypes>('../browser-error')
   return { BrowserError }
 })
@@ -238,5 +238,23 @@ describe('AgentBrowserBridge', () => {
       { enabled: true, maxTouchPoints: 5 },
       { enabled: false }
     ])
+  })
+  it("sizes the page's pane to the viewport it sets, so a wider page scrolls instead of being cut off", async () => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+    const showAgentViewportInPane = vi.fn()
+    bridge = new AgentBrowserBridge(
+      mockBrowserManager(undefined, undefined, { showAgentViewportInPane })
+    )
+    bridge.setActiveTab(100)
+
+    await bridge.setViewport(1280, 900, 1, false, undefined, 'tab-1')
+
+    expect(showAgentViewportInPane).toHaveBeenCalledWith(100, {
+      width: 1280,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false
+    })
   })
 })

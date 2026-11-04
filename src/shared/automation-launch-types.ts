@@ -1,4 +1,4 @@
-import type { AgentChoicePatch } from './agent-launch-choices'
+import type { AgentChoicePatch } from './agent-launch/choices/agent-launch-choices'
 
 export type AutomationLaunchPreferences = Omit<AgentChoicePatch, 'permissionMode'> & {
   permissionMode?: Exclude<AgentChoicePatch['permissionMode'], 'default'>

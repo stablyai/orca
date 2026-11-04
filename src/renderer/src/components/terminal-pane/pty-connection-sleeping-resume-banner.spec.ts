@@ -17,7 +17,11 @@ import {
   createPane,
   createManager
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
@@ -63,6 +67,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
     it('resumes a local sleeping pane in place when the restored PTY hint is missing', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const spawn = createDeferred<string>()
       const transport = createMockTransport()
       transport.connect.mockImplementation(() => spawn.promise)
@@ -118,7 +124,11 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         })
       }
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       await flushAsyncTicks(4)
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -191,6 +201,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
     it('says the fresh-spawn resume started fresh when main declined it', async () => {
       // Sidebar resume creates a fresh tab without a restored PTY; it still needs a resume banner (#10757).
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const spawn = createDeferred<{ id: string; agentResumeUnavailable: true }>()
       const transport = createMockTransport()
       transport.connect.mockImplementation(() => spawn.promise)
@@ -253,7 +265,11 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         })
       }
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       await flushAsyncTicks(4)
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -278,6 +294,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
     it('lets a declined resume replace an already-shown restored banner', async () => {
       // A later declined resume must clear an earlier restored-banner latch.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       let connectCount = 0
       transport.connect.mockImplementation(async () => {
@@ -343,9 +361,11 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
           transport
         })
       }
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        noteVisibilityResume: () => void
-      }
+      const binding = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
       await flushAsyncTicks(10)
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -376,6 +396,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
     it('keeps sleeping resume record when fresh cold-restore spawn fails', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const staleSessionId = 'wt-1@@stale-session'
       const transport = createMockTransport()
       transport.connect.mockResolvedValue(undefined)
@@ -418,7 +440,11 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         restoredPtyIdByLeafId: { [LEAF_2]: staleSessionId }
       })
 
-      connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+      connectPanePty(
+        createPane(2) as never,
+        createManager(2) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+      )
       await flushAsyncTicks(20)
 
       expect(transport.connect).toHaveBeenCalledTimes(2)
@@ -429,6 +455,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
     it('forwards one sidebar resume spawn without writing the restored banner through xterm', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-1')
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
@@ -437,13 +465,16 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       connectPanePty(
         pane as never,
         createManager(1) as never,
-        createDeps({
-          startup: {
-            command: "codex 'resume' 'codex-session-1'",
-            resumeProviderSession: providerSession,
-            showSessionRestoredBanner: true
-          }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            startup: {
+              command: "codex 'resume' 'codex-session-1'",
+              resumeProviderSession: providerSession,
+              showSessionRestoredBanner: true
+            }
+          }) as never,
+          agentTitleMocks5
+        )
       )
       await flushAsyncTicks(10)
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as

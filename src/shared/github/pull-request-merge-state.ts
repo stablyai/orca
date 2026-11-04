@@ -1,3 +1,4 @@
+import { getProviderChecksOutcome } from '../provider-check-summary'
 import type { CheckStatus, ProviderCheckSummary } from './pull-request-types'
 import {
   canShowGitHubPRAutoMergeControl,
@@ -41,7 +42,10 @@ export type GitHubPRMergeStateDecision = {
 
 function checksState(item: GitHubPRMergeStateInput): CheckStatus | 'none' | undefined {
   if (item.checksSummary) {
-    return item.checksSummary.state
+    const outcome = item.checksStatus
+      ? getProviderChecksOutcome(item.checksSummary, item.checksStatus)
+      : getProviderChecksOutcome(item.checksSummary)
+    return outcome === 'cancelled' ? 'failure' : outcome
   }
   return item.checksStatus
 }

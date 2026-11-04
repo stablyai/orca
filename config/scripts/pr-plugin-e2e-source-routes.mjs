@@ -127,7 +127,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/main\\/ipc\\/(?:plugins|plugin-frame-entry-ipc)\\.ts$',
       'src\\/main\\/startup\\/main-process-plugins',
       'config\\/build-plugins\\/main-build-entry-points',
-      'src\\/main\\/browser\\/browser-guest-shortcut-(?:forwarding|dispatch)',
+      'src\\/main\\/browser\\/guest-lifecycle\\/input\\/browser-guest-shortcut-(?:forwarding|dispatch)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-frame-|use-plugin-frame-|PluginPanel\\.tsx$|plugin-panel-design-token-css|use-plugin-panel-theme-revision)',
       'src\\/renderer\\/src\\/components\\/editor\\/(?:PluginCustomEditorFrame\\.tsx$|plugin-custom-editor-host)'
     ].join('|'),

@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getIndexedReposById } from '@/store/worktree-repo-index'
 import { getRepoCommitMessageModelDiscoveryHostKey } from '../../../../shared/commit-message-host-key'
 import {

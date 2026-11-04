@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { createClaudeCatalogOptions } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import { catalogModelsFromModelDiscovery } from '../../../../shared/native-chat/input/native-chat-discovered-catalog-models'
@@ -8,7 +8,7 @@ import {
   LOCAL_COMMIT_MESSAGE_HOST_KEY
 } from '../../../../shared/commit-message-host-key'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { hasExplicitTuiLaunchCommand } from '../../../../shared/tui-agent-launch-command-override'
+import { hasExplicitTuiLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getLocalProjectExecutionRuntimeContext,
@@ -21,7 +21,7 @@ import type {
   AgentSessionModelCatalogResult,
   AgentSessionModelOption
 } from '../../../../shared/agent-session/agent-session-wire'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 
 export type NativeChatModelDiscoveryContext = {

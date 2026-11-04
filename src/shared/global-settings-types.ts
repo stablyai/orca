@@ -1,4 +1,4 @@
-import type { AgentLaunchChoices } from './agent-launch-choices'
+import type { AgentLaunchChoices } from './agent-launch/choices/agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
@@ -17,7 +17,7 @@ import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { GlobalWindowsRuntimeDefault } from './project-execution-runtime'
 import type { PersistedNativeChatSessionOptions } from './native-chat/input/native-chat-session-options'
-import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
+import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
 import type { HostSettingOverrides } from './host-setting-overrides'
@@ -30,7 +30,7 @@ import type {
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { ZcodePlanSite } from './zcode-plan-sites'
 import type {
   AgentDashboardMode,
@@ -81,7 +81,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
-  editorFormatOnSave?: boolean
   /** Days a release must be public before Orca offers it; absent/0 offers releases immediately. */
   updateDelayDays?: number
   editorAutoSaveDelayMs: number

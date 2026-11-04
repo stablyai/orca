@@ -1,8 +1,9 @@
-import type { AgentStatusStore } from '../shared/agent-status-store'
+import type { AgentStatusStore } from '../shared/agent-status/store/agent-status-store'
 import { commitTmuxSelectedStatus, commitTmuxUnavailable } from '../shared/tmux-selected-status'
-import { TmuxAgentHookOwner, type TmuxManagedPty } from '../shared/tmux-agent-hook-owner'
+import { TmuxAgentHookOwner } from '../shared/tmux-agent-hook-owner'
+import type { TmuxManagedPty } from '../shared/tmux-agent-hook-contract'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookUnavailableEnvelope } from '../shared/agent-hook-relay'
+import type { AgentHookUnavailableEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 
 export function createRelayTmuxHookOwner(options: {
   getRoot?: (paneKey: string) => Promise<TmuxManagedPty | null>

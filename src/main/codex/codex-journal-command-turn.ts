@@ -6,7 +6,7 @@ import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-se
 import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { providerDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { JournalLifecycleIdentityMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { structuredCompactionOutcome } from '../native-chat/agent-session-wire/structured-conversation-command-outcome'

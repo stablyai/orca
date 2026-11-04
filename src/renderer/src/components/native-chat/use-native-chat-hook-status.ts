@@ -1,5 +1,5 @@
 import { useAppStore } from '../../store'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   nativeChatHookHasWorkingSubagents,
   resolveNativeChatHookState

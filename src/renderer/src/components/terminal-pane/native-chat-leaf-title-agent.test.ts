@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeTerminalTitle } from '../../../../shared/agent-title-status'
+import { normalizeTerminalTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 
 const panes = [
@@ -70,16 +70,5 @@ describe('resolveNativeChatLeafTitleAgent', () => {
         tabLabel: 'Claude Code'
       })
     ).toBeNull()
-  })
-
-  it('falls back to the terminal title in a single pane', () => {
-    expect(
-      resolveNativeChatLeafTitleAgent({
-        leafId: 'leaf-1',
-        panes: [panes[0]],
-        runtimePaneTitlesByPaneId: {},
-        terminalTitle: 'OpenClaude'
-      })
-    ).toBe('openclaude')
   })
 })

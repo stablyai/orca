@@ -4,8 +4,11 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PANE } from './server.test-fixtures'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { readHookRootEvidence, type HookPaneRoot } from '../../shared/hook-process-root-evidence'
-import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
+import {
+  readHookRootEvidence,
+  type HookPaneRoot
+} from '../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { startOrcadAgentHookServer } from '../orcad/orcad-managed-agent-hooks'
 import {
@@ -28,7 +31,9 @@ import {
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: vi.fn() }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: vi.fn()
+}))
 
 registerRootTestHarness()
 

@@ -7,7 +7,7 @@ import { colors, feedback, radii, spacing, typography } from '../theme/mobile-th
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { WorkspaceListItem, Worktree, WorktreeRowView } from '../worktree/workspace-list-types'
 import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentActivityDisplayMode } from '../../../src/shared/ui-chrome-types'
@@ -29,6 +29,7 @@ function displayBranch(branch: string): string {
 
 type Props = {
   item: Worktree
+  view: WorktreeRowView
   isReadOnly: boolean
   now: number
   repoColor: string
@@ -43,11 +44,12 @@ type Props = {
   onAgentPress?: (item: Worktree, paneKey: string) => void
   statusLive?: boolean
   onLongPress?: (item: Worktree) => void
-  onToggleLineage?: (item: Worktree) => void
+  onToggleLineage?: (item: WorkspaceListItem) => void
 }
 
 function WorktreeListRowComponent({
   item,
+  view,
   isReadOnly,
   now,
   repoColor,
@@ -68,14 +70,14 @@ function WorktreeListRowComponent({
   const folderMeta =
     item.comment?.trim() || item.path || t('components.worktreeListRow.folder', 'Folder')
   const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
-  const lineageDepth = Math.max(0, item.lineageDepth ?? 0)
-  const indent = projectGroupRowIndent(item) + lineageDepth * 18
-  const count = item.lineageChildCount ?? 0
-  const shouldHideRepo = hideRepo && !item.showProjectName
+  const lineageDepth = Math.max(0, view.lineageDepth ?? 0)
+  const indent = projectGroupRowIndent(item, view) + lineageDepth * 18
+  const count = view.lineageChildCount ?? 0
+  const shouldHideRepo = hideRepo && !view.showProjectName
   const showRepoChip = cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace
   const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo
-  const hostId = item.hostContextHostId ?? item.hostId
-  const hostAccessibilityLabel = [item.hostContextLabel, item.hostContextHealthLabel]
+  const hostId = view.hostContextHostId ?? item.hostId
+  const hostAccessibilityLabel = [view.hostContextLabel, view.hostContextHealthLabel]
     .filter(Boolean)
     .join(', ')
   // Why: the desktop's compact card keeps an icon-only glyph for remote projects after the host badge goes.
@@ -174,23 +176,23 @@ function WorktreeListRowComponent({
                 </Text>
               </View>
             )}
-            {cardDetails.host && (item.hostContextLabel || item.hostContextHealthLabel) ? (
+            {cardDetails.host && (view.hostContextLabel || view.hostContextHealthLabel) ? (
               <View
                 style={[styles.childBadge, styles.hostBadge]}
                 accessibilityLabel={hostAccessibilityLabel}
               >
                 <HostKindIcon hostId={hostId} size={10} />
-                {item.hostContextLabel ? (
+                {view.hostContextLabel ? (
                   <Text style={[styles.childBadgeText, styles.hostBadgeText]} numberOfLines={1}>
-                    {item.hostContextLabel}
+                    {view.hostContextLabel}
                   </Text>
                 ) : null}
                 {/* Why separate Text: the name truncates first so the health word stays readable. */}
-                {item.hostContextHealthLabel ? (
+                {view.hostContextHealthLabel ? (
                   <Text style={[styles.childBadgeText, styles.hostHealthText]}>
-                    {item.hostContextLabel
-                      ? `· ${item.hostContextHealthLabel}`
-                      : item.hostContextHealthLabel}
+                    {view.hostContextLabel
+                      ? `· ${view.hostContextHealthLabel}`
+                      : view.hostContextHealthLabel}
                   </Text>
                 ) : null}
               </View>
@@ -228,10 +230,10 @@ function WorktreeListRowComponent({
             hitSlop={LINEAGE_TOGGLE_HIT_SLOP}
             onPress={(event) => {
               event.stopPropagation()
-              onToggleLineage(item)
+              onToggleLineage({ row: item, view })
             }}
           >
-            {item.lineageCollapsed ? (
+            {view.lineageCollapsed ? (
               <ChevronRight size={12} color={colors.textSecondary} />
             ) : (
               <ChevronDown size={12} color={colors.textSecondary} />

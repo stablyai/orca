@@ -7,9 +7,9 @@ import {
   foldAutomationSourceEdit,
   type AutomationLaunchEdit
 } from '../../../../shared/automation-launch-source-edits'
-import { parseExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
-import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { parseExtraAgentArgs } from '../../../../shared/agent-launch/startup/automation-extra-agent-args'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
 export function editsSupplementalArguments(draft: AutomationDraft, modern: boolean): boolean {

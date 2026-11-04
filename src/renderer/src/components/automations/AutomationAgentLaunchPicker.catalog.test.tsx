@@ -11,9 +11,9 @@ import {
 } from '../agent/agent-launch-picker-acquisition'
 import { DropdownMenuSub, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { applyAgentPickerEdit } from '../../../../shared/agent-launch-picker-edits'
-import type * as PickerEdits from '../../../../shared/agent-launch-picker-edits'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import { applyAgentPickerEdit } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
+import type * as PickerEdits from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { AutomationAgentLaunchPicker } from './AutomationAgentLaunchPicker'
 import { buildAutomationEditDraft } from './automation-edit-draft'
 import { makeAutomation } from './automations-page-fixtures'
@@ -46,10 +46,13 @@ vi.mock('../agent/AgentLaunchSetupButton', async (importOriginal) => ({
     </DropdownMenuSub>
   ))
 }))
-vi.mock('../../../../shared/agent-launch-picker-edits', async (importOriginal) => {
-  const actual = await importOriginal<typeof PickerEdits>()
-  return { ...actual, applyAgentPickerEdit: vi.fn(actual.applyAgentPickerEdit) }
-})
+vi.mock(
+  '../../../../shared/agent-launch/picker/agent-launch-picker-edits',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof PickerEdits>()
+    return { ...actual, applyAgentPickerEdit: vi.fn(actual.applyAgentPickerEdit) }
+  }
+)
 
 afterEach(() => {
   cleanup()

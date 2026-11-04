@@ -9,7 +9,7 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { phoneWakeReport } from '../../../shared/workspace-sleep'
 import type { Repo } from '../../../shared/repo-types'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   type WorktreeStartupDraftPaste,

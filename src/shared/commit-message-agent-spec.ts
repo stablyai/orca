@@ -1,6 +1,6 @@
 import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from './omp-model-list-probe'
-import type { TuiAgent } from './tui-agent'
-import { isTuiAgentEnabled } from './tui-agent-selection'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import { isTuiAgentEnabled } from './agent-launch/catalog/tui-agent-selection'
 import { labelFromModelId } from './model-id-label'
 import { buildPrimaryCommitMessageAgentSpecs } from './commit-message-agent-specs-primary'
 import { buildSecondaryCommitMessageAgentSpecs } from './commit-message-agent-specs-secondary'

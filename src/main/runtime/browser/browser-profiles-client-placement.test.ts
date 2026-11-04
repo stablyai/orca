@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   ipcMain: { on: mocks.on, removeListener: mocks.removeListener }
 }))
-vi.mock('../../browser/browser-session-registry', () => ({
+vi.mock('../../browser/sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: mocks.getProfile,
     getDefaultProfile: mocks.getDefaultProfile

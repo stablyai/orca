@@ -5,7 +5,7 @@ import {
   EXTRA_AGENT_ARGS_REQUIRE_FRESH_SESSION,
   hasExtraAgentArgs,
   parseExtraAgentArgs
-} from './automation-extra-agent-args'
+} from './agent-launch/startup/automation-extra-agent-args'
 
 /** Stored form of an extras input: the text unchanged, or `undefined` when it holds no extras. */
 export function storedExtraAgentArgs(value: unknown): string | undefined {

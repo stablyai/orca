@@ -34,7 +34,7 @@ import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote
 import { assertOrcadMigrationRequestFits } from './orcad-migration-manifest-export'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
+import { hasExtraAgentArgs } from '../../shared/agent-launch/startup/automation-extra-agent-args'
 import { requiredOrcadMigrationSourceCapability } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import type { OrcadServerRepository } from './orcad-migration-repository-link'
 

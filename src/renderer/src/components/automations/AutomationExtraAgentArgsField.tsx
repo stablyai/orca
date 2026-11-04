@@ -6,7 +6,7 @@ import {
   getExtraAgentArgsPlaceholder,
   hasExtraAgentArgs,
   supportsExtraAgentArgs
-} from '../../../../shared/automation-extra-agent-args'
+} from '../../../../shared/agent-launch/startup/automation-extra-agent-args'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS } from './automation-page-parts'
 import {
   draftExtraAgentArgsNeedFreshSession,

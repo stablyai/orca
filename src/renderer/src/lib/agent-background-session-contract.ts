@@ -1,6 +1,6 @@
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'

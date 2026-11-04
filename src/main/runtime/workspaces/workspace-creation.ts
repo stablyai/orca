@@ -1,4 +1,4 @@
-import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
+import { toAgentLaunchPreferences } from '../../../shared/agent-launch/choices/agent-launch-preferences'
 import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS,

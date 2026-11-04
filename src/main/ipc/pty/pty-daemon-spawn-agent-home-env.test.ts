@@ -6,7 +6,7 @@ import {
   createDaemonActiveProviderFixtures
 } from './pty-ipc-daemon-provider-fixtures'
 import { delimiter, join } from 'node:path'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../pty/shell-startup/legacy-terminal-shim-dir'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers } from './register-handlers'

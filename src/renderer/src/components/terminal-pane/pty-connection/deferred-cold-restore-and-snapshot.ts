@@ -1,5 +1,5 @@
 import { paneResumeRecord } from './pane-resume-record'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { PtyReplayDataMeta } from '../pty-transport-types'
 import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal-color-scheme-protocol'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'

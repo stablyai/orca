@@ -27,7 +27,7 @@ import {
   AGENT_TUI_CLEAR_INPUT_MAX,
   AGENT_TUI_CLEAR_INPUT_LINE,
   buildAgentTuiClearInputForText
-} from '../../../../shared/agent-tui-input-clear'
+} from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 import {
   NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
   sendNativeChatMessageWithImageAttachments

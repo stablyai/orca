@@ -13,7 +13,7 @@ import { canonicalSourceControlActionSelection } from '../../../../../shared/sou
 import type { ActionArgumentChoices } from '../../../../../shared/source-control-action-argument-document'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { CustomAgentId } from '../../../../../shared/commit-message-agent-spec'
 import { isCustomAgentId } from '../../../../../shared/commit-message-agent-spec'
 import {

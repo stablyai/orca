@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
 import type {
   SourceControlAiSettings,

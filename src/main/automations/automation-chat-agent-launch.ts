@@ -17,7 +17,7 @@ import {
 } from './automation-agent-run-result'
 import { automationRunOperationId, AUTOMATION_AGENT_CALLER } from './automation-run-operation'
 import { createAutomationDispatchToken } from './dispatch-tokens'
-import { tuiAgentDisplayName } from '../../shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export type AutomationChatAgentLaunch = HeadlessAutomationDispatchLaunch & {
   terminalHandle: string | null

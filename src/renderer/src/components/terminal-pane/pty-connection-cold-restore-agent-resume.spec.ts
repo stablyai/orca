@@ -18,7 +18,11 @@ import {
   createPane,
   createManager
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
@@ -64,6 +68,8 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
     it('resumes the provider agent session when daemon reattach cold-restores a fresh shell', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -110,7 +116,11 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
@@ -152,6 +162,8 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
     it('uses WSL quoting for cold-restored agent resume in Windows-path WSL projects', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -211,7 +223,11 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
@@ -244,6 +260,8 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
     it('resumes the same agent after consecutive daemon losses before another status arrives', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -295,7 +313,9 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
       })
 
-      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks3))
+      )
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
@@ -354,10 +374,13 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         ...mockPanePtyArgs(
           createPane(1),
           createManager(1),
-          createDeps({
-            restoredLeafId: LEAF_1,
-            restoredPtyIdByLeafId: { [LEAF_1]: 'fresh-pty' }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              restoredLeafId: LEAF_1,
+              restoredPtyIdByLeafId: { [LEAF_1]: 'fresh-pty' }
+            }),
+            agentTitleMocks3
+          )
         )
       )
       await flushAsyncTicks(20)
@@ -373,6 +396,8 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
     it('marks the pane as freshly started when main declined an unverifiable resume', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -422,7 +447,11 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+      )
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
@@ -446,6 +475,8 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
     it('resumes from an unambiguous legacy sleeping record when cold-restoring a preserved pane', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -502,7 +533,11 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+      )
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
@@ -540,6 +575,8 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
     it('does not choose a non-exact legacy record when same-tab provider sessions differ', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -596,7 +633,11 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 

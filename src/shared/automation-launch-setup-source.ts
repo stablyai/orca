@@ -3,12 +3,21 @@ import type {
   AutomationLaunchPreferences,
   AutomationLaunchSetupPatch
 } from './automations-types'
-import type { AgentChoicePatch, AgentDedicatedChoices } from './agent-launch-choices'
-import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
+import type {
+  AgentChoicePatch,
+  AgentDedicatedChoices
+} from './agent-launch/choices/agent-launch-choices'
+import { reconcileAgentChoiceArgsDetailed } from './agent-launch/choices/agent-choice-reconciliation'
 import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
-import { projectAgentLaunchInputViews, projectAgentLaunchProfile } from './agent-launch-profile'
-import { hasExtraAgentArgs, parseExtraAgentArgs } from './automation-extra-agent-args'
-import type { TuiAgent } from './tui-agent'
+import {
+  projectAgentLaunchInputViews,
+  projectAgentLaunchProfile
+} from './agent-launch/choices/agent-launch-profile'
+import {
+  hasExtraAgentArgs,
+  parseExtraAgentArgs
+} from './agent-launch/startup/automation-extra-agent-args'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 export function automationLaunchChoices(setup: AutomationLaunchSetup): AgentDedicatedChoices {
   const preferences = setup.launchPreferences

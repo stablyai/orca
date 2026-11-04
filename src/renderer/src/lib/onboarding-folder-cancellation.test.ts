@@ -8,7 +8,7 @@ import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fi
 import { getDefaultSettings } from '../../../shared/constants'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
-import { projectAgentLaunchSettings } from '../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { stubRuntimeEnvironmentBridge } from '@/runtime/runtime-environment-bridge-fixture'
 import { rememberEmptyHostAnswerForTests } from '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'

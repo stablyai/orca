@@ -1,10 +1,11 @@
-import { getPiCompatibleTitleSeparatorStatus } from './pi-compatible-synthetic-title'
+import { getPiCompatibleTitleSeparatorStatus } from './agent-status/title/providers/pi-compatible-synthetic-title'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { detectAgentStatusFromTitle, getAgentLabel } from './agent-detection'
-import { normalizeCompatibleAgentTitleForOwner } from './agent-title-owner'
-import { clearPiStateWorkingMarker } from './pi-state-title-marker'
+import { detectAgentStatusFromTitle } from './agent-status/title/agent-title-status'
+import { getAgentLabel } from './agent-status/title/agent-title-identity'
+import { normalizeCompatibleAgentTitleForOwner } from './agent-status/title/agent-title-owner'
+import { clearPiStateWorkingMarker } from './agent-status/title/providers/pi-state-title-marker'
 
 const transcript = readFileSync(
   join(__dirname, '..', 'main', 'runtime', '__fixtures__', 'omp-native-title-win32.txt'),

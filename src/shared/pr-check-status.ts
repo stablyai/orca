@@ -1,6 +1,6 @@
 import { summarizeProviderChecks } from './provider-check-summary'
 import type { PRCheckDetail } from './github/check-types'
-import type { CheckStatus } from './github/pull-request-types'
+import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
 
 export function derivePRCheckStatus(checks: readonly PRCheckDetail[]): CheckStatus {
   const { state } = summarizeProviderChecks(checks)
@@ -40,13 +40,18 @@ function normalizeRollupCheck(raw: RawCheckRollup, index: number): PRCheckDetail
   }
 }
 
-export function derivePRCheckStatusFromRollup(rollup: unknown): CheckStatus {
+export function summarizePRCheckRollup(rollup: unknown): ProviderCheckSummary {
   if (!Array.isArray(rollup) || rollup.length === 0) {
-    return 'neutral'
+    return summarizeProviderChecks([])
   }
-  return derivePRCheckStatus(
+  return summarizeProviderChecks(
     rollup.map((raw, index) =>
       normalizeRollupCheck(raw && typeof raw === 'object' ? (raw as RawCheckRollup) : {}, index)
     )
   )
+}
+
+export function derivePRCheckStatusFromRollup(rollup: unknown): CheckStatus {
+  const { state } = summarizePRCheckRollup(rollup)
+  return state === 'none' ? 'neutral' : state
 }

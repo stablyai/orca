@@ -9,7 +9,7 @@ import {
   resetAgentLaunchPanesForTests,
   trackRunningAgentLaunchPane
 } from '../../agent-launch/agent-launch-pane-attachment'
-import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../shared/agent-launch-pane-verdict'
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { endPaneAgentLaunch } from './ipc/spawn-agent-launch-end'
 import { createPtyIpcSpawnState } from './ipc/spawn-state'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'

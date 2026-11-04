@@ -5,9 +5,9 @@ import {
   getDefaultSourceControlAiSettings,
   resolveSourceControlActionRecipe
 } from '../../../src/shared/source-control-ai'
-import { buildAgentStartupPlan } from '../../../src/shared/tui-agent-startup'
-import { resolveAgentStartupPlanInputs } from '../../../src/shared/agent-startup-plan-inputs'
-import { toAgentLaunchPreferences } from '../../../src/shared/agent-launch-preferences'
+import { buildAgentStartupPlan } from '../../../src/shared/agent-launch/startup/tui-agent-startup'
+import { resolveAgentStartupPlanInputs } from '../../../src/shared/agent-launch/startup/agent-startup-plan-inputs'
+import { toAgentLaunchPreferences } from '../../../src/shared/agent-launch/choices/agent-launch-preferences'
 import { AgentLaunchReplay } from '../../../src/shared/rpc-contract/agent-launch-params'
 import { AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE } from './mobile-existing-agent-launch'
 import {

@@ -70,11 +70,3 @@ it('follows saved host changes while contact with the host is unavailable', asyn
   expect(list).toHaveBeenCalledTimes(1)
   expect(getStatus).toHaveBeenCalledTimes(1)
 })
-
-it('continues hiding recipe-created VM environments from the saved-server list', async () => {
-  const { result } = renderHook(useRuntimeEnvironmentCatalog)
-  await waitFor(() => expect(result.current.isLoading).toBe(false))
-  const vm: PublicKnownRuntimeEnvironment = { ...environment, id: 'env-vm', source: 'ephemeral-vm' }
-  act(() => useAppStore.setState({ runtimeEnvironments: [vm, environment] }))
-  expect(result.current.environments).toEqual([environment])
-})

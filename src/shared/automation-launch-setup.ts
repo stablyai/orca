@@ -11,8 +11,11 @@ import {
   patchAutomationChoices,
   patchAutomationArguments
 } from './automation-launch-setup-source'
-import { hasExtraAgentArgs, parseExtraAgentArgs } from './automation-extra-agent-args'
-import type { TuiAgent } from './tui-agent'
+import {
+  hasExtraAgentArgs,
+  parseExtraAgentArgs
+} from './agent-launch/startup/automation-extra-agent-args'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import { retireAutomationChoiceSources } from './automation-launch-source-edits'
 
 export function automationCanonicalLaunchSetup(

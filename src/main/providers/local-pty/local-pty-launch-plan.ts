@@ -1,5 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
-import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import { resolveUnixPaneShellPath } from '../../daemon/shell-ready'

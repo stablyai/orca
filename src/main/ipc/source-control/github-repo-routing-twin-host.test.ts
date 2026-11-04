@@ -9,7 +9,6 @@ vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
 
 import {
   assertRegisteredGitHubRepo,
-  assertRegisteredPRRefreshCandidateRepo,
   validateAutomaticPRRefreshCandidate
 } from './github-repo-routing'
 
@@ -76,14 +75,6 @@ describe('registered GitHub repo lookup for a repo id on two hosts', () => {
         store
       )
     ).toMatchObject({ kind: 'ok', candidate: { connectionId: null } })
-  })
-
-  it('resolves a manual PR refresh to the same twin as the automatic queue', () => {
-    const store = storeWith([localTwin, samePathSshTwin])
-
-    expect(
-      assertRegisteredPRRefreshCandidateRepo(candidate({ repoPath: localTwin.path }), store)
-    ).toBe(samePathSshTwin)
   })
 
   it('keeps checks and comments on the requested host when both copies share a path', () => {

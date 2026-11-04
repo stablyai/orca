@@ -12,7 +12,7 @@ import { POSIX_PATH } from '../../../shared/launch-parity-window-cases.test-fixt
 import { launchWorkspaceId } from '../../../shared/launch-parity-window-request.test-fixture'
 import { probeOpenCodeLaunchCapabilities } from '../../opencode/opencode-launch-capabilities'
 import { probeOpenCodeLaunchModelContext } from '../../opencode/opencode-launch-model-context'
-import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { mergeWorktree } from '../worktree-metadata-merge'
 
 type OpenCodeHostPreparationDependencies = {

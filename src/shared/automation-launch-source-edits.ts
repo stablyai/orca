@@ -1,4 +1,4 @@
-import type { AgentChoicePatch } from './agent-launch-choices'
+import type { AgentChoicePatch } from './agent-launch/choices/agent-launch-choices'
 import type {
   AutomationArgumentEdit,
   AutomationLaunchSetup,
@@ -11,9 +11,12 @@ import {
   patchAutomationChoices,
   patchAutomationLegacyArguments
 } from './automation-launch-setup-source'
-import { hasExtraAgentArgs, parseExtraAgentArgs } from './automation-extra-agent-args'
-import type { TuiAgent } from './tui-agent'
-import { isAgentPermissionChoice } from './tui-agent-permission-choice'
+import {
+  hasExtraAgentArgs,
+  parseExtraAgentArgs
+} from './agent-launch/startup/automation-extra-agent-args'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import { isAgentPermissionChoice } from './agent-launch/permissions/tui-agent-permission-choice'
 
 export type AutomationLaunchEdit = AutomationLaunchSetupPatch & { legacyOnly?: true }
 export type AutomationSourceEdit =

@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { browserManager } from '../../browser/browser-manager'
-import { onDocPreviewGrantRevoked } from '../../browser/doc-preview-grant-registry'
+import { onDocPreviewGrantRevoked } from '../../browser/document-preview/doc-preview-grant-registry'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { waitForNextTabRegistration } from './browser-tab-registration-wait'
 import type {

@@ -1,10 +1,13 @@
 import type { PreflightRuntimeContext } from '../preflight/agent-detection'
 import { detectAgentCommandsOnHost } from '../preflight/agent-detection'
-import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import {
+  getTuiAgentDetectCommands,
+  TUI_AGENT_CONFIG
+} from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
   tokenizeStartupCommand,
   type AgentStartupShell
-} from '../../shared/tui-agent-startup-shell'
+} from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 
 export async function resolveQoderTerminalCommand<

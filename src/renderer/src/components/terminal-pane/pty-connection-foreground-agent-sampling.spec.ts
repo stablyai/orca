@@ -1,7 +1,7 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   VISIBLE_PTY_SETTLE_MS,
@@ -21,7 +21,11 @@ import {
   resolveMockPaneWindowsShiftEnterEncoding,
   type StoreState
 } from './pty-connection-test-store-state'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
@@ -87,6 +91,8 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         cacheKey: string
       }> {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const ptyId = args.ptyId ?? 'tab-pty'
         const tabId = args.tabId ?? `tab-${ptyId}`
         const hasReattachMetadata =
@@ -114,12 +120,8 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         const binding = connectPanePty(
           createPane(1) as never,
           createManager(1) as never,
-          deps as never
-        ) as unknown as {
-          noteVisibilityResume: () => void
-          sampleForegroundAgentOnFocus: () => void
-          requestWindowsShiftEnterReconfirmation: () => void
-        }
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+        )
         await vi.advanceTimersByTimeAsync(20)
         await flushAsyncTicks(20)
         return { binding, deps, transport, cacheKey: makePaneKey(tabId, LEAF_1) }
@@ -139,6 +141,8 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
       it('does not inspect foreground process for a fresh visible spawn', async () => {
         vi.useFakeTimers()
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks2 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
         getForegroundProcess.mockResolvedValue('codex')
         const ptyId = 'pty-fresh-visible-no-sample'
@@ -157,7 +161,11 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           }
         } as StoreState
 
-        connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          createPane(1) as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks2)
+        )
         await vi.advanceTimersByTimeAsync(20)
         await flushAsyncTicks(20)
         const spawnHandler = createdTransportOptions[0]?.onPtySpawn as
@@ -706,6 +714,8 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         // Why: a cached visible read has no routing authority; on a racing command boundary, trust the shell marker over stale identity.
         vi.useFakeTimers()
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks3 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
         getForegroundProcess.mockResolvedValue('codex')
         const ptyId = 'pty-reattach-idle-codex-leaked-d'
@@ -730,7 +740,11 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: ptyId }
         })
-        connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+        connectPanePty(
+          createPane(1) as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+        )
         await vi.advanceTimersByTimeAsync(20)
         await flushAsyncTicks(20)
 
@@ -749,6 +763,8 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
       it('re-confirms leaked 133;D after detach moved pane-scoped Droid identity', async () => {
         vi.useFakeTimers()
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks4 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
         getForegroundProcess.mockResolvedValue('droid')
         const ptyId = 'pty-detached-droid-leaked-d'
@@ -783,7 +799,11 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           restoredPtyIdByLeafId: { [LEAF_1]: ptyId }
         })
 
-        connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+        connectPanePty(
+          createPane(1) as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+        )
         await vi.advanceTimersByTimeAsync(20)
         await flushAsyncTicks(20)
         dataCallbackRef.current?.('\x1b]133;D;0\x07')

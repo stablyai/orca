@@ -534,3 +534,38 @@ describe('CheckJobLogTail', () => {
     expect(markup).toContain('max-h-[min(50vh,32rem)]')
   })
 })
+
+it.each([
+  [['cancelled', 'success'], 'Cancelled', 'text-muted-foreground'],
+  [['cancelled', 'pending'], '1 check pending', 'text-amber-500'],
+  [['cancelled', 'failure'], '1 failing check', 'text-rose-500']
+] as const)('renders triage for %j and retains Fix', (conclusions, label, tone) => {
+  const checks = conclusions.map((conclusion) => ({
+    name: conclusion,
+    status: 'completed' as const,
+    conclusion,
+    url: null
+  }))
+  const markup = renderToStaticMarkup(
+    <PRTriageStrip
+      checks={checks}
+      isResolvingConflictsWithAI={false}
+      onResolveConflictsWithAI={() => {}}
+      isFixingChecksWithAI={false}
+      onFixChecksWithAI={() => {}}
+    />
+  )
+  expect(markup).toContain(label)
+  expect(markup).toContain(tone)
+  expect(markup).toContain('Fix')
+  const list = renderWithTooltips(
+    <ChecksList checks={checks} checksLoading={false} checkDetailsContextKey="repo:42" />
+  )
+  expect(list).toContain('1 Cancelled')
+  if (conclusions.some((conclusion) => conclusion === 'failure')) {
+    expect(list).toContain('1 failing')
+    expect(list).not.toContain('2 failing')
+  } else {
+    expect(list).not.toContain('failing')
+  }
+})

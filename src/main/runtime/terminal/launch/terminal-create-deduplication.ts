@@ -1,4 +1,4 @@
-import { agentPromptRidesLaunchCommand } from '../../../../shared/tui-agent-startup'
+import { agentPromptRidesLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -19,7 +19,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from '../../worktree-launch-host-repo'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 
 export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {

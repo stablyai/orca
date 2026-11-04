@@ -1,6 +1,9 @@
 import { shallow } from 'zustand/shallow'
-import { acceptAgentPickerArguments } from '../../../shared/agent-launch-picker-edits'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../shared/agent-launch-picker'
+import { acceptAgentPickerArguments } from '../../../shared/agent-launch/picker/agent-launch-picker-edits'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../shared/agent-launch/picker/agent-launch-picker'
 import {
   selectSourceControlActionRecipe,
   pickSourceControlActionAgent,

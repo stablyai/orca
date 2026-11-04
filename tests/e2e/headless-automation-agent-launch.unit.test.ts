@@ -18,7 +18,7 @@ import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agen
 import { createQueuedMessageTestRig } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import type { AgentLaunchResult } from '../../src/shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../src/shared/agent-launch/contracts/agent-launch-intent'
 import { buildProfileStateCutoverFixture } from '../../src/main/persistence/profile-state-cutover-fixture'
 import { launchAutomationChatAgent } from '../../src/main/automations/automation-chat-agent-launch'
 

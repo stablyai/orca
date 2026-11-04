@@ -32,8 +32,8 @@ import {
   agentPickerDraft,
   type AgentPickerDraft,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
-import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { agentPickerPanelArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 
 /** Forms own selection and dispatch; rows and setup remain the same as the new-tab menu. */
 export const AgentLaunchPicker = memo(
