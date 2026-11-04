@@ -46,6 +46,8 @@ import {
 import { useRepoMap } from '@/store/selectors'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { isCrossStoreCreateParent } from '@/components/sidebar/workspace-actions/parenting/worktree-parent-candidates'
+import { useParentMachineLabel } from '@/components/sidebar/workspace-actions/parenting/use-parent-machine-label'
+import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import {
   getWorktreeHostIdentity,
   isWorktreeHostIdentity
@@ -226,7 +228,7 @@ function ParentWorktreeCandidateList({
   const [search, setSearch] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
 
-  const { candidates, valueOf } = useMemo(() => {
+  const { candidates, valueOf, isCrossStoreCandidate } = useMemo(() => {
     // Legacy rows inherit their real repo host, including candidates from another project.
     const childRepo = repoMap.get(repoId)
     const childBoundary: WorktreeLineageBoundary = {
@@ -260,7 +262,8 @@ function ParentWorktreeCandidateList({
     return {
       candidates: listed,
       valueOf: (candidate: Worktree): string =>
-        isCrossStoreCandidate(candidate) ? getWorktreeHostIdentity(candidate) : candidate.id
+        isCrossStoreCandidate(candidate) ? getWorktreeHostIdentity(candidate) : candidate.id,
+      isCrossStoreCandidate
     }
   }, [
     activeFolderWorkspaceId,
@@ -271,6 +274,8 @@ function ParentWorktreeCandidateList({
     worktreeLineageById,
     worktreesByRepo
   ])
+
+  const machineLabelOf = useParentMachineLabel(isCrossStoreCandidate)
 
   const filtered = useMemo(
     () => filterWorktreeParentCandidates(candidates, search, repoMap),
@@ -395,6 +400,9 @@ function ParentWorktreeCandidateList({
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13px] font-medium">{candidate.displayName}</div>
                     <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-none text-muted-foreground">
+                      {machineLabelOf(candidate) ? (
+                        <WorktreeHostContextBadge label={machineLabelOf(candidate) ?? ''} />
+                      ) : null}
                       <GitBranch className="size-3 shrink-0" />
                       <span className="truncate">
                         {[
