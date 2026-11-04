@@ -18,6 +18,7 @@ import { readCurrentGitRemoteIdentity } from '../../workspaces/catalog/repo-git-
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../../workspaces/catalog/folder-repo-git-conversion'
+import { repointMovedFolderProject } from '../../workspaces/catalog/folder-project-repoint'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
@@ -165,6 +166,22 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
       const parsedHost = parseExecutionHostId(args.hostId)
       if (!parsedHost) {
         throw new Error(`Unsupported host: ${args.hostId}`)
+      }
+      // A folder project whose folder moved is repointed in place instead of duplicated (#30807).
+      if (parsedHost.kind === 'local') {
+        const repoint = await repointMovedFolderProject(store, {
+          projectId: args.projectId,
+          folderPath: args.path,
+          kind: args.kind
+        })
+        if (repoint.outcome === 'repointed') {
+          invalidateAuthorizedRootsCache()
+          notifyReposChanged(mainWindow)
+          return buildProjectHostSetupResult(store, repoint.repo)
+        }
+        if (repoint.outcome === 'refused') {
+          throw new Error(repoint.reason)
+        }
       }
       const result =
         parsedHost.kind === 'local'
