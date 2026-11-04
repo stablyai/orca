@@ -1,7 +1,7 @@
 import { nativeChatAskDismissKey } from '../../../../shared/native-chat/input/native-chat-ask-dismiss-key'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { InteractivePromptCard } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
-import { NativeChatQuestionCard } from './NativeChatQuestionCard'
+import { NativeChatQuestionCard, type NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,9 @@ export function NativeChatInteractiveCard({
   requiresTerminal = false,
   onAnswerInTerminal,
   shouldFocus = false,
-  answerInputRef
+  answerInputRef,
+  onLinkClick,
+  allowFileUriLinks
 }: {
   card: NonNullable<InteractivePromptCard>
   send: NativeChatInteractiveSend
@@ -30,7 +32,7 @@ export function NativeChatInteractiveCard({
   shouldFocus?: boolean
   /** Paste target while the prompt card replaces the composer. */
   answerInputRef?: React.RefObject<HTMLInputElement | null>
-}): React.JSX.Element {
+} & Pick<NativeChatQuestionCardProps, 'onLinkClick' | 'allowFileUriLinks'>): React.JSX.Element {
   const { sendAnswer, sendRawVerified, cancelPending, cancelAsk } = send
   // Keep paced multi-step answers visible until delivery settles; block duplicate submissions meanwhile.
   const submittingRef = useRef(false)
@@ -87,6 +89,8 @@ export function NativeChatInteractiveCard({
         isSubmitting={submitting}
         isCancelling={cancelling}
         answerInputRef={answerInputRef}
+        onLinkClick={onLinkClick}
+        allowFileUriLinks={allowFileUriLinks}
         onAnswer={(selections) => {
           if (submittingRef.current) {
             return

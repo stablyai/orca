@@ -383,9 +383,17 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
               answerInputRef={questionAnswerInputRef}
+              {...fileLinkProps}
             />
           ) : null}
-          {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
+          {nativeChatStructuredAsyncQuestion(
+            props,
+            controller,
+            session,
+            transport,
+            submits,
+            fileLinkProps
+          )}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer
