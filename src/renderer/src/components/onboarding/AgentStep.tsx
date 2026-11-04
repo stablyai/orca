@@ -135,7 +135,7 @@ export function AgentStep({
   )
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5">
+    <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
       {agentSurface && (
         <AgentSurfaceModeRow
           surface={agentSurface}
@@ -191,7 +191,9 @@ export function AgentStep({
         ref={gridFades.ref}
         data-agent-grid-scroll
         className={cn(
-          'scrollbar-sleek min-h-0 space-y-5 overflow-y-auto pr-1',
+          'scrollbar-sleek space-y-5 overflow-y-auto pr-1',
+          // Floor keeps ~2 tile rows visible; the outer scroller absorbs short bodies.
+          showSkeleton ? 'shrink-0' : 'min-h-[7.5rem]',
           gridFades.className
         )}
       >
