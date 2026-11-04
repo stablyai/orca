@@ -857,9 +857,6 @@
   "auto.components.feature.wall.AiCommitPrSettingsCard.1c0cb4fabb": {
     "ko": "AI 작성자"
   },
-  "auto.components.feature.wall.AiCommitPrSettingsCard.4b2fc4b80c": {
-    "ko": "사고 강도"
-  },
   "auto.components.feature.wall.AiCommitPrSettingsCard.8d4152701a": {
     "ko": "예: ollama run llama3.1 {{value0}}"
   },

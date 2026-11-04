@@ -98,7 +98,7 @@ it('uses the shared AI-author picker without saving on cancel and preserves Cust
   fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
   fireEvent.click(screen.getByRole('option', { name: 'GPT-5.4' }))
   fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Use', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: /^Use$/ }))
   await waitFor(() =>
     expect(useAppStore.getState().settings?.commitMessageAi).toMatchObject({
       selectedModelByAgent: { codex: 'gpt-5.4' },
@@ -118,5 +118,46 @@ it('uses the shared AI-author picker without saving on cancel and preserves Cust
     agentId: 'custom',
     customPrompt: 'Keep prompt',
     selectedModelByAgent: { codex: 'gpt-5.4' }
+  })
+})
+
+it('keys an accepted effort to its displayed model while preserving a newer selected model', async () => {
+  const settings = useAppStore.getState().settings!
+  useAppStore.setState({
+    settings: {
+      ...settings,
+      commitMessageAi: {
+        enabled: true,
+        agentId: 'codex',
+        selectedModelByAgent: { codex: 'gpt-5.5' },
+        selectedThinkingByModel: { 'gpt-5.5': 'high', 'gpt-5.4': 'medium' },
+        customPrompt: '',
+        customAgentCommand: ''
+      }
+    }
+  })
+  const view = renderHook(() => useAiCommitPrSettings())
+  const entry = view.result.current.pickerEntries.find((entry) => entry.agent === 'codex')!
+  const draft = applyAgentPickerEdit(entry, aiCommitPrPickerDraft(entry), {
+    kind: 'choice',
+    patch: { options: { effort: 'low' } }
+  })
+  const accept = view.result.current.onPick
+  act(() =>
+    useAppStore.setState(({ settings }) => ({
+      settings: {
+        ...settings!,
+        commitMessageAi: {
+          ...settings!.commitMessageAi!,
+          selectedModelByAgent: { codex: 'gpt-5.4' }
+        }
+      }
+    }))
+  )
+  act(() => accept('codex', draft))
+  await waitFor(() => expect(persist).toHaveBeenCalledOnce())
+  expect(useAppStore.getState().settings?.commitMessageAi).toMatchObject({
+    selectedModelByAgent: { codex: 'gpt-5.4' },
+    selectedThinkingByModel: { 'gpt-5.5': 'low', 'gpt-5.4': 'medium' }
   })
 })

@@ -176,9 +176,10 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
     if (!agentChanged && !modelChanged && !effortChanged) {
       return
     }
-    const model = modelChanged
-      ? capability.models.find((model) => model.id === draft?.choices.model)
-      : resolveCommitMessageSelectedModel(latest, capability)
+    const model =
+      modelChanged || effortChanged
+        ? capability.models.find((model) => model.id === draft?.choices.model)
+        : resolveCommitMessageSelectedModel(latest, capability)
     if (!model) {
       return
     }
