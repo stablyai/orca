@@ -17,6 +17,10 @@ import {
 } from '../../../../shared/browser-runtime-capabilities'
 import { BrowserNetworkTunnelClient } from '../tunnels/browser-network-tunnel-client'
 import type { BrowserNetworkTunnelOutboundMemoryLease } from '../tunnels/browser-network-tunnel-outbound-memory-budget'
+import {
+  BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES,
+  negotiateBrowserNetworkTunnelWindowBytes
+} from '../tunnels/browser-network-tunnel-stream-state'
 
 const BROWSER_TUNNEL_WS_SOFT_CAP_BYTES = 1024 * 1024
 const BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES = 7 * 1024 * 1024
@@ -101,7 +105,8 @@ export class PairedRuntimeBrowserNetworkTransport {
           authorityEpoch: this.options.lease.authorityEpoch,
           browserHostClientId: this.options.lease.browserHostClientId,
           browserHostGeneration: this.options.lease.browserHostGeneration,
-          executionHost: this.options.executionHost
+          executionHost: this.options.executionHost,
+          clientMaxWindowBytes: BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
         },
         this.options.timeoutMs,
         {
@@ -126,7 +131,12 @@ export class PairedRuntimeBrowserNetworkTransport {
             }
             const result = parsed.data
             if (result.type === 'ready') {
-              this.acceptReady(result.tunnelGeneration, resolveReady, rejectReady)
+              this.acceptReady(
+                result.tunnelGeneration,
+                result.hostMaxWindowBytes,
+                resolveReady,
+                rejectReady
+              )
               return
             }
             if (this.tunnelValue?.generation === result.tunnelGeneration) {
@@ -208,6 +218,7 @@ export class PairedRuntimeBrowserNetworkTransport {
 
   private acceptReady(
     tunnelGeneration: number,
+    hostMaxWindowBytes: number | undefined,
     resolveReady: () => void,
     rejectReady: (error: Error) => void
   ): void {
@@ -227,6 +238,7 @@ export class PairedRuntimeBrowserNetworkTransport {
         sendBinary: (bytes) => this.subscription?.sendBinary(bytes) ?? false,
         outboundMemory: this.options.outboundMemory,
         maxStreamIds: this.options.maxStreamIds,
+        receiveWindowBytes: negotiateBrowserNetworkTunnelWindowBytes(hostMaxWindowBytes),
         onClosed: (error) => this.fail(error, rejectReady)
       })
       this.options.onReady(this, tunnelGeneration)

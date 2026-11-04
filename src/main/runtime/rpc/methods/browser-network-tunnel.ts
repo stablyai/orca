@@ -1,4 +1,8 @@
 import { BrowserNetworkTunnelSession } from '../../../browser/network/tunnels/browser-network-tunnel-session'
+import {
+  BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES,
+  negotiateBrowserNetworkTunnelWindowBytes
+} from '../../../browser/network/tunnels/browser-network-tunnel-stream-state'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
 import {
   browserNetworkExecutionHostKey,
@@ -191,6 +195,9 @@ export function createBrowserNetworkTunnelMethods(
             tunnelGeneration: route.tunnelGeneration,
             connect: executionRoute.connect,
             sendBinary: (bytes) => sendBinary(bytes) !== false,
+            receiveWindowBytes: negotiateBrowserNetworkTunnelWindowBytes(
+              params.clientMaxWindowBytes
+            ),
             claimAggregateRetainedBytes: outboundMemory.claimApplicationBytes,
             onClose: () => {
               try {
@@ -209,7 +216,11 @@ export function createBrowserNetworkTunnelMethods(
             cleanup()
             return
           }
-          emit({ type: 'ready', tunnelGeneration: route.tunnelGeneration })
+          emit({
+            type: 'ready',
+            tunnelGeneration: route.tunnelGeneration,
+            hostMaxWindowBytes: BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
+          })
           await closed
         } finally {
           signal?.removeEventListener('abort', cleanup)

@@ -75,13 +75,14 @@ export function writeBrowserNetworkDestination(
 
 export function grantBrowserNetworkDestinationCredit(
   stream: BrowserNetworkTunnelStream,
-  payload: Uint8Array<ArrayBufferLike>
+  payload: Uint8Array<ArrayBufferLike>,
+  maxWindowBytes: number = BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
 ): string | null {
   if (!stream.connected) {
     return 'invalid_client_credit'
   }
   const credit = decodeBrowserNetworkTunnelWindowUpdate(payload)
-  if (!credit || stream.sendCredit + credit > BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES) {
+  if (!credit || stream.sendCredit + credit > maxWindowBytes) {
     return 'send_window_overflow'
   }
   stream.sendCredit += credit

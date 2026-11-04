@@ -37,6 +37,8 @@ type BrowserNetworkTunnelClientOptions = {
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
   outboundMemory?: Pick<BrowserNetworkTunnelOutboundMemoryLease, 'claimApplicationBytes'>
   maxStreamIds?: number
+  /** Negotiated per-stream receive window; defaults to the legacy window. */
+  receiveWindowBytes?: number
   onClosed?: (error: Error) => void
 }
 
@@ -45,6 +47,7 @@ export class BrowserNetworkTunnelClient {
   private readonly frameSender: BrowserNetworkTunnelFrameSender
   private readonly outboundMemory: BrowserNetworkTunnelClientOptions['outboundMemory']
   private readonly maxStreamIds: number
+  private readonly receiveWindowBytes: number
   private readonly onClosed: BrowserNetworkTunnelClientOptions['onClosed']
   private readonly streams = new Map<number, BrowserNetworkTunnelClientStream>()
   private nextStreamId = 1
@@ -55,6 +58,8 @@ export class BrowserNetworkTunnelClient {
     this.tunnelGeneration = options.tunnelGeneration
     this.outboundMemory = options.outboundMemory
     this.onClosed = options.onClosed
+    this.receiveWindowBytes =
+      options.receiveWindowBytes ?? BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
     this.maxStreamIds = options.maxStreamIds ?? BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS
     if (
       !Number.isSafeInteger(this.maxStreamIds) ||
@@ -155,6 +160,7 @@ export class BrowserNetworkTunnelClient {
     frame: BrowserNetworkTunnelFrame
   ): void {
     handleBrowserNetworkTunnelClientStreamFrame(stream, frame, {
+      windowBytes: this.receiveWindowBytes,
       send: (opcode, streamId, payload) => this.frameSender.send(opcode, streamId, payload),
       closeTunnel: (error) => this.close(error),
       flushWrites: (target) => this.flushStreamWrites(target),
@@ -232,13 +238,7 @@ export class BrowserNetworkTunnelClient {
     if (!this.isCurrent(stream) || stream.remoteClosed || bytes === 0) {
       return
     }
-    if (
-      !grantBrowserNetworkSourceReceiveCredit(
-        stream,
-        bytes,
-        BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
-      )
-    ) {
+    if (!grantBrowserNetworkSourceReceiveCredit(stream, bytes, this.receiveWindowBytes)) {
       this.close(new Error('Browser tunnel receive credit overflow'))
       return
     }
