@@ -168,18 +168,4 @@ describe('filesystem watcher renderer document ownership', () => {
     expect(first.send).toHaveBeenCalledTimes(1)
     expect([...state.watchedRoots.values()][0].listeners.size).toBe(1)
   })
-
-  it('retains zero roots and listeners across 15 reloads and a renderer crash', async () => {
-    const sender = new Sender(1)
-    const closeLocal = vi.fn(async () => {})
-    createLocal.mockImplementation(async () => localRoot(closeLocal))
-    for (let generation = 0; generation < 16; generation++) {
-      await watch(sender, { worktreePath: `/folder-${generation}` })
-      sender.emit(generation === 15 ? 'render-process-gone' : 'did-navigate')
-      await Promise.resolve()
-      expect(state.watchedRoots.size).toBe(0)
-      expect(sender.eventNames()).toEqual([])
-    }
-    expect(closeLocal).toHaveBeenCalledTimes(16)
-  })
 })

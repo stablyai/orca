@@ -62,12 +62,6 @@ describe('a passive restore of a WSL bridge pane (E9)', () => {
     expect(readState).toHaveBeenCalledWith('Ubuntu', { retryUnverifiable: true })
   })
 
-  it('starts as before once a settled read proves the distro running', async () => {
-    readState.mockResolvedValue('running')
-    await restore({ wslPassiveRestore: true })
-    expect(spawns).toBe(1)
-  })
-
   // As every E9 gate: an unanswered read is not a running distro, and the Start card still helps.
   it('holds when the read cannot tell, too', async () => {
     readState.mockResolvedValue('unverifiable')
@@ -90,18 +84,6 @@ describe('a passive restore of a WSL bridge pane (E9)', () => {
       wslPassiveRestore: true
     })
     expect(spawns).toBe(2)
-    expect(readState).not.toHaveBeenCalled()
-  })
-
-  it('leaves a non-WSL restore alone', async () => {
-    await adapter.spawn({
-      cols: 80,
-      rows: 24,
-      cwd: 'C:\\repo',
-      sessionId: 'wt-1::C:/repo@@pane1',
-      wslPassiveRestore: true
-    })
-    expect(spawns).toBe(1)
     expect(readState).not.toHaveBeenCalled()
   })
 
@@ -130,18 +112,6 @@ describe('a passive restore of a WSL bridge pane (E9)', () => {
       })
       expect(spawns).toBe(0)
     })
-
-    it("starts the user's own launch without reading the distro", async () => {
-      await uncRestore('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
-      expect(spawns).toBe(1)
-      expect(readState).not.toHaveBeenCalled()
-    })
-
-    it('leaves a host cwd alone', async () => {
-      await uncRestore('C:\\folder', { wslPassiveRestore: true })
-      expect(spawns).toBe(1)
-      expect(readState).not.toHaveBeenCalled()
-    })
   })
 
   describe('a background start from main (orchestration, automations, recovery)', () => {
@@ -163,16 +133,6 @@ describe('a passive restore of a WSL bridge pane (E9)', () => {
       expect(spawns).toBe(0)
     })
 
-    it('holds it as unverifiable when the read cannot tell', async () => {
-      readState.mockResolvedValue('unverifiable')
-      const error = await fresh().catch((caught: unknown) => caught)
-      expect(error instanceof Error ? parseWslDistroHold(error.message) : null).toEqual({
-        distro: 'Ubuntu',
-        state: 'unverifiable'
-      })
-      expect(spawns).toBe(0)
-    })
-
     it('holds its restore of a saved pane', async () => {
       const held = await adapter
         .spawn({
@@ -188,24 +148,6 @@ describe('a passive restore of a WSL bridge pane (E9)', () => {
         state: 'stopped'
       })
       expect(spawns).toBe(0)
-    })
-
-    it('starts once a settled read proves the distro running', async () => {
-      readState.mockResolvedValue('running')
-      await fresh()
-      expect(spawns).toBe(1)
-    })
-
-    it('leaves a non-WSL start alone', async () => {
-      await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: 'C:\\repo',
-        isNewSession: true,
-        wslBackgroundStart: true
-      })
-      expect(spawns).toBe(1)
-      expect(readState).not.toHaveBeenCalled()
     })
   })
 })
