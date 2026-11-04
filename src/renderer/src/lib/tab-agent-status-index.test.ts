@@ -7,13 +7,13 @@ import {
   resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
-import { agentTypeToIconAgent } from './agent-status'
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { isTerminalLeafId, parsePaneKey } from '../../../shared/stable-pane-id'
 import type {
   AgentStatusEntry,
   AgentStatusState,
   AgentType
-} from '../../../shared/agent-status-types'
+} from '../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-freshness'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
 import type { RuntimeWorktreeAgentRow } from '../../shared/runtime-types'
 import type { RuntimeTerminalTitleEvidence } from './runtime-worktree-ps-activity'
 import { resolveRuntimeWorktreeSidebarStatus } from './runtime-worktree-sidebar-status'

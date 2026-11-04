@@ -38,7 +38,7 @@ import {
   acquireWatcherRemovalGate,
   beginTerminalInstall,
   beginWatcherInstall
-} from '../ipc/watcher-removal-gate'
+} from '../workspaces/removal/watcher-removal-gate'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,

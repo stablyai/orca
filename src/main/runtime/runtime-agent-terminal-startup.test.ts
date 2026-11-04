@@ -4,11 +4,11 @@ import { resolveAgentTerminalCreateOptions } from './runtime-agent-terminal-star
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl/discovery/distro-catalog'
 import { MIXED_FOLDER, MIXED_GROUP } from '../../shared/folder-workspace-host-routing.test-fixture'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
-import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
-import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../shared/agent-launch/startup/tui-agent-startup'
+import { tokenizeStartupCommand } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 vi.mock('../preflight/agent-detection', () => ({

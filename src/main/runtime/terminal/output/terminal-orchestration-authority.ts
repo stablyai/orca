@@ -1,5 +1,5 @@
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
-import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from '../../orchestration/terminal-authority/verify-orchestration-compatibility-caller'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
 import { createHash } from 'node:crypto'

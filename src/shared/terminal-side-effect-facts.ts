@@ -1,7 +1,7 @@
 /** Main parses local/SSH PTY facts once on pty:sideEffect; renderer store policy decides notifications/unread state. */
 
-import type { AgentIdleStatus } from './agent-title-status'
-import type { ParsedAgentStatusPayload } from './agent-status-types'
+import type { AgentIdleStatus } from './agent-status/title/agent-title-status'
+import type { ParsedAgentStatusPayload } from './agent-status/contracts/agent-status-types'
 import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'
 
 /** Timer stale-clears restore title/cache only; a >3s pause is not task completion and must not create unread/notification attention. */

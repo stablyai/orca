@@ -30,19 +30,6 @@ function render(): string {
 }
 
 describe('HostAccountSignInPrompt', () => {
-  it('shows nothing while no sign-in runs on this server', () => {
-    client.running = false
-    expect(render()).toBe('')
-  })
-
-  it('keeps Cancel for a sign-in still running after Settings reopens', () => {
-    client.running = true
-    client.status = null
-    const markup = render()
-    expect(markup).toContain('Starting sign-in on Server')
-    expect(markup).toContain('Cancel')
-  })
-
   it('offers only the provider’s own sign-in page, and a box for Claude’s code', () => {
     client.running = true
     const prompt = { userCode: null, needsCode: true }

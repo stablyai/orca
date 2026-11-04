@@ -67,10 +67,12 @@ export function useChecksListState({
   // Share the pill's classifier for skipped passes and completed-without-verdict unresolved checks.
   const {
     passed: passingCount,
-    failed: failingCount,
+    failed: inclusiveFailingCount,
+    cancelled: cancelledCount = 0,
     pending: pendingCount,
     neutral: neutralCount
   } = summarizeProviderChecks(checks)
+  const failingCount = inclusiveFailingCount - cancelledCount
 
   useEffect(() => {
     const validKeys = new Set(rows.map((row) => row.key))
@@ -344,6 +346,7 @@ export function useChecksListState({
     rows,
     passingCount,
     failingCount,
+    cancelledCount,
     pendingCount,
     neutralCount,
     toggleCheckExpanded,

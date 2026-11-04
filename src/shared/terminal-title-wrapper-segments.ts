@@ -1,4 +1,4 @@
-import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
+import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-status/title/agent-title-decoration'
 
 export const WRAPPER_SEPARATOR = ' | '
 

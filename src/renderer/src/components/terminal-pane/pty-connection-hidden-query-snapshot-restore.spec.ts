@@ -8,7 +8,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -52,6 +56,8 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
 
     it('keeps all visible bytes after a pending hidden ESC becomes non-query output', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -76,10 +82,13 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef,
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef,
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks
+        )
       )
       try {
         await flushAsyncTicks(6)
@@ -98,6 +107,8 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
 
     it('repaints from the main-owned snapshot when main drops pending output at the cap', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { droppedOutput?: boolean }) => void) | null
@@ -123,7 +134,10 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({ isVisibleRef: { current: true } }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({ isVisibleRef: { current: true } }) as never,
+          agentTitleMocks2
+        )
       )
       try {
         await flushAsyncTicks(6)
@@ -146,6 +160,8 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
 
     it('keeps split stateful Codex queries live after becoming visible', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -170,10 +186,13 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef,
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef,
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks3
+        )
       )
       try {
         await flushAsyncTicks(6)
@@ -192,6 +211,8 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
 
     it('drops pending hidden Codex query prefixes when the PTY changes', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -208,10 +229,13 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef,
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef,
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks4
+        )
       )
       try {
         await flushAsyncTicks(6)
@@ -232,6 +256,8 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
 
     it('does not live-render split hidden Codex non-query CSI output', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -247,10 +273,13 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks5
+        )
       )
       await flushAsyncTicks(6)
 
@@ -269,6 +298,8 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
 
     it('answers split hidden Codex OSC color queries directly', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -284,10 +315,13 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks6
+        )
       )
       await flushAsyncTicks(6)
 
@@ -306,6 +340,8 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
 
     it('answers hidden Codex OSC color queries split before the prefix directly', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -321,10 +357,13 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks7
+        )
       )
       await flushAsyncTicks(6)
 
@@ -343,6 +382,8 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
 
     it('keeps later hidden Codex stateless terminal queries on the live xterm path', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -358,10 +399,13 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks8
+        )
       )
       await flushAsyncTicks(6)
 
@@ -381,6 +425,8 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
 
     it('keeps clean hidden Codex stateful cursor-position queries on the live xterm path', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -396,10 +442,13 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks9
+        )
       )
       await flushAsyncTicks(6)
 
@@ -413,6 +462,8 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
 
     it('does not answer dirty hidden Codex stateful queries from stale xterm state', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -428,10 +479,13 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks10
+        )
       )
       await flushAsyncTicks(6)
 

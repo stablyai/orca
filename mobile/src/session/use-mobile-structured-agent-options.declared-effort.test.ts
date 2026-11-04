@@ -13,8 +13,9 @@ const { recordedEffortCase } = await vi.importActual<AcpDeclaredEffortFixtureMod
 
 it('renders trustworthy context through the phone consumer while capturing only accepted input', async () => {
   for (const input of ['low', 'max', 'opencode', 'absent'] as const) {
-    const { agent, model, display, live, resting, catalog } = await recordedEffortCase(input)
-    for (const answer of [live, resting]) {
+    const { agent, model, display, live, resting, launch, catalog } =
+      await recordedEffortCase(input)
+    for (const answer of [live, resting, launch]) {
       let response = Promise.resolve(answer)
       const { client } = optionsClient(
         () => response,

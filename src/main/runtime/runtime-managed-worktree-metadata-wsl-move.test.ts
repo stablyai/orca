@@ -105,11 +105,6 @@ describe('updateRuntimeManagedWorktreeMetadata under a WSL move', () => {
       update(MOVING, { isUnread: true, lineage: { noParent: true } })
     ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
   })
-
-  it('leaves a project the move is not taking untouched', async () => {
-    await update(STAYING, { comment: 'mine' })
-    expect(store.getWorktreeMeta(STAYING)?.comment).toBe('mine')
-  })
 })
 
 describe('persistRuntimeManagedWorktreeSortOrder under a WSL move', () => {

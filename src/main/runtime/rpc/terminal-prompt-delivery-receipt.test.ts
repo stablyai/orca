@@ -2,7 +2,7 @@ import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/workt
 import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { createAgentPromptSubmissionRuntime } from '../agent-prompt-submission-runtime-test-fixture'
 import { OrchestrationDb } from '../orchestration/db'
 import type { RpcRequest, RpcResponse } from './core'

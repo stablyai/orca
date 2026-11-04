@@ -1,4 +1,4 @@
-import { withFreshOmpLaunch } from '../../../shared/omp-fresh-launch'
+import { withFreshOmpLaunch } from '../../../shared/agent-launch/startup/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
 import {
   piBuildPtyEnvMock,

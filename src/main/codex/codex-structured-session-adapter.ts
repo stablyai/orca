@@ -49,6 +49,8 @@ import {
   cancelCodexStructuredTurn
 } from './codex-structured-prompt-ownership'
 import { renameCodexProviderSession } from './codex-provider-session-rename'
+import { codexAcquireFailure } from './app-server/codex-startup-outcome'
+import { openCodexStart, recoverCodexRewindAtStart } from './codex-structured-start-verdict'
 
 export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()
@@ -114,15 +116,12 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
         this.handleUnhandledFrame(sessionId, kind, payload),
       forceCloseUnexpected: (sessionId, fence, acquisitionGeneration, reason) =>
         this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
+    }).catch((error: unknown) => {
+      throw codexAcquireFailure(error)
     })
 
-  open = (input: StructuredAgentSessionProviderOpenInput) => {
-    const attempt = this.acquisitions.get(input.sessionId)
-    if (!attempt?.open) {
-      return Promise.reject(new Error(`no spawned codex child for session ${input.sessionId}`))
-    }
-    return attempt.open(input)
-  }
+  open = (input: StructuredAgentSessionProviderOpenInput) =>
+    openCodexStart(this.acquisitions, input)
 
   /** Buffers pre-publication events and drops events from superseded children. */
   private deliver(
@@ -287,7 +286,11 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     codexRewind.rewindCodexSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
 
   recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
-    codexRewind.recoverCodexRewind(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
+    recoverCodexRewindAtStart(this.sessions, input, this.deps.requestTimeoutMs)
+
+  startupEnding = (id: string, generation: string) => this.acquisitions.endings.get(id, generation)
+  retireStartup = (sessionId: string, generation: string) =>
+    this.acquisitions.endings.retire(sessionId, generation)
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
     compactCodexStructuredSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)

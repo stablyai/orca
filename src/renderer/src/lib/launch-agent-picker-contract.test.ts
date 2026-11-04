@@ -20,13 +20,13 @@ import {
   agentPickerDraft,
   agentPickerLaunchInputs,
   agentPickerEntriesFromRows
-} from '../../../shared/agent-launch-picker'
+} from '../../../shared/agent-launch/picker/agent-launch-picker'
 
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit
-} from '../../../shared/agent-launch-picker-edits'
-import { agentPickerPanelArguments } from '../../../shared/agent-launch-picker-arguments'
+} from '../../../shared/agent-launch/picker/agent-launch-picker-edits'
+import { agentPickerPanelArguments } from '../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 import {
   mockCreateTab,
   queuedStartups,
@@ -36,7 +36,7 @@ import {
   mockIsWebRuntimeSessionActive
 } from './launch-agent-in-new-tab-test-fixture'
 
-import { buildNewTabAgentMenuRows } from '../../../shared/agent-launch-picker-rows'
+import { buildNewTabAgentMenuRows } from '../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { fetchCodexModelCatalogListing } from './codex-model-catalog-reader-test-fixture'
 
@@ -66,8 +66,10 @@ describe('picker window launch contract', () => {
     'preserves %s permission and model intent through the actual picker-to-terminal compiler',
     async (agent) => {
       const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-      const { agentPickerChoiceSeeds, agentPickerDraft, agentPickerLaunchInputs } =
-        await import('../../../shared/agent-launch-picker')
+      const { agentPickerDraft, agentPickerLaunchInputs } =
+        await import('../../../shared/agent-launch/picker/agent-launch-picker')
+      const { agentPickerChoiceSeeds } =
+        await import('../../../shared/agent-launch/picker/agent-launch-picker-defaults')
       const settings = {
         agentPermissionDefault: 'ask' as const,
         agentDefaultArgs: { [agent]: '--add-dir docs' },
@@ -148,8 +150,10 @@ describe('picker window launch contract', () => {
       const { EntryActionRow } = await import('../components/tab-bar/TabBarCreateEntryRow')
       const { matchingAgentPickerLaunchOptions, configuredAgentPickerLaunchOption } =
         await import('../components/tab-bar/tab-agent-launch-options')
-      const { agentPickerChoiceSeeds, agentPickerLaunchInputs } =
-        await import('../../../shared/agent-launch-picker')
+      const { agentPickerLaunchInputs } =
+        await import('../../../shared/agent-launch/picker/agent-launch-picker')
+      const { agentPickerChoiceSeeds } =
+        await import('../../../shared/agent-launch/picker/agent-launch-picker-defaults')
       Object.assign(store.settings, { agentDefaultArgs: { claude: '--add-dir docs' } })
       if (target === 'ssh') {
         store.repos[0].connectionId = 'ssh-target-1'
@@ -321,7 +325,7 @@ it.each(['claude', 'codex'] as const)(
   async (agent) => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const { agentPickerDraft, agentPickerLaunchInputs } =
-      await import('../../../shared/agent-launch-picker')
+      await import('../../../shared/agent-launch/picker/agent-launch-picker')
     const options: Record<string, string> =
       agent === 'claude' ? { fastMode: 'false' } : { serviceTier: 'default' }
     const entry = {
@@ -406,7 +410,8 @@ it.each(['claude', 'codex'] as const)(
 it.each(['claude', 'codex'] as const)(
   'keeps failed %s defaults unknown through acquisition, controls, projection and actual dispatch, then wakes to a permission-preserving edit',
   async (agent) => {
-    const { projectAgentLaunchSettings } = await import('../../../shared/agent-launch-settings')
+    const { projectAgentLaunchSettings } =
+      await import('../../../shared/agent-launch/choices/agent-launch-settings')
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const settings = {
       agentPermissionDefault: 'ask' as const,
@@ -637,8 +642,10 @@ it('passes the recorded Codex catalog tier and approval/sandbox policy through t
 
 it('conserves quoted Codex string sources through common acceptance and the terminal compiler', async () => {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  const { tokenizeStartupCommand } = await import('../../../shared/tui-agent-startup-shell')
-  const { agentChoiceConfigString } = await import('../../../shared/agent-choice-cli-apply')
+  const { tokenizeStartupCommand } =
+    await import('../../../shared/agent-launch/startup/tui-agent-startup-shell')
+  const { agentChoiceConfigString } =
+    await import('../../../shared/agent-launch/choices/agent-choice-cli-apply')
   const own: AgentPickerEntry = {
     agent: 'codex',
     label: 'Codex',

@@ -1,5 +1,5 @@
 import { parsePaneKey } from '../stable-pane-id'
-import type { AgentHookSource } from '../agent-hook-relay'
+import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { HookListenerState } from './listener-state'
 
 /** Map OpenCode1 shared-server sessions to client-observed panes: the server's frozen env stamp cannot identify attach clients. Main binds from argv/creation evidence; ingest reattributes before disposition. */

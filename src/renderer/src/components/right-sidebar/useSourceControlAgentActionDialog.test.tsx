@@ -13,7 +13,7 @@ import { projectSourceControlActionLaunch } from '../../../../shared/source-cont
 import { structuredLaunchRequestedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { liftActionPermissionArgs } from '../../../../shared/source-control-action-permission-lift'
 import type { Repo } from '../../../../shared/repo-types'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { clearHostAgentMenuSettingsForTests } from '../../runtime/agent-launch-settings/host-agent-launch-preferences-resource'

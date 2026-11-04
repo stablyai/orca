@@ -1,27 +1,24 @@
-import { collectExplicitAgentTitleEvidence } from './agent-title-evidence'
-import { isQoderTerminalTitle } from './qoder-terminal-title'
+import { collectExplicitAgentTitleEvidence } from './agent-status/title/agent-title-evidence'
+import { isQoderTerminalTitle } from './agent-status/title/providers/qoder-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
   titleHasAgentName
-} from './agent-name-token-match'
-import {
-  containsAgentSpinnerGlyph,
-  isCursorAgentTitle,
-  isDshTerminalTitle
-} from './agent-title-core'
-import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
-import { isCodewhaleTerminalTitle } from './codewhale-terminal-title'
+} from './agent-status/title/agent-name-token-match'
+import { containsAgentSpinnerGlyph } from './agent-status/title/agent-title-glyphs'
+import { isCursorAgentTitle } from './agent-status/title/agent-title-core'
+import { isDshTerminalTitle } from './agent-status/title/providers/dsh-terminal-title'
+import { isDeepSeekBuildTerminalTitle } from './agent-status/title/providers/dsb-terminal-title'
+import { isCodewhaleTerminalTitle } from './agent-status/title/providers/codewhale-terminal-title'
 
-export { DSH_WHALE, isDshTerminalTitle } from './agent-title-core'
-import { isOpenCodeNativeTitle } from './opencode-terminal-title'
+import { isOpenCodeNativeTitle } from './agent-status/title/providers/opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
   getPiCompatibleTitleBrand,
   isLegacyPiCompatibleTitle
-} from './pi-compatible-synthetic-title'
-import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
+} from './agent-status/title/providers/pi-compatible-synthetic-title'
+import { resolveCanonicalPaneAgentIdentity } from './agent-status/identity/pane-agent-identity-adapter'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import type { TerminalAgent } from './terminal-agent'
 
@@ -71,8 +68,6 @@ export function isGeminiTerminalTitle(title: string): boolean {
   }
   return titleHasAgentName(title, 'gemini')
 }
-
-export { isGrokRotatingWorkingTitle } from './agent-title-core'
 
 export function isPiAgentTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title)
@@ -256,8 +251,6 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   Pi: 'pi',
   OMP: 'omp'
 }
-
-export { isClaudeIdentityFrameTitle } from './agent-title-core'
 
 export function resolveTerminalTitleAgentType(title: string): TerminalAgent | null {
   const label = getAgentLabel(title)

@@ -6,7 +6,7 @@ import {
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY
 } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentSessionChatProgram } from '../../../shared/agent-session/agent-session-agent-availability'
 import { chatProviderAgents } from './chat-provider-agents'
 import { resolveAgentLaunchRoute, structuredAgentLaunchSupport } from './agent-launch-routing'

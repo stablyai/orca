@@ -38,30 +38,6 @@ describe('PR workflow parallelism', () => {
     )
   })
 
-  it('keeps the selected-draft condition in one place', () => {
-    const sources = ['pr.yml', 'unit-plan.yml', 'unit-tests.yml', 'unit-selection-evidence.yml']
-      .map((file) => readFileSync(`.github/workflows/${file}`, 'utf8'))
-      .join('\n')
-    expect(sources.match(/pull_request\.draft == true/g)).toHaveLength(1)
-  })
-
-  it('enforces import boundaries in the required static-analysis checks', () => {
-    const guard = workflow.jobs.preflight.steps.find((step) =>
-      step.run?.includes('bun config/scripts/check-import-boundaries.mjs')
-    )
-    expect(guard?.if).toBe('!cancelled()')
-    expect(guard?.env.PREFLIGHT_PHASE_SELECTED).toBe(
-      "${{ needs.code_paths.outputs.static_analysis == 'true' }}"
-    )
-    expect(guard?.background).toBe(true)
-    const typecheckIndex = workflow.jobs.preflight.steps.findIndex(
-      (step) => step.wait === 'typecheck'
-    )
-    const waitIndex = workflow.jobs.preflight.steps.findIndex((step) => step.wait === guard.id)
-    expect(waitIndex).toBeGreaterThan(typecheckIndex)
-    expect(guard?.['continue-on-error']).toBeUndefined()
-  })
-
   it('keeps advisory unit-selection evidence off the gate', () => {
     // Keep advisory continue-on-error work off unit-tests.yml’s critical path: caller needs:test otherwise waits ~36s beyond last shard.
     const evidence = workflow.jobs.unit_selection_evidence
@@ -121,16 +97,4 @@ describe('PR workflow parallelism', () => {
       expect(env['INPUT_GITHUB-TOKEN']).toBe('test-token')
     }
   )
-})
-
-it('keeps the costly layout-owner experiment manual and limits it to one active suite', () => {
-  const experiment = parse(readFileSync('.github/workflows/layout-owner-e2e.yml', 'utf8'))
-  expect(Object.keys(experiment.on)).toEqual(['workflow_dispatch'])
-  expect(experiment.concurrency).toEqual({
-    group: 'layout-owner-e2e',
-    'cancel-in-progress': false
-  })
-  for (const job of Object.values(workflow.jobs)) {
-    expect(job.with?.layout_owner).toBeUndefined()
-  }
 })

@@ -4,7 +4,7 @@ import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-ser
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { codexHookService } from './hook-service'
 import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
-import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileCodexHooksForLaunch } from './codex-hook-reconcile'
 import { grantCodexSandboxReadOnManagedHome } from './codex-windows-sandbox-read-grant'
 

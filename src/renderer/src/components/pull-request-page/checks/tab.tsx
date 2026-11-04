@@ -1,8 +1,7 @@
+import { getChecksTabSummaryPresentation } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-summary'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { CircleDashed } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel/check-presentation'
 import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
@@ -162,27 +161,7 @@ export function ChecksTab({
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
   const summaryLabel = getChecksSummaryLabel(list)
-  // All-neutral checks remain unresolved; list length alone cannot justify a green tick.
-  const SummaryIcon =
-    counts.failing > 0
-      ? CHECK_ICON.failure
-      : counts.needsAction > 0
-        ? CHECK_ICON.action_required
-        : counts.pending > 0
-          ? CHECK_ICON.pending
-          : counts.passing > 0
-            ? CHECK_ICON.success
-            : CircleDashed
-  const summaryColor =
-    counts.failing > 0
-      ? CHECK_COLOR.failure
-      : counts.needsAction > 0
-        ? CHECK_COLOR.action_required
-        : counts.pending > 0
-          ? CHECK_COLOR.pending
-          : counts.passing > 0
-            ? CHECK_COLOR.success
-            : 'text-muted-foreground'
+  const { SummaryIcon, summaryColor } = getChecksTabSummaryPresentation(counts)
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
   const handleRefresh = useCallback(

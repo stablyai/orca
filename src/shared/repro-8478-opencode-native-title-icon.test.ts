@@ -1,7 +1,7 @@
 /** OpenCode’s native OC | task/plugin titles lack “opencode” and previously selected Claude/? icons (#8478).
  * Bare OpenCode remains the home/default title; tokenless braille frames are a separate case (#8940). */
 import { describe, expect, it } from 'vitest'
-import { getAgentLabel, isClaudeAgent } from './agent-detection'
+import { getAgentLabel, isClaudeAgent } from './agent-status/title/agent-title-identity'
 import {
   resolveExplicitTerminalTitleAgentType,
   resolveTerminalTitleAgentType

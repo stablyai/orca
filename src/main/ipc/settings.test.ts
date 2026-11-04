@@ -55,11 +55,11 @@ vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
 }))
 
-vi.mock('../browser/browser-session-proxy', () => ({
+vi.mock('../browser/sessions/browser-session-proxy', () => ({
   applyBrowserSessionProxies: applyBrowserSessionProxiesMock
 }))
 
-vi.mock('../browser/browser-session-registry', () => ({
+vi.mock('../browser/sessions/browser-session-registry', () => ({
   browserSessionRegistry: { listProfiles: listProfilesMock }
 }))
 

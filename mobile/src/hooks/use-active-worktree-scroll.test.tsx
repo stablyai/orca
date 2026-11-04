@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { useActiveWorktreeScroll } from './use-active-worktree-scroll'
 
-type Row = { worktreeId: string; isActive?: boolean }
+type Row = { row: { worktreeId: string; isActive?: boolean } }
 type Sections = { key: string; data: Row[] }[]
 
 const listOf = (active: string | null, folded = false): Sections => [
@@ -11,7 +11,9 @@ const listOf = (active: string | null, folded = false): Sections => [
     key: 'all',
     data: folded
       ? []
-      : ['a', 'b', 'c'].map((worktreeId) => ({ worktreeId, isActive: worktreeId === active }))
+      : ['a', 'b', 'c'].map((worktreeId) => ({
+          row: { worktreeId, isActive: worktreeId === active }
+        }))
   }
 ]
 

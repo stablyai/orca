@@ -1,5 +1,5 @@
 import type { ImageSourcePropType } from 'react-native'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 
 // Bundle desktop-shared favicons for offline/regional access (#8451), via Metro’s src/shared watch.
 // Keep literal require paths: Metro cannot resolve dynamic agent-id asset paths.

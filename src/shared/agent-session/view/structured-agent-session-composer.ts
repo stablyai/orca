@@ -1,5 +1,5 @@
 import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionValue

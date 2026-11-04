@@ -1,5 +1,5 @@
 import type { AgentJournalTurnLifecycle } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnOutcome } from '../../shared/agent-turn-outcome'
+import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey

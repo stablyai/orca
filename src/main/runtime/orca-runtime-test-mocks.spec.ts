@@ -255,7 +255,7 @@ export type { RuntimeTerminalAgentStatusEvent } from './orca-runtime'
 export type { Tab } from '../../shared/tab-types'
 export type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 export type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
-export type { TuiAgent } from '../../shared/tui-agent'
+
 export type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'
 export type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 export type { Worktree } from '../../shared/worktree/types'

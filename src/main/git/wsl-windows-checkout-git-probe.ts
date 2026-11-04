@@ -1,7 +1,7 @@
 import { stat } from 'node:fs/promises'
 import { win32 } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { resolveSelectedLocalCommand } from '../ipc/command-path-resolver'
+import { resolveSelectedLocalCommand } from '../ipc/command-path/command-path-resolver'
 import { runWslProcess, type WslResult, type WslSpec } from '../wsl/execution/wsl-runner'
 import { translateArgForWsl } from './command-runner/wsl-path-translation'
 import { acquireGitAdmission } from './command-runner/git-subprocess-admission'

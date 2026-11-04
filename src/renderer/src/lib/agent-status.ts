@@ -1,25 +1,17 @@
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { AgentStatusState, AgentType } from '../../../shared/agent-status-types'
+import type {
+  AgentStatusState,
+  AgentType
+} from '../../../shared/agent-status/contracts/agent-status-types'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import type { WorktreeStatus } from './worktree-status'
 import { tuiAgentToAgentKind } from '../../../shared/agent-kind'
-import { agentTypeToIconAgent } from '../../../shared/agent-type-icon-agent'
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
 import type { AgentKind } from '../../../shared/telemetry-events'
 
-export {
-  type AgentStatus,
-  detectAgentStatusFromTitle,
-  clearWorkingIndicators,
-  createAgentStatusTracker,
-  normalizeTerminalTitle,
-  isGeminiTerminalTitle,
-  isClaudeAgent,
-  isClaudeManagementTitle,
-  getAgentLabel
-} from '../../../shared/agent-detection'
-import type { AgentStatus } from '../../../shared/agent-detection'
+import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import { classifyTitleActivity, resolveTitleActivityLabel } from './pane-agent-evidence'
 
 type AgentQueryArgs = {
@@ -93,15 +85,10 @@ export function getWorkingAgentsPerWorktree({
   return result
 }
 
-export { formatAgentTypeLabel } from '../../../shared/agent-type-label'
-export { agentTypeToIconAgent }
-
 export function agentKindForAgentType(agentType: AgentType | null | undefined): AgentKind {
   const tuiAgent = agentTypeToIconAgent(agentType)
   return isTuiAgent(tuiAgent) ? tuiAgentToAgentKind(tuiAgent) : 'other'
 }
-
-export { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 
 /** Map explicit agent states to shared visual statuses; blocked and waiting both require permission attention. */
 export function mapAgentStatusStateToVisualStatus(state: AgentStatusState): WorktreeStatus {
