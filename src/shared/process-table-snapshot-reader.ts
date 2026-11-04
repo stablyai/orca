@@ -26,7 +26,7 @@ type ProcessTableSnapshotReaderDeps<T> = {
    * time (in `now()`'s clock) of any input older than the capture itself, such as recovered argv. */
   runPs: (fresh: boolean, inputAt: (atMs: number) => void) => Promise<T>
   now: () => number
-  ttlMs?: number
+  ttlMs?: number | (() => number)
 }
 
 /** Build a process-table reader that coalesces concurrent and recent captures. */
@@ -38,7 +38,10 @@ export function createProcessTableSnapshotReader<T = string>(
   getFreshSnapshot: () => Promise<T>
   reset: () => void
 } {
-  const ttlMs = deps.ttlMs ?? PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
+  const getTtlMs = (): number =>
+    typeof deps.ttlMs === 'function'
+      ? deps.ttlMs()
+      : (deps.ttlMs ?? PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS)
   let cached: Snapshot<T> | null = null
   let inFlight: Promise<T> | null = null
   let sequence = 0
@@ -64,7 +67,7 @@ export function createProcessTableSnapshotReader<T = string>(
   }
 
   async function getSnapshot(): Promise<T> {
-    if (cached && deps.now() - cached.completedAtMs < ttlMs) {
+    if (cached && deps.now() - cached.completedAtMs < getTtlMs()) {
       return cached.value
     }
     if (inFlight) {

@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest'
-import { parseWindowsCimProcessRows } from './windows-process-table-cim-scan'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  parseWindowsCimProcessRows,
+  readWindowsProcessRowsWithCim
+} from './windows-process-table-cim-scan'
+
+const runProcessMock = vi.fn()
+vi.mock('@orca/process-host', () => ({
+  runProcess: (spec: unknown) => runProcessMock(spec)
+}))
 
 describe('parseWindowsCimProcessRows', () => {
   it('reads the array form ConvertTo-Json emits for a real table', () => {
@@ -62,5 +70,25 @@ describe('parseWindowsCimProcessRows', () => {
   it('returns null on unparseable output so the caller can reject it', () => {
     // A policy banner or an error on stdout must not read as an idle machine.
     expect(parseWindowsCimProcessRows('Access is denied.')).toBeNull()
+  })
+})
+
+describe('readWindowsProcessRowsWithCim', () => {
+  it('passes -WindowStyle Hidden to prevent console window flashing on Windows', async () => {
+    runProcessMock.mockResolvedValueOnce({
+      timedOut: false,
+      code: 0,
+      stdout: JSON.stringify([
+        { ProcessId: 100, ParentProcessId: 4, Name: 'node.exe', CommandLine: 'node.exe' }
+      ]),
+      stderr: ''
+    })
+    const rows = await readWindowsProcessRowsWithCim()
+    expect(rows).toEqual([{ pid: 100, ppid: 4, name: 'node.exe', command: 'node.exe' }])
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: expect.arrayContaining(['-WindowStyle', 'Hidden'])
+      })
+    )
   })
 })

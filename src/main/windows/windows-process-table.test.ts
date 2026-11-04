@@ -403,6 +403,27 @@ describe('PowerShell fallback when the native binding is absent', () => {
     expect(cimScan).toHaveBeenCalledTimes(1)
   })
 
+  it('reuses the cached CIM snapshot across multiple reads within the extended fallback TTL', async () => {
+    vi.useFakeTimers()
+    try {
+      __setWindowsProcessTreeLoaderForTests(() => null)
+      await readWindowsProcessTable()
+      expect(cimScan).toHaveBeenCalledTimes(1)
+
+      // Advance by 2 seconds (well past the 500ms default TTL, but within 10s CIM fallback TTL)
+      vi.advanceTimersByTime(2_000)
+      await readWindowsProcessTable()
+      expect(cimScan).toHaveBeenCalledTimes(1)
+
+      // Advance past the 10s fallback TTL
+      vi.advanceTimersByTime(9_000)
+      await readWindowsProcessTable()
+      expect(cimScan).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rejects an identity read that omits our own pid', async () => {
     __setWindowsProcessTreeLoaderForTests(() => null)
     cimScan.mockResolvedValue([{ pid: 200, ppid: 4, name: 'claude.exe', command: 'claude' }])
