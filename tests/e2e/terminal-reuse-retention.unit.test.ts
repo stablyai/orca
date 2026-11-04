@@ -19,6 +19,7 @@ import { isAgentLaunchResult } from '../../src/shared/agent-launch/contracts/age
 import { readAutomationRunReceipt } from '../../src/main/automations/automation-run-receipt'
 import { RUN_TERMINAL_GRACE_MS } from '../../src/main/automations/headless-run-terminal-retention'
 import { setup, retentionNow } from './terminal-reuse-retention.test-fixture'
+import { setupRetirementRuntime } from './terminal-retirement-runtime.test-fixture'
 it('retains repeated delivered input through old-turn Done until the live CLI consumes it and exits', async () => {
   const {
     store,
@@ -569,3 +570,131 @@ it('bounds provenance and history work under actual timer/drain at N and 10N wit
   expect(tenN.snapshots).toBeLessThanOrEqual(n.snapshots * 11)
   console.info('retention-work', measurements)
 })
+
+it.each(['timer', 'manual'] as const)(
+  'retires an unbound published terminal through its owner before %s teardown',
+  async (route) => {
+    const h = await setupRetirementRuntime()
+    try {
+      h.nativeExit()
+      await h.createNewer()
+      for (const run of h.created) {
+        expect(readAutomationRunReceipt(h.records, run)).toMatchObject({
+          kind: 'terminal',
+          accepted: true
+        })
+      }
+      expect(new Set(h.created.map((run) => run.terminalPtyId)).size).toBe(4)
+      expect(h.membership()).toEqual({ saved: true, layout: true, raw: true, renderer: true })
+      const incarnation = h.processes.get(h.seed.terminalPtyId!)!.incarnationId
+      if (route === 'timer') {
+        vi.useFakeTimers()
+        h.service.start()
+        await vi.advanceTimersByTimeAsync(RUN_TERMINAL_GRACE_MS + 120_000)
+        await h.service.runInAutomationLane(h.seed.automationId, async () => {})
+      } else {
+        await expect(h.runtime.closeTerminal(h.handle)).resolves.toMatchObject({ ptyKilled: true })
+      }
+      expect(h.stops).toEqual([
+        {
+          id: h.seed.terminalPtyId,
+          incarnationId: incarnation,
+          membership: { saved: false, layout: false, raw: false, renderer: false }
+        }
+      ])
+      expect(h.membership()).toEqual({ saved: false, layout: false, raw: false, renderer: false })
+      expect([...h.processes.keys()]).toEqual(h.created.slice(1).map((run) => run.terminalPtyId))
+      const row = h.store
+        .listAutomationRuns(h.seed.automationId)
+        .find((run) => run.id === h.seed.id)!
+      expect(row.terminalPtyId).toBe(route === 'timer' ? null : h.seed.terminalPtyId)
+      expect(row.terminalPaneKey).toBe(route === 'timer' ? null : h.seed.terminalPaneKey)
+      h.persistRenderer()
+      await h.publishRenderer()
+      expect(h.membership()).toEqual({ saved: false, layout: false, raw: false, renderer: false })
+    } finally {
+      vi.useRealTimers()
+      await h.dispose()
+    }
+  },
+  60_000
+)
+
+it('preserves the terminal and history when currentness is revoked during durable owner admission', async () => {
+  const h = await setupRetirementRuntime()
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const durable = h.store.runDurableMutation.bind(h.store)
+  let current = true
+  const admission = vi
+    .spyOn(h.store, 'runDurableMutation')
+    .mockImplementationOnce(async (mutate) => {
+      entered.resolve()
+      await release.promise
+      return durable(mutate)
+    })
+  const warnings = vi.spyOn(console, 'error')
+  try {
+    const closing = h.runtime.closeTerminal(h.handle, {
+      beforeAction: () => {
+        if (!current) {
+          throw new Error('automation_terminal_retention_revoked')
+        }
+      }
+    })
+    const rejection = expect(closing).rejects.toThrow('automation_terminal_retention_revoked')
+    await entered.promise
+    current = false
+    release.resolve()
+    await rejection
+    expect(h.membership()).toEqual({ saved: true, layout: true, raw: true, renderer: true })
+    expect(h.processes.has(h.seed.terminalPtyId!)).toBe(true)
+    expect(h.stops).toEqual([])
+    expect(
+      h.store.listAutomationRuns(h.seed.automationId).find((run) => run.id === h.seed.id)
+        ?.terminalPtyId
+    ).toBe(h.seed.terminalPtyId)
+    expect(warnings).not.toHaveBeenCalled()
+    admission.mockRestore()
+    await expect(h.runtime.closeTerminal(h.handle)).resolves.toMatchObject({ ptyKilled: true })
+    expect(h.membership()).toEqual({ saved: false, layout: false, raw: false, renderer: false })
+  } finally {
+    release.resolve()
+    await h.dispose()
+  }
+}, 60_000)
+
+it('does not acquire close authority from an unbound publication without its saved owner', async () => {
+  const h = await setupRetirementRuntime()
+  try {
+    h.nativeExit()
+    await h.createNewer()
+    const session = h.store.getWorkspaceSession()
+    h.store.setWorkspaceSession({
+      ...session,
+      tabsByWorktree: {
+        ...session.tabsByWorktree,
+        [h.seed.workspaceId!]: session.tabsByWorktree[h.seed.workspaceId!].filter(
+          (tab) => tab.id !== h.pane.tabId
+        )
+      }
+    })
+    await expect(h.runtime.closeTerminal(h.handle)).rejects.toThrow('terminal_pane_owner_changed')
+    vi.useFakeTimers()
+    h.service.start()
+    await vi.advanceTimersByTimeAsync(RUN_TERMINAL_GRACE_MS + 120_000)
+    await h.service.runInAutomationLane(h.seed.automationId, async () => {})
+    expect(h.stops).toEqual([])
+    expect(h.processes.has(h.seed.terminalPtyId!)).toBe(true)
+    expect(h.membership()).toEqual({ saved: false, layout: true, raw: true, renderer: true })
+    expect(
+      h.store.listAutomationRuns(h.seed.automationId).find((row) => row.id === h.seed.id)
+    ).toMatchObject({
+      terminalPaneKey: h.seed.terminalPaneKey,
+      terminalPtyId: h.seed.terminalPtyId
+    })
+  } finally {
+    vi.useRealTimers()
+    await h.dispose()
+  }
+}, 60_000)

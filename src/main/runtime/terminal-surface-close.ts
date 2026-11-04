@@ -218,6 +218,14 @@ export function terminalSurfaceCloseMutation(
           `${target.tabId}:${target.leafId}`
         ]
       : undefined
+  const actionRefusal = (): Error | undefined => {
+    try {
+      commit.options.beforeAction?.()
+      return undefined
+    } catch (error) {
+      return error instanceof Error ? error : new Error('terminal_close_revoked')
+    }
+  }
   return () => {
     if (!commit.ownerMatches()) {
       return { value: new Error('terminal_pane_owner_changed'), persist: false }
@@ -271,16 +279,30 @@ export function terminalSurfaceCloseMutation(
         target.kind === 'tab' &&
         !hasClosedTerminalTabRecord(routed.session.closedTerminalTabTombstonesByTabId, target.tabId)
       ) {
-        commit.options.beforeAction?.()
+        const refusal = actionRefusal()
+        if (refusal) {
+          return { value: refusal, persist: false }
+        }
         commit.setSession(routed.result.session, routed.hostId)
+        commit.onClosed([])
         return { value: undefined }
+      }
+      if (commit.options.allowMissing && target.kind === 'tab') {
+        const refusal = actionRefusal()
+        if (refusal) {
+          return { value: refusal, persist: false }
+        }
+        commit.onClosed([])
       }
       return {
         value: commit.options.allowMissing ? undefined : new Error('tab_not_found'),
         persist: false
       }
     }
-    commit.options.beforeAction?.()
+    const refusal = actionRefusal()
+    if (refusal) {
+      return { value: refusal, persist: false }
+    }
     // Why every holder: a legacy relay reattach can leave one tab in two partitions.
     for (const { hostId, result } of closed) {
       commit.setSession(result.session, hostId)

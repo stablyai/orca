@@ -51,6 +51,7 @@ vi.mock('../../src/main/git/worktrees/catalog/worktree-listing', () => ({
 const realNow = Date.now
 export const retentionNow = () => vi.getMockedSystemTime()?.getTime() ?? realNow()
 const directories: string[] = []
+export const registerRetentionFixtureDirectory = (path: string) => directories.push(path)
 afterEach(async () => {
   catalog.paths = ['/tmp/worktree-a']
   visibleRendererPtys.clear()
@@ -68,7 +69,7 @@ afterEach(async () => {
 export async function setup(lineCarriesPrompt = false) {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-reuse-retention-'))
   directories.push(testState.dir)
-  const store = await createStore()
+  const store = createStore()
   store.addRepo({ id: 'r1', path: '/repo', displayName: 'Repo', badgeColor: '#fff', addedAt: 1 })
   const automation = store.createAutomation({
     name: 'Queued audit',

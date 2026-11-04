@@ -1,3 +1,4 @@
+import type { OrcaRuntimeWithCloseHeadlessMobileTerminalTab as HeadlessTerminalClose } from '../../session-tabs/headless-terminal-tab-close'
 import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in-main-layout'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
 import {
@@ -21,6 +22,10 @@ import { closeMobileStructuredSessionPresentation } from '../../session-tabs/str
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
 
 export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithCloseMobileRowInMainLayout {
+  protected abstract prepareHeadlessMobileTerminalTabClose(
+    ...args: Parameters<HeadlessTerminalClose['prepareHeadlessMobileTerminalTabClose']>
+  ): ReturnType<HeadlessTerminalClose['prepareHeadlessMobileTerminalTabClose']>
+
   abstract retireStructuredAgentSessionTabFromSnapshot(
     sessionId: string,
     expectedTabId?: string,
@@ -51,6 +56,38 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    const initialSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const initialTab = options.expectedPtyCloseAuthority
+      ? this.resolvePtyTabCloseSurfaceAuthority(options.expectedPtyCloseAuthority)?.surface.tab
+      : initialSnapshot?.tabs.find(
+          (row) => row.id === tabId || (row.type === 'terminal' && row.parentTabId === tabId)
+        )
+    const prepareTerminalClose = (
+      snapshot: NonNullable<typeof initialSnapshot>,
+      tab: RuntimeMobileSessionTerminalTab
+    ) =>
+      this.prepareHeadlessMobileTerminalTabClose(worktreeId, snapshot, tab, {
+        beforeAction: options.beforeAction,
+        allowMissingPersistedTab:
+          Boolean(options.expectedPtyCloseAuthority) ||
+          (options.expectedTerminalHandle === undefined && this.tabs.has(tab.parentTabId)),
+        force: options.force,
+        reason: options.reason,
+        killPtys:
+          options.localPtyTeardownOwnedExternally !== true &&
+          (options.reason === undefined || options.reason === 'user'),
+        ...(options.expectedPtyCloseAuthority
+          ? {
+              authorizedPty: this.resolvePtyTabCloseSurfaceAuthority(
+                options.expectedPtyCloseAuthority
+              )?.pty
+            }
+          : {})
+      })
+    const capturedTerminalClose =
+      initialSnapshot && initialTab?.type === 'terminal'
+        ? prepareTerminalClose(initialSnapshot, initialTab)
+        : null
     const observedPtyIds = await this.refreshMobileSessionPtyRecords()
     if (graphEpoch !== null) {
       this.assertStableReadyGraph(graphEpoch)
@@ -168,22 +205,16 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       }
       // Headless parents need local kill/de-persist or relay acknowledgments resurrect them; renderer-owned parents retain its pin guard/durable close.
       if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
-        await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
-          beforeAction: options.beforeAction,
-          allowMissingPersistedTab: Boolean(ptyCloseAuthority),
-          force: options.force,
-          reason: options.reason,
-          killPtys:
-            options.localPtyTeardownOwnedExternally !== true &&
-            (options.reason === undefined || options.reason === 'user'),
-          ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
-        })
+        const complete = capturedTerminalClose ?? prepareTerminalClose(snapshot, tab)
+        if (!(await complete())) {
+          return refusedMobileSessionTabClose('retirement-owner')
+        }
         this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
         return finishCommittedClose()
       }
       if (closingWholeParent && this.notifier?.closeTerminalTab) {
         // Commit the acknowledged identity even if renderer flush rebased its omission.
-        const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, tab.parentTabId)
+        const complete = capturedTerminalClose ?? prepareTerminalClose(snapshot, tab)
         // Await renderer pin guard, retirement and forced session flush.
         const win = this.getAvailableAuthoritativeWindow()
         if (win?.webContents.isDestroyed?.()) {
@@ -206,46 +237,18 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         } finally {
           releasePublicationThrottle()
         }
-        const remainingSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-        const retirement = acknowledgeRetirement()
-        if (!retirement.matches) {
+        try {
+          if (!(await complete())) {
+            return refusedMobileSessionTabClose('retirement-owner')
+          }
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'terminal_pane_owner_changed') {
+            throw error
+          }
           this.republishMobileSessionTabsSnapshot(worktreeId)
           return refusedMobileSessionTabClose('stale-terminal', { snapshotRepublished: true })
         }
-        const remainingTab = remainingSnapshot?.tabs.find(
-          (candidate): candidate is RuntimeMobileSessionTerminalTab =>
-            candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
-        )
-        if (
-          remainingSnapshot &&
-          remainingTab &&
-          this.isRuntimeOwnedHeadlessMobileTab(worktreeId, remainingTab)
-        ) {
-          const remainingPtyCloseAuthority = options.expectedPtyCloseAuthority
-            ? this.resolvePtyTabCloseSurfaceAuthority(options.expectedPtyCloseAuthority)
-            : null
-          // Relay recovery may acknowledge an absent renderer tab; HUB still retires its SSH surface.
-          await this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab, {
-            beforeAction: options.beforeAction,
-            // The renderer may already have durably removed it.
-            allowMissingPersistedTab: true,
-            force: options.force,
-            ...(remainingPtyCloseAuthority ? { authorizedPty: remainingPtyCloseAuthority.pty } : {})
-          })
-          this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
-        } else if (retirement.hasPersistedTab) {
-          // Cover acknowledged tabs absent from renderer inventory; concurrent durable removal is idempotent.
-          await this.closeTerminalSurface(
-            worktreeId,
-            { kind: 'tab', tabId: tab.parentTabId },
-            { allowMissing: true, force: options.force }
-          )
-        }
-        if (!acknowledgeRetirement().matches) {
-          this.republishMobileSessionTabsSnapshot(worktreeId)
-          return refusedMobileSessionTabClose('stale-terminal', { snapshotRepublished: true })
-        }
-        this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
+        this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
         return finishCommittedClose()
       }
       if (closingWholeParent) {
@@ -254,11 +257,10 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
           !this.notifier?.closeTerminal ||
           this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)
         ) {
-          await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
-            beforeAction: options.beforeAction,
-            force: options.force,
-            ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
-          })
+          const complete = capturedTerminalClose ?? prepareTerminalClose(snapshot, tab)
+          if (!(await complete())) {
+            return refusedMobileSessionTabClose('retirement-owner')
+          }
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
           return finishCommittedClose()
         }

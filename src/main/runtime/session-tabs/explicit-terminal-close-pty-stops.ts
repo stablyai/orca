@@ -56,19 +56,46 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
   protected async stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
     addressedPtyId: string,
-    beforeAction?: () => void
+    beforeAction?: () => void,
+    capturedIncarnations?: ReadonlyMap<string, string | undefined>
   ): Promise<ExplicitCloseStop> {
     let addressedPtyStop = NO_STOP
     const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
     for (const ptyId of ptyIds) {
+      const expectedIncarnationId = capturedIncarnations?.has(ptyId)
+        ? capturedIncarnations.get(ptyId)
+        : this.ptysById.get(ptyId)?.incarnationId
+      const assertIncarnation = () => {
+        if (
+          capturedIncarnations?.has(ptyId) &&
+          this.ptysById.get(ptyId)?.incarnationId !== expectedIncarnationId
+        ) {
+          throw new Error('terminal_pane_owner_changed')
+        }
+      }
+      const exited = this.getPtyLivenessVerdict(ptyId)
+      if (
+        capturedIncarnations?.has(ptyId) &&
+        expectedIncarnationId &&
+        !this.ptysById.has(ptyId) &&
+        exited?.status === 'exited' &&
+        exited.incarnationId === expectedIncarnationId
+      ) {
+        if (ptyId === addressedPtyId) {
+          addressedPtyStop = { stopped: true }
+        }
+        continue
+      }
+      assertIncarnation()
       beforeAction?.()
+      assertIncarnation()
       this.markPtyStopRequested(ptyId)
-      const expectedIncarnationId = this.ptysById.get(ptyId)?.incarnationId
       let stopped = false
       if (this.ptyController?.stopAndWait) {
         try {
           stopped = await this.ptyController.stopAndWait(ptyId, { deadlineMs })
         } catch (error) {
+          assertIncarnation()
           this.markPtyLivenessUnverifiable(ptyId, errorMessage(error))
         }
         // Preserve an observed exit when a broader inventory check could not finish.
@@ -86,7 +113,9 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
             verdict?.status === 'unverifiable' &&
             verdict.reason === SSH_PROVIDER_UNREGISTERED_REASON
           if (!providerAlreadyRetiredPty) {
+            assertIncarnation()
             beforeAction?.()
+            assertIncarnation()
             this.ptyController.kill(ptyId)
             if (!verdict || verdict.status === 'live') {
               this.markPtyLivenessUnverifiable(
