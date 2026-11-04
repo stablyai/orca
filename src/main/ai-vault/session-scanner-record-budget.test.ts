@@ -4,21 +4,27 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import {
   createSessionParseStats,
-  parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
-} from './session-scanner-parse-cache'
-import { getSessionParseCacheEntry } from './session-parse-cache-store'
-import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
-import { codexFixture, codexWorkerFixtureLines } from './session-scanner-codex-fixtures'
+  parseAgentSessionFileCached
+} from './parse-cache/session-scanner-parse-cache'
+import {
+  resetSessionParseCacheForTests,
+  getSessionParseCacheEntry
+} from './parse-cache/session-parse-cache-store'
+
+import { aiVaultScanIssueText } from '../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
+import {
+  codexFixture,
+  codexWorkerFixtureLines
+} from './scanners/codex/session-scanner-codex-fixtures'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
-import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './session-transcript-record-budget'
+import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './transcripts/session-transcript-record-budget'
 import {
   flushSessionParseCachePersist,
   initSessionParseCachePersistence,
   resetSessionParseCachePersistenceForTests
-} from './session-parse-cache-persistence'
-import { kiroTranscriptPathForMetadata } from './session-scanner-kiro-parser'
+} from './parse-cache/session-parse-cache-persistence'
+import { kiroTranscriptPathForMetadata } from '../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 const SESSION_FILE = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl'

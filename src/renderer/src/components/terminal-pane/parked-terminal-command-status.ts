@@ -1,6 +1,6 @@
 /** Keep store-level command status while parked; foreground confirmation and input-intent inference remain with mounted panes. */
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { resolvePaneAgentOwner } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'

@@ -58,7 +58,7 @@ await bundle(
   WSL_CLAUDE_PROFILE_HELPER_FILENAME
 )
 await bundle(
-  'src/main/ai-vault/session-scanner-opencode-sqlite-process-entry.ts',
+  'src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process-entry.ts',
   OPENCODE_SQLITE_READER_FILENAME,
   { external: ['electron'] }
 )

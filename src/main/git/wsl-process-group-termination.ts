@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto'
 
 import type { ProcessTerminationBarrier } from '@orca/process-host/process-spec'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import { runWslProcess } from '../wsl/wsl-runner'
-import { WSL_UNC_RUNNING_LEASE_MS, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
-import { isWslUserActFor } from '../wsl/wsl-user-act-scope'
-import { readWslDistroRunningState } from '../wsl-background-distro-gate'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
+import { WSL_UNC_RUNNING_LEASE_MS, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
+import { isWslUserActFor } from '../wsl/discovery/wsl-user-act-scope'
+import { readWslDistroRunningState } from '../wsl/discovery/wsl-background-distro-gate'
 
 const GUEST_TERMINATION_ATTEMPTS = 40
 const GUEST_TERMINATION_INTERVAL_SECONDS = '0.025'

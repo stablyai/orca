@@ -32,7 +32,7 @@ vi.mock('../startup/login-shell-environment', () => ({
     return { ...shell.current }
   }
 }))
-vi.mock('../pty/windows-environment-path', () => ({
+vi.mock('../pty/environment/windows-environment-path', () => ({
   cachedPersistedWindowsPathSegments: () => shell.saved,
   readPersistedWindowsPathSegmentsAsync: async () => (shell.saved = [...shell.nextSaved]),
   mergePersistedWindowsPathAsync: async () => {}

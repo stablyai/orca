@@ -1,18 +1,19 @@
 import { createHash } from 'node:crypto'
-import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../shared/orcad-migration/orcad-migration-scrollback'
+
 import {
+  type OrcadMigrationTerminalScrollbackSnapshot,
   MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS,
   MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES
 } from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal/replay/terminal-scrollback-limits'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import {
   makeTerminalScrollbackSnapshotRef,
   readTerminalScrollbackStoredBytesSync,
   readTerminalScrollbackStoredSnapshotSync,
   type TerminalScrollbackSnapshotStorage
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { compareKeys } from './orcad-source-key-order'
 
 export type ProjectedOrcadMigrationScrollback = {

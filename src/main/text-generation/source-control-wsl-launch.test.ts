@@ -9,7 +9,7 @@ import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
 import { prepareWslPrompt } from './source-control-prompt-files'
 import { producePromptRecords } from './source-control-prompt-producer'
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
+import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
 import {
   withPlatform,
   createMockDiscoveryChild
@@ -24,7 +24,7 @@ vi.mock('node:child_process', async (original) => {
   spawnMock.mockImplementation(actual.spawn)
   return { ...actual, spawn: spawnMock }
 })
-vi.mock('../wsl-background-distro-gate', () => ({ noteWslDistroLaunched: vi.fn() }))
+vi.mock('../wsl/discovery/wsl-background-distro-gate', () => ({ noteWslDistroLaunched: vi.fn() }))
 const nativeSpawn = (await vi.importActual<typeof ChildProcess>('node:child_process')).spawn
 afterEach(() => {
   spawnMock.mockReset().mockImplementation(nativeSpawn)

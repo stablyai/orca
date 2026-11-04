@@ -2,8 +2,8 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer, _internals } from './server'
 
 const SESSION = 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e'

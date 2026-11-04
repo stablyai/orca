@@ -1,13 +1,14 @@
 import { OrcaRuntimeWithAgentPromptRequestCorrelation } from '../../orca-runtime-agent-prompt-request-correlation'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../../runtime-terminal-agent-status-query'
-import type { AgentStatus } from '../../../../shared/agent-detection'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
 import {
   detectExplicitIdleStatusFromTitle,
   detectTerminalWaitBlockedReason
 } from '../../terminal-wait-detection'
-import { isOpenCodeNativeTitle } from '../../../../shared/agent-detection'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import { isOpenCodeNativeTitle } from '../../../../shared/agent-status/title/providers/opencode-terminal-title'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeVisibleTerminalState
@@ -18,7 +19,7 @@ import { createTerminalInputReservation } from '../../terminal-input-admission'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
 import { resolvePtyWriteHostPlatform } from '../input/pty-write-host-platform'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import { hasExplicitIdleTitle } from '../../tui-idle-evidence'

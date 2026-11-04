@@ -17,7 +17,9 @@ vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getRegisteredSshState: () => null,
   listRegisteredSshTargets: () => []
 }))
-vi.mock('../../wsl/wsl-host-service-instance', () => ({ getWslHostService: () => null }))
+vi.mock('../../wsl/host-lifecycle/wsl-host-service-instance', () => ({
+  getWslHostService: () => null
+}))
 
 const ID = 'r::/w/same'
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
 import { useAgentCompletionCoordinatorLifecycle } from './agent-completion-coordinator-test-harness'
-import { normalizeHookPayload } from '../../../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 

@@ -15,12 +15,12 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeResolvedWorktreeCache } from '../../runtime/runtime-resolved-worktree-cache'
 import type { ResolvedWorktree } from '../../runtime/runtime-worktree-path-identity'
-import { getWorktreeScanMutationRevision } from '../../local-worktree-scan-generation'
+import { getWorktreeScanMutationRevision } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { registerPtyHandlers } from './register-handlers'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import { getPtyIdForPaneKey } from './pane/key-state'
 import { setLocalPtyProvider } from './provider/registry'
-import { buildFreshShellViewportBlankingSequence } from '../../../shared/terminal-fresh-shell-viewport'
+import { buildFreshShellViewportBlankingSequence } from '../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -40,8 +40,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>

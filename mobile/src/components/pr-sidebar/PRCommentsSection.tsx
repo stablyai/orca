@@ -19,7 +19,7 @@ import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
-} from '../../../../src/shared/pr-comment-audience'
+} from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
 import {
   getPRCommentGroupCount,
   getPRCommentGroupId,
@@ -27,7 +27,7 @@ import {
   groupPRComments,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from '../../../../src/shared/pr-comment-groups'
+} from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 import { mobilePrSidebarStyles as shared } from './mobile-pr-sidebar-styles'
 import { useNow } from '../../hooks/use-now'

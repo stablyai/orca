@@ -1,16 +1,22 @@
 // @vitest-environment happy-dom
-import { entry, host, root, onUse } from './agent-launch-setup-panel-test-fixture'
+import {
+  AgentLaunchSetupPanel,
+  entry,
+  host,
+  root,
+  onUse
+} from './agent-launch-setup-panel-test-fixture'
 import { act } from 'react'
 import { fireEvent } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
-import * as shell from '../../../../shared/tui-agent-startup-shell'
-import { resolveAgentLaunchCommand } from '../../../../shared/tui-agent-launch-command'
+import * as shell from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { resolveAgentLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import {
+  agentPickerDraft,
   agentPickerLaunchInputs,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 it('uses chat-style permission icons and separated own settings while keeping raw CLI text selected', () => {
   act(() =>
@@ -97,7 +103,9 @@ it.each(['missing-default', 'pending', 'known-default', 'explicit'] as const)(
     for (const way of ['Launch chat', 'Launch terminal']) {
       onUse.mockClear()
       fireEvent.click(
-        [...host.querySelectorAll('button')].find((button) => button.textContent === way)!
+        [...host.querySelectorAll('button')].find(
+          (button) => button.getAttribute('aria-label') === way
+        )!
       )
       expect(agentPickerLaunchInputs(onUse.mock.calls[0][0], own)).toEqual({})
     }
@@ -127,7 +135,9 @@ it('edits the QA inline settings carrier after verbose and compiles the same eff
   expect(fast?.disabled).toBe(false)
   fireEvent.click(fast!)
   fireEvent.click(
-    [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch terminal')!
+    [...host.querySelectorAll('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Launch terminal'
+    )!
   )
   const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
   const compiled = resolveAgentLaunchCommand({
@@ -176,7 +186,9 @@ it('keeps the QA unclosed permission literal once after Ask and preserves actual
   )
   expect(host.querySelector('button[aria-label^="Remove --permission"]')).toBeNull()
   fireEvent.click(
-    [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch terminal')!
+    [...host.querySelectorAll('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Launch terminal'
+    )!
   )
   const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
   expect(launch.agentArgs).toBe(raw)
@@ -190,4 +202,22 @@ it('keeps the QA unclosed permission literal once after Ask and preserves actual
       ...launch
     })
   ).toEqual({ ok: false, error: 'CLI arguments are invalid: Unclosed quote in command template.' })
+})
+
+it('leaves chat Permissions enabled even with launch-owned raw CLI permission text', () => {
+  act(() =>
+    root.render(
+      <TooltipProvider>
+        <AgentLaunchSetupPanel
+          entry={entry}
+          initial={{ ...agentPickerDraft(entry, 'chat'), arguments: '--permission-mode plan' }}
+          onUse={onUse}
+        />
+      </TooltipProvider>
+    )
+  )
+  expect(
+    host.querySelector<HTMLButtonElement>('button[aria-label$=" permissions"]')?.disabled
+  ).toBe(false)
+  expect(host.querySelector('button[aria-label="Remove --permission-mode plan"]')).not.toBeNull()
 })

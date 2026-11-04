@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WatcherProcessFailure } from '../watcher-process/parcel-watcher-process-failure'
-import type * as WslBackgroundDistroGate from '../../../wsl-background-distro-gate'
+import type * as WslBackgroundDistroGate from '../../../wsl/discovery/wsl-background-distro-gate'
 
 const { createLocalWatcherMock, createWslWatcherMock, statMock, blockedWslDistroForPathMock } =
   vi.hoisted(() => ({
@@ -14,10 +14,10 @@ const { createLocalWatcherMock, createWslWatcherMock, statMock, blockedWslDistro
 const { noteWslDistroMayHaveStoppedMock } = vi.hoisted(() => ({
   noteWslDistroMayHaveStoppedMock: vi.fn()
 }))
-vi.mock('../../../wsl/wsl-unc-access-gate', () => ({
+vi.mock('../../../wsl/filesystem/wsl-unc-access-gate', () => ({
   blockedWslDistroForPath: blockedWslDistroForPathMock
 }))
-vi.mock('../../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslBackgroundDistroGate>()),
   noteWslDistroMayHaveStopped: noteWslDistroMayHaveStoppedMock
 }))
@@ -39,7 +39,7 @@ import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import {
   _resetWslBackgroundDistroGateForTests,
   noteWslDistrosRunning
-} from '../../../wsl-background-distro-gate'
+} from '../../../wsl/discovery/wsl-background-distro-gate'
 
 function install(rootKey: string): ReturnType<typeof installLocalWatcher> {
   return installLocalWatcher(

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusState } from '../../shared/agent-status-types'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import type { AutomationRun } from '../../shared/automations-types'
 import { AGENT_START_GRACE_MS } from './automation-run-agent-evidence'
 import {
@@ -16,9 +16,16 @@ type StatusRow = {
   receivedAt: number
   stateStartedAt: number
   sessionBoundary?: boolean
+  interrupted?: boolean
 }
 
-function createPane(initial: { idle: boolean; tail: string[]; idleEdgeOnly?: boolean }) {
+function createPane(initial: {
+  idle: boolean
+  tail: string[]
+  idleEdgeOnly?: boolean
+  /** Model status cleanup landing while the observer reads the screen. */
+  clearRowsOnRead?: boolean
+}) {
   let idle = initial.idle
   // Model runtimes that satisfy tui-idle only once per idle edge.
   let edgeSpent = false
@@ -27,7 +34,12 @@ function createPane(initial: { idle: boolean; tail: string[]; idleEdgeOnly?: boo
   const waiters = new Set<() => void>()
   const runtime: AutomationRunTerminalHost = {
     getTerminalHandleForPaneKey: () => HANDLE,
-    readTerminal: async () => ({ tail }),
+    readTerminal: async () => {
+      if (initial.clearRowsOnRead) {
+        rows = []
+      }
+      return { tail }
+    },
     waitForTerminal: (_handle, options) => {
       if (options?.signal?.aborted) {
         return Promise.reject(new Error('request_aborted'))
@@ -132,6 +144,38 @@ describe('observing a run with agent evidence', () => {
     pane.becomeIdle()
     await run.promise
     expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
+  })
+
+  // Why: headless runs have no renderer writer, so the observer must fail a cut-off turn (STA-12638).
+  it.each([
+    { name: 'on its idle edge', becomeIdle: true },
+    { name: 'from a held done on a pane that never reads idle', becomeIdle: false }
+  ])('fails a run whose agent reported its turn interrupted, $name', async ({ becomeIdle }) => {
+    const pane = createPane({ idle: false, tail: ['working'] })
+    const run = observe(pane)
+    await vi.advanceTimersByTimeAsync(1_000)
+    pane.report({ interrupted: true })
+    if (becomeIdle) {
+      pane.becomeIdle()
+    } else {
+      await vi.advanceTimersByTimeAsync(90_000)
+    }
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'dispatch_failed', errorCode: 'agentInterrupted' })
+    )
+  })
+
+  it('keeps a held interrupted verdict when its row is cleared during the screen read', async () => {
+    const pane = createPane({ idle: false, tail: ['working'], clearRowsOnRead: true })
+    const run = observe(pane)
+    await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS)
+    pane.report({ interrupted: true })
+    await vi.advanceTimersByTimeAsync(90_000)
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'dispatch_failed', errorCode: 'agentInterrupted' })
+    )
   })
 
   it("waits out a reused pane's previous done until this run's turn is done", async () => {

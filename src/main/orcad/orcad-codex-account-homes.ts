@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import {
   listGuestCodexAccountHomes,
   resolveGuestCodexAccountHome

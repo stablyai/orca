@@ -9,7 +9,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { checkRunDetailsOwnerScope } from '../../../../../../shared/check-run-details-owner-scope'
+import { checkRunDetailsOwnerScope } from '../../../../../../shared/source-control/checks/check-run-details-owner-scope'
 import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence

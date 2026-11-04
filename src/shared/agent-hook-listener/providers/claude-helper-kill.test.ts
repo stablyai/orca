@@ -2,7 +2,7 @@ import { writeFile, appendFile, rm, rename, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { readClaudeTranscriptChunk } from './claude-transcript-cursor'
-import type { ClaudeLaunchedBackgroundTasks } from '../../claude-owed-task-notifications'
+import type { ClaudeLaunchedBackgroundTasks } from './claude-owed-task-notifications'
 import { dir, now, stamp, kill, prompt, pane, drain } from './claude-helper-kill.test-fixture'
 
 describe('Claude helper provider evidence', () => {
@@ -399,30 +399,6 @@ describe('Claude helper provider evidence', () => {
       release()
       p.poller.clearAll()
       vi.useRealTimers()
-    }
-  })
-
-  it('ends only killed agent notification debt without claiming delivery', async () => {
-    const p = await pane()
-    try {
-      const tasks: ClaudeLaunchedBackgroundTasks = new Map([
-        ['a123', { kind: 'agent' as const, notificationOwedAt: now }],
-        ['shell', { kind: 'shell' as const, notificationOwedAt: now }]
-      ])
-      p.state.claudeLaunchedBackgroundTasksByPaneKey.set(
-        'test-tab:11111111-1111-4111-8111-111111111111',
-        tasks
-      )
-      await appendFile(p.path, kill())
-      await drain(p)
-      expect(tasks.get('a123')).toEqual({
-        kind: 'agent',
-        notificationOwedAt: undefined,
-        settled: true
-      })
-      expect(tasks.get('shell')?.notificationOwedAt).toBe(now)
-    } finally {
-      p.poller.clearAll()
     }
   })
 

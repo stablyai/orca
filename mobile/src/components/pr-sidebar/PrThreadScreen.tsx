@@ -1,5 +1,5 @@
 import { ScrollView, Text, View } from 'react-native'
-import type { PRCommentGroup } from '../../../../src/shared/pr-comment-groups'
+import type { PRCommentGroup } from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { threadDiffLines } from '../../../../src/shared/github/pr-comment-diff-hunk'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'

@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
 import type { AgentLaunchSurfaceFactory } from './agent-launch-surface-factories'
-import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type {
+  AgentLaunchIntent,
+  AgentLaunchResult
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { readCreatedWorkspaceLaunch } from './agent-launch-created-workspace'
 

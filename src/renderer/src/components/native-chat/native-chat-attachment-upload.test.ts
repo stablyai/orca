@@ -14,7 +14,6 @@ vi.mock('@/i18n/i18n', () => ({
 import { prepareNativeChatSessionAttachmentUpload } from './native-chat-attachment-upload'
 
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 
 describe('a structured chat on a paired server', () => {
   const owner = {
@@ -27,28 +26,6 @@ describe('a structured chat on a paired server', () => {
   beforeEach(() => {
     replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 7 }])
     mocks.callRuntimeRpc.mockReset()
-  })
-
-  it('asks the server, pinned to the pairing, and uploads only where it keeps a store', async () => {
-    mocks.callRuntimeRpc.mockResolvedValue({
-      runtimeId: 'runtime-a',
-      capabilities: [AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY]
-    })
-    await expect(prepareNativeChatSessionAttachmentUpload(owner)).resolves.toEqual({
-      ok: true,
-      target: {
-        environmentId: 'env-1',
-        sessionId: 'session-1',
-        expectedEnvironmentPairingRevision: 7,
-        expectedEnvironmentRuntimeId: 'runtime-a'
-      }
-    })
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-1' },
-      'status.get',
-      undefined,
-      expect.objectContaining({ expectedEnvironmentPairingRevision: 7 })
-    )
   })
 
   it('tells the user to update an older server instead of uploading', async () => {

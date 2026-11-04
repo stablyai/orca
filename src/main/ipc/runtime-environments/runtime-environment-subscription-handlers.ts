@@ -6,11 +6,10 @@ import {
   resolveSubscriptionEnvironment,
   crewSubscriptionSetupFailure,
   type RuntimeEnvironmentSubscribeArgs,
-  type CrewSubscriptionSetupResult,
-  type RuntimeEnvironmentSetupFailure,
   type RuntimeEnvironmentSubscriptionHandlerDependencies,
   assertSubscriptionPairingCurrent
 } from './runtime-environment-subscription-setup'
+import type * as SubscriptionSetup from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { ipcMain } from 'electron'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
@@ -37,10 +36,12 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
     async (
       event,
       args: RuntimeEnvironmentSubscribeArgs
-    ): Promise<{ subscriptionId: string; requestId: string } | CrewSubscriptionSetupResult> => {
+    ): Promise<
+      { subscriptionId: string; requestId: string } | SubscriptionSetup.CrewSubscriptionSetupResult
+    > => {
       const subscriptionId = runtimeEnvironmentSubscriptionId(args)
       const crewResult = args.setupResult === 'crew'
-      let failure: RuntimeEnvironmentSetupFailure | undefined
+      let failure: SubscriptionSetup.RuntimeEnvironmentSetupFailure | undefined
       let setupSignal: AbortSignal | undefined
       let operation: 'environment-resolution' | 'subscription' = 'environment-resolution'
       try {

@@ -1,7 +1,7 @@
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
-import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
+import { getFolderWorkspaceHostIdentity } from '../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeLineageGroupKey } from './group-keys'
 import {
   getExpandedWorktreeOccurrences,

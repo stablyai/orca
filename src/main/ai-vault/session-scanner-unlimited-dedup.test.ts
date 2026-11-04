@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type * as SessionDedup from './session-root-dedup'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 
 const fixture = vi.hoisted((): { sessions: AiVaultSession[]; visits: number } => ({
   sessions: [],
@@ -13,7 +13,7 @@ vi.mock('./session-scanner-source-discovery', () => ({
 vi.mock('./session-scanner-candidates', () => ({
   sessionCandidatesFromDiscoveries: async () => candidates()
 }))
-vi.mock('./session-scanner-parse-cache', () => ({
+vi.mock('./parse-cache/session-scanner-parse-cache', () => ({
   createSessionParseStats: () => ({
     reused: 0,
     incremental: 0,

@@ -145,6 +145,7 @@ type ProbeProps = {
   turnId?: string | null
   sendSelection?: boolean
   coherentCatalog?: boolean
+  modelEffortDiscovery?: boolean
   permissionOwn?: boolean
   onRender: (controller: Controller) => void
 }
@@ -165,7 +166,8 @@ function Probe(props: ProbeProps): null {
       sendOptions: false,
       statusFeed: false,
       sendSelection: props.sendSelection,
-      coherentModelCatalog: props.coherentCatalog
+      coherentModelCatalog: props.coherentCatalog,
+      modelEffortDiscovery: props.modelEffortDiscovery
     }
   })
   useLayoutEffect(() => props.onRender(controller), [controller, props.onRender])

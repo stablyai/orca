@@ -1,5 +1,5 @@
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   StructuredAgentSessionFirstMessage,
   StructuredAgentSessionResumeSource

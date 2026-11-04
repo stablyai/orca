@@ -26,7 +26,7 @@ it('canaries a minority of stable source identities while preserving full refere
 })
 
 it.each([
-  'src/main/wsl/wsl-orcad-deploy.ts',
+  'src/main/wsl/orcad/wsl-orcad-deploy.ts',
   'src/main/managed-server/install/remote-install-transport.ts',
   'src/main/orcad/main.ts',
   'src/packages/process-host/src/run-process.ts',
@@ -34,7 +34,7 @@ it.each([
   'src/main/runtime/windows-firewall.ts',
   'src/main/runtime/remote-transport.ts',
   'src/main/runtime/terminal-environment.ts',
-  'src/main/wsl/wsl-orcad-real-distro-lane.test.ts',
+  'src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts',
   'native/addon.cc',
   'package.json',
   'pnpm-lock.yaml',

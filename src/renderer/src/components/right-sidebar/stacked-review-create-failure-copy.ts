@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   STACKED_REVIEW_FAILURE_COPY as EN,
   type StackedReviewFailureReason
-} from '../../../../shared/stacked-hosted-review-failure-copy'
+} from '../../../../shared/source-control/hosted-review/stacked-hosted-review-failure-copy'
 
 // undefined = the branch name the sentence needs is missing; callers fall back to `error`.
 export function stackedFailureMessage(

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
-import type * as RepoWorktreesModule from '../../repo-worktrees'
-import type { GitStatusResult } from '../../../shared/git-status-types'
+import type * as RepoWorktreesModule from '../../workspaces/catalog/repo-worktrees'
+import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import { WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT } from '../../../shared/workspace-cleanup'
+import { WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT } from '../../../shared/workspace-cleanup/workspace-cleanup'
 
 const {
   lstatMock,
@@ -29,8 +29,10 @@ vi.mock('node:fs/promises', () => ({
   readFile: readFileMock
 }))
 
-vi.mock('../../repo-worktrees', async () => {
-  const actual = await vi.importActual<typeof RepoWorktreesModule>('../../repo-worktrees')
+vi.mock('../../workspaces/catalog/repo-worktrees', async () => {
+  const actual = await vi.importActual<typeof RepoWorktreesModule>(
+    '../../workspaces/catalog/repo-worktrees'
+  )
   return {
     listRepoWorktrees: listRepoWorktreesMock,
     createFolderWorktree: actual.createFolderWorktree
@@ -45,7 +47,7 @@ vi.mock('../../git/command-runner/git-exec-file', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
 }))
 

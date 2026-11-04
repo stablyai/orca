@@ -4,10 +4,11 @@ import { describe, expect, it } from 'vitest'
 import {
   agentChildWorkIsRunning,
   structuredRunningChildWork
-} from '../../../../shared/agent-child-work-listing'
-import { buildLegacyTaskRowModels } from '../../../../shared/agent-child-row-model'
-import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
-import type { AgentStatusEntry, AgentSubagentSnapshot } from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/child-work/agent-child-work-listing'
+import { buildLegacyTaskRowModels } from '../../../../shared/agent-status/presentation/agent-child-row-model'
+import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentSubagentSnapshot } from '../../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { buildBackgroundTaskGroupsFromViews } from '../../../../shared/background-task-roster'
 import { buildBackgroundTaskGroups } from '@/components/native-chat/background-task-roster'

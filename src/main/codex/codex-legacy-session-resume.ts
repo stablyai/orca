@@ -2,11 +2,12 @@ import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { link, lstat, mkdir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import type {
-  AiVaultPrepareSessionResumeArgs,
-  AiVaultPrepareSessionResumeResult
-} from '../../shared/ai-vault-resume-preparation'
-import { isPerAccountManagedCodexHome } from '../../shared/ai-vault-resume-preparation'
+
+import {
+  type AiVaultPrepareSessionResumeArgs,
+  type AiVaultPrepareSessionResumeResult,
+  isPerAccountManagedCodexHome
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'

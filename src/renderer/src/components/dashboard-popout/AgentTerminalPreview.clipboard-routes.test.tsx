@@ -8,10 +8,11 @@ import {
   TERMINAL_PASTE_CHUNK_MAX_BYTES,
   TERMINAL_PASTE_DIRECT_MAX_BYTES
 } from '@/components/terminal-pane/terminal-paste-limits'
+import '@/components/terminal-pane/terminal-bracketed-paste'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START
-} from '@/components/terminal-pane/terminal-bracketed-paste'
+} from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { dispatchAppMenuPasteEvent } from '@/lib/app-menu-paste'
 import { dispatchAppMenuSelectionAction } from '@/lib/app-menu-selection-actions'
 

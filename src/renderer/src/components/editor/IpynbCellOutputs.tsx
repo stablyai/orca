@@ -1,10 +1,10 @@
 import type { ITheme } from '@xterm/xterm'
 import { cn } from '@/lib/utils'
+import { getBuiltinTheme } from '@/lib/terminal-theme'
 import {
   DEFAULT_TERMINAL_THEME_DARK,
-  DEFAULT_TERMINAL_THEME_LIGHT,
-  getBuiltinTheme
-} from '@/lib/terminal-theme'
+  DEFAULT_TERMINAL_THEME_LIGHT
+} from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { IpynbMarkdownCell } from './IpynbCellEditor'
 import { IpynbHtmlOutput } from './IpynbHtmlOutput'
 import { parseAnsiSegments, type AnsiColor } from './ipynb-ansi'

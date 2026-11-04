@@ -1,4 +1,4 @@
-import type { WorkspaceKey, WorkspaceScope } from './folder-workspace-types'
+import type { WorkspaceKey, WorkspaceScope } from './folder-workspaces/folder-workspace-types'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity

@@ -1,11 +1,12 @@
-import { TmuxAgentHookOwner, type TmuxManagedPty } from '../../../shared/tmux-agent-hook-owner'
+import { TmuxAgentHookOwner } from '../../../shared/tmux-agent-hook-owner'
+import type { TmuxManagedPty } from '../../../shared/tmux-agent-hook-contract'
 import { commitTmuxSelectedStatus } from '../../../shared/tmux-selected-status'
 import {
   serializeAgentStatusSubject,
   type AgentStatusSubject
-} from '../../../shared/agent-status-subject'
+} from '../../../shared/agent-status/contracts/agent-status-subject'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
-import type { AgentHookSource } from '../../../shared/agent-hook-relay'
+import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
 import { tmuxCliWriterEvent } from './cli-writer-observation'
 

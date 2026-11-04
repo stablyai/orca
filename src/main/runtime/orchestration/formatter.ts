@@ -1,6 +1,7 @@
 import type { MessageRow } from './types'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import type { OrchestrationCliCommand } from './cli-command'
+import type { OrchestrationMailContent } from '../../../shared/agent-session/agent-session-message-source'
 
 const BANNER_WIDTH = 60
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
@@ -59,6 +60,13 @@ export function formatMessageBanner(
   msg: MessageRow,
   options: MessageFormattingOptions = {}
 ): string {
+  return formatMessageBannerWithContent(msg, options).text
+}
+
+export function formatMessageBannerWithContent(
+  msg: MessageRow,
+  options: MessageFormattingOptions = {}
+): { text: string; content: OrchestrationMailContent } {
   const priorityTag =
     msg.priority === 'urgent' ? ' [URGENT]' : msg.priority === 'high' ? ' [HIGH]' : ''
   const authority = resolveAuthority(msg, options.authority)
@@ -75,18 +83,18 @@ export function formatMessageBanner(
   const header = `──── From: ${senderName} (${msg.from_handle})${priorityTag}${authorityTag} (${msg.type}) ────`
 
   const lines: string[] = [header]
-  lines.push(`Subject: ${msg.subject}`)
+  const appendField = (value: string, prefix = '', suffix = ''): readonly [number, number] => {
+    const start = lines.reduce((length, line) => length + line.length + 1, prefix.length)
+    lines.push(prefix + value + suffix)
+    return [start, start + value.length]
+  }
+  const subject = appendField(msg.subject, 'Subject: ')
   if (authority !== 'current') {
     appendLegacyGuidance(lines, authority, options.supportedActionHints ?? [])
   }
 
-  if (msg.body) {
-    lines.push(msg.body)
-  }
-
-  if (msg.payload) {
-    lines.push(`[Payload: ${msg.payload}]`)
-  }
+  const body = msg.body ? appendField(msg.body) : undefined
+  const payload = msg.payload ? appendField(msg.payload, '[Payload: ', ']') : undefined
 
   if (authority === 'current') {
     const explicitFrom =
@@ -99,7 +107,10 @@ export function formatMessageBanner(
   }
   lines.push(SEPARATOR)
 
-  return lines.join('\n')
+  return {
+    text: lines.join('\n'),
+    content: { subject, ...(body ? { body } : {}), ...(payload ? { payload } : {}) }
+  }
 }
 
 // One wrapper marks the message block boundary while leaving each banner independently parseable.

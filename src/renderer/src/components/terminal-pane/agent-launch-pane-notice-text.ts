@@ -1,8 +1,8 @@
 import { translate } from '@/i18n/i18n'
-import type { AgentLaunchPaneOutcome } from '../../../../shared/agent-launch-pane-verdict'
+import type { AgentLaunchPaneOutcome } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { stripClientEnvironmentFooter } from '../../../../shared/client-environment-info'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { tuiAgentDisplayName } from '../../../../shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 /** What the pane shows, if its tab keeps a final launch outcome for this leaf. */
 export function agentLaunchPaneOutcomeForLeaf(

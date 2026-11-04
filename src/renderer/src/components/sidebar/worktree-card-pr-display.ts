@@ -1,4 +1,4 @@
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { translate } from '@/i18n/i18n'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -38,6 +38,7 @@ export type WorktreeCardPrDisplay =
       state?: HostedReviewInfo['state']
       url?: string
       status?: HostedReviewInfo['status']
+      checksSummary?: HostedReviewInfo['checksSummary']
     }
 
 type WorktreeCardPrDisplayOptions = {

@@ -1,8 +1,8 @@
 import type { Store } from '../../../persistence/loading-store/store'
 import { getRepoDialableSshTargetId } from '../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
-import { runAsWslUserAct, wslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
+import { runAsWslUserAct, wslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import { listDetectedWorktreesForCapturedRepo } from './detected-provider-listing'
 import { findExactRepoOwner, isCapturedRepoCurrent } from './worktree-host-ownership'
 

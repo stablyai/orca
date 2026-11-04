@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { extractAllOscTitleEntries } from '../../shared/osc-title-extraction'
+import { extractAllOscTitleEntries } from '../../shared/agent-status/title/osc-title-extraction'
 
 const captureEvent = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('title'), title: z.string(), atMs: z.number() }),

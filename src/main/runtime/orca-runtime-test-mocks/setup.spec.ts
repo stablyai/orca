@@ -1,20 +1,30 @@
-import { expect, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import { expect, vi, type Mock } from 'vitest'
+
 import type * as GitUsernameModule from '../../git/git-username'
 import type * as GitRepoDefaultBaseRefModule from '../../git/repo-default-base-ref'
-import type * as WslUncAccessGateModule from '../../wsl/wsl-unc-access-gate'
-import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/filesystem-path-containment'
+import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
+import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/access/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
 
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
+import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
 
 type TestMock = Mock
 
 const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = await getWorktreeOwnerMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrict: (await getWorktreeOwnerMocks()).listWorktreesSharedStrict
+  }
+})
+
 vi.mock('../../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({
     reconcile: reconcileClaudeAgentViewMock,
@@ -37,6 +47,11 @@ vi.mock('../../ipc/worktree-symlinks', () => ({
   createWorktreeSharedPaths: vi.fn(),
   findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock,
   removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
+}))
+
+vi.mock('../../git/worktrees/content-paths/worktree-symlink-detection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock
 }))
 
 export async function waitForMobileSessionTabsEvents(
@@ -279,21 +294,53 @@ const {
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES))
 
-vi.mock('../../git/worktree-listing', async (importOriginal) => ({
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict: listWorktreesStrictMock
+  listWorktreesStrict: listWorktreesStrictMock,
+  describeCreatedWorktree: (await getWorktreeOwnerMocks()).describeCreatedWorktree
 }))
 
-vi.mock('../../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  listWorktreesSharedStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  listWorktreesStrict: listWorktreesStrictMock,
-  describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
-  assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
-  addSparseWorktree: addSparseWorktreeMock,
-  addWorktree: addWorktreeMock,
-  removeWorktree: removeWorktreeMock,
-  forceDeleteLocalBranch: forceDeleteLocalBranchMock
+const { getWorktreeOwnerMocks } = vi.hoisted(() => {
+  function createWorktreeOwnerMocks() {
+    return (() => ({
+      listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+      listWorktreesSharedStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+      listWorktreesStrict: listWorktreesStrictMock,
+      describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
+      assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
+      addSparseWorktree: addSparseWorktreeMock,
+      addWorktree: addWorktreeMock,
+      removeWorktree: removeWorktreeMock,
+      forceDeleteLocalBranch: forceDeleteLocalBranchMock
+    }))()
+  }
+  let fixture: ReturnType<typeof createWorktreeOwnerMocks> | undefined
+  return { getWorktreeOwnerMocks: () => (fixture ??= createWorktreeOwnerMocks()) }
+})
+
+vi.mock('../../git/worktrees/removal/worktree-removal-preflight', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  assertWorktreeCleanForRemoval: (await getWorktreeOwnerMocks()).assertWorktreeCleanForRemoval
+}))
+
+vi.mock('../../git/worktrees/creation/worktree-sparse-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addSparseWorktree: (await getWorktreeOwnerMocks()).addSparseWorktree
+}))
+
+vi.mock('../../git/worktrees/creation/worktree-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addWorktree: (await getWorktreeOwnerMocks()).addWorktree
+}))
+
+vi.mock('../../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  removeWorktree: (await getWorktreeOwnerMocks()).removeWorktree
+}))
+
+vi.mock('../../git/worktrees/removal/worktree-branch-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  forceDeleteLocalBranch: (await getWorktreeOwnerMocks()).forceDeleteLocalBranch
 }))
 
 vi.mock('../repo-worktree-resolution-scan', () => ({
@@ -301,7 +348,7 @@ vi.mock('../repo-worktree-resolution-scan', () => ({
 }))
 
 // Fake-win32 runtime tests have no wsl.exe: treat every distro as running unless a test says otherwise.
-vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => {
+vi.mock('../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => {
   const actual = await importOriginal<typeof WslUncAccessGateModule>()
   const blockedWslDistroForPath = vi.fn<typeof actual.blockedWslDistroForPath>(async () => null)
   return {
@@ -327,7 +374,7 @@ vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => {
   }
 })
 
-vi.mock('../../terminal-history-deletion', () => ({
+vi.mock('../../pty/history/terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
@@ -399,7 +446,7 @@ vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
   }
 })
 
-vi.mock('../../ipc/filesystem/filesystem-auth', () => ({
+vi.mock('../../ipc/filesystem/access/filesystem-auth', () => ({
   resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
@@ -412,9 +459,9 @@ vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidati
 }))
 
 // Relay-rebuilt ENOENT errors may retain only the message.
-vi.mock('../../ipc/filesystem/filesystem-path-containment', async () => {
+vi.mock('../../ipc/filesystem/access/filesystem-path-containment', async () => {
   const actual = await vi.importActual<typeof FilesystemPathContainmentModule>(
-    '../../ipc/filesystem/filesystem-path-containment'
+    '../../ipc/filesystem/access/filesystem-path-containment'
   )
   return { isENOENT: actual.isENOENT }
 })

@@ -3,7 +3,7 @@ import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
 } from '../../shared/agent-session/agent-session-attachments'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { uploadExternalPathsToAgentSessionAttachments } from './agent-session-attachment-upload'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
