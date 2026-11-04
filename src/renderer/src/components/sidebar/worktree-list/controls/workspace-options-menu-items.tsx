@@ -1,4 +1,5 @@
 import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
+import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   DropdownMenuItem,
@@ -266,9 +267,9 @@ export function WorkspaceOptionsMenuItems({
 }: {
   preserveWorkspaceBoardOpen?: boolean
   groupCollapseAction?: {
-    collapse: boolean
+    collapseOnToggle: boolean
     disabled: boolean
-    toggle: () => void
+    setCollapsed: (collapsed: boolean) => void
     shortcutLabel?: string | null
   }
 }): JSX.Element {
@@ -313,17 +314,32 @@ export function WorkspaceOptionsMenuItems({
             )
           })}
           {section === 'group' && groupCollapseAction && (
-            <DropdownMenuItem
-              disabled={groupCollapseAction.disabled}
-              onSelect={groupCollapseAction.toggle}
-            >
-              {groupCollapseAction.collapse || groupCollapseAction.disabled
-                ? translate('sidebar.groups.collapseAll', 'Collapse all')
-                : translate('sidebar.groups.expandAll', 'Expand all')}
-              {groupCollapseAction.shortcutLabel ? (
-                <DropdownMenuShortcut>{groupCollapseAction.shortcutLabel}</DropdownMenuShortcut>
-              ) : null}
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem
+                disabled={groupCollapseAction.disabled}
+                onSelect={() => groupCollapseAction.setCollapsed(true)}
+              >
+                <ChevronsDownUp />
+                {translate('sidebar.groups.collapseAll', 'Collapse all')}
+                {!groupCollapseAction.disabled &&
+                groupCollapseAction.collapseOnToggle &&
+                groupCollapseAction.shortcutLabel ? (
+                  <DropdownMenuShortcut>{groupCollapseAction.shortcutLabel}</DropdownMenuShortcut>
+                ) : null}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={groupCollapseAction.disabled}
+                onSelect={() => groupCollapseAction.setCollapsed(false)}
+              >
+                <ChevronsUpDown />
+                {translate('sidebar.groups.expandAll', 'Expand all')}
+                {!groupCollapseAction.disabled &&
+                !groupCollapseAction.collapseOnToggle &&
+                groupCollapseAction.shortcutLabel ? (
+                  <DropdownMenuShortcut>{groupCollapseAction.shortcutLabel}</DropdownMenuShortcut>
+                ) : null}
+              </DropdownMenuItem>
+            </>
           )}
         </Fragment>
       ))}

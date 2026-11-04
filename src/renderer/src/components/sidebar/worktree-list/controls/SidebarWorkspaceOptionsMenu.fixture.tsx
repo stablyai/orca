@@ -75,14 +75,34 @@ async function openMenu(frame: HTMLElement): Promise<void> {
       new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
     )
   await paint()
+  actionItem('Collapse all')
+  actionItem('Expand all')
 }
 
-async function selectAction(label: string): Promise<void> {
+function actionItem(label: string): HTMLElement {
   const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((element) =>
     element.textContent?.startsWith(label)
   )
   if (!item) {
     throw new Error(`Missing ${label} action`)
+  }
+  return item
+}
+
+function assertToggleShortcut(label: string): void {
+  const shortcuts = document.querySelectorAll('[data-slot="dropdown-menu-shortcut"]')
+  if (
+    shortcuts.length !== 1 ||
+    !actionItem(label).querySelector('[data-slot="dropdown-menu-shortcut"]')
+  ) {
+    throw new Error(`Toggle shortcut should appear only beside ${label}`)
+  }
+}
+
+async function selectAction(label: 'Collapse all' | 'Expand all'): Promise<void> {
+  const item = actionItem(label)
+  if (item.hasAttribute('data-disabled')) {
+    throw new Error(`${label} is unexpectedly disabled`)
   }
   item.click()
   await paint()
@@ -163,23 +183,41 @@ const base = defineFixture({
   )
 })
 
-export const mixed = defineFixture({ ...base, interact: openMenu })
+export const mixed = defineFixture({
+  ...base,
+  interact: async (frame) => {
+    await openMenu(frame)
+    assertToggleShortcut('Collapse all')
+  }
+})
 export const collapsed = defineFixture({
   ...base,
   interact: async (frame) => {
     await openMenu(frame)
     await selectAction('Collapse all')
     await openMenu(frame)
+    await selectAction('Collapse all')
+    await openMenu(frame)
+    await selectAction('Expand all')
+    await openMenu(frame)
+    await selectAction('Collapse all')
+    await openMenu(frame)
+    assertToggleShortcut('Expand all')
   }
 })
 export const expanded = defineFixture({
   ...base,
   interact: async (frame) => {
     await openMenu(frame)
+    await selectAction('Expand all')
+    await openMenu(frame)
+    await selectAction('Expand all')
+    await openMenu(frame)
     await selectAction('Collapse all')
     await openMenu(frame)
     await selectAction('Expand all')
     await openMenu(frame)
+    assertToggleShortcut('Collapse all')
   }
 })
 
@@ -205,12 +243,22 @@ export const keyboardCollapsed = defineFixture({
     await paint()
     assertCollapseState(true)
     await openMenu(frame)
-    if (
-      ![...document.querySelectorAll('[role="menuitem"]')].some((item) =>
-        item.textContent?.startsWith('Expand all')
-      )
-    ) {
-      throw new Error('Configured shortcut did not collapse the sidebar groups')
+    assertToggleShortcut('Expand all')
+  }
+})
+
+export const empty = defineFixture({
+  ...base,
+  store: { ...base.store, repos: [], projectGroups: [], worktreesByRepo: {}, folderWorkspaces: [] },
+  interact: async (frame) => {
+    await openMenu(frame)
+    for (const label of ['Collapse all', 'Expand all']) {
+      if (!actionItem(label).hasAttribute('data-disabled')) {
+        throw new Error(`${label} should be disabled without sidebar groups`)
+      }
+    }
+    if (document.querySelector('[data-slot="dropdown-menu-shortcut"]')) {
+      throw new Error('Empty scope should not advertise an active toggle shortcut')
     }
   }
 })

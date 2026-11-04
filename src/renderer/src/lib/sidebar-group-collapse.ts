@@ -24,19 +24,26 @@ export function hasSidebarGroupCollapseScope(): boolean {
   return useSidebarGroupScope.getState().keys.length > 0
 }
 
-export function toggleSidebarGroupsCollapse(): boolean {
+export function setSidebarGroupsCollapsed(collapsed: boolean): boolean {
   const { keys } = useSidebarGroupScope.getState()
   if (keys.length === 0) {
     return false
   }
   const store = useAppStore.getState()
   requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
-  store.setGroupsCollapsed(keys, shouldCollapseAllGroups(keys, store.collapsedGroups))
+  store.setGroupsCollapsed(keys, collapsed)
   return true
+}
+
+export function toggleSidebarGroupsCollapse(): boolean {
+  const { keys } = useSidebarGroupScope.getState()
+  return setSidebarGroupsCollapsed(
+    shouldCollapseAllGroups(keys, useAppStore.getState().collapsedGroups)
+  )
 }
 
 export function useSidebarGroupCollapseAction() {
   const keys = useSidebarGroupScope((s) => s.keys)
-  const collapse = useAppStore((s) => shouldCollapseAllGroups(keys, s.collapsedGroups))
-  return { collapse, disabled: keys.length === 0, toggle: toggleSidebarGroupsCollapse }
+  const collapseOnToggle = useAppStore((s) => shouldCollapseAllGroups(keys, s.collapsedGroups))
+  return { collapseOnToggle, disabled: keys.length === 0, setCollapsed: setSidebarGroupsCollapsed }
 }
