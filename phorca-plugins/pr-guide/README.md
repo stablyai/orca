@@ -31,6 +31,8 @@ To update later, run `git -C phorca-pr-guide pull --ff-only`, then install the s
 
 Click the **+** beside a diff line to open an inline comment form for that line. Choose **GitHub PR** to post a PR review comment, or **Local agent session** to queue the feedback in a selected writable agent terminal in the PR worktree. The local option lists sessions in the guide's associated worktree, or in the active worktree when it belongs to the same repository. Use the target menu for a chapter or whole-PR comment. The page checks the PR before sending. It checks the PR title, body, head, and base every minute and regenerates the guide when they change. Unpushed local changes are ignored. A draft comment is kept if the PR updates; reload after copying the draft to review the new diff.
 
+If a GitHub send reports an error, check the PR before retrying. GitHub may have accepted the comment before the local command reported failure.
+
 If the command cannot start, Phorca shows the cause in a notification. For worker startup errors, open **Settings → Plugins → Installed → PR Guide → More actions → View logs**.
 
 The palette command creates a guide without a worktree or session association. Use the session command below when you need that association.
