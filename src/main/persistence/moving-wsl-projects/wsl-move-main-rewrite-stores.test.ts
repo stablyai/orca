@@ -7,8 +7,8 @@ import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Tab } from '../../../shared/tab-types'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { Store } from '../../persistence'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import type { Store } from '../loading-store/store'
 import {
   closeTestStores,
   createStore,

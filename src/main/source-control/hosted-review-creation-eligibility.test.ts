@@ -101,7 +101,7 @@ vi.mock('../gitlab/gl-utils', () => ({
     connectionId ? {} : { cwd: repoPath }
 }))
 
-vi.mock('../git/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
+vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
 vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock

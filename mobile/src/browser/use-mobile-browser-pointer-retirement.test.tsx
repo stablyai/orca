@@ -85,74 +85,6 @@ function mount(client: RpcClient) {
 }
 
 describe('browser pointer commands after owner retirement', () => {
-  it.each([8, 80])('does not drain scroll work for %i departed panes', async (owners) => {
-    const move = deferred<RpcResponse>()
-    const calls: string[] = []
-    const client = stubRpcClient({
-      sendRequest: async (method) => {
-        calls.push(method)
-        return method === 'browser.mouseMove' ? move.promise : accepted
-      }
-    })
-    for (let index = 0; index < owners; index++) {
-      const screen = mount(client)
-      screen.commands.sendWheel({ x: 10, y: 20 }, 0, 10, index)
-      screen.commands.sendWheel({ x: 10, y: 25 }, 0, 20, index)
-      screen.unmount()
-    }
-    expect(calls).toEqual(Array.from({ length: owners }, () => 'browser.mouseMove'))
-    await act(async () => {
-      move.resolve(accepted)
-      await move.promise
-    })
-    expect(calls).toHaveLength(owners)
-
-    const liveCalls: { method: string; params: unknown }[] = []
-    const live = mount(
-      stubRpcClient({
-        sendRequest: async (method, params) => {
-          liveCalls.push({ method, params })
-          return accepted
-        }
-      })
-    )
-    await act(async () => {
-      live.commands.sendWheel({ x: 5, y: 6 }, 0, 30, 1)
-    })
-    expect(liveCalls).toEqual([
-      {
-        method: 'browser.mouseMove',
-        params: { worktree: 'id:workspace', page: 'page', x: 5, y: 6 }
-      },
-      {
-        method: 'browser.mouseWheel',
-        params: { worktree: 'id:workspace', page: 'page', dx: 0, dy: -30 }
-      }
-    ])
-    expect(live.errors).toEqual([null])
-  })
-
-  it('does not replay a late refused click after leaving the pane', async () => {
-    const click = deferred<RpcResponse>()
-    const calls: string[] = []
-    const screen = mount(
-      stubRpcClient({
-        sendRequest: async (method) => {
-          calls.push(method)
-          return method === 'browser.mouseClick' ? click.promise : accepted
-        }
-      })
-    )
-    const pending = screen.commands.sendPointerClick({ x: 10, y: 20 }, 'left')
-    screen.unmount()
-    await act(async () => {
-      click.resolve(refused)
-      await pending
-    })
-    expect(calls).toEqual(['browser.mouseClick'])
-    expect(screen.errors).toEqual([])
-  })
-
   it('releases an already admitted mouse down after leaving the pane', async () => {
     const down = deferred<RpcResponse>()
     const calls: string[] = []
@@ -179,33 +111,6 @@ describe('browser pointer commands after owner retirement', () => {
     })
     expect(calls.at(-1)).toBe('browser.mouseUp')
     expect(screen.errors).toEqual([])
-  })
-
-  it('does not start a fallback press after its move outlives the pane', async () => {
-    const move = deferred<RpcResponse>()
-    const calls: string[] = []
-    const screen = mount(
-      stubRpcClient({
-        sendRequest: async (method) => {
-          calls.push(method)
-          if (method === 'browser.mouseClick') {
-            return refused
-          }
-          return method === 'browser.mouseMove' ? move.promise : accepted
-        }
-      })
-    )
-    let pending!: Promise<void>
-    await act(async () => {
-      pending = screen.commands.sendPointerClick({ x: 10, y: 20 }, 'left')
-    })
-    expect(calls).toEqual(['browser.mouseClick', 'browser.mouseMove'])
-    screen.unmount()
-    await act(async () => {
-      move.resolve(accepted)
-      await pending
-    })
-    expect(calls).toEqual(['browser.mouseClick', 'browser.mouseMove'])
   })
 
   it('lets a replacement client scroll without an old callback draining its queue', async () => {

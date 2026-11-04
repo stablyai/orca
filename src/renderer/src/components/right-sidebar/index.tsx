@@ -7,12 +7,13 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { getTopActivityBarLayout } from './activity-bar-overflow'
 import { ActivityBarButton } from './activity-bar-buttons'
-import { getActiveChecksStatus } from './active-checks-status'
+import { getActiveChecksStatus } from './checks-panel/active-checks-status'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   RIGHT_SIDEBAR_MIN_WIDTH,
   clampRightSidebarPanelWidth,
-  computeMaxRightSidebarPanelWidth
+  computeMaxRightSidebarPanelWidth,
+  RIGHT_SIDEBAR_SIDE_ACTIVITY_BAR_WIDTH as ACTIVITY_BAR_SIDE_WIDTH
 } from './right-sidebar-width'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -29,8 +30,6 @@ import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
 import { useWindowWidth } from './use-window-width'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
-
-const ACTIVITY_BAR_SIDE_WIDTH = 40
 
 function RightSidebarInner(): React.JSX.Element {
   useUiLanguageRevision()

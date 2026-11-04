@@ -1,7 +1,7 @@
 // Share pure slash-command data across desktop/mobile without DOM/RN dependencies or mirrored catalogs.
 
 import type { AgentSessionSlashCommand } from '../../agent-session/agent-session-wire'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 
 /** Terminal replies: composer answers locally without sending; transcript surfaces an agent-written row; absent means terminal/effect-only feedback. */
 export type NativeChatCommandReply = 'composer' | 'transcript'
@@ -14,6 +14,7 @@ export type SlashCommandSuggestion = {
   /** Provider-authored argument sketch, e.g. `<objective>`. */
   argumentHint?: string
   kindUnspecified?: true
+  builtin?: true
   /** Declared only on curated rows; a surface that cannot show the reply drops the row. */
   reply?: NativeChatCommandReply
   /** The desktop chat runs it itself: it hides an agent command of the same name, never a skill. */
@@ -148,7 +149,8 @@ export function sessionSlashCommandSuggestions(
         name: entry.name,
         ...(description ? { description } : {}),
         ...(entry.argumentHint ? { argumentHint: entry.argumentHint } : {}),
-        ...(entry.kindUnspecified ? { kindUnspecified: true as const } : {})
+        ...(entry.kindUnspecified ? { kindUnspecified: true as const } : {}),
+        ...(entry.builtin ? { builtin: true as const } : {})
       }
     })
 }

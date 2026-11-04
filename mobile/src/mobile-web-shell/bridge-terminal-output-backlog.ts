@@ -1,4 +1,4 @@
-import { terminalStreamJsonByteLength } from '../../../src/shared/terminal-stream-json-byte-length'
+import { terminalStreamJsonByteLength } from '../../../src/shared/terminal/stream/terminal-stream-json-byte-length'
 import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge/bridge-caps'
 import { bridgeEventEnvelopeBytes } from './bridge/bridge-event-envelope-bytes'
 

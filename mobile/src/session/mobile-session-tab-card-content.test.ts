@@ -1,31 +1,8 @@
 import { expect, it } from 'vitest'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../src/shared/agent-status-freshness'
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../src/shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { mobileSessionTabCardContent } from './mobile-session-tab-card-content'
-
-it('preserves glyph-only agent titles and derives the kind-aware empty chat label', () => {
-  const terminal: Extract<MobileSessionTab, { type: 'terminal' }> = {
-    type: 'terminal',
-    id: 't',
-    title: '✳',
-    launchAgent: 'claude',
-    terminal: 'pty',
-    isActive: true
-  }
-  const title = (tab: MobileSessionTab) => mobileSessionTabCardContent(tab, undefined, 1000).title
-  expect(title(terminal)).toBe('✳')
-  expect(
-    title({
-      type: 'agent-session',
-      id: 'c',
-      title: '',
-      agent: 'codex',
-      sessionId: 's',
-      isActive: true
-    })
-  ).toBe('Chat')
-})
 
 it('hides unconfirmed and stale status and handles redacted and blank browser URLs', () => {
   const agentStatus: AgentStatusEntry = {

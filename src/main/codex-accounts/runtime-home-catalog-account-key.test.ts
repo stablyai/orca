@@ -31,14 +31,16 @@ vi.mock('node:os', async () => {
 })
 
 // Hook install and session bridges are launch chores outside the key; keep them off disk.
-vi.mock('../codex/hook-service', () => ({
+vi.mock('../codex/hooks/installation/hook-service', () => ({
   codexHookService: { prepareRuntimeHomeForLaunch: async () => ({ state: 'installed' }) }
 }))
-vi.mock('../codex/codex-hook-reconcile', () => ({ reconcileCodexHooksForLaunch: async () => {} }))
-vi.mock('../codex/codex-session-bridge', () => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', () => ({
+  reconcileCodexHooksForLaunch: async () => {}
+}))
+vi.mock('../codex/history/bridges/codex-session-bridge', () => ({
   startSystemCodexSessionBridgeInBackground: async () => {}
 }))
-vi.mock('../codex/codex-account-session-bridge', () => ({
+vi.mock('../codex/history/bridges/codex-account-session-bridge', () => ({
   startCodexAccountSessionBridgeInBackground: async () => {}
 }))
 

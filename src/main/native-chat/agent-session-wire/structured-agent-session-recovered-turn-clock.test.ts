@@ -9,7 +9,7 @@ import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-sess
 import {
   agentTurnEndedOnPurpose,
   agentVerdictDisplayMark
-} from '../../../shared/agent-main-agent-verdict'
+} from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { formatNativeChatTurnStatusLabel } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 import { selectStructuredAgentSettledTurns } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { AgentHookServer, _internals } from '../../agent-hooks/server'

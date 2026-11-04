@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
+import { useAppStore } from '../../store/index'
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat-pty-session-options'
-import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
+import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat/input/native-chat-pty-session-options'
+import { clearNativeChatSessionOptionCacheForTests } from '../../../../shared/native-chat/input/native-chat-session-option-cache'
 import {
   answerNativeChatLocalCommand,
   type NativeChatLocalCommandAnswer
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   sendNativeChatMessageWithImageAttachments: vi.fn(() => ({ id: 'image-send' }))
 }))
 
-vi.mock('../../store', () => {
+vi.mock('../../store/index', () => {
   const state = { clearNativeChatLaunchDraft: vi.fn() }
   return { useAppStore: { getState: () => state } }
 })
@@ -184,6 +185,37 @@ describe('host-answered /context in the composer', () => {
     result.current()
     return args
   }
+
+  it.each(['claude', 'codex', 'omp'] as const)(
+    'keeps the %s composer, image and seed when terminal clearing is refused',
+    (agent) => {
+      const clearSeed = vi.mocked(useAppStore.getState().clearNativeChatLaunchDraft)
+      clearSeed.mockClear()
+      const args = {
+        ...composerArgs(() => null),
+        agent,
+        draft: 'new message',
+        imageAttachments: [{ path: '/tmp/shot.png' }],
+        launchDraft: { tabId: 'tab-1', agent, text: 'parked seed', createdAt: 1 },
+        launchDraftResolved: false,
+        readTerminalDraft: () => Array(16).fill('terminal draft').join('\n'),
+        classifySend: () => 'chat' as const,
+        terminalTabId: 'tab-1',
+        onOptimisticSend: vi.fn(),
+        onSubmitted: vi.fn()
+      }
+      const { result } = renderHook(() => useNativeChatPtyComposerSend(args))
+      result.current()
+      expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+      expect(mocks.sendNativeChatMessageWithImageAttachments).not.toHaveBeenCalled()
+      expect(args.onOptimisticSend).not.toHaveBeenCalled()
+      expect(args.onSubmitted).not.toHaveBeenCalled()
+      expect(args.setDraft).not.toHaveBeenCalled()
+      expect(args.clearImageAttachments).not.toHaveBeenCalled()
+      expect(clearSeed).not.toHaveBeenCalled()
+      expect(args.setNotice).toHaveBeenCalledWith('Message not sent')
+    }
+  )
 
   it('answers a typed /context in the chat with the listing windows, keeping attachments', () => {
     const answerCommandLocally = vi.fn<NativeChatLocalCommandAnswer>(

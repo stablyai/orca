@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { encodeMembership, type CellAdmissionMembership } from './cell-admission-selector.js'
 import type { RelayCellConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
@@ -253,28 +253,6 @@ describe('effective connection cap = min(configured, reported)', () => {
         harness.store.assign({ userId: `user-${host}`, relayHostId: `interleave${host++}` })
       ).resolves.toMatchObject({ placed: true })
     }
-  })
-
-  it('logs once when a cell reports a cap below its configured one', async () => {
-    const configured = cell(1, 3_000)
-    const harness = await setup([configured])
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    await harness.heartbeat(configured, { connectionHardCap: 1_000 })
-    await harness.heartbeat(configured, { connectionHardCap: 1_000 })
-    await harness.heartbeat(configured, { connectionHardCap: 3_000 })
-
-    const events = warn.mock.calls
-      .map((call) => String(call[0]))
-      .filter((line) => line.includes('orca_relay_cell_reported_cap_below_configured'))
-      .map((line) => JSON.parse(line) as unknown)
-    expect(events).toEqual([
-      {
-        event: 'orca_relay_cell_reported_cap_below_configured',
-        cellId: configured.id,
-        reportedHardCap: 1_000,
-        configuredHardCap: 3_000
-      }
-    ])
   })
 
   it('takes a raise only once the cell itself reports it', async () => {

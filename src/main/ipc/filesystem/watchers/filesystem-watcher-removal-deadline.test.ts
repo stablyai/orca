@@ -40,7 +40,7 @@ import {
   drainBeforeWatcherRemoval,
   WATCHER_REMOVAL_DRAIN_BUDGET_MS,
   WATCHER_REMOVAL_FINAL_DRAIN_RESERVE_MS
-} from '../../watcher-removal-drain'
+} from '../../../workspaces/removal/watcher-removal-drain'
 import { WatcherProcessFailure } from '../watcher-process/parcel-watcher-process-failure'
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'

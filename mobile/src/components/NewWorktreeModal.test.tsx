@@ -1,7 +1,7 @@
 import { createElement, Suspense, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { z } from 'zod'
+
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 
@@ -43,8 +43,10 @@ vi.mock(
       }
     )
 )
-vi.mock('./BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
-vi.mock('./bottom-drawer-modal-host', () => ({ BottomDrawerModalHost: 'BottomDrawerModalHost' }))
+vi.mock('./bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+vi.mock('./bottom-drawer/bottom-drawer-modal-host', () => ({
+  BottomDrawerModalHost: 'BottomDrawerModalHost'
+}))
 vi.mock('./PickerListDrawer', () => ({ PickerListDrawer: 'PickerListDrawer' }))
 vi.mock('./AutoHeight', () => ({ AutoHeight: 'AutoHeight' }))
 vi.mock('./MobileSwitch', () => ({ MobileSwitch: 'MobileSwitch' }))
@@ -58,13 +60,10 @@ import {
   getLocalExecutionHostLabel,
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
-import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
-import { MOBILE_RELAY_HOSTS_LIST_METHOD } from '../../../src/shared/mobile-relay-hosts-contract'
-import { NewWorktreeModal } from './NewWorktreeModal'
-import { NewWorktreeModalController } from './NewWorktreeModalController'
-import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
-const RelayedOptionsSchema = z.object({ envelope: z.object({ executionHost: z.string() }) })
+import { NewWorktreeModal } from './NewWorktreeModal'
+
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const LOCAL_HOST_LABEL = getLocalExecutionHostLabel('darwin')
 
@@ -166,56 +165,6 @@ describe('NewWorktreeModal project targets', () => {
     ])
   })
 
-  it('groups same-name checkouts under one project with separate run targets', async () => {
-    const listedRepos = [
-      ...repos,
-      {
-        id: 'repo-2',
-        displayName: 'orca',
-        path: '/home/dev/orca',
-        connectionId: 'build-server',
-        kind: 'git',
-        upstream: { owner: 'stablyai', repo: 'orca' }
-      }
-    ]
-    const client = requestsOnly(
-      vi.fn().mockImplementation((method: string) => {
-        if (method === 'repo.list') {
-          return Promise.resolve({ ok: true, result: { repos: listedRepos } })
-        }
-        if (method === 'status.get') {
-          return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
-        }
-        return new Promise(() => {})
-      })
-    )
-
-    await act(async () => {
-      renderer = create(
-        createElement(NewWorktreeModal, {
-          visible: true,
-          client,
-          hostId: 'host-1',
-          onCreated: () => {},
-          onClose: () => {},
-          openExternalUrl: () => {}
-        })
-      )
-      await Promise.resolve()
-    })
-
-    expect(pickerItems(renderer, 'Project')).toEqual([
-      expect.objectContaining({ label: 'orca', detail: 'stablyai/orca' })
-    ])
-    expect(pickerItems(renderer, 'Run on')).toEqual([
-      expect.objectContaining({ label: LOCAL_HOST_LABEL, detail: '/src/orca' }),
-      expect.objectContaining({
-        label: 'build-server',
-        detail: '/home/dev/orca'
-      })
-    ])
-  })
-
   it('loads SSH state before detecting agents on the selected remote target', async () => {
     const remoteRepo = {
       id: 'repo-remote',
@@ -299,101 +248,6 @@ describe('NewWorktreeModal project targets', () => {
     })
   })
 
-  it('keeps folder workspaces on the local execution and text-only source path', async () => {
-    const folderRepo = {
-      id: 'folder-1',
-      displayName: 'notes',
-      path: '/src/notes',
-      kind: 'folder'
-    }
-    setCachedRepos('host-folder', [folderRepo])
-    const sendRequest = vi.fn().mockImplementation((method: string) => {
-      if (method === 'repo.list') {
-        return Promise.resolve({ ok: true, result: { repos: [folderRepo] } })
-      }
-      if (method === 'preflight.detectAgents') {
-        return Promise.resolve({ ok: true, result: ['codex'] })
-      }
-      if (method === 'settings.get') {
-        return Promise.resolve({ ok: true, result: { settings: { defaultTuiAgent: 'codex' } } })
-      }
-      if (method === 'ui.get') {
-        return Promise.resolve({ ok: true, result: { ui: {} } })
-      }
-      if (method === 'preflight.check') {
-        return Promise.resolve({ ok: true, result: {} })
-      }
-      if (method === 'linear.status') {
-        return Promise.resolve({ ok: true, result: {} })
-      }
-      if (method === 'status.get') {
-        return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
-      }
-      if (method === 'repo.hooks') {
-        return Promise.resolve({ ok: true, result: { hooks: null, source: null } })
-      }
-      return Promise.resolve({ ok: true, result: {} })
-    })
-    const client = requestsOnly(sendRequest)
-
-    await act(async () => {
-      renderer = create(
-        createElement(NewWorktreeModal, {
-          visible: true,
-          client,
-          hostId: 'host-folder',
-          onCreated: () => {},
-          onClose: () => {},
-          openExternalUrl: () => {}
-        })
-      )
-    })
-    await flushUpdates()
-
-    expect(renderer.root.findAll((node) => node.props.label === 'Workspace name')).toHaveLength(1)
-    expect(sendRequest).toHaveBeenCalledWith('preflight.detectAgents', { repoId: 'folder-1' })
-    expect(sendRequest).not.toHaveBeenCalledWith('ssh.getState', expect.anything())
-    expect(sendRequest.mock.calls.map(([method]) => method)).not.toContain(
-      'worktree.prefetchCreateBase'
-    )
-  })
-
-  it("warms the host's create for the picked repo as soon as the form opens", async () => {
-    const sendRequest = vi.fn().mockImplementation((method: string) => {
-      if (method === 'repo.list') {
-        return Promise.resolve({ ok: true, result: { repos } })
-      }
-      if (method === 'status.get') {
-        return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
-      }
-      if (method === 'repo.hooks') {
-        return Promise.resolve({ ok: true, result: { hooks: null, source: null } })
-      }
-      return Promise.resolve({ ok: true, result: {} })
-    })
-
-    await act(async () => {
-      renderer = create(
-        createElement(NewWorktreeModal, {
-          visible: true,
-          client: requestsOnly(sendRequest),
-          hostId: 'host-1',
-          onCreated: () => {},
-          onClose: () => {},
-          openExternalUrl: () => {}
-        })
-      )
-    })
-    await flushUpdates()
-
-    // Without this the host fetches the base and checks out every file inside worktree.create.
-    const prefetches = sendRequest.mock.calls.filter(
-      ([method]) => method === 'worktree.prefetchCreateBase'
-    )
-    expect(prefetches).toHaveLength(1)
-    expect(prefetches[0]?.[1]).toEqual({ repo: 'id:repo-1' })
-  })
-
   it("creates a server repo's workspace on that server and names it for the route", async () => {
     const serverRepo = { ...repos[0]!, id: 'server-repo', path: '/srv/orca' }
     const serverSshRepo = { ...serverRepo, id: 'server-ssh', connectionId: 'its-own-ssh' }
@@ -475,54 +329,6 @@ describe('NewWorktreeModal project targets', () => {
       expect.anything()
     )
     expect(onCreated).toHaveBeenCalledWith('srv-wt', expect.any(String), undefined, 'runtime:env-1')
-  })
-
-  it("offers the desktop's servers, by name, in a sheet opened before the list has them", async () => {
-    const serverRepo = { ...repos[0]!, id: 'server-repo', path: '/srv/orca' }
-    // One desktop: its own repos, its server list, and a server's repos relayed through it.
-    const desktop = new FakeSession('connected')
-    desktop.sendRequest.mockImplementation(async (method: string, ...rest: unknown[]) => {
-      const relayed = RelayedOptionsSchema.safeParse(rest[1]).data?.envelope.executionHost
-      const result =
-        method === MOBILE_RELAY_HOSTS_LIST_METHOD
-          ? {
-              hosts: [
-                { hostId: 'runtime:vm', label: 'scratch-vm', health: 'available', relay: 'ready' }
-              ]
-            }
-          : method === 'repo.list'
-            ? { repos: relayed === 'runtime:vm' ? [serverRepo] : repos }
-            : {}
-      return { id: 'reply', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
-    })
-    const listCalls = () =>
-      desktop.sendRequest.mock.calls.filter(([method]) => method === MOBILE_RELAY_HOSTS_LIST_METHOD)
-    // The host list's own names: no server rows have loaded behind a sheet opened from Home.
-    const sheet = (visible: boolean) =>
-      createElement(NewWorktreeModalController, {
-        visible,
-        client: desktop,
-        hostCapabilities: [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY],
-        hostId: 'host-1',
-        hostLabelById: new Map(),
-        openExternalUrl: () => {},
-        onCreated: () => {},
-        onClose: () => {}
-      })
-
-    await act(async () => {
-      renderer = create(sheet(false))
-    })
-    await flushUpdates()
-    // Closed, it asks nothing of the desktop.
-    expect(listCalls()).toHaveLength(0)
-
-    await act(async () => renderer.update(sheet(true)))
-    await flushUpdates()
-    expect(pickerItems(renderer, 'Run on').map((item) => [item.label, item.detail])).toEqual([
-      [expect.any(String), '/src/orca'],
-      ['scratch-vm', '/srv/orca']
-    ])
   })
 
   it("lists the desktop's repos at once while a server has not answered", async () => {

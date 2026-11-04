@@ -1,6 +1,4 @@
-// Only agentSession.send mutates; stops during earlier local/read-only work prove the request never went out.
-
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryResult,
@@ -31,6 +29,7 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
+// Only agentSession.send mutates; stops during earlier local/read-only work prove the request never went out.
 
 const fences = new Map<string, number>()
 
@@ -150,7 +149,7 @@ export async function attemptStructuredAgentSessionSend(args: {
     // Re-pairing errors are raised before forwarding, proving the request never went out.
     if (error instanceof RuntimeRpcCallError && error.code === RUNTIME_ENVIRONMENT_CHANGED) {
       args.reconcile(false)
-      return args.abandoned() ? null : { kind: 'not-sent', parts: notSentParts(error) }
+      return { kind: 'not-sent', parts: notSentParts(error) }
     }
     answer = {
       kind: 'thrown',
@@ -159,9 +158,7 @@ export async function attemptStructuredAgentSessionSend(args: {
     }
   }
   args.reconcile(structuredAgentSessionSendEvidence(answer).kind === 'uncertain')
-  if (args.abandoned()) {
-    return null
-  }
+  // A recorded reply can still reconcile retained input after its caller's deadline.
   const value = answer.kind === 'result' && answer.result.ok ? answer.result.value : null
   return {
     kind: 'answered',

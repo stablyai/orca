@@ -26,7 +26,7 @@ import { withLiveCatalogListing } from '../agent-model-catalog/agent-model-catal
 import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import { createRestTestRig } from './structured-agent-session-rest-test-rig'
 import { agentSessionRecordFixture as durableAgentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { seedTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const SESSION = 'session-1'
@@ -221,7 +221,9 @@ describe('options at rest', () => {
           models: [{ id: 'old', label: 'Old', isDefault: true, efforts: [] }]
         })
         reader.adoptSession(emptyStart ? {} : { configOptions })
-        modelCatalog.recordLiveListing(SESSION, reader.startListing())
+        const startListing = reader.startListing()
+        const learnedModel = startListing.models.find((model) => model.id === 'grok-4.7')
+        modelCatalog.recordLiveListing(SESSION, startListing)
         reader.adoptConfigOptions(
           configOptions.map((option) =>
             option.type === 'select' && option.category === 'model'
@@ -235,7 +237,13 @@ describe('options at rest', () => {
         modelCatalog.recordLiveListing(SESSION, { models: reader.read().models })
         live = false
         const answer = await read()
-        expect(answer.models).toEqual(reader.read().models)
+        expect(answer.models).toEqual(
+          reader
+            .read()
+            .models.map((model) =>
+              provider === 'opencode' && model.id === 'grok-4.7' ? (learnedModel ?? model) : model
+            )
+        )
       }
     }
   )

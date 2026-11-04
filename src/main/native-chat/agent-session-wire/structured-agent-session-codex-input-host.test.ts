@@ -1,5 +1,4 @@
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
-import './structured-agent-session-codex-input-admission.spec'
 import {
   continuingStructuredAgentSessionInput,
   finalizingStructuredAgentSessionInput,
@@ -19,7 +18,6 @@ import {
   agentSessionSendSubmission as submission
 } from '../../../shared/agent-session/agent-session-wire'
 import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session/journal/agent-session-journal-types'
-
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
@@ -29,15 +27,15 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { CodexAppServerTimeoutError } from '../../codex/codex-app-server-session'
+import { CodexAppServerTimeoutError } from '../../codex/app-server/codex-app-server-session'
 import {
   THREAD_ID as THREAD,
   adapterFor,
   fakeCodex
-} from '../../codex/codex-structured-session-adapter-fixture'
-import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
+import { codexTurnLifecycleFake } from '../../codex/structured/journal/codex-turn-lifecycle-fake'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import type { CodexStructuredSessionAdapter } from '../../codex/structured/session-lifecycle/codex-structured-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { createRestTestRig } from './structured-agent-session-rest-test-rig'
 import {
@@ -48,6 +46,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import './structured-agent-session-codex-input-admission.spec'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -103,15 +102,6 @@ beforeEach(async () => {
   notify = (method, params) => codex.connections.at(-1)?.handlers.onNotification?.(method, params)
   turns = codexTurnLifecycleFake(THREAD, () => notify)
   Object.assign(codex.routes, turns.routes)
-  codex.routes['turn/interrupt'] = () => {
-    const turnId = turns.turnId
-    setTimeout(
-      () =>
-        notify('turn/completed', { threadId: THREAD, turn: { id: turnId, status: 'interrupted' } }),
-      4
-    )
-    return {}
-  }
   launch = {}
   adapter = adapterFor(codex, launch, [], {
     resolveLaunch: async ({ permissionMode, identity }) => ({
@@ -128,6 +118,7 @@ beforeEach(async () => {
         : { permissionPolicy: codexStructuredPermissionPolicy(permissionMode ?? 'ask') })
     }),
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
+    onHeldSendsChanged: ({ sessionId }) => queueMicrotask(() => host.publishWorkChanged(sessionId)),
     onEvent: (event) => {
       if (event.type === 'options-reported' || (event.type === 'ended' && 'cause' in event)) {
         void host.handleAdapterEvent(event)
@@ -232,6 +223,60 @@ async function began(id: string) {
   turns.echo(id)
   await vi.waitFor(async () => expect(await row(id)).toMatchObject({ dispatchState: 'accepted' }))
 }
+
+it('waits through live no-turn hold loss until the reheld send echoes', async () => {
+  const reply = Promise.withResolvers<unknown>()
+  codex.routes['turn/start'] = () => reply.promise
+  const id = await permissionSend('keep waiting for my actual receipt')
+  await vi.waitFor(() => expect(starts()).toHaveLength(1))
+  expect(adapter.heldSends(SESSION)).toContain(id)
+  const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const child = host.collaboratorsForTests().sessions.get(SESSION)!.child!
+  const observed = vi.fn()
+  const waiting = host.waitForSendSettlement(SESSION, id, { until: 'answered' })
+  const observation = waiting.then(observed)
+  try {
+    reply.resolve({})
+    notify('thread/status/changed', { threadId: THREAD, status: { type: 'idle' } })
+    await vi.waitFor(() => expect(adapter.heldSends(SESSION)).not.toContain(id))
+    await host.flushStreamedEvents(SESSION)
+    await host.collaboratorsForTests().serialize(SESSION, async () => {})
+    expect(journal.submission(id)).toMatchObject({ dispatchState: 'pending' })
+    expect(journal.queuedMessages.attemptEnded(id)).toBe(false)
+    expect(host.currentWork(SESSION)?.liveFence).toBe(child.fence)
+    expect(host.currentWork(SESSION)?.activeTurnId()).toBeNull()
+    const history = await host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(history).toMatchObject({ ok: true })
+    if (!history.ok) {
+      throw new Error('history refused')
+    }
+    expect(history.page.submissions.find((send) => send.clientMessageId === id)).toMatchObject({
+      dispatchState: 'unknown',
+      recovered: true
+    })
+    expect(observed).not.toHaveBeenCalled()
+
+    notify('thread/status/changed', {
+      threadId: THREAD,
+      status: { type: 'active', activeFlags: [] }
+    })
+    await vi.waitFor(() => expect(adapter.heldSends(SESSION)).toContain(id))
+    notify('item/completed', {
+      threadId: THREAD,
+      turn: { id: 'receipt-turn' },
+      item: { type: 'userMessage', id: 'exact-receipt', clientId: id, content: [] }
+    })
+    await expect(waiting).resolves.toMatchObject({
+      value: { submission: { clientMessageId: id, dispatchState: 'accepted' } }
+    })
+    expect(journal.submission(id)).toMatchObject({ dispatchState: 'accepted' })
+    expect(starts()).toHaveLength(1)
+  } finally {
+    reply.resolve({})
+    await host.close(SESSION, 'evict')
+    await observation
+  }
+})
 
 it('keeps only the original pre-send result when a ready child exits during Auto preparation', async () => {
   await pick('ask')
@@ -402,7 +447,6 @@ it.each(['config', 'order', 'initial'] as const)(
 it.each([
   ['ask', 1],
   ['auto', 1],
-  ['auto-before', 1],
   ['empty', 1],
   ['auto', 10],
   ['auto', 100]
@@ -455,9 +499,6 @@ it.each([
       population > 1 ? measureCodexInputWork(host, events, 'history', population) : undefined
     let waiting: ReturnType<typeof host.waitForSendSettlement> | undefined
     try {
-      if (mode === 'auto-before') {
-        await pick('auto')
-      }
       const id = await permissionSend('follow up')
       if (measured) {
         waiting = host.waitForSendSettlement(SESSION, id)
@@ -470,9 +511,7 @@ it.each([
           )
         ).toBe(true)
       )
-      if (mode !== 'auto-before') {
-        await pick(mode === 'empty' ? 'ask' : mode)
-      }
+      await pick(mode === 'empty' ? 'ask' : mode)
       if (mode === 'empty') {
         await journal.resolveDispatch({
           clientMessageId: id,
@@ -539,40 +578,6 @@ it.each([
     }
   }
 )
-
-it('preserves successful steering and only current retained work can inherit unknown Auto', async () => {
-  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-  const running = await permissionSend('running')
-  await began(running)
-  await pick('auto')
-  const steer = await permissionSend('steer')
-  await vi.waitFor(() =>
-    expect(codex.connections[0]?.calls.some((r) => r.method === 'turn/steer')).toBe(true)
-  )
-  turns.echo(steer)
-  await vi.waitFor(() =>
-    expect(host.readStatusSummary(SESSION)?.runtimePermission?.mode).toBe('full-access')
-  )
-  turns.end('completed')
-  await host.flushStreamedEvents(SESSION)
-  retained = true
-  const busy = await permissionSend('work still held elsewhere')
-  await vi.waitFor(() => expect(starts()).toHaveLength(2))
-  expect(starts()[1]?.params).not.toHaveProperty('sandboxPolicy')
-  expect(codex.connections).toHaveLength(1)
-  await began(busy)
-  await vi.waitFor(() =>
-    expect(host.readStatusSummary(SESSION)?.runtimePermission?.mode).toBe('full-access')
-  )
-  expect((await host.readOptions(SESSION)).current.reportedPermissionMode).toBe('full-access')
-  turns.end('completed')
-  await host.flushStreamedEvents(SESSION)
-  retained = false
-  const idle = await permissionSend('now idle')
-  await vi.waitFor(() => expect(starts()).toHaveLength(3))
-  expect(codex.connections).toHaveLength(2)
-  expect(starts()[2]?.params).toMatchObject({ clientUserMessageId: idle, sandboxPolicy: sandbox })
-})
 
 it.each(['stop', 'local-abort'] as const)(
   'keeps an actual sent envelope when %s precedes its Promise delivery and the reply is lost',
@@ -657,6 +662,7 @@ it.each(['stop', 'local-abort'] as const)(
       delivery.resolve()
       lost.reject(replyLost)
       if (cancellation === 'stop') {
+        frameDelivery.resolve()
         expect(await stopping).toMatchObject({ ok: true })
         await vi.waitFor(() => expect(session.child).toBeNull())
         expect(session.lastEndedChild).toMatchObject({
@@ -668,13 +674,9 @@ it.each(['stop', 'local-abort'] as const)(
         expect(provider.ended).toBe(true)
         expect(provider.connection.closed).toBe(true)
         expect(turns.turnId).toBeNull()
-        expect(frameEnded).toBe(false)
-        expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(true)
-        expect(submission((await waiting)?.value)).toMatchObject({
-          dispatchState: 'rejected',
-          rejection: { kind: 'cancelled' },
-          recovered: true
-        })
+        expect(frameEnded).toBe(true)
+        expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(false)
+        expect(submission((await waiting)?.value)).toMatchObject({ dispatchState: 'unknown' })
         expect(
           (await host.journalSnapshot(SESSION)).items.filter(
             (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'

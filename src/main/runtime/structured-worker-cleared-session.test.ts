@@ -1,5 +1,5 @@
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 /** Worker-level reads/operations follow clear successors and the full lineage; unresolved successors remain unverifiable. */
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -39,11 +39,12 @@ const { listAddressableStructuredWorkers } =
 const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
   await import('./orchestration/structured-worker-journal-page')
 const { sealedChildEnv } = await import('./structured-session-child-env.test-support')
-const { foundAgentSessionRecord } = await import('./agent-session-record-founding')
+const { foundAgentSessionRecord } =
+  await import('./agent-session/records/agent-session-record-founding')
 const { applyAgentSessionRestartAdjudication } =
   await import('./agent-session/ownership/agent-session-restart-lease-transitions')
 const { openTestAgentSessionRecordStore } =
-  await import('./agent-session-record-store-test-harness')
+  await import('./agent-session/records/agent-session-record-store-test-harness')
 const { OrcaRuntimeService } = await import('./orca-runtime')
 const { OrchestrationDb } = await import('./orchestration/db')
 const { rpcRuntime } = await import('./structured-worker-rpc.test-support')
@@ -211,7 +212,7 @@ function installHost(): void {
       present: tabIndexPresent,
       sessionIds: visibleTabs
     }),
-    journalSnapshot: async (id: string) => {
+    journalCurrentRead: async (id: string) => {
       journalAsked.push(id)
       if (!records.has(id)) {
         throw new Error(AGENT_SESSION_NOT_ATTACHED.code)

@@ -1,15 +1,13 @@
 import { expect } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { createAgentChildWorkAdmission } from '../../shared/agent-status-child-work-admission'
-import type { AgentChildWorkRecord } from '../../shared/agent-status-child-work'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import {
-  reconcileAgentChildWorkEvidence,
-  type AgentChildWorkReconcileOutcome
-} from '../../shared/agent-status-child-work-reconciliation'
-import { createAgentStatusStore } from '../../shared/agent-status-store'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { createAgentChildWorkAdmission } from '../../shared/agent-status/child-work/agent-status-child-work-admission'
+import type { AgentChildWorkRecord } from '../../shared/agent-status/child-work/agent-status-child-work'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-reconciliation'
+import type { AgentChildWorkReconcileOutcome } from '../../shared/agent-status/child-work/agent-status-child-work-evidence-admission'
+import { createAgentStatusStore } from '../../shared/agent-status/store/agent-status-store'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer } from '../agent-hooks/server'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'

@@ -12,13 +12,6 @@ import {
   portsPanelHostForOwnerKey
 } from './ports-panel-host'
 
-export { getLocalWorkspacePortSections } from './local-workspace-port-sections'
-export {
-  killWorkspacePortForTarget,
-  openWorkspacePortInBrowser,
-  scanWorkspacePortsForTarget
-} from '@/lib/workspace-port-actions'
-
 export default function PortsPanel({ isVisible }: { isVisible: boolean }): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
   const workspaceId = activeWorktree?.id ?? null

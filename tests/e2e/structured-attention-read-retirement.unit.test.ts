@@ -29,7 +29,7 @@ import {
   structuredAgentSessionPaneKey
 } from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
-import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/structured-agent-session-mobile-attention'
+import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
 import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import { useAppStore } from '@/store'
 import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
@@ -553,7 +553,7 @@ describe('Accepted structured history read retirement', () => {
         throw new Error('prompt not sent')
       }
       relay.configureDismissalStore(relayDirectory)
-      relay.dispatch(sent)
+      relay.dispatch({ ...sent, paneKey: SUBJECT })
       const withdrawals: string[] = []
       relay.onDispatched((event) => {
         if (event.type === 'dismiss') {
@@ -563,7 +563,7 @@ describe('Accepted structured history read retirement', () => {
       transport.dismiss
         .mockImplementation(async (_ids, _panes, reads?: StructuredNotificationRead[]) => {
           for (const read of reads ?? []) {
-            relay.retireStructuredAttention(read)
+            relay.acknowledgeAttention({ reads: [read] }, read.executionHost)
           }
           return { dismissed: 0 }
         })

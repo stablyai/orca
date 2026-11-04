@@ -1,16 +1,16 @@
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
   resolveTuiAgentLaunchEnv,
   type AgentLaunchProfileSettings
-} from '../../shared/tui-agent-launch-defaults'
+} from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import {
   checkAgentCliVersion,
   launchableRelease,
   type AgentCliVersionCheck
-} from '../agent-cli-version-probe'
+} from '../agent-launch/preflight/agent-cli-version-probe'
 import {
   resolveStructuredAgentSessionCreateSupport,
   warnStructuredAgentSessionCreateUnsupported,

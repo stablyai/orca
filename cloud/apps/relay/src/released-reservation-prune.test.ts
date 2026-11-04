@@ -3,7 +3,7 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import {
   RelayAssignmentStore,
   RELEASED_CONTROL_RESERVATION_RETENTION_MS
-} from './assignment-store.js'
+} from './assignment/assignment-store.js'
 import {
   openInMemoryRelayDatabase,
   openRelayDatabase,

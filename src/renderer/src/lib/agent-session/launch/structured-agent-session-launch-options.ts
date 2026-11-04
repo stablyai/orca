@@ -3,12 +3,12 @@ import {
   type LegacyPrerequisites
 } from '../../structured-agent-session-launch-prerequisites'
 import { useSyncExternalStore } from 'react'
-import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/structured-agent-session-options-write-owner'
+import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
 import { structuredSessionSelectionController } from '../../structured-agent-session-selection-controller'
 import type {
   SelectionOperation,
   SelectionOutcome
-} from '../../../../../shared/structured-agent-session-selection-operations'
+} from '../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
 import {
   structuredAgentSessionOptionPicks,
   type StructuredAgentSessionOptionState
@@ -201,10 +201,10 @@ export function holdStructuredLaunchCreatePicks(state: StructuredLaunchState): v
 
 export function settleStructuredLaunchCreateOptions(
   state: StructuredLaunchState,
-  options: Readonly<Record<string, string>>
+  outcome: SelectionOutcome
 ): void {
   for (const operation of createHeld.get(state) ?? []) {
-    selectionController(state).settle(operation, { kind: 'accepted', options })
+    selectionController(state).settle(operation, outcome)
   }
   createHeld.delete(state)
 }

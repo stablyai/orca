@@ -12,12 +12,12 @@ import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import {
   getLocalImageCacheKey,
   getLocalImageSrcCacheKey,
-  useLocalImageSrc,
-  releaseLocalImageSrcByKey
-} from '@/components/editor/useLocalImageSrc'
+  useLocalImageSrc
+} from '@/components/editor/document-images/useLocalImageSrc'
+import { releaseLocalImageBlob as releaseLocalImageSrcByKey } from '@/components/editor/document-images/local-image-src-cache'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
-import { isNativeChatPastedImagePath } from '../../../../shared/native-chat-image-label'
+import { isNativeChatPastedImagePath } from '../../../../shared/native-chat/native-chat-image-label'
 import { nativeChatImageLabel } from './native-chat-image-label'
 import { chatImageAccess } from '@/lib/local-file-access'
 

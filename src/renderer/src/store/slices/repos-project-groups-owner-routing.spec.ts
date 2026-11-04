@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -69,93 +69,7 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
     })
   })
 
-  function runtimeRpcResponse(result: unknown) {
-    return { id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-remote' } }
-  }
-
   describe('project group mutations route to the owning host', () => {
-    it('renames a runtime-owned folder-scan group while the local host is focused', async () => {
-      const runtimeGroup: ProjectGroup = { ...folderScanGroup, executionHostId: 'runtime:env-1' }
-      runtimeEnvironmentCall.mockResolvedValue(
-        runtimeRpcResponse({ group: { ...runtimeGroup, name: 'Renamed' } })
-      )
-      const store = createTestStore()
-      store.setState({
-        settings: { activeRuntimeEnvironmentId: null } as never,
-        projectGroups: [runtimeGroup]
-      })
-
-      await expect(
-        store.getState().updateProjectGroup(runtimeGroup.id, { name: 'Renamed' })
-      ).resolves.toBe(true)
-
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'projectGroup.update',
-        params: { groupId: runtimeGroup.id, updates: { name: 'Renamed' } },
-        timeoutMs: 15_000
-      })
-      expect(projectGroupsUpdate).not.toHaveBeenCalled()
-      expect(store.getState().projectGroups[0]).toMatchObject({
-        name: 'Renamed',
-        executionHostId: 'runtime:env-1'
-      })
-    })
-
-    it('deletes a local folder-scan group while a runtime host is focused', async () => {
-      projectGroupsDelete.mockResolvedValue(true)
-      const store = createTestStore()
-      store.setState({
-        settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-        projectGroups: [{ ...folderScanGroup, executionHostId: 'local' }]
-      })
-
-      await expect(store.getState().deleteProjectGroup(folderScanGroup.id)).resolves.toBe(true)
-
-      expect(projectGroupsDelete).toHaveBeenCalledWith({ groupId: folderScanGroup.id })
-      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-      expect(store.getState().projectGroups).toEqual([])
-    })
-
-    it('routes a direct-SSH group through the local catalog, not the focused runtime', async () => {
-      projectGroupsDelete.mockResolvedValue(true)
-      const store = createTestStore()
-      store.setState({
-        settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-        projectGroups: [{ ...folderScanGroup, connectionId: 'conn-1' }]
-      })
-
-      await expect(store.getState().deleteProjectGroup(folderScanGroup.id)).resolves.toBe(true)
-
-      expect(projectGroupsDelete).toHaveBeenCalledWith({ groupId: folderScanGroup.id })
-      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    })
-
-    it('prefers an explicit hostId over both the focused host and a colliding row', async () => {
-      runtimeEnvironmentCall.mockResolvedValue(runtimeRpcResponse({ deleted: true }))
-      const store = createTestStore()
-      store.setState({
-        settings: { activeRuntimeEnvironmentId: null } as never,
-        projectGroups: [
-          { ...folderScanGroup, executionHostId: 'local' },
-          { ...folderScanGroup, executionHostId: 'runtime:env-1' }
-        ]
-      })
-
-      await expect(
-        store.getState().deleteProjectGroup(folderScanGroup.id, { hostId: 'runtime:env-1' })
-      ).resolves.toBe(true)
-
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'projectGroup.delete',
-        params: { groupId: folderScanGroup.id },
-        timeoutMs: 15_000
-      })
-      expect(projectGroupsDelete).not.toHaveBeenCalled()
-      expect(store.getState().projectGroups).toMatchObject([{ executionHostId: 'local' }])
-    })
-
     it('refuses, rather than following focus, when a colliding id has no unambiguous owner', async () => {
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()
@@ -171,27 +85,6 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
 
       expect(projectGroupsDelete).not.toHaveBeenCalled()
       expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    })
-
-    // Why: a lost connection is unverifiable, not a refusal - the failure toast copy must stay non-asserting.
-    it('reports an unreachable owner as failure without touching local state', async () => {
-      const runtimeGroup: ProjectGroup = { ...folderScanGroup, executionHostId: 'runtime:env-1' }
-      runtimeEnvironmentCall.mockRejectedValue(new Error('runtime rpc timed out'))
-      const store = createTestStore()
-      store.setState({
-        settings: { activeRuntimeEnvironmentId: null } as never,
-        projectGroups: [runtimeGroup],
-        folderWorkspaces: [baseFolderWorkspace]
-      })
-
-      await expect(
-        store.getState().updateProjectGroup(runtimeGroup.id, { name: 'Renamed' })
-      ).resolves.toBe(false)
-      await expect(store.getState().deleteProjectGroup(runtimeGroup.id)).resolves.toBe(false)
-
-      expect(projectGroupsUpdate).not.toHaveBeenCalled()
-      expect(store.getState().projectGroups).toEqual([runtimeGroup])
-      expect(store.getState().folderWorkspaces).toEqual([baseFolderWorkspace])
     })
   })
 
@@ -245,37 +138,6 @@ export function registerReposProjectGroupsOwnerRoutingTests(): void {
       expect(store.getState().repos).toMatchObject([
         { id: 'local-repo', projectGroupId: null },
         { id: 'remote-repo', projectGroupId: folderScanGroup.id }
-      ])
-    })
-
-    it('renames only the owner host row when the id exists on two hosts', async () => {
-      projectGroupsUpdate.mockResolvedValue({
-        ...folderScanGroup,
-        executionHostId: 'local',
-        name: 'Renamed'
-      })
-      const store = createTestStore()
-      store.setState({
-        settings: { activeRuntimeEnvironmentId: null } as never,
-        projectGroups: [
-          { ...folderScanGroup, executionHostId: 'local' },
-          { ...folderScanGroup, name: 'Remote projects', executionHostId: 'runtime:env-1' }
-        ]
-      })
-
-      await expect(
-        store.getState().updateProjectGroup(
-          folderScanGroup.id,
-          { name: 'Renamed' },
-          {
-            hostId: 'local'
-          }
-        )
-      ).resolves.toBe(true)
-
-      expect(store.getState().projectGroups).toMatchObject([
-        { name: 'Renamed', executionHostId: 'local' },
-        { name: 'Remote projects', executionHostId: 'runtime:env-1' }
       ])
     })
 

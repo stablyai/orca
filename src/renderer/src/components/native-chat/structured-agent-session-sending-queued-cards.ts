@@ -4,7 +4,7 @@ import {
   queuedMessageCardImages,
   queuedMessageCardText,
   type QueuedMessageCard
-} from '../../../../shared/structured-agent-session-queued-cards'
+} from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 export function sendingQueuedMessageCards(
@@ -23,12 +23,13 @@ export function sendingQueuedMessageCards(
 
 /** Host-owned cards and active queue requests stay out of transcript echoes; recorded sends remain until their row arrives. */
 export function pendingSendsOutsideQueuedCards<
-  Send extends { clientMessageId: string; delivery?: 'queue-if-active' }
+  Send extends { clientMessageId: string; delivery?: 'queue-if-active'; phase?: string }
 >(pending: readonly Send[], heldIds: readonly string[], isWorking: boolean): readonly Send[] {
   const held = new Set(heldIds)
   const next = pending.filter(
     (entry) =>
-      !held.has(entry.clientMessageId) && !(isWorking && entry.delivery === 'queue-if-active')
+      !held.has(entry.clientMessageId) &&
+      !(isWorking && entry.delivery === 'queue-if-active' && entry.phase !== 'unconfirmed')
   )
   return next.length === pending.length ? pending : next
 }

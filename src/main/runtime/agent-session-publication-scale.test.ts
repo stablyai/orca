@@ -19,7 +19,7 @@ import { hostTestMessage } from '../native-chat/agent-session-wire/structured-ag
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import {
   countStoreWork,
   scaleDirectory,
@@ -59,6 +59,7 @@ describe('real-store status and queue publications', () => {
           >
       >()
       const counts = {
+        fullSnapshots: 0,
         snapshots: 0,
         snapshotItems: 0,
         snapshotSubmissions: 0,
@@ -116,6 +117,27 @@ describe('real-store status and queue publications', () => {
           child: null,
           params: { location: row.location, provider: row.provider }
         })
+        const publicRead = journal.publicRead
+        const seenViews = new WeakSet<object>()
+        const seenSnapshots = new WeakSet<object>()
+        vi.spyOn(journal, 'publicRead').mockImplementation(() => {
+          const view = publicRead()
+          if (!seenViews.has(view)) {
+            seenViews.add(view)
+            const currentSnapshot = view.currentSnapshot.bind(view)
+            vi.spyOn(view, 'currentSnapshot').mockImplementation((...args) => {
+              const value = currentSnapshot(...args)
+              if (!seenSnapshots.has(value)) {
+                seenSnapshots.add(value)
+                counts.snapshots++
+                counts.snapshotItems += value.items.length
+                counts.snapshotSubmissions += value.submissions.length
+              }
+              return value
+            })
+          }
+          return view
+        })
         const submissions = journal.submissions
         vi.spyOn(journal, 'submissions').mockImplementation(() => {
           const value = submissions()
@@ -139,9 +161,7 @@ describe('real-store status and queue publications', () => {
       const render = journalReducer.renderJournalState
       vi.spyOn(journalReducer, 'renderJournalState').mockImplementation((state) => {
         const value = render(state)
-        counts.snapshots++
-        counts.snapshotItems += value.items.length
-        counts.snapshotSubmissions += value.submissions.length
+        counts.fullSnapshots++
         return value
       })
       const originalStringify = JSON.stringify
@@ -201,7 +221,8 @@ describe('real-store status and queue publications', () => {
           .filter((event) => event.type === 'snapshot')
           .every((event) => 'queuedMessages' in event && event.queuedMessages?.length === cards)
       ).toBe(true)
-      // Status projection, hydration and current-work restatement reuse one current-source render.
+      // Hydration reuses one selected current-source view; hot owners never render full history.
+      expect(counts.fullSnapshots).toBe(0)
       expect(counts.snapshots).toBe(n)
       expect(counts.snapshotItems).toBe(n * (history + sends))
       expect(counts.snapshotSubmissions).toBe(n * sends)

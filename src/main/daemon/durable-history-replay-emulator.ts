@@ -1,6 +1,6 @@
 import { HeadlessEmulator } from './headless-emulator'
 import { collectNormalBufferOscLinkRanges } from './headless-osc-link-ranges'
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
 
 export type NormalBufferHead = {
   rowCount: number

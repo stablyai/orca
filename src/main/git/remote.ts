@@ -1,21 +1,21 @@
 import {
   normalizeGitErrorMessage,
   runPullWithDivergenceFallback
-} from '../../shared/git-remote-error'
-import { resolveEffectiveGitUpstream } from '../../shared/git-effective-upstream'
-import { resolveConfiguredGitPushTarget } from '../../shared/git-push-target-resolution'
+} from '../../shared/git/remotes/git-remote-error'
+import { resolveEffectiveGitUpstream } from '../../shared/git/remotes/git-effective-upstream'
+import { resolveConfiguredGitPushTarget } from '../../shared/git/remotes/git-push-target-resolution'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import {
   postponeRepoRefMaintenance,
   withRepoRefMaintenancePaused
-} from './local-repo-ref-maintenance'
+} from './refs/maintenance/local-repo-ref-maintenance'
 import { validateGitPushTarget } from './push-target-validation'
 import { gitExecFileAsync } from './runner'
-import { fetchForkRemoteWithStaleRefspecRepair } from './fork-remote-stale-branch-refspec'
-import { runWithGitReadCacheInvalidation } from './status'
-import { runWithGitWorktreeOperationLock } from '../../shared/git-worktree-operation-lock'
+import { fetchForkRemoteWithStaleRefspecRepair } from './refs/fork-remotes/fork-remote-stale-branch-refspec'
+import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
+import { runWithGitWorktreeOperationLock } from '../../shared/git/worktrees/git-worktree-operation-lock'
 
 export { gitPullRebaseFromBase } from './remote-rebase'
 

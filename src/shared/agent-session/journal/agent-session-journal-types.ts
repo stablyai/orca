@@ -1,8 +1,5 @@
-import type {
-  AgentJournalCursor,
-  AgentJournalItemIdentity
-} from '../../agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
+import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
+import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import type { AgentSessionProviderContextBoundary } from '../agent-session-provider-context'
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
@@ -10,12 +7,20 @@ import type { AgentSessionProviderContextBoundary } from '../agent-session-provi
 import type { UnreadAgentSessionFailureFact } from '../failures/agent-session-failure'
 import type { AgentSessionFailureRowWords } from '../failures/agent-session-failure-words'
 import type { AgentSessionQuestionAnswer } from '../agent-session-question-answer'
-import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
+import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat-tool-identity'
 import type { AgentSessionContextUsage } from '../agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
-import type { AgentMessageSender, AgentMessageSource } from '../agent-session-message-source'
+import type { AgentMessageSource } from '../agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../options/agent-session-execution-options'
+import type {
+  AgentJournalAgentHandoffItem,
+  AgentJournalAgentStartItem
+} from './agent-journal-creation-facts'
+export type {
+  AgentJournalAgentHandoffItem,
+  AgentJournalAgentStartItem
+} from './agent-journal-creation-facts'
 
 /** Bump only alongside a read-time upcaster in `journal-row-schema.ts`. */
 /** v3 introduced turn items; other rows stay v2. The first v3 row stops older hosts writing (read-only on released builds, failed load here) rather than allowing truncation. */
@@ -67,8 +72,9 @@ export type AgentJournalMessageItem = {
    *  goal's objective, and the provider pursues it without a turn of its own. */
   sentAs?: AgentJournalMessageSendMode
   /** Present on a conversation command the user sent, such as `/compact`. The text is what the
-   *  user typed; this names the command so no reader parses it. Open like `sentAs`. */
-  command?: { name: string }
+   *  user typed; this names the command and its instructions so no reader parses it. Open like
+   *  `sentAs`. */
+  command?: { name: string; instructions?: string }
   /** The skills the user picked from the menu for this message, by the file the agent selects
    *  each by. The text still carries each `$name`; agents that select by name ignore this. */
   skills?: AgentJournalSkillRef[]
@@ -122,6 +128,8 @@ export type AgentJournalResolution = {
   answers?: AgentSessionQuestionAnswer[]
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
+  /** Read-time device description; never written back into the journal. */
+  resolvedByDevice?: { kind: 'current' } | { kind: 'named'; name: string }
   resolvedAt: number | null
 }
 
@@ -306,16 +314,9 @@ export type AgentJournalStatusItem =
  *  absent whenever nothing told the host one. */
 export type AgentJournalTurnItem = { kind: 'turn' } & AgentJournalTurnLifecycle
 
-/** Display-only creation fact; survives removal of the orchestration Task and Dispatch. */
-export type AgentJournalAgentStartItem = {
-  kind: 'agent-start'
-  dispatchId: string
-  worker: AgentMessageSender
-  task: string
-}
-
 export type AgentJournalItemBody =
   | AgentJournalAgentStartItem
+  | AgentJournalAgentHandoffItem
   | AgentJournalMessageItem
   | AgentJournalToolCallItem
   | AgentJournalDiffItem

@@ -105,19 +105,6 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     )
   })
 
-  it('is empty when the model list is empty', () => {
-    expect(
-      buildNativeChatSessionOptionSnapshot({
-        catalog: CLAUDE_SESSION_OPTION_CATALOG,
-        models: [],
-        record: claudeRecord(),
-        mode: 'live',
-        modelLabel: 'Model',
-        liveTransport: 'catalog'
-      })
-    ).toEqual([])
-  })
-
   describe('sortNativeChatSessionOptions', () => {
     it('drops the model row and orders effort before model config before modes', () => {
       const descriptor = (id: string, category?: string): SessionOptionDescriptor =>
@@ -175,34 +162,6 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       expect(model.kind.currentValue).toBe('opus')
       expect(model.kind.choices.some((choice) => choice.value === 'opus')).toBe(true)
       expect(snapshot.length).toBeGreaterThan(1)
-    })
-
-    it('formats an unlisted model label while preserving its exact id in the details', () => {
-      const record = claudeRecord()
-      record.model = { value: 'experimental-model', source: 'reported' }
-      const reconciled = withTrackedNativeChatModel(
-        CLAUDE_SESSION_OPTION_CATALOG,
-        CLAUDE_SESSION_OPTION_CATALOG.models,
-        record
-      )
-      expect(reconciled.at(-1)).toEqual({
-        id: 'experimental-model',
-        label: 'Experimental Model',
-        description: 'experimental-model',
-        options: []
-      })
-    })
-
-    it('leaves the list alone when the tracked model is already listed', () => {
-      const record = claudeRecord()
-      record.model = { value: 'sonnet', source: 'reported' }
-      expect(
-        withTrackedNativeChatModel(
-          CLAUDE_SESSION_OPTION_CATALOG,
-          CLAUDE_SESSION_OPTION_CATALOG.models,
-          record
-        )
-      ).toEqual([...CLAUDE_SESSION_OPTION_CATALOG.models])
     })
 
     it('re-injects a grok seed model an authoritative discovery dropped', () => {

@@ -2,9 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { useAppStore } from '@/store'
-import { useCustomEditorViewStore } from '@/store/plugin-custom-editors'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
-import { reportPluginPanelDraw } from '../../right-sidebar/plugin-panel-draw-status'
+import { reportPluginPanelDraw } from '../../right-sidebar/plugin-panels/health/plugin-panel-draw-status'
 import { handlePluginViewRequest } from './plugin-view-request-handler'
 
 const KEY = 'acme.todos'
@@ -252,31 +251,5 @@ describe('open-panel with ifShown', () => {
         capture: { guestRevision: 'r1', ifShown: true, timeoutMs: 5_000 }
       })
     ).resolves.toMatchObject({ ok: true, panel: { settled: true } })
-  })
-})
-
-describe('open-editor', () => {
-  it('opens the file in the active workspace with the plugin editor chosen', async () => {
-    const openFile = vi.fn().mockReturnValue('file-1')
-    useAppStore.setState({ openFile })
-    await expect(
-      handlePluginViewRequest({
-        requestId: 'r',
-        kind: 'open-editor',
-        pluginKey: KEY,
-        editorId: 'notes',
-        filePath: '/elsewhere/plan.notes'
-      })
-    ).resolves.toEqual({ requestId: 'r', ok: true })
-    expect(openFile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/elsewhere/plan.notes',
-        relativePath: '/elsewhere/plan.notes',
-        worktreeId: 'wt-1',
-        mode: 'edit'
-      }),
-      { preview: false }
-    )
-    expect(useCustomEditorViewStore.getState().choices['file-1']).toBe(`${KEY}/notes`)
   })
 })

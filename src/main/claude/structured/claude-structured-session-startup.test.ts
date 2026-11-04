@@ -1,15 +1,23 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   adapterAtPublishFor,
   fakeClaude,
   claudeFrame,
   identityFor,
-  USER_MESSAGE
+  USER_MESSAGE,
+  recordingJournalSink,
+  PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
 import { claudeOpened } from './claude-structured-startup-settled-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import { CLAUDE_INITIALIZE_TIMEOUT_MS } from './claude-structured-session-startup'
 import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
+import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
+import { claudeRecord } from './journal/claude-structured-item-translation'
+import { startupAcquisitionRefusal } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { providerDiagnosticOf } from '../../../shared/agent-session/failures/agent-session-failure'
+import { claudeStreamJsonExitError } from '../claude-stream-json-exit-error'
 
 const owned: {
   claude: ReturnType<typeof fakeClaude>
@@ -19,9 +27,24 @@ const owned: {
 
 const ACQUIRE = { identity: identityFor(), fence: 7, spawnToken: 'spawn-9' }
 
-function adapterFor(claude: ReturnType<typeof fakeClaude>) {
+const fixture = (name: string): Record<string, unknown>[] =>
+  readFileSync(new URL(`../__fixtures__/${name}.jsonl`, import.meta.url), 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line))
+const MISSING = fixture('claude-missing-conversation')[0]!
+const AUTH_FAILED = fixture('claude-lifecycle-capture-auth-failed')
+  .map((line) => claudeRecord(line.frame))
+  .find((frame) => frame?.type === 'result')!
+const errorRows = (appendItem: ReturnType<typeof vi.fn>) =>
+  appendItem.mock.calls.filter(([, body]) => body.kind === 'status' && body.tone === 'error')
+
+function adapterFor(
+  claude: ReturnType<typeof fakeClaude>,
+  launch: Partial<ClaudeStructuredLaunch> = {}
+) {
   const events: ClaudeStructuredSessionEvent[] = []
-  const adapter = adapterAtPublishFor(claude, {}, events)
+  const adapter = adapterAtPublishFor(claude, launch, events)
   const opens: Promise<unknown>[] = []
   owned.push({ claude, adapter, opens })
   const open = adapter.open.bind(adapter)
@@ -48,6 +71,287 @@ describe('Claude host-awaited open', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // Recorded results; the send orderings after open are constructed, receipt ids omitted where named.
+  it.each([
+    ['missing conversation after open, before any send', 1],
+    ['send before its echo', 1],
+    ['send idle left in doubt', 1],
+    ['ambiguous write', 1],
+    ['/goal answered without ids', 1],
+    ['started /goal answered without ids', 1]
+  ] as const)('reports a failure result (%s) in %i rows', async (path, rows) => {
+    const claude = fakeClaude({ replayUuid: null })
+    const { adapter } = adapterFor(claude)
+    const appendItem = vi.fn()
+    await adapter.acquire({ ...ACQUIRE, events: { ...recordingJournalSink(), appendItem } })
+    const connection = claude.connections[0]!
+    let result = MISSING
+    await claudeOpened(adapter, 'session-1')
+    if (!path.startsWith('missing conversation')) {
+      result = AUTH_FAILED
+      if (path === 'ambiguous write') {
+        const send = connection.send
+        connection.send = async (...args) => {
+          await send(...args)
+          throw new Error('input pump stopped')
+        }
+      }
+      const goal = path.includes('/goal')
+      await expect(
+        adapter.dispatch({
+          sessionId: 'session-1',
+          clientMessageId: 'unechoed',
+          body: goal
+            ? { ...USER_MESSAGE, blocks: [{ type: 'text', text: '/goal task' }] }
+            : USER_MESSAGE,
+          fence: 7
+        })
+      ).resolves.toMatchObject({ state: path === 'ambiguous write' ? 'unknown' : 'admitted' })
+      const sentUuid = connection.sent[0]!.uuid
+      if (path === 'send idle left in doubt' || path === 'started /goal answered without ids') {
+        claudeFrame(connection, {
+          type: 'command_lifecycle',
+          command_uuid: sentUuid,
+          state: 'started'
+        })
+      }
+      if (path === 'send idle left in doubt') {
+        claudeFrame(connection, {
+          type: 'system',
+          subtype: 'session_state_changed',
+          state: 'idle',
+          uuid: 'idle-1'
+        })
+      }
+      // No user or assistant echo first; older CLIs omit the receipt ids.
+      result = goal
+        ? { ...result, user_message_uuid: undefined, user_message_uuids: undefined }
+        : { ...result, user_message_uuid: sentUuid, user_message_uuids: [sentUuid] }
+    }
+    claudeFrame(connection, { ...result, session_id: PROVIDER_SESSION_ID })
+    expect(errorRows(appendItem)).toHaveLength(rows)
+  })
+
+  // Recorded results; the orderings are constructed. A resumed turn's result may arrive without an echo.
+  const RESUMED = { ...AUTH_FAILED, num_turns: 0, user_message_uuid: '', user_message_uuids: [] }
+  const evidence = [
+    ['a receipt', { ...RESUMED, user_message_uuid: 'resumed-user' }],
+    ['a receipt list', { ...RESUMED, user_message_uuids: ['resumed-user'] }],
+    ['a resume reason', { ...RESUMED, resume_reason: 'host_draining' }],
+    ['model turns', { ...RESUMED, num_turns: 1 }],
+    ['no input', MISSING]
+  ] as const
+  it.each(
+    (['initialize', 'catch-up'] as const).flatMap((phase) =>
+      evidence.map(([named, result]) => [named, phase, result] as const)
+    )
+  )('a startup failure result naming %s during %s', async (_named, phase, result) => {
+    const claude = fakeClaude({ holdInit: phase === 'initialize', initProof: 'none' })
+    const { adapter } = adapterFor(claude, {
+      resumesTranscript: true,
+      ...(phase === 'catch-up' ? { resumeLeafUuid: 'saved-leaf' } : {})
+    })
+    const appendItem = vi.fn()
+    const catchingUp = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<{ ok: true }>()
+    const written = () => {
+      catchingUp.resolve()
+      return release.promise
+    }
+    await adapter.acquire({
+      ...ACQUIRE,
+      events: {
+        ...recordingJournalSink(),
+        appendItem,
+        ...(phase === 'catch-up' ? { written } : {})
+      }
+    })
+    const connection = claude.connections[0]!
+    const open = claudeOpened(adapter, 'session-1')
+    if (phase === 'catch-up') {
+      await catchingUp.promise
+    }
+    claudeFrame(connection, { ...result, session_id: PROVIDER_SESSION_ID })
+    connection.initialization.resolve({})
+    if (result !== MISSING) {
+      // A turn's own failure keeps its row; it does not fail the open.
+      release.resolve({ ok: true })
+      await expect(open).resolves.toHaveProperty('link')
+      expect(errorRows(appendItem)).toHaveLength(1)
+      expect(connection.sent).toHaveLength(0)
+      return
+    }
+    // The open fails at once, catch-up still held, so its final startup row is the only report.
+    const error = await open.catch((failure: unknown) => failure)
+    release.resolve({ ok: true })
+    expect(startupAcquisitionRefusal(error)?.reason).toBe('savedConversationMissing')
+    expect(providerDiagnosticOf(error)).toEqual({
+      text: 'No conversation found with session ID: 00000000-0000-4000-8000-00000000dead',
+      audience: 'log'
+    })
+    expect(errorRows(appendItem)).toHaveLength(0)
+  })
+
+  // Recorded result; the orderings are constructed. A start another failure ended reports that cause.
+  it.each([
+    ['initialize rejected', 1],
+    ['an exit with no stderr', 0],
+    ['an exit naming the missing conversation', 0],
+    ['the same result', 0]
+  ] as const)('a startup failure result after %s keeps %i rows', async (ended, rows) => {
+    const claude = fakeClaude({ holdInit: true, initProof: 'none' })
+    const { adapter } = adapterFor(claude)
+    const appendItem = vi.fn()
+    await adapter.acquire({ ...ACQUIRE, events: { ...recordingJournalSink(), appendItem } })
+    const connection = claude.connections[0]!
+    const open = claudeOpened(adapter, 'session-1').catch((failure: unknown) => failure)
+    if (ended === 'initialize rejected') {
+      connection.initialization.reject(new Error('initialize rejected'))
+      expect(await open).toHaveProperty('message', 'initialize rejected')
+    } else if (ended === 'the same result') {
+      claudeFrame(connection, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+    } else {
+      connection.closed = true
+      connection.exitVerdict = { root: 'exited', tree: 'exited' }
+      const stderr = ended === 'an exit with no stderr' ? '' : String(MISSING.errors)
+      connection.handlers.onExit?.(
+        claudeStreamJsonExitError(stderr, { code: 1, signal: null, processless: false })
+      )
+    }
+    // An exit naming no cause leaves the start to the buffered result, so that result is its one failure.
+    claudeFrame(connection, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+    const error = await open
+    if (ended === 'an exit with no stderr') {
+      expect(startupAcquisitionRefusal(error)?.reason).toBe('savedConversationMissing')
+    }
+    expect(errorRows(appendItem)).toHaveLength(rows)
+  })
+
+  // Whichever ends the start first is its report: a hidden result is the open's error, else its row stays.
+  it.each(Array.from({ length: 17 }, (_, gap) => gap))(
+    'a startup failure result %i microtasks after initialize rejects is reported once',
+    async (gap) => {
+      const claude = fakeClaude({ holdInit: true, initProof: 'none' })
+      const { adapter } = adapterFor(claude)
+      const appendItem = vi.fn()
+      await adapter.acquire({ ...ACQUIRE, events: { ...recordingJournalSink(), appendItem } })
+      const connection = claude.connections[0]!
+      const open = claudeOpened(adapter, 'session-1').catch((failure: unknown) => failure)
+      connection.initialization.reject(new Error('initialize rejected'))
+      for (let tick = 0; tick < gap; tick++) {
+        await Promise.resolve()
+      }
+      claudeFrame(connection, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+      const error = await open
+      const typed = startupAcquisitionRefusal(error)?.reason === 'savedConversationMissing'
+      expect(errorRows(appendItem)).toHaveLength(typed ? 0 : 1)
+      expect(typed || (error instanceof Error && error.message === 'initialize rejected')).toBe(
+        true
+      )
+    }
+  )
+
+  it.each([
+    ['naming the missing conversation', 0],
+    ['with no stderr', 1]
+  ] as const)(
+    'a transport fault %s during catch-up fails the open and keeps %i rows',
+    async (named, rows) => {
+      const claude = fakeClaude({ initProof: 'none' })
+      const { adapter } = adapterFor(claude, {
+        resumesTranscript: true,
+        resumeLeafUuid: 'saved-leaf'
+      })
+      const appendItem = vi.fn()
+      const catchingUp = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<{ ok: true }>()
+      const written = () => {
+        catchingUp.resolve()
+        return release.promise
+      }
+      await adapter.acquire({
+        ...ACQUIRE,
+        events: { ...recordingJournalSink(), appendItem, written }
+      })
+      const open = claudeOpened(adapter, 'session-1').catch((failure: unknown) => failure)
+      await catchingUp.promise
+      const connection = claude.connections[0]!
+      connection.closed = true
+      const stderr = named === 'with no stderr' ? '' : String(MISSING.errors)
+      const fault = claudeStreamJsonExitError(stderr, {
+        code: null,
+        signal: null,
+        processless: false
+      })
+      connection.handlers.onFault?.(fault)
+      claudeFrame(connection, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+      release.resolve({ ok: true })
+      expect(await open).toMatchObject({ cause: fault })
+      expect(errorRows(appendItem)).toHaveLength(rows)
+    }
+  )
+
+  it('fails the open with a startup failure Claude reported before publication', async () => {
+    const claude = fakeClaude({ initProof: 'none' })
+    const openConnection: typeof claude.openConnection = async (...args) => {
+      const connection = await claude.openConnection(...args)
+      claudeFrame(claude.connections.at(-1)!, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+      return connection
+    }
+    const { adapter } = adapterFor({ ...claude, openConnection })
+    const appendItem = vi.fn()
+    await adapter.acquire({ ...ACQUIRE, events: { ...recordingJournalSink(), appendItem } })
+    const error = await claudeOpened(adapter, 'session-1').catch((failure: unknown) => failure)
+    expect(startupAcquisitionRefusal(error)?.reason).toBe('savedConversationMissing')
+    expect(errorRows(appendItem)).toHaveLength(0)
+    // A child's failure is never the start's.
+    claudeFrame(claude.connections[0]!, {
+      ...MISSING,
+      session_id: PROVIDER_SESSION_ID,
+      parent_tool_use_id: 'child-1'
+    })
+    expect(errorRows(appendItem)).toHaveLength(1)
+  })
+
+  it('lets a late frame fail neither a ready acquisition nor its replacement', async () => {
+    const claude = fakeClaude({ initProof: 'none' })
+    const { adapter } = adapterFor(claude)
+    const appendItem = vi.fn()
+    const events = { ...recordingJournalSink(), appendItem }
+    await adapter.acquire({ ...ACQUIRE, events })
+    await claudeOpened(adapter, 'session-1')
+    const ready = claude.connections[0]!
+    claudeFrame(ready, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+    expect(errorRows(appendItem)).toHaveLength(1)
+    await adapter.closeSession('session-1')
+    await adapter.acquire({ ...ACQUIRE, events })
+    claudeFrame(ready, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+    await expect(claudeOpened(adapter, 'session-1')).resolves.toHaveProperty('link')
+    claudeFrame(claude.connections[1]!, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+    expect(errorRows(appendItem)).toHaveLength(2)
+  })
+
+  it('leaves an open Stop aborted to Stop when Claude then reports a startup failure', async () => {
+    const claude = fakeClaude({ holdInit: true, initProof: 'none' })
+    const { adapter } = adapterFor(claude)
+    const appendItem = vi.fn()
+    const acquisition = await adapter.acquire({
+      ...ACQUIRE,
+      events: { ...recordingJournalSink(), appendItem }
+    })
+    const controller = new AbortController()
+    const open = adapter.open({
+      sessionId: 'session-1',
+      fence: 7,
+      acquisitionGeneration: acquisition.acquisitionGeneration,
+      signal: controller.signal
+    })
+    controller.abort(new Error('stopped by the person'))
+    claudeFrame(claude.connections[0]!, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+    await expect(open).rejects.toThrow('stopped by the person')
+    expect(errorRows(appendItem)).toHaveLength(0)
   })
 
   // SDK-typed shape; ordering constructed

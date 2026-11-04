@@ -1,7 +1,7 @@
 import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
 // Store CAS and idempotency rows make retried create/ensure replay instead of reserving another owner.
 
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type {
   StructuredAgentId,
@@ -34,7 +34,7 @@ import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
 } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AdoptedTranscriptSource } from '../agent-session-journal/adopted-transcript-source'
 import { structuredAgentSessionRefusalMessage } from './structured-agent-session-refusal-message'
@@ -163,10 +163,7 @@ export async function attachJournal(input: {
   const journal = await input.openConversation(input.record)
   return {
     journal,
-    unconfirmedClientMessageIds: journal
-      .submissions()
-      .filter((entry) => entry.dispatchState === 'unknown' && entry.recovered === true)
-      .map((entry) => entry.clientMessageId)
+    unconfirmedClientMessageIds: journal.inputOrder.recoveredUnknownIds()
   }
 }
 

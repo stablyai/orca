@@ -1,10 +1,5 @@
-export { serializeJournalRow, journalRowByteLength } from './journal-row-encoding'
 import type { JournalInputContext, JournalInputLineage } from './journal-input-lineage'
 import type { JournalItemEcho } from './journal-item-echo'
-// Upcast on read; preserve unknown versions/kinds and fail load instead of skipping history.
-// New kinds need reader-first rollout or a version bump because older builds may delete them.
-// Unknown body kinds remain readable; malformed annotations are dropped, malformed content fails load.
-
 import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import {
@@ -14,8 +9,8 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalProducerLinkage
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
-import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   readAgentJournalItemBody,
   readAgentJournalMessageBody,
@@ -26,6 +21,10 @@ import type { StructuredAgentSessionStopCause } from '../agent-session-wire/stru
 import { dropUnusableRowAnnotations } from './journal-row-unusable-annotations'
 import { journalRowDeclaresMore } from './journal-storage-row-schema'
 import { journalQueueRowContent, type JournalQueueRow } from './journal-queue-events'
+export { serializeJournalRow, journalRowByteLength } from './journal-row-encoding'
+// Upcast on read; preserve unknown versions/kinds and fail load instead of skipping history.
+// New kinds need reader-first rollout or a version bump because older builds may delete them.
+// Unknown body kinds remain readable; malformed annotations are dropped, malformed content fails load.
 
 /** Put additive annotations on the base: older strict prompt bodies reject unknown keys. */
 export type JournalRowBase = AgentJournalProducerLinkage & {
@@ -194,7 +193,7 @@ export type JournalRowParse =
   /** Future content forbids writing/compacting this journal. */
   | { ok: false; unreadable: true }
 
-export function parseJournalRow(line: string): JournalRowParse {
+export function parseJournalRow(line: string, sourceAnnotations = false): JournalRowParse {
   let parsed: unknown
   try {
     parsed = JSON.parse(line)
@@ -215,7 +214,7 @@ export function parseJournalRow(line: string): JournalRowParse {
     version > AGENT_SESSION_JOURNAL_SCHEMA_VERSION ||
     (typeof record.kind === 'string' &&
       KNOWN_ROW_KINDS.has(record.kind) &&
-      journalRowDeclaresMore(record))
+      journalRowDeclaresMore(record, sourceAnnotations))
   ) {
     return { ok: false, unreadable: true }
   }

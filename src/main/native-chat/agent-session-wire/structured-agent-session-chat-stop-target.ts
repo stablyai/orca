@@ -7,7 +7,7 @@ import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { structuredAgentSessionStoppedTurnId } from './structured-agent-session-turn-stop-notes'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 
 /** close joins shutdown; starting ends startup; interrupt reaches live work; withdraw only settles queued sends. */
 export type ChatStopReach = 'close' | 'starting' | 'interrupt' | 'withdraw'
@@ -35,6 +35,7 @@ export function captureChatStopTarget(
     endsSession: boolean
     stoppedPrePrompt?: boolean
     stoppedSend?: boolean
+    withdrawsContinue?: boolean
   }
 ): ChatStopTarget | null {
   const { child, turnId } = input
@@ -42,7 +43,9 @@ export function captureChatStopTarget(
   if (reached === 'late') {
     return null
   }
-  const queued = ctx.journal.submissions().some(isQueuedAgentJournalSubmission)
+  const queued = ctx.journal.inputOrder
+    .recoverableSubmissions()
+    .some(isQueuedAgentJournalSubmission)
   const target = {
     child,
     turnId: structuredAgentSessionStoppedTurnId(
@@ -55,7 +58,7 @@ export function captureChatStopTarget(
     queued
   }
   if (child?.close) {
-    return { ...target, reach: 'close', marks: queued }
+    return { ...target, reach: 'close', marks: queued || input.withdrawsContinue === true }
   }
   if (child?.phase === 'starting') {
     return { ...target, reach: 'starting', marks: true }
@@ -67,7 +70,9 @@ export function captureChatStopTarget(
     !child ||
     (turnId === undefined && !input.stoppedSend && !isMainAgentWorking(ctx) && !canHaveGoal)
   ) {
-    return queued || input.stoppedPrePrompt ? { ...target, reach: 'withdraw', marks: true } : null
+    return queued || input.stoppedPrePrompt || input.withdrawsContinue
+      ? { ...target, reach: 'withdraw', marks: true }
+      : null
   }
   // Repeated Stop must not pause cards queued after the first press.
   return { ...target, reach: 'interrupt', marks: queued || reached === 'unrecorded' }

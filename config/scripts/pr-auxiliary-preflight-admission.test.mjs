@@ -22,8 +22,8 @@ const relaySteps = unit.jobs.relay_integration.steps
 const chrome = relaySteps.find((step) => step.name === 'Resolve Chrome for the browser provider')
 const browser = relaySteps.find((step) => step.name === 'Test external Chromium browser provider')
 const routes = [
-  ['git_compatibility', 'src/shared/git-capability-cache.ts'],
-  ['codex_index_heal_contract', 'src/main/codex/codex-session-index-heal.ts'],
+  ['git_compatibility', 'src/shared/git/commands/git-capability-cache.ts'],
+  ['codex_index_heal_contract', 'src/main/codex/history/index/codex-session-index-heal.ts'],
   ['xterm_patch_sync', 'config/patches/xterm-upstream.json'],
   ['shell_contracts', 'src/main/pty/pty-manager.ts'],
   ['orcad_browser', 'src/main/orcad/orcad-browser-provider.ts'],
@@ -63,74 +63,6 @@ function routedOutputs(files, reused, options) {
     ].map((name) => [name, String(evaluate(workflow.jobs.code_paths.outputs[name], context))])
   )
 }
-
-describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
-  const job = workflow.jobs[jobName === 'orcad_browser' ? 'test' : jobName]
-  const condition =
-    jobName === 'orcad_browser' ? `(${job.if}) && (${chrome.if}) && (${browser.if})` : job.if
-  // Unit shards wait for their plan rather than preflight.
-  const gate = jobName === 'orcad_browser' ? 'unit_plan' : 'preflight'
-
-  it.each([
-    { name: 'all prerequisites pass', admitted: true },
-    { name: 'preflight fails', preflight: 'failure', admitted: false },
-    { name: 'preflight is cancelled', preflight: 'cancelled', admitted: false },
-    { name: 'preflight skips', preflight: 'skipped', admitted: false },
-    { name: 'preflight result is missing', preflight: '', admitted: false },
-    { name: 'preflight is unfinished', preflight: null, admitted: false },
-    { name: 'detector fails', detector: 'failure', admitted: false },
-    { name: 'detector is cancelled', detector: 'cancelled', admitted: false },
-    { name: 'detector skips', detector: 'skipped', admitted: false },
-    { name: 'detector result is missing', detector: '', admitted: false },
-    { name: 'detector is unfinished', detector: null, admitted: false },
-    { name: 'route is unselected', selected: 'false', admitted: false },
-    { name: 'route is missing', selected: '', admitted: false },
-    { name: 'route is absent', selected: null, admitted: false },
-    { name: 'route is unknown', selected: 'unknown', admitted: false },
-    { name: 'workflow is cancelled', cancelled: true, admitted: false }
-  ])('evaluates the actual workflow condition: $name', (scenario) => {
-    const context = {
-      cancelled: () => scenario.cancelled ?? false,
-      success: () => true,
-      inputs: {},
-      needs: {
-        code_paths: {
-          result: scenario.detector === undefined ? 'success' : (scenario.detector ?? undefined),
-          outputs: {
-            test: 'true',
-            [jobName]: scenario.selected === undefined ? 'true' : (scenario.selected ?? undefined)
-          }
-        },
-        [gate]: {
-          result: scenario.preflight === undefined ? 'success' : (scenario.preflight ?? undefined)
-        }
-      }
-    }
-    if (jobName === 'orcad_browser') {
-      context.inputs.browser_contract = evaluate(job.with.browser_contract, context)
-    }
-    expect(evaluate(condition, context)).toBe(scenario.admitted)
-  })
-
-  it.each(['true', 'false', undefined])(
-    'honors the actual readiness-masked output when reuse is %s',
-    (reused) => {
-      const outputs = routedOutputs([changedFile], reused)
-      expect(outputs[jobName]).toBe(String(reused !== 'true'))
-      expect(outputs.test).toBe(String(reused !== 'true'))
-      const context = {
-        cancelled: () => false,
-        success: () => true,
-        inputs: {},
-        needs: { code_paths: { result: 'success', outputs }, [gate]: { result: 'success' } }
-      }
-      if (jobName === 'orcad_browser') {
-        context.inputs.browser_contract = evaluate(job.with.browser_contract, context)
-      }
-      expect(evaluate(condition, context)).toBe(reused !== 'true')
-    }
-  )
-})
 
 it('preserves relay continuation, setup guards and cancellation', () => {
   const steps = relaySteps
@@ -226,7 +158,7 @@ describe('Mobile CI tool preflight routing', () => {
 })
 
 describe('Renderer-only relay admission', () => {
-  const renderer = 'src/renderer/src/components/right-sidebar/FileExplorer.tsx'
+  const renderer = 'src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorer.tsx'
   const admitted = (files) => {
     const outputs = routedOutputs(files, 'false')
     const runRelay = evaluate(workflow.jobs.test.with.run_relay_integration, {

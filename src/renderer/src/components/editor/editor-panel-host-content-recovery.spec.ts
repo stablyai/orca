@@ -4,8 +4,8 @@ import type { OpenFile } from '@/store/slices/editor'
 import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
 import { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
-import { editorSaveWriterView } from './editor-save-writer-view'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import { editorSaveWriterView } from './save/queue/editor-save-writer-view'
+import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './autosave/editor-autosave'
 import type { FileContent } from './editor-panel-content-types'
 
 export function registerEditorPanelHostContentRecoveryTests(

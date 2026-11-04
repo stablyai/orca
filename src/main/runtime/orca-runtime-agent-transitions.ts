@@ -4,7 +4,7 @@ import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { installExternalConversations } from '../external-conversations/external-conversations-install'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { OrcaRuntimeWithWindowlessTerminalActivity } from './orca-runtime-windowless-terminal-activity'
@@ -123,11 +123,17 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     // Attach connector watches at hook-store startup, before any connector call.
     this.externalConversations.current()
     const detachTransitions = this.agentTransitions.attach(store)
+    const detachCrew = store.subscribeStatusRowMutations(() =>
+      this.crewChanges.notify(new Set(['status', 'names']))
+    )
+    this.crewChanges.notify(new Set(['status', 'names']))
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
     const detachTitles = subscribe
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
       : () => {}
     return () => {
+      detachCrew()
+      this.crewChanges.notify(new Set(['status', 'names']))
       detachTitles()
       detachTransitions()
     }

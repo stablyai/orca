@@ -4,11 +4,11 @@ import {
   getWorkspaceCleanupBlockerSeverity,
   getWorkspaceCleanupGitRank,
   getWorkspaceCleanupReviewRank
-} from '../../../../shared/workspace-cleanup-facet-rankings'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-facet-rankings'
 import type {
   WorkspaceCleanupSortField,
   WorkspaceCleanupSortState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 /** Missing signals sort last in either direction; flipping reverses only rows with evidence. */
 const ABSENT_LAST_FIELDS: ReadonlySet<WorkspaceCleanupSortField> = new Set([

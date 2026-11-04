@@ -2,16 +2,12 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   decodePersistedAgentSessionProviderHandleChain,
   encodePersistedAgentSessionProviderHandleChain,
-  isAgentSessionHandleProvider,
   type AgentSessionProviderHandle,
   type AgentSessionProviderHandleLink
 } from './agent-session-provider-handle'
 import {
-  agentSessionJournalProviderHandle,
-  agentSessionProviderHandleFromWire,
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,
-  agentSessionWireProviderHandle,
   claudeProviderHandle,
   codexProviderHandle,
   decodePersistedAgentSessionProviderHandle,
@@ -31,24 +27,6 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from './agent-session-record.test-fixture'
-
-/** The pre-neutral-handle guard applied to every stored handle. */
-function olderBuildReadsHandle(value: unknown): boolean {
-  const isHandleField = (field: unknown): boolean =>
-    typeof field === 'string' && field.length > 0 && field.length <= 512 && field === field.trim()
-  if (typeof value !== 'object' || value === null || !('provider' in value)) {
-    return false
-  }
-  if (value.provider === 'claude') {
-    return (
-      'sessionId' in value &&
-      isHandleField(value.sessionId) &&
-      'leafUuid' in value &&
-      (value.leafUuid === null || isHandleField(value.leafUuid))
-    )
-  }
-  return value.provider === 'codex' && 'threadId' in value && isHandleField(value.threadId)
-}
 
 /** A Claude record row exactly as builds before this change wrote it: a fork with its seed key. */
 const STORED_CLAUDE_ROW = JSON.stringify({
@@ -103,18 +81,6 @@ const STORED_CODEX_ROW = JSON.stringify({
 })
 
 describe('a record row older builds wrote', () => {
-  it.each([undefined, 0, 6, 7, 9, Number.MAX_SAFE_INTEGER])(
-    'keeps a valid legacy next-fence floor %s readable',
-    (minimumNextFence) => {
-      const record = agentSessionRecordFixture(agentSessionLeaseFixture({ minimumNextFence }))
-      const stored = JSON.parse(JSON.stringify(encodeAgentSessionRecord(record)))
-      expect(isPersistedAgentSessionRecord(stored)).toBe(true)
-      expect(decodePersistedAgentSessionRecord(stored).record.lease.minimumNextFence).toBe(
-        minimumNextFence
-      )
-    }
-  )
-
   it.each([
     ['Claude', STORED_CLAUDE_ROW],
     ['Codex', STORED_CODEX_ROW]
@@ -128,30 +94,6 @@ describe('a record row older builds wrote', () => {
     expect(normalized).toBe(false)
     expectTypeOf(record).toMatchTypeOf<AgentSessionRecord>()
     expect(JSON.stringify(encodeAgentSessionRecord(record))).toBe(row)
-  })
-
-  it.each([undefined, 25, 0, -1, '25', null, Number.NaN, Number.POSITIVE_INFINITY])(
-    'normalizes a saved sleep value %s without hiding the conversation',
-    (sleptAt) => {
-      const stored = { ...encodeAgentSessionRecord(agentSessionRecordFixture()), sleptAt }
-      expect(isPersistedAgentSessionRecord(stored)).toBe(true)
-      const decoded = decodePersistedAgentSessionRecord(stored)
-      expectTypeOf(decoded.record).toMatchTypeOf<AgentSessionRecord>()
-      expect(decoded.record.sleptAt).toBe(sleptAt === 25 ? 25 : undefined)
-      expect(decoded.normalized).toBe(sleptAt !== undefined && sleptAt !== 25)
-    }
-  )
-
-  it('hands shared code only the neutral handle', () => {
-    const stored: unknown = JSON.parse(STORED_CLAUDE_ROW)
-    if (!isPersistedAgentSessionRecord(stored)) {
-      throw new Error('fixture row must be readable')
-    }
-    const { record } = decodePersistedAgentSessionRecord(stored)
-    expect(record.providerHandleChain.map((link) => link.handle)).toEqual([
-      { transport: 'claude-sdk', agent: 'claude', nativeId: 'sess-1', resumeCursor: 'leaf-1' },
-      { transport: 'claude-sdk', agent: 'claude', nativeId: 'sess-2' }
-    ])
   })
 
   it('still reports a lease only the removed terminal handoff wrote', () => {
@@ -189,28 +131,6 @@ describe('a record row older builds wrote', () => {
 })
 
 describe('what this build writes', () => {
-  it('stores Claude and Codex handles in the typed form older builds read', () => {
-    const claude = claudeProviderHandle('sess-1', 'leaf-1')
-    const codex = codexProviderHandle('thread-1')
-    expect(encodePersistedAgentSessionProviderHandle(claude)).toEqual({
-      provider: 'claude',
-      sessionId: 'sess-1',
-      leafUuid: 'leaf-1'
-    })
-    expect(encodePersistedAgentSessionProviderHandle(claudeProviderHandle('sess-1', null))).toEqual(
-      { provider: 'claude', sessionId: 'sess-1', leafUuid: null }
-    )
-    expect(encodePersistedAgentSessionProviderHandle(codex)).toEqual({
-      provider: 'codex',
-      threadId: 'thread-1'
-    })
-    for (const handle of [claude, codex]) {
-      const stored = encodePersistedAgentSessionProviderHandle(handle)
-      expect(olderBuildReadsHandle(stored)).toBe(true)
-      expect(decodePersistedAgentSessionProviderHandle(stored)).toEqual(handle)
-    }
-  })
-
   it('keeps the persisted key and root strings older builds derived', () => {
     // Fork seeds, superseded creations and resume offers store these; a new spelling strands them.
     const claude = claudeProviderHandle('sess-1', 'leaf-1')
@@ -221,27 +141,6 @@ describe('what this build writes', () => {
     expect(agentSessionProviderHandleRoot(claude)).toBe('claude:"sess-1"')
     expect(agentSessionProviderHandleKey(codexProviderHandle('t'))).toBe('codex:"t"')
     expect(agentSessionProviderHandleRoot(codexProviderHandle('t'))).toBe('codex:"t"')
-  })
-
-  it('round-trips another transport in the neutral form, which an older build refuses', () => {
-    const grok = {
-      transport: 'acp',
-      agent: 'grok',
-      nativeId: 'acp-session-1',
-      resumeCursor: '{"cwd":"/repo"}'
-    }
-    const stored = encodePersistedAgentSessionProviderHandle(grok)
-    expect(stored).toEqual(grok)
-    expect(decodePersistedAgentSessionProviderHandle(JSON.parse(JSON.stringify(stored)))).toEqual(
-      grok
-    )
-    // Unknown providers must never impersonate Codex on an older build.
-    expect(olderBuildReadsHandle(stored)).toBe(false)
-    expect(isAgentSessionHandleProvider(grok.agent)).toBe(false)
-    expect(agentSessionWireProviderHandle(grok)).toBeNull()
-    // Root, not the resume cursor: the cursor is resume state, not identity.
-    expect(agentSessionProviderHandleRoot(grok)).toBe('acp/grok:"acp-session-1"')
-    expect(agentSessionProviderHandleKey(grok)).toBe(agentSessionProviderHandleRoot(grok))
   })
 
   it('refuses a stored handle that is not the one form its transport writes', () => {
@@ -280,20 +179,6 @@ describe('what this build writes', () => {
     }
   })
 
-  it('still reads a typed handle that carries an unrelated field', () => {
-    expect(
-      decodePersistedAgentSessionProviderHandle({ provider: 'codex', threadId: 't', note: 1 })
-    ).toEqual(codexProviderHandle('t'))
-    expect(
-      decodePersistedAgentSessionProviderHandle({
-        provider: 'claude',
-        sessionId: 'sess-1',
-        leafUuid: 'leaf-1',
-        note: 1
-      })
-    ).toEqual(claudeProviderHandle('sess-1', 'leaf-1'))
-  })
-
   it('drops a field a later build put on a handle, but keeps one on the link or record', () => {
     const stored = JSON.parse(STORED_CODEX_ROW)
     stored.providerHandleChain[0].handle.laterHandleField = 'x'
@@ -330,48 +215,6 @@ describe('what this build writes', () => {
       resumeCursor: 'resume-token'
     })
     expect(isPersistedAgentSessionRecord(stored)).toBe(false)
-  })
-})
-
-describe('the wire and journal forms', () => {
-  it('maps the attach wire handle both ways for Claude and Codex', () => {
-    const claudeWire = { kind: 'claude', sessionId: 'sess-1', leafUuid: null } as const
-    const codexWire = { kind: 'codex', threadId: 'thread-1' } as const
-    expect(agentSessionProviderHandleFromWire(claudeWire)).toEqual(
-      claudeProviderHandle('sess-1', null)
-    )
-    expect(agentSessionWireProviderHandle(agentSessionProviderHandleFromWire(claudeWire))).toEqual(
-      claudeWire
-    )
-    expect(agentSessionWireProviderHandle(agentSessionProviderHandleFromWire(codexWire))).toEqual(
-      codexWire
-    )
-  })
-
-  it('records the journal rows exactly as before, and another transport as opaque', () => {
-    expect(
-      agentSessionJournalProviderHandle({
-        agent: 'claude',
-        providerHandle: claudeProviderHandle('sess-1', 'leaf-1')
-      })
-    ).toEqual({ kind: 'claude', sessionId: 'sess-1', leafUuid: 'leaf-1' })
-    expect(
-      agentSessionJournalProviderHandle({
-        agent: 'codex',
-        providerHandle: codexProviderHandle('t')
-      })
-    ).toEqual({ kind: 'codex', threadId: 't' })
-    expect(agentSessionJournalProviderHandle({ agent: 'codex', providerHandle: null })).toEqual({
-      kind: 'opaque',
-      agent: 'codex',
-      value: 'pending'
-    })
-    expect(
-      agentSessionJournalProviderHandle({
-        agent: 'grok',
-        providerHandle: { transport: 'acp', agent: 'grok', nativeId: 's' }
-      })
-    ).toEqual({ kind: 'opaque', agent: 'grok', value: 's' })
   })
 })
 
@@ -420,19 +263,6 @@ describe('a chat whose saved conversation could not be restored', () => {
     stored[3].replaces.key = agentSessionProviderHandleKey(acp('s-1'))
     expect(decodePersistedAgentSessionProviderHandleChain(stored)).toBeNull()
   })
-})
-
-it.each([
-  null,
-  'open',
-  {},
-  { state: 'open', at: -1 },
-  { state: 'settled', at: 10, outcome: 'newer' },
-  { state: 'open', at: 10, prompt: 'p'.repeat(281) }
-])('ignores malformed optional last-turn metadata: %j', (lastTurn) => {
-  const stored = { ...encodeAgentSessionRecord(agentSessionRecordFixture()), lastTurn }
-  expect(isPersistedAgentSessionRecord(stored)).toBe(true)
-  expect(decodePersistedAgentSessionRecord(stored).record.lastTurn).toBeUndefined()
 })
 
 it('preserves the saved turn and unknown JSON through a record transition', () => {

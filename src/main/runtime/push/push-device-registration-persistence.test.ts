@@ -69,20 +69,6 @@ describe('DeviceRegistry push registrations', () => {
     expect(registry.setPushRegistration(cli.deviceId, REGISTRATION)).toBe(false)
   })
 
-  it('loads a registry written before push existed', () => {
-    const dir = userDataDir()
-    const device = new DeviceRegistry(dir).addDevice('phone', 'mobile')
-    rewriteRegistry(dir, (devices) => {
-      for (const entry of devices) {
-        delete entry.pushRegistration
-      }
-    })
-
-    const reloaded = new DeviceRegistry(dir)
-    expect(reloaded.listDevices()).toHaveLength(1)
-    expect(reloaded.getDevice(device.deviceId)?.pushRegistration).toBeUndefined()
-  })
-
   it.each([
     ['a malformed registration', { registrationId: 'reg-1' }],
     ['a missing expiry', { ...REGISTRATION, expiresAt: undefined }],

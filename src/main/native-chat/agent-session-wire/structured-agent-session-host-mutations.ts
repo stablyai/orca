@@ -12,7 +12,7 @@ import type {
   AgentSessionSendResult
 } from '../../../shared/agent-session/agent-session-wire'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
-import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
+import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-gate'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionThreadGoalChange,
@@ -87,7 +87,7 @@ export function sendStructuredAgentSessionTurn(
             return blocked
           }
           if (params.usageLimitContinuationOfTurnItemId !== undefined) {
-            const snapshot = ctx.journal.snapshot()
+            const snapshot = ctx.journal.statusRead()
             const cut = latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
             if (
               cut?.turnItemId !== params.usageLimitContinuationOfTurnItemId ||

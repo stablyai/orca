@@ -1,5 +1,5 @@
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
@@ -224,7 +224,7 @@ describe('a running chat’s listing, saved for the next chat', () => {
     catalog.recordLiveListing(record.sessionId, {
       models: [
         { id: 'a', label: 'A', isDefault: false, efforts: [{ value: 'high', label: 'High' }] },
-        { id: 'b', label: 'B', isDefault: false, efforts: [] }
+        { id: 'b', label: 'B', isDefault: false, effortsKnown: false, efforts: [] }
       ]
     })
     const read = await catalog.read({ agent: 'opencode', sessionId: 'oc' })

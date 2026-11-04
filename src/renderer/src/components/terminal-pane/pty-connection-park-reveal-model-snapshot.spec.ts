@@ -11,7 +11,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -55,6 +59,8 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
 
     it('restores configured paired scrollback after an ordinary park reveal', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const remotePtyId = 'remote:env-1@@terminal-1'
       const transport = createMockTransport(remotePtyId)
       transport.connect.mockImplementation(
@@ -89,7 +95,11 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
       const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
       const deps = createDeps({ mountFollowsTerminalPark: true })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       for (let step = 0; step < 30; step += 1) {
         parseCallbacks.shift()?.()
         await flushAsyncTicks(2)
@@ -107,6 +117,8 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
 
     it('keeps a parked main-model alt frame at its capture grid while hidden', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const localPtyId = 'global-floating-terminal@@terminal-1'
       const transport = createMockTransport(localPtyId)
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -150,7 +162,11 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: localPtyId }
       })
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       for (let step = 0; step < 30; step += 1) {
         parseCallbacks.shift()?.()
         await flushAsyncTicks(2)

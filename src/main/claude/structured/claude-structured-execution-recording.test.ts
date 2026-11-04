@@ -5,7 +5,7 @@ import {
   fakeClaude,
   USER_MESSAGE
 } from './claude-structured-session-test-support'
-import { recordAgentSessionRanOptions } from '../../runtime/agent-session-record-options'
+import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
 import {
   createQueuedMessageTestRig,
   eventually

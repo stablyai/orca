@@ -10,7 +10,7 @@ import {
 import {
   nativeChatSessionChoiceShortLabel,
   nativeChatSessionOptionLabel
-} from '../../../../../src/shared/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { SessionOptionCaption } from './MobileNativeChatSessionOptionRows'
 

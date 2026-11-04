@@ -1,5 +1,5 @@
-import { WorkerThreadRequestQueue } from '../worker-thread-request-queue'
-import type { WorkerThreadFactory } from '../lazy-worker-thread-host'
+import { WorkerThreadRequestQueue } from '../worker-threads/worker-thread-request-queue'
+import type { WorkerThreadFactory } from '../worker-threads/worker-thread-transport'
 import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../claude-usage/types'
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../opencode-usage/types'

@@ -1,10 +1,10 @@
 import { settledDaemonRestart } from '../../daemon/daemon-restart-state'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { LocalPtyProvider } from '../../providers/local-pty-provider'
-import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/terminal-startup-cwd'
+import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
+import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/shell/launch/terminal-startup-cwd'
 import {
   getHiddenRendererPtyDeliveryDebug,
   resetRendererScopedHiddenPtyDeliveryState

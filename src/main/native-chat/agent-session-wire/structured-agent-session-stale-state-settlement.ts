@@ -8,7 +8,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-death-evidence'
+import type { AgentSessionDeathEvidence } from '../../../shared/agent-session/lifecycle/agent-session-death-evidence'
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { journalPendingSubmissionResolutions } from '../agent-session-journal/journal-pending-submission-recovery'
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
@@ -40,6 +40,8 @@ export type StaleStructuredAgentSessionStateJournal = Pick<
   | 'itemFence'
   | 'itemBody'
   | 'submissions'
+  | 'statusRead'
+  | 'inputOrder'
   | 'stopMarks'
   | 'lastProviderActivityAt'
   | 'cursor'
@@ -88,14 +90,14 @@ export function planStaleStructuredAgentSessionState(
   const { journal, below } = input
   const ended = (fence: number | undefined) =>
     below === undefined || (fence !== undefined && fence < below)
-  const items = providerTimelineExecutionItems(journal.snapshot().items).filter((item) =>
+  const items = providerTimelineExecutionItems(journal.statusRead().items).filter((item) =>
     ended(journal.itemFence(item.itemId))
   )
   const dispatches =
     below === undefined
       ? []
       : journalPendingSubmissionResolutions(
-          journal.submissions().filter((entry) => ended(entry.fence)),
+          journal.inputOrder.recoverableSubmissions().filter((entry) => ended(entry.fence)),
           input.fence,
           // Unanswered handover proves uncertainty, never non-delivery.
           { reason: DISPATCH_DOUBT_PROVIDER_EXITED }

@@ -1,7 +1,8 @@
 import { useCallback } from 'react'
+import type { MobileComposerWriter } from './composer/mobile-native-chat-draft-store'
 import type { RpcClient } from '../../transport/rpc-client'
-import type { ConnectionState } from '../../transport/types'
 import type { StructuredAgentSessionHostSupport } from '../mobile-structured-agent-session-host-support'
+import type { ConnectionState } from '../../transport/types'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from '../use-mobile-structured-agent-session'
 import { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
@@ -11,6 +12,7 @@ import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat
 // Run both hooks in fixed order and starve the inactive lane’s identity so flips preserve cached transcripts.
 export function useMobileNativeChatSessionLane({
   client,
+  pairedHostClient,
   hostId,
   composerScopeKey,
   structured,
@@ -25,6 +27,7 @@ export function useMobileNativeChatSessionLane({
   onActionResolved
 }: {
   client: RpcClient | null
+  pairedHostClient: RpcClient | null
   hostId: string
   composerScopeKey?: string | null
   structured: boolean
@@ -43,9 +46,9 @@ export function useMobileNativeChatSessionLane({
   session: ReturnType<typeof useMobileNativeChatSession>
   sessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
 } {
-  const appendComposerText = useCallback(
-    (text: string) => appendComposerTextRef.current(text),
-    [appendComposerTextRef]
+  const appendComposerText: MobileComposerWriter = Object.assign(
+    useCallback((text: string) => appendComposerTextRef.current(text), [appendComposerTextRef]),
+    { captureOrigin: () => appendComposerTextRef.current }
   )
   const agent = resolution?.agent ?? null
   const sessionId = resolution?.sessionId ?? null
@@ -66,6 +69,7 @@ export function useMobileNativeChatSessionLane({
   })
   const structuredSession = useMobileStructuredAgentSession({
     client,
+    pairedHostClient,
     sessionId: structured ? sessionId : null,
     sourceIdentity,
     hostSupport,

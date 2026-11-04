@@ -3,12 +3,12 @@ import type { StructuredAgentSessionState } from '../../../src/shared/agent-sess
 import type { NativeChatLiveTurnIndicator } from '../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { isStructuredAgentSessionThinking } from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import { selectStructuredAgentTurnActivity } from '../../../src/shared/native-chat/transcript/native-chat-turn-activity'
-import { agentStopDisplayStatus } from '../../../src/shared/agent-stop-display-status'
+import { agentStopDisplayStatus } from '../../../src/shared/agent-status/lifecycle/agent-stop-display-status'
 import { mobileStructuredSendQueues } from './use-mobile-structured-send-with-outcome'
 import {
   nativeChatSendFollowUp,
   type NativeChatSendFollowUp
-} from '../../../src/shared/native-chat-follow-up-behavior'
+} from '../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 
 export function useMobileStructuredTurnIndicator(input: {
   state: StructuredAgentSessionState
