@@ -88,6 +88,8 @@ function PendingCreationSurface(props: {
 
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const { activeView, hasActiveWorktree, activePendingCreationId, creationLayoutActive } = layout
+  // Why: first run keeps Landing's onboarding; once projects exist the empty state shows Home.
+  const hasProjects = useAppStore((s) => s.repos.length > 0)
   return (
     <>
       {activeView === 'settings' ? <Settings /> : null}
@@ -106,7 +108,13 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
         />
       ) : null}
       {activeView === 'terminal' && !hasActiveWorktree && !creationLayoutActive ? (
-        <Landing />
+        hasProjects ? (
+          <div className="absolute inset-0 flex">
+            <HomePage asLanding />
+          </div>
+        ) : (
+          <Landing />
+        )
       ) : null}
     </>
   )

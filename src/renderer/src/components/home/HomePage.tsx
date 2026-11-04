@@ -5,6 +5,7 @@ import { buildHomeFleet, type HomeFleet } from './home-fleet-model'
 import { HomeActivityCard } from './HomeActivityCard'
 import { HomeNeedsYouCard, HomeRunningNowCard } from './HomeFleetCards'
 import { HomeUsageCard } from './HomeUsageCard'
+import { HomeLandingFooter } from './HomeLandingFooter'
 
 export function formatFleetSummary(counts: HomeFleet['counts']): string {
   return translate(
@@ -14,7 +15,12 @@ export function formatFleetSummary(counts: HomeFleet['counts']): string {
   )
 }
 
-export default function HomePage(): React.JSX.Element {
+export default function HomePage({
+  asLanding = false
+}: {
+  /** Shown in place of Landing when no workspace is selected. */
+  asLanding?: boolean
+}): React.JSX.Element {
   // Why: one snapshot subscription for the whole page; it reads many store slices.
   const snapshot = useLiveDashboardSnapshot()
   const fleet = useMemo(() => buildHomeFleet(snapshot.cards), [snapshot.cards])
@@ -44,6 +50,7 @@ export default function HomePage(): React.JSX.Element {
           <HomeActivityCard />
         </div>
       </div>
+      {asLanding ? <HomeLandingFooter /> : null}
     </main>
   )
 }

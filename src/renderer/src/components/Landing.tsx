@@ -1,29 +1,15 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ExternalLink, FolderPlus, GitBranchPlus, Star } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
-import { isGitRepoKind } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
-import {
-  dismissPreflightIssue,
-  githubProjectKeys,
-  isPreflightIssueDismissed
-} from './landing-preflight-dismissal'
-import { ShortcutKeyCombo } from './ShortcutKeyCombo'
-import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import logo from '../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
-import { hasGitHubBackedProject, type PreflightIssue } from './landing-preflight-issues'
+import { hasGitHubBackedProject } from './landing-preflight-issues'
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 import { useLandingOrcaStarState, type LandingStarState } from './landing-github-star-state'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
-
-type ShortcutItem = {
-  id: string
-  shortcut: ShortcutKeyComboDetails
-  action: string
-}
+import { PreflightBanner } from './landing-preflight-banner'
+import { LandingShortcutHints, useWorkspaceCreateActionLabel } from './landing-shortcut-hints'
 
 // Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
 const ORCA_GITHUB_URL = 'https://github.com/stablyai/orca'
@@ -139,93 +125,11 @@ function GitHubStarButton({
   )
 }
 
-function dismissedPreflightIssueIds(issues: PreflightIssue[], repos: readonly Repo[]): Set<string> {
-  return new Set(
-    issues
-      .filter((issue) => issue.dismissible && isPreflightIssueDismissed(issue.id, repos))
-      .map((issue) => issue.id)
-  )
-}
-
-function PreflightBanner({
-  issues,
-  repos
-}: {
-  issues: PreflightIssue[]
-  repos: readonly Repo[]
-}): React.JSX.Element | null {
-  // Recheck dismissals when the GitHub project set changes so expired nudges can reappear.
-  const githubKey = githubProjectKeys(repos).join('|')
-  const [dismissed, setDismissed] = useState<Set<string>>(() =>
-    dismissedPreflightIssueIds(issues, repos)
-  )
-
-  // Reseed only when GitHub projects change; issues identity is stable and would reset transient dismissals each render.
-  const reseedDismissed = useEffectEvent(() =>
-    setDismissed(dismissedPreflightIssueIds(issues, repos))
-  )
-  useEffect(() => {
-    reseedDismissed()
-  }, [githubKey])
-
-  const visibleIssues = issues.filter((issue) => !dismissed.has(issue.id))
-  if (visibleIssues.length === 0) {
-    return null
-  }
-
-  const dismiss = (issue: PreflightIssue): void => {
-    dismissPreflightIssue(issue.id, repos)
-    setDismissed((prev) => new Set(prev).add(issue.id))
-  }
-
-  return (
-    // Keep setup nudges narrow and muted; the styleguide reserves warning/error framing for actual problems.
-    <div className="w-full max-w-sm space-y-1.5 rounded-lg border border-border bg-muted/40 p-3">
-      {visibleIssues.map((issue) => (
-        <div
-          key={issue.id}
-          className="flex items-start gap-3 rounded-md px-1 py-1.5 first:pt-0 last:pb-0"
-        >
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500/70" />
-          <div className="min-w-0 flex-1 space-y-0.5">
-            <p className="text-[13px] font-medium leading-snug text-foreground">{issue.title}</p>
-            <p className="text-xs leading-snug text-muted-foreground">{issue.description}</p>
-            <button
-              className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline cursor-pointer"
-              onClick={(event) => openAppHttpLink(issue.fixUrl, { event })}
-            >
-              {issue.fixLabel}
-              <ExternalLink className="size-3" />
-            </button>
-          </div>
-          {issue.dismissible && (
-            <button
-              className="-mr-1 -mt-0.5 shrink-0 rounded p-1 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
-              onClick={() => dismiss(issue)}
-              aria-label={translate('auto.components.Landing.preflightDismiss', 'Dismiss')}
-            >
-              <X className="size-3.5" />
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
-
 export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
 
-  const createActionLabel =
-    repos.length > 0 && repos.every((repo) => isGitRepoKind(repo))
-      ? translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
-      : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
-  const moveUpLabel = translate('auto.components.Landing.moveUpWorkspace', 'Move up workspace')
-  const moveDownLabel = translate(
-    'auto.components.Landing.moveDownWorkspace',
-    'Move down workspace'
-  )
+  const createActionLabel = useWorkspaceCreateActionLabel(repos)
   const hasProjects = repos.length > 0
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
   const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
@@ -233,24 +137,6 @@ export default function Landing(): React.JSX.Element {
   // Probe the active execution host, including remote runtimes.
   const { preflightIssues } = useLandingPreflightRuntime()
   const [starState, setStarState] = useLandingOrcaStarState()
-
-  const createWorktreeShortcut = useShortcutKeyDetails('workspace.create')
-  const previousWorktreeShortcut = useShortcutKeyDetails('worktree.navigateUp')
-  const nextWorktreeShortcut = useShortcutKeyDetails('worktree.navigateDown')
-  const shortcuts = useMemo<ShortcutItem[]>(() => {
-    return [
-      { id: 'create', shortcut: createWorktreeShortcut, action: createActionLabel },
-      { id: 'up', shortcut: previousWorktreeShortcut, action: moveUpLabel },
-      { id: 'down', shortcut: nextWorktreeShortcut, action: moveDownLabel }
-    ]
-  }, [
-    createActionLabel,
-    moveUpLabel,
-    moveDownLabel,
-    createWorktreeShortcut,
-    nextWorktreeShortcut,
-    previousWorktreeShortcut
-  ])
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
@@ -299,18 +185,7 @@ export default function Landing(): React.JSX.Element {
             </button>
           </div>
 
-          <div className="mt-6 w-full max-w-xs space-y-2">
-            {shortcuts.map((shortcut) => (
-              <div key={shortcut.id} className="grid grid-cols-[1fr_auto] items-center gap-3">
-                <span className="text-sm text-muted-foreground">{shortcut.action}</span>
-                <ShortcutKeyCombo
-                  keys={shortcut.shortcut.keys}
-                  doubleTap={shortcut.shortcut.doubleTap}
-                  separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
-                />
-              </div>
-            ))}
-          </div>
+          <LandingShortcutHints className="mt-6 w-full max-w-xs" />
         </div>
       </div>
 
