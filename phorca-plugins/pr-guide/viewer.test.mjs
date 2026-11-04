@@ -149,6 +149,28 @@ it('sends inline feedback only to a selected writable local agent session', asyn
   }
 })
 
+it('accepts comments at the UI length limit when their UTF-8 body is larger', async () => {
+  const calls = []
+  const viewer = await startViewer(snapshot, {
+    run: async (_file, args, stdin) => {
+      if (args[0] === 'pr') return JSON.stringify(source)
+      calls.push(JSON.parse(stdin))
+      return 'https://github.com/a/b/pull/2#issuecomment-1'
+    }
+  })
+  try {
+    const response = await fetch(viewer.url + '/comment', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: new URL(viewer.url).origin },
+      body: JSON.stringify({ kind: 'general', body: '界'.repeat(5000), sourceFingerprint: snapshot.sourceFingerprint })
+    })
+    assert.equal(response.status, 200)
+    assert.equal(calls[0].body.length, 5000)
+  } finally {
+    viewer.close()
+  }
+})
+
 it('offers no local sessions without an explicit terminal access provider', async () => {
   const viewer = await startViewer(snapshot)
   try {

@@ -137,7 +137,7 @@ export async function startViewer(initial, { run = runCli, generate = generateGu
         let raw = ''
         for await (const chunk of request) {
           raw += chunk
-          if (Buffer.byteLength(raw) > 12_000) return send(413, { error: 'Comment is too large.' })
+          if (Buffer.byteLength(raw) > 64_000) return send(413, { error: 'Comment is too large.' })
         }
         const input = JSON.parse(raw)
         const body = typeof input.body === 'string' ? input.body.trim() : ''
