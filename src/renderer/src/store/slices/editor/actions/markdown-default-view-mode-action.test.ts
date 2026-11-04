@@ -31,9 +31,9 @@ function state(markdownViewMode: Record<string, 'source' | 'rich'>) {
 }
 
 describe('markdownViewModesForNewDefault', () => {
-  it('pins untoggled Markdown edit tabs to the old default and moves the active tab', () => {
-    expect(markdownViewModesForNewDefault(state({}), 'source', 'a.md')).toEqual({
-      'a.md': 'source',
+  it('pins untoggled Markdown edit tabs to the old default', () => {
+    expect(markdownViewModesForNewDefault(state({}), 'source')).toEqual({
+      'a.md': 'rich',
       'b.md': 'rich'
     })
   })

@@ -23,7 +23,7 @@ export type EditorDraftState = {
   markdownViewMode: Record<string, MarkdownViewMode>
   setMarkdownViewMode: (fileId: string, mode: MarkdownViewMode) => void
   /** Persists the default view for newly opened Markdown files without flipping open tabs. */
-  setMarkdownDefaultViewMode: (mode: MarkdownDefaultViewMode, activeFileId?: string) => void
+  setMarkdownDefaultViewMode: (mode: MarkdownDefaultViewMode) => void
   // Why: per-file opt-in to open an oversized markdown file in the rich editor despite the size limit.
   markdownRichModeSizeOverride: Record<string, boolean>
   setMarkdownRichModeSizeOverride: (fileId: string, enabled: boolean) => void
@@ -98,8 +98,8 @@ export function createEditorDraftState(set: EditorSet, get: EditorGet): EditorDr
       set((s) => ({
         markdownViewMode: { ...s.markdownViewMode, [fileId]: mode }
       })),
-    setMarkdownDefaultViewMode: (mode, activeFileId) => {
-      set((s) => ({ markdownViewMode: markdownViewModesForNewDefault(s, mode, activeFileId) }))
+    setMarkdownDefaultViewMode: (mode) => {
+      set((s) => ({ markdownViewMode: markdownViewModesForNewDefault(s, mode) }))
       void get().updateSettings({ markdownDefaultViewMode: mode })
     },
 

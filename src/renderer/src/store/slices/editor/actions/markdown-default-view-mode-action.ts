@@ -13,13 +13,11 @@ type MarkdownDefaultViewModeState = Pick<AppState, 'openFiles' | 'markdownViewMo
 
 /**
  * Per-tab view modes after changing the Markdown default. Open Markdown tabs that were never
- * toggled are pinned to the old default so they don't flip under the user; `activeFileId`
- * (the tab whose switcher was right-clicked) adopts the new default so the change is visible.
+ * toggled are pinned to the old default so they don't flip under the user.
  */
 export function markdownViewModesForNewDefault(
   state: MarkdownDefaultViewModeState,
-  nextDefault: MarkdownDefaultViewMode,
-  activeFileId?: string
+  nextDefault: MarkdownDefaultViewMode
 ): Record<string, MarkdownViewMode> {
   const previousDefault = normalizeMarkdownDefaultViewMode(state.settings?.markdownDefaultViewMode)
   const next = { ...state.markdownViewMode }
@@ -32,9 +30,6 @@ export function markdownViewModesForNewDefault(
         next[file.id] = previousDefault
       }
     }
-  }
-  if (activeFileId !== undefined) {
-    next[activeFileId] = nextDefault
   }
   return next
 }

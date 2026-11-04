@@ -303,7 +303,7 @@ export function EditorPanelHeader({
       {hasEditorToggle &&
         !activeFile.csvPreviewOnly &&
         (canSetMarkdownDefaultView ? (
-          <MarkdownDefaultViewContextMenu fileId={activeFile.id}>
+          <MarkdownDefaultViewContextMenu onSelectView={onEditorToggleChange}>
             {editorViewToggle}
           </MarkdownDefaultViewContextMenu>
         ) : (

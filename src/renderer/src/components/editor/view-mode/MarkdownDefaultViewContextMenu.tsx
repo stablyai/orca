@@ -16,14 +16,14 @@ import {
 } from '../../../../../shared/markdown-default-view-mode'
 
 type MarkdownDefaultViewContextMenuProps = {
-  /** The tab whose switcher was right-clicked; it follows the newly chosen default. */
-  fileId: string
+  /** Switches the right-clicked tab through the normal toggle path (leaves Changes/plugin editors). */
+  onSelectView: (mode: MarkdownDefaultViewMode) => void
   children: React.ReactNode
 }
 
 /** Right-click on a Markdown tab's view switcher to choose the view new Markdown files open in. */
 export function MarkdownDefaultViewContextMenu({
-  fileId,
+  onSelectView,
   children
 }: MarkdownDefaultViewContextMenuProps): React.JSX.Element {
   useTranslation()
@@ -48,9 +48,11 @@ export function MarkdownDefaultViewContextMenu({
         </ContextMenuLabel>
         <ContextMenuRadioGroup
           value={defaultViewMode}
-          onValueChange={(value) =>
-            setMarkdownDefaultViewMode(normalizeMarkdownDefaultViewMode(value), fileId)
-          }
+          onValueChange={(value) => {
+            const mode = normalizeMarkdownDefaultViewMode(value)
+            setMarkdownDefaultViewMode(mode)
+            onSelectView(mode)
+          }}
         >
           {(['source', 'rich'] as const satisfies readonly MarkdownDefaultViewMode[]).map(
             (mode) => (
