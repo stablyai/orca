@@ -7,7 +7,7 @@ import {
   githubOperationResponse
 } from '../transport/github-target-invocation'
 import { openRpcRequestBudget } from '../transport/rpc-request-budget'
-import type { RpcClient } from '../transport/rpc-client-contract'
+import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
 import { bridgePendingRequestCap } from './bridge/bridge-caps'

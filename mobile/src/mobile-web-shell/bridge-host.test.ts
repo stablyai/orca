@@ -155,7 +155,7 @@ describe('requests', () => {
     bridge.client.requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
     await vi.waitFor(() =>
       expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(
-        baseline.pendingRequestCount + BRIDGE_MAX_PENDING_REQUESTS - 1
+        baseline.pendingRequestCount + BRIDGE_MAX_PENDING_DESKTOP_REQUESTS - 1
       )
     )
     bridge.host.receive(

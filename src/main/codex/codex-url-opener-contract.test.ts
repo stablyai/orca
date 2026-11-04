@@ -7,35 +7,35 @@ import {
   adapterFor,
   fakeCodex,
   identityFor
-} from './codex-structured-session-adapter-fixture'
+} from '@orca/test-host/main/codex/codex-structured-session-adapter-fixture'
 import {
   attach,
   hostTestState
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '@orca/test-host/main/native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { readCodexMcpElicitation } from './codex-mcp-elicitation'
-import { projectStructuredPermission } from '../../../mobile/src/session/mobile-structured-agent-prompts'
-import { createBridgePortPair } from '../../../mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness'
-import { createFakeRpcClient } from '../../../mobile/src/mobile-web-shell/bridge-host-test-fakes'
+} from '@orca/test-host/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { readCodexMcpElicitation } from '@orca/test-host/main/codex/codex-mcp-elicitation'
+import { projectStructuredPermission } from '@orca/test-mobile/session/mobile-structured-agent-prompts'
+import { createBridgePortPair } from '@orca/test-mobile/mobile-web-shell/bridge/bridge-port-pair-test-harness'
+import { createFakeRpcClient } from '@orca/test-mobile/mobile-web-shell/bridge-host-test-fakes'
 import {
   createPageClient,
   INIT,
   GRANTS
-} from '../../../mobile/src/mobile-web-shell/bridge/bridge-page-client-test-harness'
+} from '@orca/test-mobile/mobile-web-shell/bridge/bridge-page-client-test-harness'
 import {
   BRIDGE_EXTERNAL_LINK_FULL_URL,
   BRIDGE_EXTERNAL_LINK_GRANT
-} from '../../../mobile/src/mobile-web-shell/bridge/bridge-frame-fields'
+} from '@orca/test-mobile/mobile-web-shell/bridge/bridge-frame-fields'
 import {
   canOpenExternalLink,
   openExternalLink,
   publishExternalLinkOpener,
   useExternalLinkAvailable
-} from '../../../mobile/src/platform/external-link.web'
-import { readBridgeClientMessage } from '../../../mobile/src/mobile-web-shell/bridge/bridge-envelope'
+} from '@orca/test-mobile/platform/external-link.web'
+import { readBridgeClientMessage } from '@orca/test-mobile/mobile-web-shell/bridge/bridge-envelope'
 
 let adapter: ReturnType<typeof adapterFor> | undefined
 afterEach(async () => {

@@ -1,4 +1,4 @@
-import type { SendRequestOptions } from '../../transport/rpc-client-contract'
+import type { SendRequestOptions } from '../../transport/rpc-client'
 import {
   RpcEnvelopeFieldsSchema,
   type RpcEnvelopeFields

@@ -2,6 +2,10 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
+  // Phone/host contract suites drive the real journal through node:sqlite; their aliased imports hide that from the scan.
+  'src/main/codex/codex-form-transport-envelope.test.ts',
+  'src/main/codex/codex-url-opener-contract.test.ts',
+  'src/renderer/src/components/native-chat/NativeChatForm.contract.test.tsx',
   // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
   'src/main/linear/linear-request-recovery.test.ts',
   'src/main/linear/linear-issue-detail-deadline.test.ts',

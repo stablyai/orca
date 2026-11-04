@@ -1,34 +1,34 @@
 // @vitest-environment happy-dom
-import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
-import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
-import type { AgentSessionForm } from '../../../../shared/agent-session-form'
+import { NativeChatResolutionReceipt } from '@orca/test-host/renderer/src/components/native-chat/NativeChatResolutionReceipt'
+import { i18n, loadRendererUiLanguage } from '@orca/test-host/renderer/src/i18n/i18n'
+import type { AgentSessionForm } from '@orca/test-host/shared/agent-session-form'
 import recordedFrames from '../../../../main/codex/__fixtures__/codex-app-server-mcp-elicitations.json'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { NativeChatApprovalCard } from './NativeChatApprovalCard'
-import { respondToStructuredAgentSessionPrompt } from './structured-agent-session-prompt-response'
-import { chatApprovalFromJournal } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
-import { RespondParams } from '../../../../shared/rpc-contract/structured-agent-session-params'
+import { NativeChatApprovalCard } from '@orca/test-host/renderer/src/components/native-chat/NativeChatApprovalCard'
+import { respondToStructuredAgentSessionPrompt } from '@orca/test-host/renderer/src/components/native-chat/structured-agent-session-prompt-response'
+import { chatApprovalFromJournal } from '@orca/test-host/shared/native-chat/input/native-chat-interactive-prompt'
+import { RespondParams } from '@orca/test-host/shared/rpc-contract/structured-agent-session-params'
 import {
   acquireReadyCodexForTest,
   adapterFor,
   fakeCodex,
   identityFor
-} from '../../../../main/codex/codex-structured-session-adapter-fixture'
+} from '@orca/test-host/main/codex/codex-structured-session-adapter-fixture'
 import {
   attach,
   CALLER,
   envelope,
   hostTestState
-} from '../../../../main/native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '@orca/test-host/main/native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
-} from '../../../../main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { projectStructuredPermission } from '../../../../../mobile/src/session/mobile-structured-agent-prompts'
-import { createAgentSessionCurrentRequestsReader } from '../../../../shared/agent-session/requests/agent-session-current-requests-reader'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+} from '@orca/test-host/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { projectStructuredPermission } from '@orca/test-mobile/session/mobile-structured-agent-prompts'
+import { createAgentSessionCurrentRequestsReader } from '@orca/test-host/shared/agent-session/requests/agent-session-current-requests-reader'
+import type { AgentJournalRenderItem } from '@orca/test-host/shared/agent-session/journal/agent-session-journal-types'
 
 const frames = z
   .array(

@@ -1,29 +1,29 @@
 import { expect, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES as M } from '../../shared/remote-runtime/remote-runtime-memory-limits'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import type { AgentJournalRenderItem } from '@orca/test-host/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournal } from '@orca/test-host/main/native-chat/agent-session-journal/journal-store'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES as M } from '@orca/test-host/shared/remote-runtime/remote-runtime-memory-limits'
+import { HOST_TEST_SESSION as SESSION } from '@orca/test-host/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import {
   settledBodyPresentation,
   readSettledBodyPiece
-} from '../native-chat/agent-session-wire/agent-session-settled-body'
-import { encrypt } from '../../shared/e2ee-crypto'
-import { sealMobileE2EEV2Frame } from '../../shared/mobile-e2ee-v2-framing'
+} from '@orca/test-host/main/native-chat/agent-session-wire/agent-session-settled-body'
+import { encrypt } from '@orca/test-host/shared/e2ee-crypto'
+import { sealMobileE2EEV2Frame } from '@orca/test-host/shared/mobile-e2ee-v2-framing'
 import {
   splitBridgeReply,
   BridgeReplyAssembler
-} from '../../../mobile/src/mobile-web-shell/bridge/bridge-reply-chunking'
-import { createAgentSessionSettledBodyReader } from '../../shared/agent-session-settled-body-reader'
+} from '@orca/test-mobile/mobile-web-shell/bridge/bridge-reply-chunking'
+import { createAgentSessionSettledBodyReader } from '@orca/test-host/shared/agent-session-settled-body-reader'
 import {
   call,
   STRUCTURED_MOBILE_CLIENT
-} from '../runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
+} from '@orca/test-host/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
 import {
   AGENT_SESSION_SETTLED_BODY_CAPABILITY,
   AgentSessionSettledBodyPieceSchema
-} from '../../shared/agent-session-settled-body'
-import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from '../runtime/rpc/methods/structured-agent-session-item'
-import { nativeChatReceiptAnswers } from '../../shared/native-chat/native-chat-resolution-receipt'
+} from '@orca/test-host/shared/agent-session-settled-body'
+import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from '@orca/test-host/main/runtime/rpc/methods/structured-agent-session-item'
+import { nativeChatReceiptAnswers } from '@orca/test-host/shared/native-chat/native-chat-resolution-receipt'
 
 export async function certifyBody(
   item: AgentJournalRenderItem,

@@ -2,78 +2,81 @@
 import { certifyBody } from './codex-settled-body-contract-fixture'
 import { createElement } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
-import { NativeChatResolutionReceipt } from '../../renderer/src/components/native-chat/NativeChatResolutionReceipt'
-import { NativeChatSettledBodyContext } from '../../renderer/src/components/native-chat/native-chat-settled-body'
-import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { NativeChatResolutionReceipt } from '@orca/test-host/renderer/src/components/native-chat/NativeChatResolutionReceipt'
+import { NativeChatSettledBodyContext } from '@orca/test-host/renderer/src/components/native-chat/native-chat-settled-body'
+import { StructuredAgentSessionHost } from '@orca/test-host/main/native-chat/agent-session-wire/structured-agent-session-host'
+import { openTestJournalHostDatabase } from '@orca/test-host/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   replaceHostTestState,
   attach,
   CALLER,
   envelope,
   hostTestState
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '@orca/test-host/main/native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import {
   settledBodySerializationEvidence,
   settledBodyPresentation
-} from '../native-chat/agent-session-wire/agent-session-settled-body'
-import { createBridgePortPair } from '../../../mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness'
-import { BridgeReplyPayloadSchema } from '../../../mobile/src/mobile-web-shell/bridge/bridge-envelope'
-import { createFakeRpcClient } from '../../../mobile/src/mobile-web-shell/bridge-host-test-fakes'
-import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from '../runtime/rpc/methods/structured-agent-session-prompt-response'
+} from '@orca/test-host/main/native-chat/agent-session-wire/agent-session-settled-body'
+import { createBridgePortPair } from '@orca/test-mobile/mobile-web-shell/bridge/bridge-port-pair-test-harness'
+import { BridgeReplyPayloadSchema } from '@orca/test-mobile/mobile-web-shell/bridge/bridge-envelope'
+import { createFakeRpcClient } from '@orca/test-mobile/mobile-web-shell/bridge-host-test-fakes'
+import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from '@orca/test-host/main/runtime/rpc/methods/structured-agent-session-prompt-response'
 import {
   createSharedControlTestServer,
   closeSharedControlTestServers
-} from '../../shared/remote-runtime/control/remote-runtime-shared-control-test-server'
-import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
-import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../../shared/runtime-ordinary-message-capability'
+} from '@orca/test-host/shared/remote-runtime/control/remote-runtime-shared-control-test-server'
+import { RemoteRuntimeRequestConnection } from '@orca/test-host/shared/remote-runtime/requests/remote-runtime-request-connection'
+import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '@orca/test-host/shared/runtime-ordinary-message-capability'
 import type {
   AgentSessionMutationResult,
   AgentSessionSubscribeEvent
-} from '../../shared/agent-session/agent-session-wire'
+} from '@orca/test-host/shared/agent-session/agent-session-wire'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   acquireReadyCodexForTest,
   adapterFor,
   fakeCodex,
   identityFor
-} from './codex-structured-session-adapter-fixture'
-import { CodexPromptRegistry } from './codex-prompt-registry'
+} from '@orca/test-host/main/codex/codex-structured-session-adapter-fixture'
+import { CodexPromptRegistry } from '@orca/test-host/main/codex/codex-prompt-registry'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { canonicalAgentSessionFormContent } from '../../shared/agent-session-form'
+} from '@orca/test-host/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { canonicalAgentSessionFormContent } from '@orca/test-host/shared/agent-session-form'
 import {
   serializeRemoteRuntimeRpcRequest,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES as M
-} from '../../shared/remote-runtime/remote-runtime-memory-limits'
-import { buildDirectRpcWireRequest } from '../../../mobile/src/transport/rpc-envelope-fields'
+} from '@orca/test-host/shared/remote-runtime/remote-runtime-memory-limits'
+import { buildDirectRpcWireRequest } from '@orca/test-mobile/transport/rpc-envelope-fields'
 import {
   splitBridgeReply,
   BridgeReplyAssembler
-} from '../../../mobile/src/mobile-web-shell/bridge/bridge-reply-chunking'
-import { encrypt, decrypt } from '../../shared/e2ee-crypto'
-import { sealMobileE2EEV2Frame, openMobileE2EEV2Frame } from '../../shared/mobile-e2ee-v2-framing'
-import { createAgentSessionSettledBodyReader } from '../../shared/agent-session-settled-body-reader'
+} from '@orca/test-mobile/mobile-web-shell/bridge/bridge-reply-chunking'
+import { encrypt, decrypt } from '@orca/test-host/shared/e2ee-crypto'
+import {
+  sealMobileE2EEV2Frame,
+  openMobileE2EEV2Frame
+} from '@orca/test-host/shared/mobile-e2ee-v2-framing'
+import { createAgentSessionSettledBodyReader } from '@orca/test-host/shared/agent-session-settled-body-reader'
 import {
   AgentSessionSettledBodyPieceSchema,
   AGENT_SESSION_SETTLED_BODY_CAPABILITY
-} from '../../shared/agent-session-settled-body'
-import { readCodexMcpElicitation } from './codex-mcp-elicitation'
-import { codexPromptIdentity } from './codex-structured-prompt-items'
-import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+} from '@orca/test-host/shared/agent-session-settled-body'
+import { readCodexMcpElicitation } from '@orca/test-host/main/codex/codex-mcp-elicitation'
+import { codexPromptIdentity } from '@orca/test-host/main/codex/codex-structured-prompt-items'
+import { agentJournalItemKey } from '@orca/test-host/shared/agent-session/journal/agent-session-journal-item-key'
 import {
   call,
   STRUCTURED_MOBILE_CLIENT
-} from '../runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
-import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from '../runtime/rpc/methods/structured-agent-session-item'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '@orca/test-host/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
+import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from '@orca/test-host/main/runtime/rpc/methods/structured-agent-session-item'
+import { setStructuredAgentSessionHost } from '@orca/test-host/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { DeviceRegistry } from '../runtime/device-registry'
-import { rewriteRelayedPhoneRequest } from '../runtime/mobile-desktop-relay/relayed-phone-frames'
+import { DeviceRegistry } from '@orca/test-host/main/runtime/device-registry'
+import { rewriteRelayedPhoneRequest } from '@orca/test-host/main/runtime/mobile-desktop-relay/relayed-phone-frames'
 
 let adapter: ReturnType<typeof adapterFor> | undefined
 afterEach(async () => {

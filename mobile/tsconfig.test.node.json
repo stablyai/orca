@@ -16,7 +16,10 @@
     "paths": {
       "@orca/test-mobile/*": ["./node_modules/.cache/phone-host-contract-types/mobile/src/*"],
       "@orca/test-host/*": ["./node_modules/.cache/phone-host-contract-types/src/*"],
-      "@/*": ["./node_modules/.cache/phone-host-contract-types/mobile/src/*"],
+      "@/*": [
+        "./node_modules/.cache/phone-host-contract-types/src/renderer/src/*",
+        "./node_modules/.cache/phone-host-contract-types/mobile/src/*"
+      ],
       "@renderer/*": ["./node_modules/.cache/phone-host-contract-types/src/renderer/src/*"],
       "zod": ["../node_modules/zod"],
       "react": ["./node_modules/@types/react"],
@@ -31,6 +34,10 @@
   "files": [
     "src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx",
     "src/test-support/rpc-recording/recorded-request-params.test.ts",
+    "../src/main/codex/codex-form-transport-envelope.test.ts",
+    "../src/main/codex/codex-url-opener-contract.test.ts",
+    "../src/renderer/src/components/native-chat/NativeChatForm.contract.test.tsx",
+    "../src/main/codex/codex-settled-body-contract-fixture.ts",
     "../src/types/build-constants.d.ts"
   ],
   "include": [],

@@ -4,7 +4,12 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal'
-import { parseCompilerPass } from './check-node-tests-typecheck.mjs'
+import {
+  checkNodeTestProgram,
+  parseCompilerPass,
+  partitionNodeTestBodies,
+  readNodeTestBodies
+} from './check-node-tests-typecheck.mjs'
 import {
   checkTransfers,
   diffBaseline,
@@ -30,10 +35,16 @@ const transfers = [
   'src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx',
   'src/test-support/rpc-recording/recorded-request-params.test.ts'
 ]
+const external = [
+  'src/main/codex/codex-form-transport-envelope.test.ts',
+  'src/main/codex/codex-settled-body-contract-fixture.ts'
+]
 const cleanTransfers = () => ({
   ok: true,
   expected: transfers,
+  external: [] as string[],
   programTestFiles: transfers,
+  programExternalFiles: [] as string[],
   failures: [],
   problems: []
 })
@@ -280,6 +291,66 @@ describe('checked transfers', () => {
     ).toBe(false)
     expect(checkTransfers({ ...cleanTransfers(), ok: false }, allowed)).toEqual([
       'the phone/host contract program did not pass'
+    ])
+  })
+
+  it('fails a desktop body or helper missing from the program or opting out, without an RN exclusion', () => {
+    expect(
+      checkTransfers(
+        { ...cleanTransfers(), external, programExternalFiles: [external[0]] },
+        allowed,
+        [external[0]]
+      )
+    ).toEqual([
+      `checked desktop body opts out with @ts-nocheck: ${external[0]}`,
+      `checked desktop body is absent from its program: ${external[1]}`
+    ])
+  })
+
+  it('reads every body root from the config as a repository path on any platform', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-pr36356-node-bodies-'))
+    try {
+      fs.mkdirSync(path.join(root, 'mobile'))
+      fs.writeFileSync(
+        path.join(root, 'mobile/tsconfig.test.node.json'),
+        JSON.stringify({
+          files: [
+            'src/a.test.ts',
+            '..\\src\\main\\b.test.ts',
+            '../src/main/helper.ts',
+            '../src/x.d.ts'
+          ]
+        })
+      )
+      const bodies = readNodeTestBodies(root)
+      expect(bodies).toEqual(['mobile/src/a.test.ts', 'src/main/b.test.ts', 'src/main/helper.ts'])
+      expect(partitionNodeTestBodies(bodies)).toEqual({
+        local: ['src/a.test.ts'],
+        external: ['src/main/b.test.ts', 'src/main/helper.ts']
+      })
+    } finally {
+      removeTreeSync(root)
+    }
+  })
+
+  it('names a missing helper, leaked implementation source and native globals in the program', () => {
+    expect(
+      checkNodeTestProgram(
+        [
+          '/repo/mobile/src/a.test.ts',
+          '/repo/src/main/b.test.ts',
+          '/repo/src/shared/leak.ts',
+          '/repo/node_modules/react-native/src/types/globals.d.ts'
+        ],
+        {
+          realRoot: '/repo',
+          expected: ['mobile/src/a.test.ts', 'src/main/b.test.ts', 'src/main/helper.ts']
+        }
+      )
+    ).toEqual([
+      'checked body is missing from the program: src/main/helper.ts',
+      'implementation source re-entered the test program: src/shared/leak.ts',
+      'native global declarations leaked into the test program: /repo/node_modules/react-native/src/types/globals.d.ts'
     ])
   })
 

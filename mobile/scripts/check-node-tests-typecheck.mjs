@@ -26,10 +26,56 @@ const LEAKED_NATIVE_GLOBALS = [
 ]
 const toPosix = (filePath) => filePath.replaceAll('\\', '/')
 
-// The two test bodies are the roots of the node test config, so no second list names them.
-export function readNodeTestRoots(root = repoRoot) {
+// The checked bodies are the node test config's non-declaration roots, so no second list names them.
+// Each is normalized to a repository path; phone bodies sit under mobile/, desktop ones under src/.
+export function readNodeTestBodies(root = repoRoot) {
   const config = JSON.parse(fs.readFileSync(path.join(root, NODE_TEST_PROJECT), 'utf8'))
-  return config.files.filter((file) => /\.test\.tsx?$/.test(file)).sort()
+  const base = path.posix.dirname(NODE_TEST_PROJECT)
+  return config.files
+    .filter((file) => /\.tsx?$/.test(file) && !file.endsWith('.d.ts'))
+    .map((file) => path.posix.normalize(path.posix.join(base, toPosix(file))))
+    .sort()
+}
+
+// Phone test roots, relative to mobile/, run under the phone's Bun role; the rest stay desktop-owned.
+export function partitionNodeTestBodies(bodies) {
+  const local = bodies.filter((file) => file.startsWith('mobile/') && /\.test\.tsx?$/.test(file))
+  return {
+    local: local.map((file) => file.slice('mobile/'.length)),
+    external: bodies.filter((file) => !file.startsWith('mobile/'))
+  }
+}
+
+// Declarations share one `@/` namespace; a phone declaration's `@/` path that a renderer file also
+// occupies would silently resolve to the renderer, so name it instead.
+export function findShadowedPhoneAliases(output) {
+  const phone = path.join(output, 'mobile/src')
+  const renderer = path.join(output, 'src/renderer/src')
+  const problems = []
+  const visit = (directory) => {
+    for (const entry of fs.existsSync(directory)
+      ? fs.readdirSync(directory, { withFileTypes: true })
+      : []) {
+      const file = path.join(directory, entry.name)
+      if (entry.isDirectory()) {
+        visit(file)
+      } else if (file.endsWith('.d.ts')) {
+        for (const [, spec] of fs.readFileSync(file, 'utf8').matchAll(/['"]@\/([^'"]+)['"]/g)) {
+          if (
+            ['.d.ts', '/index.d.ts'].some((suffix) =>
+              fs.existsSync(path.join(renderer, `${spec}${suffix}`))
+            )
+          ) {
+            problems.push(
+              `phone declaration alias resolves to a renderer file: ${toPosix(path.relative(output, file))} imports @/${spec}`
+            )
+          }
+        }
+      }
+    }
+  }
+  visit(phone)
+  return problems
 }
 
 export function parseCompilerPass(output, code) {
@@ -42,22 +88,21 @@ export function parseCompilerPass(output, code) {
   return { ok: code === 0 && diagnostics.length === 0, code, diagnostics, files }
 }
 
-// Membership is the proof: both bodies, nothing else repository-owned that is not a declaration,
-// and no RN/Expo global file. Returns the problems; an empty list is a clean program.
+// Membership is the proof: every checked body, nothing else repository-owned that is not a declaration,
+// and no RN/Expo global file. Bodies are repository paths. Returns the problems; empty is clean.
 export function checkNodeTestProgram(files, { realRoot, expected }) {
   const prefix = `${toPosix(realRoot).replace(/\/$/, '')}/`
   const owned = files
     .filter((file) => file.startsWith(prefix) && !file.includes('/node_modules/'))
     .map((file) => file.slice(prefix.length))
-  const expectedPaths = expected.map((file) => `mobile/${file}`)
   const problems = []
-  for (const file of expectedPaths) {
+  for (const file of expected) {
     if (!owned.includes(file)) {
-      problems.push(`checked test body is missing from the program: ${file}`)
+      problems.push(`checked body is missing from the program: ${file}`)
     }
   }
   for (const file of owned) {
-    if (/\.tsx?$/.test(file) && !file.endsWith('.d.ts') && !expectedPaths.includes(file)) {
+    if (/\.tsx?$/.test(file) && !file.endsWith('.d.ts') && !expected.includes(file)) {
       problems.push(`implementation source re-entered the test program: ${file}`)
     }
   }
@@ -133,7 +178,8 @@ function mirrorDeclarationInputs(passes, root, output) {
 
 // Sequential: two declaration producers, then the strict check of the test bodies.
 export function runNodeTestsTypecheck({ root = repoRoot, run = runProcessSync } = {}) {
-  const expected = readNodeTestRoots(root)
+  const bodies = readNodeTestBodies(root)
+  const { local: expected, external } = partitionNodeTestBodies(bodies)
   const output = ownOutputDirectory(root)
   try {
     const producers = []
@@ -141,23 +187,33 @@ export function runNodeTestsTypecheck({ root = repoRoot, run = runProcessSync } 
       const pass = compile(project, [], root, run)
       producers.push(pass)
       if (!pass.ok) {
-        return { ok: false, expected, programTestFiles: [], failures: [pass], problems: [] }
+        return {
+          ok: false,
+          expected,
+          external,
+          programTestFiles: [],
+          programExternalFiles: [],
+          failures: [pass],
+          problems: []
+        }
       }
     }
     mirrorDeclarationInputs(producers, root, output)
     const check = compile(NODE_TEST_PROJECT, ['--noEmit'], root, run)
-    const problems = checkNodeTestProgram(check.files, {
-      realRoot: fs.realpathSync(root),
-      expected
-    })
-    const prefix = `${toPosix(fs.realpathSync(root))}/mobile/`
+    const problems = [
+      ...findShadowedPhoneAliases(output),
+      ...checkNodeTestProgram(check.files, { realRoot: fs.realpathSync(root), expected: bodies })
+    ]
+    const prefix = `${toPosix(fs.realpathSync(root))}/`
+    const inProgram = check.files
+      .filter((file) => file.startsWith(prefix))
+      .map((file) => file.slice(prefix.length))
     return {
       ok: check.ok && problems.length === 0,
       expected,
-      programTestFiles: check.files
-        .filter((file) => file.startsWith(prefix))
-        .map((file) => file.slice(prefix.length))
-        .filter((file) => expected.includes(file)),
+      external,
+      programTestFiles: expected.filter((file) => inProgram.includes(`mobile/${file}`)),
+      programExternalFiles: external.filter((file) => inProgram.includes(file)),
       failures: check.ok ? [] : [check],
       problems
     }
@@ -188,5 +244,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     printNodeTestsFailure(result)
     process.exit(1)
   }
-  console.log(`phone/host contract tests check: ${result.programTestFiles.join(', ')}`)
+  console.log(
+    `phone/host contract tests check: ${[...result.programTestFiles.map((file) => `mobile/${file}`), ...result.programExternalFiles].join(', ')}`
+  )
 }

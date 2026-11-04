@@ -6,7 +6,7 @@ import type {
 } from './bridge/bridge-terminal-key'
 import type { BridgePageGeometry } from './bridge/bridge-page-geometry'
 import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-terminal-output-backlog'
-import type { RpcClient } from '../transport/rpc-client-contract'
+import type { RpcClient } from '../transport/rpc-client'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeRefusal } from './bridge/bridge-caps'
 import type {
