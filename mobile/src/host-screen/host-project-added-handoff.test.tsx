@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -18,14 +19,28 @@ vi.mock('./host-screen-operations', () => ({
   worktreePinWrite: { request: () => Promise.resolve({}) },
   worktreeRemove: { request: () => Promise.resolve({}) }
 }))
-vi.mock('../transport/host-removal-lifecycle', () => ({
+vi.mock('../host-catalog/host-removal-lifecycle', () => ({
   removeHostAndCloseClient: () => Promise.resolve()
 }))
 vi.mock('../host-route-exit', () => ({ leaveHostRoute: vi.fn() }))
 vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
+// The delete hook this graph reaches fires haptics, whose expo-haptics import is Flow
+// source vitest cannot parse; the handoff path never triggers a single pulse.
+vi.mock('../platform/haptics/haptics', () => ({
+  triggerError: () => {},
+  triggerSuccess: () => {}
+}))
 
-import type { RpcClient } from '../transport/rpc-client'
-import { useHostWorktreeActions } from './use-host-worktree-actions'
+// The actions hook's module graph reaches react-native (session guards, list rows);
+// Flow sources cannot parse under vitest, so stub the surface it touches.
+vi.mock('react-native', () => ({
+  AppState: {},
+  StyleSheet: { create: (styles: unknown) => styles }
+}))
+
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { NO_SERVER_WORKSPACES } from '../worktree/server-workspaces'
+import { useHostWorktreeActions } from './workspace-actions/use-host-worktree-actions'
 import type { HostScreenState } from './use-host-screen-state'
 import type { Worktree } from '../worktree/workspace-list-sections'
 
@@ -53,8 +68,12 @@ function handoffWith(confirmed: Worktree[] | undefined): (repo: typeof addedRepo
   const held: { handoff: ((repo: typeof addedRepo) => Promise<void>) | null } = { handoff: null }
   function Probe(): null {
     const actions = useHostWorktreeActions({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktreeActivate is mocked above, so the client never leaves the hook's null-check.
-      client: {} as unknown as RpcClient,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktreeActivate is mocked above, and the mutation hook reads the connection surface only; sendRequest is unreachable from the handoff.
+      client: {
+        getLastConnectedAt: () => 0,
+        getState: () => 'connected',
+        onStateChange: () => () => {}
+      } as unknown as RpcClient,
       connState: 'connected',
       embedded: false,
       fetchWorktrees: () => Promise.resolve(confirmed),
@@ -64,16 +83,19 @@ function handoffWith(confirmed: Worktree[] | undefined): (repo: typeof addedRepo
       pathname: '/h/host-a',
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: navigateFromHostList (embedded: false) reads push only; every other router member is unreachable from the handoff.
       router: router as unknown as Parameters<typeof useHostWorktreeActions>[0]['router'],
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handoff path reads setOptimisticActiveWorktreeIdentity and the modal refs' null defaults; every other member is unreachable from it.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handoff path reads setOptimisticActiveWorktreeIdentity, the empty server list its session open consults, and the modal refs' null defaults; every other member is unreachable from it.
       state: {
-        setOptimisticActiveWorktreeIdentity: () => {}
+        setOptimisticActiveWorktreeIdentity: () => {},
+        serverWorkspaces: NO_SERVER_WORKSPACES
       } as unknown as HostScreenState
     })
     held.handoff = actions.handleProjectAdded
     return null
   }
   act(() => {
-    create(createElement(Probe))
+    // Upstream's actions hook reads the shared query client; give the probe one.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    create(createElement(QueryClientProvider, { client: queryClient }, createElement(Probe)))
   })
   if (held.handoff === null) {
     throw new Error('the actions hook did not mount')
