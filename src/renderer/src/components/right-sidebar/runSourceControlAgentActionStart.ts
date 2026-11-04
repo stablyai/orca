@@ -3,14 +3,14 @@ import {
   sourceControlActionRecipeEntry,
   type SelectedSourceControlActionRecipe
 } from '../../../../shared/source-control-action-selection'
-import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import {

@@ -17,7 +17,10 @@ import { removeHostTree } from '../filesystem/host-tree-removal'
 import { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
 import { removeWorktree } from '../git/worktrees/removal/worktree-removal'
 import { areWorktreePathsEqual } from '../git/worktrees/catalog/worktree-path-comparison'
-import { acquireWatcherRemovalGate, beginTerminalInstall } from '../ipc/watcher-removal-gate'
+import {
+  acquireWatcherRemovalGate,
+  beginTerminalInstall
+} from '../workspaces/removal/watcher-removal-gate'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,

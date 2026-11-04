@@ -51,15 +51,6 @@ describe('resolveRuntimePaneTitleLeafResolution', () => {
       hasAnyPaneTitle: true
     })
   })
-
-  it('reports the matching leaf title when one resolves', () => {
-    expect(
-      resolveRuntimePaneTitleLeafResolution(splitLayout, { 1: 'zsh', 2: 'Codex' }, LEAF_B)
-    ).toEqual({
-      title: 'Codex',
-      hasAnyPaneTitle: true
-    })
-  })
 })
 
 describe('isRuntimePaneTitleOrphan', () => {

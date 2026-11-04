@@ -2,7 +2,7 @@ import { writeFile, appendFile, rm, rename, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { readClaudeTranscriptChunk } from './claude-transcript-cursor'
-import type { ClaudeLaunchedBackgroundTasks } from '../../claude-owed-task-notifications'
+import type { ClaudeLaunchedBackgroundTasks } from './claude-owed-task-notifications'
 import { dir, now, stamp, kill, prompt, pane, drain } from './claude-helper-kill.test-fixture'
 
 describe('Claude helper provider evidence', () => {

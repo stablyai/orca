@@ -5,18 +5,19 @@ import {
   getSshTargetDraftConnectionFields,
   hasAdvancedConnectionValues,
   type EditingTarget
-} from '../settings/ssh-target-draft'
-import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../../shared/ssh-types'
-import type {
-  SshConfigHostSummary,
-  SshConfigHostListArgs,
-  SshConfigHostListResult,
-  SshConfigHostResolution,
-  SshRepoReadoption,
-  SshTarget,
-  SshTargetAddResult,
-  SshTargetCreateInput
+} from '../settings/ssh/targets/ssh-target-draft'
+import {
+  SSH_CONFIG_HOST_RESULT_LIMIT,
+  type SshConfigHostSummary,
+  type SshConfigHostListArgs,
+  type SshConfigHostListResult,
+  type SshConfigHostResolution,
+  type SshRepoReadoption,
+  type SshTarget,
+  type SshTargetAddResult,
+  type SshTargetCreateInput
 } from '../../../../shared/ssh-types'
+
 import { isDuplicateSshTargetAlias } from './ssh-target-duplicate'
 
 type SshApi = {

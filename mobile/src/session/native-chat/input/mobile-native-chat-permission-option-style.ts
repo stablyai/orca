@@ -3,7 +3,7 @@ import { colors } from '../../../theme/mobile-theme'
 import {
   AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
   isAgentChatPermissionMode
-} from '../../../../../src/shared/agent-chat-permission-mode'
+} from '../../../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 
 /** Full access reads in the warning colour wherever it is shown. */
 export function permissionChoiceColor(value: string | undefined): string | undefined {

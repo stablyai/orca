@@ -59,7 +59,7 @@ import { renderProjectSettingsSections } from './settings-project-section-render
 import {
   SettingsHostScopePicker,
   shouldShowSettingsHostScopePicker
-} from '../SettingsHostScopePicker'
+} from '../host-scope/SettingsHostScopePicker'
 
 export function renderSettingsLoading(
   interactions: SettingsInteractionController

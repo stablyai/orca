@@ -1,4 +1,7 @@
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentType
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 
 export type TerminalTabAgentTypeState = Record<string, AgentStatusEntry>

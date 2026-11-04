@@ -9,6 +9,7 @@ export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
     state: pr.state,
     url: pr.url,
     status: pr.checksStatus,
+    ...(pr.checksSummary ? { checksSummary: pr.checksSummary } : {}),
     updatedAt: pr.updatedAt,
     mergeable: pr.mergeable,
     ...(pr.reviewDecision !== undefined ? { reviewDecision: pr.reviewDecision } : {}),

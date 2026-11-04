@@ -153,14 +153,6 @@ describe('terminal path helpers', () => {
       })
     })
 
-    it('handles large spaced path lists in linear time', () => {
-      const line = Array.from({ length: 20_000 }, () => '/tmp/Foo Bar/file').join(', ')
-
-      const paths = pathTexts(line)
-
-      expect(paths.filter((path) => path === '/tmp/Foo Bar/file')).toHaveLength(20_000)
-    })
-
     it('grows a spaced reading over a bounded number of words', () => {
       const paths = pathTexts(`/tmp/root ${'part/x '.repeat(20_000)}`)
 

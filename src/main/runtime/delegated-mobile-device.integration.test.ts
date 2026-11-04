@@ -326,26 +326,43 @@ describe('pairing.delegatedMobileDevice.sync', () => {
     expect(registry.listDelegatedMobileDevices(desktop.pairedDeviceId!)).toHaveLength(1)
   })
 
-  it('keeps the parent when a child cleanup cannot be saved', async () => {
-    const { server, registry } = await startServer()
-    const desktop = pairDesktop(server)
-    const [child] = await sync(desktop, [{ phoneKey: 'p', name: 'p' }])
-    expect(
-      server.setMobileRelayBinding(child!.deviceId, {
-        relayHostId: 'host',
-        relayDeviceId: child!.deviceId,
-        ownerIdentityKey: 'owner'
+  it.each(['bearer', 'fork'] as const)(
+    'keeps the ancestors when a %s child cleanup cannot be saved',
+    async (kind) => {
+      const { server, registry } = await startServer()
+      const desktop = pairDesktop(server)
+      const parent =
+        kind === 'fork'
+          ? registry.forkDeviceKey(
+              desktop.pairedDeviceId!,
+              Buffer.alloc(32, 7).toString('base64'),
+              'Fork'
+            )
+          : registry.getDevice(desktop.pairedDeviceId!)!
+      const [child] = registry.upsertDelegatedMobileDevices(parent, [{ phoneKey: 'p', name: 'p' }])
+      expect(
+        server.setMobileRelayBinding(child!.deviceId, {
+          relayHostId: 'host',
+          relayDeviceId: child!.deviceId,
+          ownerIdentityKey: 'owner'
+        })
+      ).toBe(true)
+      const enqueue = vi.spyOn(server.getRelayRevokeOutbox(), 'enqueue').mockImplementation(() => {
+        throw new Error('disk full')
       })
-    ).toBe(true)
-    const enqueue = vi.spyOn(server.getRelayRevokeOutbox(), 'enqueue').mockImplementation(() => {
-      throw new Error('disk full')
-    })
-    cleanups.push(() => enqueue.mockRestore())
+      cleanups.push(() => enqueue.mockRestore())
 
-    expect(server.revokeRuntimeAccess(desktop.pairedDeviceId!)).toBe(false)
-    expect(registry.getDevice(desktop.pairedDeviceId!)).not.toBeNull()
-    expect(registry.getDevice(child!.deviceId)).not.toBeNull()
-  })
+      expect(server.revokeRuntimeAccess(desktop.pairedDeviceId!)).toBe(false)
+      expect(registry.getDevice(desktop.pairedDeviceId!)).not.toBeNull()
+      expect(registry.getDevice(parent.deviceId)).not.toBeNull()
+      expect(registry.getDevice(child!.deviceId)).not.toBeNull()
+
+      enqueue.mockRestore()
+      expect(server.revokeRuntimeAccess(desktop.pairedDeviceId!)).toBe(true)
+      expect(registry.getDevice(parent.deviceId)).toBeNull()
+      expect(registry.getDevice(child!.deviceId)).toBeNull()
+    }
+  )
 
   it('fails a sync whose dropped child cannot be revoked, keeping that child', async () => {
     const { server, registry } = await startServer()

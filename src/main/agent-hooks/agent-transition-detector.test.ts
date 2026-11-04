@@ -4,7 +4,7 @@ import { AgentTransitionDetector, type AgentPaneChange } from './agent-transitio
 import {
   AGENT_TRANSITION_SCENARIOS,
   type AgentTransitionStep
-} from '../../shared/agent-transitions.test-fixture'
+} from '../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))

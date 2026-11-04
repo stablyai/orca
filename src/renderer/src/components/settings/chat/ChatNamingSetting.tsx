@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control-ai-types'
@@ -11,17 +11,18 @@ import {
   setSourceControlActionDefault
 } from '../../../../../shared/source-control-ai-actions'
 import { CUSTOM_AGENT_ID } from '../../../../../shared/commit-message-agent-spec'
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { Switch } from '../../ui/switch'
 import { Card, CardContent } from '../../ui/card'
-import { SourceControlActionRecipeRow } from '../SourceControlActionRecipeRow'
-import { CustomAgentCommandField } from '../CustomAgentCommandField'
+import { SourceControlActionRecipeRow } from '../source-control/SourceControlActionRecipeRow'
+import { replayGlobalTextModelEdits } from '../source-control-text-action-model-replay'
+import { CustomAgentCommandField } from '../source-control/CustomAgentCommandField'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { getChatNamingSearchEntry } from './chat-naming-search'
-import type { ActionRecipeDraftValue } from '../source-control-ai-action-recipe-draft'
+import type { ActionRecipeDraftValue } from '../source-control/source-control-ai-action-recipe-draft'
 import { AppearanceAdvancedDisclosure } from '../appearance/AppearanceAdvancedDisclosure'
 
 type ChatNamingSettingProps = {
@@ -39,21 +40,33 @@ export function ChatNamingSetting({
   onDirtyChange,
   forceVisible = false
 }: ChatNamingSettingProps): React.JSX.Element {
-  const config = normalizeSourceControlAiSettings(
-    settings.sourceControlAi,
-    settings.commitMessageAi
+  const config = useMemo(
+    () => normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi),
+    [settings.sourceControlAi, settings.commitMessageAi]
   )
   const recipe = config.actions?.conversationName
-  const persisted: ActionRecipeDraftValue = {
-    commandInputTemplate:
-      recipe?.commandInputTemplate ??
-      DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.conversationName,
-    agentArgs: recipe?.agentArgs ?? ''
-  }
+  const persistedModelChoice = config.modelOverridesByOperation?.conversationName
+  const persisted = useMemo<ActionRecipeDraftValue>(
+    () => ({
+      commandInputTemplate:
+        recipe?.commandInputTemplate ??
+        DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.conversationName,
+      agentArgs: recipe?.agentArgs ?? '',
+      modelChoice: persistedModelChoice
+    }),
+    [recipe, persistedModelChoice]
+  )
   const [draft, setDraft] = useState<ActionRecipeDraftValue | null>(null)
   const [customCommandDraft, setCustomCommandDraft] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
-  const value = draft ?? persisted
+  // Without a menu edit the model choice is whatever is saved now, including another editor's.
+  const value = useMemo(
+    () =>
+      draft && !draft.modelEdits?.length
+        ? { ...draft, modelChoice: persisted.modelChoice }
+        : (draft ?? persisted),
+    [draft, persisted]
+  )
   const customCommand = customCommandDraft ?? config.customAgentCommand
   const customCommandDirty = customCommand !== config.customAgentCommand
   const recipeDirty = JSON.stringify(value) !== JSON.stringify(persisted)
@@ -92,7 +105,22 @@ export function ChatNamingSetting({
     setIsSaving(true)
     try {
       await writeSourceControlAiSettings((current) => ({
-        actions: setSourceControlActionDefault(current.actions, 'conversationName', value),
+        actions: setSourceControlActionDefault(current.actions, 'conversationName', {
+          commandInputTemplate: value.commandInputTemplate,
+          agentArgs: value.agentArgs
+        }),
+        ...(value.modelEdits?.length
+          ? {
+              modelOverridesByOperation: {
+                ...current.modelOverridesByOperation,
+                conversationName: replayGlobalTextModelEdits(
+                  current,
+                  'conversationName',
+                  value.modelEdits
+                )
+              }
+            }
+          : {}),
         ...(customCommandDirty ? { customAgentCommand: customCommand } : {})
       }))
       if (!isMountedRef.current) {
@@ -207,6 +235,11 @@ export function ChatNamingSetting({
                 ) : null}
                 <SourceControlActionRecipeRow
                   actionId="conversationName"
+                  source={config}
+                  onTextModelChoiceChange={(_id, modelChoice, agentArgs, modelEdits) =>
+                    updateDraft({ ...value, modelChoice, agentArgs, modelEdits })
+                  }
+                  writeSourceControlAiSettings={writeSourceControlAiSettings}
                   selectedAgent={recipe?.agentId ?? null}
                   defaultAgentLabel={defaultAgentLabel}
                   defaultAgentSupportText={

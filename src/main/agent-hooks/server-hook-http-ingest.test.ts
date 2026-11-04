@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
-import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../shared/agent-status-types'
+import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../shared/agent-status/contracts/agent-status-field-normalization'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { buildBody, PANE, LEAF_2, LEAF_3 } from './server.test-fixtures'
 
@@ -302,10 +302,12 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('tracks hook posts with an empty paneKey before dropping them', async () => {
+  it('deduplicates empty pane diagnostics across HTTP, terminal, and relay ingress', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
+      const listener = vi.fn()
+      server.setListener(listener)
       const env = server.buildPtyEnv()
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
         method: 'POST',
@@ -323,14 +325,26 @@ describe('AgentHookServer listener replay', () => {
           )
         )
       })
-      const listener = vi.fn()
-      server.setListener(listener)
-
       expect(response.status).toBe(204)
+      for (let index = 0; index < 100; index++) {
+        server.ingestTerminalStatus({
+          paneKey: '',
+          payload: { state: 'working', prompt: '', agentType: 'codex' }
+        })
+        server.ingestRemote(
+          { paneKey: '  ', payload: { state: 'working', prompt: '', agentType: 'codex' } },
+          'remote-1'
+        )
+      }
       expect(listener).not.toHaveBeenCalled()
-      expect(trackMock).toHaveBeenCalledWith('agent_hook_unattributed', {
+      expect(trackMock).toHaveBeenCalledExactlyOnceWith('agent_hook_unattributed', {
         reason: 'empty_pane_key'
       })
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        payload: { state: 'working', prompt: 'valid', agentType: 'codex' }
+      })
+      expect(listener).toHaveBeenCalledWith(expect.objectContaining({ paneKey: PANE }))
     } finally {
       server.stop()
     }

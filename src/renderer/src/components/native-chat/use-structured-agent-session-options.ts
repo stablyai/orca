@@ -1,4 +1,4 @@
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
@@ -65,25 +65,6 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
 
   const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
 
-  const hostCatalog = useHostModelCatalogUpgrade({
-    agent,
-    sessionId,
-    target,
-    optionCatalog,
-    enabled: args.isVisible,
-    // A resumed conversation may keep its own model, so only a new one runs the listed default.
-    newLaunch,
-    ...(launch?.worktree ? { worktree: launch.worktree } : {}),
-    fence,
-    turnId,
-    reportedUnpickedModel:
-      newLaunch && launchSeedOptions?.model === undefined && optionState.catalogSource === 'live',
-    ...(args.providerRunning ? { providerRunning: true } : {}),
-    activeOptionRecordRef,
-    updateOptionState,
-    receiveCatalog
-  })
-
   const acceptsTurnPicks =
     acceptsPicks && (!(args.isWorking ?? turnId !== null) || takesSendOptions || takesSelection)
   const interactionReadyRef = useRef(acceptsTurnPicks)
@@ -109,6 +90,27 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       optionView(optionState, launchSeedOptions, launch?.explicitOptions)
     )
   )
+  const modelOption = optionSnapshot.find((row) => row.id === 'model')
+  const hostCatalog = useHostModelCatalogUpgrade({
+    agent,
+    selectedModel: modelOption?.kind.type === 'select' ? modelOption.kind.currentValue : undefined,
+    sessionId,
+    target,
+    optionCatalog,
+    enabled: args.isVisible,
+    // A resumed conversation may keep its own model, so only a new one runs the listed default.
+    newLaunch,
+    ...(launch?.worktree ? { worktree: launch.worktree } : {}),
+    fence,
+    turnId,
+    reportedUnpickedModel:
+      newLaunch && launchSeedOptions?.model === undefined && optionState.catalogSource === 'live',
+    ...(args.providerRunning ? { providerRunning: true } : {}),
+    activeOptionRecordRef,
+    updateOptionState,
+    receiveCatalog
+  })
+
   const readWriteContext = () => {
     const view = optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)
     return {

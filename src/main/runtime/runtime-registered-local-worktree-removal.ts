@@ -19,7 +19,7 @@ import { runHook, getEffectiveHooks } from '../workspace-hooks/hooks'
 import { findExistingWorktreeSymlinkPaths } from '../git/worktrees/content-paths/worktree-symlink-detection'
 import { removeWorktreeLinkedPaths } from '../ipc/worktree-symlinks'
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
-import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,

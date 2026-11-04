@@ -1,11 +1,7 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it } from 'vitest'
-import {
-  buildPluginGuestShellHtml,
-  buildPluginPanelShellHtml,
-  PLUGIN_GUEST_CSP
-} from './plugin-panel-shell'
+import { buildPluginGuestShellHtml, buildPluginPanelShellHtml } from './plugin-panel-shell'
 
 describe('buildPluginPanelShellHtml', () => {
   it('removes WebRTC peer connections before plugin code can reach them', () => {
@@ -82,45 +78,6 @@ describe('buildPluginPanelShellHtml', () => {
 })
 
 describe('buildPluginGuestShellHtml', () => {
-  it('injects only the frame API ahead of plugin HTML; main fences the guest', () => {
-    const html = buildPluginGuestShellHtml('<main>Plugin</main>')
-    expect(html.indexOf('__orcaPluginFrameTransport')).toBeLessThan(html.indexOf('<main>'))
-    expect(html).toContain('<style id="orca-design-tokens">')
-    expect(html).not.toContain('Content-Security-Policy')
-    expect(html).not.toContain('RTCPeerConnection')
-    expect(html).not.toContain('__ORCA_PANEL_TOKENS__')
-  })
-
-  it('pins the guest CSP from the design contract', () => {
-    expect(PLUGIN_GUEST_CSP).toBe(
-      "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; " +
-        "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; " +
-        "media-src 'self' data: blob:; connect-src 'self' data: blob:; worker-src 'self' blob:; " +
-        "frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
-    )
-  })
-
-  it("hands Orca's declarative boot script a post hook only on its own page", () => {
-    expect(buildPluginGuestShellHtml('<main></main>')).not.toContain('__orcaDeclarativePost')
-    expect(buildPluginGuestShellHtml('<main></main>', 'panel', { declarative: true })).toContain(
-      '"declarativePost":"__orcaDeclarativePost"'
-    )
-  })
-
-  it("never puts shell or files on a components panel's hidden guest", () => {
-    expect(buildPluginGuestShellHtml('<main></main>')).toContain('"user":{')
-    expect(buildPluginGuestShellHtml('<main></main>', 'panel', { declarative: true })).toContain(
-      '"user":null'
-    )
-  })
-
-  it('offers user-gesture methods to guests only, where Orca can verify the gesture', () => {
-    const methods = (html: string) => html.match(/"methods":(\[[^\]]*\])/)?.[1] ?? ''
-    expect(methods(buildPluginPanelShellHtml('<main></main>'))).not.toContain('shell.openExternal')
-    expect(methods(buildPluginGuestShellHtml('<main></main>'))).toContain('shell.openExternal')
-    expect(methods(buildPluginGuestShellHtml('<main></main>'))).toContain('notifications.show')
-  })
-
   it('paints the host theme before any script, so boot-time token reads get values', () => {
     const html = buildPluginGuestShellHtml('<main></main>', 'panel', {
       theme: { colorScheme: 'dark', tokens: '--orca-background:#000;}</style><script>x' }

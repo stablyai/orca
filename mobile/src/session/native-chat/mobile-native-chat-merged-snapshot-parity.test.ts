@@ -17,7 +17,7 @@ import {
   type StructuredAgentSessionState
 } from '../../../../src/shared/agent-session/structured-agent-session-reducer'
 import { selectStructuredAgentTurnBars } from '../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../../src/shared/tui-agent-display-names'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages

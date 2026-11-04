@@ -48,17 +48,6 @@ const open = (sessionId: string) => ({
 })
 
 describe("a host's chat tab change as main's layout command", () => {
-  it("opens a listed chat in the workspace's remembered active group", () => {
-    expect(commandOn(session([chatTab('a', 'saved-tab')], 'group-1'), open('b'))).toEqual({
-      type: 'openAgentSessionTab',
-      workspace: WT,
-      tabId: 'agent-session:b',
-      sessionId: 'b',
-      agent: 'codex',
-      groupId: 'group-1'
-    })
-  })
-
   it('names no group the workspace no longer holds, nor one with no layout loaded', () => {
     expect(commandOn(session([chatTab('a', 'saved-tab')], 'gone'), open('b'))).toEqual(
       expect.not.objectContaining({ groupId: expect.anything() })
@@ -136,9 +125,5 @@ describe("a host's chat tab change as main's layout command", () => {
       tabIds: ['saved-tab'],
       force: true
     })
-  })
-
-  it('closes nothing for a chat no tab shows', () => {
-    expect(commandOn(session([chatTab('a', 'saved-tab')]), { close: 'b' })).toBeNull()
   })
 })

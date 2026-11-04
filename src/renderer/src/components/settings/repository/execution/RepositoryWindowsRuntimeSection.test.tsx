@@ -13,7 +13,7 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (value: typeof state) => unknown) => selector(state)
 }))
 vi.mock('../../../wsl-move/wsl-move-entry', () => ({ useWslMoveTargetForRepo: () => null }))
-vi.mock('../../ProjectWindowsRuntimeSetting', () => ({
+vi.mock('./ProjectWindowsRuntimeSetting', () => ({
   ProjectWindowsRuntimeSetting: () => <div>runtime</div>
 }))
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }))

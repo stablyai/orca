@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
-import { getAgentAwakeLidNote } from '../settings/agent-awake-copy'
+import { getAgentAwakeLidNote } from '../settings/agents/behavior/agent-awake-copy'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 
 const storeMocks = vi.hoisted(() => ({

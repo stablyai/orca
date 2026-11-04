@@ -1,5 +1,5 @@
 import { vi, type Mock } from 'vitest'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'

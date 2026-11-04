@@ -1,7 +1,7 @@
 import { liftActionPermissionArgs } from '../../../../../../shared/source-control-action-permission-lift'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { CUSTOM_AGENT_ID } from '../../../../../../shared/commit-message-agent-spec'
 import type {
   RepoSourceControlAiOverrides,
@@ -31,11 +31,11 @@ import {
 } from './repository-source-control-ai-draft'
 import { ACTION_MODE_INHERIT, DEFAULT_AGENT_VALUE } from './repository-source-control-ai-labels'
 import { createRepoAiPersistQueue } from './repository-source-control-ai-persist-queue'
-import { withRepoAiActionAgent } from '../../repository-source-control-ai-action-agent-draft'
+import { withRepoAiActionAgent } from './repository-source-control-ai-action-agent-draft'
 import {
   createRepoActionTextDraftEditors,
   resetActionDraftLaunchPreferences
-} from '../../repository-source-control-ai-text-draft'
+} from './repository-source-control-ai-text-draft'
 
 type HostedReviewDefaultKey = keyof NonNullable<RepoSourceControlAiOverrides['prCreationDefaults']>
 
@@ -230,6 +230,7 @@ export function useRepositorySourceControlAiGlobalUx({
   }
 
   const {
+    updateActionTextModelChoice,
     updateActionLaunchPreferences,
     updateActionTemplate,
     updateActionAgentArgs,
@@ -262,16 +263,21 @@ export function useRepositorySourceControlAiGlobalUx({
         if (!hasOwnActionOverride(next.actionOverrides, actionId)) {
           next = withRepoAiActionMode(next, settings, actionId, 'override')
         }
-        return withRepoAiActionRecipeText(next, settings, actionId, draft)
+        return withRepoAiActionRecipeText(next, settings, actionId, draft, repoIdForWrite)
       })
       if (repoIdRef.current !== repoIdForWrite || !mountedRef.current || !ok) {
         return
       }
-      setImmediateRepoAi((current) => {
-        const next = withRepoAiActionRecipeText(current, settings, actionId, draft)
-        immediateRepoAiRef.current = next
-        return next
-      })
+      // Built outside a state updater: replaying the menu edits reads the store's current settings.
+      commitImmediate(
+        withRepoAiActionRecipeText(
+          immediateRepoAiRef.current,
+          settings,
+          actionId,
+          draft,
+          repoIdForWrite
+        )
+      )
       setActionTextDrafts((current) =>
         clearActionTextDraftIfUnchanged(current, actionId, actionTextDrafts[actionId] ?? draft)
       )
@@ -297,6 +303,7 @@ export function useRepositorySourceControlAiGlobalUx({
 
   return {
     displayRepoAi,
+    actionTextDrafts,
     saveError,
     actionDirtyById,
     savingActionIds,
@@ -306,6 +313,7 @@ export function useRepositorySourceControlAiGlobalUx({
     updateHostedReviewDefault,
     updateActionMode,
     updateActionAgent,
+    updateActionTextModelChoice,
     updateActionLaunchPreferences,
     updateActionTemplate,
     updateActionAgentArgs,

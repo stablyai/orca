@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { AgentHookServer, PANE_KEY_ALIASES_MAX } from './server'
+import { AgentHookServer } from './server'
+import { PANE_KEY_ALIASES_MAX } from './server/server-constants'
 
 const SOURCE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
 const TARGET = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')

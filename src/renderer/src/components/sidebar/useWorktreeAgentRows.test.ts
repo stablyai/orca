@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'

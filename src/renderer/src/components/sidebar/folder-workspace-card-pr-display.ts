@@ -1,3 +1,4 @@
+import { getProviderChecksOutcome } from '../../../../shared/provider-check-summary'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
@@ -19,11 +20,12 @@ type FolderWorkspaceCardPrDisplayArgs = {
   settings?: AppState['settings']
 }
 
-const REVIEW_STATUS_PRIORITY: Record<NonNullable<WorktreeCardPrDisplay['status']>, number> = {
+const REVIEW_STATUS_PRIORITY: Record<string, number> = {
   failure: 0,
   pending: 1,
-  success: 2,
-  neutral: 3
+  cancelled: 2,
+  success: 3,
+  neutral: 4
 }
 
 export function getFolderWorkspaceCardPrDisplay({
@@ -106,7 +108,11 @@ function parentPrChecksRowToCardDisplay(row: ParentPrChecksRow): WorktreeCardPrD
     title: row.title,
     ...(row.reviewState ? { state: row.reviewState } : {}),
     ...(row.reviewUrl ? { url: row.reviewUrl } : {}),
-    status: row.checkTone
+    status: row.checkTone === 'cancelled' ? 'failure' : row.checkTone,
+    // Review attention tones must not be reinterpreted as check outcomes.
+    checksSummary: ['failing', 'pending', 'cancelled', 'success', 'neutral'].includes(row.status)
+      ? row.checksSummary
+      : undefined
   }
 }
 
@@ -133,5 +139,7 @@ function compareReviewDisplays(left: WorktreeCardPrDisplay, right: WorktreeCardP
 }
 
 function getReviewDisplayPriority(review: WorktreeCardPrDisplay): number {
-  return review.status ? REVIEW_STATUS_PRIORITY[review.status] : 4
+  return review.status
+    ? (REVIEW_STATUS_PRIORITY[getProviderChecksOutcome(review.checksSummary, review.status)] ?? 4)
+    : 5
 }

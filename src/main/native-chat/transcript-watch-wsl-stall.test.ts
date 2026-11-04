@@ -14,7 +14,7 @@ vi.mock('./session-file-resolver', () => ({ resolveSessionFilePath: mocks.resolv
 vi.mock('../wsl/filesystem/wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths])
 }))
-vi.mock('./transcript-native-watcher', () => ({
+vi.mock('../../shared/transcript-native-watcher', () => ({
   createTranscriptNativeWatcher: () => ({
     bind: () => true,
     needsRebind: () => false,

@@ -37,8 +37,8 @@ import { addWslEnvKeys } from '../../../shared/wsl-env'
 import {
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess
-} from '../../../shared/agent-process-recognition'
-import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/hermes-startup-query'
+} from '../../../shared/agent-status/process/agent-process-recognition'
+import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/agent-launch/startup/hermes-startup-query'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV

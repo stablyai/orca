@@ -1,4 +1,5 @@
-import { useAppStore } from '@/store'
+import { paneResumeRecord } from './pane-resume-record'
+import { useAppStore } from '@/store/index'
 import type { PtyReplayDataMeta } from '../pty-transport-types'
 import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal-color-scheme-protocol'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
@@ -53,21 +54,48 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     }
     return true
   }
-  session.clearSleepingRecordAfterColdRestoreSpawn = (
+  session.keepResumeRecordAfterColdRestoreSpawn = (
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
-    if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
-      // Record main’s wake before dropping the record; record-only consumption would leave nothing for main to resume.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        recordPaneWakeThroughLayoutOwner(
-          useAppStore.getState(),
-          session.deps.worktreeId,
-          session.cacheKey
-        )
+    if (!startup || startup.resumeSource?.cancelled) {
+      return
+    }
+    const state = useAppStore.getState()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      if (!startup.useLiveEntry && startup.sleepingRecordEntry) {
+        recordPaneWakeThroughLayoutOwner(state, session.deps.worktreeId, session.cacheKey)
+        session.clearSleepingRecordProviderDuplicates(state, startup.sleepingRecordEntry)
       }
+      return
+    }
+    const captured = startup.sleepingRecordEntry
+    if (captured && state.sleepingAgentSessionsByPaneKey[captured.paneKey] !== captured.record) {
+      return
+    }
+    if (!captured && startup.useLiveEntry) {
+      const expected = startup.resumeSource?.expectedStatus
+      const current = state.agentStatusByPaneKey[session.cacheKey]
+      if (
+        !expected ||
+        current?.updatedAt !== expected.receivedAt ||
+        current.stateStartedAt !== expected.stateStartedAt
+      ) {
+        return
+      }
+    }
+    // Spawn proves a PTY exists, not that the agent has replaced its resume identity.
+    const record = paneResumeRecord(session, startup)
+    if (record) {
+      state.rememberSleepingAgentSession(
+        record,
+        captured && captured.paneKey === session.cacheKey ? captured.record : undefined
+      )
+    }
+    if (!startup.useLiveEntry && startup.sleepingRecordEntry) {
       session.clearSleepingRecordProviderDuplicates(
         useAppStore.getState(),
-        startup.sleepingRecordEntry
+        startup.sleepingRecordEntry,
+        session.cacheKey
       )
     }
   }

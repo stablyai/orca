@@ -24,8 +24,8 @@ import {
   type AgentSessionRestartPrompt,
   type AgentSessionRestartTask
 } from '../../../shared/agent-session/lifecycle/agent-session-restart-activity'
-import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { isLiveChildWork } from '../../../shared/agent-status/child-work/agent-status-child-work-liveness'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {

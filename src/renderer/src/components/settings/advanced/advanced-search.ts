@@ -1,5 +1,5 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
-import { getAdvancedNetworkSearchEntries } from '../advanced-network-search'
+import { getAdvancedNetworkSearchEntries } from './network/advanced-network-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'

@@ -1,8 +1,8 @@
 import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
 import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { MAX_SKILL_REFS } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import { SkillRefLimitError } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { promptSkillRefs } from './native-chat-prompt-document'
@@ -13,7 +13,7 @@ import {
   isStructuredAgentSessionGoalCommand,
   structuredAgentSessionCommandChangesConversation
 } from '../../../../shared/agent-session/view/structured-agent-session-composer'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'

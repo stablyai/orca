@@ -39,6 +39,10 @@ export function useBrowserPageViewportScrollReporting(
     scroller.addEventListener('scroll', report, { passive: true })
     const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report)
     resizeObserver?.observe(scroller)
+    // A new box size changes the scroll range without resizing the scroller.
+    if (scroller.firstElementChild) {
+      resizeObserver?.observe(scroller.firstElementChild)
+    }
     return () => {
       scroller.removeEventListener('scroll', report)
       resizeObserver?.disconnect()

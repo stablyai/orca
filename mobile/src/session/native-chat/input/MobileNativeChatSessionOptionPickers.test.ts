@@ -339,6 +339,24 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     })
   })
 
+  it('shows the current fallback model without making a model write', () => {
+    const descriptor: SessionOptionDescriptor = {
+      ...MODEL_DESCRIPTOR,
+      transport: 'agent-session',
+      valueSource: 'applied',
+      reportedModel: 'claude-opus-4-8',
+      kind: {
+        type: 'select',
+        currentValue: 'claude-opus-5-5',
+        choices: [{ value: 'claude-opus-5-5', label: 'Opus 5.5' }]
+      }
+    }
+    mount([descriptor], true)
+    expect(pill('Model').props.accessibilityLabel).toBe('Model, Opus 4.8')
+    expect(descriptor.kind.currentValue).toBe('claude-opus-5-5')
+    expect(setOption).not.toHaveBeenCalled()
+  })
+
   it('opens the model sheet and applies a picked model', async () => {
     mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR])
     await act(async () => pill('Model').props.onPress())

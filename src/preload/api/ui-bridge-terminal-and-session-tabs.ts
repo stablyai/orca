@@ -9,8 +9,8 @@ import type {
   AgentLaunchTabPublishReply,
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
-import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+} from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
@@ -20,7 +20,7 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {
   RuntimeMobileSessionTabMove,

@@ -15,18 +15,18 @@ import {
   FILE_UPLOAD_TARGET_FUNCTION,
   FILL_ELEMENT_FUNCTION,
   SELECT_ALL_ELEMENT_FUNCTION
-} from '../browser-element-functions'
-import { assertUploadFilesExist } from '../browser-upload-files'
+} from '../cdp/input/browser-element-functions'
+import { assertUploadFilesExist } from '../cdp/input/browser-upload-files'
 import type { WebContents } from 'electron'
-import type { CapturedElement } from '../cdp-element-capture'
-import { interceptFileChooser, type OpenedFileChooser } from '../guest-file-chooser'
-import { readRecord, readString } from '../guest-frame-input-sessions'
+import type { CapturedElement } from '../cdp/commands/cdp-element-capture'
+import { interceptFileChooser, type OpenedFileChooser } from '../cdp/input/guest-file-chooser'
+import { readRecord, readString } from '../cdp/input/guest-frame-input-sessions'
 import {
   agentBrowserWaitArguments,
   type AgentBrowserWaitOptions
 } from './agent-browser-wait-arguments'
-import { parseCdpKeyEvent } from '../cdp-keyboard-us-layout'
-import { readRemoteCliAdmittedPage } from '../remote-cli-page-admission'
+import { parseCdpKeyEvent } from '../cdp/input/cdp-keyboard-us-layout'
+import { readRemoteCliAdmittedPage } from '../routing/input-ownership/remote-cli-page-admission'
 import { AgentBrowserBridgeKeyCommands } from './agent-browser-bridge-key-commands'
 
 export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowserBridgeKeyCommands {

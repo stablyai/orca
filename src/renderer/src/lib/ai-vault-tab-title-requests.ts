@@ -1,5 +1,8 @@
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentType
+} from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   type AiVaultSessionTitle,
   isAiVaultTitleAgent

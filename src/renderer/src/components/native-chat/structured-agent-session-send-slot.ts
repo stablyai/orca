@@ -30,12 +30,13 @@ export type StructuredAgentSessionSendInput = {
   skills?: readonly AgentJournalSkillRef[]
   /** Made while the chat read Stopping: drawn after that turn until the host records it. */
   sentWhileStopping?: true
+  onCreated?: (clientMessageId: string) => void
   now?: number
 }
 
 export type StructuredAgentSessionSendRequest = Pick<
   StructuredAgentSessionSendInput,
-  'callerKeepsText' | 'usageLimitContinuationOfTurnItemId' | 'skills'
+  'callerKeepsText' | 'usageLimitContinuationOfTurnItemId' | 'skills' | 'onCreated'
 > & {
   /** An explicit keyboard choice overrides the Enter preference for this draft. */
   delivery?: 'immediate' | 'queue-if-active'

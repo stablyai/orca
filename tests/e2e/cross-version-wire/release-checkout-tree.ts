@@ -8,8 +8,8 @@ import {
   type PackageImports
 } from './release-missing-packages.ts'
 
-const CHECKOUT_PROCESS_TIMEOUT_MS = 45_000
-const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
+import { CHECKOUT_PROCESS_TIMEOUT_MS, runCheckoutProcess } from './release-checkout-process.ts'
+import { prepareReleaseSnapshotSource } from './release-checkout-prefetch.ts'
 
 // Extract runtime, renderer, codecs and the phone row reader; omit CLI to bound cold-CI extraction.
 // Add source workspace packages from each release’s own policy.
@@ -160,31 +160,6 @@ function checkoutTarProgram(): string {
   return join(systemRoot, 'System32', 'tar.exe')
 }
 
-async function runCheckoutProcess(
-  repoRoot: string,
-  program: string,
-  args: string[],
-  deadline: number
-): Promise<string> {
-  // Kept lazy so plain Node 24 contention children never load Vite's TS graph.
-  const { runProcess } = await import('@orca/process-host')
-  const result = await runProcess({
-    program,
-    args,
-    cwd: repoRoot,
-    timeoutMs: Math.max(1, deadline - Date.now()),
-    maxOutputBytes: CHECKOUT_MAX_OUTPUT_BYTES,
-    terminationBarrier: true
-  })
-  if (result.code === 0 && !result.timedOut) {
-    return result.stdout
-  }
-  const detail = result.timedOut
-    ? `timed out after ${CHECKOUT_PROCESS_TIMEOUT_MS}ms`
-    : result.stderr.trim() || `exited with ${result.code}`
-  throw new Error(`${program} ${args[0] ?? ''} ${detail}`)
-}
-
 function workspacePatternRoot(pattern: string): string {
   const segments: string[] = []
   for (const segment of pattern.replace(/\/$/, '').split('/')) {
@@ -254,23 +229,16 @@ export async function extractReleaseCheckoutTree(
   sourceOnly = false
 ): Promise<PackageImports> {
   const archive = join(staging, '.release-checkout.tar')
+  await prepareReleaseSnapshotSource(repoRoot, commit)
   const deadline = Date.now() + CHECKOUT_PROCESS_TIMEOUT_MS
   const workspacePaths = await releaseWorkspaceArchivePaths(repoRoot, commit, deadline)
   const optionalPaths = await listReleasePaths(repoRoot, commit, OPTIONAL_ARCHIVE_PATHS, deadline)
+  const paths = [...ARCHIVE_PATHS, ...optionalPaths, ...workspacePaths]
   try {
     await runCheckoutProcess(
       repoRoot,
       'git',
-      [
-        'archive',
-        '--format=tar',
-        `--output=${archive}`,
-        commit,
-        '--',
-        ...ARCHIVE_PATHS,
-        ...optionalPaths,
-        ...workspacePaths
-      ],
+      ['archive', '--format=tar', `--output=${archive}`, commit, '--', ...paths],
       deadline
     )
     await runCheckoutProcess(

@@ -37,7 +37,7 @@ vi.mock('../../../BrowserCookieImportMachineNotice', () => ({
   BrowserCookieImportMachineNotice: () => null
 }))
 vi.mock('../../../../../../main/browser/browser-manager', () => ({ browserManager: {} }))
-vi.mock('../../../../../../main/browser/browser-session-registry', () => ({
+vi.mock('../../../../../../main/browser/sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: () => profile,
     listProfiles: () => [profile],

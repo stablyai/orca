@@ -8,8 +8,15 @@ import {
   scoreSettingsSearch,
   type SettingsSearchEntry
 } from './settings-search'
+import { getGeneralEditorSearchEntries } from '../editor/general-editor-search'
 
 describe('settings-search', () => {
+  it('finds the final-newline setting by its end-of-file aliases', () => {
+    const entries = getGeneralEditorSearchEntries()
+    expect(matchesSettingsSearch('final newline', entries)).toBe(true)
+    expect(matchesSettingsSearch('eof', entries)).toBe(true)
+  })
+
   it('scores pane title matches above entry, description, and keyword matches', () => {
     const paneTitleMatch = [{ title: 'Keyboard Shortcuts' }]
     const entryTitleMatch = [{ title: 'Interface' }, { title: 'Shortcuts' }]

@@ -5,7 +5,7 @@ import {
   antigravityTranscriptReferencePrompt
 } from './antigravity-session-origin'
 import { normalizeAiVaultResumeFilePath } from './ai-vault-resume-path'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
 import {
   clearEnvCommand,
   commandSeparator,
@@ -13,7 +13,7 @@ import {
   quoteStartupArg,
   type AgentStartupShell,
   withoutEnvCommand
-} from './tui-agent-startup-shell'
+} from './agent-launch/startup/tui-agent-startup-shell'
 import type { AiVaultAgent, AiVaultSession } from './ai-vault-types'
 
 export function buildAiVaultResumeCommand(args: {

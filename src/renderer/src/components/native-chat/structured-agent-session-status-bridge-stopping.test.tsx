@@ -8,7 +8,7 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { selectLiveTabAgentPanes } from '../../lib/tab-agent-status-index'
 import { createTestStore } from '../../store/slices/store-test-helpers'
 import { createTabBarAgentProjectionSelector } from '../tab-bar/tab-agent-types-by-tab-id'

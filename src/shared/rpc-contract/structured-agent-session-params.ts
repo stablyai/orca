@@ -253,7 +253,8 @@ export const ModelCatalogParams = z.strictObject({
   worktree: Identifier('Invalid worktree selector').optional(),
   waitForListing: z.boolean().optional(),
   // Read saved data without starting a listing; gate on saved-only capability because older hosts refuse unknown keys.
-  savedOnly: z.boolean().optional()
+  savedOnly: z.boolean().optional(),
+  selectedModel: Identifier('Invalid selected model').optional()
 })
 
 export const ConversationCommandParams = z

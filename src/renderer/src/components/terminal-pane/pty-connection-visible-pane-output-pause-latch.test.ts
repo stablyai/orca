@@ -9,7 +9,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -103,6 +107,7 @@ async function connectVisibleRemotePane(): Promise<{
   pauseCalls: () => boolean[]
 }> {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.setOutputPaused = vi.fn(() => true)
   transport.serializeBuffer = vi.fn()
@@ -116,8 +121,8 @@ async function connectVisibleRemotePane(): Promise<{
   const binding = connectPanePty(
     createPane(1) as never,
     createManager(1) as never,
-    deps as never
-  ) as Binding
+    bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(captured.callbacks).not.toBeNull()
   return {

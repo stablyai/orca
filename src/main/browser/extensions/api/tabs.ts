@@ -6,7 +6,7 @@ import {
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   activateBrowserExtensionTab,
   closeBrowserExtensionTab,
@@ -19,12 +19,12 @@ import {
   resolveBrowserExtensionTab,
   resolveCallerWindowId,
   type BrowserExtensionTabEntry
-} from '../browser-extension-tab-model'
+} from '../tabs-and-windows/browser-extension-tab-model'
 import {
   matchesDiscardedTabNativeQuery,
   matchesOrcaTabQuery,
   type OrcaTabQuery
-} from '../browser-extension-tab-query'
+} from '../tabs-and-windows/browser-extension-tab-query'
 import {
   activateBrowserExtensionDiscardedTab,
   closeBrowserExtensionDiscardedTab,
@@ -32,13 +32,13 @@ import {
   findBrowserExtensionDiscardedTab,
   listBrowserExtensionDiscardedTabs,
   type BrowserExtensionDiscardedTabEntry
-} from '../browser-extension-discarded-tab-model'
+} from '../tabs-and-windows/browser-extension-discarded-tab-model'
 import { captureVisibleTabMethod } from './tabs-capture'
 import { tabsPageMethods } from './tabs-page-methods'
 import {
   getLastFocusedBrowserExtensionWindowId,
   listBrowserExtensionWindows
-} from '../browser-extension-window-model'
+} from '../tabs-and-windows/browser-extension-window-model'
 
 const tabIdSchema = z.number().int().nonnegative()
 const nativeTabSchema = z.record(z.string(), z.unknown())
