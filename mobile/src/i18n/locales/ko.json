@@ -550,6 +550,8 @@
     }
   },
   "common": {
+    "details": "세부 정보",
+    "hideDetails": "세부 정보 숨기기",
     "back": "뒤로",
     "cancel": "취소",
     "close": "닫기",

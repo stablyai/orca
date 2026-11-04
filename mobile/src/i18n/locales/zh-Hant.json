@@ -550,6 +550,8 @@
     }
   },
   "common": {
+    "details": "詳情",
+    "hideDetails": "隱藏詳情",
     "back": "返回",
     "cancel": "取消",
     "close": "關閉",
