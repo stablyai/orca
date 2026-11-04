@@ -62,7 +62,7 @@ export function useMobileStructuredInterruptedContinue(
     const turnItemId = offeredTurnItemId
     setHeld({ sessionKey, attempt: { asked: turnItemId, failedOn: null } })
     void requestNativeChatInterruptedContinue(
-      (method, params) => callAgentSession(client, method, params),
+      (method, params) => callAgentSession<{ outcome?: string }>(client, method, params),
       sessionId,
       turnItemId
     ).then((accepted) => {

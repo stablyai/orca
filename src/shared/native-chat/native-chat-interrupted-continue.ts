@@ -56,12 +56,15 @@ export function failNativeChatInterruptedContinue(
 
 /** Resolves false when the host took nothing; the host rechecks the cut under the session lock. */
 export function requestNativeChatInterruptedContinue(
-  call: (method: 'agentSession.continueInterrupted', params: unknown) => Promise<unknown>,
+  call: (
+    method: 'agentSession.continueInterrupted',
+    params: { sessionId: string; turnItemId: string }
+  ) => Promise<{ outcome?: string }>,
   sessionId: string,
   turnItemId: string
 ): Promise<boolean> {
   return call('agentSession.continueInterrupted', { sessionId, turnItemId }).then(
-    (answer) => (answer as { outcome?: string } | null)?.outcome !== 'refused',
+    (answer) => answer.outcome !== 'refused',
     () => false
   )
 }

@@ -172,7 +172,7 @@ export function useNativeChatInterruptedContinuation(input: {
     setAttempt({ asked: turnItemId, failedOn: null })
     reportComposerError(null)
     void requestNativeChatInterruptedContinue(
-      (method, params) => callStructuredAgentSession(target, method, params),
+      (method, params) => callStructuredAgentSession<{ outcome?: string }>(target, method, params),
       sessionId,
       turnItemId
     ).then((accepted) => {
