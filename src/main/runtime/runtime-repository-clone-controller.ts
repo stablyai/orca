@@ -5,7 +5,7 @@ import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
+import { getGitCloneFailureMessage } from '../../shared/git/remotes/git-clone-failure-message'
 import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
@@ -14,15 +14,15 @@ import {
 } from '../git/repo-clone-path'
 import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../git/runner'
 import { reuseSavedCloneTarget } from '../git/saved-clone-target'
-import { runWithGitReadCacheInvalidation } from '../git/status'
-import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
+import { runWithGitReadCacheInvalidation } from '../git/source-control/git-read-cache-invalidation'
+import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { detectRepoIconAndUpstream } from '../repository-icons/repo-icon-autodetect'
 import { getRepoName } from '../git/repo'
-import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
-import { resolveClonedFolderConversion } from '../folder-repo-git-conversion'
-import { findExtraFolderWorkspaceIds } from '../folder-workspace-meta-presence'
+import { resolveClonedFolderConversion } from '../workspaces/catalog/folder-repo-git-conversion'
+import { findExtraFolderWorkspaceIds } from '../workspaces/catalog/folder-workspace-meta-presence'
 
 type RuntimeRepositoryCloneDependencies = {
   getStore: () => RuntimeStore | null

@@ -1,4 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat/native-ch
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import {
   agentMessageHeading,
+  agentMessageIsCompact,
   agentMessagePrimarySender,
   agentMessageOverflows,
   agentMessageFoldLabel,
@@ -22,7 +24,9 @@ import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
+import { NativeChatExpandable } from './NativeChatExpandable'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatTextAttachments } from './NativeChatTextAttachments'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
@@ -56,12 +60,142 @@ function heading(from: AgentMessageSource, message: NativeChatMessage): string {
   }
 }
 
-export function NativeChatAgentMessageCard({
+export function NativeChatAgentMessageCard(
+  props: React.ComponentProps<typeof PreviewAgentMessageCard>
+): React.JSX.Element {
+  return agentMessageIsCompact(props.message, props.from) ? (
+    <CompactAgentMessageCard {...props} />
+  ) : (
+    <PreviewAgentMessageCard {...props} />
+  )
+}
+
+function CompactAgentMessageCard({
   message,
   from,
   runtimeContext,
   onLinkClick,
   allowFileUriLinks,
+  textAttachmentContent,
+  onRefolded
+}: React.ComponentProps<typeof PreviewAgentMessageCard>): React.JSX.Element {
+  const owner = useNativeChatVisualOwner()
+  const worktreeId = owner?.worktreeId ?? runtimeContext?.worktreeId ?? null
+  const target = owner?.target ?? runtimeContext?.target
+  const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
+  const disclosure = useNativeChatDisclosure(`agent-message:${message.id}`, false)
+  const labelId = useId()
+  const bodyId = useId()
+  const expandable =
+    agentMessageCanCopy(text) || message.blocks.some((block) => block.type === 'image-ref')
+  const toggle = () => {
+    disclosure.setOpen(!disclosure.open)
+    if (disclosure.open) {
+      requestAnimationFrame(onRefolded)
+    }
+  }
+  return (
+    <div className="group @container w-full rounded-xl border border-border bg-card text-sm text-card-foreground">
+      <div
+        className="relative flex min-w-0 items-center gap-2 px-3 py-1.5"
+        data-state={disclosure.open ? 'open' : 'closed'}
+      >
+        {expandable ? (
+          <button
+            type="button"
+            aria-labelledby={labelId}
+            aria-controls={bodyId}
+            aria-expanded={disclosure.open}
+            onClick={toggle}
+            className="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          />
+        ) : null}
+        <div className="pointer-events-none">
+          <AgentMessageAvatar
+            compact
+            sender={agentMessagePrimarySender(from)}
+            dispatchId={message.agentStartDispatchId}
+            worktreeId={worktreeId}
+            target={target}
+          />
+        </div>
+        <span
+          id={labelId}
+          className="pointer-events-none max-w-1/3 shrink-0 truncate text-xs text-muted-foreground"
+        >
+          {heading(from, message)}
+        </span>
+        <div className="pointer-events-none relative min-w-0 flex-1 [&_button]:pointer-events-auto">
+          <NativeChatAgentMessageSenders
+            compact
+            dispatchId={message.agentStartDispatchId}
+            from={from}
+            chatWorktreeId={worktreeId}
+            target={target}
+          />
+        </div>
+        {agentMessageCanCopy(text) ? (
+          <NativeChatCopyButton
+            text={text}
+            className="relative transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100"
+          />
+        ) : null}
+        <div className={cn('pointer-events-none shrink-0', expandable && 'hidden @sm:block')}>
+          <NativeChatMessageTimestamp
+            timestamp={message.timestamp}
+            className="text-muted-foreground"
+          />
+        </div>
+        {expandable ? (
+          <ChevronDown
+            aria-hidden
+            className={cn(
+              'pointer-events-none size-3.5 shrink-0 text-muted-foreground',
+              disclosure.open && 'rotate-180'
+            )}
+          />
+        ) : null}
+      </div>
+      <NativeChatExpandable open={expandable && disclosure.open}>
+        <div id={bodyId} className="space-y-2 px-3 pb-3">
+          <NativeChatImageAttachments
+            blocks={message.blocks}
+            runtimeContext={runtimeContext}
+            enablePreview={runtimeContext !== undefined}
+          />
+          <NativeChatTextAttachments
+            content={textAttachmentContent ?? text}
+            structured={textAttachmentContent !== undefined}
+            runtimeContext={runtimeContext}
+            renderText={() => (
+              <NativeChatMarkdown
+                rowKey={message.id}
+                content={text}
+                variant="document"
+                className="text-sm"
+                renderCodeBlock={NativeChatCodeBlock}
+                onLinkClick={onLinkClick}
+                allowFileUriLinks={allowFileUriLinks}
+              />
+            )}
+          />
+          <NativeChatMessageTimestamp
+            timestamp={message.timestamp}
+            className="text-muted-foreground @sm:hidden"
+          />
+        </div>
+      </NativeChatExpandable>
+    </div>
+  )
+}
+
+function PreviewAgentMessageCard({
+  message,
+  from,
+  runtimeContext,
+  onLinkClick,
+  allowFileUriLinks,
+  textAttachmentContent,
   onRefolded
 }: {
   message: NativeChatMessage
@@ -69,12 +203,13 @@ export function NativeChatAgentMessageCard({
   runtimeContext?: RuntimeFileOperationArgs | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks: boolean
+  textAttachmentContent?: string
   onRefolded: () => void
 }): React.JSX.Element {
   const owner = useNativeChatVisualOwner()
   const worktreeId = owner?.worktreeId ?? runtimeContext?.worktreeId ?? null
   const target = owner?.target ?? runtimeContext?.target
-  const text = agentMessageTranscriptText(message.blocks, from)
+  const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
   const disclosure = useNativeChatDisclosure(`agent-message:${message.id}`, false)
   const clip = useRef<HTMLDivElement>(null)
   const clipId = useId()
@@ -97,6 +232,7 @@ export function NativeChatAgentMessageCard({
     <div className="group flex w-full gap-3 rounded-xl border border-border bg-card p-3 text-sm text-card-foreground">
       <AgentMessageAvatar
         sender={agentMessagePrimarySender(from)}
+        dispatchId={message.agentStartDispatchId}
         worktreeId={worktreeId}
         target={target}
       />
@@ -117,7 +253,12 @@ export function NativeChatAgentMessageCard({
             />
           </div>
         </div>
-        <NativeChatAgentMessageSenders from={from} chatWorktreeId={worktreeId} target={target} />
+        <NativeChatAgentMessageSenders
+          dispatchId={message.agentStartDispatchId}
+          from={from}
+          chatWorktreeId={worktreeId}
+          target={target}
+        />
         <NativeChatImageAttachments
           blocks={message.blocks}
           runtimeContext={runtimeContext}
@@ -137,14 +278,21 @@ export function NativeChatAgentMessageCard({
             }
           }}
         >
-          <NativeChatMarkdown
-            rowKey={message.id}
-            content={text}
-            variant="document"
-            className="text-sm"
-            renderCodeBlock={NativeChatCodeBlock}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={allowFileUriLinks}
+          <NativeChatTextAttachments
+            content={textAttachmentContent ?? text}
+            structured={textAttachmentContent !== undefined}
+            runtimeContext={runtimeContext}
+            renderText={() => (
+              <NativeChatMarkdown
+                rowKey={message.id}
+                content={text}
+                variant="document"
+                className="text-sm"
+                renderCodeBlock={NativeChatCodeBlock}
+                onLinkClick={onLinkClick}
+                allowFileUriLinks={allowFileUriLinks}
+              />
+            )}
           />
         </div>
         {overflows ? (
@@ -172,21 +320,30 @@ export function NativeChatAgentMessageCard({
 }
 
 function AgentMessageAvatar({
+  dispatchId,
   sender,
   worktreeId,
-  target
+  target,
+  compact = false
 }: {
+  compact?: boolean
+  dispatchId?: string
   sender: AgentMessageSource['senders'][number] | undefined
   worktreeId: string | null
   target?: RuntimeClientTarget
 }): React.JSX.Element {
-  const view = useAgentMessageSenderView(sender, worktreeId, target)
+  const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
   return (
-    <div className="relative mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
+    <div
+      className={cn(
+        'relative flex shrink-0 items-center justify-center rounded-full border border-border bg-muted',
+        compact ? 'size-6' : 'mt-0.5 size-8'
+      )}
+    >
       <AgentTypeIcon agentType={view.agentType} size={16} />
       {view.dot ? (
         // Flex square: the chat line box would stretch a shrink-wrapped badge into a pill.
-        <span className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full border border-border bg-card ring-2 ring-card">
+        <span className="absolute -right-0.5 -bottom-0.5 flex size-3.5 items-center justify-center rounded-full border border-border bg-card">
           <AgentStateDot state={view.dot} size="md" progress={view.progress} />
         </span>
       ) : null}

@@ -1,5 +1,5 @@
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentChildWorkStopAcknowledgement } from '../../../shared/agent-child-work-stop-targets'
+import type { AgentChildWorkStopAcknowledgement } from '../../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import type { ClaudePromptClaim } from '../claude-prompt-registry'
 import {
   ClaudeControlRequestError,

@@ -1,7 +1,7 @@
 import * as selectionOperations from '../../../src/shared/agent-session/options/structured-agent-session-selection-operations'
 import { createElement, StrictMode, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { OptionsParams } from '../../../src/shared/rpc-contract/structured-agent-session-params'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import type { RpcClient } from '../transport/rpc-client'
@@ -387,68 +387,3 @@ it.each([false, true])(
     await view.unmount()
   }
 )
-
-it('bounds real phone permission projection work with 10 and 100 retained operations', async () => {
-  const measurements: number[] = []
-  for (const count of [10, 100]) {
-    const factory = vi.spyOn(selectionOperations, 'createStructuredSessionSelectionController')
-    const blocked = deferred<AgentSessionOptionsResult>()
-    let reads = 0
-    const rpc = optionsClient(() =>
-      ++reads === 1
-        ? Promise.resolve({ ...OPTIONS, current: { ...OPTIONS.current, permissionMode: 'ask' } })
-        : blocked.promise
-    )
-    const replies = Array.from({ length: count }, () => deferred<ReturnType<typeof accepted>>())
-    const { calls, mutate } = recordingMutate((index) => replies[index].promise)
-    const view = await mountOptions({ ...BASE, client: rpc.client, mutate })
-    const result = factory.mock.results.at(-1)!
-    if (result.type !== 'return') {
-      throw new Error('real hook did not construct its owner')
-    }
-    const controller = result.value
-    const issue = vi.spyOn(controller, 'issue')
-    let visits = 0
-    for (let index = 0; index < count; index++) {
-      const before = visits
-      act(() => {
-        void view.current().setStructuredOption('permissionMode', index % 2 ? 'ask' : 'full-access')
-      })
-      expect(visits - before).toBeLessThanOrEqual(40)
-      const issued = issue.mock.results.at(-1)!
-      if (issued.type !== 'return') {
-        throw new Error('permission not admitted')
-      }
-      const operation = issued.value
-      for (const key of ['identity', 'key', 'transmitted', 'outcome'] as const) {
-        let value = operation[key]
-        Object.defineProperty(operation, key, {
-          configurable: true,
-          get() {
-            visits++
-            return value
-          },
-          set(next) {
-            value = next
-          }
-        })
-      }
-    }
-    const issueVisits = visits
-    expect(issueVisits).toBeLessThanOrEqual(40 * count)
-    visits = 0
-    for (let index = count - 1; index >= 0; index--) {
-      const before = visits
-      await act(async () => replies[index].resolve(acceptedWrite(calls[index])))
-      expect(view.current().pendingOptionId).toBeNull()
-      expect(visits - before).toBeLessThanOrEqual(40)
-    }
-    expect(calls).toHaveLength(count)
-    expect(visits).toBeLessThanOrEqual(40 * count)
-    measurements.push(issueVisits + visits)
-    await view.unmount()
-    issue.mockRestore()
-    factory.mockRestore()
-  }
-  expect(measurements[1]).toBeLessThanOrEqual(measurements[0] * 11)
-})

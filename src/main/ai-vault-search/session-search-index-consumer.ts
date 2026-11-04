@@ -1,4 +1,4 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   registerTranscriptConsumer,
   type TranscriptConsumer,
@@ -6,13 +6,12 @@ import {
   type TranscriptReadConsumer,
   type TranscriptReadOutcome,
   type TranscriptReadStart
-} from '../ai-vault/session-transcript-consumers'
+} from '../ai-vault/transcripts/session-transcript-consumers'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity } from './session-search-file-cursor'
 import type { SessionSearchFileWrite } from './session-search-index-writer'
 import type { SessionSearchResumableCursor, SessionSearchStore } from './session-search-store'
 
-// File-read assumptions are checked by session-search-transcript-dependencies.test.ts.
 export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   claude: true,
   qoder: true,

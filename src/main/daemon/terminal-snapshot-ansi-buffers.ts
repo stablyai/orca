@@ -1,5 +1,5 @@
 import type { TerminalModes } from './types'
-import { splitAtAlternateScreenEntry } from '../../shared/terminal-alternate-screen-split'
+import { splitAtAlternateScreenEntry } from '../../shared/terminal/protocol/escape/terminal-alternate-screen-split'
 
 export function splitTerminalSnapshotAnsi(
   snapshotAnsi: string,

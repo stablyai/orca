@@ -16,7 +16,10 @@ import type {
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor'
 import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
 
@@ -230,6 +233,7 @@ export type WebSessionTabsSyncState = Pick<
   Partial<
     Pick<
       AppState,
+      | 'agentSenderPublicationsByHost'
       | 'automaticAgentResumeClaimsByTabId'
       // Client draft proves dirty-flag ownership (#21392); without one, follow host save state.
       | 'editorDrafts'

@@ -5,6 +5,8 @@ import { expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-commit'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
+
+vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
 import { terminalPaneViewport, type TerminalPaneViewport } from './mobile-terminal-pane-layout'
 
 vi.mock('../platform/live-input-composing-range', () => ({
@@ -25,7 +27,6 @@ it('a pane tap moves the one input owner without dropping either stream or forwa
   const send = vi.fn(async (_handle: string, _text: string) => true)
   const focus = vi.fn()
   const unsubscribe = vi.fn()
-  const handles = new Set(['a', 'b'])
   let tap!: (handle: string) => void
   let change!: ReturnType<typeof useTerminalLiveInputCommit>['handleLiveInputChange']
   function Probe() {
@@ -66,8 +67,6 @@ it('a pane tap moves the one input owner without dropping either stream or forwa
       activeSessionTabTypeRef: { current: 'terminal' },
       connected: true,
       liveInputRef: { current: null },
-      liveInputTerminalHandles: handles,
-      liveInputTerminalHandlesRef: { current: handles },
       sendLiveTerminalInputRef: { current: send },
       setLiveInputCapture: vi.fn()
     })
@@ -98,7 +97,7 @@ it('a pane tap moves the one input owner without dropping either stream or forwa
     await act(async () => {
       await vi.advanceTimersByTimeAsync(300)
     })
-    expect(send.mock.calls).toEqual([['b', 'hello']])
+    expect(send.mock.calls.map(([handle, text]) => [handle, text])).toEqual([['b', 'hello']])
     act(() => {
       tap('hidden')
     })

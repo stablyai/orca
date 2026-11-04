@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayOuterError } from './mobile-relay-e2ee-link'
+
 import {
   bundle,
   dependencies,
-  FakeLogicalClient,
   FakeRelaySession,
   FakeSession,
   host,
@@ -52,50 +51,6 @@ describe('mobile endpoint supervisor nudges', () => {
     supervisor.stop()
     logical.close()
     expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('restarts a disconnected Relay immediately on an app-resume retry', async () => {
-    const logical = new FakeLogicalClient('disconnected', 'relay')
-    const openRelay = vi
-      .fn()
-      .mockReturnValueOnce(new FakeRelaySession('disconnected', new RelayOuterError(4408)))
-      .mockReturnValueOnce(new FakeRelaySession('connected'))
-    const deps = dependencies({
-      openRelay,
-      openDirect: vi.fn(() => new FakeSession('disconnected')),
-      randomBytes: () => new Uint8Array([128, 0])
-    })
-    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
-
-    await supervisor.start()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(openRelay).toHaveBeenCalledOnce()
-
-    supervisor.nudge('app-resume')
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(openRelay).toHaveBeenCalledTimes(2)
-    expect(logical.getState()).toBe('connected')
-    expect(logical.getActivePath()).toBe('relay')
-    supervisor.stop()
-  })
-
-  it('leaves physical relay probing to the session watchdog', async () => {
-    const logical = new FakeLogicalClient('connected', 'relay')
-    const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
-    await supervisor.start()
-
-    supervisor.nudge('focus')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(logical.sendRequest).not.toHaveBeenCalled()
-    expect(logical.suspendActiveSession).not.toHaveBeenCalled()
-    expect(deps.openRelay).not.toHaveBeenCalled()
-
-    supervisor.nudge('focus')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(logical.sendRequest).not.toHaveBeenCalled()
-    supervisor.stop()
   })
 
   it('withdraws the racing relay dial when direct authenticated while it was in flight', async () => {

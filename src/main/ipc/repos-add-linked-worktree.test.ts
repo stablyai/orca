@@ -1,3 +1,4 @@
+import type * as RepoDetectionModule from '../git/repo-detection'
 /** Linked worktrees report their own toplevel; deduplicate by common repo to avoid duplicate run-target rows. */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
@@ -30,6 +31,15 @@ const {
   detectRepoIconAndUpstreamMock: vi.fn()
 }))
 
+vi.mock('../git/repo-detection', async (importOriginal) => {
+  const facade = await vi.importMock<typeof RepoDetectionModule>('../git/repo')
+  return {
+    ...(await importOriginal<typeof RepoDetectionModule>()),
+    isGitRepoAsync: facade.isGitRepoAsync,
+    getGitRepoRootAsync: facade.getGitRepoRootAsync
+  }
+})
+
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
@@ -55,11 +65,11 @@ vi.mock('../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: detectRepoIconAndUpstreamMock
 }))
 
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 

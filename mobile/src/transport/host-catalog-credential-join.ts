@@ -1,4 +1,4 @@
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { HostListSnapshot } from './host-list-load-sharing'
 import type { HostCatalogEntry, StoredHostProfile } from './types'
 

@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { TerminalCommandQuickCommand } from '../../../shared/terminal-quick-command-types'
+import type { TerminalCommandQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { OpenFile } from '@/store/slices/editor'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -9,7 +9,7 @@ import {
   terminalQuickCommandUsesPlaceholders,
   type TerminalQuickCommandPlaceholderContext,
   type TerminalQuickCommandPlaceholderResult
-} from '../../../shared/terminal-quick-command-placeholders'
+} from '../../../shared/terminal/quick-commands/terminal-quick-command-placeholders'
 
 type PlaceholderEditorFile = Pick<
   OpenFile,

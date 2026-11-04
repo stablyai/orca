@@ -8,8 +8,9 @@ import {
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { STEPS } from './use-onboarding-flow-types'
+import type { ThemeLookSettings } from './onboarding-theme-look-settings'
 
 type TaskSourcesSnapshotProps = EventProps<'onboarding_task_sources_snapshot'>
 type TaskSourcesGithubStatus = TaskSourcesSnapshotProps['github_status']
@@ -123,7 +124,8 @@ export function remapOpenOnboardingLastCompletedStep({
 
 type SkippedOnboardingPreferenceOptions = {
   currentStepId: OnboardingStepId
-  themeBeforePreview: GlobalSettings['theme'] | null
+  /** Look settings as the theme step found them; null before it was reached. */
+  lookBeforePreview: ThemeLookSettings | null
   settingsTheme: GlobalSettings['theme'] | undefined
   selectedAgent: TuiAgent | null
   setTheme: (theme: GlobalSettings['theme']) => void
@@ -134,7 +136,7 @@ type SkippedOnboardingPreferenceOptions = {
 
 export async function prepareSkippedOnboardingPreferences({
   currentStepId,
-  themeBeforePreview,
+  lookBeforePreview,
   settingsTheme,
   selectedAgent,
   setTheme,
@@ -145,11 +147,11 @@ export async function prepareSkippedOnboardingPreferences({
   try {
     // Why: theme tiles save immediately for a stable preview, but skip must not keep this step's choice.
     if (currentStepId === 'theme') {
-      const themeToRestore = themeBeforePreview ?? settingsTheme
+      const themeToRestore = lookBeforePreview?.theme ?? settingsTheme
       if (themeToRestore) {
         setTheme(themeToRestore)
         applyTheme(themeToRestore)
-        await updateSettings({ theme: themeToRestore })
+        await updateSettings({ ...lookBeforePreview, theme: themeToRestore })
       }
     }
     // Why: skipping bypasses step persistence, so save the visible agent choice before closing.

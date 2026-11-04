@@ -4,31 +4,30 @@ import {
   enrollWebRuntimeSubscription,
   type WebRuntimeCrewSetupOutcome
 } from './web-runtime-dedicated-subscription'
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
-import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import type { PairedE2EEClientHandshake } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
-import type { RuntimeEnvironmentSetupFailure } from '../../../shared/runtime-environment-subscription-setup'
-import { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
+import type { RuntimeEnvironmentSetupFailure } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
+import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import type {
   RuntimeHostStatusSnapshot,
   RuntimeHostStatusResponse
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
+import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from './web-runtime-request-registry'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { WebRuntimeConnectionTransport } from './web-runtime-connection-transport'
 import type { WebRuntimeCredentialSource } from './web-runtime-credential-source'
 import { subscribeWebRuntimeFileWatch } from './web-runtime-file-watch-subscription'
 import type { WebRuntimeConnectionState } from './web-runtime-connection-frame-router'
-import type {
-  WebRuntimeSubscribeOptions,
-  WebRuntimeSubscriptionCallbacks,
-  WebRuntimeTransportSubscription,
-  WebRuntimeTransportSubscriptionHandle
+import {
+  pinWebRuntimeSubscription,
+  type WebRuntimeSubscribeOptions,
+  type WebRuntimeSubscriptionCallbacks,
+  type WebRuntimeTransportSubscription,
+  type WebRuntimeTransportSubscriptionHandle
 } from './web-runtime-subscription-contract'
 
-export type WebRuntimeSubscriptionHandle = {
-  unsubscribe: () => void
-  sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
-}
+export type WebRuntimeSubscriptionHandle = WebRuntimeTransportSubscriptionHandle
 
 export type SubscribeOptions = WebRuntimeSubscribeOptions
 
@@ -116,7 +115,7 @@ export class WebRuntimeClient {
   call(
     method: string,
     params?: unknown,
-    options?: { timeoutMs?: number; expectedConnectionEpoch?: number }
+    options?: { timeoutMs?: number; signal?: AbortSignal; expectedConnectionEpoch?: number }
   ): Promise<RuntimeRpcResponse<unknown>> {
     return method === 'status.get' && this.statusOwner
       ? this.statusOwner.refresh(options)
@@ -207,17 +206,33 @@ export class WebRuntimeClient {
     this.transport.close(options)
   }
 
-  private subscribeOnCurrentConnection(
+  private async subscribeOnCurrentConnection(
     method: string,
     params: unknown,
     callbacks: WebRuntimeSubscriptionCallbacks,
     options?: SubscribeOptions
   ): Promise<WebRuntimeTransportSubscriptionHandle> {
+    const expectedConnectionEpoch =
+      options?.expectedEnvironmentRuntimeId === undefined
+        ? undefined
+        : await pinWebRuntimeSubscription(this, options, this.waitForConnected(options.timeoutMs))
     return enrollWebRuntimeSubscription({
       method,
       params,
       callbacks,
-      options,
+      options: {
+        ...options,
+        assertCurrent: () => {
+          options?.assertCurrent?.()
+          if (
+            expectedConnectionEpoch !== undefined &&
+            expectedConnectionEpoch !== this.connectionEpoch
+          ) {
+            throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+          }
+          options?.beforeSend?.()
+        }
+      },
       waitForConnected: (timeout, signal) => this.waitForConnected(timeout, signal),
       nextId: () => this.nextId(),
       subscriptions: this.subscriptions,

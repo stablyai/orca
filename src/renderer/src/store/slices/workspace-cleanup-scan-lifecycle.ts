@@ -2,7 +2,7 @@ import type { AppState } from '../types'
 import type {
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getInFlightWorkspaceCleanupScan,
   hasInFlightWorkspaceCleanupScan,

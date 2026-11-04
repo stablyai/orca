@@ -12,7 +12,7 @@ import {
   emptySession,
   GIT_KEY
 } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../../../shared/workspace-session/workspace-session-pane-ownership'
 import type { OpenFile } from '../store/slices/editor'
 import { layoutEditorViewOfOpenFile } from '../store/slices/editor/tabs/open-file-layout-view'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'

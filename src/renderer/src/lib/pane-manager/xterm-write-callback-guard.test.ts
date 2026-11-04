@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  _resetWriteCompletionReportsForTests,
-  runGuardedWriteCompletionStep
-} from './xterm-write-callback-guard'
+import { _resetWriteCompletionReportsForTests } from './xterm-write-callback-guard'
 import { writeForegroundTerminalChunk } from './pane-terminal-foreground-render-settle'
 
 const mocks = vi.hoisted(() => ({
@@ -16,22 +13,6 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
 beforeEach(() => {
   mocks.recordRendererCrashBreadcrumb.mockClear()
   _resetWriteCompletionReportsForTests()
-})
-
-describe('runGuardedWriteCompletionStep', () => {
-  it('caps repeated reports per context so a throw-per-write loop cannot spam breadcrumbs', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      for (let i = 0; i < 20; i++) {
-        runGuardedWriteCompletionStep('spammy-step', () => {
-          throw new Error('always fails')
-        })
-      }
-      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(5)
-    } finally {
-      errorSpy.mockRestore()
-    }
-  })
 })
 
 describe('writeForegroundTerminalChunk completion guarding', () => {

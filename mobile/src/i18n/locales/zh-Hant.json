@@ -110,13 +110,8 @@
       "tryAgain": "重試"
     },
     "terminalSettings": {
-      "autocomplete": "自動完成與自動修正",
-      "autocompleteOff": "關閉",
-      "autocompleteOn": "開啟",
       "defaultText": "預設（100%）",
       "keepPhoneSize": "保持手機尺寸（預設）",
-      "keyboardInputDescription": "自動完成、自動修正和拼字建議僅適用於緩衝命令輸入模式。點一下鍵盤上方的雙箭頭按鈕，從即時輸入切換至此模式，編輯好命令後再點「傳送」。預設為關閉，以免命令、旗標或路徑遭到改寫。",
-      "keyboardInputHeading": "鍵盤輸入",
       "largeText": "大（125%）",
       "largerText": "較大（150%）",
       "largestText": "最大（200%）",
@@ -283,7 +278,8 @@
       "stoppedManually": "已手動停止",
       "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
       "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
-      "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。"
+      "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
+      "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。"
     },
     "orcaStop": {
       "canContinue": "您可以在此對話中繼續。",
@@ -330,7 +326,10 @@
       "emptyAnswer": "回答內容為空",
       "resolved": "已解決",
       "resolver": "已在 {{device}} 回答",
-      "unavailable": "無法顯示所選的答案"
+      "unavailable": "無法顯示所選的答案",
+      "thisPhone": "這支手機",
+      "computer": "電腦",
+      "otherDevice": "其他裝置"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "工作階段開始後可用。",
@@ -525,6 +524,24 @@
     "agentMessage": {
       "handedOffToAgent": "已交接給代理程式",
       "startedAgent": "已啟動代理程式"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "無法讀取附件回應。請重試。",
+      "incompleteReply": "附件已變更或回應不完整。請關閉後重試。",
+      "notText": "無法以文字預覽此檔案。請儲存後在其他應用程式中開啟。",
+      "openFailed": "無法開啟附件。請重試。",
+      "hostUpdate": "此主機尚無法開啟文字附件。請更新該主機上的 Orca，然後重試。",
+      "copyTooLarge": "檔案太大，無法複製。請改為儲存。",
+      "connectionChanged": "連線已變更。請重試以重新開啟附件。",
+      "hostChanged": "附件所在的主機已變更。請關閉附件並重新開啟。",
+      "readFailed": "無法讀取附件。請重新連線後重試。檔案可能已被移除或變更。",
+      "copyFrame": "完整複製此附件需要即將推出的手機更新。",
+      "copyFailed": "無法複製附件。請重試。",
+      "pastedText": "貼上的文字",
+      "textAttachment": "文字附件",
+      "byteSize": "{{size}} 位元組",
+      "saveUpdate": "儲存功能將在手機更新中提供。",
+      "fullCopySaveUpdate": "完整複製和儲存此附件的功能將在手機更新中提供。"
     }
   },
   "common": {
@@ -799,7 +816,8 @@
     },
     "prSidebar": {
       "loading": "正在載入 PR…",
-      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。"
+      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。",
+      "retryLoading": "重新嘗試載入 PR"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主機清單",
@@ -1639,7 +1657,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "無法取得目前分支。",
-      "providerUnavailable": "此提供者無法使用託管審查面板。"
+      "githubRemoteRequired": "此分頁需要 GitHub 遠端儲存庫才能顯示提取要求詳情。對於其他支援的平台，請在「變更」中建立審查，然後在瀏覽器中開啟。"
     },
     "reviewerPickerDrawer": {
       "loadFailed": "載入人員失敗",
@@ -1662,15 +1680,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "收起鍵盤",
       "sendKey": "傳送 {{label}}",
-      "modifierHint": "套用至下一個按鍵。點兩下可保持啟用。",
       "typeCharacter": "輸入 {{character}}",
       "interrupt": "中斷終端機",
       "keysModeLabel": "按鍵模式：輸入內容會直接傳送至終端機。切換至訊息模式",
       "messageModeLabel": "訊息模式：輸入後再傳送。切換至按鍵模式",
-      "keysMode": "按鍵",
-      "messageMode": "訊息",
       "moreKeys": "更多按鍵與操作",
-      "showKeyboard": "顯示鍵盤"
+      "showKeyboard": "顯示鍵盤",
+      "dismissKeyboardHint": "隱藏螢幕鍵盤，並保持目前的終端機工作階段開啟。",
+      "switchToDesktopMode": "切換至桌面模式",
+      "switchToPhoneMode": "切換到手機模式",
+      "pasteFromClipboard": "從剪貼簿貼上",
+      "paste": "貼上",
+      "addCustomShortcut": "新增自訂快速鍵"
     },
     "activeContent": {
       "createTab": "建立分頁",
@@ -1781,11 +1802,7 @@
     },
     "commandDock": {
       "liveInputHint": "輸入的文字會直接傳送至目前使用中的終端機",
-      "liveInputLabel": "終端機即時輸入",
-      "sendCommand": "傳送命令",
-      "messageAgentPlaceholder": "傳送訊息給 {{agent}}",
-      "writeCommandPlaceholder": "輸入指令後傳送",
-      "theAgent": "代理程式"
+      "liveInputLabel": "終端機即時輸入"
     },
     "contentRow": {
       "dismissCreationWarning": "關閉工作區建立警告"
@@ -1834,6 +1851,7 @@
       "attachmentAtMost": "{{agent}} 每則訊息最多接受 {{limit}} 張圖片，因此此訊息未傳送。",
       "attachmentEmpty": "此訊息中的一張圖片為空，因此訊息未傳送。",
       "attachmentInvalid": "此訊息中的附件無法傳送給代理程式。",
+      "attachmentsExpired": "{{names}} 已過期。",
       "attachmentLargerThan": "此訊息中的一張圖片超過 {{size}} MB，因此訊息未傳送。",
       "attachmentNoSource": "此訊息中的一張圖片沒有可傳送的檔案，因此訊息未傳送。",
       "attachmentNotAFile": "此訊息中的一張圖片不是檔案，因此訊息未傳送。",
@@ -2037,7 +2055,8 @@
       "promptUnconfirmed": "代理程式已啟動，但無法確認提示詞是否已傳送。"
     },
     "prActionsEngine": {
-      "mergeFailed": "合併 PR 失敗。"
+      "mergeFailed": "合併 PR 失敗。",
+      "refreshFailed": "無法重新整理提取要求。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "代理程式已啟動",
@@ -2418,6 +2437,7 @@
       "queueTooLarge": "佇列中等待的文字過多。",
       "quitTerminalAgent": "請結束該代理程式，以便在此處繼續聊天。",
       "reattachFile": "請將其移除後重新附加。",
+      "reattachFiles": "請將它們移除後重新附加。",
       "recordFailed": "Orca 無法將此內容儲存到聊天歷史記錄中。",
       "recordUnreadable": "Orca 無法讀取此聊天的已儲存狀態。",
       "reopenChat": "請重新開啟聊天以再次檢查。",
@@ -2464,14 +2484,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "無法儲存版面配置",
       "saveFailedMessage": "此版面配置暫時生效。請再次選取以重試儲存。"
-    },
-    "terminalArrowPad": {
-      "label": "方向鍵",
-      "hint": "點按一側可按一次方向鍵，或按住並拖曳以重複",
-      "up": "上",
-      "down": "下",
-      "left": "左",
-      "right": "右"
     },
     "terminalMoreKeys": {
       "sendKey": "傳送 {{label}}",
@@ -2644,6 +2656,9 @@
       "title": "語音",
       "toggleMode": "切換",
       "updateFailed": "無法更新"
+    },
+    "agents": {
+      "permissionOwnAll": "各代理程式自身的設定"
     }
   },
   "sourceControl": {
@@ -3189,7 +3204,6 @@
       "pipelineJobs_one": "{{count}} 項作業",
       "pipelineJobs_other": "{{count}} 項作業",
       "rerunAll": "全部重新執行",
-      "rerunFailed": "重新執行失敗項目",
       "subIssueTitle": "子議題標題",
       "subIssues": "子議題"
     },
@@ -3420,7 +3434,6 @@
       "requestReview": "請求審查",
       "requestReviewers": "邀請審查人",
       "rerunAll": "全部重新執行",
-      "rerunFailed": "重新執行失敗項目",
       "reviewers": "審查人",
       "viewFile": "檢視"
     },

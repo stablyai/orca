@@ -1,5 +1,5 @@
-import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
-import type { PtyModelRestoreReason } from '../../../../shared/pty-model-restore-marker'
+import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
+import type { PtyModelRestoreReason } from '../../../../shared/terminal/replay/pty-model-restore-marker'
 import { mainDeliveryBreadcrumbs } from './debug'
 import { recordPtyRendererDeliveryPressure } from './accounting'
 import type { PtyDataPayload, PtyIpcSession } from '../session'

@@ -1,5 +1,5 @@
-import type { AgentType } from '../agent-status-types'
-import { formatAgentTypeLabel } from '../agent-type-label'
+import type { AgentType } from '../agent-status/contracts/agent-status-types'
+import { formatAgentTypeLabel } from '../agent-status/presentation/agent-type-label'
 
 /** Use the shared name table so unknown agents retain their own name instead of becoming Codex. */
 export function defaultAgentChatLabel(agent: AgentType | null | undefined): string {

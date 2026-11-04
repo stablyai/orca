@@ -3,11 +3,11 @@ import type { SleepingAgentSessionRecord } from '../../shared/agent-session/life
 import type { BrowserPage, BrowserWorkspace } from '../../shared/browser-workspace-types'
 import { remapBrowserPageDocLocation } from '../../shared/browser-page-doc-location'
 import type { Tab, TabGroup } from '../../shared/tab-types'
-import type { TerminalTab } from '../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../shared/workspace-layout/terminal-tab-types'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceKey } from '../../shared/workspace-scope'
 import { SESSION_FIELDS_COPIED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
 import { mapMarkdownFrontmatterVisible } from './profile-session-markdown-transfer'
@@ -16,7 +16,7 @@ export {
   buildMarkdownFrontmatterIdMap,
   markdownFileIdCandidates
 } from './profile-session-markdown-transfer'
-import { paneBelongsToTabs } from '../../shared/workspace-session-pane-ownership'
+import { paneBelongsToTabs } from '../../shared/workspace-session/workspace-session-pane-ownership'
 
 export type SessionOwnerProjection = {
   mapOwnerKey: (ownerKey: string) => string | null

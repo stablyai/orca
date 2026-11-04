@@ -40,6 +40,7 @@ vi.mock('lucide-react-native', () => ({
   Brain: 'Brain',
   Check: 'Check',
   ChevronDown: 'ChevronDown',
+  ChevronUp: 'ChevronUp',
   ChevronRight: 'ChevronRight',
   Copy: 'Copy',
   Eye: 'Eye',

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { parseWorkspaceSession } from '../../../../shared/workspace-session/workspace-session-schema'
 import {
   _resetTerminalPaneRecoveryForTests,
   requestTerminalPaneRecovery

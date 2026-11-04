@@ -1,6 +1,5 @@
 // Drafts owe no execution work; derive delivery gates under serialization before consuming one card per turn.
 
-import { journalInputOrder } from '../agent-session-journal/journal-input-order'
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -8,10 +7,8 @@ import type { AgentSessionSendResult } from '../../../shared/agent-session/agent
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
-import { structuredAgentSessionSendBlock } from './structured-agent-session-send-preparation'
 import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-queued-published-bytes'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   contextStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWork
@@ -35,75 +32,9 @@ import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachmen
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import {
-  selectStructuredAgentSessionInput,
-  structuredInputExecutionWorking
-} from './structured-agent-session-input-selection'
-
-/** Preserve order and holds; only automatic drain stops at edit leases, which still count as admission backlog. */
-function oldestActionableQueuedMessage(
-  journal: Pick<AgentSessionJournal, 'queuedMessages'>,
-  automatic: boolean
-): QueuedMessageRow | null {
-  return journal.queuedMessages.nextInputCard(automatic)
-}
-
-/** Host-local gate shared by admission, drain and Send-now; only Send-now overrides working. */
-export type StructuredQueueHold = 'blocked' | 'working' | 'prompt'
-
-/** Ended-generation leftovers must not hold the queue. */
-export type StructuredQueueGateInput = {
-  record: AgentSessionRecord | null
-  work: StructuredAgentSessionCurrentWork
-}
-
-export function structuredQueueHold(input: StructuredQueueGateInput): StructuredQueueHold | null {
-  if (!input.record || structuredAgentSessionSendBlock(input.record)) {
-    return 'blocked'
-  }
-  // Prompts outrank working because Send-now cannot override them.
-  if (input.work.hasActionablePrompt()) {
-    return 'prompt'
-  }
-  return input.work.working() ? 'working' : null
-}
-
-/** Publish the drain’s live pick; backlog itself never gates a lone draft. */
-export function nextStructuredQueuedMessage(
-  input: StructuredQueueGateInput & { journal: AgentSessionJournal }
-): QueuedMessageRow | null {
-  // Every gate before the queue is asked: choosing a card can read mail authority, and a session
-  // that is working, blocked or waiting on a prompt can send nothing anyway. An empty queue has
-  // nothing to choose, so it never reads the prompt either.
-  const state = input.journal.queuedMessages.inputState()
-  const cards = journalInputOrder(state).cards
-  cards.ensure(state)
-  if (
-    structuredInputExecutionWorking(input.journal, input.work) ||
-    !input.record ||
-    structuredAgentSessionSendBlock(input.record) ||
-    !cards.head() ||
-    input.work.hasActionablePrompt()
-  ) {
-    return null
-  }
-  const selected = selectStructuredAgentSessionInput(input.journal)
-  return selected.kind === 'card' ? selected.card : null
-}
-
-/** Queue behind work/actionable backlog; held or returned cards cannot trap a fresh send that lifts their pause. */
-export function shouldQueueStructuredAgentSessionSend(
-  input: StructuredQueueGateInput & { journal: AgentSessionJournal }
-): boolean {
-  const hold = structuredQueueHold(input)
-  if (hold === 'blocked') {
-    // Return immediate refusal; queueing behind a blocked session would strand the draft.
-    return false
-  }
-  if (hold !== null) {
-    return true
-  }
-  return oldestActionableQueuedMessage(input.journal, false) !== null
-}
+  nextStructuredQueuedMessage,
+  shouldQueueStructuredAgentSessionSend
+} from './structured-agent-session-queued-gate'
 
 /** Queue eligible fresh sends; return null for immediate delivery or existing submission replay. */
 export async function maybeQueueStructuredAgentSessionSend(
@@ -157,7 +88,8 @@ export async function maybeQueueStructuredAgentSessionSend(
     !shouldQueueStructuredAgentSessionSend({
       journal: ctx.journal,
       record: context.deps.store.getRecord(ctx.sessionId),
-      work: contextStructuredAgentSessionCurrentWork(ctx)
+      work: contextStructuredAgentSessionCurrentWork(ctx),
+      fromAgent: !params.userSend && !params.personsMessage && params.body.from !== undefined
     })
   ) {
     return null
@@ -188,7 +120,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     )
   } catch (error) {
     if (isAgentSessionAttachmentExpiredError(error)) {
-      return agentSessionAttachmentExpiredRefusal()
+      return agentSessionAttachmentExpiredRefusal(error)
     }
     throw error
   }
@@ -207,6 +139,7 @@ export type QueuedMessageDrainDeps = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   conversationFence: (sessionId: string) => number
   currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
+  canSteer?: (sessionId: string, card: QueuedMessageRow) => boolean
   wakeDelivery: (sessionId: string) => void
   submissionReceipt?: (sessionId: string) => JournalOperationReceipt
   owed?: StructuredAgentSessionHostDeps['queuedAgentMessageOwed']
@@ -228,19 +161,6 @@ export class StructuredAgentSessionQueuedMessageDrain {
   schedule(sessionId: string): void {
     const journal = this.disposed ? undefined : this.deps.sessions.get(sessionId)?.journal
     if (!journal) {
-      return
-    }
-    // Skip serialized work during token streams; settlement/generation-end schedules a fresh gate check.
-    try {
-      const work = this.deps.currentWork(sessionId)
-      if (
-        !work ||
-        nextStructuredQueuedMessage({ journal, record: this.deps.getRecord(sessionId), work }) ===
-          null
-      ) {
-        return
-      }
-    } catch {
       return
     }
     if (this.scheduled.has(sessionId)) {
@@ -271,10 +191,19 @@ export class StructuredAgentSessionQueuedMessageDrain {
     const fence = this.deps.conversationFence(sessionId)
     const record = this.deps.getRecord(sessionId)
     const work = this.deps.currentWork(sessionId)
-    const next = work ? nextStructuredQueuedMessage({ journal, record, work }) : null
+    const next = work
+      ? nextStructuredQueuedMessage({
+          journal,
+          record,
+          work,
+          steer: true,
+          canSteer: this.deps.canSteer?.bind(null, sessionId)
+        })
+      : null
     if (this.disposed || !next) {
       return
     }
+    const steer = work !== null && work.activeTurnId() !== null
     // Fresh submission IDs link drafts through queuedMessageId, never equality.
     const submissionId = createStructuredAgentSessionOperationId(randomUUID)
     const owed = queuedMessageOwed({ queuedAgentMessageOwed: this.deps.owed }, sessionId, next.body)
@@ -294,13 +223,14 @@ export class StructuredAgentSessionQueuedMessageDrain {
           messageId: next.messageId,
           expect: 'waiting',
           yieldsToPause: true,
+          ...(steer && { steer: true }),
           ...(owed && { owed })
         },
         this.deps.submissionReceipt?.(sessionId)
       )
     } catch (error) {
       if (error instanceof QueuedMessageNotConsumableError) {
-        if (next.messageId !== journal.queuedMessages.nextInputCard()?.messageId) {
+        if (next.messageId !== journal.queuedMessages.nextInputCard(true, steer)?.messageId) {
           // The queue's choice moved (older mail became decidable): choose again.
           this.schedule(sessionId)
         }

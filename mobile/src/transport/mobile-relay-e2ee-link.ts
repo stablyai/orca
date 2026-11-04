@@ -1,7 +1,7 @@
 import {
   RelayPhoneHelloSchema,
   type RelayPhoneHello
-} from '../../../src/shared/mobile-relay-phone-protocol'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-phone-protocol'
 import {
   relayHostCloseReasonFrom,
   type RelayHostCloseReason

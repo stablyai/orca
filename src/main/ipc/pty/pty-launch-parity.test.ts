@@ -42,7 +42,7 @@ import {
   makePaneSpawnReservationKey,
   paneSpawnReservationsByOwnerKey
 } from './pane/spawn-reservation'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { CALLER_LAUNCH_CASES } from './pty-launch-parity-caller.test-cases'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../../runtime/rpc/rpc-caller-identity'
@@ -73,8 +73,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('node:fs/promises', async (importOriginal) =>
@@ -95,7 +97,7 @@ vi.mock('../../memory/pty-registry', () =>
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../../codex/codex-pane-account-registry', () =>
+vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 // Model an OpenCode v2 install with the selected model without running its binary.
@@ -123,7 +125,7 @@ vi.mock('../../project-groups/folder-workspace-path-status', async (importOrigin
 vi.mock('../../antigravity/native-account-launch', () => ({
   prepareAntigravityAccountForLaunch: vi.fn(async () => {})
 }))
-vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 // Only managed Windows SSH-host cases supply OpenSSH DefaultShell.
@@ -131,7 +133,7 @@ vi.mock('../../../shared/openssh-default-shell', () => ({
   readOpenSshDefaultShell: vi.fn(() => '')
 }))
 // Fake-win32 runs have no wsl.exe: the distro runs, so main's background-start hold passes (E9).
-vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   readWslDistroRunningState: vi.fn(async () => 'running')
 }))

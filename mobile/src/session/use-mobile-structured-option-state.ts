@@ -9,11 +9,9 @@ import { createStructuredAgentSessionOptionsReadOwner } from '../../../src/share
 import { BoundedMap } from '../../../src/shared/bounded-map'
 import type { RpcClient } from '../transport/rpc-client'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
-import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-model-catalog-ownership'
-import {
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionReportsAtFence
-} from '../../../src/shared/agent-session/options/structured-agent-session-options'
+import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-session/options/agent-model-catalog-ownership'
+import { createStructuredAgentSessionOptionState } from '../../../src/shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionReportsAtFence } from '../../../src/shared/agent-session/options/structured-agent-session-runtime-reports'
 
 // Matches the transcripts this view retains per chat.
 const MAX_RETAINED_CHAT_READERS = 32
@@ -122,7 +120,8 @@ export function useMobileStructuredOptionState(args: {
         ? {
             conversationSupport: {
               sessionId: support.sessionId,
-              commands: support.result.conversationCommands ?? []
+              commands: support.result.conversationCommands ?? [],
+              compactInstructions: support.result.compactInstructions === true
             },
             imageSupport: {
               sessionId: support.sessionId,

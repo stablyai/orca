@@ -1,7 +1,8 @@
 import { Platform } from 'react-native'
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, savePairedHost } from './host-store'
-import type { HostProfile, PairingOffer } from './types'
+import type { HostProfile } from './types'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 import {
   relayCredentialProvision,

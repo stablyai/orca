@@ -1,9 +1,9 @@
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import {
   buildTerminalQuickCommandInput,
   flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { prepareTerminalQuickCommandForRun } from '@/lib/terminal-quick-command-placeholder-run'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import type { PtyTransport } from './pty-transport-types'

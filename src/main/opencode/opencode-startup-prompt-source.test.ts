@@ -11,7 +11,7 @@ import {
   OPENCODE_STARTUP_PROMPT_NONCE_ENV,
   OPENCODE_STARTUP_PROMPT_BODY_ENV,
   OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV
-} from '../../shared/opencode-startup-prompt'
+} from '../../shared/agent-launch/startup/opencode-startup-prompt'
 import { getOpenCodeStartupPromptSource } from './opencode-startup-prompt-source'
 import { OpenCodeStartupPromptClaims } from './opencode-startup-prompt-claims'
 

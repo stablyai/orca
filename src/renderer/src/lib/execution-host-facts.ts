@@ -4,8 +4,8 @@ import {
   type ParsedExecutionHost
 } from '../../../shared/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'

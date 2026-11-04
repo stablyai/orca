@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPaneController } from '../terminal-pane/use-terminal-pane-controller'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   captureTerminalDropTarget,
   getCurrentTerminalDropTransport

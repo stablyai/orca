@@ -1,8 +1,8 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { bindPaneFirst } from './bind-first-pane.test-fixture'
 import type {

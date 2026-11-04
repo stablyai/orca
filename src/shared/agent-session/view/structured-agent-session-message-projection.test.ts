@@ -56,6 +56,44 @@ const lingeringCopy = {
   queuedAt: 1
 }
 
+it('looks up delivery facts linearly as the transcript and submission ledger grow', () => {
+  for (const count of [50, 500]) {
+    let identityReads = 0
+    const items = Array.from({ length: count }, (_, index) =>
+      userItem(`send-${index}`, 'answer', index)
+    )
+    const submissions = items.map((_, index): AgentJournalSubmission => ({
+      ...rejected({ dispatchState: 'pending', reason: null, resolvedAt: null }),
+      get clientMessageId() {
+        identityReads += 1
+        return `send-${index}`
+      }
+    }))
+    const messages = projectStructuredAgentSessionMessages(items, [], submissions)
+    expect(messages.map((message) => message.id)).toEqual(items.map((item) => item.itemId))
+    expect(identityReads).toBeLessThanOrEqual(8 * count)
+  }
+})
+
+it('keeps a local echo when a mixed-version host lacks its submission until the row arrives', () => {
+  const missing = rejected({
+    dispatchState: 'unknown',
+    reason: 'durable_send_submission_missing'
+  })
+  const projected = projectStructuredAgentSessionMessages([], [lingeringCopy], [missing])
+  expect(projected).toEqual([
+    expect.objectContaining({
+      id: agentJournalSubmissionKey(KEPT_ID),
+      blocks: lingeringCopy.body.blocks,
+      deliveryState: 'unknown'
+    })
+  ])
+  const item = userItem(KEPT_ID, 'the kept words', 1)
+  expect(projectStructuredAgentSessionMessages([item], [lingeringCopy], [missing])).toEqual(
+    projectStructuredAgentSessionMessages([item], [], [missing])
+  )
+})
+
 describe('a send kept as a card', () => {
   it('shows nothing of the original send, even beside its own local copy', () => {
     const kept = rejected({ keptAsQueuedMessageId: KEPT_ID })

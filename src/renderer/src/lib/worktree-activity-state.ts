@@ -1,10 +1,8 @@
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import {
-  isFreshNonDoneAgentStatus,
-  type AgentStatusEntry
-} from '../../../shared/agent-status-types'
-import { resolveAgentStatusWorktreeId } from '../../../shared/agent-status-worktree-attribution'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import { isFreshNonDoneAgentStatus } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
+import { resolveAgentStatusWorktreeId } from '../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import {
   liveAgentStatusOf,
   strongerLiveAgentStatus,

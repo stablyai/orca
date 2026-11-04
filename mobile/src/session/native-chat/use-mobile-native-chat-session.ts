@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  createNativeChatTranscriptRetention,
+  EMPTY_NATIVE_CHAT_TRANSCRIPT,
   encodeNativeChatTranscriptIdentity
 } from '../../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
 import {
@@ -11,6 +11,7 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatTranscriptPage } from '../../../../src/shared/native-chat/native-chat-transcript-frames'
 import { buildNativeChatSubscriptionId } from '../../../../src/shared/native-chat/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../../transport/rpc-client'
 import { nativeChatSessionPageRead } from '../mobile-session-read-operations'
@@ -20,6 +21,11 @@ import {
 } from './mobile-native-chat-stream-frame'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { useMobileOlderPageLoader, type OlderPagePhase } from '../use-mobile-older-page-loader'
+import {
+  cacheMobileNativeChatTranscript,
+  mobileNativeChatResumePoint,
+  mobileNativeChatTranscriptCache
+} from './mobile-native-chat-transcript-cache'
 
 export type MobileNativeChatStatus =
   | 'idle'
@@ -63,7 +69,8 @@ function nextPageWindow(
 }
 
 type ReadSessionResult =
-  | { messages: NativeChatMessage[]; hasMore?: boolean; beforeOffset?: number }
+  | (Pick<NativeChatTranscriptPage, 'messages'> &
+      Partial<Pick<NativeChatTranscriptPage, 'hasMore' | 'beforeOffset'>>)
   | { error: string }
 // Retain paged history across contiguous replay; ordered read windows replace while live appends merge by id.
 export function useMobileNativeChatSession(args: {
@@ -90,6 +97,8 @@ export function useMobileNativeChatSession(args: {
     client: RpcClient
     identity: string
     status: MobileNativeChatStatus
+    // This read failed before it could confirm the cached rows on screen.
+    rowsUnconfirmed?: boolean
   } | null>(null)
   // Discard settled state as soon as identity/client changes; view toggles must not revive ready over cleared rows.
   let current = read
@@ -115,13 +124,16 @@ export function useMobileNativeChatSession(args: {
   sessionIdRef.current = sessionId
   // Only the first real snapshot establishes the base; subsequent snapshots are reconnect replays.
   const snapshotSeenRef = useRef(false)
-  const transcriptRetentionRef = useRef(createNativeChatTranscriptRetention())
   const settledReady = settled?.status === 'ready'
   useEffect(() => {
     if (settledReady) {
-      transcriptRetentionRef.current.capture(identity, messages)
+      cacheMobileNativeChatTranscript(identity, {
+        messages,
+        hasMore,
+        beforeOffset: beforeOffsetRef.current
+      })
     }
-  }, [identity, messages, settledReady])
+  }, [identity, messages, hasMore, settledReady])
 
   const setList = useCallback((next: readonly NativeChatMessage[]) => {
     replaceList(mergerRef.current, next)
@@ -134,10 +146,13 @@ export function useMobileNativeChatSession(args: {
     supersede()
     limitRef.current = INITIAL_LIMIT
     snapshotSeenRef.current = false
-    setList([])
+    const cached = mobileNativeChatTranscriptCache.get(identity)
+    const resumeAfter = cached ? mobileNativeChatResumePoint(cached.messages) : null
+    const holdsCachedRows = Boolean(cached?.messages.length)
+    setList(cached?.messages ?? EMPTY_NATIVE_CHAT_TRANSCRIPT)
     setError(undefined)
-    setHasMore(false)
-    beforeOffsetRef.current = null
+    setHasMore(cached?.hasMore ?? false)
+    beforeOffsetRef.current = cached?.beforeOffset ?? null
     if (!client || !agent) {
       return
     }
@@ -154,13 +169,19 @@ export function useMobileNativeChatSession(args: {
         // Use a distinct token per screen so another viewer cannot evict this host feed.
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid()),
         capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 },
-        ...(transcriptPath ? { transcriptPath } : {})
+        ...(transcriptPath ? { transcriptPath } : {}),
+        ...(resumeAfter ? { resumeAfter } : {})
       },
       (raw) => {
         if (cancelled) {
           return
         }
         const frame = raw as MobileNativeChatStreamFrame
+        // No file yet says nothing about rows this subscription already holds: unsettle the read, keep the rows.
+        if (resumeAfter && frame.type === 'snapshot' && frame.pending) {
+          setRead({ client, identity, status: 'awaiting-transcript' })
+          return
+        }
         const applied = applyMobileNativeChatStreamFrame({
           merger: mergerRef.current,
           frame,
@@ -172,7 +193,12 @@ export function useMobileNativeChatSession(args: {
           return
         }
         if (applied.kind === 'error') {
-          setRead({ client, identity, status: 'error' })
+          setRead({
+            client,
+            identity,
+            status: 'error',
+            rowsUnconfirmed: holdsCachedRows && !snapshotSeenRef.current
+          })
           setError(applied.error)
           return
         }
@@ -286,18 +312,18 @@ export function useMobileNativeChatSession(args: {
     })
   }, [client, agent, sessionId, transcriptPath, hasMore, setList, loadOlderPages])
 
-  // Retain history through any unsettled read so disconnect/error cannot replace the conversation with a card.
-  const visibleMessages = transcriptRetentionRef.current.visible({
-    identity,
-    messages,
-    settled: settledReady
-  })
+  // Show the cached rows through any unsettled read: a reopen paints at once, and a disconnect or error can't blank the conversation.
+  const visibleMessages = settledReady
+    ? messages
+    : (mobileNativeChatTranscriptCache.get(identity)?.messages ?? EMPTY_NATIVE_CHAT_TRANSCRIPT)
 
   return {
     // Withhold rows until they belong to this identity; passive reset otherwise exposes previous-tab history for one commit.
     messages: visibleMessages,
     status,
-    transcriptLoading: status === 'loading' || status === 'awaiting-transcript',
+    // Rows left from an earlier visit can't answer "is this ask still open?" until a read confirms them.
+    transcriptLoading:
+      status === 'loading' || status === 'awaiting-transcript' || settled?.rowsUnconfirmed === true,
     error,
     hasMore,
     loadingEarlier: olderPages === 'loading',

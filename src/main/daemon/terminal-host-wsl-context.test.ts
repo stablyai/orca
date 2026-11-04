@@ -1,8 +1,8 @@
 import './mock-descendant-sweep'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as WslModule from '../wsl'
+import type * as WslModule from '../wsl/discovery/distro-catalog'
 
-vi.mock('../wsl', async (importOriginal) => ({
+vi.mock('../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   getDefaultWslDistro: () => 'Ubuntu'
 }))

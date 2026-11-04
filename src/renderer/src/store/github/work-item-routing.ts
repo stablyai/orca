@@ -1,3 +1,5 @@
+import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import type { AppState } from '../types'
 import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { Repo } from '../../../../shared/repo-types'
@@ -80,6 +82,18 @@ function settingsForGitHubTaskSource(
   )
 }
 
+/** A source names its host even when two registered copies share an id and path. */
+export function findGitHubWorkItemRepo(
+  state: Partial<Pick<AppState, 'repos'>>,
+  repoId: string,
+  repoPath: string,
+  source?: TaskSourceContext | null
+): Repo | undefined {
+  return source?.provider === 'github'
+    ? getGitHubRepoLookupIndex(state.repos).findOnHost(source.hostId, repoId, repoPath)
+    : findRepoForGitHubOwner(state, repoId, repoPath)
+}
+
 export function getWorkItemsCacheKeyForOwner(
   state: Partial<Pick<AppState, 'repos' | 'settings'>>,
   repoId: string,
@@ -89,7 +103,13 @@ export function getWorkItemsCacheKeyForOwner(
 ): string {
   const repo = findRepoForGitHubOwner(state, repoId, repoPath ?? '')
   // Why canonical: an SSH row may carry only connectionId, and an unstamped row is local, not focus.
-  return workItemsCacheKey(repoId, limit, query, repo ? getRepoExecutionHostId(repo) : undefined)
+  return workItemsCacheKey(
+    repoId,
+    limit,
+    query,
+    repo ? getRepoExecutionHostId(repo) : undefined,
+    repo && githubTaskBinding(repo)
+  )
 }
 
 export function getGitHubWorkItemSourceHostId(

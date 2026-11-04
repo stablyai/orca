@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
-import { runtimeEnvironmentStatusFromSnapshot } from '../../../shared/runtime-host-status'
+
+import {
+  type RuntimeEnvironmentStatus,
+  runtimeEnvironmentStatusFromSnapshot
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
 import type * as RuntimeSession from './preload-api/web-runtime-session'
 import type { PreloadApi } from '../../../preload/api-types'
