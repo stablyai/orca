@@ -21698,6 +21698,7 @@
     "searchHitSourceHost": "Found on {{value0}}",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
+    "antigravityChatToCli": "Chat → CLI",
     "continueInCli": "Continue in CLI",
     "continueInCliNewTab": "Continue in CLI in New Tab",
     "subagents": {
