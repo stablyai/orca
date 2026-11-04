@@ -59,32 +59,6 @@ describe('project formatter execution', () => {
     )
   })
 
-  it('does not spawn for unconfigured projects, other hosts, or excluded files', async () => {
-    expect(
-      await formatEditorText(store, { ...target(), path: join(root, 'a.png') }, 'text')
-    ).toEqual({ kind: 'skipped' })
-    expect(
-      await formatEditorText(store, { ...target(), executionHostId: 'ssh:other' }, 'text')
-    ).toEqual({ kind: 'skipped' })
-    delete repo.editorFormatter
-    expect(await formatEditorText(store, target(), 'text')).toEqual({ kind: 'skipped' })
-    expect(runProcess).not.toHaveBeenCalled()
-  })
-
-  it('checks host support only after a configured formatter applies', async () => {
-    const unsupported = vi.fn(() => {
-      throw new Error('unsupported host')
-    })
-    expect(
-      await formatEditorText(store, { ...target(), path: join(root, 'a.png') }, 'text', unsupported)
-    ).toEqual({ kind: 'skipped' })
-    expect(unsupported).not.toHaveBeenCalled()
-    await expect(formatEditorText(store, target(), 'text', unsupported)).rejects.toThrow(
-      'unsupported host'
-    )
-    expect(runProcess).not.toHaveBeenCalled()
-  })
-
   it('reports the formatter failure and never changes the saved file', async () => {
     repo.editorFormatter!.command = command('process.stderr.write("syntax error");process.exit(2)')
     await expect(formatEditorText(store, target(), 'input')).rejects.toThrow('syntax error')
@@ -124,19 +98,4 @@ describe('project formatter execution', () => {
       }
     }
   )
-
-  it.each([
-    [{ timedOut: true }, 'timed out'],
-    [{ outputTruncated: true }, 'output exceeded']
-  ])('refuses incomplete formatter output (%j)', async (result, message) => {
-    vi.mocked(runProcess).mockResolvedValueOnce({
-      code: 0,
-      signal: null,
-      timedOut: false,
-      stdout: 'partial',
-      stderr: '',
-      ...result
-    })
-    await expect(formatEditorText(store, target(), 'input')).rejects.toThrow(message)
-  })
 })

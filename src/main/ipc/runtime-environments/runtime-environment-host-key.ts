@@ -4,7 +4,7 @@ import {
   redactRuntimeEnvironment,
   type KnownRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 /** Compare a digest of the persistent E2EE host key without exposing the key to the renderer. */
 export function publicRuntimeEnvironmentWithHostKey(

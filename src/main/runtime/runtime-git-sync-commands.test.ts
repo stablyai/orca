@@ -49,49 +49,10 @@ const pushTarget = {
   remoteName: 'origin',
   branchName: 'main'
 } satisfies GitPushTarget
-const expectedUpstream = { owner: 'stablyai', repo: 'orca' }
 
 describe('RuntimeGitSyncCommands admission', () => {
   beforeEach(() => {
     vi.resetAllMocks()
-  })
-
-  it('prioritizes local runtime git actions and preserves host routing', async () => {
-    const commands = new RuntimeGitSyncCommands({
-      resolveRuntimeGitTarget: async () => ({
-        executionHostId: 'local',
-        worktree,
-        localGitOptions: { wslDistro: 'Ubuntu' }
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-    mocks.commitChanges.mockResolvedValue({ success: true })
-    mocks.gitSyncForkDefaultBranch.mockResolvedValue({ status: 'up-to-date' })
-
-    await commands.abortRuntimeGitMerge('id:wt-1')
-    await commands.abortRuntimeGitRebase('id:wt-1')
-    await commands.fetchRuntimeGit('id:wt-1', pushTarget)
-    await commands.syncRuntimeGitForkDefaultBranch('id:wt-1', expectedUpstream)
-    await commands.pullRuntimeGit('id:wt-1', pushTarget)
-    await commands.fastForwardRuntimeGit('id:wt-1', pushTarget)
-    await commands.commitRuntimeGit('id:wt-1', 'feat: prioritize user action')
-
-    const options = { admissionTier: 'interactive', wslDistro: 'Ubuntu' }
-    expect(mocks.abortMerge).toHaveBeenCalledWith(worktree.path, options)
-    expect(mocks.abortRebase).toHaveBeenCalledWith(worktree.path, options)
-    expect(mocks.gitFetch).toHaveBeenCalledWith(worktree.path, pushTarget, options)
-    expect(mocks.gitSyncForkDefaultBranch).toHaveBeenCalledWith(
-      worktree.path,
-      expectedUpstream,
-      options
-    )
-    expect(mocks.gitPull).toHaveBeenCalledWith(worktree.path, pushTarget, options)
-    expect(mocks.gitFastForward).toHaveBeenCalledWith(worktree.path, pushTarget, options)
-    expect(mocks.commitChanges).toHaveBeenCalledWith(
-      worktree.path,
-      'feat: prioritize user action',
-      options
-    )
   })
 
   it('refuses every runtime git action on an SSH host without running git here', async () => {

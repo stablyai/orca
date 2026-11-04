@@ -3,7 +3,7 @@ import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-l
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-prompt-injection'
+import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-launch/startup/agent-prompt-injection'
 import { createAgentPromptSubmissionRuntime } from './agent-prompt-submission-runtime-test-fixture'
 import { dispatchPreambleSendOptions } from './orchestration/preamble'
 

@@ -1,10 +1,11 @@
+import { summarizePRCheckRollup } from '../../../../shared/source-control/checks/pr-check-status'
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
 import type {
   PRConflictSummary,
   PRMergeableState,
   GitHubPRStack
 } from '../../../../shared/github/pull-request-types'
-import { deriveCheckStatus, mapPRState } from '../../mappers'
+import { mapPRState } from '../../mappers'
 import type { OwnerRepo } from '../../gh-utils'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
 
@@ -30,6 +31,7 @@ export function assemblePRRefreshFoundOutcome(args: {
     headDivergedFromMergedPRAtOid,
     conflictSummary
   } = args
+  const checksSummary = summarizePRCheckRollup(data.statusCheckRollup)
   return {
     kind: 'found',
     fetchedAt: Date.now(),
@@ -38,7 +40,8 @@ export function assemblePRRefreshFoundOutcome(args: {
       title: data.title,
       state: mapPRState(data.state, data.isDraft),
       url: data.url,
-      checksStatus: deriveCheckStatus(data.statusCheckRollup),
+      checksStatus: checksSummary.state === 'none' ? 'neutral' : checksSummary.state,
+      ...(data.checksUnavailable === false ? { checksSummary } : {}),
       updatedAt: data.updatedAt,
       mergeable,
       ...(data.reviewDecision !== undefined ? { reviewDecision: data.reviewDecision } : {}),

@@ -6,8 +6,8 @@ import {
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
-} from '../../src/shared/terminal-quick-commands'
-import type { TerminalQuickCommand } from '../../src/shared/terminal-quick-command-types'
+} from '../../src/shared/terminal/quick-commands/terminal-quick-commands'
+import type { TerminalQuickCommand } from '../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
 import { handleMockAccountRequest } from './mock-server-account-rpc'

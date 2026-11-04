@@ -10,7 +10,7 @@ import { act } from 'react'
 import { fireEvent } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 it.each([
   [undefined, { origin: 'unknown' }, 'Pi models are unavailable on this host.', false],

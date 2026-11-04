@@ -4,7 +4,7 @@ import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
-import { parsePaneKey } from '../../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type {
   WorkflowDispatch,
   WorkflowRun

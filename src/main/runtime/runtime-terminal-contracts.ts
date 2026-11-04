@@ -1,9 +1,9 @@
 import type { RuntimePtyWorktreeRecord, RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
-import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
-import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
+import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
+import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
-import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
   AgentLaunchPreferences,
   AgentSessionExecutionClaim,
@@ -14,17 +14,17 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrchestrationCompatibilityHostStamp } from '../../shared/orchestration-compatibility-evidence'
-import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type {
   RuntimeTerminalPresentation,
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'

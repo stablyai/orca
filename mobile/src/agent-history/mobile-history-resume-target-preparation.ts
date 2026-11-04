@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'

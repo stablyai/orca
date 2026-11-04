@@ -1,4 +1,4 @@
-import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import type { TerminalGitHubPRLink } from '../../shared/terminal/links/terminal-github-pr-link-detector'
 
 export type PtyDataEvent = {
   id: string

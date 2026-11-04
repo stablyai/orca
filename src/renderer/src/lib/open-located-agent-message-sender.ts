@@ -23,8 +23,8 @@ import {
   agentMessageSenderUnavailableText,
   type AgentMessageSenderTarget
 } from '@/components/native-chat/native-chat-agent-message-sender-target'
-import { activateWorktreeAgentPane } from '@/components/sidebar/use-worktree-agent-activation'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { activateWorktreeAgentPane } from '@/components/sidebar/workspace-card/activity/use-worktree-agent-activation'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 
 /** older-host identifies the chat host; update may mean either side, and unreachable proves nothing. */

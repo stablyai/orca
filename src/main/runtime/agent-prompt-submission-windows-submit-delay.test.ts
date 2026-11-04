@@ -5,7 +5,7 @@ import {
   buildAgentPromptPasteBytes,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs
-} from '../../shared/agent-prompt-injection'
+} from '../../shared/agent-launch/startup/agent-prompt-injection'
 import { setSshTargetRegistryHandlers } from '../ssh/targets/ssh-target-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'

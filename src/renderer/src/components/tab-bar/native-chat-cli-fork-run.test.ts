@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { runNativeChatCliFork } from './native-chat-cli-fork-run'
-import type * as LaunchFeedback from '../right-sidebar/ai-vault-session-launch-feedback'
+import type * as LaunchFeedback from '../right-sidebar/ai-vault/session-actions/ai-vault-session-launch-feedback'
 import type {
   NativeChatCliForkPreparation,
   NativeChatCliForkSubject
@@ -48,15 +48,18 @@ vi.mock('@/lib/ai-vault-session-fork-startup', () => ({
   buildAiVaultForkStartupForWorktree: () => ({ command: 'claude --resume source --fork-session' }),
   buildAiVaultCopiedSessionStartupForWorktree: () => ({ command: 'omp --resume copy' })
 }))
-vi.mock('../right-sidebar/ai-vault-session-resume-in-chat-launch', () => ({
+vi.mock('../right-sidebar/ai-vault/session-actions/ai-vault-session-resume-in-chat-launch', () => ({
   activateAiVaultResumeWorkspace: mocks.activate
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.error } }))
 vi.mock('@/lib/launch-ai-vault-session', () => ({ launchAiVaultSessionInNewTab: mocks.launch }))
-vi.mock('../right-sidebar/ai-vault-session-launch-feedback', async (importOriginal) => {
-  const actual = await importOriginal<typeof LaunchFeedback>()
-  return { ...actual, notifyAiVaultSessionQueued: mocks.notify }
-})
+vi.mock(
+  '../right-sidebar/ai-vault/session-actions/ai-vault-session-launch-feedback',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof LaunchFeedback>()
+    return { ...actual, notifyAiVaultSessionQueued: mocks.notify }
+  }
+)
 
 const subject: NativeChatCliForkSubject = {
   kind: 'chat',

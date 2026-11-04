@@ -1,4 +1,4 @@
-import { parseTerminalOscColorQuery } from '../../../../../shared/terminal-osc-color-reply'
+import { parseTerminalOscColorQuery } from '../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS,
   extractHiddenStartupRendererQueryData,
@@ -6,7 +6,7 @@ import {
   isPrimaryDeviceAttributesQuerySequence,
   isStatefulRendererReplyCsiQuery,
   isStatelessRendererReplyCsiQuery
-} from '../../../../../shared/terminal-reply-query-extraction'
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import type { PtyDataMeta } from '../pty-dispatcher'
 import {
   DEFAULT_DA1_RESPONSE,

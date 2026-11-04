@@ -5,8 +5,8 @@ import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PersistedClientHostedBrowserPage } from '../../../shared/client-hosted-browser-page-record'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { PersistedClientHostedBrowserPage } from '../../../shared/workspace-session/client-hosted-browser-page-record'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 vi.mock('electron', () => ({
   app: {

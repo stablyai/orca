@@ -1,4 +1,4 @@
-import { PROCESS_BOUNDARY_GROUND } from '../../../../../shared/terminal-mode-reset-profiles'
+import { PROCESS_BOUNDARY_GROUND } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /** A replaced process must not inherit the old one's input modes (#35559). */

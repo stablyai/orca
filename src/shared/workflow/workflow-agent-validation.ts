@@ -1,5 +1,5 @@
-import { checkAgentLaunchModelPreferences } from '../agent-launch-model-preferences'
-import { isTuiAgent } from '../tui-agent-config'
+import { checkAgentLaunchModelPreferences } from '../agent-launch/choices/agent-launch-model-preferences'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import {
   isWorkflowAgentNode,
   type WorkflowAgentNode,

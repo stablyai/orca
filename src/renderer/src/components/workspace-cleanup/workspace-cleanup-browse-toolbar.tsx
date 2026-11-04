@@ -9,7 +9,7 @@ import {
 } from './workspace-cleanup-dialog-notices'
 import { WorkspaceCleanupFilterBar } from './workspace-cleanup-filter-bar'
 import { WorkspaceCleanupSortHeader } from './workspace-cleanup-sort-header'
-import type { WorkspaceSpaceScanProgress } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceScanProgress } from '../../../../shared/workspace-disk-space/workspace-space-types'
 
 export function WorkspaceCleanupBrowseToolbar({
   browse,

@@ -75,6 +75,15 @@ export type BundledSkillOp = {
   linkTarget?: string
   /** The interrupted swap's old copy a `restore` moves back. */
   restoreFrom?: { path: string; observed: BundledSkillObserved }
+  /** Verified former placement, retired only after the canonical placement succeeds. */
+  previous?: readonly {
+    path: string
+    observed: BundledSkillObserved
+    /** Preserve shared paths referenced by older agent profiles. */
+    forward?: boolean
+    /** Copy-only hosts keep the former shared copy for older profiles. */
+    retain?: boolean
+  }[]
   reason?: BundledSkillLeaveReason
   /** Whether Replace / `--force` may back this up and put Orca's copy in its place. */
   replaceable?: boolean

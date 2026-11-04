@@ -8,7 +8,6 @@ import {
 } from '../runtime/runtime-mobile-notification-controller'
 import {
   agentSessionAttentionSubjectPrefix,
-  type StructuredAttentionRead,
   type StructuredAttentionOrigin,
   type StructuredAttentionState
 } from '../../shared/agent-session/agent-session-attention'
@@ -54,8 +53,6 @@ function register(
     controller?.dispatch(event)
   )
   const dismissMobileNotification = vi.fn((id: string) => controller?.dismiss(id))
-  const retireStructuredAttention = (read: StructuredAttentionRead) =>
-    controller?.retireStructuredAttention(read)
   const reconcileStructuredPromptAttention = (state: StructuredAttentionState) =>
     controller?.reconcileStructuredPromptAttention(state)
   registerNotificationHandlers(
@@ -75,7 +72,7 @@ function register(
     {
       dispatchMobileNotification,
       dismissMobileNotification,
-      retireStructuredAttention,
+      retireNotificationAttention: controller?.acknowledgeAttention.bind(controller),
       reconcileStructuredPromptAttention
     } as never
   )

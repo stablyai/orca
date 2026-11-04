@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store'
 import { useWorktreeMap } from '../store/selectors'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'

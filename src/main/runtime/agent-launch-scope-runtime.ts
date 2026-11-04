@@ -3,9 +3,9 @@ import {
   executionRuntimePlatform,
   remoteExecutionPlatform,
   type AgentLaunchRuntime
-} from '../../shared/agent-launch-runtime'
-import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
-import type { TuiAgent } from '../../shared/tui-agent'
+} from '../../shared/agent-launch/startup/agent-launch-runtime'
+import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { Repo } from '../../shared/repo-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getRepoSshConnectionId } from '../../shared/execution-host'

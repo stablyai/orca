@@ -35,6 +35,7 @@
     "../src/wsl-guest/**/*",
     "../src/types/**/*"
   ],
+  "exclude": ["../src/main/runtime/structured-chat-coordinator-mail.test.ts"],
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node"]

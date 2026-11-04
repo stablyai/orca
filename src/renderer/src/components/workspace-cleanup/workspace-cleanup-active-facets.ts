@@ -1,7 +1,7 @@
 import {
   createDefaultWorkspaceCleanupFilterState,
   type WorkspaceCleanupFilterState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 export type WorkspaceCleanupFacetGroupKey = keyof Omit<WorkspaceCleanupFilterState, 'query'>
 

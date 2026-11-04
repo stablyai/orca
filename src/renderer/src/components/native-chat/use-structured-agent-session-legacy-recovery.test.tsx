@@ -1,8 +1,19 @@
 // @vitest-environment happy-dom
-// Recover an older client’s in-doubt first send and two queued followers using real hooks/stores; fake only history and RPC.
-
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { useStructuredAgentSession } from './use-structured-agent-session'
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from './native-chat-composer-draft-store'
+import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
+import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
+// Recover an older client’s in-doubt first send and two queued followers using real hooks/stores; fake only history and RPC.
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
@@ -40,19 +51,6 @@ vi.mock('./use-structured-agent-session-read', () => ({
     loadOlder: vi.fn()
   })
 }))
-
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { useStructuredAgentSession } from './use-structured-agent-session'
-import {
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from './native-chat-composer-draft-store'
-import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
-import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
 
 const SESSION = 'session-1'
 const KEY = `orca:desktopStructuredAgentSessionOutbox:v1:${SESSION}`
@@ -165,12 +163,27 @@ describe('opening a chat an older build left stuck behind a message in doubt', (
     expect(sendCalls()).toEqual([])
   })
 
-  it("says it couldn't confirm when the host can't list the whole conversation", async () => {
+  it('keeps the full handback without uncertainty advice when the host cannot list history', async () => {
     mocks.outline.mockResolvedValue(null)
-    const { result } = renderChat()
+    const originalSubmission = structuredClone(IN_DOUBT_SUBMISSION)
+    const { result, unmount } = renderChat()
 
     await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull())
-    expect(result.current.error).toContain("couldn't confirm your message reached the agent")
+    expect(draft()).toBe('second\n\nthird')
+    expect(result.current.error).toBeNull()
+    expect(result.current.messages.map((message) => message.id)).toEqual([
+      agentJournalSubmissionKey(IN_DOUBT)
+    ])
+    expect(result.current.pending).toEqual([])
+    expect(result.current.isWorking).toBe(false)
+    expect(result.current.canStop).toBe(false)
+    expect(result.current.sendOut).toBe(false)
+    expect(sendCalls()).toEqual([])
+    expect(IN_DOUBT_SUBMISSION).toEqual(originalSubmission)
+    unmount()
+    renderChat()
+    expect(draft()).toBe('second\n\nthird')
+    expect(mocks.outline).toHaveBeenCalledTimes(1)
   })
 
   it("sends the next message under the fence the chat's read reported", async () => {

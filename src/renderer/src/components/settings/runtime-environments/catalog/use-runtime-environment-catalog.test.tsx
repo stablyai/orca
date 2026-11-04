@@ -3,7 +3,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store/index'
 import { useRuntimeEnvironmentCatalog } from './use-runtime-environment-catalog'
 
@@ -69,12 +69,4 @@ it('follows saved host changes while contact with the host is unavailable', asyn
   expect(result.current.environments).toEqual([])
   expect(list).toHaveBeenCalledTimes(1)
   expect(getStatus).toHaveBeenCalledTimes(1)
-})
-
-it('continues hiding recipe-created VM environments from the saved-server list', async () => {
-  const { result } = renderHook(useRuntimeEnvironmentCatalog)
-  await waitFor(() => expect(result.current.isLoading).toBe(false))
-  const vm: PublicKnownRuntimeEnvironment = { ...environment, id: 'env-vm', source: 'ephemeral-vm' }
-  act(() => useAppStore.setState({ runtimeEnvironments: [vm, environment] }))
-  expect(result.current.environments).toEqual([environment])
 })

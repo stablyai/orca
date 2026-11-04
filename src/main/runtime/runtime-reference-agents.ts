@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
@@ -7,7 +7,7 @@ import {
 } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
-import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { composeWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
 import {
   structuredAgentSessionPaneKey,

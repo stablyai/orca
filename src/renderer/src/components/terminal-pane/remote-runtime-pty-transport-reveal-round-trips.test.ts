@@ -3,7 +3,7 @@ import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks

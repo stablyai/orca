@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { HostedReviewProvider } from '../../../../shared/hosted-review'
-import type { WorkspaceCleanupFilterState } from '../../../../shared/workspace-cleanup-filter-model'
+import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { WorkspaceCleanupFilterState } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 export type WorkspaceCleanupFacetCounts = Record<
   keyof Omit<WorkspaceCleanupFilterState, 'query'>,

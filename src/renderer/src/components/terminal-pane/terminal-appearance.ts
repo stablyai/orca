@@ -1,8 +1,8 @@
 import type { ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
-import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
+import { resolveTerminalFontWeights } from '../../../../shared/terminal/appearance/terminal-fonts'
+import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal/appearance/terminal-ligatures'
 import { resolvePaneStyleOptions, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
@@ -14,19 +14,20 @@ import {
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
-  resolveTerminalCursorInactiveStyle
+  resolveTerminalCursorInactiveStyle,
+  resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-cursor-blink-suspension'
 import type { PtyTransport } from './pty-transport-types'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { HEX_COLOR_RE } from '../../../../shared/color-validation'
-import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
-import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
+import { normalizeTerminalLineHeight } from '../../../../shared/terminal/appearance/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
-import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
-import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-themes/terminal-contrast-correction'
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
 import { windowBackdropActive } from '@/lib/window-backdrop'
 import { contrastRatio, over, type Rgba } from '@/lib/plugin-theme-tokens'
 
@@ -228,6 +229,9 @@ export function applyTerminalAppearance(
     )
     pane.terminal.options.fastScrollSensitivity = normalizeTerminalFastScrollSensitivity(
       settings.terminalFastScrollSensitivity
+    )
+    pane.terminal.options.scrollOnUserInput = resolveTerminalScrollOnUserInput(
+      settings.terminalScrollOnUserInput
     )
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'

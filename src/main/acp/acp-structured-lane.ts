@@ -17,7 +17,7 @@ import {
   acpBackgroundTaskChildWork,
   isAcpBackgroundTaskChildWorkEvent
 } from './acp-background-task-child-work'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import {
   neverThrowingStructuredAgentSessionLogger,

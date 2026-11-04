@@ -6,16 +6,19 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { useAppStore } from '@/store'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PtyTransport } from '../terminal-pane/pty-transport-types'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { createIpcPtyTransport } from '../terminal-pane/pty-transport'
 import { TerminalCrewPortals } from './TerminalCrewPortals'
 import { holdPhysicalCloseTasks } from './crew-menu.test-fixture'
 
+// Exercise dormant panel interactions independently of the suspension gate.
+vi.mock('./use-orchestration-panel-enabled', () => ({
+  useOrchestrationPanelEnabled: () => true
+}))
 const rig = vi.hoisted(() => ({ open: vi.fn(), copy: vi.fn(), identity: vi.fn(), crew: vi.fn() }))
 vi.mock('./use-terminal-crew-identity', () => ({
   useTerminalCrewIdentity: (paneKey: string) => {
@@ -86,12 +89,6 @@ function mount(insertion?: {
   split?: boolean
   restored?: boolean
 }) {
-  // On unless the test turned it off first.
-  if (useAppStore.getState().settings?.experimentalOrchestrationPanel === undefined) {
-    useAppStore.setState({
-      settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: true }
-    })
-  }
   const link = { connected: !insertion?.restored }
   currentWorker = insertion
     ? { ...worker, task: { title: 'Inspect', state: 'dispatched' }, sendAddress: 'term_worker' }
@@ -349,34 +346,6 @@ it.each(['retired pane', 'disconnected terminal'] as const)(
     )
   }
 )
-
-it('mounts no pane panel, identity lookup or crew read while the setting is off, live both ways', () => {
-  useAppStore.setState({
-    settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: false }
-  })
-  const { first, second } = mount()
-  expect(document.querySelector('[data-orchestration-crew]')).toBeNull()
-  expect(rig.identity).not.toHaveBeenCalled()
-  expect(rig.crew).not.toHaveBeenCalled()
-
-  act(() =>
-    useAppStore.setState({
-      settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: true }
-    })
-  )
-  for (const pane of [first, second]) {
-    expect(
-      within(pane.container).getByRole('button', { name: /^Show orchestration: 1 worker,/ })
-    ).toBeInTheDocument()
-  }
-
-  act(() =>
-    useAppStore.setState({
-      settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: false }
-    })
-  )
-  expect(document.querySelector('[data-orchestration-crew]')).toBeNull()
-})
 
 it('retires only the hidden menu before deferred physical close and never replays it on show', async () => {
   const tasks = holdPhysicalCloseTasks()

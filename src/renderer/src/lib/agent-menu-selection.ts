@@ -1,9 +1,12 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
 import type { AgentLaunchSurface } from './agent-session-launch-plan'
 import type { AgentLaunchRoute } from './agent-launch-routing'
-import type { HostChatAnswer, NewTabAgentMenuSettings } from './new-tab-agent-menu-rows'
+import type {
+  HostChatAnswer,
+  NewTabAgentMenuSettings
+} from '../../../shared/agent-launch/picker/agent-launch-picker-rows'
 
 /** Accepted renderer intent; route and explicitness remain distinct through admission. */
 export type AgentLaunchChoice = {
