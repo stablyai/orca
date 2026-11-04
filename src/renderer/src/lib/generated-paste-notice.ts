@@ -46,16 +46,19 @@ export async function deliverKeepingNotice(
     ...(paste.submit ? {} : { submitted: false })
   }
   await registerGeneratedInputNotice(LOCAL_NOTICE_RUNTIME, notice, { pending: true })
-  let reply: { noticeRetained: boolean } | null = null
-  let route: { target: RuntimeClientTarget; keepsNotices: boolean } | null = null
+  // Filled by the send's callbacks: the host's answer (absent for a lost reply) and its route.
+  const heard: {
+    reply: { noticeRetained: boolean } | null
+    route: { target: RuntimeClientTarget; keepsNotices: boolean } | null
+  } = { reply: null, route: null }
   const { outcome, hosted } = await send(
     // The client drops these for a host that keeps no notices by id.
     { retainNotice: true, operationId: id },
-    (answer) => (reply = answer),
-    (where) => (route = where)
+    (answer) => (heard.reply = answer),
+    (where) => (heard.route = where)
   )
-  const answered: { noticeRetained: boolean } | null = reply
-  const routed: { target: RuntimeClientTarget; keepsNotices: boolean } | null = route
+  const answered = heard.reply
+  const routed = heard.route
   const remoteHost = routed?.target.kind === 'environment' ? routed.target : null
   if (outcome === 'delivered' || outcome === 'staged') {
     settleGeneratedInputNotice(id)
