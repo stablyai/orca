@@ -3,7 +3,7 @@ import {
   validateAdoptedOpenCodeSource,
   type AdoptedTranscriptSource
 } from './adopted-transcript-source'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type {
   AgentJournalCursor,
   AgentJournalItemIdentity

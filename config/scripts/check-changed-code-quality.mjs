@@ -7,6 +7,7 @@ import { runProcessSync } from '@orca/process-host'
 import { scanAstGrep } from './ast-grep-scan.mjs'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
+import { createExistingTypeAssertionMatcher } from './existing-type-assertions.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
 const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
@@ -294,7 +295,7 @@ function readBaseSourceBatch(root, comparisonBase, files) {
       if (!Number.isSafeInteger(size) || output[offset + size] !== 10) {
         return null
       }
-      sources.push(output.subarray(offset, offset + size).toString('utf8'))
+      sources.push({ file, source: output.subarray(offset, offset + size).toString('utf8') })
       offset += size + 1
     }
     return offset === output.length ? sources : null
@@ -304,14 +305,14 @@ function readBaseSourceBatch(root, comparisonBase, files) {
   }
 }
 
-export function collectBaseLineBlocks(root, comparisonBase, files = null) {
+function collectBaseSources(root, comparisonBase, files = null) {
   // Read all touched base paths including deletions/rename sources; split code may no longer exist under current paths.
   const paths =
     files ??
     splitNullDelimited(
       runGit(root, ['diff', '--name-only', '--no-renames', '-z', comparisonBase, '--'])
     ).filter((file) => SOURCE_FILE_PATTERN.test(file))
-  const blocks = []
+  const records = []
   for (let start = 0; start < paths.length; start += 32) {
     const batch = paths.slice(start, start + 32)
     let sources = readBaseSourceBatch(root, comparisonBase, batch)
@@ -327,7 +328,7 @@ export function collectBaseLineBlocks(root, comparisonBase, files = null) {
             timeoutMs: null
           })
           if (result.code === 0) {
-            sources.push(result.stdout)
+            sources.push({ file, source: result.stdout })
           }
         } catch {
           // Failed source reads were already skipped by the per-file implementation.
@@ -335,11 +336,15 @@ export function collectBaseLineBlocks(root, comparisonBase, files = null) {
         }
       }
     }
-    for (const source of sources) {
-      blocks.push(source.split(/\r?\n/).map(normalizeSourceLine).filter(Boolean))
-    }
+    records.push(...sources)
   }
-  return blocks
+  return records
+}
+
+export function collectBaseLineBlocks(root, comparisonBase, files = null) {
+  return collectBaseSources(root, comparisonBase, files).map(({ source }) =>
+    source.split(/\r?\n/).map(normalizeSourceLine).filter(Boolean)
+  )
 }
 
 export function isMovedCode(highlightedLines, baseBlocks) {
@@ -403,7 +408,8 @@ export function diagnosticTouchesAddedLines(
   rangesByFile,
   root = process.cwd(),
   baseBlocks = [],
-  movedCodeMatcher = isMovedCode
+  movedCodeMatcher = isMovedCode,
+  existingAssertionMatcher = () => false
 ) {
   const file = normalizedDiagnosticPath(root, diagnostic.filename)
   const ranges = rangesByFile.get(file)
@@ -414,6 +420,21 @@ export function diagnosticTouchesAddedLines(
     const lineRange = diagnosticLineRange(root, diagnostic.filename, label.span)
     if (lineRange === null || !overlapsAddedLines(lineRange.start, lineRange.end, ranges)) {
       return false
+    }
+    if (diagnostic.code === 'typescript(consistent-type-assertions)') {
+      const { offset, length } = label.span
+      if (Number.isInteger(offset) && offset >= 0 && Number.isInteger(length) && length > 0) {
+        const absolute = path.isAbsolute(diagnostic.filename)
+          ? diagnostic.filename
+          : path.join(root, diagnostic.filename)
+        const source = readFileSync(absolute)
+        if (offset + length <= source.length) {
+          const fragment = source.subarray(offset, offset + length).toString('utf8')
+          if (existingAssertionMatcher(fragment)) {
+            return false
+          }
+        }
+      }
     }
     return !movedCodeMatcher(
       diagnosticHighlightedLines(root, diagnostic.filename, label.span),
@@ -573,8 +594,12 @@ export function main(
     return 0
   }
 
-  const baseBlocks = collectBaseLineBlocks(root, comparisonBase)
+  const baseSources = collectBaseSources(root, comparisonBase)
+  const baseBlocks = baseSources.map(({ source }) =>
+    source.split(/\r?\n/).map(normalizeSourceLine).filter(Boolean)
+  )
   const movedCodeMatcher = createMovedCodeMatcher(baseBlocks)
+  const existingAssertionMatcher = createExistingTypeAssertionMatcher(baseSources)
 
   let failures = 0
   for (const scan of OXLINT_SCANS) {
@@ -583,7 +608,14 @@ export function main(
         !isSuppressedDiagnostic(diagnostic, root) &&
         !isCastingDirectiveUnusedWarning(diagnostic, root) &&
         !isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, scan.label) &&
-        diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks, movedCodeMatcher)
+        diagnosticTouchesAddedLines(
+          diagnostic,
+          rangesByFile,
+          root,
+          baseBlocks,
+          movedCodeMatcher,
+          existingAssertionMatcher
+        )
     )
     for (const diagnostic of diagnostics) {
       printDiagnostic(diagnostic, root)

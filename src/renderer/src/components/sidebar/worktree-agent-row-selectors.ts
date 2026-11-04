@@ -3,9 +3,9 @@ import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-statu
 import type { AppState } from '@/store/types'
 import type {
   AgentStatusEntry,
-  AgentStatusOrchestrationContext,
-  MigrationUnsupportedPtyEntry
-} from '../../../../shared/agent-status-types'
+  AgentStatusOrchestrationContext
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   type LiveEntriesByWorktreeCache,

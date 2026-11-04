@@ -7,7 +7,7 @@ import { translate } from '@/i18n/i18n'
 
 import { wslHostDistroForTarget } from '@/lib/wsl-host-account-owner'
 import { useAppStore } from '@/store'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {

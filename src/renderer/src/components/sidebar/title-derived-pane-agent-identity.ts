@@ -1,6 +1,6 @@
-import { titleShowsNoAgent } from '../../../../shared/agent-detection'
-import type { AgentType } from '../../../../shared/agent-status-types'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
+import { titleShowsNoAgent } from '../../../../shared/shell-process-detection'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-generation-client'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'

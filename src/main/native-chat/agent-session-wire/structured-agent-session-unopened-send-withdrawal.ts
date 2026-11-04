@@ -1,5 +1,5 @@
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'

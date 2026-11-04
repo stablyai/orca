@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
+import { agentChildWorkLiveness } from '../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import {
   conversationCommandBlocked,
   type ConversationCommandAdmissionContext
 } from './structured-conversation-command-admission'
-import type { AgentSessionBackgroundTaskStops } from '../../../shared/agent-child-work-stop-targets'
+import type { AgentSessionBackgroundTaskStops } from '../../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 

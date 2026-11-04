@@ -12,7 +12,7 @@ import { getTextGenerationModels } from '../../../../shared/source-control-ai-mo
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   EMPTY_COMMIT_MESSAGE_AI_SETTINGS,
   readCommitMessageAiSettings,

@@ -1,7 +1,7 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 

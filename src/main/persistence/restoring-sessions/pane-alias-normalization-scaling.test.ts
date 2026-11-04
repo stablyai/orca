@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { legacyMigrationUnsupportedRowsToAliasEntries } from './pane-alias-normalization'
 
 vi.mock('../../agent-hooks/server', () => ({ agentHookServer: {} }))

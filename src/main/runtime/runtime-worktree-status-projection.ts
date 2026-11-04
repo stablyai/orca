@@ -1,12 +1,14 @@
 import {
   detectAgentStatusFromTitle,
+  isQuarterCircleSpinnerOnlyAgentTitle
+} from '../../shared/agent-status/title/agent-title-status'
+import {
   isClaudeManagementTitle,
-  isOpenCodeNativeTitle,
-  isQuarterCircleSpinnerOnlyAgentTitle,
-  isShellProcess,
   type AgentStatus
-} from '../../shared/agent-detection'
-import type { AgentStatusEntry } from '../../shared/agent-status-types'
+} from '../../shared/agent-status/title/agent-title-core'
+import { isOpenCodeNativeTitle } from '../../shared/agent-status/title/providers/opencode-terminal-title'
+import { isShellProcess } from '../../shared/shell-process-detection'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type {
   RuntimeTerminalAgentStatus,

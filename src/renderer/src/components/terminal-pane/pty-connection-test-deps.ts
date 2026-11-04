@@ -1,8 +1,24 @@
+import type { PtyConnectionDeps } from './pty-connection-types'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { leafIdForPane } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+
+export type PtyConnectionAgentTitleMocks = Required<
+  Pick<PtyConnectionDeps, 'detectAgentStatusFromTitle' | 'isClaudeAgent' | 'isGeminiTerminalTitle'>
+>
+
+export function bindPaneAgentTitleMocks<T extends object>(
+  deps: T,
+  mocks: PtyConnectionAgentTitleMocks
+) {
+  return Object.assign(deps, {
+    detectAgentStatusFromTitle: mocks.detectAgentStatusFromTitle,
+    isClaudeAgent: mocks.isClaudeAgent,
+    isGeminiTerminalTitle: mocks.isGeminiTerminalTitle
+  })
+}
 
 type MockRef = { current: Mock }
 

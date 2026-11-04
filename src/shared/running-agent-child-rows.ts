@@ -4,10 +4,10 @@ import {
   flattenAgentChildRowModels,
   type AgentChildRowContext,
   type AgentChildRowModel
-} from './agent-child-row-model'
-import { agentChildWorkIsRunning } from './agent-child-work-listing'
-import type { AgentChildWorkView } from './agent-status-child-work-view'
-import type { AgentSubagentSnapshot } from './agent-status-types'
+} from './agent-status/presentation/agent-child-row-model'
+import { agentChildWorkIsRunning } from './agent-status/child-work/agent-child-work-listing'
+import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
+import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
 
 function ownsLiveWork(row: AgentChildRowModel): boolean {
   return row.owned.some((owned) => !owned.settled || ownsLiveWork(owned))

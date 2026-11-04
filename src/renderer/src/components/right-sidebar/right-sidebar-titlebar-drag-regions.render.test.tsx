@@ -56,7 +56,7 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   useShortcutLabel: (actionId: string) => actionId
 }))
 
-vi.mock('@/store', async () => {
+vi.mock('@/store/index', async () => {
   const React = await vi.importActual<typeof ReactModule>('react')
   const getSnapshot = (selector: (state: Record<string, unknown>) => unknown): unknown => {
     if (mockAppState.snapshotCache.has(selector)) {

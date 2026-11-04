@@ -5,7 +5,7 @@ import type {
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentChildWorkLivenessCandidate } from '../../../shared/agent-status-child-work-liveness'
+import type { AgentChildWorkLivenessCandidate } from '../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'
 

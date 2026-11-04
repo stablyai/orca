@@ -2,7 +2,7 @@ import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settl
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../../shared/tab-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { agentChildWorkLiveness } from '../../../../shared/agent-status-child-work-liveness'
+import { agentChildWorkLiveness } from '../../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   structuredAgentSessionLaunchHasRetainedInput

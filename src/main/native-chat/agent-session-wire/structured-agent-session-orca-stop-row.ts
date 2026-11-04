@@ -18,7 +18,7 @@ import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { agentTurnVerdict } from '../../../shared/agent-turn-outcome'
+import { agentTurnVerdict } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { orcaShutdownRowClientMessageId } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'

@@ -16,7 +16,7 @@ import {
 import { clearPendingSendCacheForTests } from './native-chat-pending'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 const writes = vi.hoisted(() => vi.fn())
 const verified = vi.hoisted(() => vi.fn())

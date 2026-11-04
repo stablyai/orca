@@ -6,7 +6,7 @@ import {
   CodexAppServerUnsupportedError,
   isCodexMethodNotFoundError
 } from './app-server/codex-app-server-session'
-import { isRecord } from '../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 export const CODEX_SKILLS_LIST_METHOD = 'skills/list'
 

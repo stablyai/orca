@@ -5,10 +5,10 @@ import {
   resolveNativeChatPastedText
 } from './native-chat-composer-pasted-text-references'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
   sendNativeChatMessage,

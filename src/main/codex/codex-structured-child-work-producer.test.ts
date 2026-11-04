@@ -10,23 +10,23 @@ import { describe, expect, it } from 'vitest'
 import {
   foldAgentLeadStatus,
   type AgentLeadStatusResolution
-} from '../../shared/agent-lead-status-fold'
-import { createAgentChildWorkAdmission } from '../../shared/agent-status-child-work-admission'
-import type { AgentChildWorkRecord } from '../../shared/agent-status-child-work'
-import { agentChildWorkLiveness } from '../../shared/agent-status-child-work-liveness'
-import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status-child-work-reconciliation'
+} from '../../shared/agent-status/lifecycle/agent-lead-status-fold'
+import { createAgentChildWorkAdmission } from '../../shared/agent-status/child-work/agent-status-child-work-admission'
+import type { AgentChildWorkRecord } from '../../shared/agent-status/child-work/agent-status-child-work'
+import { agentChildWorkLiveness } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
+import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-reconciliation'
 import {
   agentChildWorkOwnedLiveness,
   deriveAgentChildDisplayState
-} from '../../shared/agent-status-child-work-display'
-import { projectAgentChildWorkViews } from '../../shared/agent-status-child-work-view'
-import { createAgentStatusStore } from '../../shared/agent-status-store'
+} from '../../shared/agent-status/child-work/agent-status-child-work-display'
+import { projectAgentChildWorkViews } from '../../shared/agent-status/child-work/agent-status-child-work-view'
+import { createAgentStatusStore } from '../../shared/agent-status/store/agent-status-store'
 import { agentJournalLinkageFields } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 
