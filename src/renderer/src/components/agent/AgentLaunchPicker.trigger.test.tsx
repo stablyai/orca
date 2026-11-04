@@ -238,3 +238,45 @@ it.each(['button', 'enter'] as const)(
     )
   }
 )
+
+it('opens from a printable key on the focused trigger and seeds the search', () => {
+  const claude: AgentPickerEntry = {
+    ...entry,
+    agent: 'claude',
+    label: 'Claude',
+    rows: [{ agent: 'claude', kind: 'cli' }]
+  }
+  const entries = [entry, claude]
+  vi.spyOn(inventoryModule, 'useAgentLaunchPickerInventory').mockReturnValue([])
+  const model = {
+    state: 'settled' as const,
+    rows: entries.flatMap((entry) => entry.rows),
+    detection: {
+      detectedIds: entries.map((entry) => entry.agent),
+      isLoading: false,
+      isRefreshing: false,
+      detectionFailed: false,
+      needsServerUpdate: false,
+      refresh: async () => entries.map((entry) => entry.agent)
+    }
+  }
+  act(() =>
+    root.render(
+      <TooltipProvider>
+        <AgentLaunchPicker model={model} entries={entries} agent="codex" onPick={launch} />
+      </TooltipProvider>
+    )
+  )
+  const trigger = getByRole(document.body, 'button', { name: 'Select agent' })
+  const search = () =>
+    document.querySelector<HTMLInputElement>('input[placeholder="Search agents and setups…"]')
+  fireEvent.keyDown(trigger, { key: 'c', metaKey: true })
+  expect(search()).toBeNull()
+  fireEvent.keyDown(trigger, { key: 'l' })
+  expect(search()?.value).toBe('l')
+  expect(getByRole(document.body, 'button', { name: 'Configure Claude' })).toBeTruthy()
+  expect(document.querySelector('[aria-label="Configure Codex"]')).toBeNull()
+  fireEvent.keyDown(getByRole(document.body, 'menu'), { key: 'Escape' })
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+  expect(search()?.value).toBe('')
+})
