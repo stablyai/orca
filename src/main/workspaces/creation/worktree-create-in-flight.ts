@@ -43,7 +43,7 @@ export function openWorktreeCreatePathClaim(): WorktreeCreatePathClaim {
 }
 
 // Git lists real paths even when creation uses a symlink and the leaf does not exist yet.
-async function resolveCreatePathAlias(worktreePath: string): Promise<string> {
+export async function resolveCreatePathAlias(worktreePath: string): Promise<string> {
   let ancestor = worktreePath
   const missing: string[] = []
   for (;;) {

@@ -770,6 +770,25 @@ describe('repos:add + repos:clone', () => {
       expect(mockStore.addRepo).not.toHaveBeenCalled()
     })
 
+    it('refuses a different repo through a symlinked destination when the saved folder is gone', async () => {
+      const root = await createTempRoot()
+      await mkdir(join(root, 'real'))
+      const destination = join(root, 'alias')
+      await symlink(join(root, 'real'), destination)
+      // Clone saves Git's resolved path; the typed alias must still find it.
+      const saved = savedProject(join(root, 'real', 'orca'), {
+        gitRemoteIdentity: identity('github.com/stablyai/orca')
+      })
+      mockStore.getRepos.mockReturnValue([saved])
+      gitExecFileAsyncMock.mockRejectedValue(new Error('spawn ENOENT'))
+
+      await expect(
+        handlers.get('repos:clone')!(null, { url: 'https://github.com/me/orca.git', destination })
+      ).rejects.toThrow('"orca" is already an Orca project')
+
+      expect(gitSpawnMock).not.toHaveBeenCalled()
+    })
+
     it('refuses, naming the project, when the saved project was a different repo', async () => {
       const destination = await createTempRoot()
       const clonePath = join(destination, 'orca')

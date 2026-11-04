@@ -120,7 +120,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
     async (_event, args: { url: string; destination: string }): Promise<Repo> => {
       const clonePath = deriveValidatedClonePath(args)
       const clonePathKey = getClonePathComparisonKey(clonePath)
-      let savedPathKeys = await getSavedProjectPathKeys(clonePath)
+      let savedPathKeys: string[] = []
       // Remote projects can share this path string without belonging to this clone host.
       const findSaved = (): Repo | undefined =>
         store
@@ -132,6 +132,8 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
           )
       return runWithClonePathLock(clonePathKey, async () => {
         await pendingAbortCleanupByPath.get(clonePathKey)
+        // Read after the lock so lookup sees what a queued clone of this path registered.
+        savedPathKeys = await getSavedProjectPathKeys(clonePath)
         const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
         let claimedTarget: ClaimedCloneTarget
         let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>

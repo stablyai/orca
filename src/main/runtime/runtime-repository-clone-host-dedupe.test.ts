@@ -1,5 +1,5 @@
 import { runProcessSync } from '@orca/process-host'
-import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, stat, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -110,6 +110,45 @@ describe('clone reuses only a project on this machine', () => {
       expect(remote.kind).toBe('folder')
     }
   )
+
+  describe('through a symlinked destination', () => {
+    let alias: string
+    beforeEach(async () => {
+      await mkdir(join(root, 'real'))
+      alias = join(root, 'alias')
+      await symlink(join(root, 'real'), alias)
+    })
+
+    it('reuses the first of two queued clones', async () => {
+      const { controller, repos } = createController([])
+
+      const [first, second] = await Promise.all([
+        controller.clone(sourceUrl, alias),
+        controller.clone(sourceUrl, alias)
+      ])
+
+      expect(second.id).toBe(first.id)
+      expect(repos).toHaveLength(1)
+      expect(first.path).toBe(join(root, 'real', 'source'))
+    })
+
+    it('refuses a different repository at a saved project whose folder is gone', async () => {
+      const saved: Repo = {
+        ...folderRow(join(root, 'real', 'source'), {}),
+        kind: 'git',
+        gitRemoteIdentity: {
+          canonicalKey: 'example.com/other/source',
+          remoteName: 'origin',
+          remoteUrl: 'https://example.com/other/source.git'
+        }
+      }
+      const { controller, repos } = createController([saved])
+
+      await expect(controller.clone(sourceUrl, alias)).rejects.toThrow('is already an Orca project')
+      expect(repos).toEqual([saved])
+      await expect(stat(join(root, 'real', 'source'))).rejects.toThrow()
+    })
+  })
 
   it('converts the local folder project already at the clone path', async () => {
     const destination = join(root, 'dest')
