@@ -1,4 +1,4 @@
-import type { AiVaultSessionTitleRequest } from '../../../shared/ai-vault-session-title'
+import type { AiVaultSessionTitleRequest } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { toHostReadableTranscriptPath } from '../../native-chat/host-readable-transcript-path'
 import { wslTranscriptFsRefusal } from '../../native-chat/wsl-transcript-fs-error'
 

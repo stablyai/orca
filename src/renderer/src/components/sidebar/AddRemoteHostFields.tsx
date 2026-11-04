@@ -8,7 +8,7 @@ import {
   translateHostAccessLinkError,
   translateRemotePairingEndpointKind
 } from '@/lib/remote-pairing-copy'
-import type { ParseHostAccessLinkResult } from '../../../../shared/remote-pairing-address'
+import type { ParseHostAccessLinkResult } from '../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import {
   applyParsedSshHostInput,
   type EditingTarget

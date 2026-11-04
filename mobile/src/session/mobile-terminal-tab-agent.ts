@@ -61,14 +61,6 @@ export function isMobileTerminalTabRunningAgent(tab: MobileTerminalTabAgentIdent
   return resolveMobileTerminalTabOwnedAgentId(tab) !== null
 }
 
-export function listMobileTerminalAgentHandles(tabs: readonly MobileSessionTab[]): string[] {
-  return tabs.flatMap((tab) =>
-    tab.type === 'terminal' && tab.terminal && isMobileTerminalTabRunningAgent(tab)
-      ? [tab.terminal]
-      : []
-  )
-}
-
 // Phones get no process, sleeping-session or sibling signals; host Cursor identity stands in for an unowned pane's process, since terminal.list can keep it after the pane is reused.
 export function resolveMobileTerminalTabAgentId(
   tab: MobileTerminalTabAgentIdentity,

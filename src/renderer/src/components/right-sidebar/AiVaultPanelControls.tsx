@@ -28,9 +28,13 @@ import {
   type AiVaultAgent,
   type AiVaultGroup,
   type AiVaultScope
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { getExecutionHostLabel, type ExecutionHostScope } from '../../../../shared/execution-host'
-import { agentLabel, type AiVaultSessionGroup } from './ai-vault-session-filters'
+import './ai-vault-session-filters'
+import {
+  agentLabel,
+  type AiVaultSessionGroup
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 import { AiVaultSessionLimitMenu } from './AiVaultSessionLimitMenu'

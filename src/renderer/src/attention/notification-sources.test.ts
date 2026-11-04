@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { NotificationDispatchRequest } from '../../../shared/notification-settings-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import {
   createTestStore,

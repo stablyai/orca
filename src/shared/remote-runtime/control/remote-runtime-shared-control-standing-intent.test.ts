@@ -1,4 +1,4 @@
-import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../pairing/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'

@@ -1,13 +1,13 @@
-import { resolveQualifiedFolderWorkspaceResult } from '../../shared/folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspaceResult } from '../../shared/folder-workspaces/folder-workspace-execution-host'
 import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { stat as statLocalPath } from 'node:fs/promises'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
-} from '../../shared/folder-workspace-path-status'
+} from '../../shared/folder-workspaces/folder-workspace-path-status'
 import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'

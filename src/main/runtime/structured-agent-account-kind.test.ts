@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveStructuredCodexAccountKind } from './structured-agent-account-home'
-import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { getSystemCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 const ACCOUNT: CodexManagedAccount = {
   id: 'account-a',

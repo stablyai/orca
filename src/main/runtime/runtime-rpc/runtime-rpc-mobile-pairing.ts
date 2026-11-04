@@ -1,9 +1,10 @@
-import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingConnectionMode } from '../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import {
   mobileRelayMintFailureFromUnknown,
   type MobileRelayMintFailure
-} from '../../../shared/mobile-relay-mint-failure'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+} from '../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../network-exposure-guidance'
 import { RuntimeRpcPairing } from './runtime-rpc-pairing'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 // The desktop's server-list feed loads react-native; its timer never runs without a subscriber.
 vi.mock('react-native', () => ({}))
-import type { MobileRelayHost } from '../../../src/shared/mobile-relay-hosts-contract'
+import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   applyServerWorkspaces,
   fetchServerWorkspaces,

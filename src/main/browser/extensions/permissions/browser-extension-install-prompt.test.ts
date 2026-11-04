@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_EXTENSION_INSTALL_PROMPT_CLOSED_CHANNEL,
   BROWSER_EXTENSION_INSTALL_PROMPT_REQUESTED_CHANNEL
-} from '../../../../shared/browser-extension-webstore'
+} from '../../../../shared/browser/extensions/browser-extension-webstore'
 import {
   requestBrowserExtensionInstallPrompt,
   respondToBrowserExtensionInstallPrompt

@@ -28,24 +28,28 @@ async function resolveMainConfig(command: 'build' | 'serve', watch = false) {
 }
 
 describe('Electron Vite development compilation', () => {
-  it('keeps the watch-only TypeScript API out of production config loading', async () => {
-    const result = await runProcess({
-      program: process.execPath,
-      args: [
-        '--input-type=module',
-        '-e',
-        `import { createRequire } from 'node:module';
+  it.each([undefined, 'config/electron-vite-target.config.cts'])(
+    'keeps the watch-only TypeScript API out of production config loading (%s)',
+    async (configFile) => {
+      const result = await runProcess({
+        program: process.execPath,
+        args: [
+          '--input-type=module',
+          '-e',
+          `import { createRequire } from 'node:module';
 import { resolveConfig } from 'electron-vite';
-await resolveConfig({ logLevel: 'silent' }, 'build');
+process.env.ORCA_ELECTRON_VITE_TARGET = 'main';
+await resolveConfig({ logLevel: 'silent', configFile: ${JSON.stringify(configFile)} }, 'build');
 const require = createRequire(import.meta.url);
 console.log(JSON.stringify({ loaded: Object.hasOwn(require.cache, require.resolve('typescript-api')) }));`
-      ],
-      cwd: process.cwd()
-    })
+        ],
+        cwd: process.cwd()
+      })
 
-    expect(result.code, result.stderr).toBe(0)
-    expect(JSON.parse(result.stdout)).toEqual({ loaded: false })
-  })
+      expect(result.code, result.stderr).toBe(0)
+      expect(JSON.parse(result.stdout)).toEqual({ loaded: false })
+    }
+  )
 
   it.each([false, true])('skips main minification in development (watch=%s)', async (watch) => {
     const resolved = await resolveMainConfig('serve', watch)

@@ -1,6 +1,6 @@
 import { errorMessage } from '../../../shared/error-message'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { getOrcadSshDeployment } from '../../../shared/runtime-environments'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getOrcadSshDeployment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { OrcadManagedPairingRepairFailedError } from '../../managed-server/lifecycle/orcad-managed-pairing-repair-failure'
 import {
   managedOrcadPairingFailureStands,

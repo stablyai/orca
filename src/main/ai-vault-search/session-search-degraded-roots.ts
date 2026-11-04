@@ -1,4 +1,4 @@
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { SessionSearchDirectoryReader } from './session-search-directory-listings'
 
 export type SessionSearchDegradedRoot = { root: string; reason: string }

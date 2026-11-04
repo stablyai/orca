@@ -6,17 +6,19 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../../shared/ai-vault-search-types'
-import type { AiVaultListResult, AiVaultSubagentListResult } from '../../../shared/ai-vault-types'
+} from '../../../shared/ai-vault/search/ai-vault-search-types'
+import type {
+  AiVaultListResult,
+  AiVaultSubagentListResult,
+  AiVaultFirstUserPromptResult as ReadAiVaultFirstUserPromptResult
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   AiVaultSessionTitleRequest,
   AiVaultSessionTitlesResult
-} from '../../../shared/ai-vault-session-title'
+} from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { withSpan } from '../../observability/tracer'
-import type {
-  ReadAiVaultFirstUserPromptArgs,
-  ReadAiVaultFirstUserPromptResult
-} from '../session-first-user-prompt-read'
+import type { ReadAiVaultFirstUserPromptArgs } from '../session-first-user-prompt-read'
+
 import { sessionSearchServiceInit } from '../../ai-vault-search/session-search-service-init'
 import { getSessionParseCachePersistenceOptions } from '../parse-cache/session-parse-cache-persistence'
 import { buildAiVaultServiceEnv } from './session-scanner-service-env'
