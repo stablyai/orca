@@ -1,4 +1,4 @@
-import type { WorkspaceAttachmentMetadata } from '../../../../shared/workspace-attachment-legacy'
+import type { WorkspaceAttachmentMetadata } from '../../../../shared/workspace-attachments/workspace-attachment-legacy'
 import type { AppState } from '@/store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
@@ -6,8 +6,8 @@ import type {
   RuntimeGitContext
 } from '@/runtime/runtime-git-client-context'
 import type { Repo } from '../../../../shared/repo-types'
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control-ai-types'
+import type { HostedReviewCreationEligibility } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type {
   PullRequestFieldRevisions,
   PullRequestGenerationFields

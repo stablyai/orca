@@ -18,7 +18,7 @@ import {
   sourceControlPickerDraft,
   applySourceControlPickerDraft
 } from '../../lib/source-control-agent-launch-picker'
-import { canonicalSourceControlActionSelection } from '../../../../shared/source-control-action-selection'
+import { canonicalSourceControlActionSelection } from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { AgentLaunchSetupButton, useAgentPickerDraftScope } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import {

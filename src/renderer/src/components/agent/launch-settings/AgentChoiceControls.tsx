@@ -12,7 +12,7 @@ import {
 import {
   sourceControlActionAgentPicksModel,
   sourceControlActionOptions
-} from '../../../../../shared/source-control-action-options'
+} from '../../../../../shared/source-control/ai/recipes/source-control-action-options'
 import { encodeCatalogOptionValue } from '../../../../../shared/agent-session/options/structured-agent-session-option-codec'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentChoiceMenu } from './AgentChoiceMenu'

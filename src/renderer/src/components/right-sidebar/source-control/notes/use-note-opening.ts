@@ -6,9 +6,9 @@ import { useAppStore } from '@/store'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
   cancelSourceControlEditorRevealFrames,
   requestSourceControlEditorRevealFrame

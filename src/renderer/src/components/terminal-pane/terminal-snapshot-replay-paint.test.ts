@@ -4,7 +4,7 @@ import {
   ABORT_TRUNCATED_CONTROL_STRING,
   buildSnapshotReplayPrologue,
   RESET_AFTER_BYTE_GAP
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   buildParityMainBufferSnapshot,
   createRendererParityTerminal,
@@ -12,7 +12,7 @@ import {
   normalBufferRowsTrimmed,
   visibleRowStyles,
   writeToTerminal
-} from '../../../../shared/terminal-restore-parity-fixture'
+} from '../../../../shared/terminal/replay/testing/terminal-restore-parity-fixture'
 import {
   buildMainModelSnapshotReplayWrites,
   hasPositiveTerminalDimensions,

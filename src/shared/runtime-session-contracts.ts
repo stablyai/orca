@@ -3,7 +3,7 @@ import type { MobileProjectSectionCatalog } from './mobile-project-sections-cont
 import type { AgentStatusOrchestrationContext } from './agent-status/contracts/agent-status-types'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime/control/remote-runtime-shared-control-types'
-import type { RuntimeHostConnectionState } from './runtime-host-connection-state'
+import type { RuntimeHostConnectionState } from './remote-runtime/host-status/runtime-host-connection-state'
 import type { RuntimeCapability } from './protocol-version'
 import type {
   RuntimeBrowserUnavailableReason,
@@ -17,7 +17,7 @@ import type {
   RuntimeMobileSessionTerminalClientTab
 } from './runtime-mobile-session-tab-contracts'
 import type { CliStatusCaller } from './orchestration-caller-status'
-import type { RuntimeHostDescriptor } from './runtime-host-descriptor'
+import type { RuntimeHostDescriptor } from './remote-runtime/host-status/runtime-host-descriptor'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 export type * from './runtime-mobile-session-tab-contracts'

@@ -17,7 +17,7 @@ import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
 } from '@/store/slices/runtime-status'
-import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   HOST_MIRROR_HANDLE_GAP_DEADLINE_MS,
   countParkedHostMirrorHandleGapPanesForTests,

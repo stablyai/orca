@@ -8,8 +8,8 @@ import {
   resolvePullRequestGenerationSuccess
 } from '@/store/slices/pull-request-generation'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import type { CreateHostedReviewResult } from '../../../../../shared/hosted-review'
-import { getDefaultSourceControlAiSettings } from '../../../../../shared/source-control-ai-settings'
+import type { CreateHostedReviewResult } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { getDefaultSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import type * as AppHttpLinkOpen from '@/lib/app-http-link-open'
 import { useChecksPanelCreateReview } from './use-checks-panel-create-review'
 

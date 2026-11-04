@@ -1,4 +1,4 @@
-import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 
 export function getKnownGitHead(head: string | null | undefined): string | undefined {
   const trimmed = head?.trim()

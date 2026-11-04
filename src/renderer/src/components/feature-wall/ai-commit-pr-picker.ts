@@ -1,7 +1,7 @@
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
 import { sourceControlModelLabel, sourceControlThinkingLabel } from './source-control-model-label'
-import type { CommitMessageAiSettings } from '../../../../shared/commit-message-ai-types'
-import type { CommitMessageAgentCapability } from '../../../../shared/commit-message-agent-spec'
+import type { CommitMessageAiSettings } from '../../../../shared/source-control/ai/generation/commit-message-ai-types'
+import type { CommitMessageAgentCapability } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import {
   agentPickerDraft,
   type AgentPickerEntry

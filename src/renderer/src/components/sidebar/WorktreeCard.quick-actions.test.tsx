@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitConflictOperation } from '../../../../shared/git-status-types'
+import type { GitConflictOperation } from '../../../../shared/git/status/git-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'

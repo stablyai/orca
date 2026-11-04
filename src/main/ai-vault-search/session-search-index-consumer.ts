@@ -1,4 +1,4 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   registerTranscriptConsumer,
   type TranscriptConsumer,

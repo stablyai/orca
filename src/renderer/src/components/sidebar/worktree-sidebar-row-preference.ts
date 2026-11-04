@@ -1,7 +1,7 @@
 import {
   getFolderWorkspaceHostIdentity,
   folderWorkspaceToWorktree
-} from '../../../../shared/folder-workspace-worktree'
+} from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'

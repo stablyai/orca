@@ -1,4 +1,4 @@
-import { summarizePRCheckRollup } from '../../../../shared/pr-check-status'
+import { summarizePRCheckRollup } from '../../../../shared/source-control/checks/pr-check-status'
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
 import type {
   PRConflictSummary,

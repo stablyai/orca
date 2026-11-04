@@ -7,7 +7,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import type {
   RuntimeEnvironmentStatus,
   RuntimeHostStatusSnapshot
-} from '../../../../shared/runtime-host-status'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {

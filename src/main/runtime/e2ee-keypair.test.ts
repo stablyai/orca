@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { describe, expect, it, vi } from 'vitest'
 import { loadOrCreateE2EEKeypair } from './e2ee-keypair'
-import { E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
+import './mobile-pairing-files'
+import { E2EE_KEYPAIR_FILENAME } from '../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
 
 describe('loadOrCreateE2EEKeypair', () => {
   it('advertises the public key derived from the stored secret, leaving the file untouched', () => {

@@ -5,7 +5,7 @@ import {
   POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_REATTACH_RESET
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'

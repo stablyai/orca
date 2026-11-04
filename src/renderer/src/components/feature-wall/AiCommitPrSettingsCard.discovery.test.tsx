@@ -7,8 +7,8 @@ import { persist } from '../settings/__fixtures__/settings-persistence-test-fixt
 import { AiCommitPrSettingsCard } from './AiCommitPrSettingsCard'
 import { useAiCommitPrSettings } from './useAiCommitPrSettings'
 import * as picker from './ai-commit-pr-picker'
-import * as models from '../../../../shared/source-control-ai-model-selection'
-import * as sourceSettings from '../../../../shared/source-control-ai'
+import * as models from '../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
+import * as sourceSettings from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 
 it.each(['omitted', 'efforts replaced'])(
   'keeps accepted choices when discovery is %s',

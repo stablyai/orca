@@ -3,9 +3,9 @@ import type {
   ProviderCheckSummary,
   GitHubOwnerRepo,
   RpcClient,
-  HostedReviewDecision,
   LinearMobileIssue
 } from './mobile-tasks-dependencies'
+import type { HostedReviewDecision } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 
 export type RepoSummary = {
   id: string

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store'
-import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../right-sidebar/AiVaultSessionSurfaceSwitchMenuItems'
 import {
   resolveTabSessionHistorySubject,

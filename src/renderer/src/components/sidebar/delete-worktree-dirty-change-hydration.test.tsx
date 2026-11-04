@@ -5,7 +5,7 @@ import { useMemo, type JSX } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { GitStatusResult } from '../../../../shared/git-status-types'
+import type { GitStatusResult } from '../../../../shared/git/status/git-status-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 

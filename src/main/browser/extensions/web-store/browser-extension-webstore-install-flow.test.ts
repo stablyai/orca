@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   CHROME_WEB_STORE_APPROVAL_TTL_MS,
   ChromeWebStoreInstallFlow,

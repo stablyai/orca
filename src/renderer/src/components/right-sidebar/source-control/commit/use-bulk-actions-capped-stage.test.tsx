@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 
 const mocks = vi.hoisted(() => ({ bulkStage: vi.fn(), stageScope: vi.fn(), toastError: vi.fn() }))
 
@@ -15,7 +15,7 @@ vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
 }))
 
 import { useSourceControlBulkActions } from './use-bulk-actions'
-import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control/listing/source-control-section-order'
 
 function entry(path: string, area: GitStatusEntry['area']): GitStatusEntry {
   return { path, status: area === 'untracked' ? 'untracked' : 'modified', area }

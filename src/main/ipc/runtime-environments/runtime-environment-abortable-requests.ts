@@ -1,4 +1,4 @@
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import type {

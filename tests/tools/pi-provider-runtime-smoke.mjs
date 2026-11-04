@@ -51,7 +51,8 @@ try {
   const bundle = join(bundleDir, 'orca.cjs')
   await build({
     stdin: {
-      contents: "export {planCommitMessageGeneration} from './src/shared/commit-message-plan';",
+      contents:
+        "export {planCommitMessageGeneration} from './src/shared/source-control/ai/generation/commit-message-plan';",
       resolveDir: process.cwd()
     },
     bundle: true,

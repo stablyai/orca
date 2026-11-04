@@ -1,11 +1,11 @@
 import { useMemo, type JSX } from 'react'
 import { Terminal } from 'lucide-react'
-import { CUSTOM_PROMPT_PLACEHOLDER } from '../../../../shared/commit-message-prompt'
+import { CUSTOM_PROMPT_PLACEHOLDER } from '../../../../shared/source-control/ai/generation/commit-message-prompt'
 import {
   CUSTOM_AGENT_ID,
   type CommitMessageAgentCapability
-} from '../../../../shared/commit-message-agent-spec'
-import type { CommitMessageAiSettings } from '../../../../shared/commit-message-ai-types'
+} from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import type { CommitMessageAiSettings } from '../../../../shared/source-control/ai/generation/commit-message-ai-types'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { AgentLaunchPicker } from '../agent/AgentLaunchPicker'

@@ -4,7 +4,10 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
-import { decodePairingOffer, encodePairingOffer } from '../../src/shared/pairing'
+import {
+  decodePairingOffer,
+  encodePairingOffer
+} from '../../src/shared/remote-runtime/pairing/pairing'
 import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'

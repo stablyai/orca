@@ -4,7 +4,7 @@ import {
   ABORT_TRUNCATED_CONTROL_STRING,
   buildSnapshotReplayPrologue,
   RESET_AFTER_BYTE_GAP
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   flushAsyncTicks,
   renderHeadlessTerminalState,

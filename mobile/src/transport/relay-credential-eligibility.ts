@@ -1,4 +1,4 @@
-import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 
 // Only a relay-hello refusal is the relay's verdict on a credential; a bare 4401
