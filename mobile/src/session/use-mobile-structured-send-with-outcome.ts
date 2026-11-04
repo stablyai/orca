@@ -76,6 +76,7 @@ export function useMobileStructuredSendWithOutcome(args: {
   /** The host's queue sends next: commands that cannot wait in line read the chat as working. */
   queueSendsNext: boolean
   accept: MobileStructuredSends['accept']
+  acknowledge: MobileStructuredSends['acknowledge']
   reject: MobileStructuredSends['reject']
   commandPending: { current: boolean }
   /** This chat's message sends still out, which a command waits behind as on desktop. */
@@ -102,6 +103,7 @@ export function useMobileStructuredSendWithOutcome(args: {
 ) => Promise<MobileNativeChatSendOutcome> {
   const {
     accept,
+    acknowledge,
     agent,
     client,
     commandPending,
@@ -235,8 +237,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         ...captured,
         deadline,
         clientMessageId: send.clientMessageId,
-        onAccepted: (cursor) =>
-          accept({ ...send, ...(cursor ? { recordedCursor: cursor } : {}) }, images),
+        onAccepted: (cursor) => acknowledge(send.clientMessageId, cursor),
         onError: onSendError
       })
       if (outcome === 'rejected' || outcome === 'queued') {
@@ -246,6 +247,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     },
     [
       accept,
+      acknowledge,
       agent,
       client,
       commandPending,

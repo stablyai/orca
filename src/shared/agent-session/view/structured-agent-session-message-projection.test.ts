@@ -85,7 +85,7 @@ it('keeps a local echo when a mixed-version host lacks its submission until the 
     expect.objectContaining({
       id: agentJournalSubmissionKey(KEPT_ID),
       blocks: lingeringCopy.body.blocks,
-      deliveryState: 'pending'
+      deliveryState: 'unknown'
     })
   ])
   const item = userItem(KEPT_ID, 'the kept words', 1)

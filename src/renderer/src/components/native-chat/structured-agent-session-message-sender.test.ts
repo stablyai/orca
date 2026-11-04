@@ -1,3 +1,4 @@
+import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -776,6 +777,8 @@ describe('a send whose fate is unknown never freezes the chat', () => {
         previewUris: ['blob:original'],
         imageConnectionIds: ['ssh-1']
       })
+      const messages = projectStructuredAgentSessionMessages([], pending, [])
+      expect(messages[0]?.deliveryState).toBe('unknown')
       expect(pending[0].body.skills).toEqual([{ name: 'review', path: '/skills/review/SKILL.md' }])
       expect(pending[0].body.blocks).toContainEqual({
         type: 'text',

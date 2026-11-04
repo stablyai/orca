@@ -29,6 +29,7 @@ export type StructuredAgentSessionOptimisticMessage = {
   clientMessageId: string
   body: AgentJournalMessageItem
   queuedAt: number
+  phase?: 'sending' | 'recorded' | 'unconfirmed'
   recordedCursor?: AgentJournalCursor
   /** In-memory placement captured at Send, independent of any acknowledgement. */
   afterSequence?: number
@@ -199,18 +200,28 @@ export function projectStructuredAgentSessionMessages(
             submission.reason === STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING)
         )
       })
-      .map((entry): NativeChatMessage => ({
-        id: agentJournalSubmissionKey(entry.clientMessageId),
-        role: 'user',
-        source: 'transcript',
-        deliveryState: 'pending',
-        timestamp: entry.queuedAt,
-        blocks: entry.body.blocks,
-        ...(entry.afterSequence !== undefined
-          ? { journalPosition: { sequence: entry.afterSequence + 0.5, index: entry.queuedAt } }
-          : {}),
-        ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
-      }))
+      .map((entry): NativeChatMessage => {
+        const id = agentJournalSubmissionKey(entry.clientMessageId)
+        const submission = submissionsByItemId.get(id)
+        const hostPending =
+          submission?.dispatchState === 'pending' &&
+          submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
+        return {
+          id,
+          role: 'user',
+          source: 'transcript',
+          deliveryState:
+            hostPending || entry.phase === 'recorded' || entry.recordedCursor !== undefined
+              ? 'pending'
+              : 'unknown',
+          timestamp: entry.queuedAt,
+          blocks: entry.body.blocks,
+          ...(entry.afterSequence !== undefined
+            ? { journalPosition: { sequence: entry.afterSequence + 0.5, index: entry.queuedAt } }
+            : {}),
+          ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
+        }
+      })
   ]
 }
 

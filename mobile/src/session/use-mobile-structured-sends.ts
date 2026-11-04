@@ -21,6 +21,7 @@ export type MobileStructuredSends = {
   optimistic: readonly StructuredAgentSessionOptimisticMessage[]
   imagePreviewsByMessageId: Record<string, string[]>
   accept: (send: StructuredAgentSessionOptimisticMessage, images?: string[]) => void
+  acknowledge: (clientMessageId: string, cursor?: AgentJournalCursor) => void
   reject: (clientMessageId: string) => void
 }
 
@@ -83,6 +84,27 @@ export function useMobileStructuredSends(args: {
     },
     [keep, sessionKey]
   )
+  const acknowledge = useCallback(
+    (clientMessageId: string, recordedCursor?: AgentJournalCursor) => {
+      if (mountedRef.current) {
+        setSendsBySession((previous) => {
+          const sends = previous[sessionKey]
+          if (!sends?.some((send) => send.clientMessageId === clientMessageId)) {
+            return previous
+          }
+          return {
+            ...previous,
+            [sessionKey]: sends.map((send) =>
+              send.clientMessageId === clientMessageId
+                ? { ...send, phase: 'recorded', ...(recordedCursor ? { recordedCursor } : {}) }
+                : send
+            )
+          }
+        })
+      }
+    },
+    [sessionKey]
+  )
   const reject = useCallback(
     (clientMessageId: string) => forget(new Set([clientMessageId])),
     [forget]
@@ -124,6 +146,7 @@ export function useMobileStructuredSends(args: {
     optimistic: sends,
     imagePreviewsByMessageId: imagePreviewsBySession[sessionKey] ?? NO_IMAGE_PREVIEWS,
     accept,
+    acknowledge,
     reject
   }
 }

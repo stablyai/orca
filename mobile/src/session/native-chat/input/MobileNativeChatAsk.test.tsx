@@ -6,11 +6,29 @@ import type {
   NativeChatAnswerSource,
   AskAnswerSelection
 } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
+import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../src/shared/native-chat/input/native-chat-question-auto-advance'
 import { encodeAgentSessionQuestionAnswers } from '../../../../../src/shared/agent-session/agent-session-question-answer'
+import { useMobileStructuredAgentSession } from '../../use-mobile-structured-agent-session'
+import { useMobileStructuredAsyncQuestion } from '../../use-mobile-structured-async-question'
+import {
+  aggregateAsyncQuestions,
+  scanPendingAsks
+} from '../../../../../src/shared/native-chat/input/native-chat-ask'
+import type { RpcClient } from '../../../transport/rpc-client'
+import {
+  acceptedSubmission,
+  fieldsOf,
+  ok,
+  snapshotEvent
+} from '../../use-mobile-structured-agent-session-queued.test-fixture'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatStructuredAsk } from './MobileNativeChatStructuredAsk'
+
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() }
+}))
 
 vi.mock('react-native', () => ({
   Keyboard: { dismiss: () => {} },
@@ -80,6 +98,185 @@ afterEach(() => {
 })
 
 describe('MobileNativeChatAsk single-select auto-advance', () => {
+  it.each(['unknown', 'cursorless acknowledgement', 'retired before acknowledgement'] as const)(
+    'composes the actual phone sender, projector and async form through %s',
+    async (outcome) => {
+      vi.useFakeTimers()
+      let listener: ((value: unknown) => void) | undefined
+      let reply: ((value: Awaited<ReturnType<RpcClient['sendRequest']>>) => void) | undefined
+      let id = ''
+      const sendRequest = vi.fn<RpcClient['sendRequest']>(async (method, params) => {
+        if (method !== 'agentSession.send') {
+          return ok({ models: [], current: {} })
+        }
+        id = String(fieldsOf(fieldsOf(params).envelope).clientOperationId)
+        return new Promise((resolve) => {
+          reply = resolve
+        })
+      })
+      const client: RpcClient = {
+        sendRequest,
+        subscribe: vi.fn<RpcClient['subscribe']>((_method, _params, onData) => {
+          if (_method === 'agentSession.subscribe') {
+            listener = onData
+          }
+          return () => {}
+        }),
+        updateTerminalSubscriptionViewport: () => {},
+        getState: () => 'connected',
+        getReconnectAttempt: () => 0,
+        getLastConnectedAt: () => null,
+        onStateChange: () => () => {},
+        notifyForeground: () => {},
+        close: () => {}
+      }
+      const onSendError = vi.fn()
+      let structured: ReturnType<typeof useMobileStructuredAgentSession>
+      function Chat() {
+        structured = useMobileStructuredAgentSession({
+          client,
+          pairedHostClient: client,
+          sessionId: 'session-1',
+          sourceIdentity: 'host-a\0workspace-a',
+          enabled: true,
+          connected: true,
+          agent: 'codex',
+          hostSupport: null,
+          onSendError
+        })
+        const scan = scanPendingAsks(structured.session.messages)
+        const question = useMobileStructuredAsyncQuestion({
+          structured,
+          pendingAsk: aggregateAsyncQuestions(scan.contributors, 'host/epoch'),
+          transcriptLoading: structured.session.transcriptLoading
+        })
+        return (
+          question.ask &&
+          createElement(MobileNativeChatAsk, {
+            prompt: question.ask,
+            answerPending: scan.answerPending,
+            answerSendSource: {
+              messages: structured.session.messages,
+              submissions: structured.submissions
+            },
+            onAnswer: (selections, onCreated) =>
+              question.answer!(question.ask!, selections, onCreated)
+          })
+        )
+      }
+      await act(async () => {
+        tree = create(createElement(Chat))
+      })
+      const asked = {
+        itemId: 'ask',
+        sequence: 2,
+        revision: 1,
+        observedAt: 1,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [
+            {
+              type: 'tool-call',
+              name: 'request_user_input_async',
+              input: { questions: [{ title: 'Tabs or spaces?', options: ['Tabs', 'Spaces'] }] }
+            }
+          ]
+        }
+      } satisfies AgentJournalRenderItem
+      act(() => listener!(snapshotEvent({ items: [asked] })))
+      press('Spaces')
+      await passAutoAdvanceBeat()
+      const button = () =>
+        tree.root.find(
+          (node) =>
+            isHost(node, 'Pressable') &&
+            node.findAll((child) => child.props.children === 'Submit').length > 0
+        )
+      const sends = () =>
+        sendRequest.mock.calls.filter(([method]) => method === 'agentSession.send')
+      expect(sends()).toHaveLength(1)
+      const original = structured!.session.messages.find((row) => row.role === 'user')!
+      expect(original).toMatchObject({
+        id: agentJournalSubmissionKey(id),
+        deliveryState: 'unknown',
+        journalPosition: { sequence: 2.5 },
+        blocks: [{ type: 'text', text: '> Tabs or spaces?\n\nSpaces' }]
+      })
+      expect(button().props.disabled).toBe(true)
+      if (outcome === 'retired before acknowledgement') {
+        act(() =>
+          listener!(
+            snapshotEvent({
+              items: [asked],
+              submissions: [
+                {
+                  ...acceptedSubmission(id),
+                  dispatchState: 'unknown',
+                  providerItemId: null
+                }
+              ]
+            })
+          )
+        )
+        expect(button().props.disabled).toBe(false)
+        expect(structured!.session.messages.filter((row) => row.role === 'user')).toHaveLength(0)
+        // The old proof may leave the current page before the original RPC answers.
+        act(() => listener!(snapshotEvent({ items: [asked] })))
+        expect(structured!.session.messages.filter((row) => row.role === 'user')).toHaveLength(0)
+      }
+      await act(async () =>
+        reply!(
+          outcome === 'unknown'
+            ? ok({
+                ok: false,
+                refusal: { code: 'agent_session_operation_unknown', message: 'unknown' }
+              })
+            : ok({
+                ok: true,
+                replayed: false,
+                fence: 3,
+                value: { clientMessageId: id, submission: acceptedSubmission(id) }
+              })
+        )
+      )
+      expect(sends()).toHaveLength(1)
+      expect(tree.root.find((node) => node.props.label === 'Spaces').props.selected).toBe(true)
+      expect(button().props.disabled).toBe(outcome === 'cursorless acknowledgement')
+      const users = structured!.session.messages.filter((row) => row.role === 'user')
+      if (outcome === 'retired before acknowledgement') {
+        expect(users).toHaveLength(0)
+        expect(button().props.disabled).toBe(false)
+      } else {
+        expect(users).toHaveLength(1)
+        expect(users[0]).toEqual({
+          ...original,
+          deliveryState: outcome === 'unknown' ? 'unknown' : 'pending'
+        })
+        if (outcome === 'cursorless acknowledgement') {
+          act(() => listener!(snapshotEvent({ items: [asked] })))
+          expect(button().props.disabled).toBe(true)
+          act(() =>
+            listener!(
+              snapshotEvent({
+                items: [asked],
+                submissions: [
+                  {
+                    ...acceptedSubmission(id),
+                    dispatchState: 'unknown',
+                    providerItemId: null
+                  }
+                ]
+              })
+            )
+          )
+          expect(button().props.disabled).toBe(false)
+          expect(structured!.session.messages.filter((row) => row.role === 'user')).toHaveLength(0)
+        }
+      }
+    }
+  )
+
   it.each([1000, 10000])(
     'does not revisit unchanged delivery history while editing after failure (%i rows)',
     async (count) => {
