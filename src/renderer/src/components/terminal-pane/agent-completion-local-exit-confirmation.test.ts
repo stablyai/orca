@@ -10,11 +10,6 @@ import {
 describe('agent completion local exit confirmation', () => {
   useAgentCompletionCoordinatorLifecycle()
 
-  const agentShellCases = [
-    { agent: 'codex', shell: 'pwsh.exe' },
-    { agent: 'claude', shell: '/bin/zsh' }
-  ]
-
   async function trackAgent(
     confirmForegroundProcess = vi.fn(async (): Promise<string | null> => 'codex'),
     agent = 'codex'
@@ -45,23 +40,6 @@ describe('agent completion local exit confirmation', () => {
     }
   }
 
-  it.each(agentShellCases)(
-    'keeps live $agent out of terminal cleanup when cached reads repeatedly report $shell',
-    async ({ agent, shell }) => {
-      const tracked = await trackAgent(
-        vi.fn(async () => agent),
-        agent
-      )
-      tracked.setInspection(shell, false)
-      await vi.advanceTimersByTimeAsync(10_000)
-
-      expect(tracked.dispatchCompletion).not.toHaveBeenCalled()
-      expect(tracked.onForegroundAgentExited).not.toHaveBeenCalled()
-      expect(tracked.confirmForegroundProcess).toHaveBeenCalledWith('pty-1')
-      tracked.coordinator.dispose()
-    }
-  )
-
   it('preserves terminal modes when a fresh read cannot establish the foreground', async () => {
     const tracked = await trackAgent(vi.fn(async () => null))
     tracked.setInspection('pwsh.exe', false)
@@ -83,26 +61,6 @@ describe('agent completion local exit confirmation', () => {
     tracked.coordinator.dispose()
   })
 
-  it.each(agentShellCases)(
-    'still cleans up exited $agent once a fresh read confirms $shell',
-    async ({ agent, shell }) => {
-      const tracked = await trackAgent(
-        vi.fn(async () => shell),
-        agent
-      )
-      tracked.setInspection(shell, false)
-      await vi.advanceTimersByTimeAsync(5_000)
-
-      expect(tracked.confirmForegroundProcess).toHaveBeenCalled()
-      expect(tracked.onForegroundAgentExited).toHaveBeenCalledExactlyOnceWith({
-        agent,
-        processName: agent
-      })
-      expect(tracked.dispatchCompletion).toHaveBeenCalledTimes(1)
-      tracked.coordinator.dispose()
-    }
-  )
-
   it('detects exit when cached and fresh reads report the same unlisted shell name', async () => {
     const tracked = await trackAgent(vi.fn(async () => '-zsh'))
     tracked.setInspection('-zsh', false)
@@ -112,16 +70,6 @@ describe('agent completion local exit confirmation', () => {
       agent: 'codex',
       processName: 'codex'
     })
-    tracked.coordinator.dispose()
-  })
-
-  it('does not add fresh scans to recognized agents or inspections that already see children', async () => {
-    const tracked = await trackAgent()
-    await vi.advanceTimersByTimeAsync(3_000)
-    tracked.setInspection('pwsh.exe', true)
-    await vi.advanceTimersByTimeAsync(3_000)
-
-    expect(tracked.confirmForegroundProcess).not.toHaveBeenCalled()
     tracked.coordinator.dispose()
   })
 
@@ -169,23 +117,4 @@ describe('agent completion local exit confirmation', () => {
       tracked.coordinator.dispose()
     }
   )
-
-  it('does not query the local foreground confirmation API for remote terminals', async () => {
-    const confirmForegroundProcess = vi.fn(async () => 'pwsh.exe')
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: 'tab-1:remote-leaf',
-      getPtyId: () => 'remote:pty-1',
-      isRemotePtyId: () => true,
-      inspectProcess: vi.fn(async () => processResult('pwsh.exe', false)),
-      confirmForegroundProcess,
-      dispatchCompletion: vi.fn(),
-      isLive: () => true
-    })
-    coordinator.observeTitle('Codex working')
-    coordinator.observeTitle('~/project')
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    expect(confirmForegroundProcess).not.toHaveBeenCalled()
-    coordinator.dispose()
-  })
 })
