@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
+import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
 import { buildDashboardWorktreeLaunchOptions } from './dashboard-worktree-launch-options'
 
 type LaunchState = Parameters<typeof buildDashboardWorktreeLaunchOptions>[0]
@@ -61,11 +62,11 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
             addedAt: 1,
             executionHostId: 'runtime:hub-1'
           }
-        ] as LaunchState['repos'],
+        ],
         worktreesByRepo: {
-          'repo-ssh': [{ id: 'ssh-worktree', repoId: 'repo-ssh' }],
-          'repo-runtime': [{ id: 'runtime-worktree', repoId: 'repo-runtime' }]
-        } as unknown as LaunchState['worktreesByRepo'],
+          'repo-ssh': [makeWorktree({ id: 'ssh-worktree', repoId: 'repo-ssh' })],
+          'repo-runtime': [makeWorktree({ id: 'runtime-worktree', repoId: 'repo-runtime' })]
+        },
         detectedAgentIds: ['claude'],
         remoteDetectedAgentIds: { 'ssh-1': ['grok'] },
         runtimeDetectedAgentIds: { 'hub-1': ['aider'] }
