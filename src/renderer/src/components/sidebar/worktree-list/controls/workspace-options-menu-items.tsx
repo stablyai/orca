@@ -1,6 +1,8 @@
 import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
 import { useAppStore } from '@/store'
 import {
+  DropdownMenuItem,
+  DropdownMenuShortcut,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -259,9 +261,16 @@ function SectionHeading({ section }: { section: WorkspaceViewSection }): JSX.Ele
 }
 
 export function WorkspaceOptionsMenuItems({
-  preserveWorkspaceBoardOpen = false
+  preserveWorkspaceBoardOpen = false,
+  groupCollapseAction
 }: {
   preserveWorkspaceBoardOpen?: boolean
+  groupCollapseAction?: {
+    collapse: boolean
+    disabled: boolean
+    toggle: () => void
+    shortcutLabel?: string | null
+  }
 }): JSX.Element {
   const repoCount = useAppStore((s) => s.repos.length)
   const groupBy = useAppStore((s) => s.groupBy)
@@ -303,6 +312,19 @@ export function WorkspaceOptionsMenuItems({
               />
             )
           })}
+          {section === 'group' && groupCollapseAction && (
+            <DropdownMenuItem
+              disabled={groupCollapseAction.disabled}
+              onSelect={groupCollapseAction.toggle}
+            >
+              {groupCollapseAction.collapse || groupCollapseAction.disabled
+                ? translate('sidebar.groups.collapseAll', 'Collapse all')
+                : translate('sidebar.groups.expandAll', 'Expand all')}
+              {groupCollapseAction.shortcutLabel ? (
+                <DropdownMenuShortcut>{groupCollapseAction.shortcutLabel}</DropdownMenuShortcut>
+              ) : null}
+            </DropdownMenuItem>
+          )}
         </Fragment>
       ))}
     </>

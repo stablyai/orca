@@ -30,6 +30,14 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     }
   },
   {
+    id: 'sidebar.groups.toggleCollapseAll',
+    title: 'Collapse / expand all sidebar groups',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'sidebar', 'groups', 'sections', 'collapse', 'expand', 'all'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'sidebar.childWorkspaces.toggle',
     title: 'Toggle Child Workspaces',
     group: 'Global',

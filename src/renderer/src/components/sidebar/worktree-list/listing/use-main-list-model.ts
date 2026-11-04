@@ -42,6 +42,7 @@ import { withWindowCreations } from './window-worktree-creations'
 export { withWindowCreations } from './window-worktree-creations'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
+import { collectSectionCollapseKeys } from '../../../../../../shared/sidebar-list/section-collapse'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
 import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
@@ -179,6 +180,14 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     ]
   )
 
+  const collapsibleGroupKeys = useMemo(
+    () =>
+      collectSectionCollapseKeys(
+        renderSidebarFeedRows(planned, view, PLANNED_UNCOLLAPSED).sectionRows
+      ),
+    [planned, view]
+  )
+
   const worktreeByIdentity = useMemo(
     () =>
       new Map(args.allWorktrees.map((worktree) => [getWorktreeHostIdentity(worktree), worktree])),
@@ -276,6 +285,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     },
     externalWorktreeCards,
     rowModel: {
+      collapsibleGroupKeys,
       occurrencePlan: planned.plan.occurrencePlan,
       hostOptions: planned.orderedHostOptions,
       effectiveCollapsedGroups,

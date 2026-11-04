@@ -222,6 +222,10 @@
       "existingTitle": "Add on the {{distro}} host (recommended)",
       "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
       "existingAccept": "Add on host"
+    },
+    "groups": {
+      "collapseAll": "Collapse all",
+      "expandAll": "Expand all"
     }
   },
   "app": {
@@ -22924,7 +22928,8 @@
       "terminalSwitchInputSource": "Switch input source / language (native)",
       "newAgentTab": "New {{agent}} tab",
       "tabNewBrowserSplitRight": "New browser tab in right split",
-      "viewPlugins": "Open Plugins"
+      "viewPlugins": "Open Plugins",
+      "sidebarGroupsToggleCollapseAll": "Collapse / expand all sidebar groups"
     },
     "group": {
       "global": "Global",
