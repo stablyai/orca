@@ -189,7 +189,7 @@ export function ChatModeTerminalTip() {
           i18n={i18n}
           defaults={translate(
             'components.onboarding.agentStep.terminalTip',
-            'You can also start any agent in a terminal from the <em>+</em> menu.'
+            'Switch back any time in <em>Settings → Chat UI</em>. You can also start any agent in a terminal from the <em>+</em> menu.'
           )}
           components={emphasis}
         />

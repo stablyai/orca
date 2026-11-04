@@ -10,7 +10,7 @@ import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { ChatUiHereCornerCard } from './ChatUiHereCornerCard'
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), dismiss: vi.fn() } }))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
 vi.mock('@/hooks/usePrefersReducedMotion', () => ({ usePrefersReducedMotion: () => true }))
 
@@ -137,7 +137,7 @@ describe('Chat UI corner card', () => {
     updateSettingsOrThrow.mockRejectedValueOnce(new Error('disk unavailable'))
     await act(async () => button('Use Chat UI').click())
     expect(toast.error).toHaveBeenCalledExactlyOnceWith(
-      'Could not turn on Chat UI. Choose Chat in Settings → Agents.'
+      'Could not turn on Chat UI. Turn it on in Settings → Chat UI.'
     )
     expect(track).not.toHaveBeenCalledWith(
       'chat_ui_feature_tip_action',
@@ -166,14 +166,13 @@ describe('Chat UI corner card', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('opens Agents settings from the copy link', () => {
+  it('opens the Chat UI settings switch from the copy link', () => {
     const settingsLink = container.querySelector<HTMLButtonElement>('button.inline')
     act(() => settingsLink?.click())
     expect(openSettingsTarget).toHaveBeenCalledWith({
-      pane: 'agents',
+      pane: 'chat',
       repoId: null,
-      hostScope: { kind: 'local' },
-      sectionId: 'agents-default-surface'
+      sectionId: 'chat-launch-default'
     })
     expect(openSettingsPage).toHaveBeenCalledOnce()
     expect(onClose).toHaveBeenCalledOnce()
