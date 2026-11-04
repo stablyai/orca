@@ -4,7 +4,8 @@ import type { createStore } from '../../src/main/persistence/persistence-test-ha
 import type { setRuntimeDesktopSurface as SetRuntimeDesktopSurface } from '../../src/main/runtime/runtime-desktop-surface'
 
 export async function loadRetirementRenderer(
-  setRuntimeDesktopSurface: typeof SetRuntimeDesktopSurface
+  setRuntimeDesktopSurface: typeof SetRuntimeDesktopSurface,
+  options: { naturalPublication?: boolean } = {}
 ) {
   const { useAppStore } = await import('../../src/renderer/src/store')
   const { publishAgentLaunchTab } =
@@ -25,7 +26,13 @@ export async function loadRetirementRenderer(
     const originalGraph = { ...graphState }
     const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
     const originalRenderer = useAppStore.getState()
+    const domWindow = globalThis.window
     createTabsSliceMockApi()
+    if (options.naturalPublication) {
+      const api = window.api
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: domWindow })
+      Object.assign(window, { api })
+    }
     useAppStore.setState(useAppStore.getInitialState(), true)
     const persistRenderer = () =>
       store.setWorkspaceSession(buildWorkspaceSessionPayload(useAppStore.getState()))
@@ -82,7 +89,9 @@ export async function loadRetirementRenderer(
       },
       publishAgentLaunchTab: async (request) => {
         const result = publishAgentLaunchTab({ ...request, requestId: randomUUID() })
-        persistRenderer()
+        if (!options.naturalPublication) {
+          persistRenderer()
+        }
         return result
       }
     })

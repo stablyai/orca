@@ -2,8 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi } from 'vitest'
-import type { ipcMain } from 'electron'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import {
+  closeIpc,
+  installAcknowledgedCloseRelay
+} from './orca-runtime-terminal-close-relay-fixture'
+export { installAcknowledgedCloseRelay } from './orca-runtime-terminal-close-relay-fixture'
 import { OrcaRuntimeService } from '../orca-runtime'
 import {
   REPO_ID,
@@ -17,40 +20,15 @@ import {
 } from './orca-runtime-terminal-close-continuity-state-fixture'
 import { createCloseContinuityGraphFixture } from './orca-runtime-terminal-close-continuity-graph-fixture'
 
-type InvokeHandler = Parameters<typeof ipcMain.handle>[1]
-type IpcListener = Parameters<typeof ipcMain.on>[1]
-
-const closeIpc = vi.hoisted(() => ({
-  handlers: new Map<string, InvokeHandler>(),
-  listeners: new Map<string, Set<IpcListener>>()
-}))
-vi.mock('electron', () => ({
-  ipcMain: {
-    handle: (name: string, callback: InvokeHandler) => closeIpc.handlers.set(name, callback),
-    on: (name: string, callback: IpcListener) => {
-      const listeners = closeIpc.listeners.get(name) ?? new Set()
-      listeners.add(callback)
-      closeIpc.listeners.set(name, listeners)
-    },
-    removeListener: (name: string, callback: IpcListener) =>
-      closeIpc.listeners.get(name)?.delete(callback)
-  }
-}))
-
 export async function createAcknowledgedCloseHarness(lifetimeLoss: 'after-owner' | 'before-owner') {
   const { Store } = await import('../../persistence/loading-store/store')
   const { createSqliteTestStore, closeTestStores } =
     await import('../../persistence/persistence-test-harness')
-  const { registerSessionHandlers } = await import('../../ipc/session')
-  const { requestTerminalTabCloseFromRenderer } =
-    await import('../../window/terminal-tab-close-request-relay')
   const { getRuntimeDesktopSurface, setRuntimeDesktopSurface } =
     await import('../runtime-desktop-surface')
   const { useAppStore } = await import('../../../renderer/src/store')
   const { createTabsSliceMockApi } =
     await import('../../../renderer/src/store/slices/tabs-slice-test-harness')
-  const { registerMobileAndTerminalCloseIpcBridge } =
-    await import('../../../renderer/src/hooks/ipc-events/mobile-terminal-close-ipc-bridge')
   const directory = mkdtempSync(join(tmpdir(), 'orca-terminal-close-'))
   const store = createSqliteTestStore(Store, { dataFile: join(directory, 'orca-data.json') })
   const repo = {
@@ -114,77 +92,12 @@ export async function createAcknowledgedCloseHarness(lifetimeLoss: 'after-owner'
     },
     true
   )
-  const unsubs: (() => void)[] = []
-  type Request = Parameters<Parameters<typeof window.api.ui.onTerminalTabCloseRequest>[0]>[0]
-  let requestConsumer: ((request: Request) => void) | undefined
-  const webContents = {
-    id: 1,
-    isDestroyed: () => false,
-    setBackgroundThrottling: () => {},
-    send: (channel: string, request: Request) => {
-      if (channel !== 'ui:terminalTabCloseRequest' || !requestConsumer) {
-        throw new Error('close request consumer missing')
-      }
-      queueMicrotask(() => requestConsumer?.(request))
+  const relay = await installAcknowledgedCloseRelay(store, runtime, () => {
+    if (lifetimeLoss === 'before-owner') {
+      outage = true
     }
-  }
-  const win = { isDestroyed: () => false, webContents }
-  registerSessionHandlers(store, runtime)
-  const invoke = async (channel: string, ...args: unknown[]) => {
-    const handler = closeIpc.handlers.get(channel)
-    if (!handler) {
-      throw new Error('session handler missing')
-    }
-    return handler({ sender: webContents } as never, ...args)
-  }
-  Object.assign(window.api, {
-    session: {
-      set: (value: WorkspaceSessionState, hostId?: string | null) =>
-        invoke('session:set', value, hostId),
-      flush: () => invoke('session:flush'),
-      closeTerminalSurface: (args: unknown) => invoke('session:close-terminal-surface', args)
-    }
-  })
-  Object.assign(window.api.ui, {
-    onOpenFileFromMobile: () => () => {},
-    onOpenDiffFromMobile: () => () => {},
-    onCloseTerminal: () => () => {},
-    onWorkspaceSleep: () => () => {},
-    onResumeSleepingAgents: () => () => {},
-    onTerminalTabCloseRequest: (listener: typeof requestConsumer) => {
-      requestConsumer = listener
-      return () => {
-        requestConsumer = undefined
-      }
-    },
-    respondTerminalTabClose: (response: { requestId: string; error?: string }) => {
-      queueMicrotask(() => {
-        const listeners = closeIpc.listeners.get('ui:terminalTabCloseResponse') ?? []
-        for (const listener of listeners) {
-          listener({ sender: {} } as never, { ...response, error: 'wrong-sender' })
-          listener({ sender: webContents } as never, {
-            ...response,
-            requestId: 'other-request',
-            error: 'wrong-request'
-          })
-        }
-        if (lifetimeLoss === 'before-owner') {
-          outage = true
-        }
-        ackDelivered = true
-        order.push('renderer-ack')
-        for (const listener of listeners) {
-          listener({ sender: webContents } as never, response)
-        }
-      })
-    }
-  })
-  registerMobileAndTerminalCloseIpcBridge(unsubs, () => {})
-  setRuntimeDesktopSurface({
-    showNotification: () => false,
-    findWindowById: () => win as never,
-    onIpc: () => {},
-    removeIpcListener: () => {}
+    ackDelivered = true
+    order.push('renderer-ack')
   })
   runtime.attachWindow(1)
   let alive = true
@@ -246,8 +159,7 @@ export async function createAcknowledgedCloseHarness(lifetimeLoss: 'after-owner'
   graph.syncFixtureTabWithoutLeaf()
   runtime.setNotifier({
     closeTerminal: () => {},
-    closeTerminalTab: (tabId, options) =>
-      requestTerminalTabCloseFromRenderer(win as never, tabId, options)
+    closeTerminalTab: (tabId, options) => relay.closeTerminalTab(tabId, options)
   } as never)
   const [terminal] = (await runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
   return {
@@ -263,9 +175,7 @@ export async function createAcknowledgedCloseHarness(lifetimeLoss: 'after-owner'
       outage = false
       await Promise.all(exits)
       runtime.setNotifier(null)
-      for (const unsubscribe of unsubs) {
-        unsubscribe()
-      }
+      relay.dispose()
       if (originalGetter) {
         Object.defineProperty(store, 'getWorkspaceSession', originalGetter)
       } else {

@@ -18,7 +18,7 @@ import {
 } from './terminal-reuse-retention.test-fixture'
 import { loadRetirementRenderer } from './terminal-retirement-renderer.test-fixture'
 
-export async function setupRetirementRuntime() {
+export async function setupRetirementRuntime(options: { naturalPublication?: boolean } = {}) {
   const { randomUUID } = await import('node:crypto')
   const { AgentHookServer } = await import('../../src/main/agent-hooks/server')
   const { agentHookRuntimeDeps } =
@@ -29,7 +29,7 @@ export async function setupRetirementRuntime() {
     await import('../../src/main/runtime/runtime-desktop-surface')
   const { stopStructuredAgentSessionRuntime } =
     await import('../../src/main/runtime/agent-session/structured-agent-session-runtime')
-  const setupRetirementRenderer = await loadRetirementRenderer(setRuntimeDesktopSurface)
+  const setupRetirementRenderer = await loadRetirementRenderer(setRuntimeDesktopSurface, options)
   const { parsePaneKey } = await import('../../src/shared/workspace-layout/stable-pane-id')
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-f17-close-'))
   registerRetentionFixtureDirectory(testState.dir)
@@ -168,7 +168,9 @@ export async function setupRetirementRuntime() {
   if (!handle) {
     throw new Error('seed handle unavailable')
   }
-  await publishRenderer()
+  if (!options.naturalPublication) {
+    await publishRenderer()
+  }
   const nativeExit = () => {
     shell.add(seed.terminalPtyId!)
     const row = normalizeCodexEvent(createHookListenerState(), 'Stop', '', seed.terminalPaneKey!, {

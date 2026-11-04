@@ -273,26 +273,24 @@ export function terminalSurfaceCloseMutation(
         // An unroutable workspace (its folder record is gone) has nothing to close.
         return { value: undefined, persist: false }
       }
-      // Stamp missing tabs in the routed partition to reject late spawns; repeated close echoes need no second write.
-      if (
-        commit.options.allowMissing &&
+      const canCompleteMissingTab =
         target.kind === 'tab' &&
-        !hasClosedTerminalTabRecord(routed.session.closedTerminalTabTombstonesByTabId, target.tabId)
-      ) {
+        (commit.options.allowMissing || requestedHolders?.get(routed.hostId) != null)
+      if (canCompleteMissingTab) {
         const refusal = actionRefusal()
         if (refusal) {
           return { value: refusal, persist: false }
         }
-        commit.setSession(routed.result.session, routed.hostId)
-        commit.onClosed([])
-        return { value: undefined }
-      }
-      if (commit.options.allowMissing && target.kind === 'tab') {
-        const refusal = actionRefusal()
-        if (refusal) {
-          return { value: refusal, persist: false }
+        // Stamp missing tabs to reject late spawns; repeated close echoes need no second write.
+        const needsTombstone = !hasClosedTerminalTabRecord(
+          routed.session.closedTerminalTabTombstonesByTabId,
+          target.tabId
+        )
+        if (needsTombstone) {
+          commit.setSession(routed.result.session, routed.hostId)
         }
         commit.onClosed([])
+        return { value: undefined, persist: needsTombstone }
       }
       return {
         value: commit.options.allowMissing ? undefined : new Error('tab_not_found'),
