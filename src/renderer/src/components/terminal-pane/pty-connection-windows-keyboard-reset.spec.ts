@@ -4,7 +4,7 @@ import {
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   temporarilySetNavigatorUserAgent,
   sendTerminalInputThroughPane

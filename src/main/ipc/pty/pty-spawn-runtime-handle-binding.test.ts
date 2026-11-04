@@ -3,7 +3,7 @@ import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { createHash } from 'node:crypto'
 import { delimiter } from 'node:path'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { ClaudeAgentTeamsService } from '../../runtime/claude-agent-teams-service'
 import {

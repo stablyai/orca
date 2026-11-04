@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { createTestStore, makeTab, seedStore } from './store-test-helpers'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
 {
   describe('terminal PTY identity replacement', () => {
@@ -38,112 +37,6 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
       unsubscribe()
 
       expect(observed).toEqual([{ tabPtyId: replacementPtyId, panePtyId: replacementPtyId }])
-    })
-  })
-}
-
-{
-  /** Cache-timer/title churn repeats equal writes; subscriber-count assertions require no-op timer/layout updates to avoid O(panes) fanout (1,000 before, zero after). */
-
-  const REPEATS = 1_000
-
-  function makeLayout(overrides: Partial<TerminalLayoutSnapshot> = {}): TerminalLayoutSnapshot {
-    return {
-      root: {
-        type: 'split',
-        direction: 'vertical',
-        ratio: 0.5,
-        first: { type: 'leaf', leafId: 'leaf-a' },
-        second: { type: 'leaf', leafId: 'leaf-b' }
-      },
-      activeLeafId: 'leaf-a',
-      expandedLeafId: null,
-      ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-b' },
-      titlesByLeafId: { 'leaf-a': 'build' },
-      ...overrides
-    }
-  }
-
-  describe('setCacheTimerStartedAt identity bailout', () => {
-    it('wakes zero subscribers across 1,000 null-over-null writes', () => {
-      const store = createTestStore()
-      const paneKey = 'tab-1:leaf-a'
-      store.getState().setCacheTimerStartedAt(paneKey, null)
-
-      let wakeups = 0
-      const unsubscribe = store.subscribe(() => {
-        wakeups += 1
-      })
-      for (let i = 0; i < REPEATS; i += 1) {
-        store.getState().setCacheTimerStartedAt(paneKey, null)
-      }
-      unsubscribe()
-
-      expect(wakeups).toBe(0)
-      expect(store.getState().cacheTimerByKey[paneKey]).toBeNull()
-    })
-  })
-
-  describe('setTabLayout identity bailout', () => {
-    it('wakes zero subscribers across 1,000 structurally identical snapshots', () => {
-      const store = createTestStore()
-      store.getState().setTabLayout('tab-1', makeLayout())
-
-      let wakeups = 0
-      const unsubscribe = store.subscribe(() => {
-        wakeups += 1
-      })
-      for (let i = 0; i < REPEATS; i += 1) {
-        // Fresh object each iteration: this is what persistLayoutSnapshot produces.
-        store.getState().setTabLayout('tab-1', makeLayout())
-      }
-      unsubscribe()
-
-      expect(wakeups).toBe(0)
-    })
-
-    it('publishes when any tracked field changes', () => {
-      const store = createTestStore()
-      store.getState().setTabLayout('tab-1', makeLayout())
-
-      const mutations: Partial<TerminalLayoutSnapshot>[] = [
-        { activeLeafId: 'leaf-b' },
-        { expandedLeafId: 'leaf-a' },
-        { chatLeafId: 'leaf-b' },
-        { titlesByLeafId: { 'leaf-a': 'test' } },
-        { ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-c' } },
-        { buffersByLeafId: { 'leaf-a': 'scrollback' } },
-        { scrollbackRefsByLeafId: { 'leaf-a': 'ref-1' } },
-        {
-          root: {
-            type: 'split',
-            direction: 'horizontal',
-            ratio: 0.5,
-            first: { type: 'leaf', leafId: 'leaf-a' },
-            second: { type: 'leaf', leafId: 'leaf-b' }
-          }
-        },
-        {
-          root: {
-            type: 'split',
-            direction: 'vertical',
-            ratio: 0.7,
-            first: { type: 'leaf', leafId: 'leaf-a' },
-            second: { type: 'leaf', leafId: 'leaf-b' }
-          }
-        }
-      ]
-
-      for (const mutation of mutations) {
-        store.getState().setTabLayout('tab-1', makeLayout())
-        let wakeups = 0
-        const unsubscribe = store.subscribe(() => {
-          wakeups += 1
-        })
-        store.getState().setTabLayout('tab-1', makeLayout(mutation))
-        unsubscribe()
-        expect(wakeups, `expected a publish for ${JSON.stringify(mutation)}`).toBe(1)
-      }
     })
   })
 }

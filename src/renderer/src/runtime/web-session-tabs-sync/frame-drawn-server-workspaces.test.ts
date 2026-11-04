@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import '../../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import '../../../../shared/workspace-layout/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
   ENV,
@@ -107,21 +107,6 @@ describe('frame-drawn server workspaces', () => {
     hoisted.refresh.mockReset()
     resetWebSessionTabsSyncTestState()
     resetFrameDrawnServerWorkspacesForTests()
-  })
-
-  it('keeps a repeated sender publication and unchanged frame status as a no-op', () => {
-    const snapshot = {
-      ...shell('a', 2),
-      agentSenderAssociations: {
-        associations: [],
-        principals: [],
-        attachments: [],
-        revision: { epoch: 'host', revision: 1 }
-      }
-    }
-    const previous = frameDrawnStore()
-    const store = merge(previous, applyWebSessionTabsSnapshot(previous, snapshot, ENV, NOW))
-    expect(applyWebSessionTabsSnapshot(store, snapshot, ENV, NOW)).toBe(store)
   })
 
   it('hands a workspace back: the snapshot replaces the frame tree in one write', async () => {

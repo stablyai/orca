@@ -11,7 +11,7 @@ import {
   getTerminalPasteIngestMs
 } from '../../shared/agent-launch/startup/agent-prompt-injection'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
@@ -22,15 +22,15 @@ import {
   ensurePathWithinWorkspaceMock,
   type ProjectGroup,
   type RpcRequest,
-  type TerminalLayoutSnapshot,
-  type WorkspaceSessionState,
   type WorktreeMeta
 } from './orca-runtime-test-mocks.spec'
+import type { TerminalLayoutSnapshot } from '../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
 import type { OrchestrationDb } from './orchestration/db'
-import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { TerminalProcessInspection as PtyProcessInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { Store } from '../persistence/loading-store/store'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 

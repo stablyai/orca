@@ -4,8 +4,10 @@ import {
   callRuntimeRpc,
   clearRecentRuntimeCompatibilityFailure,
   clearRuntimeCompatibilityCacheForTests,
-  runtimeEnvironmentSupportsCapability
+  runtimeEnvironmentSupportsCapability,
+  runtimeEnvironmentSupportsCapabilities
 } from './runtime-rpc-client'
+import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
 import './runtime-rpc-result'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
@@ -191,6 +193,40 @@ describe('runtime RPC client routing', () => {
       'status.get',
       'worktree.detectedList'
     ])
+  })
+
+  it('reads grouped capabilities consistently and observes an in-place host upgrade', async () => {
+    const old = createCompatibleRuntimeStatusResponse()
+    old.result.capabilities = ['settings.agent-launch.choices.v1']
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce(old)
+      .mockResolvedValue(createCompatibleRuntimeStatusResponse())
+    await expect(
+      runtimeEnvironmentSupportsCapabilities('env-upgrade', [
+        'agent-session.create-options.v1',
+        'settings.agent-launch.choices.v1'
+      ])
+    ).resolves.toEqual([false, true])
+    await expect(
+      runtimeEnvironmentSupportsCapabilities('env-upgrade', [
+        'agent-session.create-options.v1',
+        'settings.agent-launch.choices.v1'
+      ])
+    ).resolves.toEqual([true, true])
+    await expect(
+      runtimeEnvironmentSupportsCapability('env-upgrade', 'agent-session.create-options.v1')
+    ).resolves.toBe(true)
+  })
+  it('keeps a grouped capability read behind protocol compatibility', async () => {
+    const status = createCompatibleRuntimeStatusResponse()
+    status.result.minCompatibleRuntimeClientVersion = RUNTIME_PROTOCOL_VERSION + 1
+    runtimeEnvironmentCall.mockResolvedValue(status)
+    await expect(
+      runtimeEnvironmentSupportsCapabilities('env-incompatible', [
+        'agent-session.create-options.v1',
+        'settings.agent-launch.choices.v1'
+      ])
+    ).rejects.toMatchObject({ code: 'runtime_compat_block' })
   })
 
   it('coalesces concurrent cold-cache capability probes onto one status.get', async () => {

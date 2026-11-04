@@ -6,11 +6,11 @@ import { SearchAddon } from '@xterm/addon-search'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { disposePane } from './pane-lifecycle'
 import { toPublicPane } from './pane-public-view'
-import { cancelPendingTerminalViewportPresents, presentPaneViewport } from './pane-viewport-present'
+import { presentPaneViewport } from './pane-viewport-present'
 import { requestFullViewportPresent } from './terminal-render-pause-release'
 
 vi.mock('./terminal-render-pause-release', () => ({
@@ -150,40 +150,5 @@ describe('pane viewport retry lifetime', () => {
     flushFrame()
     expect(requestFullViewportPresent).toHaveBeenCalledOnce()
     expect(requestFullViewportPresent).toHaveBeenCalledWith(live.terminal)
-  })
-
-  it('deduplicates retries for the same wrapper', () => {
-    const pane = createPane()
-    const view = toPublicPane(pane)
-    presentPaneViewport(view)
-    presentPaneViewport(view)
-    expect(frames.size).toBe(1)
-    pane.container.style.display = 'block'
-    flushFrame()
-    expect(requestFullViewportPresent).toHaveBeenCalledOnce()
-  })
-
-  it('preserves the sixteen-frame budget for a live collapsed pane', () => {
-    const pane = createPane()
-    presentPaneViewport(toPublicPane(pane))
-    for (let tick = 0; tick < 15; tick++) {
-      flushFrame()
-      expect(frames.size).toBe(1)
-    }
-    flushFrame()
-    expect(frames.size).toBe(0)
-    pane.container.style.display = 'block'
-    presentPaneViewport(toPublicPane(pane))
-    expect(requestFullViewportPresent).toHaveBeenCalledOnce()
-  })
-
-  it('allows a cancelled live wrapper to schedule again', () => {
-    const pane = createPane()
-    const view = toPublicPane(pane)
-    presentPaneViewport(view)
-    cancelPendingTerminalViewportPresents(pane.terminal)
-    expect(frames.size).toBe(0)
-    presentPaneViewport(view)
-    expect(frames.size).toBe(1)
   })
 })

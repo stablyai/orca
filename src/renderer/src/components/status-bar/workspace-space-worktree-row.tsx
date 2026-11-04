@@ -22,7 +22,7 @@ import type {
 import { CheckButton } from './workspace-space-selection-controls'
 import { WorkspaceDecisionHoverCard } from './workspace-space-decision-hover-card'
 import { WorkspaceSpaceStatusBadge } from './workspace-space-status-badge'
-import { describeWorktreeDeleteError } from '../sidebar/worktree-delete-error-display'
+import { describeWorktreeDeleteError } from '../sidebar/workspace-actions/deletion/worktree-delete-error-display'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { WorkspaceSpaceChanges } from './workspace-space-changes'
 import { WORKSPACE_SPACE_TABLE_GRID_CLASS } from './workspace-space-table-layout'

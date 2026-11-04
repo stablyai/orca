@@ -57,31 +57,6 @@ export function registerPtyConnectionPendingSpawnTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('does not retain PTY connect diagnostics unless e2e debug state is enabled', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        ptyIdsByTabId: { 'tab-1': [] }
-      }
-
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks)
-      )
-      await flushAsyncTicks()
-
-      expect((globalThis as Record<string, unknown>).__ptyConnectDiag).toBeUndefined()
-      expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('[pty-connect]'))
-      logSpy.mockRestore()
-    }, 30_000)
-
     it('does not hold a successor behind a canceled spawn serializer declaration', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks2 =

@@ -71,7 +71,7 @@ vi.mock('@/store', () => ({
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './autosave/editor-autosave'
 import { registerEditorPanelHostContentRecoveryTests } from './editor-panel-host-content-recovery.spec'
 
 type Deferred<T> = {
@@ -208,8 +208,6 @@ describe('useEditorPanelContentState', () => {
   registerEditorPanelHostContentRecoveryTests(
     mocks,
     () => latestFileContents,
-    createOpenFile,
-    (file, options) => latestReloadContent(file, options),
     async (file) => {
       container = document.createElement('div')
       document.body.appendChild(container)

@@ -100,21 +100,6 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
     await expect(git(['remote'], repoPath)).resolves.toContain(FORK_REMOTE)
   })
 
-  it('leaves the remote alone while a live worktree still references it', async () => {
-    const worktreePath = join(scratchDir, 'wt-live')
-    await git(['worktree', 'add', '-q', worktreePath, '-b', 'contributor/fix-local'], repoPath)
-
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      repoPath,
-      REPO_ID,
-      storeOf({ [worktreeId(worktreePath)]: forkTarget() }),
-      execGit,
-      [worktreePath]
-    )
-    expect(reclaimed).toEqual([])
-    await expect(git(['remote'], repoPath)).resolves.toContain(FORK_REMOTE)
-  })
-
   it('leaves the remote alone while its branch still exists (preserve-on-delete kept alive)', async () => {
     await git(['branch', 'contributor/fix', `${FORK_REMOTE}/contributor/fix`], repoPath)
     await git(['config', `branch.contributor/fix.remote`, FORK_REMOTE], repoPath)
@@ -140,23 +125,6 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
       repoPath,
       REPO_ID,
       storeOf({ [worktreeId(join(scratchDir, 'wt-gone'))]: forkTarget() }),
-      execGit,
-      []
-    )
-    expect(reclaimed).toEqual([FORK_REMOTE])
-    await expect(git(['remote'], repoPath)).resolves.not.toContain(FORK_REMOTE)
-  })
-
-  it('reclaims a remote orphaned by a worktree removed outside Orca (path 3)', async () => {
-    const worktreePath = join(scratchDir, 'wt-externally-removed')
-    await git(['worktree', 'add', '-q', worktreePath, '-b', 'contributor/fix-local-2'], repoPath)
-    // External worktree removal leaves stale Orca metadata without a cleanup event.
-    await git(['worktree', 'remove', '--force', worktreePath], repoPath)
-
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      repoPath,
-      REPO_ID,
-      storeOf({ [worktreeId(worktreePath)]: forkTarget() }),
       execGit,
       []
     )

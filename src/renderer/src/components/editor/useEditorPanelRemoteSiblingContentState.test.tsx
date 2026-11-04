@@ -41,6 +41,12 @@ vi.mock('@/lib/connection-context', () => ({
 
 vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
 
+// Why: these hosts predate saving granted files, so a sibling file still moves to its workspace.
+vi.mock(import('@/runtime/runtime-rpc-client'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => false)
+}))
+
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
 }))
@@ -80,7 +86,7 @@ vi.mock('@/store', () => ({
   )
 }))
 
-vi.mock('./useEditorPanelExternalContentEvents', () => ({
+vi.mock('./external-changes/useEditorPanelExternalContentEvents', () => ({
   useEditorPanelExternalContentEvents: vi.fn(),
   usePruneClosedEditorContent: vi.fn()
 }))

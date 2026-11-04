@@ -1,8 +1,8 @@
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
-import { getNaturalWorktreeKeys } from '../../natural-worktree-keys'
+import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import type { WorktreeDragGroup } from '../../worktree-manual-order'
+import type { WorktreeDragGroup } from './worktree-manual-order'
 
 /** Group members are host identities: same-id copies on two machines are separate cards to reorder. */
 export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup[] {

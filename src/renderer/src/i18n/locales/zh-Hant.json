@@ -4493,7 +4493,6 @@
             "5c938d39ac": "週",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "沒有其他帳戶",
             "d450654fa2": "Claude 帳戶",
             "11e2354daf": "Claude 用量執行環境",
             "3dd7ddfae1": "開啟 Claude 詳情和帳戶切換器",
@@ -14850,7 +14849,6 @@
           "ae3b00ca82": "設定 GitHub 任務",
           "ff92d15436": "Orca 會在代理程式完成工作或需要協助時發出通知。",
           "b054332836": "設定通知",
-          "04ae28d8ca": "選擇你想盯著看幾個小時的主題。",
           "f396db9f20": "讓這裡有家的感覺",
           "322fc50a18": "Orca 支援所有 CLI 代理程式。選擇你最常用的一個，隨時可切換。",
           "198b148b3c": "選擇預設代理程式",
@@ -17769,6 +17767,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "儲存的執行主機與此專案設定不再相符。"
+        },
+        "launchSettings": {
+          "needsFreshSession": "代理程式啟動設定要求每次執行都使用新工作階段。"
         }
       },
       "agent": {
@@ -18819,7 +18820,32 @@
           "system": "與作業系統一致",
           "dark": "柔和護眼",
           "light": "明亮清晰"
-        }
+        },
+        "looks": {
+          "activeNow": "目前",
+          "browsePlugins": "瀏覽外掛程式",
+          "browseThemePlugins": "瀏覽主題外掛程式",
+          "colorMode": "色彩模式",
+          "colorModeCaption": "淺色、深色或跟隨系統。",
+          "darkLook": "深色外觀",
+          "darkLooks": "深色外觀",
+          "lightLook": "淺色外觀",
+          "lightLooks": "淺色外觀",
+          "moreThemes": "更多主題",
+          "next": "更多外觀",
+          "orcaDark": "Orca 深色",
+          "orcaLight": "Orca 淺色",
+          "pluginsHint": "更多主題以外掛程式形式提供。",
+          "previous": "上一組外觀",
+          "showsWhenDark": "系統為深色時顯示",
+          "showsWhenLight": "系統為淺色時顯示",
+          "slotLabel": "要編輯的外觀",
+          "sourceBuiltIn": "內建",
+          "sourceCommunity": "終端機調色盤",
+          "themes": "主題",
+          "themesCaption": "選用。使用 App 主題和終端機調色盤進一步自訂。"
+        },
+        "subtitle": "選擇淺色或深色，也可以再選一個主題。兩者都能隨時在設定中變更。"
       },
       "integrations": {
         "capabilities": {
@@ -19526,7 +19552,6 @@
       "dismissDeliveryNotice": "關閉",
       "addSelectionToChat": "新增到聊天",
       "messageNotSent": "訊息未傳送",
-      "deliveryUnconfirmed": "無法確認送達 — 重試前請檢查聊天",
       "messageSending": "正在傳送…",
       "userMessage": {
         "showFull": "顯示完整訊息",
@@ -19595,8 +19620,7 @@
       "interruptedContinue": {
         "continue": "繼續",
         "failed": "無法繼續此聊天。請重試，或傳送一則訊息。",
-        "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。",
-        "unconfirmed": "無法確認 {{agent}} 是否收到「繼續」指令。請先查看聊天再重試。"
+        "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。"
       },
       "antigravitySignIn": {
         "sentence": "Antigravity 尚未登入。請前往 <settings>設定 → 帳戶 → Antigravity</settings> 登入，再重新傳送訊息。"
@@ -20155,6 +20179,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "將後續訊息加入佇列",
+        "scrollToLatestOnSendTitle": "傳送時捲動到最新訊息",
+        "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",
+        "scrollToLatestOnSendSearchPosition": "位置",
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",
         "inlineVisualsToggleLabel": "切換內嵌視覺化",
@@ -20166,7 +20193,13 @@
         "queueSearchSteer": "立即傳送",
         "shellEnvSearchVariables": "環境變數",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "代理"
+        "shellEnvSearchProxy": "代理",
+        "idleStopTitle": "閒置多久後停止代理",
+        "idleStopCopy": "聊天閒置達到此時長後，結束該聊天的代理以釋放記憶體。聊天會保留，你傳送下一則訊息時代理會重新啟動。如果代理在輪次之間仍會在背景繼續工作，請選擇「永不」。",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "逾時",
+        "idleStopSearchKeepAlive": "保持運作",
+        "idleStopNever": "永不"
       }
     },
     "agentChildRow": {

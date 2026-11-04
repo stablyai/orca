@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { withDurableRuntimeStore } from '../../runtime/runtime-durable-store-fixture'
 import { SessionNotFoundError } from '../../daemon/daemon-errors'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { registerPtyHandlers } from './register-handlers'
 import { setLocalPtyProvider } from './provider/registry'
 import {
@@ -16,7 +16,7 @@ import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import {
   formatTerminalStartFailure,
   terminalStartError
-} from '../../../shared/terminal-start-failure'
+} from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))

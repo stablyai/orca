@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
@@ -37,7 +37,7 @@ vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
 
-vi.mock('@/components/sidebar/StatusIndicator', () => ({
+vi.mock('@/components/sidebar/workspace-card/surface/StatusIndicator', () => ({
   default: () => <span data-status-indicator="true" />
 }))
 

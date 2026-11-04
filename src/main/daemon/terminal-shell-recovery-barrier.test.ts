@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
-import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
+import type { PtyIngressEmission } from '../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 
 const TRIGGER = '\x1b[?1049hTUI\x1b]133;D;137\x07'
 const MARK = '\x1b]133;D;137\x07'

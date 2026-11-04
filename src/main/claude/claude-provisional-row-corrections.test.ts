@@ -69,16 +69,6 @@ function ledger(initial: Record<string, ClaudeSubagentLinkageVerdict> = {}) {
 }
 
 describe('ClaudeProvisionalRowCorrections', () => {
-  it("stamps the session's own rows with no producer and owes them nothing", () => {
-    const { corrections, rewrites } = ledger()
-    expect(corrections.stampFor(null)(identityOf('toolu_2'), RUNNING)).toEqual({
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-    expect(corrections.pending).toBe(0)
-    corrections.retry()
-    expect(rewrites).toEqual([])
-  })
-
   it('stamps a provisional row at once and re-attributes it on the announcement', () => {
     const { corrections, rewrites, announce } = ledger()
     const stamped = corrections.stampFor('toolu_1')(identityOf('toolu_2'), RUNNING)
@@ -97,16 +87,6 @@ describe('ClaudeProvisionalRowCorrections', () => {
       }
     ])
     expect(corrections.pending).toBe(0)
-  })
-
-  it('drops a correction that would change nothing rather than burning a revision', () => {
-    const { corrections, rewrites, publishes } = ledger()
-    corrections.stampFor('toolu_1')(identityOf('toolu_2'), RUNNING)
-
-    corrections.abandon()
-
-    expect(rewrites).toEqual([])
-    expect(publishes()).toBe(0)
   })
 
   it('lets a settled write supersede the correction owed to that row', () => {

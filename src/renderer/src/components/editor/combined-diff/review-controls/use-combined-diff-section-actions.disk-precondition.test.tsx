@@ -14,7 +14,7 @@ import { fetchCombinedDiffSection } from '../load-sections/fetch-combined-diff-s
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 const mocks = vi.hoisted(() => ({ writeRuntimeFile: vi.fn(), diff: vi.fn() }))
 vi.mock('@/runtime/runtime-git-diff-client', () => ({

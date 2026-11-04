@@ -303,7 +303,6 @@ describe('AgentTerminalPreview', () => {
     await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
   })
 
-  // Assert the forwarder receives live snapshot-seeded flags; replay ordering is covered in preview-terminal-snapshot-replay.test.ts.
   it('hands the forwarder the live mirror seeded from the snapshot flags', async () => {
     platformState.value = 'darwin'
     connect.mockResolvedValue({

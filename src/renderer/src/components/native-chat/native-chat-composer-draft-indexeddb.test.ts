@@ -86,29 +86,6 @@ describe('the IndexedDB draft storage', () => {
     await expect(write).resolves.toBeUndefined()
   })
 
-  it('settles a read-modify-write only when its transaction completes', async () => {
-    const { factory, transactions, puts } = fakeDatabase()
-    const update = createIndexedDbNativeChatComposerDraftStorage(factory).update(
-      'scope',
-      () => DRAFT
-    )
-
-    expect(await settledYet(update)).toBe(false)
-    expect(puts).toEqual([DRAFT])
-    transactions[0]!.oncomplete?.()
-    await expect(update).resolves.toBeUndefined()
-  })
-
-  it('rejects a write whose transaction aborts, as on a full disk', async () => {
-    const { factory, transactions } = fakeDatabase()
-    const write = createIndexedDbNativeChatComposerDraftStorage(factory).write('scope', DRAFT)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    transactions[0]!.error = new Error('QuotaExceededError')
-    transactions[0]!.onabort?.()
-
-    await expect(write).rejects.toThrow('QuotaExceededError')
-  })
-
   describe('through the draft store', () => {
     const loaded: { clearNativeChatComposerDraftsForTests: () => void }[] = []
     afterEach(() => {

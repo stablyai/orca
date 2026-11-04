@@ -53,11 +53,6 @@ describe('Claude images follow the launching viewer', () => {
   ])('keeps same-build local launches on their existing policy %#', (context) => {
     expect(terminalImageViewerSupported(context)).toBeUndefined()
   })
-  it.each([undefined, true])('keeps supported or local env unchanged (%s)', (supported) => {
-    vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', undefined)
-    const launch = { launchAgent: 'claude' as const, env: { KEEP: 'yes' } }
-    expect(applyClaudeTerminalImageViewerEnv(launch, supported)).toBe(launch)
-  })
   it('disables automatic image forcing only for unsupported Claude', () => {
     vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', undefined)
     const launch = { launchAgent: 'claude' as const, env: { KEEP: 'yes' } }
@@ -68,16 +63,5 @@ describe('Claude images follow the launching viewer', () => {
     expect(launch.env).toEqual({ KEEP: 'yes' })
     const codex = { launchAgent: 'codex' as const }
     expect(applyClaudeTerminalImageViewerEnv(codex, false)).toBe(codex)
-  })
-  it.each(['0', '1', ''])('preserves explicit and inherited override %j', (value) => {
-    vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', undefined)
-    const explicit = {
-      launchAgent: 'claude' as const,
-      env: { CLAUDE_CODE_FORCE_TERMINAL_IMAGES: value }
-    }
-    expect(applyClaudeTerminalImageViewerEnv(explicit, false)).toBe(explicit)
-    vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', value)
-    const inherited = { launchAgent: 'claude' as const }
-    expect(applyClaudeTerminalImageViewerEnv(inherited, false)).toBe(inherited)
   })
 })

@@ -4047,7 +4047,6 @@
             "5c938d39ac": "周",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "没有其他账户",
             "d450654fa2": "Claude 账户",
             "11e2354daf": "Claude 使用量运行时",
             "3dd7ddfae1": "打开 Claude 详情和账户切换器",
@@ -14402,7 +14401,6 @@
           "ae3b00ca82": "设置 GitHub 任务",
           "ff92d15436": "Orca 会在智能体完成工作或需要帮助时通知你。",
           "b054332836": "设置通知",
-          "04ae28d8ca": "选择你想盯着看几个小时的主题。",
           "f396db9f20": "让这里有家的感觉",
           "322fc50a18": "Orca 支持所有 CLI 智能体。选择你最常用的一个，随时可切换。",
           "198b148b3c": "选择默认智能体",
@@ -17321,6 +17319,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "保存的运行主机与此项目配置不再匹配。"
+        },
+        "launchSettings": {
+          "needsFreshSession": "智能体启动设置要求每次运行都使用新会话。"
         }
       },
       "agent": {
@@ -19064,7 +19065,6 @@
       "dismissDeliveryNotice": "关闭",
       "addSelectionToChat": "添加到聊天",
       "messageNotSent": "消息未发送",
-      "deliveryUnconfirmed": "无法确认送达 — 重试前请检查聊天",
       "messageSending": "正在发送…",
       "userMessage": {
         "showFull": "显示完整消息",
@@ -19127,7 +19127,6 @@
         "continue": "继续",
         "failed": "无法继续此聊天。请重试，或发送一条消息。",
         "explanation": "继续后，智能体会先检查其上一步是否已完成。",
-        "unconfirmed": "无法确认 {{agent}} 是否收到“继续”。在重试之前请检查聊天记录。",
         "usageLimitExplanation": "让智能体从中断处继续。请在上限重置后使用。"
       },
       "rewind": {
@@ -19700,7 +19699,32 @@
           "system": "匹配操作系统",
           "dark": "轻松护眼",
           "light": "明亮、清脆"
-        }
+        },
+        "looks": {
+          "activeNow": "当前",
+          "browsePlugins": "浏览插件",
+          "browseThemePlugins": "浏览主题插件",
+          "colorMode": "颜色模式",
+          "colorModeCaption": "浅色、深色或跟随系统。",
+          "darkLook": "深色外观",
+          "darkLooks": "深色外观",
+          "lightLook": "浅色外观",
+          "lightLooks": "浅色外观",
+          "moreThemes": "更多主题",
+          "next": "更多外观",
+          "orcaDark": "Orca 深色",
+          "orcaLight": "Orca 浅色",
+          "pluginsHint": "更多主题以插件形式提供。",
+          "previous": "上一组外观",
+          "showsWhenDark": "系统为深色时显示",
+          "showsWhenLight": "系统为浅色时显示",
+          "slotLabel": "要编辑的外观",
+          "sourceBuiltIn": "内置",
+          "sourceCommunity": "终端调色板",
+          "themes": "主题",
+          "themesCaption": "可选。使用应用主题和终端调色板进一步自定义。"
+        },
+        "subtitle": "选择浅色或深色，也可以再选一个主题。两者都可以随时在设置中更改。"
       },
       "integrations": {
         "capabilities": {
@@ -19766,6 +19790,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "将后续消息加入队列",
+        "scrollToLatestOnSendTitle": "发送时滚动到最新消息",
+        "scrollToLatestOnSendCopy": "向上滚动时发送消息会跳到最新消息并跟随回复。关闭后将保持当前位置。",
+        "scrollToLatestOnSendSearchPosition": "位置",
         "followUpBehaviorCopy": "智能体工作时发送的消息会以卡片形式等待到回合结束，而不是进入正在进行的回合。Cmd/Ctrl+Enter 会对单条消息采取相反做法。",
         "inlineVisualsTitle": "内联可视化",
         "inlineVisualsCopy": "允许智能体在其回复中显示图表、示意图和原型图。适用于新启动的聊天。",
@@ -19782,7 +19809,13 @@
         "usageLimitContinueCopy": "额度重置后，Orca 会发送“Continue where you left off.”。适用于所有已知重置时间的聊天。",
         "usageLimitContinueSearchLimit": "使用额度",
         "usageLimitContinueSearchReset": "重置",
-        "usageLimitContinueToggleLabel": "切换使用额度重置后自动继续聊天"
+        "usageLimitContinueToggleLabel": "切换使用额度重置后自动继续聊天",
+        "idleStopTitle": "空闲多久后停止智能体",
+        "idleStopCopy": "聊天空闲达到此时长后，结束该聊天的智能体以释放内存。聊天会保留，你发送下一条消息时智能体会重新启动。如果智能体在轮次之间仍会在后台继续工作，请选择“从不”。",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "超时",
+        "idleStopSearchKeepAlive": "保持活动",
+        "idleStopNever": "从不"
       }
     },
     "agentChildRow": {

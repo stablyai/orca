@@ -8,14 +8,14 @@ import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
 import type { PRCheckRunDetails } from '../../../../../../shared/github/check-types'
 import { readingCheck, readingDetails } from '../reading/check-details-reading-fixture'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
-import { CheckRunDetails } from '@/components/right-sidebar/checks-panel/check-run-details'
+import { CheckRunDetails } from '@/components/right-sidebar/checks-panel/presentation/check-run-details'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import {
   checkDetailsReadingKey,
   checkJobIdentities,
   checkReadingIntentKey
 } from '../reading/check-details-reading-cache'
-import * as diagnosticPosition from '@/components/right-sidebar/check-log-initial-diagnostic-position'
+import * as diagnosticPosition from '@/components/right-sidebar/checks-panel/logs/check-log-initial-diagnostic-position'
 
 vi.mock('@/i18n/i18n', () => ({
   getIntlLocale: () => 'en',

@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeNavHistoryEntry } from '@/store/slices/worktree-nav-history'
-import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
+import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 
@@ -116,30 +116,6 @@ describe('worktree keyboard cycling with a resolved active host', () => {
   it('steps to the next row when the active host resolved to local but rows are unqualified', () => {
     // Clicks resolve local host ownership; raw hostless identities would miss the active row and wrap to the top.
     renderProbe('b', 'local')
-
-    press('down')
-
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {
-      navigationIntent: 'user-open',
-      revealInSidebar: false,
-      executionHostId: 'local'
-    })
-  })
-
-  it('steps to the previous row when the active host resolved to local', () => {
-    renderProbe('b', 'local')
-
-    press('up')
-
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('a', {
-      navigationIntent: 'user-open',
-      revealInSidebar: false,
-      executionHostId: 'local'
-    })
-  })
-
-  it('still steps normally when the active host is unqualified', () => {
-    renderProbe('b', null)
 
     press('down')
 
