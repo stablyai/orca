@@ -152,6 +152,17 @@ export class RuntimeTerminalAgentPresence {
     if (isOpenCodeNativeTitle(markerTitle) && pty.launchAgent === 'opencode') {
       return true
     }
+    // A pane whose OpenCode was started inside the shell — a Windows-hosted WSL pane,
+    // where the Windows host cannot prove the guest's foreground process — has no
+    // launchAgent record (#37815). An OpenCode native title plus a tracked agent status
+    // is the same live evidence the untitled status-feed branch below already trusts.
+    if (
+      isOpenCodeNativeTitle(markerTitle) &&
+      pty.lastAgentStatus !== null &&
+      managementClassification !== 'management'
+    ) {
+      return true
+    }
     const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
     if (!isOpenCodeNativeTitle(markerTitle) && isKnownReadyPromptPreview(waitText)) {
       return true
