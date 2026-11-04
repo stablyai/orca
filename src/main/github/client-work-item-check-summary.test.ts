@@ -97,8 +97,24 @@ describe('work item checksSummary', () => {
       total: 3,
       passed: 2,
       failed: 0,
+      cancelled: 0,
       pending: 0,
       neutral: 1
     })
+  })
+
+  it.each([
+    [[{ state: 'SUCCESS' }, { state: 'EXPECTED' }], 'pending', 0],
+    [[{ state: 'SUCCESS' }, { status: 'COMPLETED', conclusion: 'CANCELLED' }], 'failure', 1]
+  ] as const)('preserves the raw task rollup contract for %j', async (rollup, state, cancelled) => {
+    mockPullRequestDetail({
+      number: 43,
+      title: 'Waiting checks',
+      state: 'OPEN',
+      url: 'https://github.com/acme/widgets/pull/43',
+      statusCheckRollup: rollup
+    })
+    const item = await getWorkItem('/repo-root', 43, 'pr', null, {}, 'origin')
+    expect(item?.checksSummary).toMatchObject({ state, total: 2, passed: 1, cancelled })
   })
 })

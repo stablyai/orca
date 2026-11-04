@@ -6,7 +6,7 @@ import type {
 } from './agent-status/contracts/agent-status-types'
 import type { AgentMainAgentStatus } from './agent-status/lifecycle/main-agent-status'
 import type { ProgramStatusFacet } from './program-status/facet'
-import type { CheckStatus } from './github/pull-request-types'
+import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
 import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
 import type { RuntimeTerminalInteractiveWait } from './runtime-terminal-contracts'
@@ -101,6 +101,7 @@ export type RuntimeWorktreePsSummary = {
     title?: string
     url?: string
     checksStatus?: CheckStatus
+    checksSummary?: ProviderCheckSummary
   } | null
   linkedLinearIssue: string | null
   linkedGitLabMR: number | null

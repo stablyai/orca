@@ -35,6 +35,7 @@ function gitLabHydrationUnchanged(
     current.total === summary.total &&
     current.passed === summary.passed &&
     current.failed === summary.failed &&
+    current.cancelled === summary.cancelled &&
     current.pending === summary.pending &&
     current.neutral === summary.neutral &&
     current.scope === summary.scope &&

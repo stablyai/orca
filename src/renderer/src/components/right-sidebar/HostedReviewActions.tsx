@@ -93,6 +93,7 @@ export default function HostedReviewActions({
       mergeStateStatus: review.mergeStateStatus,
       reviewDecision: review.reviewDecision,
       checksStatus: review.status,
+      checksSummary: review.checksSummary,
       autoMergeEnabled: review.autoMergeEnabled,
       autoMergeAllowed: review.autoMergeAllowed,
       mergeQueueRequired: review.mergeQueueRequired
