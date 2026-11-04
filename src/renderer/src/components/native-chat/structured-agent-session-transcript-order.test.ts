@@ -108,6 +108,23 @@ describe('structured transcript order', () => {
     expect(drawn(items, outbox)).toEqual(['ask', 'reply', agentJournalSubmissionKey('queued')])
   })
 
+  it('keeps a retained ordinary send ahead of later host rows despite their earlier clocks', () => {
+    const first = { ...queued('first', 'Original', 150), afterSequence: 2 }
+    const second = { ...queued('second', 'Later', 151), afterSequence: 2 }
+    const items = [
+      journalItem('ask', 1, 100, said('user', 'Start')),
+      journalItem('stopped', 2, 140, { kind: 'status', text: 'Interrupted' }),
+      journalItem('later-host-input', 3, 120, said('user', 'Newer input'))
+    ]
+    expect(drawn(items, [first, second])).toEqual([
+      'ask',
+      'stopped',
+      agentJournalSubmissionKey('first'),
+      agentJournalSubmissionKey('second'),
+      'later-host-input'
+    ])
+  })
+
   it('keeps a send the journal recorded and the provider refused at its journal place', () => {
     const refused = agentJournalSubmissionKey('steer')
     const items = [

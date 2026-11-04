@@ -210,7 +210,8 @@ async function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRec
     journal: {
       threadGoal: () => null,
       visitItems: () => {},
-      submissions: () => [],
+      inputOrder: { hasInputs: () => false },
+      statusRead: () => ({ items: [], submissions: [] }),
       contextUsage: () => null,
       context: { floor: () => null }
     }

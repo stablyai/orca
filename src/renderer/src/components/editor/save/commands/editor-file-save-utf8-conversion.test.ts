@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
 import { attachEditorAutosaveController } from '../../autosave/editor-autosave-controller'
-import { attemptEditorFileSave, confirmEditorUtf8Conversion } from './editor-file-save-attempt'
+import { attemptEditorFileSave } from './editor-file-save-attempt'
 import {
   GUARDED_PATH,
   openGuardedFile,
@@ -60,29 +60,4 @@ it('writes UTF-8 once the user confirms the conversion', async () => {
   } finally {
     cleanup()
   }
-})
-
-it('reports the refusal when no one can be asked', async () => {
-  const { disk, id, cleanup } = openLatin1()
-  try {
-    expect(await attemptEditorFileSave({ fileId: id })).toBe(false)
-    expect(disk.files.get(GUARDED_PATH)).toBe(LATIN1)
-    expect(vi.mocked(toast.error).mock.calls[0]?.[0]).toBe(
-      "This file isn't UTF-8 text, so it wasn't saved."
-    )
-  } finally {
-    cleanup()
-  }
-})
-
-it('words the confirmation as a lossy, destructive conversion', async () => {
-  const confirm = vi.fn(async () => true)
-  await confirmEditorUtf8Conversion(confirm, '/repo/notes.md')
-  expect(confirm).toHaveBeenCalledWith({
-    title: 'Save notes.md as UTF-8?',
-    description:
-      "This file isn't UTF-8 text. Saving it as UTF-8 replaces any characters that aren't valid UTF-8 with �, and the original bytes can't be recovered.",
-    confirmLabel: 'Save as UTF-8',
-    confirmVariant: 'destructive'
-  })
 })

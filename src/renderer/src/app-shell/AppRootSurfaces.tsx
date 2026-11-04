@@ -59,7 +59,7 @@ const NodeDistMirrorDialog = lazy(
   () => import('../components/settings/advanced/network/NodeDistMirrorDialog')
 )
 const AiVaultSessionHistoryDialog = lazy(
-  () => import('../components/right-sidebar/AiVaultSessionHistoryDialog')
+  () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')
 )
 const DeleteWorktreeDialog = lazy(
   () => import('../components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog')

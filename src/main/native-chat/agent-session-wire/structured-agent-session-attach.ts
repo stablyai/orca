@@ -163,10 +163,7 @@ export async function attachJournal(input: {
   const journal = await input.openConversation(input.record)
   return {
     journal,
-    unconfirmedClientMessageIds: journal
-      .submissions()
-      .filter((entry) => entry.dispatchState === 'unknown' && entry.recovered === true)
-      .map((entry) => entry.clientMessageId)
+    unconfirmedClientMessageIds: journal.inputOrder.recoveredUnknownIds()
   }
 }
 

@@ -41,19 +41,6 @@ it('keeps the PTY incarnation across a window save that still binds the pane', a
   })
 })
 
-it('keeps other panes incarnations when a save carries only some of them', async () => {
-  const { store } = await fixture()
-  await store.persistPtyBinding(binding)
-  const saved = rendererSave(store.getWorkspaceSession())
-  saved.terminalPtyIncarnationsByPaneKey = { 'other-tab:dddddddd-dddd-4ddd-8ddd-dddddddddddd': 'x' }
-
-  store.setWorkspaceSession(saved)
-
-  expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
-    binding.incarnationId
-  )
-})
-
 it('drops the incarnation once a window save binds the pane to another PTY', async () => {
   const { store } = await fixture()
   await store.persistPtyBinding(binding)

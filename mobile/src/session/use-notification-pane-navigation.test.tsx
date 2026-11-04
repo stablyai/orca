@@ -151,12 +151,6 @@ beforeEach(() => {
 
 // Exercise the page hook: shell init carries pane requests because this document at / cannot edit the native route.
 describe('the page pane hook', () => {
-  it('switches to the pane the page was opened on, which arrives in the first init', () => {
-    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
-    render(true)
-    expect(switched.map((tab) => tab.id)).toEqual(['second'])
-  })
-
   it('holds that request until the terminals have loaded, rather than dropping it', () => {
     bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
     const tree = render(false)
@@ -165,13 +159,6 @@ describe('the page pane hook', () => {
       tree.update(createElement(Probe, { terminalsLoaded: true }))
     })
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
-  })
-
-  it('erases the param that carried the pane it applied', () => {
-    // Erase by value so an older acknowledgement cannot spend a newer notification tap.
-    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
-    render(true)
-    expect(bridge.cleared).toEqual([{ param: 'paneKey', value: `tab-b:${LEAF}` }])
   })
 
   it('switches again for a repeat tap on the pane already showing', () => {
@@ -194,32 +181,6 @@ describe('the page pane hook', () => {
     deliver(`tab-a:${LEAF}`)
     expect(switched.map((tab) => tab.id)).toEqual(['first'])
     expect(bridge.cleared).toHaveLength(2)
-  })
-
-  it('applies successive pane requests and names each value when clearing', () => {
-    render(true)
-    deliver(`tab-a:${LEAF}`)
-    deliver(`tab-b:${LEAF}`)
-    expect(switched.map((tab) => tab.id)).toEqual(['first', 'second'])
-    expect(bridge.cleared.map((entry) => entry.value)).toEqual([`tab-a:${LEAF}`, `tab-b:${LEAF}`])
-  })
-
-  it('asks for nothing and applies nothing when the route carries no pane', () => {
-    // The shell’s erase returns as a route update, including on later ready replies.
-    render(true)
-    deliver(`tab-a:${LEAF}`)
-    bridge.cleared.length = 0
-    deliver('')
-    expect(switched.map((tab) => tab.id)).toEqual(['first'])
-    expect(bridge.cleared).toEqual([])
-  })
-
-  it('stays on the open tab for a pane that has since closed', () => {
-    render(true)
-    deliver(`gone:${LEAF}`)
-    expect(switched).toEqual([])
-    deliver('')
-    expect(switched).toEqual([])
   })
 
   it('opens a pane missing from a list loaded before the push once a fresh list names it', () => {

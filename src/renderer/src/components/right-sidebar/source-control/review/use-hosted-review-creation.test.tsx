@@ -13,7 +13,7 @@ import {
   type PullRequestGenerationFields
 } from '@/store/slices/pull-request-generation'
 import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
-import type { PullRequestGenerationOutcome } from '../../create-pull-request-dialog-field-model'
+import type { PullRequestGenerationOutcome } from '../../hosted-review/creation/create-pull-request-dialog-field-model'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import type {
