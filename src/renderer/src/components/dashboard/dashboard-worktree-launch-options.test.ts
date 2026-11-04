@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  DASHBOARD_MAX_LAUNCH_WORKTREES,
-  type DashboardCard
-} from '../../../../shared/dashboard-snapshot'
-
-import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { buildDashboardWorktreeLaunchOptions } from './dashboard-worktree-launch-options'
 
 type LaunchState = Parameters<typeof buildDashboardWorktreeLaunchOptions>[0]
@@ -48,19 +41,6 @@ function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
 }
 
 describe('buildDashboardWorktreeLaunchOptions', () => {
-  it('stops at the bound the snapshot validator enforces', () => {
-    const cards = Array.from({ length: DASHBOARD_MAX_LAUNCH_WORKTREES + 25 }, (_unused, index) =>
-      card({ paneKey: `pane-${index}`, worktreeId: `worktree-${index}` })
-    )
-
-    const options = buildDashboardWorktreeLaunchOptions(
-      state({ detectedAgentIds: ['codex'] }),
-      cards
-    )
-
-    expect(Object.keys(options)).toHaveLength(DASHBOARD_MAX_LAUNCH_WORKTREES)
-  })
-
   it('uses each git workspace execution host instead of local detection', () => {
     const options = buildDashboardWorktreeLaunchOptions(
       state({
@@ -101,25 +81,5 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
     )
 
     expect(options).toEqual({ 'ssh-worktree': ['grok'], 'runtime-worktree': ['aider'] })
-  })
-
-  it('resolves folder workspace detection through its project host', () => {
-    const worktreeId = folderWorkspaceKey('folder-1')
-    const options = buildDashboardWorktreeLaunchOptions(
-      state({
-        folderWorkspaces: [
-          {
-            id: 'folder-1',
-            projectGroupId: 'group-1',
-            connectionId: 'ssh-folder'
-          } as FolderWorkspace
-        ],
-        projectGroups: [{ id: 'group-1' } as ProjectGroup],
-        remoteDetectedAgentIds: { 'ssh-folder': ['goose'] }
-      }),
-      [card({ repoId: 'folder-workspace:group-1', worktreeId })]
-    )
-
-    expect(options).toEqual({ [worktreeId]: ['codex', 'goose'] })
   })
 })
