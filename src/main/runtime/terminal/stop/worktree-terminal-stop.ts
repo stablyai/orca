@@ -10,7 +10,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeTerminalMutationKind } from '../../worktree-terminal-mutation-lock'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import {

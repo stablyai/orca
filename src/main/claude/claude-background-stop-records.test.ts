@@ -34,10 +34,11 @@ async function droppedFromRoster() {
         sessionId: 'session-1',
         fence: 7,
         journal: {
-          snapshot: () => ({ items: [] }),
+          itemsRead: () => ({ items: [] }),
           cursor: () => ({ epoch: 'e', sequence: 0 }),
           item: () => null,
           submissions: () => [],
+          inputOrder: { recoverableSubmissions: () => [] },
           runningTurn: () => null,
           itemFence: () => undefined,
           visitItems: () => undefined,

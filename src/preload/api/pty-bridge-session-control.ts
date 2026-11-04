@@ -2,7 +2,7 @@ import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
-} from '../../shared/pty-fenced-termination'
+} from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import { ipcRenderer } from 'electron'
@@ -12,7 +12,7 @@ import type { TerminalInputKind } from '../../shared/terminal/input/terminal-inp
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../shared/terminal-leaf-move'
+} from '../../shared/workspace-layout/terminal-leaf-move'
 import type {
   SavedResumeDecision,
   TerminalLaunchResult,
@@ -20,16 +20,19 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
+import type {
+  PtyListedSession,
+  PtySessionListScope
+} from '../../shared/terminal/pty/lifecycle/pty-listed-session'
 import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
-} from '../../shared/pty-renderer-delivery-health'
+} from '../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
 import type { TerminalViewAttributes } from '../../shared/terminal/protocol/queries/terminal-view-attributes'
-import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
+import type { PtyMainDeliveryDiagnostics } from '../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { PreloadApi } from '../api-types'
-import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-pane-placement'
 import type { AgentPaneLaunchRequest } from '../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export const ptySessionControlApi = {

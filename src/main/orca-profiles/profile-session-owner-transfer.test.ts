@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { PersistedOpenFile } from '../../shared/workspace-session-state-types'
+import type { PersistedOpenFile } from '../../shared/workspace-session/workspace-session-state-types'
 
 import { buildMarkdownFrontmatterIdMap } from './profile-session-markdown-transfer'
 import { extractSessionOwnersForTransfer } from './profile-session-owner-transfer'

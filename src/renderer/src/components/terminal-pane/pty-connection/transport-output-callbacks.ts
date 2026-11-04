@@ -3,7 +3,7 @@ import {
   captureTerminalLaunchContext
 } from './terminal-launch-result-policy'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
-import type { TerminalAttachmentLaunchResult } from '../../../../../shared/terminal-attachment-launch-result'
+import type { TerminalAttachmentLaunchResult } from '../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import { isPaneOwnerRefusal } from './pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import { createTerminalStartupTiming } from '../terminal-startup-timing'

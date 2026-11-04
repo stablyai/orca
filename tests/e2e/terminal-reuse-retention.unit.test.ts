@@ -11,7 +11,7 @@ import {
 } from '../../src/main/automations/automation-run-operation'
 import { rpcCallerOperationKey } from '../../src/main/runtime/rpc/rpc-caller-identity'
 import { createAutomationTerminalOwnership } from '../../src/renderer/src/lib/automation-terminal-ownership'
-import { parsePaneKey } from '../../src/shared/stable-pane-id'
+import { parsePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '../../src/renderer/src/store'
 import { singlePaneLayoutSnapshot } from '../../src/renderer/src/store/slices/terminal-helpers'
 import { createStore as createRendererStore } from 'zustand/vanilla'

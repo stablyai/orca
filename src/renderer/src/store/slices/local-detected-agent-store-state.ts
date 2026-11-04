@@ -2,7 +2,7 @@ import type { AppState } from '../types'
 import type {
   PathSource,
   ShellHydrationFailureReason
-} from '../../../../shared/shell-path-hydration-types'
+} from '../../../../shared/shell/launch/shell-path-hydration-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 /** `wakeWslDistro`: a user act (a click, a runtime choice) that may start a stopped WSL distro. */

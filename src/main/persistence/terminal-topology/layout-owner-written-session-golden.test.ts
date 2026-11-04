@@ -8,7 +8,7 @@ import {
   LAYOUT_OWNER_WRITTEN_SESSION_WORKTREE_ID as WORKTREE
 } from '../../../shared/__fixtures__/layout-owner-written-session-golden-paths'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { Store } from '../loading-store/store'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { windowViewSaveForMain } from '../window-save-view'

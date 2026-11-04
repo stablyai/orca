@@ -9,7 +9,7 @@ import {
   ptySessionIdentity,
   type PtyListedSession,
   type PtySessionListScope
-} from '../../../../shared/pty-listed-session'
+} from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { ptyOwnership } from '../provider/ownership-state'
 import { getProvider, registeredPtyProviders, type ResolvedPtyHost } from '../provider/registry'
 import {

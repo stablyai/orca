@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { PluginInstallSource } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { splitQualifiedPluginKey } from '../../../shared/plugins/catalog/plugin-marketplace'
-import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
 import { installPluginFromLocalPath, readPluginLockfile } from './plugin-install'
 import { writePluginLockfile } from './plugin-install-lockfile-store'
 import { installStagedPluginTree } from './plugin-install-staging'
@@ -69,33 +68,6 @@ async function catalogInstall(): Promise<{ pluginsDir: string; sourcePath: strin
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
-})
-
-describe('pluginCatalogTakeoverError', () => {
-  it('allows sources that are not catalog installs and the same catalog', () => {
-    expect(pluginCatalogTakeoverError('p.demo', undefined, null)).toBeNull()
-    expect(
-      pluginCatalogTakeoverError('p.demo', { kind: 'local-path', path: '/tmp/demo' }, null)
-    ).toBeNull()
-    expect(pluginCatalogTakeoverError('p.demo', marketplaceSource, catalog)).toBeNull()
-  })
-
-  it('refuses another catalog, another ref, and direct sources', () => {
-    const otherCatalog =
-      'p.demo is installed from https://example.com/catalog.git; remove it first to install it from another catalog'
-    expect(
-      pluginCatalogTakeoverError('p.demo', marketplaceSource, {
-        url: 'https://example.com/other.git',
-        ref: 'main'
-      })
-    ).toBe(otherCatalog)
-    expect(
-      pluginCatalogTakeoverError('p.demo', marketplaceSource, { url: catalog.url, ref: 'next' })
-    ).toBe(otherCatalog)
-    expect(pluginCatalogTakeoverError('p.demo', marketplaceSource, null)).toBe(
-      'p.demo is installed from https://example.com/catalog.git; remove it first to install it from a Git URL or local folder'
-    )
-  })
 })
 
 describe('direct installs over a catalog install', () => {

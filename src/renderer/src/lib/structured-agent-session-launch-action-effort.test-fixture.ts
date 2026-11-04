@@ -8,6 +8,7 @@ import { startStructuredAgentLaunch } from './agent-session/launch/structured-ag
 import { holdStructuredAgentSessionLaunchOption } from './agent-session/launch/structured-agent-session-launch-options'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import { newAgentLaunchRequestId } from './agent-launch-request-id'
+export { registerCreateSelectionTests } from './structured-agent-session-create-selection.test-fixture'
 
 export function registerActionEffortCreateTests(
   mocks: {

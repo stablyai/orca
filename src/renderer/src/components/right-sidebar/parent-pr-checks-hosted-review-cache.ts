@@ -5,7 +5,7 @@ import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-supp
 import {
   getWorktreeCardPrDisplay,
   isCachedMergedBranchPRCurrentForWorktree
-} from '@/components/sidebar/worktree-card-pr-display'
+} from '@/components/sidebar/workspace-card/review/worktree-card-pr-display'
 import type { ParentPrChecksCacheEntry } from './parent-pr-checks-row-types'
 
 export function canUseParentPrChecksHostedReviewCacheEntry(

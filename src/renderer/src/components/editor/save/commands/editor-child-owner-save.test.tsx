@@ -6,7 +6,7 @@ import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { useEditorPanelFileContentLoader } from '../../useEditorPanelFileContentLoader'
 import type { FileContent } from '../../editor-panel-content-types'
 import { createEditorSaveQueue } from '../queue/editor-save-queue'

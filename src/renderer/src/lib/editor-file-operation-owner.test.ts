@@ -26,7 +26,7 @@ import {
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { ORCA_EDITOR_FILE_SAVED_EVENT } from '@/components/editor/autosave/editor-autosave'
 import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
 import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'

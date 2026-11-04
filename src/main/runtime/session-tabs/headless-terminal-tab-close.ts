@@ -12,9 +12,9 @@ import type {
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { buildHeadlessMobileSessionTabGroups } from '../mobile-session-layout-projection'
 import { paneTitlesForDesktopWindow } from './desktop-pane-title-forwarding'
-import { appendRetiredTerminalSurfaceProofs } from '../../../shared/terminal-retirement-proof-ledger'
+import { appendRetiredTerminalSurfaceProofs } from '../../../shared/workspace-layout/terminal-retirement-proof-ledger'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimeTerminalRename } from '../../../shared/runtime-terminal-contracts'
 import type { RuntimeSessionTabCloseReason } from '../../../shared/runtime-session-contracts'
 

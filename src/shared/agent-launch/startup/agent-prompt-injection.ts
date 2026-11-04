@@ -4,7 +4,7 @@ import {
   iterateTerminalInputChunks,
   TERMINAL_INPUT_CHUNK_MAX_BYTES
 } from '../../terminal/input/terminal-input'
-import type { TerminalAgent } from '../../terminal-agent'
+import type { TerminalAgent } from '../../agent-status/identity/terminal-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 
 export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'

@@ -1,5 +1,5 @@
 import type { AppState } from '../store/types'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIdsInOrder } from '../components/terminal-pane/terminal-layout-leaf-ids'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '../store/worktree-repo-index'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'

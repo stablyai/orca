@@ -9,7 +9,7 @@ import type {
   RuntimeTerminalVisualTab
 } from '../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
-import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
 
 type RuntimeTerminalVisualLayoutArgs = {
   terminals: RuntimeTerminalSummary[]

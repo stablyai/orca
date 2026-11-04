@@ -11,7 +11,7 @@ import {
   mobileSnapshotIdentityUnchanged
 } from '../mobile-session-snapshot-equality'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeClientSettingsController } from '../runtime-client-settings'
@@ -36,9 +36,11 @@ import { ClientHostedPageReconciliationWindow } from '../client-hosted-page-reco
 import { ClientSessionTabSelectionStore } from '../client-session-tab-selection'
 import { WorktreeTerminalMutationLock } from '../worktree-terminal-mutation-lock'
 import { RemoteRuntimeTerminalCreateIdempotency } from '../remote-runtime-terminal-create-idempotency'
-import type { PtyIncarnationId } from '../../../shared/pty-incarnation'
+import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
+
 import type { MobileSessionTabsNotifyCoalescer } from '../mobile-session-tabs-notify-coalescer'
 import { createMobileSessionTabsNotifyCoalescer } from '../mobile-session-tabs-notify-coalescer'
+
 import type { MobileSessionTabsAgentStatusHeartbeat } from '../mobile-session-tabs-agent-status-heartbeat'
 import { createMobileSessionTabsAgentStatusHeartbeat } from '../mobile-session-tabs-agent-status-heartbeat'
 import { TerminalFocusNavigationCoalescer } from '../terminal-focus-navigation-coalescer'
@@ -54,7 +56,7 @@ import type {
 import { MailPointerRepointScheduler } from '../orchestration/mail-pointer-repoint-scheduler'
 import { RuntimeTerminalWaiterRegistry } from '../terminal/wait/terminal-waiter-registry'
 import { RuntimeTerminalWriter } from '../runtime-terminal-writer'
-import { writeRefused } from '../../../shared/pty-write-settlement'
+import { writeRefused } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import { RuntimeTerminalIdlePolls } from '../terminal/wait/terminal-idle-polls'
 import { TerminalIntentionalStops } from '../terminal-intentional-stops'
 import { TerminalRunFactsRegister, type TerminalSpawnCommit } from '../terminal-run-facts'
@@ -66,7 +68,7 @@ import {
   TUI_IDLE_QUIESCENCE_MS
 } from '../orca-runtime-postlude'
 import { RuntimeTerminalWait as RuntimeTerminalWaitController } from '../terminal/wait/terminal-wait'
-import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'
 import type { TerminalHandleAccess } from '../runtime-agent-sender-associations'
 
