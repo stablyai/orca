@@ -16,6 +16,7 @@ type StatusRow = {
   receivedAt: number
   stateStartedAt: number
   sessionBoundary?: boolean
+  interrupted?: boolean
 }
 
 function createPane(initial: { idle: boolean; tail: string[]; idleEdgeOnly?: boolean }) {
@@ -132,6 +133,26 @@ describe('observing a run with agent evidence', () => {
     pane.becomeIdle()
     await run.promise
     expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
+  })
+
+  // Why: headless runs have no renderer writer, so the observer must fail a cut-off turn (STA-12638).
+  it.each([
+    { name: 'on its idle edge', becomeIdle: true },
+    { name: 'from a held done on a pane that never reads idle', becomeIdle: false }
+  ])('fails a run whose agent reported its turn interrupted, $name', async ({ becomeIdle }) => {
+    const pane = createPane({ idle: false, tail: ['working'] })
+    const run = observe(pane)
+    await vi.advanceTimersByTimeAsync(1_000)
+    pane.report({ interrupted: true })
+    if (becomeIdle) {
+      pane.becomeIdle()
+    } else {
+      await vi.advanceTimersByTimeAsync(90_000)
+    }
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'dispatch_failed', errorCode: 'agentInterrupted' })
+    )
   })
 
   it("waits out a reused pane's previous done until this run's turn is done", async () => {

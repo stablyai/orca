@@ -19,7 +19,7 @@ const MISSING_COMMAND_PATTERNS = [
 
 export type AgentTurnStatusRow = Pick<
   AgentStatusIpcPayload,
-  'state' | 'stateStartedAt' | 'sessionBoundary' | 'providerSessionOnly'
+  'state' | 'stateStartedAt' | 'sessionBoundary' | 'providerSessionOnly' | 'interrupted'
 >
 
 export type IdleAgentTurnEvidence = {
@@ -32,7 +32,8 @@ export type IdleAgentTurnEvidence = {
 }
 
 export type IdleAgentTurnVerdict =
-  | { kind: 'completed' }
+  /** `interrupted`: the agent reported this turn cut off before it finished. */
+  | { kind: 'completed'; interrupted: boolean }
   | { kind: 'failed'; missingCommandLine: string }
   /** An idle shell that may not have started the agent yet. */
   | { kind: 'wait' }
@@ -73,8 +74,9 @@ export function judgeIdleAgentTurn(
   const { sentAt } = evidence
   // Resume identity is no status report.
   const rows = evidence.rows.filter((row) => !row.providerSessionOnly)
-  if (rows.some((row) => isTurnDoneSince(row, sentAt))) {
-    return { kind: 'completed' }
+  const done = rows.filter((row) => isTurnDoneSince(row, sentAt))
+  if (done.length > 0) {
+    return { kind: 'completed', interrupted: done.some((row) => row.interrupted === true) }
   }
   const missing = findMissingCommandLine(evidence.tail, evidence.readAgentCommands())
   if (missing) {
@@ -82,6 +84,6 @@ export function judgeIdleAgentTurn(
   }
   // Only an agent that never reports status is believed done by an idle pane.
   return rows.length === 0 && now - sentAt >= AGENT_START_GRACE_MS
-    ? { kind: 'completed' }
+    ? { kind: 'completed', interrupted: false }
     : { kind: 'wait' }
 }

@@ -15,6 +15,7 @@ import {
 } from './automation-agent-status-entry-change'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
+import { automationRunFailure } from '../../../shared/automation-run-failure-copy'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
@@ -26,7 +27,6 @@ export function createAutomationDispatchCompletion(args: {
   markDispatchResult: MarkDispatchResult
   releaseTerminalOwnership: () => void
   finalizeTerminalOwnership: AutomationTerminalOwnership['finalize']
-  agentLabel: string
 }) {
   const outputSnapshotBuffer = createAutomationRunOutputSnapshotBuffer()
   let latestAssistantMessage: string | null = null
@@ -62,9 +62,7 @@ export function createAutomationDispatchCompletion(args: {
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
         precheckResult: args.precheckResult,
-        error: interrupted
-          ? `${args.agentLabel} was Interrupted. Open the terminal or run the automation again.`
-          : null
+        ...(interrupted ? automationRunFailure('agentInterrupted') : { error: null })
       })
     } catch (error) {
       args.releaseTerminalOwnership()

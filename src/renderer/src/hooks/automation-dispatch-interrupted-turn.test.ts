@@ -21,8 +21,7 @@ async function createCompletion() {
     precheckResult: null,
     markDispatchResult,
     releaseTerminalOwnership,
-    finalizeTerminalOwnership,
-    agentLabel: 'Pi'
+    finalizeTerminalOwnership
   })
 }
 
@@ -51,7 +50,8 @@ describe('automation dispatch completion for an interrupted turn', () => {
     expect(markDispatchResult).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'dispatch_failed',
-        error: 'Pi was Interrupted. Open the terminal or run the automation again.'
+        errorCode: 'agentInterrupted',
+        error: 'The agent was interrupted before it finished this run.'
       })
     )
     expect(finalizeTerminalOwnership).not.toHaveBeenCalled()

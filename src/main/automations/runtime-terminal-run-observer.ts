@@ -62,9 +62,11 @@ async function judgeIdleTail(
   if (verdict.kind === 'wait') {
     return null
   }
-  return verdict.kind === 'completed'
-    ? { status: 'completed', outputSnapshot: snapshotOf(tail), error: null }
-    : { status: 'dispatch_failed', outputSnapshot: snapshotOf(tail), error: verdict.error }
+  if (verdict.kind === 'completed') {
+    return { status: 'completed', outputSnapshot: snapshotOf(tail), error: null }
+  }
+  const { kind: _kind, ...failure } = verdict
+  return { status: 'dispatch_failed', outputSnapshot: snapshotOf(tail), ...failure }
 }
 
 /** Rejudge unchanged idle output: an idle shell may never emit another idle edge. */
@@ -266,10 +268,15 @@ export function createRuntimeAutomationRunTerminalObserver(
               HELD_DONE_SETTLE_MS
             )
           ) {
-            return {
-              status: 'completed',
-              outputSnapshot: snapshotOf(await readTail(runtime, handle)),
-              error: null
+            // A held done is decided by the same verdict, so an interrupted turn still fails.
+            const observation = await judgeIdleTail(
+              await readTail(runtime, handle),
+              judged.evidence,
+              judged.run,
+              runStartedAt
+            )
+            if (observation) {
+              return observation
             }
           }
         }

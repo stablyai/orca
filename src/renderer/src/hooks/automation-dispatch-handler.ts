@@ -13,7 +13,6 @@ import type {
   AutomationDispatchResult
 } from '../../../shared/automations-types'
 import { createAutomationDispatchCompletion } from './automation-dispatch-completion'
-import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import {
   connectAutomationDispatchWorkspace,
   prepareAutomationDispatchWorkspace,
@@ -92,8 +91,7 @@ export async function handleAutomationDispatchRequest({
       precheckResult: resolved.context.precheckResult,
       markDispatchResult,
       releaseTerminalOwnership,
-      finalizeTerminalOwnership,
-      agentLabel: tuiAgentDisplayName(automation.agentId) ?? 'Agent'
+      finalizeTerminalOwnership
     })
     const dispatchStartedAt = Date.now()
     if (automation.reuseSession) {

@@ -21,8 +21,7 @@ async function createCompletion() {
     precheckResult: null,
     markDispatchResult,
     releaseTerminalOwnership,
-    finalizeTerminalOwnership,
-    agentLabel: 'Claude'
+    finalizeTerminalOwnership
   })
   await completion.settlePendingAfterDispatch()
   markDispatchResult.mockClear()
