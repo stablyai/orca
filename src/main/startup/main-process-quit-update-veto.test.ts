@@ -7,6 +7,7 @@ const dependencyExports: [string, string[]][] = [
   ['../ipc/folder-repo-git-upgrade', ['stopFolderRepoGitUpgradeWatch']],
   ['../ipc/pty/kill-all', ['killAllPty']],
   ['../daemon/providers/lifecycle/daemon-provider-state', ['disconnectDaemon', 'shutdownDaemon']],
+  ['./quit/quit-terminal-session-teardown', ['disconnectDaemonOnQuit']],
   ['../ipc/ssh-shutdown-drain', ['beginSshShutdown']],
   ['../agent-hooks/server', ['agentHookServer']],
   ['../agent-hooks/wsl-hook-relay-manager', ['wslHookRelayManager']],
