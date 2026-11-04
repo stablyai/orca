@@ -1074,7 +1074,7 @@
 2 test-no-wall-clock:src/renderer/src/components/dashboard/useLiveDashboardSnapshot.test.ts
 2 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatStructuredSessionStatus.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/native-chat/use-native-chat-interactive-send.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.single-reference-details.test.tsx
+1 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.single-reference-details.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-antigravity-segment.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts
