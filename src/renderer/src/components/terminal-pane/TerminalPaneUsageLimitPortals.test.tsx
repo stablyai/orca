@@ -521,7 +521,7 @@ describe('terminal usage-limit overlay', () => {
         <TerminalPaneUsageLimitPortals controller={controller} />
       </TooltipProvider>
     )
-    expect(pane.querySelector('.terminal-usage-limit-overlay')).not.toBeNull()
+    expect(pane.querySelector('[data-terminal-usage-limit-overlay]')).not.toBeNull()
     for (const next of [
       { ...controller, effectiveChatViewMode: true, chatLeafId: LEAF },
       { ...controller, showSshReconnectOverlay: true },
@@ -537,7 +537,7 @@ describe('terminal usage-limit overlay', () => {
           <TerminalPaneUsageLimitPortals controller={next} />
         </TooltipProvider>
       )
-      expect(pane.querySelector('.terminal-usage-limit-overlay')).toBeNull()
+      expect(pane.querySelector('[data-terminal-usage-limit-overlay]')).toBeNull()
     }
     pane.remove()
   })
