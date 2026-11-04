@@ -217,6 +217,56 @@ describe('terminal.send into a composer with unsent input', () => {
   // Why: the composer re-read awaits the emulator, and a pane can stop mid-await. The
   // writability assert therefore has to run AFTER that read — checking before it leaves the
   // initial PTY write reachable on a pane that is already going away.
+  // Why: a provider-preferred pty's evidence is a frame serialized by its provider, which can
+  // be current in the output sequence yet still lag the renderer's own screen — a keystroke
+  // echoed locally is visible before it round-trips. The renderer may only ADD a refusal.
+  it('refuses on a renderer draft the provider frame has not caught up to', async () => {
+    const { runtime, write, handle } = await makeClaudeRuntime('\u276F ')
+    await runtime.isTerminalRunningSettledPromptAgent(handle)
+    const ptyId = 'pty-1'
+
+    runtime['providerSnapshotPreferredPtys'].add(ptyId)
+    runtime['readRendererVisibleSnapshotLines'] = async () => ({
+      lines: [CLAUDE_RULE, '\u276F half-typed by the user'],
+      draft: 'half-typed by the user'
+    })
+
+    const result = await runtime
+      .sendTerminalAgentPrompt(handle, 'Status update: the build is green.', {
+        inputKind: 'driving'
+      })
+      .then(
+        () => null,
+        (error: unknown) => error
+      )
+    if (!(result instanceof AgentPromptPendingInputError)) {
+      throw new Error(`expected a pending-input refusal, got ${String(result)}`)
+    }
+    expect(result.pendingInput).toBe('half-typed by the user')
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  // Why: `null` from the renderer means "nothing to add", never "there is no draft" — an empty
+  // or unmounted renderer must leave the provider/headless verdict exactly as it was.
+  it('still pastes when the renderer is empty and the screen shows no draft', async () => {
+    const { runtime, write, handle } = await makeClaudeRuntime('\u276F ')
+    await runtime.isTerminalRunningSettledPromptAgent(handle)
+    runtime['providerSnapshotPreferredPtys'].add('pty-1')
+    runtime['readRendererVisibleSnapshotLines'] = async () => ({ lines: [] })
+
+    vi.useFakeTimers()
+    const send = runtime.sendTerminalAgentPrompt(handle, 'Status update: the build is green.', {
+      inputKind: 'driving'
+    })
+    await vi.waitFor(() => expect(write).toHaveBeenCalled())
+    expect(String(write.mock.calls[0]?.[1])).toContain(
+      `${AGENT_PROMPT_BRACKETED_PASTE_START}Status update: the build is green.`
+    )
+    await vi.runAllTimersAsync()
+    expect(await send).toMatchObject({ accepted: true })
+    expect(write.mock.calls.some((call) => call[1] === '\r')).toBe(true)
+  })
+
   it('refuses when the pty stops while the composer re-read is in flight', async () => {
     const { runtime, write, handle } = await makeClaudeRuntime('\u276F ')
     await runtime.isTerminalRunningSettledPromptAgent(handle)

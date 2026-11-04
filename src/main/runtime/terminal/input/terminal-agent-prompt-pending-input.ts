@@ -70,6 +70,29 @@ export abstract class OrcaRuntimeWithPendingComposerInputGuard extends OrcaRunti
   }
 
   /**
+   * The renderer's own view of the composer, when it holds text the provider frame does not.
+   *
+   * Only provider-preferred ptys consult it. For those, evidence is a frame serialized by the
+   * pty's provider, and being current in the output sequence does not make it current with the
+   * renderer: a keystroke echoed locally is on screen before it round-trips. Everything else
+   * already reads the ordered host emulator, which cannot lag that way.
+   *
+   * This can only ever ADD a refusal. Returning `null` means "nothing to add here", never
+   * "there is no draft", so a renderer that is empty, unmounted or unreadable leaves the
+   * provider path to decide exactly as before. The cost is the other direction: renderer-local
+   * echo that the agent never accepted (#12358) can refuse a send that would have been safe —
+   * loud and non-destructive, which is the side to err on for a guard whose whole job is to
+   * never submit over a user's draft.
+   */
+  private async readRendererComposerDraft(ptyId: string): Promise<string | null> {
+    if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
+      return null
+    }
+    const rendererState = await this.readRendererVisibleSnapshotLines(ptyId)
+    return rendererState.draft?.trim() ? rendererState.draft : null
+  }
+
+  /**
    * Read the composer's unsent text, or `null` when there is none to refuse over.
    *
    * A provider frame is discarded when output advanced past it — which is exactly what a
@@ -82,6 +105,10 @@ export abstract class OrcaRuntimeWithPendingComposerInputGuard extends OrcaRunti
       : 1
     for (let attempt = 0; ; attempt += 1) {
       assertAgentPromptRequestActive(signal)
+      const rendererDraft = await this.readRendererComposerDraft(ptyId)
+      if (rendererDraft !== null) {
+        return rendererDraft
+      }
       const visibleState = await this.readVisibleTerminalState(ptyId)
       if (visibleState) {
         return visibleState.draft?.trim() ? visibleState.draft : null
