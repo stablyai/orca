@@ -18,6 +18,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it('emits one mobile session terminal tab per live PTY even if two tabs resolve to it', async () => {
     const runtime = createRuntime()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture exercises the runtime's actual private PTY and tab owners.
     const internals = runtime as unknown as {
       recordPtyWorktree: (
         ptyId: string,

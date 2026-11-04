@@ -102,9 +102,9 @@ function host(n: number) {
     rowsSent += publication?.associations.length ?? 0
   }
   /** The window's graph sync: it sends the revision it applied, and applies only rows. */
-  const graphReply = () => {
+  const graphReply = async () => {
     const base = useAppStore.getState().agentSenderPublicationsByHost.local?.['*']?.revision
-    return wire<SenderGraphReply>(senders.buildForGraph(base))
+    return wire<SenderGraphReply>(await senders.buildForGraph(base))
   }
   const applyGraph = (result: SenderGraphReply) => {
     count(result.agentSenderAssociations)
@@ -116,7 +116,7 @@ function host(n: number) {
   let version = 0
   /** One session-tab stream frame for a worktree, through that stream's encoder and the wire;
    *  a host re-emit repeats the tab version the window already has. */
-  const frame = (worktree: string, snapshotVersion = ++version) =>
+  const frame = async (worktree: string, snapshotVersion = ++version) =>
     wire<RuntimeMobileSessionTabsResult>(
       stream({
         worktree,
@@ -126,7 +126,7 @@ function host(n: number) {
         activeTabId: null,
         activeTabType: null,
         tabs: [],
-        agentSenderAssociations: senders.buildForFrame(worktree)
+        agentSenderAssociations: await senders.buildForFrame(worktree)
       })
     )
   /** The window's local receipt path, with its version, placeholder and frames-draw checks. */
@@ -135,10 +135,10 @@ function host(n: number) {
     applyStructuredSessionTabSnapshots([snapshot], undefined, { framesDraw: () => framesDraw })
   }
   const deliverAll = () =>
-    act(() => {
-      applyGraph(graphReply())
-      applyFrame(frame('w1'))
-      applyFrame(frame('w2'))
+    act(async () => {
+      applyGraph(await graphReply())
+      applyFrame(await frame('w1'))
+      applyFrame(await frame('w2'))
     })
   return {
     open,
@@ -167,7 +167,7 @@ const located = (i: number) =>
 
 it.each([100, 1000])(
   'sends and reduces nothing for unchanged sender data, at %i live terminals',
-  (n) => {
+  async (n) => {
     const h = host(n)
     useAppStore.getState().setAgentSenderPublication('runtime:other', {
       associations: [{ identity: 'term_far', paneKey: 'far:pane', worktreeId: 'far' }],
@@ -198,7 +198,7 @@ it.each([100, 1000])(
         makeTab({ id: `${bucket}-tab-${i}::${leafOf(i)}`, worktreeId: bucket })
       )
     useAppStore.setState({ tabsByWorktree: { w1: windowTabs('w1'), w2: windowTabs('w2') } })
-    h.deliverAll()
+    await h.deliverAll()
     expect(located(0)).toBe(`tab0:${leafOf(0)}`)
     const settled = {
       revision: h.senders.publisher.current().revision,
@@ -213,7 +213,7 @@ it.each([100, 1000])(
     // unrelated writes, a switch between other workspaces and a settings write.
     for (let k = 0; k < 5; k++) {
       h.leaves[k].lastOutputAt = 100 + k
-      h.deliverAll()
+      await h.deliverAll()
       act(() =>
         useAppStore.setState((state) => ({
           sidebarBody: k % 2 ? 'agents' : 'workspaces',
@@ -240,64 +240,66 @@ it.each([100, 1000])(
         }
       }))
     )
-    act(() => h.applyGraph(h.graphReply()))
+    await act(async () => h.applyGraph(await h.graphReply()))
     expect(agentSenderAliasWorkForTest()).toBe(settled.aliases + n / 2)
     expect(agentSenderIndexWorkForTest()).toEqual(settled.index)
     expect(renders).toBe(settled.renders)
 
     // One real change publishes once; its duplicate on the other transport changes nothing again.
     h.open(n, 'w2')
-    act(() => h.applyGraph(h.graphReply()))
+    await act(async () => h.applyGraph(await h.graphReply()))
     const published = useAppStore.getState().agentSenderPublicationsByHost
     expect(h.senders.publisher.current().revision?.revision).toBe(
       (settled.revision?.revision ?? 0) + 1
     )
     expect(located(n)).toBe(`tab${n}:${leafOf(n)}`)
-    act(() => {
-      h.applyFrame(h.frame('w2'))
-      h.applyFrame(h.frame('w1'))
+    await act(async () => {
+      h.applyFrame(await h.frame('w2'))
+      h.applyFrame(await h.frame('w1'))
     })
     expect(useAppStore.getState().agentSenderPublicationsByHost).toBe(published)
     expect(otherRenders).toBe(settled.otherRenders)
   }
 )
 
-it('keeps a newer worktree scope over a delayed whole-host reply, in either order', () => {
+it('keeps a newer worktree scope over a delayed whole-host reply, in either order', async () => {
   const h = host(4)
-  h.deliverAll()
+  await h.deliverAll()
   // A whole-host reply with rows is cut, then delayed past a newer change to w1.
   h.open(4, 'w1')
-  const delayed = h.graphReply()
+  const delayed = await h.graphReply()
   expect(delayed.agentSenderAssociations?.associations).toHaveLength(5)
   h.open(6, 'w1')
-  act(() => h.applyFrame(h.frame('w1')))
+  await act(async () => h.applyFrame(await h.frame('w1')))
   act(() => h.applyGraph(delayed))
   expect(located(6)).toBe(`tab6:${leafOf(6)}`)
   expect(located(4)).toBe(`tab4:${leafOf(4)}`)
   expect(located(1)).toBe(`tab1:${leafOf(1)}`)
   // Reverse: the whole-host reply first, then the same change's scope, which adds nothing.
   h.open(5, 'w2')
-  act(() => h.applyGraph(h.graphReply()))
+  await act(async () => h.applyGraph(await h.graphReply()))
   const applied = useAppStore.getState().agentSenderPublicationsByHost
-  act(() => h.applyFrame(h.frame('w2')))
+  await act(async () => h.applyFrame(await h.frame('w2')))
   expect(useAppStore.getState().agentSenderPublicationsByHost).toBe(applied)
   expect(located(5)).toBe(`tab5:${leafOf(5)}`)
 })
 
-it('sends complete sender data to a reconnected stream, a second window and a replaced runtime', () => {
+it('sends complete sender data to a reconnected stream, a second window and a replaced runtime', async () => {
   const h = host(4)
-  h.deliverAll()
+  await h.deliverAll()
   const before = h.rowsSent()
-  expect(h.frame('w1').agentSenderAssociations).toBeUndefined()
+  expect((await h.frame('w1')).agentSenderAssociations).toBeUndefined()
   h.reconnect()
-  expect(h.frame('w1').agentSenderAssociations?.associations).toHaveLength(2)
+  expect((await h.frame('w1')).agentSenderAssociations?.associations).toHaveLength(2)
   // A window that applied nothing yet sends no base.
-  expect(h.senders.buildForGraph(undefined).agentSenderAssociations?.associations).toHaveLength(4)
+  expect(
+    (await h.senders.buildForGraph(undefined)).agentSenderAssociations?.associations
+  ).toHaveLength(4)
   h.replaceRuntime()
   h.reconnect()
-  act(() => {
-    h.applyGraph(h.graphReply())
-    h.applyFrame(h.frame('w1'))
+  await act(async () => {
+    h.applyGraph(await h.graphReply())
+    h.applyFrame(await h.frame('w1'))
   })
   expect(h.rowsSent()).toBe(before + 4 + 2)
   expect(useAppStore.getState().agentSenderPublicationsByHost.local['*'].revision?.epoch).toBe(
@@ -306,17 +308,17 @@ it('sends complete sender data to a reconnected stream, a second window and a re
   expect(located(3)).toBe(`tab3:${leafOf(3)}`)
 })
 
-it('applies a sender scope whose local frame the tab checks drop, and keeps it when later frames omit it', () => {
+it('applies a sender scope whose local frame the tab checks drop, and keeps it when later frames omit it', async () => {
   const h = host(2)
-  h.deliverAll()
+  await h.deliverAll()
   // A host re-emit at the tab version the window already applied carries the new terminal.
   h.open(2, 'w1')
-  act(() => h.applyFrame(h.frame('w1', h.version())))
+  await act(async () => h.applyFrame(await h.frame('w1', h.version())))
   expect(located(2)).toBe(`tab2:${leafOf(2)}`)
-  expect(h.frame('w1').agentSenderAssociations).toBeUndefined()
+  expect((await h.frame('w1')).agentSenderAssociations).toBeUndefined()
   // A workspace main's frames draw drops the tab patch; the sender scope still applies.
   h.open(4, 'w1')
-  act(() => h.applyFrame(h.frame('w1'), true))
+  await act(async () => h.applyFrame(await h.frame('w1'), true))
   expect(located(4)).toBe(`tab4:${leafOf(4)}`)
 })
 
@@ -355,47 +357,47 @@ function pairedWindow() {
   }
 }
 
-it('applies a paired host scope its tab gates drop: same-version re-emit, then later frames that omit it', () => {
+it('applies a paired host scope its tab gates drop: same-version re-emit, then later frames that omit it', async () => {
   const h = host(2)
   const w = pairedWindow()
-  w.frame(h.frame('w1'))
+  w.frame(await h.frame('w1'))
   expect(pairedLocated(0)).toBe(`tab0:${leafOf(0)}`)
   h.open(2, 'w1')
-  const reemit = h.frame('w1', h.version())
+  const reemit = await h.frame('w1', h.version())
   expect(reemit.agentSenderAssociations?.associations).toHaveLength(2)
   w.frame(reemit)
-  const later = h.frame('w1')
+  const later = await h.frame('w1')
   expect(later.agentSenderAssociations).toBeUndefined()
   w.frame(later)
   expect(pairedLocated(2)).toBe(`tab2:${leafOf(2)}`)
   // A resume census at unchanged versions skips its tab work, not its sender scopes.
   h.reconnect()
   h.open(4, 'w1')
-  w.census([h.frame('w1', h.version()), h.frame('w2', h.version())])
+  w.census([await h.frame('w1', h.version()), await h.frame('w2', h.version())])
   expect(pairedLocated(4)).toBe(`tab4:${leafOf(4)}`)
   expect(pairedLocated(1)).toBe(`tab1:${leafOf(1)}`)
 })
 
-it('never lets an older paired scope or a superseded runtime replace a newer one', () => {
+it('never lets an older paired scope or a superseded runtime replace a newer one', async () => {
   const h = host(2)
   const w = pairedWindow()
-  w.frame(h.frame('w1'))
+  w.frame(await h.frame('w1'))
   // A one-shot list cut before the change arrives after the stream delivered it.
   h.reconnect()
-  const delayed = h.frame('w1')
+  const delayed = await h.frame('w1')
   h.open(2, 'w1')
-  w.frame(h.frame('w1'))
+  w.frame(await h.frame('w1'))
   const applied = useAppStore.getState().agentSenderPublicationsByHost
   w.frame(delayed)
   expect(useAppStore.getState().agentSenderPublicationsByHost).toBe(applied)
   expect(pairedLocated(2)).toBe(`tab2:${leafOf(2)}`)
   // The host restarts: the new runtime's scope replaces the old epoch, and the old runtime's
   // straggler changes nothing.
-  const straggler = h.frame('w1')
+  const straggler = await h.frame('w1')
   h.replaceRuntime()
   h.reconnect()
   h.leaves.splice(2, 1)
-  w.frame(h.frame('w1'), 'rt-2')
+  w.frame(await h.frame('w1'), 'rt-2')
   expect(pairedLocated(2)).toBeUndefined()
   const restarted = useAppStore.getState().agentSenderPublicationsByHost
   w.frame({ ...straggler, agentSenderAssociations: delayed.agentSenderAssociations }, 'rt-1')

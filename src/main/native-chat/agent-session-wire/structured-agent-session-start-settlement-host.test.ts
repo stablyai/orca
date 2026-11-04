@@ -23,7 +23,10 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 
-const retryClock = vi.hoisted(() => ({ fake: false, scheduled: [] as number[] }))
+const retryClock = vi.hoisted((): { fake: boolean; scheduled: number[] } => ({
+  fake: false,
+  scheduled: []
+}))
 vi.mock('node:timers/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof TimerPromises>()
   return {

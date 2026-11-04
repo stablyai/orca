@@ -87,6 +87,7 @@ describe('graph-sync deletion fence', () => {
       }
     }
     const runtime = new OrcaRuntimeService(store as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture inspects the actual private graph-retirement owner.
     const internals = runtime as unknown as FenceInternals
     const events: RuntimeMobileSessionTabsResult[] = []
     runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
@@ -100,7 +101,7 @@ describe('graph-sync deletion fence', () => {
         ...(extra.rendererGeneration ? { rendererGeneration: extra.rendererGeneration } : {}),
         mobileSessionTabs,
         ...(extra.unchanged ? { unchangedMobileSessionWorktrees: extra.unchanged } : {})
-      } as never)
+      })
     const recreate = (instanceId: string): void => {
       meta = { instanceId }
     }
