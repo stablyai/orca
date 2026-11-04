@@ -139,9 +139,20 @@ describe('turn item capability at the RPC boundary', () => {
         [CURRENT_CLIENT, TURN_ITEM]
       ] as const) {
         const reply = await call('agentSession.subscribe', { sessionId: SESSION }, client)
-        const event = (reply.ok ? reply.result : null) as AgentSessionSubscribeEvent
-        const items =
-          event.type === 'batch' ? event.batch.items : 'page' in event ? event.page.items : []
+        const event = reply.ok ? reply.result : null
+        if (typeof event !== 'object' || event === null || !('type' in event)) {
+          throw new Error('Expected a subscription frame')
+        }
+        const payload =
+          event.type === 'batch' && 'batch' in event
+            ? event.batch
+            : 'page' in event
+              ? event.page
+              : null
+        if (typeof payload !== 'object' || payload === null || !('items' in payload)) {
+          throw new Error('Expected subscription frame items')
+        }
+        const items = payload.items
         expect(items).toEqual([USER_ITEM, expected])
       }
     }
