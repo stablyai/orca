@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   createDiagnosticsBridge,
+  createIdleWatchdog,
   createLspMessageReader,
-  encodeLspMessage
+  encodeLspMessage,
+  resolveIdleMs
 } from './agent-typescript-lsp.mjs'
 
 const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url))
@@ -133,5 +135,108 @@ describe('agent TypeScript LSP diagnostics bridge', () => {
     expect(plugin['orca-typescript'].command).toBe('node')
     expect(plugin['orca-typescript'].args).toEqual([`\${CLAUDE_PROJECT_DIR}/${script}`])
     expect(opencode.lsp['orca-typescript'].command).toEqual(['node', script])
+  })
+})
+
+describe('idle reaper for a connected but quiet client (#38188)', () => {
+  function bridgeWithClient(capabilities) {
+    const client = []
+    const server = []
+    const bridge = createDiagnosticsBridge({
+      toClient: (message) => client.push(message),
+      toServer: (message) => server.push(message)
+    })
+    bridge.fromClient({ jsonrpc: '2.0', id: 0, method: 'initialize', params: { capabilities } })
+    return bridge
+  }
+
+  it('counts open documents even when the client answers pull diagnostics itself', () => {
+    // The reaper must not retire a server while a file is open, whether or not this
+    // bridge publishes diagnostics for the client.
+    const bridge = bridgeWithClient({ textDocument: { diagnostic: {} } })
+    expect(bridge.openDocumentCount()).toBe(0)
+    bridge.fromClient({
+      jsonrpc: '2.0',
+      method: 'textDocument/didOpen',
+      params: { textDocument: { uri, languageId: 'typescript', version: 1, text: '' } }
+    })
+    expect(bridge.openDocumentCount()).toBe(1)
+    bridge.fromClient({
+      jsonrpc: '2.0',
+      method: 'textDocument/didClose',
+      params: { textDocument: { uri } }
+    })
+    expect(bridge.openDocumentCount()).toBe(0)
+  })
+
+  it('reaps only after the window passes with no message and no open document', () => {
+    let nowMs = 0
+    const timers = []
+    let openDocuments = 1
+    const reaped = []
+    const watchdog = createIdleWatchdog({
+      idleMs: 60_000,
+      hasOpenDocuments: () => openDocuments > 0,
+      onIdle: () => reaped.push(nowMs),
+      now: () => nowMs,
+      setTimer: (run, delay) => {
+        timers.push({ run, delay, at: nowMs + delay })
+        return timers.length
+      },
+      clearTimer: () => {}
+    })
+    watchdog.start()
+
+    // Open document: a full window passes, then the watchdog defers another window.
+    nowMs = 60_000
+    timers.at(-1).run()
+    expect(reaped).toEqual([])
+
+    openDocuments = 0
+    nowMs = 120_000
+    timers.at(-1).run()
+    expect(reaped).toEqual([120_000])
+
+    // Traffic within the window keeps the server.
+    const fresh = []
+    nowMs = 0
+    timers.length = 0
+    const second = createIdleWatchdog({
+      idleMs: 60_000,
+      hasOpenDocuments: () => false,
+      onIdle: () => fresh.push(nowMs),
+      now: () => nowMs,
+      setTimer: (run, delay) => {
+        timers.push({ run, delay, at: nowMs + delay })
+        return timers.length
+      },
+      clearTimer: () => {}
+    })
+    second.start()
+    nowMs = 50_000
+    second.touch()
+    nowMs = 100_000
+    timers.at(-1).run()
+    expect(fresh).toEqual([])
+  })
+
+  it('is inert when disabled and defaults to a conservative hour', () => {
+    expect(resolveIdleMs('0')).toBe(0)
+    expect(resolveIdleMs(undefined)).toBe(60 * 60 * 1000)
+    expect(resolveIdleMs('nonsense')).toBe(60 * 60 * 1000)
+    expect(resolveIdleMs('90000')).toBe(90_000)
+
+    const reaped = []
+    const disabled = createIdleWatchdog({
+      idleMs: 0,
+      hasOpenDocuments: () => false,
+      onIdle: () => reaped.push(true),
+      setTimer: () => {
+        throw new Error('disabled watchdog must not arm a timer')
+      }
+    })
+    disabled.start()
+    disabled.touch()
+    expect(reaped).toEqual([])
   })
 })
