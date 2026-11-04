@@ -5,37 +5,40 @@ import {
   hostTestRestingOptionsJournal as restingJournal,
   hostTestOptionsReadStore
 } from './structured-agent-session-host-test-data'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
+import {
+  CODEX_SESSION_OPTION_CATALOG,
+  CLAUDE_SESSION_OPTION_CATALOG
+} from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionSendSelection
-} from '../../../shared/structured-agent-session-option-view'
+} from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { startCodexTurn } from '../../codex/codex-structured-turn-start'
-import { readLiveCodexSessionOptions } from '../../codex/codex-structured-session-options'
-import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
+import { startCodexTurn } from '../../codex/structured/turns/codex-structured-turn-start'
+import { readLiveCodexSessionOptions } from '../../codex/structured/catalog/codex-structured-session-options'
+import { optionSession } from '../../codex/structured/catalog/codex-structured-option-session.test-fixture'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
-import { structuredAgentSessionDrawnValues } from '../../../shared/structured-agent-session-option-snapshot'
+import { structuredAgentSessionDrawnValues } from '../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 
 import { structuredAgentSessionCapabilityView } from './structured-agent-session-option-models'
-import { claudeFallbackModelOptions } from '../../claude/claude-structured-session-options'
+import { claudeFallbackModelOptions } from '../../claude/structured/launch/claude-structured-session-options'
 import {
   acquired,
   fakeClaude,
   USER_MESSAGE
-} from '../../claude/claude-structured-session-test-support'
-import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
+} from '../../claude/structured/claude-structured-session-test-support'
+import { getAgentSessionOptionCatalog } from '../../../shared/agent-session/options/agent-session-option-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 import {
   createAgentModelCatalogService,
   type AgentModelCatalogService
@@ -53,7 +56,7 @@ import {
   saveStructuredAgentSessionStartReadbackListing,
   type StructuredAgentSessionStartListingContext
 } from './structured-agent-session-start-listing'
-import { recordAgentSessionRanOptions } from '../../runtime/agent-session-record-options'
+import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
 import {
   claudeAndCodexAgents,
   NO_STRUCTURED_AGENTS
@@ -94,7 +97,10 @@ describe('a chat at rest, read by the host', () => {
     const resting = {
       child: liveOptions ? { fence: 1 } : null,
       params: { provider: record.provider },
-      journal: restingJournal(items, wroteBeforeOpen)
+      journal: {
+        ...restingJournal(items, wroteBeforeOpen),
+        snapshot: () => ({ items: [], submissions: [] })
+      }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read touches only the declared context fields.
     const context = {
@@ -110,6 +116,26 @@ describe('a chat at rest, read by the host', () => {
     } as unknown as StructuredAgentSessionMutationContext
     return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
   }
+
+  it('separates Claude fallback reports from the saved model and accepted send selection', async () => {
+    const saved = { model: 'claude-opus-5-5', effort: 'high' }
+    const answer = await readAtRest({ provider: 'claude', options: saved }, [], false, null, true, {
+      models: [],
+      current: { model: 'claude-opus-5-5', reportedModel: 'claude-opus-4-8', confirmed: ['model'] }
+    })
+    expect(answer.current).toMatchObject({
+      model: saved.model,
+      reportedModel: 'claude-opus-4-8',
+      effort: saved.effort,
+      acceptedInputSources: { model: 'saved', effort: 'saved' }
+    })
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('claude'),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      answer
+    )
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({ ...saved, fastMode: 'false' })
+  })
 
   it.each<[string, RestingFacts, AgentJournalItemBody[], boolean, string[]]>([
     ['started here names its default as its own', {}, [], false, []],
@@ -438,7 +464,8 @@ describe('a chat at rest, read by the host', () => {
       false,
       answer.models
     )
-    expect(complete.current.effort).toBe('high')
+    expect(complete.current.effort).toBeUndefined()
+    expect(complete.current.acceptedInputSources).not.toHaveProperty('effort')
   })
 
   it.each([

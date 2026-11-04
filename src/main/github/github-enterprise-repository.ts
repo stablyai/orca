@@ -18,8 +18,8 @@ import {
   gitHubSshConfigHostAlias
 } from './github-remote-identity-parsing'
 import { resolveSshConfigHostname } from './github-ssh-host-alias-resolution'
-import { parseWslPath } from '../wsl'
-import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
+import { isStableMissingGitRemoteError } from '../git/remotes/stable-missing-git-remote-error'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
 

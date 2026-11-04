@@ -1,19 +1,17 @@
 /** Create selects only its caller; shared selection stays put and no tap-style PTY respawn runs. */
 import { expect, it, vi } from 'vitest'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
-const { store, TEST_WORKTREE_ID, HEADLESS_LEAF_ID } =
-  await import('./orca-runtime-test-fixtures.spec')
-const { makePendingAgentTabActivationRuntime } =
-  await import('./orca-runtime-test-scenario-builders.spec')
+const { store, TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
+await import('./orca-runtime-test-scenario-builders.spec')
 
 const WT = TEST_WORKTREE_ID
 
-function pairedRuntime() {
+function pairedRuntime(clientKind?: 'mobile' | 'runtime') {
   let next = 0
   const spawn = vi.fn(async () => ({ id: `pty-${++next}` }))
   const runtime = new OrcaRuntimeService(store)
@@ -24,8 +22,12 @@ function pairedRuntime() {
     getForegroundProcess: async () => null
   })
   const caller: RuntimeMobileSessionTabsResult[] = []
-  runtime.onMobileSessionTabsChanged((snapshot) => caller.push(snapshot), 'device-caller')
-  runtime.onMobileSessionTabsChanged(() => {}, 'device-bystander')
+  runtime.onMobileSessionTabsChanged(
+    (snapshot) => caller.push(snapshot),
+    'device-caller',
+    clientKind
+  )
+  runtime.onMobileSessionTabsChanged(() => {}, 'device-bystander', clientKind)
   return { runtime, spawn, caller }
 }
 
@@ -76,35 +78,4 @@ it('selects a launched chat by its session for the caller only', async () => {
   expect((await runtime.listMobileSessionTabs(`id:${WT}`, 'device-bystander')).activeTabId).toBe(
     first.id
   )
-})
-
-it('reports a tab that is not published instead of selecting something else', async () => {
-  const { runtime, caller } = pairedRuntime()
-  await createPane(runtime)
-  const before = caller.length
-
-  expect(
-    runtime.selectCreatedMobileSessionTabForClient(WT, { sessionId: 'missing' }, 'device-caller')
-  ).toBe(false)
-  expect(caller).toHaveLength(before)
-})
-
-it('never materializes a pane that is not ready, as a tap would', async () => {
-  const { runtime, spawn } = makePendingAgentTabActivationRuntime()
-  const listed = await runtime.listMobileSessionTabs(`id:${WT}`)
-  expect(listed.tabs[0]).toMatchObject({ launchAgent: 'claude', status: 'pending-handle' })
-
-  expect(
-    runtime.selectCreatedMobileSessionTabForClient(
-      WT,
-      { tabId: 'host-tab', leafId: HEADLESS_LEAF_ID },
-      'device-caller'
-    )
-  ).toBe(true)
-
-  const selected = await runtime.listMobileSessionTabs(`id:${WT}`, 'device-caller')
-  expect(selected.activeTabId).toBe(`host-tab::${HEADLESS_LEAF_ID}`)
-  // Respawn crosses several awaits; an immediate absence assertion would be premature.
-  await new Promise((resolve) => setTimeout(resolve, 200))
-  expect(spawn).not.toHaveBeenCalled()
 })

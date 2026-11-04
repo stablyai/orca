@@ -3,8 +3,8 @@ import {
   aiVaultAgentLabel,
   type AiVaultAgent,
   type AiVaultSession
-} from '../../shared/ai-vault-types'
-import { buildAiVaultResumeCommand } from '../../shared/ai-vault-resume-command'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import { buildAiVaultResumeCommand } from '../../shared/ai-vault/resume/ai-vault-resume-command'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type {
   FileWithMtime,
@@ -16,7 +16,7 @@ import {
   NO_TRANSCRIPT_MESSAGES,
   type TranscriptMessageSink,
   type TranscriptSessionIdentity
-} from './session-transcript-consumers'
+} from './transcripts/session-transcript-consumers'
 
 export function createAccumulator(args: {
   agent: AiVaultAgent

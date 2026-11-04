@@ -7,7 +7,7 @@ import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { ActionButton } from './action-button'
 import { ConflictBadge } from './conflict-badge'
 import {
@@ -24,8 +24,8 @@ import {
   canUnstageStatusEntry,
   getConflictResolutions,
   type ConflictResolution
-} from '../../../../../../shared/source-control-entry-actions'
-import { isSubmoduleWorktreeOnlyChange } from '../../../../../../shared/source-control-discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-entry-actions'
+import { isSubmoduleWorktreeOnlyChange } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { toPermanentSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from './split-open'
 import {
   getSourceControlRowHighlightClass,
@@ -35,7 +35,8 @@ import {
   getSubmoduleWorktreeOnlyLabel,
   getSubmoduleWorktreeOnlyTooltip
 } from './row-layout'
-import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
+import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 
 export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   entryKey,

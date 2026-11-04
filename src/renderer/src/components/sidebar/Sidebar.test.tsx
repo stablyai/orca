@@ -55,7 +55,7 @@ vi.mock('./SetupScriptPromptCard', () => ({
   default: () => <div data-testid="setup-script-prompt-card" />
 }))
 
-vi.mock('./WorktreeList', () => ({
+vi.mock('./worktree-list/listing/WorktreeList', () => ({
   default: () => <div data-testid="worktree-list" />
 }))
 
@@ -65,7 +65,7 @@ vi.mock('./SidebarToolbar', () => ({
   default: () => <div data-testid="sidebar-toolbar" />
 }))
 
-vi.mock('./WorkspaceKanbanDrawer', () => ({
+vi.mock('./workspace-board/surface/WorkspaceKanbanDrawer', () => ({
   default: ({
     leftSidebarStyle,
     statusBarVisible
@@ -81,7 +81,7 @@ vi.mock('./WorkspaceKanbanDrawer', () => ({
   )
 }))
 
-vi.mock('./useSidebarProjectDrop', () => ({
+vi.mock('./project-admission/drop/useSidebarProjectDrop', () => ({
   useSidebarProjectDrop: () => ({
     dropOwnerRef: mocks.dropOwnerRef,
     dropHandlers: {},
@@ -89,7 +89,7 @@ vi.mock('./useSidebarProjectDrop', () => ({
   })
 }))
 
-vi.mock('./useWorkspaceBoardPanel', () => ({
+vi.mock('./workspace-board/surface/useWorkspaceBoardPanel', () => ({
   useWorkspaceBoardPanel: () => ({
     ...mocks.panel,
     workspaceBoardMenuOpen: false,
@@ -140,7 +140,7 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Sidebar', () => {
-  it('explains the incomplete workspace list until startup discovery finishes', () => {
+  it('shows a compact loading status until startup discovery finishes', () => {
     vi.useFakeTimers()
     try {
       setSidebarState(getDefaultSettings(tmpdir()))
@@ -148,8 +148,7 @@ describe('Sidebar', () => {
       const view = render(sidebarElement())
       expect(view.queryByRole('status')).toBeNull()
       act(() => vi.advanceTimersByTime(200))
-      expect(view.getByRole('status').textContent).toContain('Discovering workspaces')
-      expect(view.getByRole('status').textContent).toContain('More workspaces may appear')
+      expect(view.getByRole('status').textContent).toBe('Loading workspaces…')
       mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: true }
       view.rerender(sidebarElement())
       expect(view.queryByRole('status')).toBeNull()

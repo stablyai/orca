@@ -4,7 +4,7 @@ import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { loadWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { composeMainTerminalSurfaces, TerminalSurfaceIndex } from './terminal-surface-index'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 

@@ -1,20 +1,20 @@
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type {
   AgentJournalSnapshot,
   AgentJournalItemBody,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type {
   AgentSessionRecord,
   AgentSessionExecutionLocation
-} from '../../../shared/agent-session-record'
-import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   attachFingerprintFields,
   type AgentSessionAttachParams
@@ -51,7 +51,7 @@ export function hostTestAttachParams(
   overrides: Partial<AgentSessionAttachParams> = {}
 ): AgentSessionAttachParams {
   const params: AgentSessionAttachParams = {
-    envelope: {
+    envelope: overrides.envelope ?? {
       sessionId: HOST_TEST_SESSION,
       clientOperationId: hostTestOperationId(),
       expectedRuntimeFence,
@@ -174,6 +174,7 @@ export function hostTestRestingOptionsJournal(
 ) {
   return {
     threadGoal: () => null,
+    inputOrder: { hasInputs: () => false },
     visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) =>
       items.forEach((body, index) => visit(`item-${index}`, index + 1, body)),
     wroteBeforeOpen: () => wroteBeforeOpen,

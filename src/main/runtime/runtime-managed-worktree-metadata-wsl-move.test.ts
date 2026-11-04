@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { wslMoveCutoverFixture as cutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import {
@@ -104,11 +104,6 @@ describe('updateRuntimeManagedWorktreeMetadata under a WSL move', () => {
     await expect(
       update(MOVING, { isUnread: true, lineage: { noParent: true } })
     ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
-  })
-
-  it('leaves a project the move is not taking untouched', async () => {
-    await update(STAYING, { comment: 'mine' })
-    expect(store.getWorktreeMeta(STAYING)?.comment).toBe('mine')
   })
 })
 

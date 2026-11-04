@@ -1,4 +1,4 @@
-import type { HostedReviewSummary } from '../../shared/hosted-review'
+import type { HostedReviewSummary } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 
 export type NumberedHostedReviewSummary = Omit<HostedReviewSummary, 'number'> & { number: number }
 

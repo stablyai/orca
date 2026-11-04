@@ -1,6 +1,7 @@
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { journalInputOrder } from './journal-input-order'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { DISPATCH_DOUBT_HOST_RESTARTED } from './journal-dispatch-doubt-reasons'
 import type { JournalReducerState } from './journal-reducer'
 import { journalDispatchRowBuilder } from './journal-row-builders'
@@ -53,7 +54,11 @@ export async function markJournalPendingSubmissionsUnknown(
   fence: number,
   reason: string = DISPATCH_DOUBT_HOST_RESTARTED
 ): Promise<string[]> {
-  const unresolved = journalPendingSubmissionResolutions(journal.submissions(), fence, { reason })
+  const unresolved = journalPendingSubmissionResolutions(
+    journal.inputOrder.recoverableSubmissions(),
+    fence,
+    { reason }
+  )
   for (const resolution of unresolved) {
     await journal.resolveDispatch(resolution)
   }
@@ -66,7 +71,11 @@ export async function rejectJournalPendingSubmissions(
   fence: number,
   rejection: AgentJournalDispatchRejection
 ): Promise<string[]> {
-  const unwritten = journalPendingSubmissionResolutions(journal.submissions(), fence, { rejection })
+  const unwritten = journalPendingSubmissionResolutions(
+    journal.inputOrder.recoverableSubmissions(),
+    fence,
+    { rejection }
+  )
   for (const resolution of unwritten) {
     await journal.resolveDispatch(resolution)
   }
@@ -79,8 +88,8 @@ export async function rejectJournalQueuedSubmissions(
   rejection: AgentJournalDispatchRejection,
   which: (submission: AgentJournalSubmission) => boolean = () => true
 ): Promise<string[]> {
-  const queued = journal
-    .submissions()
+  const queued = journal.inputOrder
+    .recoverableSubmissions()
     .filter((entry) => isQueuedAgentJournalSubmission(entry) && which(entry))
   // Issue together so Stop observes every withdrawal once this call returns.
   await Promise.all(
@@ -103,13 +112,16 @@ export function journalQueuedRejectionRowBuilders(
   fence: number,
   rejection: AgentJournalDispatchRejection
 ): ((seq: number, ts: number) => JournalRow)[] {
-  return [...state().submissions.values()].filter(isQueuedAgentJournalSubmission).map((entry) =>
-    journalDispatchRowBuilder(state, {
-      clientMessageId: entry.clientMessageId,
-      state: 'rejected',
-      ...rejection,
-      fence,
-      recovered: true
-    })
-  )
+  return journalInputOrder(state())
+    .recoverableSubmissions()
+    .filter(isQueuedAgentJournalSubmission)
+    .map((entry) =>
+      journalDispatchRowBuilder(state, {
+        clientMessageId: entry.clientMessageId,
+        state: 'rejected',
+        ...rejection,
+        fence,
+        recovered: true
+      })
+    )
 }

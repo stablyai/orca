@@ -1,26 +1,26 @@
 import { posix as pathPosix } from 'node:path'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import { getDefaultWslDistro, getWslHome } from '../wsl'
-import { getCachedWslHome } from '../wsl-home-cache'
-import { isWslDistroRunning } from '../wsl-background-distro-gate'
+import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
+import { getCachedWslHome } from '../wsl/discovery/wsl-home-cache'
+import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import {
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
-} from '../codex/codex-home-paths'
-import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
+} from '../codex/configuration/homes/codex-home-paths'
+import { syncSystemConfigIntoManagedCodexHome } from '../codex/configuration/settings/codex-config-mirror'
 import {
   getWslSelectionKey,
   normalizeCodexRuntimeSelection,
   type CodexAccountSelectionTarget
 } from './runtime-selection'
-import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
+import { hasCustomCodexHomeOverrideForLaunch } from '../codex/configuration/homes/codex-real-home-path'
 import {
   hasRecordedLegacySharedCodexPane,
   getCodexPaneAccount
-} from '../codex/codex-pane-account-registry'
+} from '../codex/configuration/homes/codex-pane-account-registry'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
@@ -246,12 +246,14 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   }
 
   // A skipped poll needs a distinct result: null routes the fetcher to system default (#STA-4422).
-  prepareForRateLimitFetch(target?: CodexAccountSelectionTarget): CodexRateLimitHomeResolution {
+  prepareForRateLimitFetch(
+    target?: CodexAccountSelectionTarget,
+    pinnedWslDistro?: string
+  ): CodexRateLimitHomeResolution {
     if (target?.runtime === 'wsl') {
-      const wslTarget = this.resolveWslDefaultTarget(target)
       return {
         kind: 'ready',
-        codexHomePath: this.getPreparedWslRateLimitHomePath(wslTarget)
+        codexHomePath: this.getPreparedWslRateLimitHomePath(target, pinnedWslDistro)
       }
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()

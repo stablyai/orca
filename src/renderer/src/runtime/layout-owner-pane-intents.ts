@@ -1,6 +1,6 @@
 // Track window pane-close reason, moved-tab selection and in-flight drawn-tree holds while main owns frame structure. Unrequested drops await main’s notice; added panes mount/focus unless a local split requested retained focus.
 
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 
 /** Intents outlive their frame only when a tab never mounts again; keep the newest few. */
 const MAX_INTENTS = 64

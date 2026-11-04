@@ -5,18 +5,18 @@ import {
   type SubmissionRejectionFact,
   type AgentSessionFailureKind,
   type ProviderDiagnostic
-} from '../../../shared/agent-session-failure'
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionArgumentProblem } from '../../../shared/agent-session/agent-session-argument-problem'
-import type { AgentSessionRefusalReason } from '../../../shared/agent-session-refusal-details'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection,
   type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   agentSessionRefusalReference,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   AgentSessionAcquisitionRefusal,
   isAgentSessionPreSpawnError
@@ -29,9 +29,10 @@ import { providerRequestTimeoutOf } from '../../provider-process/provider-reques
 import { findInErrorChain } from '../../provider-process/provider-error-chain'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
-import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
+import { agentCliInstallationFacts } from '../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
 const TYPED_START_REFUSALS = [
+  'savedConversationMissing',
   'notSignedIn',
   'cliMissing',
   'historyTooLarge',
@@ -148,11 +149,17 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
   if (preparation) {
     return agentSessionFailureFact('launchPreparationFailed', { detail: preparation })
   }
-  const exited = providerExitObserved(cause)
+  // A request deadline is the most specific explanation: an exit seen around it never replaces it.
+  const requestTimeout = providerRequestTimeoutOf(cause)
+  const exited = !requestTimeout && providerExitObserved(cause)
   return agentSessionFailureFact(exited ? 'providerStartFailed' : 'startFailed', {
+    // A typed refusal of any reason stays final when only its exit fact reaches the start.
+    ...(cause instanceof AgentSessionAcquisitionRefusal
+      ? { refusal: { code: cause.code, details: { reason: cause.reason } } }
+      : {}),
     detail: providerDiagnosticOf(cause),
     argumentProblem: argumentProblemOf(cause),
-    ...(exited ? {} : { requestTimeout: providerRequestTimeoutOf(cause) })
+    requestTimeout
   })
 }
 

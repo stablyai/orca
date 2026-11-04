@@ -11,7 +11,7 @@ import {
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 it('preserves existing queuedAt across two live replacements despite an older original receipt', async () => {
   const rewind = vi.fn(async () => ({ ok: true as const }))
@@ -94,8 +94,9 @@ it('preserves existing queuedAt across two live replacements despite an older or
         result: { kind: 'journal-row', epoch: epoch1 }
       }
     })
-    expect(card.queuedAt!.epoch).not.toBe(epoch1)
-    expect(card.queuedAt!.epoch).toBe(journal.epoch)
+    expect(card.queuedAt!.epoch).toBe(epoch1)
+    expect(journal.cursor().epoch).not.toBe(epoch1)
+    expect(card.queuedAt!.epoch).toBe(journal.physicalCursor().epoch)
     expect(card.queuedAt!.sequence).toBeGreaterThanOrEqual(
       journal.submission(m.id)!.acceptedSequence!
     )

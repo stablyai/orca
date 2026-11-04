@@ -6,7 +6,7 @@ import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestrat
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 import { WorkerAutoReleaseActivity } from '../../../../orchestration/worker-auto-release-activity'
-import type { AgentPhase } from '../../../../../../shared/agent-transitions'
+import type { AgentPhase } from '../../../../../../shared/agent-status/lifecycle/agent-transitions'
 
 const GRACE_MS = 2 * 60_000
 
@@ -81,18 +81,26 @@ describe('orchestration worker automatic release', () => {
     })
   })
 
-  it('keeps a terminal worker-retain claimed before the deadline', async () => {
+  it('keeps a worker-retain terminal through follow-up work until the coordinator releases it', async () => {
     setupWithFakeClock()
     const { dispatchId } = await h.startSettledWorker()
 
     await h.call('orchestration.workerRetain', { dispatch: dispatchId })
     await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
-
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+
+    const followUp = await h.startWorker({ terminal: 'term_worker' })
+    h.settle(followUp.taskId, followUp.dispatchId, 'succeeded')
+    await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
+    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(h.db.getWorkerTerminalResourceByOwner(followUp.dispatchId)).toMatchObject({
       release_state: 'retained',
+      retained_reason: 'user_requested',
       auto_release_at: null
     })
+
+    await h.call('orchestration.workerRelease', { dispatch: followUp.dispatchId })
+    await vi.waitFor(() => expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1))
   })
 
   it("closes a worker the user typed into on time; an older client's typing report keeps nothing", async () => {

@@ -4,7 +4,7 @@ import {
   detectInstalledBrowsers as detectBrowsers,
   selectBrowserProfile as selectProfile
 } from './sources/browser-cookie-detection'
-import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
+import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 import {
   pickCookieFile as pickFile,
   importCookiesFromFile as importFile,

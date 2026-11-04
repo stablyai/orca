@@ -2,9 +2,12 @@
  * Existing/folder targets select the tab; worktree creates provision setup/default tabs in the background.
  * In-process callers retain host navigation; folder creation activates nothing. */
 
-import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
-import type { AgentLaunchPublishedSurface } from '../../../agent-launch/agent-launch-executor'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type {
+  AgentLaunchTarget,
+  AgentLaunchResult as AgentLaunchPublishedSurface
+} from '../../../../shared/agent-launch/contracts/agent-launch-intent'
+
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 import { clientRendersStructuredAgent } from './structured-agent-session-policy'

@@ -4,7 +4,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { appendAckPendingOutput } from './terminal-stream-replay'
 import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
 import {
@@ -37,7 +37,12 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
       typeof seq === 'number' ? seq : opcode === TerminalStreamOpcode.Output ? 0 : state.cursor++
     let sent: RpcBinarySendResult
     try {
-      sent = sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload }))
+      sent = sendBinary(
+        encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload }),
+        {
+          compressible: true
+        }
+      )
     } catch {
       state.closeMultiplex()
       return false

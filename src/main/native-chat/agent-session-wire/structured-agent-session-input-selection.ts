@@ -1,8 +1,10 @@
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
-import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session/agent-session-approval-subject'
+import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 export type StructuredInputSelection =
   | { kind: 'card'; card: QueuedMessageRow }
@@ -13,7 +15,8 @@ export type StructuredInputSelection =
 export function selectStructuredAgentSessionInput(
   journal: AgentSessionJournal,
   currentInput?: string,
-  unanswerable = false
+  unanswerable = false,
+  steer = false
 ): StructuredInputSelection {
   const queued = journal.inputOrder.firstQueued()
   const current = currentInput ? journal.submission(currentInput) : undefined
@@ -22,9 +25,13 @@ export function selectStructuredAgentSessionInput(
     (!queued || current.submittedSequence! < queued.submittedSequence!)
       ? current
       : queued
-  const nextCard = journal.queuedMessages.nextInputCard()
+  // Read only where a card can be chosen: the queue's rule may ask mail authority.
+  const nextCard = (): StructuredInputSelection => {
+    const card = journal.queuedMessages.nextInputCard(true, steer)
+    return card ? { kind: 'card', card } : { kind: 'none' }
+  }
   if (!selected) {
-    return nextCard ? { kind: 'card', card: nextCard } : { kind: 'none' }
+    return nextCard()
   }
   // Explicit card Send intentionally overrides the automatic queue place.
   const override = journal.inputOrder.explicitSend()
@@ -46,7 +53,7 @@ export function selectStructuredAgentSessionInput(
     }
   }
   if (predecessors.head) {
-    return nextCard ? { kind: 'card', card: nextCard } : { kind: 'none' }
+    return nextCard()
   }
   return { kind: 'submission', submission: selected }
 }
@@ -54,6 +61,9 @@ export function selectStructuredAgentSessionInput(
 export function selectedStructuredSubmission(
   journal: AgentSessionJournal
 ): AgentJournalSubmission | undefined {
+  if (!journal.inputOrder.firstQueued()) {
+    return undefined
+  }
   const selected = selectStructuredAgentSessionInput(journal)
   return selected.kind === 'submission' ? selected.submission : undefined
 }
@@ -72,6 +82,16 @@ export function selectableStructuredSubmission(
     return undefined
   }
   const { submission } = selected
+  const body = journal.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
+  if (
+    !unanswerable &&
+    submission.origin === 'host' &&
+    body?.kind === 'message' &&
+    orchestrationMailNotice(body.from) &&
+    work?.hasActionablePrompt()
+  ) {
+    return undefined
+  }
   if (unanswerable) {
     return submission
   }
@@ -91,6 +111,14 @@ export function structuredInputExecutionWorking(
   if (work.activeTurnId() !== null) {
     return true
   }
+  return structuredInputHandoverWorking(journal, work, currentInput)
+}
+
+export function structuredInputHandoverWorking(
+  journal: AgentSessionJournal,
+  work: StructuredAgentSessionCurrentWork,
+  currentInput?: string
+): boolean {
   for (const entry of journal.inputOrder.enteredSubmissions()) {
     if (entry.clientMessageId !== currentInput && work.owesSend(entry)) {
       return true

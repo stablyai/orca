@@ -1,9 +1,15 @@
 import type { DiffComment, DiffReviewScope } from '../../../src/shared/diff-comment-types'
+import {
+  mobileDiffReviewCommentMatchesItem,
+  type MobileDiffReviewQueueItem
+} from './mobile-diff-review-queue'
 
 export type CreateMobileDiffCommentInput = {
   worktreeId: string
   filePath: string
   oldPath?: string
+  /** Inclusive range start, below lineNumber; absent for a single line. */
+  startLine?: number
   lineNumber: number
   body: string
   id: string
@@ -71,6 +77,9 @@ export function createMobileDiffComment(input: CreateMobileDiffCommentInput): Di
     filePath: input.filePath,
     oldPath: input.oldPath,
     source: 'diff',
+    ...(input.startLine !== undefined && input.startLine < input.lineNumber
+      ? { startLine: input.startLine }
+      : {}),
     lineNumber: input.lineNumber,
     body,
     createdAt: input.createdAt,
@@ -132,4 +141,29 @@ export function sendableMobileDiffComments(
   sendingIds: ReadonlySet<string>
 ): DiffComment[] {
   return comments.filter((comment) => !comment.sentAt && !sendingIds.has(comment.id))
+}
+
+/** The open file's notes by line, and which were written against an older version of its diff. */
+export function mobileDiffReviewNotesForItem(
+  comments: readonly DiffComment[],
+  item: MobileDiffReviewQueueItem | null
+): { commentsByLine: Map<number, DiffComment[]>; staleCommentIds: Set<string> } {
+  const commentsByLine = new Map<number, DiffComment[]>()
+  const staleCommentIds = new Set<string>()
+  if (!item) {
+    return { commentsByLine, staleCommentIds }
+  }
+  for (const comment of comments) {
+    if (!mobileDiffReviewCommentMatchesItem(comment, item)) {
+      continue
+    }
+    commentsByLine.set(comment.lineNumber, [
+      ...(commentsByLine.get(comment.lineNumber) ?? []),
+      comment
+    ])
+    if (comment.diffIdentity !== undefined && comment.diffIdentity !== item.diffIdentity) {
+      staleCommentIds.add(comment.id)
+    }
+  }
+  return { commentsByLine, staleCommentIds }
 }

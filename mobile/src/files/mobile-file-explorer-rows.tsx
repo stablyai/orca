@@ -1,7 +1,4 @@
 import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   filterDirectoryCache,
   flattenDirectoryCache,
@@ -9,7 +6,6 @@ import {
   type DirectoryCache,
   type FileExplorerRow
 } from './file-tree'
-import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 
 /** The explorer's visible rows, folded by open folders or narrowed by the name filter, and what a folder tap does. */
 export function useMobileFileExplorerRows({
@@ -100,32 +96,4 @@ export function useMobileFileExplorerRows({
     shownExpanded,
     onToggleDirectory: filtering ? revealDirectory : toggleDirectory
   }
-}
-
-export function MobileFileExplorerNoMatches({
-  bottomPadding,
-  onClearFilter
-}: {
-  bottomPadding: number
-  onClearFilter: () => void
-}) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
-  return (
-    <View style={[styles.state, { paddingBottom: bottomPadding }]}>
-      <Text style={styles.stateTitle}>{t('files.fileExplorerPanel.noMatches', 'No matches')}</Text>
-      <Text style={styles.emptyText}>
-        {t('files.fileExplorerPanel.noMatchesHint', 'Only folders you have opened are searched.')}
-      </Text>
-      <Pressable
-        onPress={onClearFilter}
-        accessibilityRole="button"
-        style={({ pressed }) => [styles.clearFilterButton, pressed && styles.rowPressed]}
-      >
-        <Text style={styles.clearFilterText}>
-          {t('files.fileExplorerPanel.clearFilter', 'Clear filter')}
-        </Text>
-      </Pressable>
-    </View>
-  )
 }

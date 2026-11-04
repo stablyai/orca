@@ -28,9 +28,10 @@ import {
 import {
   assertAutomationDestination,
   assertAutomationOwnerFence,
+  assertAutomationWorkspaceModePrecondition,
   assertExecutionTargetMatchesDestination,
   type AutomationDestination,
-  type AutomationOwnerPrecondition
+  type AutomationUpdatePreconditions
 } from '../../../shared/automation-owner-precondition'
 import {
   getAutomationContextsForRepo,
@@ -147,11 +148,7 @@ export function updateAutomation(
   operations: AutomationDefinitionOperations,
   id: string,
   updates: AutomationUpdateInput,
-  options?: {
-    expectedOwner?: AutomationOwnerPrecondition
-    destination?: AutomationDestination
-    resolvedRepo?: Repo
-  }
+  options?: AutomationUpdatePreconditions & { resolvedRepo?: Repo }
 ): Automation {
   const index = (operations.state.automations ?? []).findIndex((entry) => entry.id === id)
   if (index === -1) {
@@ -172,6 +169,7 @@ export function updateAutomation(
   if (options?.destination) {
     assertAutomationDestination(options.destination, projectionContext)
   }
+  assertAutomationWorkspaceModePrecondition(current, options?.expectedWorkspaceMode)
   const retainContexts = retainAutomationReselectionContexts(
     operations.state,
     current,

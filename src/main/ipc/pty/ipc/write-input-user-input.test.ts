@@ -8,7 +8,7 @@ import {
   writeRefused,
   writeUnverifiable,
   type WriteSettlement
-} from '../../../../shared/pty-write-settlement'
+} from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 const PTY_ID = 'pty-user-input'
 

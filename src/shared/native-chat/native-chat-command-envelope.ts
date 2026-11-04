@@ -1,7 +1,7 @@
 // Claude-family skill envelopes must resurface as user text or replies lose their prompt. Catalog commands remain noise,
 // with local Ran /x feedback; ordinary non-catalog envelopes recover typed /name args.
 
-import { isTextBlock, type NativeChatMessage } from '../native-chat-types'
+import { isTextBlock, type NativeChatMessage } from './native-chat-types'
 
 const COMMAND_NAME = /<command-name>([\s\S]*?)<\/command-name>/
 const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/

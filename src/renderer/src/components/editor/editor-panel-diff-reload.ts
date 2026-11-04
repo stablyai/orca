@@ -1,5 +1,5 @@
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 
 export function isReloadableSingleFileDiffTab(file: OpenFile): boolean {
   return (

@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   detectRemoteWindowsTerminalCapabilities,
   runPreflightCheck
@@ -18,7 +18,7 @@ import type {
 
 import { readZCodeInteractiveCapability } from '../zcode/interactive-capability'
 import { getPreflightWslTarget } from './preflight-runtime-target'
-import { runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'
+import { runAsWslExecUserAct } from '../wsl/discovery/wsl-background-exec-gate'
 import { deferRefusedPreflight } from './preflight-wsl-refusal-retry'
 
 type AgentDetectionRequest = PreflightRuntimeContext & { enabledOnly?: boolean }

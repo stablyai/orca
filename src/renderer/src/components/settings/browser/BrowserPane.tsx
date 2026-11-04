@@ -1,0 +1,357 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { useAppStore } from '../../../store/index'
+import { matchesSettingsSearch } from '../search/settings-search'
+import { getBrowserPaneSearchEntries } from './browser-search'
+import { getBrowserLinkRoutingDescription } from './routing/browser-link-routing-copy'
+import { getBrowserUsePaneSearchEntries } from './use/browser-use-search'
+
+import { BrowserHomePageSetting } from './BrowserHomePageSetting'
+import { BrowserDefaultZoomSetting } from './BrowserDefaultZoomSetting'
+import { BrowserUseSetup } from './use/BrowserUsePane'
+import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
+import { BrowserLinkRoutingSetting } from './routing/BrowserLinkRoutingSetting'
+import { BrowserLinkRoutingModifierSetting } from './routing/BrowserLinkRoutingModifierSetting'
+import { BrowserLinkRoutingBackgroundSetting } from './routing/BrowserLinkRoutingBackgroundSetting'
+import { BrowserTerminalLinkActionsSetting } from './routing/BrowserTerminalLinkActionsSetting'
+import { BrowserLocalhostWorktreeLabelsSetting } from './routing/BrowserLocalhostWorktreeLabelsSetting'
+import { BrowserClientHostedRemoteSetting } from './routing/BrowserClientHostedRemoteSetting'
+import { BrowserSshWorkspaceRoutingSetting } from './routing/BrowserSshWorkspaceRoutingSetting'
+import { BrowserProfileScopeSetting } from './profiles/BrowserProfileScopeSetting'
+import { BrowserUserAgentSetting } from './BrowserUserAgentSetting'
+import { BrowserSitePermissionsSetting } from './BrowserSitePermissionsSetting'
+import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
+import { BrowserSessionCookiesSection } from './profiles/BrowserSessionCookiesSection'
+import { BrowserNewProfileDialog } from './profiles/BrowserNewProfileDialog'
+import { BrowserExtensionsSection } from './extensions/BrowserExtensionsSection'
+import {
+  createBrowserHomePageDraftState,
+  resolveBrowserHomePageDraftState
+} from './browser-home-page-draft-state'
+import { buildSidebarHostOptions } from '../../sidebar/worktree-list/controls/sidebar-host-options'
+import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
+import {
+  getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host'
+import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/browser-host-state'
+import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+
+type BrowserPaneProps = {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+  onOpenComputerUse?: () => void
+}
+
+function cancelBrowserSessionCookieScrollFrames(frameIds: MutableRefObject<number[]>): void {
+  for (const frameId of frameIds.current) {
+    cancelAnimationFrame(frameId)
+  }
+  frameIds.current = []
+}
+
+export function BrowserPane({
+  settings,
+  updateSettings,
+  onOpenComputerUse
+}: BrowserPaneProps): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
+  const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
+  const setBrowserDefaultUrl = useAppStore((s) => s.setBrowserDefaultUrl)
+  const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
+  const setBrowserDefaultSearchEngine = useAppStore((s) => s.setBrowserDefaultSearchEngine)
+  const browserDefaultZoomLevel = useAppStore((s) => s.browserDefaultZoomLevel)
+  const setBrowserDefaultZoomLevel = useAppStore((s) => s.setBrowserDefaultZoomLevel)
+  const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
+  const repos = useAppStore((s) => s.repos)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const browserSessionHostIdOverride = useAppStore((s) => s.browserSessionHostIdOverride)
+  const setBrowserSessionHostId = useAppStore((s) => s.setBrowserSessionHostId)
+  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
+  const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
+  const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
+  const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
+  const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
+  const persistedHomePageDraft = browserDefaultUrl ?? ''
+  const [homePageDraftState, setHomePageDraftState] = useState(() =>
+    createBrowserHomePageDraftState(persistedHomePageDraft)
+  )
+  const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
+  const sessionCookieScrollFrameIdsRef = useRef<number[]>([])
+  const resolvedHomePageDraftState = resolveBrowserHomePageDraftState(
+    homePageDraftState,
+    persistedHomePageDraft
+  )
+
+  if (resolvedHomePageDraftState !== homePageDraftState) {
+    setHomePageDraftState(resolvedHomePageDraftState)
+  }
+  const homePageDraft = resolvedHomePageDraftState.value
+  const setHomePageDraft = (value: string): void => {
+    setHomePageDraftState((current) => ({ ...current, value }))
+  }
+
+  const setBrowserPaneRootNode = useCallback((node: HTMLDivElement | null) => {
+    if (node !== null) {
+      return
+    }
+    cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
+  }, [])
+
+  const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
+
+  const browserSearchEntries = getBrowserPaneSearchEntries()
+  const showHomePage = matchesSettingsSearch(searchQuery, [browserSearchEntries[0]])
+  const showSearchEngine = matchesSettingsSearch(searchQuery, [browserSearchEntries[1]])
+  const showDefaultZoom = matchesSettingsSearch(searchQuery, [browserSearchEntries[2]])
+  const showLinkRouting = matchesSettingsSearch(searchQuery, [browserSearchEntries[3]])
+  const showLinkRoutingModifier = matchesSettingsSearch(searchQuery, [browserSearchEntries[4]])
+  const showTerminalLinkActions = matchesSettingsSearch(searchQuery, [browserSearchEntries[5]])
+  const showLocalhostLabels = matchesSettingsSearch(searchQuery, [browserSearchEntries[6]])
+  const showCookies = matchesSettingsSearch(searchQuery, [browserSearchEntries[7]])
+  const showClientHostedRemote = matchesSettingsSearch(searchQuery, [browserSearchEntries[8]])
+  const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [browserSearchEntries[9]])
+  const showUserAgent = matchesSettingsSearch(searchQuery, [browserSearchEntries[10]])
+  const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
+  const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
+  const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
+  const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
+  const isMac = isMacUserAgent()
+  const linkRoutingDescription = getBrowserLinkRoutingDescription(
+    { isMac },
+    settings.openLinksInAppModifierInverts === true
+  )
+  const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+  const browserSessionHostOptions = useMemo(
+    () =>
+      buildSidebarHostOptions({
+        repos,
+        sshTargetLabels,
+        sshConnectionStates,
+        settings,
+        runtimeEnvironments,
+        runtimeStatusByEnvironmentId,
+        hostLabelOverrides
+      })
+        .filter((host) => host.kind === 'local' || host.kind === 'runtime')
+        .map((host) => ({
+          id: host.id,
+          label: host.label,
+          detail:
+            host.kind === 'local'
+              ? translate('auto.components.settings.BrowserPane.86b7c83fee', 'This computer')
+              : translate(
+                  'auto.components.settings.BrowserPane.c0f85056d9',
+                  'Browser profiles on this Orca server.'
+                )
+        })),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+    [
+      repos,
+      sshTargetLabels,
+      sshConnectionStates,
+      settings,
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId,
+      hostLabelOverrides,
+      languageRevision
+    ]
+  )
+  const settingsFocusedHostId = getSettingsFocusedExecutionHostId(settings)
+  const selectedBrowserSessionHostId = resolveAvailableBrowserSessionHostId(
+    browserSessionHostOptions,
+    browserSessionHostIdOverride,
+    settingsFocusedHostId
+  )
+  const activeBrowserSessionProfileId =
+    useAppStore((s) => getDefaultBrowserProfileForHost(s, selectedBrowserSessionHostId)) ??
+    'default'
+  useEffect(() => {
+    const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
+    if (selectedBrowserSessionHostId !== requestedHostId) {
+      void setBrowserSessionHostId(selectedBrowserSessionHostId)
+    }
+  }, [
+    browserSessionHostIdOverride,
+    selectedBrowserSessionHostId,
+    setBrowserSessionHostId,
+    settingsFocusedHostId
+  ])
+  const selectBrowserSessionHost = useCallback(
+    (hostId: ExecutionHostId) => {
+      void setBrowserSessionHostId(hostId)
+    },
+    [setBrowserSessionHostId]
+  )
+
+  const requestSessionCookieScrollFrame = (callback: FrameRequestCallback): void => {
+    let completed = false
+    let frameId: number | undefined
+    frameId = requestAnimationFrame((timestamp) => {
+      completed = true
+      if (frameId !== undefined) {
+        sessionCookieScrollFrameIdsRef.current = sessionCookieScrollFrameIdsRef.current.filter(
+          (pendingFrameId) => pendingFrameId !== frameId
+        )
+      }
+      callback(timestamp)
+    })
+    if (!completed) {
+      sessionCookieScrollFrameIdsRef.current.push(frameId)
+    }
+  }
+
+  const scrollToSessionCookies = (): void => {
+    cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
+    useAppStore.getState().setSettingsSearchQuery('')
+    requestSessionCookieScrollFrame(() => {
+      requestSessionCookieScrollFrame(() => {
+        const el = document.getElementById('browser-session-cookies')
+        if (!el) {
+          return
+        }
+        el.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
+      })
+    })
+  }
+
+  return (
+    <div ref={setBrowserPaneRootNode} className="space-y-6">
+      {showBrowserUse ? (
+        <BrowserUseSetup
+          onConfigureMoreBrowsers={scrollToSessionCookies}
+          onOpenComputerUse={onOpenComputerUse}
+        />
+      ) : null}
+
+      {showHomePage ? (
+        <BrowserHomePageSetting
+          value={homePageDraft}
+          onChange={setHomePageDraft}
+          onSave={(url) => {
+            setBrowserDefaultUrl(url)
+            setHomePageDraftState(createBrowserHomePageDraftState(url ?? ''))
+          }}
+        />
+      ) : null}
+
+      {showSearchEngine ? (
+        <BrowserSearchEngineSetting
+          selectedSearchEngine={selectedSearchEngine}
+          onSearchEngineChange={(engine) => {
+            setBrowserDefaultSearchEngine(engine === 'google' ? null : engine)
+          }}
+        />
+      ) : null}
+
+      {showDefaultZoom ? (
+        <BrowserDefaultZoomSetting
+          value={browserDefaultZoomLevel}
+          onChange={setBrowserDefaultZoomLevel}
+        />
+      ) : null}
+
+      {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}
+
+      {showSitePermissions ? <BrowserSitePermissionsSetting /> : null}
+
+      {showLinkRouting ? (
+        <BrowserLinkRoutingSetting
+          settings={settings}
+          linkRoutingDescription={linkRoutingDescription}
+          isMac={isMac}
+          updateSettings={updateSettings}
+        />
+      ) : null}
+
+      {showLinkRoutingModifier ? (
+        <BrowserLinkRoutingModifierSetting
+          settings={settings}
+          isMac={isMac}
+          updateSettings={updateSettings}
+        />
+      ) : null}
+
+      {showLinkRoutingBackground ? (
+        <BrowserLinkRoutingBackgroundSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
+      {showTerminalLinkActions ? (
+        <BrowserTerminalLinkActionsSetting
+          settings={settings}
+          isMac={isMac}
+          updateSettings={updateSettings}
+        />
+      ) : null}
+
+      {showLocalhostLabels ? (
+        <BrowserLocalhostWorktreeLabelsSetting
+          settings={settings}
+          updateSettings={updateSettings}
+        />
+      ) : null}
+
+      {showProfileScope ? (
+        <BrowserProfileScopeSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
+      {showClientHostedRemote || showSshWorkspaceRouting ? (
+        <SettingsSubsectionHeader
+          className="pt-2"
+          title={translate('settings.browser.remoteBrowsing.heading', 'Remote browsing')}
+          description={translate(
+            'settings.browser.remoteBrowsing.headingDescription',
+            'Where remote workspace pages render, and where their network traffic leaves from.'
+          )}
+        />
+      ) : null}
+
+      {showClientHostedRemote ? (
+        <BrowserClientHostedRemoteSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
+      {showSshWorkspaceRouting ? (
+        <BrowserSshWorkspaceRoutingSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
+      {showCookies ? (
+        <BrowserSessionCookiesSection
+          defaultProfile={defaultProfile}
+          nonDefaultProfiles={nonDefaultProfiles}
+          detectedBrowsers={detectedBrowsers}
+          importState={browserSessionImportState}
+          hostOptions={browserSessionHostOptions}
+          selectedHostId={selectedBrowserSessionHostId}
+          activeProfileId={activeBrowserSessionProfileId}
+          onAddProfile={() => setNewProfileDialogOpen(true)}
+          onSelectHost={selectBrowserSessionHost}
+          onSelectDefaultProfile={() => setDefaultBrowserSessionProfileId(null)}
+          onSelectProfile={setDefaultBrowserSessionProfileId}
+        />
+      ) : null}
+
+      {/* Why local only: release 1 runs extensions in this computer's browser profiles. */}
+      {settings.experimentalBrowserExtensions === true &&
+      selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
+        <BrowserExtensionsSection
+          profileId={activeBrowserSessionProfileId}
+          profileLabel={
+            browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)
+              ?.label ?? activeBrowserSessionProfileId
+          }
+        />
+      ) : null}
+
+      <BrowserNewProfileDialog open={newProfileDialogOpen} onOpenChange={setNewProfileDialogOpen} />
+    </div>
+  )
+}

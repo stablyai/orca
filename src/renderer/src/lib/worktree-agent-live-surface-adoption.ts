@@ -1,6 +1,6 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import type { useAppStore } from '@/store'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'

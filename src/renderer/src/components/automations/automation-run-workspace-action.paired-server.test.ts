@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import type { Tab } from '../../../../shared/tab-types'
+import { installAutomationRunInteractionCases } from './automation-run-workspace-interaction.test-fixture'
 import { installAutomationChatRunCases } from './automation-run-workspace-chat.test-fixture'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import type {
@@ -12,7 +13,7 @@ import type {
 } from '../../../../shared/automation-owner-ref'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   makeAutomation,
   makeAutomationListRow,
@@ -22,8 +23,9 @@ import {
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '../sidebar/folder-workspace-composer-submit-fixtures'
-import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
+} from '../sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
+import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { getRuntimeEnvironmentIdForFolderWorkspace } from '@/lib/folder-workspace-runtime-owner'
 import { hostStableKey, toStableCatalogRef } from '../../../../shared/automation-owner-key'
 import { capturedAutomationOwnerKey } from './automation-captured-owner'
@@ -143,6 +145,7 @@ function seed(rows: Worktree[], authority: AutomationAuthorityRef = desktop) {
   }
   mocks.state = {
     activeWorktreeId: 'unrelated',
+    wslMovedProjects: [],
     activeWorkspaceExecutionHostId: 'ssh:other',
     repos: rows.map((row) => ({ id: row.repoId, path: row.path, executionHostId: row.hostId })),
     worktreesByRepo: { 'repo-a': rows },
@@ -282,6 +285,15 @@ beforeEach(() => {
   mocks.activate.mockReturnValue(true)
   mocks.chatTabs.length = 0
   mocks.rpc.mockImplementation(async (_target, method, params) => {
+    if (method === 'orchestration.partyLocation') {
+      return {
+        location: {
+          kind: 'chat',
+          sessionId: params.address.slice('orca_session_id:'.length),
+          worktreeId: WT
+        }
+      }
+    }
     if (method === 'agentSession.reveal') {
       mocks.chatTabs.push(
         makeUnifiedTab({
@@ -294,7 +306,7 @@ beforeEach(() => {
         })
       )
     }
-    return { ok: true }
+    return { ok: true, sessionId: params.sessionId, workspaceId: WT, agent: 'codex' }
   })
 })
 afterEach(async () => {
@@ -741,6 +753,17 @@ function seedChat() {
 }
 
 installAutomationChatRunCases({
+  mocks,
+  run,
+  workspaceId: WT,
+  environmentId: ENV,
+  groupId: GROUP,
+  seedChat,
+  mount,
+  open: (recorded) => current.open(recorded)
+})
+
+installAutomationRunInteractionCases({
   mocks,
   run,
   workspaceId: WT,

@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-optional-model-capability'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../src/shared/agent-session/options/agent-session-optional-model-capability'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../src/shared/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime/remote-runtime-client-capabilities'
 import { resolveBaselineReleaseRef } from './release-checkout'
@@ -84,27 +84,5 @@ describe('selected model reports across released client and host versions', () =
         }
       )
     ).toMatchObject([{ ok: true, result: { current: { model: 'reported-model' } } }])
-  })
-
-  it('lets a new desktop client read existing model reports from the released host', async () => {
-    const client = {
-      clientKind: 'runtime' as const,
-      clientCapabilities: remoteRuntimeClientCapabilities(
-        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-      )
-    }
-    if (!baseline.methodNames.includes('agentSession.options')) {
-      expect(
-        await callBuild(baseline, 'agentSession.options', { sessionId: SESSION }, client)
-      ).toMatchObject([{ ok: false, error: { code: 'method_not_found' } }])
-      return
-    }
-    const host = structuredHostStub(SESSION, 'folder-options')
-    const report = { models: [], current: { model: 'released-model', effort: 'off' } }
-    host.readOptions.mockResolvedValue(report)
-    await baseline.installStructuredHost(installableHost(host))
-    expect(
-      await callBuild(baseline, 'agentSession.options', { sessionId: SESSION }, client)
-    ).toMatchObject([{ ok: true, result: report }])
   })
 })

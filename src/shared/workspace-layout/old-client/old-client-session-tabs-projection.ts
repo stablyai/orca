@@ -12,8 +12,8 @@ import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
 } from '../../runtime-session-contracts'
-import type { TerminalLayoutSnapshot } from '../../terminal-tab-types'
-import { pruneGroupLayout } from '../../workspace-session-terminal-tab-close'
+import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
+import { pruneGroupLayout } from '../../workspace-session/workspace-session-terminal-tab-close'
 import { diffTabRow, editorTabRow } from './old-client-session-editor-rows'
 import { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
 import { collectLayoutLeafIdsInOrder } from '../terminal-pane-tree'
@@ -269,7 +269,7 @@ function agentSessionRow(tab: LayoutContentTab, scope: Scope): RuntimeMobileSess
   }
   return {
     type: 'agent-session',
-    id: agentSessionRowId(tab.entityId),
+    id: agentSessionRowId(tab.entityId, tab.id),
     title:
       tab.customTitle?.trim() ||
       scope.facts.tabLabels[scope.key]?.[tab.id] ||

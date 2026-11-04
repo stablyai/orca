@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en-US',
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     fallback.replace('{{value0}}', values?.value0 ?? '')
 }))
@@ -15,8 +16,9 @@ vi.mock('./editor-shortcuts', () => ({
     actionId === 'editor.save' && (event.metaKey || event.ctrlKey) && event.key === 's'
 }))
 
+import { CUSTOM_EDITOR_FLUSH_TIMEOUT_MS } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import PluginCustomEditorFrame from './PluginCustomEditorFrame'
-import { flushEditorFrames } from './editor-pending-flush'
+import { runAfterEditorFramesFlush, flushEditorFrames } from './save/flush/editor-pending-flush'
 
 const FILE_ID = '/repo/diagram.excalidraw'
 const READY = { orca: 1, kind: 'evt', event: 'ready', payload: { protocol: 1 } }
@@ -58,6 +60,7 @@ const editor: ActivePluginCustomEditor = {
 let container: HTMLDivElement
 let root: Root
 const readCustomEditorEntry = vi.fn()
+let pluginsChanged: () => void = () => {}
 
 beforeEach(() => {
   container = document.createElement('div')
@@ -70,11 +73,18 @@ beforeEach(() => {
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the frame reads only these two plugin bridge methods.
   globalThis.window.api = {
-    plugins: { readCustomEditorEntry, onChanged: () => vi.fn() }
+    plugins: {
+      readCustomEditorEntry,
+      onChanged: (listener: () => void) => {
+        pluginsChanged = listener
+        return vi.fn()
+      }
+    }
   } as unknown as Window['api']
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
   await act(async () => root.unmount())
   container.remove()
 })
@@ -143,6 +153,52 @@ describe('PluginCustomEditorFrame', () => {
     })
     await expect(silent).resolves.toBe(false)
     expect(container.textContent).toContain("Couldn't save the latest changes from Excalidraw")
+  })
+
+  it('applies the edit a closing frame flushes before the close runs its dirty check', async () => {
+    const { posted, fromFrame, onContentChange } = await renderFrame({ content: 'scene' })
+    await fromFrame(READY)
+    const index = { editorBufferIdOf: {}, editorBufferViews: {} }
+    const close = vi.fn(() => expect(onContentChange).toHaveBeenCalledWith('scene+late'))
+    runAfterEditorFramesFlush(index, [FILE_ID], close)
+    expect(posted).toHaveBeenLastCalledWith(
+      { orca: 1, kind: 'req', id: 0, method: 'editor.flush' },
+      '*',
+      []
+    )
+    expect(close).not.toHaveBeenCalled()
+    await fromFrame(textEdit('scene+late'))
+    await fromFrame({ orca: 1, kind: 'res', id: 0, result: null })
+    expect(close).toHaveBeenCalledWith(true)
+
+    // A silent frame delays the close by the flush deadline only.
+    vi.useFakeTimers()
+    const silentClose = vi.fn()
+    runAfterEditorFramesFlush(index, [FILE_ID], silentClose)
+    await act(async () => vi.advanceTimersByTimeAsync(CUSTOM_EDITOR_FLUSH_TIMEOUT_MS))
+    expect(silentClose).toHaveBeenCalledWith(true)
+  })
+
+  it('keeps a reloading frame mounted until it flushed its pending edit', async () => {
+    const { iframe, posted, fromFrame, onContentChange } = await renderFrame({ content: 'scene' })
+    await fromFrame(READY)
+    readCustomEditorEntry.mockResolvedValue({
+      html: '<main>v2</main>',
+      sessionToken: 't'.repeat(43)
+    })
+    await act(async () => pluginsChanged())
+    expect(container.querySelector('iframe')).toBe(iframe)
+    expect(posted).toHaveBeenLastCalledWith(
+      { orca: 1, kind: 'req', id: 0, method: 'editor.flush' },
+      '*',
+      []
+    )
+    await fromFrame(textEdit('scene+late'))
+    await fromFrame({ orca: 1, kind: 'res', id: 0, result: null })
+    expect(onContentChange).toHaveBeenCalledWith('scene+late')
+    const reloaded = container.querySelector('iframe')
+    expect(reloaded).not.toBe(iframe)
+    expect(reloaded?.getAttribute('srcdoc')).toContain('v2')
   })
 
   it('saves on a frame chord only while it rides real user input', async () => {

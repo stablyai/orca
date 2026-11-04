@@ -1,10 +1,11 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useState } from 'react'
-import { Pressable, Text, TextInput, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { PickerModal, type PickerOption } from '../components/PickerModal'
-import { colors } from '../theme/mobile-theme'
+import { pressedStyle } from '../theme/mobile-theme'
 import { automationStyles as styles } from './automation-styles'
+import { FieldTextInput } from '../components/composer-input/FieldTextInput'
 
 export function AutomationButton(props: {
   label: string
@@ -20,10 +21,11 @@ export function AutomationButton(props: {
       accessibilityState={{ disabled: props.disabled }}
       disabled={props.disabled}
       onPress={props.onPress}
-      style={[
+      style={({ pressed }) => [
         styles.button,
         props.primary && styles.primaryButton,
-        props.disabled && styles.disabled
+        props.disabled && styles.disabled,
+        pressed && pressedStyle
       ]}
     >
       <Text
@@ -52,10 +54,9 @@ export function AutomationField(props: {
   return (
     <View style={styles.field}>
       <Text style={styles.meta}>{props.label}</Text>
-      <TextInput
+      <FieldTextInput
         accessibilityLabel={props.label}
         style={[styles.input, props.multiline && styles.multiline]}
-        placeholderTextColor={colors.textMuted}
         value={props.value}
         onChangeText={props.onChange}
         multiline={props.multiline}

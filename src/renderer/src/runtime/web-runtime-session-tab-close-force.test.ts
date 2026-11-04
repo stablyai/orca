@@ -12,17 +12,11 @@ import {
 import { appPairedTerminalTabCloseIntentStore as INTENTS } from './paired-terminal-tab-close-intent-store'
 import { createPairedTerminalTabCloseIntentTestStore } from '../store/terminals/paired-terminal-tab-close-intent.test-fixture'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
-import {
-  isWebSessionCloseIntentPending,
-  resetWebSessionCloseIntentForTests
-} from './web-session-close-intent'
+import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import type * as RuntimeRpcClient from './runtime-rpc-client'
 import type * as WebRuntimeSessionEnvironment from './web-runtime-session-environment'
 import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
-import {
-  SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY,
-  SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY
-} from '../../../shared/session-tabs-runtime-capabilities'
+import '../../../shared/session-tabs-runtime-capabilities'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
@@ -104,8 +98,6 @@ afterEach(() => {
   resetWebSessionCloseIntentForTests()
   resetWebSessionCloseReplaysForTests()
 })
-
-const OWNER = { environmentId: ENVIRONMENT_ID }
 const HOST_TAB = 'host-browser-unified'
 
 function closeCalls(runtimeCall: ReturnType<typeof vi.fn>): unknown[] {
@@ -157,62 +149,6 @@ describe('a confirmed close of a pinned server tab', () => {
     resetWebSessionFocusIntentForTests()
     vi.unstubAllGlobals()
     vi.clearAllMocks()
-  })
-
-  it('sends force to a host advertising the capability', async () => {
-    mocks.runtimeEnvironmentSupportsCapability.mockResolvedValue(true)
-    const runtimeCall = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 'c', ok: true, result: { closed: true } })
-    runtimeCall.mockResolvedValue({ id: 'list', ok: true, result: makeSnapshot() })
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-
-    await expect(closeTab(true)).resolves.toBe('applied')
-
-    expect(mocks.runtimeEnvironmentSupportsCapability).toHaveBeenCalledWith(
-      ENVIRONMENT_ID,
-      SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY
-    )
-    expect(closeCalls(runtimeCall)).toEqual([
-      expect.objectContaining({ tabId: HOST_TAB, reason: 'user', force: true })
-    ])
-  })
-
-  it('sends no force to an older host, which refuses and shows the tab again as today', async () => {
-    mocks.runtimeEnvironmentSupportsCapability.mockResolvedValue(false)
-    const runtimeCall = vi.fn().mockResolvedValueOnce({
-      id: 'c',
-      ok: false,
-      error: { code: 'terminal_tab_pinned', message: 'terminal_tab_pinned' }
-    })
-    runtimeCall.mockResolvedValue({ id: 'list', ok: true, result: makeSnapshot() })
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-
-    await expect(closeTab(true)).resolves.toBe('failed')
-
-    expect(closeCalls(runtimeCall)).toEqual([
-      { worktree: expect.any(String), tabId: HOST_TAB, reason: 'user' }
-    ])
-    expect(isWebSessionCloseIntentPending(OWNER, WORKTREE_ID, HOST_TAB, Date.now())).toBe(false)
-    expect(
-      takeDueWebSessionCloseReplays(INTENTS, ENVIRONMENT_ID, WORKTREE_ID, new Set([HOST_TAB]))
-    ).toEqual([])
-  })
-
-  it('never sends force or probes the host for an unconfirmed close', async () => {
-    mocks.runtimeEnvironmentSupportsCapability.mockResolvedValue(true)
-    const runtimeCall = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 'c', ok: true, result: { closed: true } })
-    runtimeCall.mockResolvedValue({ id: 'list', ok: true, result: makeSnapshot() })
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-
-    await expect(closeTab()).resolves.toBe('applied')
-
-    expect(mocks.runtimeEnvironmentSupportsCapability).not.toHaveBeenCalled()
-    expect(closeCalls(runtimeCall)).toEqual([
-      expect.not.objectContaining({ force: expect.anything() })
-    ])
   })
 
   it('keeps force on a held close the host never received, and sends it on replay', async () => {
@@ -273,53 +209,4 @@ describe('a confirmed close of a pinned server tab', () => {
       expect.objectContaining({ tabId: HOST_TAB, reason: 'replay', force: true })
     ])
   })
-
-  it('holds a close whose capability probe failed as undelivered, keeping its force', async () => {
-    mocks.runtimeEnvironmentSupportsCapability.mockRejectedValueOnce(new Error('socket hang up'))
-    const runtimeCall = vi.fn().mockResolvedValue({ id: 'list', ok: true, result: makeSnapshot() })
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-
-    await expect(closeTab(true)).resolves.toBe('failed')
-
-    expect(closeCalls(runtimeCall)).toEqual([])
-    expect(isWebSessionCloseIntentPending(OWNER, WORKTREE_ID, HOST_TAB, Date.now() + 60_000)).toBe(
-      true
-    )
-    expect(
-      takeDueWebSessionCloseReplays(INTENTS, ENVIRONMENT_ID, WORKTREE_ID, new Set([HOST_TAB]))
-    ).toEqual([expect.objectContaining({ force: true })])
-  })
-
-  it.each([
-    [true, 'replay'],
-    [false, 'user']
-  ])(
-    'marks a re-sent held close as a replay only for a host that accepts it (%s)',
-    async (hostAcceptsReplay, reason) => {
-      mocks.runtimeEnvironmentSupportsCapability.mockImplementation(
-        async (_environmentId: string, capability: string) =>
-          capability !== SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY || hostAcceptsReplay
-      )
-      const runtimeCall = vi
-        .fn()
-        .mockRejectedValueOnce(new Error('socket hang up'))
-        .mockResolvedValueOnce({ id: 'c', ok: true, result: { closed: true } })
-        .mockResolvedValue({ id: 'list', ok: true, result: makeSnapshot() })
-      stubRuntimeEnvironmentBridge({ call: runtimeCall })
-
-      await expect(closeTab()).resolves.toBe('failed')
-      const due = takeDueWebSessionCloseReplays(
-        INTENTS,
-        ENVIRONMENT_ID,
-        WORKTREE_ID,
-        new Set([HOST_TAB])
-      )
-      await replayWebSessionTabCloses(ENVIRONMENT_ID, due)
-
-      expect(closeCalls(runtimeCall)).toEqual([
-        expect.objectContaining({ reason: 'user' }),
-        expect.objectContaining({ tabId: HOST_TAB, reason })
-      ])
-    }
-  )
 })

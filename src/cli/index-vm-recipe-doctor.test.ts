@@ -33,9 +33,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -44,7 +47,8 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../shared/pairing'
+import { encodePairingOffer } from '../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {

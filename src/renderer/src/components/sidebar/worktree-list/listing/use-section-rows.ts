@@ -1,8 +1,9 @@
+import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
 import { useCallback, useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
@@ -34,7 +35,7 @@ import {
   buildSidebarHostOptions,
   sidebarHostSemantics,
   createSidebarHostLabelsSelector
-} from '../../sidebar-host-options'
+} from '../controls/sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
@@ -56,7 +57,7 @@ function createSidebarHostOptionsSelector() {
       state.runtimeEnvironments,
       hostLabelOverrides,
       state.wslHostStatuses,
-      settings?.experimentalWslHosts === true,
+      selectWslHostsServing(state),
       state.wslHostServerFiles === 'missing'
     ]
     if (shallow(inputs, nextInputs)) {
@@ -72,7 +73,7 @@ function createSidebarHostOptionsSelector() {
       runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
       hostLabelOverrides,
       wslHostStatuses: state.wslHostStatuses,
-      wslHostsEnabled: settings?.experimentalWslHosts === true,
+      wslHostsEnabled: selectWslHostsServing(state),
       wslHostServerFilesMissing: state.wslHostServerFiles === 'missing'
     })
     if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
@@ -143,6 +144,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     () =>
       planSidebarRows({
         groupBy: args.groupBy,
+        sortBy: args.sortBy,
         worktrees,
         repoMap,
         repoOfWorktree,
@@ -167,6 +169,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       }),
     [
       args.groupBy,
+      args.sortBy,
       worktrees,
       repoMap,
       repoOfWorktree,

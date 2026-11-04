@@ -8,20 +8,21 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import type { NotificationSettings } from '../../src/shared/notification-settings-types'
-import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../src/shared/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionHistoryPage } from '../../src/shared/agent-session/agent-session-wire'
 import type { RuntimeRpcResponse } from '../../src/shared/runtime-rpc-envelope'
 import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
 import {
   structuredAgentSessionPaneKey,
   projectStructuredAgentSessionStatusState
-} from '../../src/shared/structured-agent-session-projection'
+} from '../../src/shared/agent-session/view/structured-agent-session-projection'
+import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
 } from '../../src/main/runtime/runtime-mobile-notification-controller'
-import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/structured-agent-session-mobile-attention'
+import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
 import {
   call,
   installStructuredHostStub,
@@ -51,6 +52,7 @@ export const REMOTE_TARGET = { kind: 'environment', environmentId: 'relay-host' 
 export const NOTIFICATION_SETTINGS: NotificationSettings = {
   enabled: true,
   agentTaskComplete: true,
+  agentNeedsInput: true,
   terminalBell: true,
   suppressWhenFocused: true,
   customSoundId: 'system',
@@ -183,6 +185,11 @@ beforeEach(() => {
   vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   const directory = mkdtempSync(join(tmpdir(), 'orca-renderer-read-'))
   installStructuredHostStub()
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    throw new Error('structured host not installed')
+  }
+  vi.spyOn(host.attentionReads, 'sessionLocation').mockReturnValue(SCOPE)
   const controller = new RuntimeMobileNotificationController()
   controller.configureDismissalStore(directory)
   const events: MobileNotificationEvent[] = []
@@ -211,6 +218,7 @@ beforeEach(() => {
     readNotificationSettings: () => ({ ...NOTIFICATION_SETTINGS, suppressWhenFocused: false }),
     readWorkspaceLabels: () => ({}),
     isWorkspaceMuted: () => false,
+    readOrchestration: () => undefined,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => 42
@@ -226,6 +234,7 @@ beforeEach(() => {
       ]
     ]),
     readStatusState: () => projectStructuredAgentSessionStatusState(fixture.items),
+    readChildWork: () => undefined,
     now: hostClock
   })
   fixture = {
@@ -299,7 +308,7 @@ beforeEach(() => {
       })
     }
     const reply = await call(method, params, STRUCTURED_CLIENT, {
-      retireStructuredAttention: fixture.controller.retireStructuredAttention.bind(
+      acknowledgeNotificationAttention: fixture.controller.acknowledgeAttention.bind(
         fixture.controller
       )
     })

@@ -7,12 +7,12 @@ import {
 } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../shared/workspace-session-host-field-ownership'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../shared/workspace-session/workspace-session-host-field-ownership'
 import {
   contestedPartitionHosts,
   pickPrimaryHostForClaims
-} from '../../shared/workspace-session-contested-primary-host'
+} from '../../shared/workspace-session/workspace-session-contested-primary-host'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import type { RuntimeStore } from './runtime-store-contract'
 

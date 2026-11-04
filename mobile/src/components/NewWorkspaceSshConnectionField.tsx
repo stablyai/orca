@@ -4,6 +4,7 @@ import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import { workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function NewWorkspaceSshConnectionField({
   repoName,
@@ -41,7 +42,11 @@ export function NewWorkspaceSshConnectionField({
           </View>
           {sshGate.status === 'connected' ? null : (
             <Pressable
-              style={[styles.sshConnectButton, sshGate.connectInProgress && styles.disabled]}
+              style={({ pressed }) => [
+                styles.sshConnectButton,
+                sshGate.connectInProgress && styles.disabled,
+                pressed && pressedStyle
+              ]}
               disabled={sshGate.connectInProgress}
               onPress={onConnect}
             >

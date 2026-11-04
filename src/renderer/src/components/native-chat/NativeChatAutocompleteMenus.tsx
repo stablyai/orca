@@ -7,10 +7,8 @@ import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
 import { FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import type {
-  ComposerAutocomplete,
-  NativeChatPickerItem
-} from '../../../../shared/native-chat-composer-autocomplete'
+import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/native-chat-composer-autocomplete'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { localizeSlashCommandDescription } from './native-chat-slash-command-descriptions'
@@ -274,13 +272,15 @@ function PickerListbox({
           <div
             id={id}
             role="listbox"
+            data-focus-behavior="composer-suggestions"
             style={{
               position: 'fixed',
               left: bounds.left,
               width: bounds.width,
               bottom: window.innerHeight - bounds.top + 4
             }}
-            className="scrollbar-sleek z-50 max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating"
+            // Inside a popover (the launch setup), take the menu layer Select and DropdownMenu use above popovers.
+            className={`scrollbar-sleek max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating ${marker.current?.closest('[data-slot="popover-content"]') ? 'z-[70]' : 'z-50'}`}
           >
             {children}
           </div>,
@@ -372,15 +372,14 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
 }): React.JSX.Element {
   useUiLanguageRevision()
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
-  const { files } = mention
-  const selectedIndex = Math.min(activeIndex, files.length - 1)
+  const selectedIndex = Math.min(activeIndex, mention.files.length - 1)
 
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [selectedIndex, files])
+  }, [selectedIndex, mention.files])
 
   const statusText =
-    files.length > 0
+    mention.files.length > 0
       ? null
       : mention.loading
         ? translate('components.native-chat.composer.loadingFiles', 'Loading files...')
@@ -390,7 +389,7 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
 
   return (
     <PickerListbox id={listboxId}>
-      {files.map((path, index) => (
+      {mention.files.map((path, index) => (
         <PickerOptionButton
           key={path}
           id={`${listboxId}-option-${index}`}

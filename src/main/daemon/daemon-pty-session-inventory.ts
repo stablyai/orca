@@ -4,20 +4,24 @@ import { existsSync } from 'node:fs'
 import {
   isAgentSessionOwnerBinding,
   type AgentSessionOwnerBinding
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
 import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { recordAuthenticatedInventory } from './daemon-audit-classifier'
 import { isMissingWindowsNamedPipeError } from './daemon-endpoint-errors'
 import { DaemonPtyProcessInspection } from './daemon-pty-process-inspection'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
-import { parsePtySessionId } from '../../shared/pty-session-id-format'
+import { parsePtySessionId } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import type { ListSessionsResult, SessionInfo } from './types'
 import { PtyProcessListAdmission } from '../providers/pty-process-list-admission'
 import type { PtyProcessInfo } from '../providers/pty-provider-contract'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
-  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+  async listProcesses(opts?: {
+    deadlineMs?: number
+    ptyIds?: readonly string[]
+    targetOwnerOnly?: boolean
+  }): Promise<PtyProcessInfo[]> {
     try {
       // Retry connect and inventory together; reconcile only once after both succeed.
       // Share the teardown deadline so handshake cannot consume a fresh budget before inventory.
@@ -33,7 +37,12 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
           const admission = new PtyProcessListAdmission()
           const processes: PtyProcessInfo[] = []
           const aliveSessionIds = new Map<string, string | undefined>()
+          // A target read skips unrelated rows and never reconciles them as absent.
+          const requested = opts?.targetOwnerOnly && opts.ptyIds ? new Set(opts.ptyIds) : undefined
           for (const session of result.sessions) {
+            if (requested && !requested.has(session.sessionId)) {
+              continue
+            }
             if (!session.isAlive) {
               continue
             }
@@ -54,15 +63,18 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
                 ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
                 ...(session.paneKey ? { paneKey: session.paneKey } : {}),
                 ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
+                ...(session.wslGuestRoot ? { wslGuestRoot: session.wslGuestRoot } : {}),
                 ...(session.state === 'exiting' ? { exiting: true as const } : {}),
                 ...this.validatedAgentSessionOwners(session.agentSessionOwners)
               })
             )
           }
-          this.ptyInventory.commit(inventory, aliveSessionIds)
-          this.publishAuditObservation(
-            recordAuthenticatedInventory(this.auditContext, this.exactDaemonIncarnation)
-          )
+          if (!requested) {
+            this.ptyInventory.commit(inventory, aliveSessionIds)
+            this.publishAuditObservation(
+              recordAuthenticatedInventory(this.auditContext, this.exactDaemonIncarnation)
+            )
+          }
           return processes
         } finally {
           this.ptyInventory.end(inventory)

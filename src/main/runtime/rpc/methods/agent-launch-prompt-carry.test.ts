@@ -1,7 +1,7 @@
 /** The runtime's typed-line carry report decides whether to paste: never duplicate a carried prompt or drop an uncarried one. */
 
 import { describe, expect, it, vi } from 'vitest'
-import { formatTerminalStartFailure } from '../../../../shared/terminal-start-failure'
+import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import {
   CAPABLE_CLIENT,
   methodNamed,

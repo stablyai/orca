@@ -6,7 +6,7 @@ import { runProcessSync } from '@orca/process-host'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
 import { stopOrcadCommand } from './orcad-remote-process-control'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
 const directories: string[] = []
 const host = getRemoteHostPlatform('linux-x64')

@@ -4,22 +4,27 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { isSubagentBlock } from '../../../shared/native-chat-types'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { isSubagentBlock } from '../../../shared/native-chat/native-chat-types'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { acpChildWorkStatusSink } from '../../acp/acp-structured-child-work.test-support'
 import { RESUMED_BY_MESSAGE } from '../../claude/claude-captured-task-frames.test-fixture'
+import {
+  result,
+  says,
+  type CapturedFrame
+} from '../../claude/claude-captured-frame-builders.test-fixture'
 import { WAKES_AFTER_ITS_SHELL } from '../../claude/claude-captured-wake-frames.test-fixture'
-import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from '../../claude/structured/claude-structured-session-adapter'
 import {
   fakeClaude,
   PROVIDER_SESSION_ID,
   type FakeConnection
-} from '../../claude/claude-structured-session-test-support'
-import { claudeStartupSettled } from '../../claude/claude-structured-startup-settled-test-support'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+} from '../../claude/structured/claude-structured-session-test-support'
+import { claudeStartupSettled } from '../../claude/structured/claude-structured-startup-settled-test-support'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import {
   closeTestJournalHostDatabases,
@@ -213,6 +218,42 @@ it("keeps an agent whose helper the store refused past idle cleanup, until the s
   await eventually(() => expect(strip()?.incomplete).toBeUndefined())
 })
 
+it('announces a helper that outlives the turn once, after the lead answers its final result', async () => {
+  const connection = claude.connections[0]!
+  const completions: string[] = []
+  host.subscribeTurnCompletions({
+    id: 'completions',
+    emit: (event) => {
+      if (event.type === 'completion') {
+        completions.push(event.completion.turnId)
+      }
+    }
+  })
+  await sendAndEcho(connection, 'Sleep in the background.')
+  const start = clock
+  // The capture omits the lead's replies: Claude wakes it after each of the helper's notifications.
+  const leadWake = (at: number, uuid: string): CapturedFrame[] => [
+    { at, frame: says(uuid, 'Noted.', null) },
+    { at: at + 1, frame: result('success') }
+  ]
+  const frames: CapturedFrame[] = WAKES_AFTER_ITS_SHELL.flatMap((captured, index) =>
+    captured.frame.subtype === 'task_notification' && captured.frame.task_id === 'agent-1'
+      ? [captured, ...leadWake(captured.at + 1_000, `lead-wake-${index}`)]
+      : [captured]
+  )
+  for (const [index, captured] of frames.entries()) {
+    clock = start + captured.at
+    frame(connection, { uuid: `frame-${index}`, ...captured.frame })
+    await host.flushStreamedEvents(SESSION)
+  }
+
+  // The first turn and the wake while the helper's own shell runs stay quiet; the wake its final notification opens announces.
+  const finalNotification = frames.findLastIndex(
+    ({ frame }) => frame.subtype === 'task_notification'
+  )
+  await eventually(() => expect(completions).toEqual([`frame-${finalNotification}`]))
+})
+
 it('keeps a helper working while its own shell runs and through its wake-up, ending on its answer', async () => {
   const connection = claude.connections[0]!
   await sendAndEcho(connection, 'Sleep in the background.')
@@ -246,7 +287,8 @@ it('keeps a helper working while its own shell runs and through its wake-up, end
       state: 'completed',
       tokens: 18_181,
       startedAt: start + 15,
-      settledAt: start + 46_198
+      // Settled by its notification, which wakes the lead, not the update a millisecond before.
+      settledAt: start + 46_199
     })
   )
   expect(strip()).toEqual([])

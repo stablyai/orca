@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 
 export const { fetchCodexModelCatalogListing } = await vi.importActual<{
   fetchCodexModelCatalogListing(input: {
@@ -19,4 +19,4 @@ export const { fetchCodexModelCatalogListing } = await vi.importActual<{
     configured?: { model?: string; effort?: string }
     listedServiceTiers?: readonly string[]
   }>
-}>('../../../main/codex/codex-structured-model-catalog')
+}>('../../../main/codex/structured/catalog/codex-structured-model-catalog')

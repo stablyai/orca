@@ -1,3 +1,4 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -9,7 +10,6 @@ import {
   resolveDefaultBaseRefWithLocalGit,
   getBranchConflictKind,
   getPRForBranchMock,
-  gitRunner,
   listWorktrees,
   resolveLocalGitUsernameMock
 } from '../orca-runtime-test-mocks.spec'
@@ -83,12 +83,15 @@ describe('OrcaRuntimeService', () => {
     const result = await runtime.createManagedWorktree({
       repoSelector: 'id:folder-repo',
       name: 'folder-session',
+      lineage: { cwdParentWorktree: 'id:stale', cwdParentAmbiguous: true },
       displayName: '\u0000\u202e',
       displayNameKind: 'user',
       createdWithAgent: 'codex',
       startup: { command: 'codex', viewMode: 'chat' }
     })
 
+    expect(result.lineage).toBeUndefined()
+    expect(result.worktree.lineage).toBeNull()
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(createTerminal).toHaveBeenCalledWith(
       `id:${result.worktree.id}`,
@@ -164,7 +167,7 @@ describe('OrcaRuntimeService', () => {
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/cli-fresh-base^{commit}')) {
         throw new Error('branch not found')
       }
@@ -259,7 +262,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/cli-stale-main^{commit}')) {
         throw new Error('branch not found')
       }
@@ -305,7 +308,7 @@ describe('OrcaRuntimeService', () => {
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(addWorktree).mockResolvedValueOnce({})
     vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
@@ -370,7 +373,7 @@ describe('OrcaRuntimeService', () => {
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(addWorktree).mockResolvedValueOnce({})
     vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
@@ -423,7 +426,7 @@ describe('OrcaRuntimeService', () => {
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(addWorktree).mockResolvedValueOnce({})
     vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote') {
         return { stdout: 'team\norigin\n', stderr: '' }
       }
@@ -483,7 +486,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/cli-refresh-no-local')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/cli-refresh-no-local')
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
@@ -527,7 +530,7 @@ describe('OrcaRuntimeService', () => {
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(addWorktree).mockResolvedValueOnce({})
     vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
@@ -583,7 +586,7 @@ describe('OrcaRuntimeService', () => {
   it('creates a branchNameOverride worktree from the selected matching remote base ref', async () => {
     const runtime = new OrcaRuntimeService(store)
     const gitSpy = vi
-      .spyOn(gitRunner, 'gitExecFileAsync')
+      .spyOn(gitExecFile, 'gitExecFileAsync')
       .mockResolvedValue({ stdout: '', stderr: '' })
     onTestFinished(() => gitSpy.mockRestore())
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/feature-something')
@@ -661,7 +664,7 @@ describe('OrcaRuntimeService', () => {
         }
       ])
       .mockResolvedValueOnce([createdWorktree])
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args[1] === '--verify') {
         return { stdout: 'branch-sha\n', stderr: '' }
       }

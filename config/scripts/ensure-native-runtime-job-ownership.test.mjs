@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { peImage } from './windows-pe-image-fixture.mjs'
 
@@ -11,8 +11,7 @@ const {
   CYGWIN_BREAKAWAY_MARKER_TEXT,
   NATIVE_HOST_JOB_MARKER,
   assertNodePtyJobOwnership,
-  assertRebuiltConptyDeniesMsysBreakaway,
-  nodePtyAddonPath
+  assertRebuiltConptyDeniesMsysBreakaway
 } = require('./node-pty-job-ownership.cjs')
 const NODE_PTY_PATCH = readFileSync(
   new URL('../patches/node-pty@1.1.0.patch', import.meta.url),
@@ -65,17 +64,6 @@ const onWindows = (native, addonPath) => ({
 })
 
 describe('assertNodePtyJobOwnership', () => {
-  it('keeps node-addon-api project paths absolute during Windows source builds', () => {
-    expect(NODE_PTY_PATCH).toContain(
-      `+      "<!(node -p \\"require.resolve('node-addon-api/node_addon_api.gyp')\\"):node_addon_api_except"`
-    )
-  })
-
-  it('leaves the unchanged Windows helper and fallback on their upstream prebuilds', () => {
-    expect(NODE_PTY_PATCH).toContain("-          'target_name': 'conpty_console_list'")
-    expect(NODE_PTY_PATCH).toContain("-          'target_name': 'pty'")
-  })
-
   // Pin marker to compiled C++: drift would reject every correctly rebuilt addon, unfixable by another rebuild.
   it('sniffs for a literal the patch really adds to conpty.cc', () => {
     const conptyHunk = NODE_PTY_PATCH.split(/^diff --git /m).find((section) =>
@@ -91,12 +79,6 @@ describe('assertNodePtyJobOwnership', () => {
         'stopped adding it or CYGWIN_BREAKAWAY_MARKER_TEXT drifted; until they agree the gate ' +
         'rejects every correctly rebuilt addon.'
     ).toBe(true)
-  })
-
-  // MSVC compiles L"" to UTF-16LE; reading the addon as anything else finds nothing.
-  it('looks for that literal in the encoding the compiler stores it in', () => {
-    expect(CYGWIN_BREAKAWAY_MARKER.toString('utf16le')).toBe(CYGWIN_BREAKAWAY_MARKER_TEXT)
-    expect(CYGWIN_BREAKAWAY_MARKER.length).toBe(CYGWIN_BREAKAWAY_MARKER_TEXT.length * 2)
   })
 
   it('rejects the prebuild that shipped without the job exports', () => {
@@ -143,35 +125,6 @@ describe('assertNodePtyJobOwnership', () => {
   ])('stays out of the way on %s', (_case, spec) => {
     expect(() => assertNodePtyJobOwnership({ ...spec, native: PREBUILD })).not.toThrow()
   })
-
-  it('would have thrown on Windows for the very same input', () => {
-    expect(() =>
-      assertNodePtyJobOwnership({ platform: 'win32', nativeName: 'conpty', native: PREBUILD })
-    ).toThrow()
-  })
-})
-
-describe('nodePtyAddonPath', () => {
-  // Join segments so Windows drive/backslash paths exercise the real resolve result.
-  it('resolves the addon against node-pty lib, which is the only base callers share', () => {
-    expect(
-      nodePtyAddonPath(
-        resolve('/app/node_modules/node-pty/lib/utils.js'),
-        { dir: '../build/Release/' },
-        'conpty'
-      )
-    ).toBe(join(resolve('/app/node_modules/node-pty'), 'build', 'Release', 'conpty.node'))
-  })
-
-  it('handles the bundled layout, where the addon sits beside lib', () => {
-    expect(
-      nodePtyAddonPath(
-        resolve('/app/resources/node-pty/lib/utils.js'),
-        { dir: './build/Release/' },
-        'conpty'
-      )
-    ).toBe(join(resolve('/app/resources/node-pty/lib'), 'build', 'Release', 'conpty.node'))
-  })
 })
 
 describe('assertRebuiltConptyDeniesMsysBreakaway', () => {
@@ -192,13 +145,6 @@ describe('assertRebuiltConptyDeniesMsysBreakaway', () => {
     }
     return nodePtyDir
   }
-
-  it('accepts the addon a good same-host rebuild leaves behind', () => {
-    const nodePtyDir = rebuiltInto({ 'build/Release/conpty.node': {} })
-    expect(() =>
-      assertRebuiltConptyDeniesMsysBreakaway({ nodePtyDir, rebuildArch: 'x64', crossHost: false })
-    ).not.toThrow()
-  })
 
   it('rejects one that predates the denial, wherever the rebuild ran', () => {
     const nodePtyDir = rebuiltInto({

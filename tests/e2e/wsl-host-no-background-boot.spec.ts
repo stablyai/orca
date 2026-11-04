@@ -165,7 +165,7 @@ test.describe('E9: background work on a stopped WSL host', () => {
             ),
           { timeout: 30_000 }
         )
-        .toContain('Ubuntu was stopped')
+        .toContain('Ubuntu is stopped')
       const connectsWhileStopped = fakeWslConnects(connectLogFile).length
       // Setup connected at least once: a connect log that was never written fails here.
       expect(connectsWhileStopped).toBeGreaterThan(0)

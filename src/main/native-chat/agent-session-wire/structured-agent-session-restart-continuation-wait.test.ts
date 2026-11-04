@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 
 import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
@@ -9,7 +9,8 @@ const MESSAGE = 'continuation-1'
 
 let submission: AgentJournalSubmission
 const journal = {
-  submissions: (): AgentJournalSubmission[] => [submission],
+  submission: (id: string): AgentJournalSubmission | undefined =>
+    id === MESSAGE ? submission : undefined,
   cursor: () => ({ epoch: 'epoch-1', sequence: 1 }),
   activeTurnId: () => null
 }

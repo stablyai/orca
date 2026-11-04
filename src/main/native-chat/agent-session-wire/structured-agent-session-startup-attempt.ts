@@ -1,89 +1,43 @@
-import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
-import { randomUUID } from 'node:crypto'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import {
   waitForStructuredAgentSessionStart,
   type StructuredAgentSessionStartReadiness
 } from './structured-agent-session-start-readiness'
 export type { StructuredAgentSessionStartReadiness } from './structured-agent-session-start-readiness'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import {
+  STRUCTURED_AGENT_SESSION_STARTUP_EXIT_GRACE_MS,
   STRUCTURED_AGENT_SESSION_STARTUP_LIMITS,
   type StructuredAgentSessionStartupAttempt,
   type StructuredAgentSessionStartupLimits
 } from './structured-agent-session-startup-attempt-contract'
+import { AgentSessionStartFailure } from './structured-agent-session-start-failure'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import {
+  measureStartup,
+  startupContractFailure,
+  startupDue,
+  trackedStartup,
+  type StructuredAgentSessionExpiredStartup,
+  type StructuredAgentSessionStartupProgress,
+  type StructuredAgentSessionStartupSettled,
+  type StructuredAgentSessionTrackedStartup
+} from './structured-agent-session-startup-tracking'
 
-export function mintStructuredAgentSessionStartupAttempt(input: {
-  record: AgentSessionRecord
-  identity: AgentSessionJournalIdentity
-  spawnToken: string
-  permissionMode?: AgentChatPermissionChoice
-  accountRecipe?: ClaudeAccountRecipe
-  events?: StructuredAgentSessionEventSink
-  signal?: AbortSignal
-  startupOptions?: Readonly<Record<string, string>>
-  attemptId?: string
-}): StructuredAgentSessionStartupAttempt {
-  const { record } = input
-  const selected = input.startupOptions ?? record.options
-  const options = record.provider === 'claude' ? { fastMode: 'false', ...selected } : selected
-  return {
-    attemptId: input.attemptId ?? randomUUID(),
-    identity: input.identity,
-    fence: record.lease.runtimeFence,
-    spawnToken: input.spawnToken,
-    launch: {
-      location: record.location,
-      accountHome: record.accountHome,
-      ...(record.launchDirectory === undefined ? {} : { launchDirectory: record.launchDirectory })
-    },
-    ...(options ? { options } : {}),
-    ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
-    ...(input.accountRecipe ? { accountRecipe: input.accountRecipe } : {}),
-    ...(input.events ? { events: input.events } : {}),
-    ...(input.signal ? { signal: input.signal } : {})
-  }
-}
+export { mintStructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt-mint'
 
-export type StructuredAgentSessionExpiredStartup = {
-  sessionId: string
-  attemptId: string
-  child: StructuredAgentSessionProviderChildIdentity | null
-}
+export type {
+  StructuredAgentSessionExpiredStartup,
+  StructuredAgentSessionStartupProgress,
+  StructuredAgentSessionStartupSettled
+} from './structured-agent-session-startup-tracking'
 
-export type StructuredAgentSessionStartupSettled = {
-  agent: AgentSessionJournalIdentity['agent']
-  outcome: 'ready' | 'ceiling' | 'ended'
-  durationMs: number
-}
-
-export type StructuredAgentSessionStartupProgress = {
-  spawned: () => void
-}
-
-type Tracked = {
-  attemptId: string
-  attempt: StructuredAgentSessionStartupAttempt | null
-  child: StructuredAgentSessionProviderChildIdentity | null
-  /** Absolute ceiling starts before any startup wait. */
-  registeredAt: number
-  spawnedAt: number | null
-  timer: ReturnType<typeof setTimeout> | null
-  expired: boolean
-  /** Defer expiry reporting until aborted spawn settles; successful readiness overrides it. */
-  expiry: StructuredAgentSessionStartupSettled | null
-  failure?: SubmissionRejectionFact
-  retry?: boolean
-  readiness: PromiseWithResolvers<'ready' | 'ended'>
-}
+type Tracked = StructuredAgentSessionTrackedStartup
 
 export class StructuredAgentSessionStartupAttempts {
   private readonly open = new Map<string, Tracked>()
+  /** The open settling each starting child's outcome; while it runs, the child's end waits for it. */
+  private readonly owners = new Map<string, StructuredAgentSessionProviderChildIdentity>()
   private disposed = false
   private readonly limits: StructuredAgentSessionStartupLimits
   private readonly now: () => number
@@ -92,6 +46,8 @@ export class StructuredAgentSessionStartupAttempts {
     private readonly deps: {
       /** Expire outside serialization so blocked provider startup cannot delay cancellation. */
       expire: (expired: StructuredAgentSessionExpiredStartup) => void
+      /** The adapter answered nothing within the grace after its exit; cancel like expiry. */
+      breach?: (breached: StructuredAgentSessionExpiredStartup & { agent: string }) => void
       settled?: (settled: StructuredAgentSessionStartupSettled) => void
       limits?: Partial<StructuredAgentSessionStartupLimits>
       /** Use elapsed time; host clocks may be pinned. */
@@ -112,31 +68,9 @@ export class StructuredAgentSessionStartupAttempts {
     return this.now() - registeredAt >= this.limits.ceilingMs
   }
 
-  childFailed(
-    sessionId: string,
-    child: StructuredAgentSessionProviderChildIdentity,
-    failure: SubmissionRejectionFact,
-    retry: boolean
-  ): void {
-    const tracked = this.open.get(sessionId)
-    if (tracked?.child && sameProviderChild(tracked.child, child)) {
-      Object.assign(tracked, { failure, retry })
-    }
-  }
-
   private register(sessionId: string, attemptId: string, registeredAt = this.now()): Tracked {
     this.end(sessionId)
-    const tracked: Tracked = {
-      attemptId,
-      attempt: null,
-      child: null,
-      registeredAt,
-      spawnedAt: null,
-      timer: null,
-      expired: false,
-      expiry: null,
-      readiness: Promise.withResolvers()
-    }
+    const tracked = trackedStartup(attemptId, registeredAt)
     this.open.set(sessionId, tracked)
     if (!this.disposed) {
       this.schedule(sessionId, tracked)
@@ -154,6 +88,9 @@ export class StructuredAgentSessionStartupAttempts {
         ? begun
         : this.register(sessionId, attempt.attemptId)
     tracked.attempt = attempt
+    tracked.stopListening ??= attempt.events?.onRootExit?.(() =>
+      this.rootExited(sessionId, tracked)
+    )
     const current = (): boolean => this.open.get(sessionId) === tracked && !this.disposed
     return {
       spawned: () => {
@@ -175,6 +112,39 @@ export class StructuredAgentSessionStartupAttempts {
     }
     return {
       wait: (budgetMs) => waitForStructuredAgentSessionStart(tracked.readiness.promise, budgetMs)
+    }
+  }
+
+  /** The child's open claims its outcome; false if the child no longer starts on this clock. */
+  own(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): boolean {
+    if (!this.tracking(sessionId, child)) {
+      return false
+    }
+    this.owners.set(sessionId, { generation: child.generation, fence: child.fence })
+    return true
+  }
+
+  disown(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): void {
+    if (this.ownsOpen(sessionId, child)) {
+      this.owners.delete(sessionId)
+    }
+  }
+
+  ownsOpen(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): boolean {
+    const owner = this.owners.get(sessionId)
+    return !!owner && sameProviderChild(owner, child)
+  }
+
+  /** The owner's verdict; readiness waiters and the start flight read it once readiness ends. */
+  failed(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity,
+    failure: AgentSessionStartFailure
+  ): void {
+    const tracked = this.tracking(sessionId, child)
+    if (tracked) {
+      tracked.failure = failure
+      this.settle(sessionId, tracked, 'ended')
     }
   }
 
@@ -202,13 +172,8 @@ export class StructuredAgentSessionStartupAttempts {
 
   /** Reject readiness that lost the race to expiry. */
   onClock(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): boolean {
-    const tracked = this.open.get(sessionId)
-    return (
-      !this.disposed &&
-      !!tracked?.child &&
-      !tracked.expired &&
-      sameProviderChild(tracked.child, child)
-    )
+    const tracked = this.tracking(sessionId, child)
+    return !this.disposed && !!tracked && !tracked.expired
   }
 
   ready(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): void {
@@ -218,9 +183,34 @@ export class StructuredAgentSessionStartupAttempts {
     }
   }
 
-  childEnded(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): void {
-    const tracked = this.open.get(sessionId)
-    if (tracked?.child && sameProviderChild(tracked.child, child)) {
+  /** Settles once the adapter saw this starting child's own root exit; otherwise never. */
+  rootExit(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): Promise<void> {
+    return this.tracking(sessionId, child)?.rootExit.promise ?? new Promise(() => {})
+  }
+
+  /** Orca ending the child decides the start: a failure Orca recorded is final, any other close
+   *  cancels it. An exit of its own leaves an open still settling the start, and its clock, until
+   *  that open gives the outcome. */
+  childEnded(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity,
+    ended: { byOrca: boolean; failure?: SubmissionRejectionFact; reason?: string | null } = {
+      byOrca: false
+    }
+  ): void {
+    const tracked = this.tracking(sessionId, child)
+    if (ended.failure) {
+      const cause = new Error(ended.reason ?? 'Orca stopped the agent while it started')
+      this.failed(sessionId, child, new AgentSessionStartFailure(cause, 'never', ended.failure))
+    } else if (tracked && (ended.byOrca || !this.ownsOpen(sessionId, child))) {
+      this.settle(sessionId, tracked, 'ended')
+    }
+  }
+
+  /** The owner ended without a verdict: replaced, cancelled or no longer starting. */
+  released(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): void {
+    const tracked = this.tracking(sessionId, child)
+    if (tracked) {
       this.settle(sessionId, tracked, 'ended')
     }
   }
@@ -241,11 +231,34 @@ export class StructuredAgentSessionStartupAttempts {
     this.disposed = true
     for (const tracked of this.open.values()) {
       tracked.readiness.resolve('ended')
+      tracked.stopListening?.()
       if (tracked.timer) {
         clearTimeout(tracked.timer)
       }
     }
     this.open.clear()
+    this.owners.clear()
+  }
+
+  private tracking(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity
+  ): Tracked | undefined {
+    const tracked = this.open.get(sessionId)
+    return tracked?.child && sameProviderChild(tracked.child, child) ? tracked : undefined
+  }
+
+  /** The deadline becomes the earlier of the original one and the grace after the exit. */
+  private rootExited(sessionId: string, tracked: Tracked): void {
+    if (this.open.get(sessionId) !== tracked || this.disposed || tracked.rootExitAt !== null) {
+      return
+    }
+    tracked.rootExitAt = this.now()
+    tracked.rootExit.resolve()
+    if (tracked.timer) {
+      clearTimeout(tracked.timer)
+    }
+    this.schedule(sessionId, tracked)
   }
 
   private markSpawned(tracked: Tracked): void {
@@ -253,7 +266,7 @@ export class StructuredAgentSessionStartupAttempts {
   }
 
   private schedule(sessionId: string, tracked: Tracked): void {
-    const due = tracked.registeredAt + this.limits.ceilingMs
+    const due = startupDue(tracked, this.limits.ceilingMs)
     tracked.timer = setTimeout(() => this.check(sessionId, tracked), Math.max(0, due - this.now()))
     tracked.timer.unref?.()
   }
@@ -265,9 +278,23 @@ export class StructuredAgentSessionStartupAttempts {
     }
     if (this.now() - tracked.registeredAt >= this.limits.ceilingMs) {
       this.expire(sessionId, tracked, 'ceiling')
+    } else if (
+      tracked.rootExitAt !== null &&
+      this.now() - tracked.rootExitAt >= STRUCTURED_AGENT_SESSION_STARTUP_EXIT_GRACE_MS
+    ) {
+      this.breach(sessionId, tracked)
     } else {
       this.schedule(sessionId, tracked)
     }
+  }
+
+  /** Fires on a timer, so neither the adapter nor the session's serialized work can hold it. */
+  private breach(sessionId: string, tracked: Tracked): void {
+    const agent = tracked.attempt?.identity.agent ?? 'agent'
+    tracked.failure = startupContractFailure(agent)
+    const breached = { sessionId, attemptId: tracked.attemptId, child: tracked.child, agent }
+    this.settle(sessionId, tracked, 'ended')
+    this.deps.breach?.(breached)
   }
 
   /** null means an already-expired spawn just published its child. */
@@ -299,13 +326,7 @@ export class StructuredAgentSessionStartupAttempts {
     tracked: Tracked,
     outcome: StructuredAgentSessionStartupSettled['outcome']
   ): StructuredAgentSessionStartupSettled | null {
-    return tracked.spawnedAt === null || !tracked.attempt
-      ? null
-      : {
-          agent: tracked.attempt.identity.agent,
-          outcome,
-          durationMs: Math.max(0, this.now() - tracked.spawnedAt)
-        }
+    return measureStartup(tracked, outcome, this.now())
   }
 
   private report(settled: StructuredAgentSessionStartupSettled | null): void {
@@ -322,6 +343,7 @@ export class StructuredAgentSessionStartupAttempts {
   private end(sessionId: string): void {
     const tracked = this.open.get(sessionId)
     tracked?.readiness.resolve('ended')
+    tracked?.stopListening?.()
     if (tracked?.timer) {
       clearTimeout(tracked.timer)
     }

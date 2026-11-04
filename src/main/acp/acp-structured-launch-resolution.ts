@@ -10,26 +10,26 @@ import {
 
 import { delimiter } from 'node:path'
 import { homedir } from 'node:os'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey,
   type AgentSessionProviderHandleChain
-} from '../../shared/agent-session-provider-handle'
-import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import {
   checkAgentCliVersion,
   type AgentCliVersionCheck,
   type AgentCliVersionReader
-} from '../agent-cli-version-probe'
+} from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   copyBesidePinnedMembers,
   resolveInstalledRuntimeRelease
 } from '../node-runtime/managed-runtime-release'
-import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { hasExplicitTuiLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import {
   isProviderTimelineTurnInNamespace,

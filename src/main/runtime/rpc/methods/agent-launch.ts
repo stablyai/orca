@@ -3,10 +3,10 @@
  * operationId adds durable at-most-once execution and recorded replay; unknown outcomes refuse, while stranded-surface recovery remains separate. */
 
 import { agentLaunchFeatureRequirement } from '../agent-launch-feature-requirement'
-import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
-import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
-import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
-import { agentSessionOperationKey } from '../../../../shared/agent-session-operation-ledger'
+import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
+import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch/contracts/agent-launch-operation'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
+import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
@@ -34,6 +34,7 @@ import {
   type AgentLaunchParams
 } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
+import { prepareAgentHandoffCard } from './agent-launch-handoff-card'
 import {
   agentLaunchFailureCode,
   launchFailureWithoutEffectsCode
@@ -201,6 +202,7 @@ async function executeAdmittedAgentLaunch(
     throw error
   }
   const terminalSpawn = trackTerminalSpawnDispatch()
+  const handedOff = prepareAgentHandoffCard(params, context)
   let result: AgentLaunchResult
   try {
     result = await runAgentLaunch(resolved, context, view, {
@@ -229,7 +231,7 @@ async function executeAdmittedAgentLaunch(
   }
   // Failed settlement leaves the provisional prompt unconfirmed (unknown for older callers), never not-delivered that invites duplication.
   await settleQuietly(admission.settle(result))
-  return result
+  return handedOff(result)
 }
 
 function runReplaySafeAgentLaunch(

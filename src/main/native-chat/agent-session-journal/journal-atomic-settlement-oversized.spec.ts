@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSnapshot
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { settleObservedExitForTest } from '../agent-session-wire/structured-agent-session-observed-exit.test-fixture'
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from './journal-row-schema'
@@ -92,9 +92,9 @@ export function registerJournalAtomicSettlementOversizedTests(
       database.db.exec('DROP TRIGGER reject_submission_settlement_item')
       expect(await settleObservedExitForTest(input)).toMatchObject({ ok: true })
       expect(fixture.journal.submission('unanswered')).toMatchObject({
-        dispatchState: 'rejected',
+        dispatchState: mode === 'stop' ? 'unknown' : 'rejected',
         recovered: true,
-        rejection: { kind: mode === 'stop' ? 'cancelled' : 'providerStartFailed' }
+        ...(mode === 'stop' ? {} : { rejection: { kind: 'providerStartFailed' } })
       })
       const committed = fixture.rows().slice(diskBefore.length)
       expect(committed.filter((row) => row.kind === 'dispatch')).toHaveLength(1)

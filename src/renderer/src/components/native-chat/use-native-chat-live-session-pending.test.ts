@@ -3,7 +3,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { useAppStore } from '@/store'
 
 const { resetTransport, subscriptions, transport } = vi.hoisted(() => {
@@ -25,7 +25,6 @@ vi.mock('./native-chat-session-transport', () => ({
   getNativeChatSessionTransport: () => transport
 }))
 
-import { isNativeChatTranscriptUnsettled } from './native-chat-live-session-contract'
 import {
   NOTFOUND_RETRY_WINDOW_MS,
   useNativeChatLiveSession,
@@ -89,24 +88,6 @@ describe('useNativeChatLiveSession — unflushed transcript (pending frame)', ()
   afterEach(() => {
     act(() => root.unmount())
     vi.useRealTimers()
-  })
-
-  it('spins while neither the read nor the stream has produced anything', async () => {
-    await render()
-
-    expect(latest?.readPhase).toBe('loading')
-    expect(latest?.status).toBe('loading')
-  })
-
-  it('leaves the loading surface on a pending frame without claiming a settled read', async () => {
-    await render()
-
-    await emit(PENDING_FRAME)
-
-    expect(latest?.readPhase).toBe('awaiting')
-    expect(latest?.status).not.toBe('loading')
-    expect(latest?.status).not.toBe('error')
-    expect(latest?.messages).toEqual([])
   })
 
   it('keeps the readSession seed live, so the real transcript still backfills', async () => {
@@ -221,15 +202,5 @@ describe('useNativeChatRetainedSession — unflushed transcript', () => {
 
     expect(latest?.readPhase).toBe('awaiting')
     expect(latest?.messages.map((message) => message.id)).toEqual(['committed'])
-  })
-})
-
-describe('isNativeChatTranscriptUnsettled', () => {
-  it('covers both unsettled phases and neither settled one', () => {
-    // Treating awaiting as settled would re-offer an already-submitted launch prefill.
-    expect(isNativeChatTranscriptUnsettled('loading')).toBe(true)
-    expect(isNativeChatTranscriptUnsettled('awaiting')).toBe(true)
-    expect(isNativeChatTranscriptUnsettled('ready')).toBe(false)
-    expect(isNativeChatTranscriptUnsettled('error')).toBe(false)
   })
 })

@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs'
 import { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
-import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,

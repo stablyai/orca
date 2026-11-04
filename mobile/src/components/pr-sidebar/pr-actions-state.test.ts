@@ -1,21 +1,7 @@
+import { summarizeProviderChecks } from '../../../../src/shared/source-control/checks/provider-check-summary'
 import { describe, expect, it } from 'vitest'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
-import { presentPrMerge, resolvePrActionAvailability } from './pr-actions-state'
-
-describe('resolvePrActionAvailability', () => {
-  it('offers Ready for review instead of Merge on drafts, like desktop', () => {
-    expect(resolvePrActionAvailability('draft')).toMatchObject({
-      canMerge: false,
-      canMarkReady: true,
-      canClose: true
-    })
-    expect(resolvePrActionAvailability('open')).toMatchObject({
-      canMerge: true,
-      canMarkReady: false,
-      canClose: true
-    })
-  })
-})
+import { presentPrMerge } from './pr-actions-state'
 
 describe('presentPrMerge', () => {
   const pr: PRInfo = {
@@ -65,6 +51,28 @@ describe('presentPrMerge', () => {
     expect(presentPrMerge({ ...pr, stack: blocked }, 'squash')).toMatchObject({
       enabled: false,
       hint: '#201 is still a draft.'
+    })
+  })
+  it('keeps the provider-authorized merge action available with cancelled checks', () => {
+    const checksSummary = summarizeProviderChecks([
+      { status: 'completed', conclusion: 'success' },
+      { status: 'completed', conclusion: 'cancelled' }
+    ])
+    expect(
+      presentPrMerge(
+        {
+          ...pr,
+          mergeable: 'MERGEABLE',
+          mergeStateStatus: 'CLEAN',
+          checksStatus: 'failure',
+          checksSummary
+        },
+        'squash'
+      )
+    ).toMatchObject({
+      label: 'Squash and merge',
+      hint: null,
+      enabled: true
     })
   })
 })

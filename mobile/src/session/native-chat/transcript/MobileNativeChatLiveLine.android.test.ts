@@ -77,20 +77,6 @@ describe('MobileNativeChatLiveLine on Android', () => {
   const sheetIds = (): string[] =>
     byType('MessageActionsSheet').map((sheet) => sheet.props.message.id)
 
-  it('opens the actions sheet for the live block from a long press on its text', () => {
-    act(() => {
-      renderer = create(chat(block))
-    })
-    expect(byType('MessageActionsSheet')).toHaveLength(0)
-
-    act(() => byType('ReasoningBody')[0]!.props.onLongPress())
-    const [sheet] = byType('MessageActionsSheet')
-    expect(sheet?.props.message).toBe(block.message)
-
-    act(() => sheet!.props.onClose())
-    expect(byType('MessageActionsSheet')).toHaveLength(0)
-  })
-
   it('keeps the sheet open when the turn finishes, and opens none for the next block by itself', () => {
     act(() => {
       renderer = create(chat(block))

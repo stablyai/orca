@@ -3,9 +3,9 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../shared/ai-vault-search-types'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
-import type { AiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+} from '../../shared/ai-vault/search/ai-vault-search-types'
+import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
+import type { AiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { SessionSearchEngine } from './session-search-engine'
 import { SessionSearchIndexer } from './session-search-indexer'
 import { sessionSearchHistoryCutoffMs } from './session-search-retention-policy'

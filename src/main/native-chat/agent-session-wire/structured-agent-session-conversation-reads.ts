@@ -4,15 +4,17 @@ import {
 } from './structured-agent-session-catalog-reads'
 import { revealStructuredAgentSession } from './structured-agent-session-reveal'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { StructuredAttentionRead } from '../../../shared/agent-session/agent-session-attention'
 import * as providerSupport from './structured-agent-session-provider-support'
-import type { OpenedStructuredAgentSessionConversation } from './structured-agent-session-conversation-open'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
-import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
-import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
+import {
+  queuedSendAnswer,
+  structuredSendAnswer
+} from './structured-agent-session-queued-send-answer'
 
 type ReadContext = {
   deps: StructuredAgentSessionHostDeps
@@ -20,32 +22,10 @@ type ReadContext = {
   serialize: <T>(id: string, task: () => Promise<T>) => Promise<T>
   readCommands: StructuredAgentSessionClientDelivery['readCommandsSettled']
   conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
-  adoptOpened: (id: string, opened: OpenedStructuredAgentSessionConversation) => Promise<void>
 }
 
 /** Readers share the conversation owner; inventory never founds a journal or prepares a provider. */
 export function createStructuredAgentSessionConversationReads(context: () => ReadContext) {
-  const sessionOwned = async (id: string, current: () => boolean = () => true) => {
-    const { deps, sessions, adoptOpened } = context()
-    const record = deps.store.requireWritableRecord(id)
-    let session = sessions.get(id)
-    if (!session) {
-      const opened = await restoreStructuredAgentSessionRead(deps, id)
-      if (opened) {
-        if (current()) {
-          await adoptOpened(id, opened)
-          session = opened.session
-        } else {
-          await opened.session.journal.close()
-        }
-      }
-    }
-    return { record, session }
-  }
-  const prospectiveAccountHomeOwned = async (id: string) => {
-    const { record, session } = await sessionOwned(id)
-    return (await structuredAgentSessionReceivingAccount(context().deps, record, session)).home
-  }
   const readModelCatalog = createStructuredAgentSessionCatalogReads(() => ({
     deps: context().deps,
     serialize: context().serialize,
@@ -66,15 +46,55 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       if (!context().deps.store.getRecord(record.sessionId)) {
         return structuredAgentSessionCatalogScopeOwned(context().deps, params, undefined)
       }
-      const { session } = await sessionOwned(record.sessionId, params.operation?.current)
-      if (params.operation?.current() === false) {
-        return null
-      }
-      return structuredAgentSessionCatalogScopeOwned(context().deps, params, session)
+      return structuredAgentSessionCatalogScopeOwned(
+        context().deps,
+        params,
+        context().sessions.get(record.sessionId)
+      )
     }
   }))
+  const journalOf = async (id: string) => (await context().conversation(id)).journal
   return {
+    journalCurrentRead: async (sessionId: string, inputIds?: readonly string[]) =>
+      (await context().conversation(sessionId)).journal.currentRead(inputIds),
+
     readModelCatalog,
+    attentionReads: {
+      workspace: async (
+        location: AgentSessionExecutionLocation
+      ): Promise<(StructuredAttentionRead & { scope: AgentSessionExecutionLocation })[]> => {
+        const { deps, sessions } = context()
+        const reads = await Promise.all(
+          deps.store.workspaceAttentionReads(location).map(async (read) => {
+            const journal = sessions.get(read.sessionId)?.journal
+            try {
+              return journal
+                ? { ...read, observedCursor: await journal.readInOrder(journal.cursor) }
+                : read
+            } catch (error) {
+              deps.logger.warn('capturing a workspace attention boundary failed', {
+                scope: 'workspace-attention-read',
+                sessionId: read.sessionId,
+                error
+              })
+              return null
+            }
+          })
+        )
+        return reads.flatMap((read) => (read ? [read] : []))
+      },
+      sessionLocation: (id: string): AgentSessionExecutionLocation | null =>
+        context().deps.store.getConversation(id)?.location ?? null
+    },
+    queuedSendAnswer: async (id: string, messageId: string) =>
+      queuedSendAnswer(await journalOf(id), messageId),
+    sendAnswer: async (id: string, messageId: string) =>
+      structuredSendAnswer(
+        await journalOf(id),
+        (operationId) => context().deps.store.readCommandReceipt({ kind: 'global' }, operationId),
+        id,
+        messageId
+      ),
     readCommands: (id: string, commandsOnRequest = false) =>
       context().readCommands(id, commandsOnRequest),
     supportsCreate: (location: AgentSessionExecutionLocation, agent: string) =>
@@ -90,7 +110,11 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     holdsSessions: () => context().deps.store.holdsRecords(),
     onSessionsHeld: (listener: () => void) => context().deps.store.onFirstRecord(listener),
     prospectiveAccountHome: (id: string) => {
-      return context().serialize(id, () => prospectiveAccountHomeOwned(id))
+      const { deps, serialize } = context()
+      return serialize(
+        id,
+        async () => (await deps.launchAccountHome?.(deps.store.requireWritableRecord(id))) ?? null
+      )
     }
   }
 }

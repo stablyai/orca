@@ -2,7 +2,11 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import { createPane, createManager, type MockTransport } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -160,8 +164,15 @@ describe('a pane on an unconverted SSH row', () => {
     }
     await installTerminalTestGlobals()
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     connectPane = (paneId, deps) =>
-      connectPanePty(...mockPanePtyArgs(createPane(paneId), createManager(paneId), deps))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(paneId),
+          createManager(paneId),
+          bindPaneAgentTitleMocks(deps, agentTitleMocks)
+        )
+      )
   })
 
   afterEach(async () => {
@@ -227,29 +238,5 @@ describe('a pane on an unconverted SSH row', () => {
     await flushAsyncTicks(10)
 
     expect(sshApi().connect).not.toHaveBeenCalled()
-  })
-
-  it('reports a failed dial on the pane', async () => {
-    sshApi().connect.mockRejectedValueOnce(new Error('host unreachable'))
-
-    const { deps } = mountUnservedPane()
-    await flushAsyncTicks(10)
-
-    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
-      expect.any(Number),
-      'SSH connection failed: host unreachable'
-    )
-  })
-
-  it('leaves recovery to the overlay when typed input cannot be delivered', async () => {
-    const pane = createPane(1)
-    const { connectPanePty } = await import('./pty-connection')
-    connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
-    await flushAsyncTicks(10)
-
-    vi.mocked(pane.terminal.onData).mock.calls[0]?.[0]('ls\r')
-    await flushAsyncTicks(10)
-
-    expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
   })
 })

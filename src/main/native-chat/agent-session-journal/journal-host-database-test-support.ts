@@ -1,27 +1,35 @@
-import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session-journal-types'
-// Share one connection per test profile to match production host ownership.
-
+import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
-import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { JournalHostDatabase } from './journal-host-database'
+import { restoreJournal, type JournalLoad } from './journal-open'
+import { buildJournalQueueRow, type JournalQueueChange } from './journal-queue-events'
 import { fields } from './journal-state-schema'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { decodeJournalOutcome, type JournalOutcome } from './journal-outcome-codec'
 import { applyJournalRow } from './journal-reducer'
-import { restoreJournal, type JournalLoad } from './journal-open'
+import {
+  assertTestJournalHistoricalInputs,
+  pinTestJournalInputMode
+} from './journal-historical-inputs.test-support'
+export {
+  finishTestJournalHistoricalInputs,
+  pinTestJournalInputMode
+} from './journal-historical-inputs.test-support'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
 import {
-  insertJournalRow,
   iterateJournalEpochRows,
   publishJournalSessionEpoch,
   readJournalSessionEpoch,
   type JournalStoredRow
 } from './journal-row-table'
-import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
+// Share one connection per test profile to match production host ownership.
+
+import type Database from '../../sqlite/sync-database'
 
 const opened = new Map<string, JournalHostDatabase>()
 
@@ -198,6 +206,20 @@ export function deleteTestJournalRow(db: Database.Database, sessionId: string, s
   )
 }
 
+/** Persist a prior-build queue row verbatim, then replay it through the production fold. */
+export function appendTestJournalQueueRow(
+  db: Database.Database,
+  journal: AgentSessionJournal,
+  messageId: string,
+  change: JournalQueueChange
+): void {
+  const state = journal['state']
+  assertTestJournalHistoricalInputs(db, journal)
+  const row = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, Date.now())
+  insertTestJournalRow(db, state.sessionId, row)
+  applyJournalRow(state, row)
+}
+
 /** Unannotated submissions and terminal rows emitted by the legacy writer in one source epoch. */
 export function writeTestLegacyTerminalGaps(
   db: Database.Database,
@@ -276,26 +298,4 @@ export function readTestQueueChanges(
       { messageId, op: first ? 'queued' : card.state, returned: first && card.state === 'returned' }
     ]
   })
-}
-
-/** Input fixtures stand for a chat an older build wrote and goes on writing: writes to its input
- * epoch stay input rows, as that build's writer stored them, so the input reader meets writer-made
- * rows. An epoch this build founds (rollover, replacement) is written as this build writes it. */
-export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
-  const projection = journal['projection']
-  const prepare = projection.prepare.bind(projection)
-  projection.prepare = (db, rows, savedAt) => {
-    const state = journal['state']
-    if (journalOutcomeSource(db, state.sessionId, state.epoch)) {
-      return prepare(db, rows, savedAt)
-    }
-    for (const row of rows) {
-      insertJournalRow(db, state.sessionId, row, savedAt)
-    }
-    return () => {
-      for (const row of rows) {
-        applyJournalRow(state, row, savedAt)
-      }
-    }
-  }
 }

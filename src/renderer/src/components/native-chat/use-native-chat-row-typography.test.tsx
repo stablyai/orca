@@ -2,7 +2,7 @@
 import { useMemo, useRef } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
+import * as terminalThemeSelection from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { useAppStore } from '../../store'
 import { resetSystemPrefersDarkSubscriptionForTests } from '../terminal-pane/use-system-prefers-dark'

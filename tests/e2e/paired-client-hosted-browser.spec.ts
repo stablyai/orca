@@ -237,6 +237,48 @@ async function callBrowserSnapshot(
   )
 }
 
+// Every hop between the runtime and the page's host must keep the URL guard and its diagnostics.
+async function expectUrlGuardHolds(
+  page: Page,
+  environmentId: string,
+  worktreeId: string,
+  browserPageId: string,
+  { pageUrl, otherUrl }: { pageUrl: string; otherUrl: string }
+): Promise<void> {
+  const focusExpecting = (expectUrl: string): Promise<unknown> =>
+    page.evaluate(
+      ({ browserPageId, environmentId, expectUrl, worktreeId }) =>
+        window.api.runtimeEnvironments.call({
+          selector: environmentId,
+          method: 'browser.focus',
+          params: {
+            element: '#marker',
+            expectUrl,
+            page: browserPageId,
+            worktree: `id:${worktreeId}`
+          },
+          timeoutMs: 15_000
+        }),
+      { browserPageId, environmentId, expectUrl, worktreeId }
+    )
+  expect(await focusExpecting(otherUrl)).toMatchObject({
+    ok: false,
+    error: {
+      code: 'browser_expected_url_mismatch',
+      data: {
+        expectedUrl: otherUrl,
+        actualUrl: pageUrl,
+        browserPageId,
+        mayHaveStarted: false
+      }
+    }
+  })
+  expect(await focusExpecting(pageUrl)).toMatchObject({
+    ok: true,
+    result: { browserPageId, checkedUrl: pageUrl }
+  })
+}
+
 async function runClientHostedBrowserJourney(args: {
   hostApp: ElectronApplication
   offer: RuntimeDesktopPairingOffer
@@ -281,6 +323,13 @@ async function runClientHostedBrowserJourney(args: {
         clientHostedPage.remotePageId
       )
     ).toContain('client-hosted-marker')
+    await expectUrlGuardHolds(
+      client.page,
+      client.environmentId,
+      worktreeId,
+      clientHostedPage.remotePageId,
+      { pageUrl: fixture.clientUrl, otherUrl: fixture.serverUrl }
+    )
 
     await client.page.evaluate(async () => {
       await window.__store?.getState().updateSettings({
@@ -308,6 +357,13 @@ async function runClientHostedBrowserJourney(args: {
       .toHaveLength(1)
     expect(await readOwnedPageUrls(client.app, fixture.serverUrl)).toHaveLength(0)
     expect(await readOwnedPageUrls(client.app, fixture.clientUrl)).toHaveLength(1)
+    await expectUrlGuardHolds(
+      client.page,
+      client.environmentId,
+      worktreeId,
+      serverHostedPage.remotePageId,
+      { pageUrl: fixture.serverUrl, otherUrl: fixture.clientUrl }
+    )
   } finally {
     await client?.dispose()
     await fixture.close()
