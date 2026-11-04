@@ -21,12 +21,14 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 import {
   appendTestJournalQueueRow,
   openTestJournalHostDatabase,
-  createTrackedJournalOpener
+  createTrackedJournalOpener,
+  finishTestJournalHistoricalInputs
 } from './journal-host-database-test-support'
 import type { AgentSessionJournal } from './journal-store'
 import * as records from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 const journals = createTrackedJournalOpener()
+const historicalJournals = createTrackedJournalOpener({ legacyInputs: true })
 const identity = {
   sessionId: 'recovery-flow',
   workspaceId: 'ws',
@@ -54,13 +56,17 @@ const open = async () => {
   journal = await journals.open({ identity, stateDirectory: root, now: () => ++clock })
   journal.queuedMessages.inputWork = work
 }
+const openHistorical = async () => {
+  journal = await historicalJournals.open({ identity, stateDirectory: root, now: () => ++clock })
+  journal.queuedMessages.inputWork = work
+}
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'b1-recovery-'))
   held = new Set()
   lease = records.agentSessionLeaseFixture({ sessionId: identity.sessionId })
-  await open()
 })
 afterEach(async () => {
+  await historicalJournals.closeAll()
   await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
@@ -121,6 +127,7 @@ function savedCopy(id: string, changedBody?: AgentJournalMessageItem) {
 }
 
 it('keeps uncertain input ordinary, rejects stale virtual actions, and preserves exclusive stopped carry', async () => {
+  await open()
   await send('send')
   await ended()
   const original = journal.submission('send')!
@@ -215,6 +222,7 @@ it('keeps uncertain input ordinary, rejects stale virtual actions, and preserves
 })
 
 it('retains ordinary input through restart/reconciliation and exact replay receipt', async () => {
+  await open()
   await send('restart')
   await ended('replayed')
   await journal.close()
@@ -278,6 +286,7 @@ it('retains ordinary input through restart/reconciliation and exact replay recei
 })
 
 it('shows the stopped queue again when a post-Stop direct send is no longer held', async () => {
+  await open()
   await journal.queuedMessages.insert({ messageId: 'waiting', body: body('waiting') })
   await journal.appendStopEvent({ reason: 'user-stop' }, 7)
   await send('post-stop')
@@ -293,6 +302,7 @@ it('shows the stopped queue again when a post-Stop direct send is no longer held
 })
 
 it('keeps an image as a returned card on both failed-start routes in the rejection transaction', async () => {
+  await open()
   const image: AgentJournalMessageItem = {
     ...body('image'),
     blocks: [
@@ -337,6 +347,7 @@ it('keeps an image as a returned card on both failed-start routes in the rejecti
 })
 
 it('confirms id-less live receipts and releases unopened error/interrupt holds without deciding delivery', async () => {
+  await open()
   const { createCodexDispatchEchoes } = await import('../../codex/codex-structured-dispatch-echo')
   const { settleCodexSendsInEndedTurn } =
     await import('../../codex/codex-structured-turn-end-settlement')
@@ -403,6 +414,7 @@ it('confirms id-less live receipts and releases unopened error/interrupt holds w
 })
 
 it('retains full source, action resolution and exact late proof across cuts and epochs', async () => {
+  await openHistorical()
   const noop = { write: () => {}, committed: () => {} }
   await journal.context.clear(
     { operationId: 'clear-before-U', afterFence: 7, clearedAt: clock },
@@ -419,6 +431,16 @@ it('retains full source, action resolution and exact late proof across cuts and 
   await send('U', true, full)
   await ended('U-end')
   const original = savedCopy('U')
+  await send('delete-U')
+  await ended('delete-end')
+  savedCopy('delete-U')
+  await send('edited', true, full)
+  await ended('edited-end')
+  const edit = savedCopy('edited', full)
+  await send('resent', true, full)
+  await ended('resent-end')
+  const retry = savedCopy('resent')
+  finishTestJournalHistoricalInputs(journal)
   await journal.context.rewind(floor, 7, [], () => noop)
   expect(journal.item(agentJournalSubmissionKey('U'))).toBeNull()
   expect(journal.queuedMessages.get(original.messageId)?.body).toEqual(full)
@@ -436,18 +458,14 @@ it('retains full source, action resolution and exact late proof across cuts and 
     holdReason: 'delivery_unconfirmed',
     body: full
   })
-  await send('delete-U')
-  await ended('delete-end')
-  savedCopy('delete-U')
+
   await journal.queuedMessages.withdraw([cardId('delete-U')])
   await journal.replaceEpochItems('handle_forked', 7, [])
   await journal.close()
   await open()
   expect(journal.queuedMessages.get(cardId('delete-U'))?.state).toBe('withdrawn')
   expect(journal.queuedMessages.list().filter((c) => c.state === 'returned')).toEqual([])
-  await send('edited', true, full)
-  await ended('edited-end')
-  const edit = savedCopy('edited', full)
+
   const before = journal.cursor()
   await journal.queuedMessages.update({
     messageId: edit.messageId,
@@ -483,9 +501,7 @@ it('retains full source, action resolution and exact late proof across cuts and 
     expectedBodyFingerprint: edit.fingerprint,
     text: 'changed'
   })
-  await send('resent', true, full)
-  await ended('resent-end')
-  const retry = savedCopy('resent')
+
   await journal.appendSubmission(
     {
       clientMessageId: 'fresh-attempt',
@@ -516,6 +532,7 @@ it('retains full source, action resolution and exact late proof across cuts and 
 })
 
 it('does not end observation from warnings, retry errors or another attempt’s explicit end', async () => {
+  await open()
   await send('U')
   for (const [kind, payload] of [
     ['notification:warning', '{}'],
@@ -554,6 +571,7 @@ it('does not end observation from warnings, retry errors or another attempt’s 
 it.each([100, 1000])(
   'does no accepted-history or spent-card visits per streamed row at N=%i',
   async (count) => {
+    await open()
     for (let i = 0; i < count; i++) {
       const message = body('old')
       await journal.appendSubmission({
@@ -610,13 +628,27 @@ it.each([100, 1000])(
     const { structuredAgentSessionCommandTurnIdentity } =
       await import('../../../shared/agent-session/view/structured-agent-session-command-turn-identity')
     const command = { ...body('/compact'), command: { name: 'compact' as const } }
-    appendTestJournalQueueRow(openTestJournalHostDatabase(root).db, journal, 'command', {
-      op: 'queued',
-      body: command,
-      position: 0,
-      queuedAt: null,
-      attempt: 'command-send',
-      returned: { reason: 'refused' }
+    await journal.queuedMessages.insert({ messageId: 'command', body: command })
+    await journal.appendSubmission(
+      {
+        clientMessageId: 'command-send',
+        body: command,
+        payloadFingerprint: agentSessionSendBodyFingerprint(identity.sessionId, command),
+        fence: 7,
+        handoverRecorded: true
+      },
+      { messageId: 'command', expect: 'waiting' }
+    )
+    await journal.resolveDispatch({
+      clientMessageId: 'command-send',
+      state: 'rejected',
+      fence: 7,
+      ...agentSessionFailureWords(
+        agentSessionFailureFact('providerRejected', {
+          detail: { text: 'refused', audience: 'person' }
+        }),
+        { surface: 'rejection' }
+      )
     })
     expect(state.queue.cards.get('command')?.state).toBe('returned')
     await journal.appendItem(
@@ -629,6 +661,7 @@ it.each([100, 1000])(
 )
 
 it('retains an ordinary consumed payload and attempt across failed replacement, boundary and restart', async () => {
+  await open()
   const payload: AgentJournalMessageItem = {
     ...body('full input'),
     blocks: [
@@ -693,9 +726,11 @@ it('retains an ordinary consumed payload and attempt across failed replacement, 
 })
 
 it('indexes queue-restored unknown for an ordinary card and a retained recovery successor', async () => {
+  await openHistorical()
   await send('original')
   await ended('original-end')
   const recovery = savedCopy('original')
+  finishTestJournalHistoricalInputs(journal)
   await journal.appendSubmission(
     {
       clientMessageId: 'V',

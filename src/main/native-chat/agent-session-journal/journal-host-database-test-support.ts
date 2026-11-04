@@ -1,4 +1,3 @@
-import { prepareJournalOutcomeWrite } from './journal-outcome-write'
 import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -11,9 +10,16 @@ import { fields } from './journal-state-schema'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { decodeJournalOutcome, type JournalOutcome } from './journal-outcome-codec'
 import { applyJournalRow } from './journal-reducer'
+import {
+  assertTestJournalHistoricalInputs,
+  pinTestJournalInputMode
+} from './journal-historical-inputs.test-support'
+export {
+  finishTestJournalHistoricalInputs,
+  pinTestJournalInputMode
+} from './journal-historical-inputs.test-support'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
 import {
-  insertJournalRow,
   iterateJournalEpochRows,
   publishJournalSessionEpoch,
   readJournalSessionEpoch,
@@ -208,21 +214,10 @@ export function appendTestJournalQueueRow(
   change: JournalQueueChange
 ): void {
   const state = journal['state']
+  assertTestJournalHistoricalInputs(db, journal)
   const row = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, Date.now())
-  if (journalOutcomeSource(db, state.sessionId, state.epoch)) {
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      const transition = prepareJournalOutcomeWrite(db, state, [row], row.ts)
-      db.exec('COMMIT')
-      transition.adopt()
-    } catch (error) {
-      db.exec('ROLLBACK')
-      throw error
-    }
-  } else {
-    insertTestJournalRow(db, state.sessionId, row)
-    applyJournalRow(state, row)
-  }
+  insertTestJournalRow(db, state.sessionId, row)
+  applyJournalRow(state, row)
 }
 
 /** Unannotated submissions and terminal rows emitted by the legacy writer in one source epoch. */
@@ -303,29 +298,4 @@ export function readTestQueueChanges(
       { messageId, op: first ? 'queued' : card.state, returned: first && card.state === 'returned' }
     ]
   })
-}
-
-/** Input fixtures stand for a chat an older build wrote and goes on writing: writes to its input
- * epoch stay input rows, as that build's writer stored them, so the input reader meets writer-made
- * rows. A context this build replaces uses its current writer, including logical replacement. */
-export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
-  const projection = journal['projection']
-  const prepare = projection.prepare.bind(projection)
-  projection.prepare = (db, rows, savedAt) => {
-    const state = journal['state']
-    if (
-      journalOutcomeSource(db, state.sessionId, state.epoch) ||
-      rows.some((row) => row.kind === 'epoch')
-    ) {
-      return prepare(db, rows, savedAt)
-    }
-    for (const row of rows) {
-      insertJournalRow(db, state.sessionId, row, savedAt)
-    }
-    return () => {
-      for (const row of rows) {
-        applyJournalRow(state, row, savedAt)
-      }
-    }
-  }
 }

@@ -24,6 +24,9 @@ import type { Subscriber } from '../agent-session-wire/structured-agent-session-
 import {
   appendTestJournalQueueRow,
   openTestJournalHostDatabase,
+  finishTestJournalHistoricalInputs,
+  pinTestJournalInputMode,
+  readTestJournalOutcomes,
   createTrackedJournalOpener
 } from './journal-host-database-test-support'
 import type { AgentSessionJournal } from './journal-store'
@@ -135,7 +138,10 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
     )
   })
   journal.queuedMessages.inputWork = () => idleWork
-  await journal.rollEpoch('unreconcilable_prefix', 7)
+  // Historical tombstones hide presentation while keeping the original submission bodies.
+  for (let i = 0; i < 10; i++) {
+    await journal.appendTombstone({ provider: 'orca', clientMessageId: `image-${i}` }, { fence: 7 })
+  }
   const subscribers = new AgentSessionSubscribers({
     readQueuePublication: () =>
       readQueuePublication(journal, () => ({
@@ -187,6 +193,30 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
   for (let i = 0; i < 10; i++) {
     saveCopy(`image-${i}`, journal.submissionBody(`image-${i}`)!)
   }
+  finishTestJournalHistoricalInputs(journal)
+  const historicalCursor = journal.cursor()
+  const historicalCards = structuredClone(journal.queuedMessages.list())
+  pinTestJournalInputMode(journal)
+  expect(() => saveCopy('after-finish', body('after-finish'))).toThrow(
+    'historical journal authoring ended'
+  )
+  expect(journal.cursor()).toEqual(historicalCursor)
+  const db = openTestJournalHostDatabase(root).db
+  db.exec(
+    "CREATE TEMP TRIGGER fail_current_takeover BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'takeover unavailable'); END"
+  )
+  await expect(journal.appendQueueResume(7)).rejects.toThrow('takeover unavailable')
+  expect(journal.cursor()).toEqual(historicalCursor)
+  expect(journal.queuedMessages.list()).toEqual(historicalCards)
+  expect(readTestJournalOutcomes(db, identity.sessionId)).toEqual([])
+  db.exec('DROP TRIGGER fail_current_takeover')
+  await journal.appendQueueResume(7)
+  expect(
+    readTestJournalOutcomes(openTestJournalHostDatabase(root).db, identity.sessionId).length
+  ).toBeGreaterThan(0)
+  const currentCursor = journal.cursor()
+  expect(() => saveCopy('too-late', body('too-late'))).toThrow('historical journal authoring ended')
+  expect(journal.cursor()).toEqual(currentCursor)
   await journal.open()
   const correction = {
     type: 'batch' as const,

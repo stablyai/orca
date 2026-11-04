@@ -13,12 +13,8 @@ import {
   journalRowBase
 } from './journal-row-builders'
 import type { JournalRowWriter, JournalOperationReceipt } from './journal-row-writer'
-import {
-  buildJournalQueueClearRow,
-  buildJournalQueueResumeRow,
-  buildJournalStopEventRow,
-  buildJournalQueueReopenRow
-} from './journal-stop-and-resume-rows'
+import { composeJournalOperationReceipts } from './journal-row-writer'
+import { buildJournalQueueClearRow } from './journal-stop-and-resume-rows'
 import { journalQueuePauseRestatement } from './queued-message-pause'
 import type { JournalQueuedMessages } from './journal-queued-messages'
 import { journalContextCursor, journalContextEpoch } from './journal-context-cursor'
@@ -43,6 +39,7 @@ export async function rewindJournalContext(input: {
   receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
 }): Promise<AgentJournalCursor> {
   let receipt: JournalOperationReceipt | undefined
+  let retainFailures: ((draft: JournalReducerState) => void) | undefined
   const rows = await input.writer.enqueueRows(
     () => {
       const state = input.state()
@@ -53,11 +50,16 @@ export async function rewindJournalContext(input: {
       ) {
         throw new Error('agent_session_rewind:stale-context')
       }
-      const { lifted, failureHeld, liveStop, reopened, cleared } = journalQueuePauseRestatement(
+      const { cleared } = journalQueuePauseRestatement(
         state.queuePauseMarks,
         state.latestAcceptedTurnSequence,
         input.cards.pauses()
       )
+      const retained = journalInputOrder(state).newestTurn.retainFailures(
+        state,
+        input.items.map((item) => agentJournalItemKey(item.identity))
+      )
+      retainFailures = (draft) => retained(journalInputOrder(draft).newestTurn, draft)
       const queued = new Set(
         journalInputOrder(state)
           .recoverableSubmissions()
@@ -95,13 +97,6 @@ export async function rewindJournalContext(input: {
         revisions.set(itemId, row.revision)
         plan.push((seq, ts) => ({ ...row, seq, ts }))
       }
-      const restatePauses = boundary && input.items.length > 0
-      const resume = () =>
-        plan.push((seq, ts) => buildJournalQueueResumeRow({ state, seq, ts, fence: input.fence }))
-      // Rebuilt failures must stay on the same side of the person's successful Resume.
-      if (restatePauses && lifted && failureHeld) {
-        resume()
-      }
       const scope = new JournalDerivedTurnScope()
       for (const item of input.items) {
         const itemId = agentJournalItemKey(item.identity)
@@ -132,17 +127,6 @@ export async function rewindJournalContext(input: {
           revision
         }))
       }
-      if (restatePauses && lifted && !failureHeld) {
-        resume()
-      }
-      if (restatePauses && liveStop) {
-        plan.push((seq, ts) =>
-          buildJournalStopEventRow({ state, seq, ts, fence: input.fence, event: liveStop })
-        )
-      }
-      if (restatePauses && reopened) {
-        plan.push((seq, ts) => buildJournalQueueReopenRow({ state, seq, ts, fence: input.fence }))
-      }
       if (cleared) {
         plan.push((seq, ts) =>
           buildJournalQueueClearRow({ state, seq, ts, fence: input.fence, clear: cleared })
@@ -156,7 +140,15 @@ export async function rewindJournalContext(input: {
       })
       return plan
     },
-    (rows) => input.inputReceipt(rows, receipt)
+    (rows) => {
+      const foldReceipt: JournalOperationReceipt = {
+        fold: (draft) => retainFailures?.(draft),
+        write: () => {},
+        committed: () => {}
+      }
+      const inputReceipt = input.inputReceipt(rows, receipt)
+      return composeJournalOperationReceipts(foldReceipt, ...(inputReceipt ? [inputReceipt] : []))
+    }
   )
   const last = rows.at(-1)!
   return { epoch: last.epoch, sequence: last.seq }

@@ -35,6 +35,7 @@ import {
   message,
   words,
   journalFor,
+  historicalJournalFor,
   seedLegacy,
   legacyIds
 } from './structured-agent-session-queued-legacy-import.test-fixture'
@@ -354,11 +355,20 @@ it.each([false, true])(
   'keeps legacy effective actions and exact proof durable while cleanup fails=%s',
   async (failed) => {
     const session = `legacy-action-${failed}`
-    let journal = journalFor(session)
+    let journal = historicalJournalFor(session)
     await journal.open()
     const ids = ['proof', 'deleted', 'edited', 'sent']
     for (const id of ids) {
       await handOff(journal, `U-${id}`, `Q-${id}`, id, 'cancelled', 0, true)
+      expect(journal.queuedMessages.get(`recovery:U-${id}`)).toBeNull()
+      appendTestJournalQueueRow(db(), journal, `recovery:U-${id}`, {
+        op: 'queued',
+        body: message(id),
+        recovers: `U-${id}`,
+        position: 0,
+        queuedAt: journal.cursor(),
+        returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
+      })
     }
     await journal.close()
     seedLegacy(
@@ -383,15 +393,6 @@ it.each([false, true])(
     await open()
     for (const id of ids) {
       expect(journal.submission(`U-${id}`)?.dispatchState).toBe('unknown')
-      expect(journal.queuedMessages.get(`recovery:U-${id}`)).toBeNull()
-      appendTestJournalQueueRow(db(), journal, `recovery:U-${id}`, {
-        op: 'queued',
-        body: message(id),
-        recovers: `U-${id}`,
-        position: 0,
-        queuedAt: journal.cursor(),
-        returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
-      })
       expect(journal.queuedMessages.get(`recovery:U-${id}`)).toMatchObject({
         state: 'waiting',
         holdReason: 'delivery_unconfirmed'
@@ -488,9 +489,19 @@ it.each(['proof', 'withdraw'] as const)(
         { type: 'image-ref', path }
       ]
     }
-    let journal = journalFor(session)
+    let journal = historicalJournalFor(session)
     await journal.open()
     await handOff(journal, 'U', 'Q', 'original', 'cancelled', 0, true, { body, options: {} })
+    if (action === 'withdraw') {
+      appendTestJournalQueueRow(db(), journal, 'recovery:U', {
+        op: 'queued',
+        body,
+        recovers: 'U',
+        position: 0,
+        queuedAt: journal.cursor(),
+        returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
+      })
+    }
     await journal.close()
     seedLegacy(session, [['Q', 'waiting', 'original']])
     db()
@@ -524,14 +535,6 @@ it.each(['proof', 'withdraw'] as const)(
         }
       })
     } else {
-      appendTestJournalQueueRow(db(), journal, 'recovery:U', {
-        op: 'queued',
-        body,
-        recovers: 'U',
-        position: 0,
-        queuedAt: journal.cursor(),
-        returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
-      })
       await journal.queuedMessages.withdraw(['recovery:U'])
       expect(journal.queuedMessages.get('recovery:U')?.state).toBe('withdrawn')
     }

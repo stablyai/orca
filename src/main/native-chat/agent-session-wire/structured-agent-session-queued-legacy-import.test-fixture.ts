@@ -7,7 +7,11 @@ import { activeProviderContext } from '../../../shared/agent-session/agent-sessi
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  openTestJournalHostDatabase,
+  seedLegacyTestJournal,
+  pinTestJournalInputMode
+} from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import {
@@ -52,6 +56,14 @@ export function journalFor(sessionId: string): AgentSessionJournal {
       providerHandle: activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle
     }
   })
+}
+
+/** Prepare a genuinely historical source before any current writer owns this session. */
+export function historicalJournalFor(sessionId: string): AgentSessionJournal {
+  const journal = journalFor(sessionId)
+  seedLegacyTestJournal(openTestJournalHostDatabase(rig.root), { identity: journal['identity'] })
+  pinTestJournalInputMode(journal)
+  return journal
 }
 
 export type Legacy = [

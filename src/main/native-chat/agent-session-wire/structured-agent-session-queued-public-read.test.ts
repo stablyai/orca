@@ -1,7 +1,8 @@
 import * as legacyChange from '../agent-session-journal/journal-queue-legacy-change'
 import {
   readTestJournalOutcomes,
-  appendTestJournalQueueRow
+  appendTestJournalQueueRow,
+  finishTestJournalHistoricalInputs
 } from '../agent-session-journal/journal-host-database-test-support'
 import { outcomeFormat1EntryParsers } from '../agent-session-journal/journal-outcome-format-1'
 import { JournalDraftMap } from '../agent-session-journal/journal-transition-collections'
@@ -34,6 +35,7 @@ import {
   message,
   words,
   journalFor,
+  historicalJournalFor,
   seedLegacy,
   legacyIds,
   threadWrite,
@@ -395,14 +397,15 @@ it('public metadata follows legacy-only commits, item recreation and epoch repla
 })
 
 it('carries saved independent holds through real publication, bounded snapshot/reset/catch-up/live and the shared reducer', async () => {
-  const journal = journalFor(SESSION)
+  const sessionId = 'historical-public-read'
+  const journal = historicalJournalFor(sessionId)
   await journal.open()
   try {
     const body = message('immutable full original')
     await journal.appendSubmission({
       clientMessageId: 'original',
       body,
-      payloadFingerprint: agentSessionSendBodyFingerprint(SESSION, body),
+      payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, body),
       fence: 0,
       origin: 'client',
       handoverRecorded: true,
@@ -423,6 +426,7 @@ it('carries saved independent holds through real publication, bounded snapshot/r
       options: { model: 'default' },
       returned: { reason: 'old stored uncertainty', rejection: { kind: 'unconfirmed' } }
     })
+    finishTestJournalHistoricalInputs(journal)
     await journal.queuedMessages.insert({ messageId: 'W', body: message('waiting') })
     const cards = readPublishedQueuedMessages(journal)
     expect(cards).toMatchObject([
@@ -452,7 +456,7 @@ it('carries saved independent holds through real publication, bounded snapshot/r
     const feed = new AgentSessionSubscribers({ readQueuePublication: () => publication })
     feed.open({
       id: 'bounded',
-      sessionId: SESSION,
+      sessionId,
       journal,
       fence: 0,
       boundedFrames: true,
@@ -463,10 +467,10 @@ it('carries saved independent holds through real publication, bounded snapshot/r
       throw new Error('missing snapshot')
     }
     const hooks = { readQueuePublication: () => publication }
-    const subscriber = { sessionId: SESSION, boundedFrames: true }
+    const subscriber = { sessionId, boundedFrames: true }
     const batch: AgentSessionSubscribeEvent = {
       type: 'batch',
-      sessionId: SESSION,
+      sessionId,
       batch: { cursor: journal.cursor(), items: [], removedItemIds: [], submissions: [] }
     }
     const withheld = buildSubscriberFrame(hooks, subscriber, batch, true)
