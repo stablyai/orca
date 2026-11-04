@@ -24,6 +24,8 @@ type OrcadArtifactCachePruneOptions = {
   inUseVersions?: ReadonlySet<string>
 }
 
+/** Evict old version slots per target, keeping the in-use version and the newest others.
+ *  The shared `runtimes/` directory is not a slot and is never evicted. */
 export async function pruneOrcadArtifactCache(
   cacheRoot: string,
   options: OrcadArtifactCachePruneOptions = {}
