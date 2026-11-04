@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "Izinkan Orca menggunakan kamera untuk memindai kode QR.",
+    "NSLocalNetworkUsageDescription": "Orca terhubung ke aplikasi desktop melalui LAN Anda.",
+    "NSMicrophoneUsageDescription": "Izinkan Orca menggunakan mikrofon Anda untuk diktasi suara yang dikirim ke desktop yang dipasangkan untuk ditranskripsikan.",
+    "NSPhotoLibraryUsageDescription": "Izinkan Orca melampirkan foto dari pustaka Anda ke sesi terminal di desktop yang dipasangkan."
+  }
+}

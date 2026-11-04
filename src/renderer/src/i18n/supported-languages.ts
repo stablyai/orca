@@ -5,6 +5,7 @@ import {
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_FRENCH,
   UI_LANGUAGE_GERMAN,
+  UI_LANGUAGE_INDONESIAN,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_PORTUGUESE,
@@ -41,7 +42,8 @@ export const UI_LANGUAGE_CHOICES: UiLanguageChoice[] = [
   { value: UI_LANGUAGE_PORTUGUESE, labelKey: 'settings.appearance.language.portuguese' },
   { value: UI_LANGUAGE_RUSSIAN, labelKey: 'settings.appearance.language.russian' },
   { value: UI_LANGUAGE_TURKISH, labelKey: 'settings.appearance.language.turkish' },
-  { value: UI_LANGUAGE_GERMAN, labelKey: 'settings.appearance.language.german' }
+  { value: UI_LANGUAGE_GERMAN, labelKey: 'settings.appearance.language.german' },
+  { value: UI_LANGUAGE_INDONESIAN, labelKey: 'settings.appearance.language.indonesian' }
 ]
 
 export function getUiLanguageChoiceLabel(

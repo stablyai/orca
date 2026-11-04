@@ -2148,6 +2148,11 @@
       "permissionOverridesKept_one": "{{count}} agent still uses their own permission setting:",
       "permissionOverridesKept_other": "{{count}} agents still use their own permission setting:"
     },
+    "appearance": {
+      "language": {
+        "indonesian": "Bahasa Indonesia"
+      }
+    },
     "diagnostics": {
       "errors": {
         "creatingDisabled": "creating review files is disabled",
