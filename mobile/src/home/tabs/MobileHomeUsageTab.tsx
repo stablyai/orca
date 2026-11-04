@@ -294,9 +294,10 @@ function UsageMeter(props: {
   reducedMotion: boolean
 }) {
   useMobileColorScheme()
-  const bar = getUsageBarState(props.card.limits, props.windowKey, props.card.fetching)
+  const usageWindow = props.card.limits?.[props.windowKey] ?? null
+  const bar = getUsageBarState(props.card.limits, usageWindow, props.card.fetching)
   const { used, color } = usageBarFill(bar.usedPercent, bar.unavailable)
-  const reset = getWindowResetLabel(props.card.limits, props.windowKey, props.now)
+  const reset = getWindowResetLabel(usageWindow, props.now)
   const target = used ?? 0
   const width = useSharedValue(props.reducedMotion ? target : 0)
 
