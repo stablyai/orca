@@ -695,6 +695,7 @@
     "components.native-chat.approval.title",
     "components.native-chat.copyCode",
     "components.native-chat.disableLineWrap",
+    "components.native-chat.notices.details",
     "components.native-chat.prompt.collapse",
     "components.native-chat.prompt.expand",
     "components.native-chat.wrapLines",

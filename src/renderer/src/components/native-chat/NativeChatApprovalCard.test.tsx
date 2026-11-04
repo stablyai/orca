@@ -74,6 +74,39 @@ describe('NativeChatApprovalCard', () => {
     )
   })
 
+  it.each([
+    ['ordinary context', 200, 0],
+    ['oversized context', 488, 200]
+  ] as const)(
+    'keeps the operated disclosure visible with %s after scrolling',
+    (_case, rowBottom, offset) => {
+      render(
+        <NativeChatApprovalCard
+          approval={{ title: 'Allow command?', detail: 'one\ntwo\nthree\nfour\nfive', options: [] }}
+          onChoose={() => {}}
+        />
+      )
+      const toggle = screen.getByRole('button', { name: 'Details' })
+      const content = document.querySelector<HTMLElement>('[data-native-chat-approval-content]')!
+      Object.defineProperty(content, 'clientHeight', { value: 288 })
+      vi.spyOn(content, 'getBoundingClientRect').mockReturnValue({ top: 0 } as DOMRect)
+      vi.spyOn(toggle, 'getBoundingClientRect').mockImplementation(
+        () =>
+          ({
+            bottom: rowBottom - content.scrollTop
+          }) as DOMRect
+      )
+      toggle.focus()
+      fireEvent.click(toggle)
+      expect(content.scrollTop).toBe(offset)
+      content.scrollTop = 780
+      fireEvent.click(toggle)
+      expect(content.scrollTop).toBe(offset)
+      expect(toggle.getAttribute('aria-expanded')).toBe('false')
+      expect(document.activeElement).toBe(toggle)
+    }
+  )
+
   describe("a subject of a kind this build cannot draw: a newer Orca's", () => {
     // A subject kind a newer build wrote; this build draws only plans.
     const NEWER_SUBJECT = JSON.parse('{"kind":"diff","path":"a.ts"}')
