@@ -28,15 +28,14 @@ const PROBLEM_VERDICTS: ReadonlySet<ConnectionVerdict['kind']> = new Set([
 ])
 
 function worktreeSummaries(info: HostWorktreeInfo | undefined, t: Translate) {
-  const now = Date.now()
-  const visual = homeHostWorktreeSummary(info, now)
+  const visual = homeHostWorktreeSummary(info)
   const accessibility =
     info && info.activeCount > 0 && (!info.catalogUnavailable || info.staleCounts)
       ? t(
           'components.hostCard.worktreeAccessibilitySummary',
           '{{summary}}, {{activeCount}} active',
           {
-            summary: homeHostWorktreeSummary({ ...info, activeCount: 0 }, now),
+            summary: homeHostWorktreeSummary({ ...info, activeCount: 0 }),
             activeCount: info.activeCount
           }
         )
