@@ -11,7 +11,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
-import { NAV_BAR_BUTTON_SIZE } from '../../../src/components/nav-bar/NavBarButton'
+import { Save } from 'lucide-react-native'
+import { NavBarButton } from '../../../src/components/nav-bar/NavBarButton'
 import { SettingsNavBar } from '../../../src/settings/settings-screen-frame'
 import { themedStyleSheet } from '../../../src/theme/themed-styles'
 import { useMobileColorScheme } from '../../../src/theme/use-mobile-color-scheme'
@@ -176,22 +177,12 @@ export default function EditHostScreen() {
         title={t('host.edit.title', 'Edit host')}
         onBack={leave}
         trailing={
-          <Pressable
-            style={({ pressed }) => [
-              styles.saveButton,
-              (!canSave || pressed) && styles.saveButtonDisabled
-            ]}
+          <NavBarButton
+            icon={saving ? SavingIcon : Save}
             onPress={() => void handleSave()}
             disabled={!canSave}
-            accessibilityRole="button"
             accessibilityLabel={t('host.edit.saveHost', 'Save host')}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color={colors.bgBase} />
-            ) : (
-              <Text style={styles.saveButtonText}>{t('common.save', 'Save')}</Text>
-            )}
-          </Pressable>
+          />
         }
       />
 
@@ -286,6 +277,10 @@ export default function EditHostScreen() {
   )
 }
 
+function SavingIcon({ color }: { color?: string }) {
+  return <ActivityIndicator size="small" color={color} />
+}
+
 const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
@@ -293,23 +288,6 @@ const styles = themedStyleSheet(() => ({
   },
   flex: {
     flex: 1
-  },
-  saveButton: {
-    minWidth: 64,
-    height: NAV_BAR_BUTTON_SIZE,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.pill,
-    backgroundColor: colors.surfaceBright,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  saveButtonDisabled: {
-    opacity: 0.4
-  },
-  saveButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
   },
   form: {
     paddingHorizontal: spacing.lg,

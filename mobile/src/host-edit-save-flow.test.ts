@@ -34,7 +34,8 @@ vi.mock('expo-router', () => ({
 }))
 
 vi.mock('lucide-react-native', () => ({
-  ChevronLeft: 'ChevronLeft'
+  ChevronLeft: 'ChevronLeft',
+  Save: 'Save'
 }))
 
 vi.mock('./transport/host-store', () => ({
