@@ -1,7 +1,7 @@
 import React from 'react'
 import { toast } from 'sonner'
 import type { useAppStore } from '@/store'
-import { SourceControlAgentActionDialog } from '@/components/right-sidebar/SourceControlAgentActionDialog'
+import { SourceControlAgentActionDialog } from '@/components/right-sidebar/source-control/ai/SourceControlAgentActionDialog'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type { SourceControlActionRecipe } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { translate } from '@/i18n/i18n'

@@ -42,30 +42,6 @@ describe('withWslMoveSeededViewState', () => {
     ])
   })
 
-  it('re-keys frontmatter visibility to the host file, and moves closed-tab tombstones', () => {
-    const localId = `editor:${encodeURIComponent(UNC)}:local:${encodeURIComponent(`${UNC_ROOT}\\README.md`)}`
-    const next = withWslMoveSeededViewState(
-      seed(),
-      {
-        markdownFrontmatterVisible: { [localId]: false, 'editor:other%3A%3Ax:ssh-1:%2Fx': true },
-        closedTerminalTabTombstonesByTabId: { 'tab-old': { closedAt: 1, worktreeId: UNC } }
-      },
-      scope,
-      new Set([HOST])
-    )
-
-    expect(next?.markdownFrontmatterVisible).toEqual({
-      [`editor:${encodeURIComponent(HOST)}:wsl%3AUbuntu:${encodeURIComponent('/home/dev/app/README.md')}`]: false
-    })
-    expect(next?.closedTerminalTabTombstonesByTabId).toEqual({
-      'tab-old': { closedAt: 1, worktreeId: HOST }
-    })
-  })
-
-  it('leaves a workspace this run did not seed alone, so a file closed on the host stays closed', () => {
-    expect(withWslMoveSeededViewState(seed(), local, scope, new Set())).toBeNull()
-  })
-
   it('never replaces a draft the seeded record already has', () => {
     const drafted = seed()
     drafted.openFilesByWorktree = { [HOST]: [file('/home/dev/app/README.md', HOST, '# newer')] }

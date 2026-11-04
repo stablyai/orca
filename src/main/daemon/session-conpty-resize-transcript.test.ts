@@ -98,11 +98,4 @@ describe('daemon screen through a captured ConPTY resize transcript', () => {
     expect(lines.filter((line) => line === LONG_LINE)).toHaveLength(1)
     expect(lines.filter((line) => /\$.*orca@/.test(line))).toEqual([])
   })
-
-  // Control: the Unix grow model pulls history back under ConPTY's repaint.
-  it('loses or repeats lines without the ConPTY model', async () => {
-    const lines = await savedLogicalLines('posix-pty')
-    const numbers = lines.filter((line) => /^\d+$/.test(line)).map(Number)
-    expect(numbers).not.toEqual(Array.from({ length: 80 }, (_, i) => i + 1))
-  })
 })

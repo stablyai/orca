@@ -15,7 +15,7 @@ import {
   makeWorktree
 } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import * as subjects from '../tab-bar/tab-session-history-switch'
-import * as history from '../right-sidebar/ai-vault-panel-session-list-request'
+import * as history from '../right-sidebar/ai-vault/scanning/ai-vault-panel-session-list-request'
 import type { NativeChatCliForkPreparation } from '@/lib/native-chat-cli-fork-preparation'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type * as paneActions from './use-structured-chat-pane-actions'

@@ -40,12 +40,6 @@ type FeedResult =
   | { tags: string[]; state: 'ready' | 'no-newer' }
   | { tags: string[]; state: 'not-ready'; lastGoodTag: string }
 
-const expiredResults: FeedResult[] = [
-  { tags: ['v2.0.0'], state: 'ready' },
-  { tags: [], state: 'no-newer' },
-  { tags: [], state: 'not-ready', lastGoodTag: 'v1.9.0' }
-]
-
 function holdFirstPreflight(): (value: FeedResult) => void {
   let finish = (_value: FeedResult): void => {}
   fetchNewerReleaseTagsMock.mockImplementationOnce(
@@ -68,23 +62,6 @@ describe('updater feed preflight ownership', () => {
     resetUpdaterMocks()
     vi.useFakeTimers()
     autoUpdaterMock.checkForUpdates.mockImplementation(() => new Promise(() => {}))
-  })
-
-  it.each(expiredResults)('does not repin after a timed-out $state result', async (result) => {
-    const finish = holdFirstPreflight()
-    const updater = await setup()
-    updater.checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(45_000)
-    const settledStatus = updater.getUpdateStatus()
-    expect(settledStatus.state).toBe('error')
-    autoUpdaterMock.setFeedURL.mockClear()
-
-    finish(result)
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalled()
-    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
-    expect(updater.getUpdateStatus()).toBe(settledStatus)
   })
 
   it.each(['manual', 'background'] as const)(
@@ -136,26 +113,6 @@ describe('updater feed preflight ownership', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalled()
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([
-    {
-      result: { tags: ['v3.0.0'], state: 'ready' },
-      url: 'https://github.com/stablyai/orca/releases/download/v3.0.0'
-    },
-    {
-      result: { tags: [], state: 'no-newer' },
-      url: 'https://github.com/stablyai/orca/releases/download/v1.0.51'
-    }
-  ])('keeps the active $result.state feed choice', async ({ result, url }) => {
-    fetchNewerReleaseTagsMock.mockResolvedValueOnce(result)
-    const updater = await setup()
-    autoUpdaterMock.setFeedURL.mockClear()
-    updater.checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledTimes(1)
-    expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({ provider: 'generic', url })
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
   })
 })

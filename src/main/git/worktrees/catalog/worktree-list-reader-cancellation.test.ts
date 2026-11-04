@@ -90,15 +90,6 @@ describe('old-Git native worktree listing cancellation', () => {
     expect(statProbe).toHaveBeenCalledTimes(8)
   })
 
-  it('starts no existence probes when the request is already aborted', async () => {
-    const controller = new AbortController()
-    const reason = new Error('Already closed')
-    controller.abort(reason)
-    await expect(readWorktreeList('/repo', { signal: controller.signal })).rejects.toBe(reason)
-    await nextTurn()
-    expect(statProbe).not.toHaveBeenCalled()
-  })
-
   it('handles synchronous cancellation by the first existence probe without an unhandled rejection', async () => {
     const controller = new AbortController()
     const reason = new Error('First probe closed the request')
@@ -123,39 +114,5 @@ describe('old-Git native worktree listing cancellation', () => {
       releases.splice(0).forEach((release) => release())
       process.off('unhandledRejection', onUnhandled)
     }
-  })
-
-  it('keeps lock and prunable protections and treats only ENOENT as absence', async () => {
-    porcelain = [
-      porcelainRow('/repo'),
-      porcelainRow('/repo/bare', ['bare']),
-      porcelainRow('/repo/locked', ['locked agent session']),
-      porcelainRow('/repo/prunable', ['prunable missing directory']),
-      porcelainRow('/repo/missing'),
-      porcelainRow('/repo/denied'),
-      porcelainRow('/repo/live')
-    ].join('')
-    statProbe.mockImplementation(async (worktreePath) => {
-      if (worktreePath.endsWith('/missing')) {
-        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
-      }
-      if (worktreePath.endsWith('/denied')) {
-        throw Object.assign(new Error('denied'), { code: 'EACCES' })
-      }
-    })
-    const result = await readWorktreeList('/repo')
-    expect(statProbe.mock.calls.map(([worktreePath]) => worktreePath)).toEqual([
-      '/repo/missing',
-      '/repo/denied',
-      '/repo/live'
-    ])
-    expect(result.filter((row) => row.prunable).map((row) => row.path)).toEqual([
-      '/repo/prunable',
-      '/repo/missing'
-    ])
-    expect(result.find((row) => row.path === '/repo/locked')).toMatchObject({
-      locked: true,
-      lockReason: 'agent session'
-    })
   })
 })

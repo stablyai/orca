@@ -141,13 +141,6 @@ export function shouldAttemptCreateHostedReviewForIntent(
   )
 }
 
-export function shouldGenerateHostedReviewDetailsForIntent(
-  eligibility: HostedReviewCreationEligibility
-): boolean {
-  // Generate before main rechecks unavailable lookups so recovered creates never submit fallback fields.
-  return shouldAttemptCreateHostedReviewForIntent(eligibility)
-}
-
 export function resolveCreatePrIntentGeneratedReviewFields(
   current: CreatePrIntentReviewFields,
   generated: CreatePrIntentReviewGeneration

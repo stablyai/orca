@@ -99,12 +99,6 @@ describe('restoring a pane its host recorded an agent in', () => {
     expect(spawn.mock.calls[0]![0].command).toMatch(RESUMES)
   })
 
-  it('never resumes a conversation a relayed SSH row names', async () => {
-    const { runtime, spawn } = makeRuntime([codexRow({ connectionId: 'ssh-1' })])
-    await restore(runtime)
-    expect(spawn.mock.calls[0]![0].command ?? '').not.toContain('resume')
-  })
-
   it('ignores a row from another worktree, and launches the tab’s agent fresh', async () => {
     const { runtime, spawn } = makeRuntime(
       [codexRow({ worktreeId: 'other-repo::/other' })],

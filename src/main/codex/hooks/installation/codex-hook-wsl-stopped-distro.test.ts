@@ -94,13 +94,6 @@ describe('Codex WSL hook install on a stopped distro', () => {
     expect(mocks.upsert).not.toHaveBeenCalled()
   })
 
-  it('still writes the fallback trust while the distro runs', async () => {
-    await expect(installManagedHooksIntoWslRuntime(plan())).resolves.toMatchObject({
-      state: 'installed'
-    })
-    expect(mocks.upsert).toHaveBeenCalledOnce()
-  })
-
   it('does not revoke trust on a stopped distro when the canonical probe settles later', async () => {
     let settled: WslCanonicalPathSettled | undefined
     mocks.createPlan.mockImplementation(

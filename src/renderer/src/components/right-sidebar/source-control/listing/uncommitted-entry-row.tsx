@@ -35,7 +35,7 @@ import {
   getSubmoduleWorktreeOnlyLabel,
   getSubmoduleWorktreeOnlyTooltip
 } from './row-layout'
-import { STATUS_COLORS } from '../../status-display'
+import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 
 export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({

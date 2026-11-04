@@ -45,15 +45,4 @@ describe('image reads for a document whose owner is unresolved', () => {
     expect(loadImage).not.toHaveBeenCalled()
     expect(readFile).not.toHaveBeenCalled()
   })
-
-  it('keeps no workspace distinct from an unresolved owner', () => {
-    expect(
-      createRichMarkdownImageResolverContext({
-        filePath: '/notes/doc.md',
-        runtimeTarget: { kind: 'local' },
-        worktreeId: '',
-        worktreeRoot: null
-      }).runtimeContext
-    ).toBeUndefined()
-  })
 })

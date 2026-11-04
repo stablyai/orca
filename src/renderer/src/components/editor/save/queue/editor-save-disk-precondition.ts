@@ -51,7 +51,9 @@ export function isCodeViewTab(state: AppState, file: OpenFile): boolean {
   const views = getMarkdownViewModes(target)
   const stored = state.markdownViewMode?.[file.id]
   const view =
-    stored !== undefined && views.includes(stored) ? stored : getDefaultMarkdownViewMode(target)
+    stored !== undefined && views.includes(stored)
+      ? stored
+      : getDefaultMarkdownViewMode(target, state.settings?.markdownDefaultViewMode)
   return views.length === 0 || view === 'source'
 }
 
