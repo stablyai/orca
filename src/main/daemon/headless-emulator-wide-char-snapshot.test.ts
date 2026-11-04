@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { HeadlessEmulator } from './headless-emulator'
-import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
+import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal/appearance/terminal-unicode-provider'
 
 const KO =
   '안녕하세요 오르카 테스트입니다. 결론부터 말씀드리면 시각적 피로도 절제된 럭셔리 다크 테마 가독성 행간(1.75) 적용 roadmap/complete-overhaul-backlog-history.md'

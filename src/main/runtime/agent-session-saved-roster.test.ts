@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { savedRosterRig, countRosterWork } from './agent-session-saved-roster.test-support'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -9,7 +9,7 @@ import {
 import type { AgentSessionStatusEvent } from '../../shared/agent-session/agent-session-wire'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from './agent-session/records/agent-session-recovery-capsule'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 afterEach(() => vi.restoreAllMocks())

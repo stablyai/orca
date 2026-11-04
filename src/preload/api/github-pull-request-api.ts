@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type { AppStarSource } from '../../shared/gh-star-source'
 import type { GhAuthDiagnostic } from '../../shared/github/auth-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
@@ -38,6 +39,7 @@ export type GithubPullRequestApi = {
   prForBranch: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     branch: string
     linkedPRNumber?: number | null
     fallbackPRNumber?: number | null
@@ -86,6 +88,7 @@ export type GithubPullRequestApi = {
   prCheckDetails: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     sourceContext?: TaskSourceContext | null
     checkRunId?: number
     workflowRunId?: number
@@ -104,6 +107,7 @@ export type GithubPullRequestApi = {
   prComments: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     sourceContext?: TaskSourceContext | null
     prNumber: number
     prRepo?: GitHubOwnerRepo | null
@@ -112,6 +116,7 @@ export type GithubPullRequestApi = {
   setPRCommentReaction: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     sourceContext?: TaskSourceContext | null
     reactionSubjectId: string
     content: GitHubReactionContent
@@ -121,6 +126,7 @@ export type GithubPullRequestApi = {
   resolveReviewThread: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     sourceContext?: TaskSourceContext | null
     threadId: string
     resolve: boolean
@@ -128,6 +134,7 @@ export type GithubPullRequestApi = {
   }) => Promise<boolean>
   setPRFileViewed: (
     args: GitHubRepoSelectorArgs & {
+      expectedGhAccount?: GhAccountBinding | null
       prNumber: number
       prRepo?: GitHubOwnerRepo | null
       pullRequestId: string

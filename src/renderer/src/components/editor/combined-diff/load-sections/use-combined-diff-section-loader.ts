@@ -4,12 +4,15 @@ import type { OpenFile } from '@/store/slices/editor'
 import type {
   GitBranchChangeEntry,
   GitDiffResult
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { DiffSection } from '../../diff-section-types'
-import { getLargeDiffRenderLimit } from '../../large-diff-render-limit'
-import { getStoredTextDiffContent, getStoredTextDiffResult } from '../../large-diff-section-content'
-import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
+import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
+import {
+  getStoredTextDiffContent,
+  getStoredTextDiffResult
+} from '../../diff/large-files/large-diff-section-content'
+import { removeDiffSectionMeasuredHeight } from '../../diff/sections/diff-section-height-cache'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { fetchCombinedDiffSection } from './fetch-combined-diff-section'
 import { getDiffSectionLoadErrorMessage } from './combined-diff-section-load-timeout'

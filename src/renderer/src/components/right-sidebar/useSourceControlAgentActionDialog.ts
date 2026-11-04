@@ -1,3 +1,8 @@
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { applySourceControlPickerDraft } from '../../lib/source-control-agent-launch-picker'
 import {
   canonicalSourceControlActionSelection,
   commitSourceControlActionArguments,
@@ -5,14 +10,14 @@ import {
   pickSourceControlActionAgent,
   selectSourceControlActionRecipe,
   type CurrentActionSelection
-} from '../../../../shared/source-control-action-selection'
-import { captureSourceControlActionSelection } from '../../../../shared/source-control-ai-operation-policy'
+} from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
+import { captureSourceControlActionSelection } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { useCallback, useMemo, useState } from 'react'
-import { resolveSourceControlLaunchAgentScope } from '../../../../shared/source-control-launch-agent-selection'
+import { resolveSourceControlLaunchAgentScope } from '../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
-import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import { savedSurfaceForPick } from '@/lib/source-control-agent-picker'
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
@@ -98,49 +103,55 @@ export function useSourceControlAgentActionDialog({
     basePrompt: baseCommandInput
   })
   const trimmedCommandInput = commandInput.trim()
-  const { deliveryPlan, resetDeliveryPlan, cancelStart, isStarting, handleStart } =
-    useSourceControlAgentActionStart({
-      open,
-      connectionId,
-      selectedAgent,
-      commandInput,
-      trimmedCommandInput,
-      agentArgsApply: choice.launchAppliesAgentArgs,
-      recipe: choice.canSaveSurface ? recipe : (({ surface: _surface, ...rest }) => rest)(recipe),
-      prepareRecipe: (agent) => {
-        const submitted = argumentsEdited
-          ? commitSourceControlActionArguments(currentSelection, agent).recipe
-          : recipe
-        return choice.canSaveSurface
-          ? submitted
-          : (({ surface: _surface, ...rest }) => rest)(submitted)
-      },
-      saveLaunchRecipe,
-      saveTargetValue,
-      actionId,
-      repoId,
-      settings,
-      agentLaunchPreferences: choice.observation.preferences,
-      repo,
-      worktreeId,
-      groupId,
-      promptDelivery,
-      launchPlatform,
-      // Why: an SSH host runs the plain `orca` shim; keep the previewed command
-      // label aligned with the real remote launch (no `orca-ide` rename).
-      isRemote: typeof connectionId === 'string',
-      launchSource,
-      recoveryContext,
-      connectionUnavailable,
-      detectedAgents,
-      launchChoice: selection.choice,
-      onStart,
-      onSaveAgentDefault,
-      onLaunchAccepted,
-      onLaunchAborted,
-      onLaunched,
-      onClose: closeDialog
-    })
+  const {
+    deliveryPlan,
+    resetDeliveryPlan,
+    cancelStart,
+    isStarting,
+    isCreateAccepted,
+    handleStart
+  } = useSourceControlAgentActionStart({
+    open,
+    connectionId,
+    selectedAgent,
+    commandInput,
+    trimmedCommandInput,
+    agentArgsApply: choice.launchAppliesAgentArgs,
+    recipe: choice.canSaveSurface ? recipe : (({ surface: _surface, ...rest }) => rest)(recipe),
+    prepareRecipe: (agent) => {
+      const submitted = argumentsEdited
+        ? commitSourceControlActionArguments(currentSelection, agent).recipe
+        : recipe
+      return choice.canSaveSurface
+        ? submitted
+        : (({ surface: _surface, ...rest }) => rest)(submitted)
+    },
+    saveLaunchRecipe,
+    saveTargetValue,
+    actionId,
+    repoId,
+    settings,
+    agentLaunchPreferences: choice.observation.preferences,
+    repo,
+    worktreeId,
+    groupId,
+    promptDelivery,
+    launchPlatform,
+    // Why: an SSH host runs the plain `orca` shim; keep the previewed command
+    // label aligned with the real remote launch (no `orca-ide` rename).
+    isRemote: typeof connectionId === 'string',
+    launchSource,
+    recoveryContext,
+    connectionUnavailable,
+    detectedAgents,
+    launchChoice: selection.choice,
+    onStart,
+    onSaveAgentDefault,
+    onLaunchAccepted,
+    onLaunchAborted,
+    onLaunched,
+    onClose: closeDialog
+  })
 
   const canStart =
     Boolean(trimmedCommandInput) &&
@@ -169,11 +180,20 @@ export function useSourceControlAgentActionDialog({
     [resetDeliveryPlan]
   )
   // A pick changes route even for the same agent, so it always invalidates the previewed plan.
-  const onAgentPick = (agent: TuiAgent, surface?: AgentLaunchSurface): void => {
-    const saved = savedSurfaceForPick(choice.observation.model, agent, surface)
-    setLivePick(surface)
-    setCurrentSelection((previous) =>
-      pickSourceControlActionAgent(
+  const onAgentPick = (
+    agent: TuiAgent,
+    surface?: AgentLaunchSurface,
+    draft?: AgentPickerDraft,
+    entry?: AgentPickerEntry
+  ): void => {
+    const saved =
+      selectedAgent === agent &&
+      (surface === undefined || surface === currentSelection.current.surface)
+        ? currentSelection.current.surface
+        : savedSurfaceForPick(choice.observation.model, agent, surface, entry)
+    setLivePick((current) => (selectedAgent === agent && surface === undefined ? current : surface))
+    setCurrentSelection((previous) => {
+      const picked = pickSourceControlActionAgent(
         argumentsEdited && selectedAgent !== agent
           ? commitSourceControlActionArguments(previous, selectedAgent ?? agent).selection
           : previous,
@@ -181,8 +201,11 @@ export function useSourceControlAgentActionDialog({
         selectedAgent,
         saved
       )
-    )
-    if (selectedAgent !== agent) {
+      return draft && entry ? applySourceControlPickerDraft(picked, entry, draft) : picked
+    })
+    // A surface button always carries a draft. Only an argument edit in that draft,
+    // or a different agent, replaces the dialog's pending arguments.
+    if (draft?.recipeEdits?.changed || selectedAgent !== agent) {
       setArgumentsEdited(false)
     }
     resetDeliveryPlan()
@@ -220,6 +243,8 @@ export function useSourceControlAgentActionDialog({
     hasEnabledAgents: choice.hasEnabledAgents,
     detecting,
     surfaceRows: {
+      launchSelection: currentSelection,
+      worktreeId: worktreeId ?? undefined,
       model: choice.observation.model,
       selection: choice.pickerSelection,
       contextKey: choice.observation.contextKey,
@@ -239,6 +264,7 @@ export function useSourceControlAgentActionDialog({
     deliveryPlan,
     canStart,
     isStarting,
+    isCreateAccepted,
     onAgentPick,
     onAgentArgsChange,
     onCommandTemplateChange,

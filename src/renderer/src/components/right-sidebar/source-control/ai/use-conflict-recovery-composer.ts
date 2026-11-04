@@ -7,7 +7,7 @@ import {
 } from '../../source-control-recovery-admission'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import type { SourceControlAiControllerParams } from './controller-types'
-import { buildResolveConflictsPrompt } from './prompts'
+import { buildResolveConflictsPrompt } from '../../../../../../shared/source-control/recovery/source-control-conflict-prompts'
 
 export function useConflictRecoveryComposer({
   target,

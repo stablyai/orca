@@ -10,12 +10,12 @@ import type * as ProcessHostModule from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type * as AcpAdapterModule from '../acp/acp-structured-session-adapter'
 import type * as ClaudeAdapterModule from '../claude/structured/claude-structured-session-adapter'
-import type * as CodexAdapterModule from '../codex/codex-structured-session-adapter'
+import type * as CodexAdapterModule from '../codex/structured/session-lifecycle/codex-structured-session-adapter'
 import type * as PiAdapterModule from '../pi/rpc-session-adapter'
 import type * as ManagedProviderProcessModule from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import type * as StructuredAgentSessionRuntimeModule from './structured-agent-session-runtime'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type * as StructuredAgentSessionRuntimeModule from './agent-session/structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
 const capture = vi.hoisted(() => {
   const pendingEnvToDelete: readonly string[] = []
@@ -57,7 +57,7 @@ vi.mock('../provider-process/managed-provider-process', async (importOriginal) =
     }
   }
 })
-vi.mock('./structured-agent-session-runtime', async (importOriginal) => {
+vi.mock('./agent-session/structured-agent-session-runtime', async (importOriginal) => {
   const actual = await importOriginal<typeof StructuredAgentSessionRuntimeModule>()
   return {
     ...actual,
@@ -67,15 +67,18 @@ vi.mock('./structured-agent-session-runtime', async (importOriginal) => {
   }
 })
 // Each adapter as production builds it, with its resolved launch recorded on the way to the spawn.
-vi.mock('../codex/codex-structured-session-adapter', async (importOriginal) => {
-  const actual = await importOriginal<typeof CodexAdapterModule>()
-  class RecordingAdapter extends actual.CodexStructuredSessionAdapter {
-    constructor(deps: ConstructorParameters<typeof actual.CodexStructuredSessionAdapter>[0]) {
-      super({ ...deps, resolveLaunch: (input) => deps.resolveLaunch(input).then(capture.record) })
+vi.mock(
+  '../codex/structured/session-lifecycle/codex-structured-session-adapter',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof CodexAdapterModule>()
+    class RecordingAdapter extends actual.CodexStructuredSessionAdapter {
+      constructor(deps: ConstructorParameters<typeof actual.CodexStructuredSessionAdapter>[0]) {
+        super({ ...deps, resolveLaunch: (input) => deps.resolveLaunch(input).then(capture.record) })
+      }
     }
+    return { ...actual, CodexStructuredSessionAdapter: RecordingAdapter }
   }
-  return { ...actual, CodexStructuredSessionAdapter: RecordingAdapter }
-})
+)
 vi.mock('../claude/structured/claude-structured-session-adapter', async (importOriginal) => {
   const actual = await importOriginal<typeof ClaudeAdapterModule>()
   class RecordingAdapter extends actual.ClaudeStructuredSessionAdapter {
@@ -125,10 +128,10 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
-} from '../../shared/agent-hook-scrub-safe-env'
+} from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { STRUCTURED_WORKER_HANDLE_PREFIX } from '../../shared/structured-worker-handle'
-import { YOLO_TUI_AGENT_ARGS } from '../../shared/tui-agent-permissions'
-import { agentChatPermissionModes } from '../../shared/agent-chat-permission-mode'
+import { YOLO_TUI_AGENT_ARGS } from '../../shared/agent-launch/permissions/tui-agent-permissions'
+import { agentChatPermissionModes } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import {
   AGENT_HOOK_RUNTIME_ENV_KEYS,
   ORCA_AGENT_SESSION_CALLER_ENV_KEYS
@@ -141,7 +144,7 @@ import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-se
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { createClaudeCliFlagSupport } from '../claude/claude-cli-flag-support'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
@@ -149,7 +152,7 @@ import {
   type StructuredAgentRuntimeAdapter
 } from './structured-agent-runtime-registrations'
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
-import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
+import { createStructuredAgentSessionDispatchFollowUps } from './agent-session/structured-agent-session-dispatch-followups'
 import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,

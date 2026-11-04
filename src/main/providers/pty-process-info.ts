@@ -1,6 +1,7 @@
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { ForegroundProcessEvidence } from '../../shared/foreground-process-evidence'
+import type { WslGuestRoot } from '../../shared/wsl-guest-root-marker'
 
 export type PtyProcessInfo = {
   id: string
@@ -23,6 +24,8 @@ export type PtyProcessInfo = {
   paneKey?: string
   /** Exact WSL owner reported by the PTY provider; null means native Windows. */
   wslDistro?: string | null
+  /** A live WSL PTY's guest root shell, seen once at its launch; absent from older owners. */
+  wslGuestRoot?: WslGuestRoot
   /** Optional host-side process evidence attached to an inventory seed. */
   foregroundProcessEvidence?: ForegroundProcessEvidence
   agentSessionOwners?: AgentSessionOwnerBinding[]

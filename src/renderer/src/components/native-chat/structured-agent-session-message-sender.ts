@@ -1,6 +1,6 @@
 // Allow one unanswered send per chat in memory; host rows/cards own admitted messages. Never retry a send or retain it past its deadline.
 
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionFirstMessage } from '../../../../shared/agent-session/structured-agent-session-create'
 import {
@@ -36,7 +36,7 @@ import {
   beginSend,
   finish,
   handBack,
-  refusedSendParts,
+  handBackRefused,
   runtimes,
   settleRecorded,
   STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS,
@@ -75,7 +75,7 @@ async function attempt(entry: StructuredAgentSessionPendingSend): Promise<void> 
   } else if (outcome.evidence.kind === 'recorded') {
     settleRecorded(current, outcome.submission, 'reply', outcome.cursor)
   } else if (outcome.evidence.kind === 'not-recorded') {
-    handBack(current, refusedSendParts(outcome.evidence.failure))
+    handBackRefused(current, outcome.evidence.failure)
   } else {
     // An uncertain request may have landed; return its text with an unconfirmed notice and never resend automatically.
     handBack(current, agentSessionUnconfirmedSendParts(outcome.thrownRefusal))
@@ -96,7 +96,11 @@ export function sendStructuredAgentSessionMessage(
   input: StructuredAgentSessionSendInput & { target: RuntimeClientTarget }
 ): StructuredAgentSessionSent | null {
   const entry = takeStructuredAgentSessionSendSlot(input)
-  return entry ? dispatch(entry, input.target) : null
+  if (!entry) {
+    return null
+  }
+  input.onCreated?.(entry.clientMessageId)
+  return dispatch(entry, input.target)
 }
 
 export type StructuredAgentSessionReservedSend = {
@@ -190,14 +194,14 @@ export function reserveStructuredAgentSessionSend(
           }
           if (result.kind === 'recorded') {
             settleRecorded(pending, result.submission, 'reply', result.cursor)
+          } else if (result.kind === 'refused' && result.failure) {
+            handBackRefused(pending, result.failure)
           } else {
             handBack(
               pending,
               result.kind === 'unconfirmed'
                 ? agentSessionUnconfirmedSendParts(undefined)
-                : result.failure
-                  ? refusedSendParts(result.failure)
-                  : agentSessionWriteNotDoneParts('composer-send')
+                : agentSessionWriteNotDoneParts('composer-send')
             )
           }
         }

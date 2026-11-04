@@ -1,4 +1,4 @@
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   buildWorkspaceCleanupFacetList,
   type WorkspaceCleanupFacetSources,
@@ -20,7 +20,7 @@ import { sortWorkspaceCleanupFacets } from './workspace-cleanup-facet-sort'
 import type {
   WorkspaceCleanupFilterState,
   WorkspaceCleanupSortState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 export type WorkspaceCleanupQuery = {
   filters: WorkspaceCleanupFilterState

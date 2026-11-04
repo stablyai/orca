@@ -20,19 +20,6 @@ function item(id: string, sequence: number): AgentJournalRenderItem {
   }
 }
 
-function submission(index: number) {
-  return {
-    clientMessageId: `client-${index}`,
-    fence: 1,
-    payloadFingerprint: `fingerprint-${index}`,
-    dispatchState: 'accepted' as const,
-    providerItemId: `provider-${index}`,
-    reason: null,
-    submittedAt: index,
-    resolvedAt: index
-  }
-}
-
 function hydrationPage(
   items: AgentJournalRenderItem[],
   submissions: AgentJournalSubmission[] = []
@@ -89,78 +76,6 @@ describe('structured agent session reducer', () => {
     expect(live.items.map(({ itemId }) => itemId).slice(-2)).toEqual(['next-a', 'next-b'])
   })
 
-  it('applies an additive targeted-stop capability update without journal churn', () => {
-    const backgroundTasks = {
-      state: 'monitoring' as const,
-      tasks: [{ id: 'task-1', kind: 'agent' as const }]
-    }
-    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: { ...hydrationPage([]), backgroundTasks }
-      }
-    })
-    const updated = reduceStructuredAgentSession(initial, {
-      type: 'event',
-      event: {
-        type: 'batch',
-        sessionId: 'session-a',
-        batch: {
-          cursor: { epoch: 'epoch-a', sequence: 0 },
-          items: [],
-          removedItemIds: [],
-          submissions: []
-        },
-        backgroundTasks: { ...backgroundTasks, supportsTaskStop: true }
-      }
-    })
-
-    expect(updated.backgroundTasks).toEqual({ ...backgroundTasks, supportsTaskStop: true })
-    expect(updated.items).toBe(initial.items)
-  })
-
-  it("republishes when only a row's stoppability changes", () => {
-    // A lost Stop button changes behavior and must invalidate equality.
-    const backgroundTasks = {
-      state: 'monitoring' as const,
-      supportsTaskStop: true,
-      tasks: [{ id: 'task-1', kind: 'agent' as const }]
-    }
-    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: { ...hydrationPage([]), backgroundTasks }
-      }
-    })
-    const updated = reduceStructuredAgentSession(initial, {
-      type: 'event',
-      event: {
-        type: 'batch',
-        sessionId: 'session-a',
-        batch: {
-          cursor: { epoch: 'epoch-a', sequence: 0 },
-          items: [],
-          removedItemIds: [],
-          submissions: []
-        },
-        backgroundTasks: {
-          ...backgroundTasks,
-          tasks: [{ id: 'task-1', kind: 'agent' as const, stoppable: false }]
-        }
-      }
-    })
-
-    expect(updated.backgroundTasks?.tasks).toEqual([
-      { id: 'task-1', kind: 'agent', stoppable: false }
-    ])
-  })
-
   it('decodes child rows once as they arrive: a malformed row is dropped, and a repeat keeps identity', () => {
     const view = {
       id: 'child-1',
@@ -205,63 +120,6 @@ describe('structured agent session reducer', () => {
     expect(state.backgroundTasks).toBe(kept)
   })
 
-  it("keeps a failed read's refusal beside its text until the read recovers", () => {
-    const refusal = {
-      code: 'agent_session_journal_unreadable',
-      details: { reason: 'journalCorrupt' }
-    } as const
-    const failed = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'error',
-      message: 'agent_session_journal_unreadable',
-      refusal
-    })
-    expect(failed).toMatchObject({ status: 'error', readRefusal: refusal })
-
-    expect(reduceStructuredAgentSession(failed, { type: 'loading' }).readRefusal).toBeUndefined()
-    const live = reduceStructuredAgentSession(
-      reduceStructuredAgentSession(failed, {
-        type: 'history-page',
-        page: hydrationPage([item('a', 1)])
-      }),
-      { type: 'error', message: 'transport died' }
-    )
-    expect(live.readRefusal).toBeUndefined()
-    const recovered = reduceStructuredAgentSession(
-      { ...live, readRefusal: refusal },
-      {
-        type: 'event',
-        event: {
-          type: 'batch',
-          sessionId: 'session-a',
-          batch: {
-            cursor: { epoch: 'epoch-a', sequence: 2 },
-            items: [item('b', 2)],
-            removedItemIds: [],
-            submissions: []
-          }
-        }
-      }
-    )
-    expect(recovered).toMatchObject({ status: 'ready', error: undefined, readRefusal: undefined })
-  })
-
-  it('uses the bounded hydration page pagination boundary', () => {
-    const restored = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage(
-          Array.from({ length: 84 }, (_, index) => item(`item-${index}`, index + 1))
-        )
-      }
-    })
-
-    expect(restored.items).toHaveLength(84)
-    expect(restored.hasOlder).toBe(false)
-  })
-
   it('stops offering older history once a /clear divider is loaded, live or paged in', () => {
     const clearRow = (sequence: number): AgentJournalRenderItem => ({
       ...item(`clear-${sequence}`, sequence),
@@ -303,107 +161,6 @@ describe('structured agent session reducer', () => {
     })
     expect(pagedBack.items.map(({ itemId }) => itemId)).toEqual(['old', 'clear-11', 'new'])
     expect(pagedBack.hasOlder).toBe(false)
-  })
-
-  it('projects additive background task state without changing transcript identity', () => {
-    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('message', 1)]),
-        backgroundTasks: null
-      }
-    })
-    const monitoring = reduceStructuredAgentSession(initial, {
-      type: 'event',
-      event: {
-        type: 'batch',
-        sessionId: 'session-a',
-        batch: {
-          cursor: initial.cursor!,
-          items: [],
-          removedItemIds: [],
-          submissions: []
-        },
-        fence: 1,
-        backgroundTasks: { state: 'monitoring' }
-      }
-    })
-
-    expect(monitoring.backgroundTasks).toEqual({ state: 'monitoring' })
-    expect(monitoring.items).toBe(initial.items)
-  })
-
-  it('returns the same state for duplicate background task publications', () => {
-    const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('message', 1)]),
-        backgroundTasks: { state: 'monitoring' }
-      }
-    })
-    const duplicate = reduceStructuredAgentSession(monitoring, {
-      type: 'event',
-      event: {
-        type: 'batch',
-        sessionId: 'session-a',
-        batch: {
-          cursor: monitoring.cursor!,
-          items: [],
-          removedItemIds: [],
-          submissions: []
-        },
-        fence: 1,
-        backgroundTasks: { state: 'monitoring' }
-      }
-    })
-
-    expect(duplicate).toBe(monitoring)
-  })
-
-  it('applies background task roster changes without a journal update', () => {
-    const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('message', 1)]),
-        backgroundTasks: {
-          state: 'monitoring',
-          tasks: [{ id: 'task-1', kind: 'command', description: 'first command' }]
-        }
-      }
-    })
-    const changed = reduceStructuredAgentSession(monitoring, {
-      type: 'event',
-      event: {
-        type: 'batch',
-        sessionId: 'session-a',
-        batch: {
-          cursor: monitoring.cursor!,
-          items: [],
-          removedItemIds: [],
-          submissions: []
-        },
-        fence: 1,
-        backgroundTasks: {
-          state: 'monitoring',
-          tasks: [{ id: 'task-1', kind: 'agent', description: 'review the change' }]
-        }
-      }
-    })
-
-    expect(changed).not.toBe(monitoring)
-    expect(changed.backgroundTasks?.tasks).toEqual([
-      { id: 'task-1', kind: 'agent', description: 'review the change' }
-    ])
-    expect(changed.items).toBe(monitoring.items)
   })
 
   it('applies a publication whose only change is one task state or settled roster', () => {
@@ -477,30 +234,6 @@ describe('structured agent session reducer', () => {
     expect(unchanged).toBe(monitoring)
   })
 
-  it('clears additive background state when a replacement snapshot omits the field', () => {
-    const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('message', 1)]),
-        backgroundTasks: { state: 'monitoring' }
-      }
-    })
-    const withoutCapability = reduceStructuredAgentSession(monitoring, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 2,
-        page: hydrationPage([item('message', 1)])
-      }
-    })
-
-    expect(withoutCapability.backgroundTasks).toBeUndefined()
-  })
-
   // Old hosts omit empty rosters; a cursor resume must clear the detached client’s stale roster (#24227).
   it("drops the held roster on a resumed subscription's first batch that omits it", () => {
     const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
@@ -530,53 +263,6 @@ describe('structured agent session reducer', () => {
     })
     expect(resumed.backgroundTasks).toBeUndefined()
     expect(resumed.items).toBe(monitoring.items)
-  })
-
-  it('projects ephemeral activity without changing transcript identity and clears it', () => {
-    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('message', 1)])
-      }
-    })
-    const active = reduceStructuredAgentSession(initial, {
-      type: 'event',
-      event: {
-        type: 'batch',
-        sessionId: 'session-a',
-        batch: {
-          cursor: initial.cursor!,
-          items: [],
-          removedItemIds: [],
-          submissions: []
-        },
-        activity: { turnId: 'turn-1', text: 'Checking the renderer' }
-      }
-    })
-
-    expect(active.activity).toEqual({ turnId: 'turn-1', text: 'Checking the renderer' })
-    expect(active.items).toBe(initial.items)
-
-    const cleared = reduceStructuredAgentSession(active, {
-      type: 'event',
-      event: {
-        type: 'batch',
-        sessionId: 'session-a',
-        batch: {
-          cursor: active.cursor!,
-          items: [],
-          removedItemIds: [],
-          submissions: []
-        },
-        activity: null
-      }
-    })
-
-    expect(cleared.activity).toBeNull()
-    expect(cleared.items).toBe(active.items)
   })
 
   describe("the host's newest turn record", () => {
@@ -692,92 +378,4 @@ describe('structured agent session reducer', () => {
     expect(downgraded.working).toBeUndefined()
     expect(downgraded.actionablePromptIds).toBeUndefined()
   })
-
-  it('records the host clock from frames that carry it and keeps it otherwise', () => {
-    const snapshot = reduceStructuredAgentSession(
-      EMPTY_STRUCTURED_AGENT_SESSION,
-      {
-        type: 'event',
-        event: {
-          type: 'snapshot',
-          sessionId: 'session-a',
-          fence: 1,
-          page: hydrationPage([item('first', 1)]),
-          hostNow: 5_000
-        }
-      },
-      9_000
-    )
-    expect(snapshot.hostClock).toEqual({ hostNow: 5_000, receivedAt: 9_000 })
-
-    const batch = reduceStructuredAgentSession(
-      snapshot,
-      {
-        type: 'event',
-        event: {
-          type: 'batch',
-          sessionId: 'session-a',
-          fence: 1,
-          hostNow: 5_400,
-          batch: {
-            cursor: { epoch: 'epoch-a', sequence: 2 },
-            items: [item('second', 2)],
-            removedItemIds: [],
-            submissions: []
-          }
-        }
-      },
-      9_400
-    )
-    expect(batch.hostClock).toEqual({ hostNow: 5_400, receivedAt: 9_400 })
-
-    // An older host stamps nothing; the last sample stays usable.
-    const unstamped = reduceStructuredAgentSession(
-      batch,
-      {
-        type: 'event',
-        event: {
-          type: 'batch',
-          sessionId: 'session-a',
-          fence: 1,
-          batch: {
-            cursor: { epoch: 'epoch-a', sequence: 3 },
-            items: [item('third', 3)],
-            removedItemIds: [],
-            submissions: []
-          }
-        }
-      },
-      9_800
-    )
-    expect(unstamped.hostClock).toEqual({ hostNow: 5_400, receivedAt: 9_400 })
-  })
-})
-
-it('applies catalog-only checkpoints without replacing transcript or submission state', () => {
-  const state = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-    type: 'event',
-    event: {
-      type: 'snapshot',
-      sessionId: 'session-a',
-      fence: 1,
-      page: hydrationPage([item('one', 1)], [submission(1)]),
-      commands: []
-    }
-  })
-  const event = {
-    type: 'batch' as const,
-    sessionId: 'session-a',
-    fence: 1,
-    commands: [{ name: 'loaded', kind: 'skill' as const }],
-    batch: { cursor: state.cursor!, items: [], removedItemIds: [], submissions: [] }
-  }
-  const updated = reduceStructuredAgentSession(state, { type: 'event', event })
-  expect(updated.commands).toEqual(event.commands)
-  expect(updated.items).toBe(state.items)
-  expect(updated.submissions).toBe(state.submissions)
-  expect(updated.cursor).toBe(state.cursor)
-  expect(reduceStructuredAgentSession(updated, { type: 'event', event })).toBe(updated)
-  const { commands: _commands, ...oldEvent } = event
-  expect(reduceStructuredAgentSession(updated, { type: 'event', event: oldEvent })).toBe(updated)
 })

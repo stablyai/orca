@@ -1,7 +1,7 @@
 import { createElement, Fragment, startTransition, Suspense, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { QuickCommandsSheet } from './QuickCommandsSheet'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
@@ -43,7 +43,7 @@ vi.mock('react-native', () => ({
 
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'ChevronLeft' }))
 
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children: ReactNode }) => children
 }))
 

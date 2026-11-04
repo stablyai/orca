@@ -15,14 +15,16 @@ import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-pr
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 
 const os = vi.hoisted(() => ({
   capture: vi.fn(),
   terminate: vi.fn(async () => 'unverifiable' as const)
 }))
-vi.mock('../pty-descendant-termination', () => ({ captureDescendantSnapshot: os.capture }))
-vi.mock('../pty-descendant-exit-verification', () => ({
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
+  captureDescendantSnapshot: os.capture
+}))
+vi.mock('../pty/process-retirement/pty-descendant-exit-verification', () => ({
   terminateDescendantSnapshotWithVerdict: os.terminate
 }))
 vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({

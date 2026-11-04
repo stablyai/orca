@@ -62,7 +62,18 @@
         "searchTerminal": "터미널",
         "searchCli": "CLI"
       },
-      "permissionsDescriptionOwnAgents": "새 채팅은 설정 → 에이전트에 있는 각 에이전트의 권한을 따릅니다."
+      "permissionsDescriptionOwnAgents": "새 채팅은 설정 → 에이전트에 있는 각 에이전트의 권한을 따릅니다.",
+      "launch": {
+        "on": "Chat UI 켜짐",
+        "off": "Chat UI 꺼짐",
+        "agents": "에이전트별 기본 실행 모드",
+        "agentsDescription": "각 에이전트를 Chat UI와 CLI 중 어디에서 열지 선택합니다.",
+        "chatDescription": "새 에이전트가 기본적으로 채팅 모드로 실행됩니다.",
+        "cliDescription": "새 에이전트가 기본적으로 CLI로 실행됩니다.",
+        "turnOn": "켜기",
+        "turnOff": "끄기",
+        "toggle": "기본적으로 Chat UI 사용"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC 또는 U.S. — Option 키가 Alt/Esc 시퀀스를 전송합니다",
@@ -171,7 +182,7 @@
         "inheritFont": "IDE와 같은 글꼴",
         "fontPreviewLabel": "채팅 글꼴 미리보기",
         "fontPreview": "이 문장에서 채팅 글꼴을 미리 볼 수 있습니다.",
-        "title": "채팅",
+        "title": "채팅 UI",
         "textSize": "텍스트 크기",
         "textSizeDescription": "메시지, 도구 활동 및 메시지 입력란. 채팅에서 {{increase}} / {{decrease}} 키로도 변경할 수 있습니다.",
         "codeTextSize": "코드 텍스트 크기",
@@ -407,6 +418,8 @@
       "claudeRemoveFolder": "Orca는 이 컴퓨터에서 해당 계정의 Claude 폴더와 로그인 정보를 삭제합니다. 시스템 기본 계정과 공유하는 채팅 기록은 유지됩니다. 삭제한 계정이 선택되어 있었다면, 다음에 시작하는 Claude는 시스템 기본 계정을 사용합니다."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "다른 곳에서 Git 작업 실행 중",
+      "remoteOperationInAnotherWorkspace": "다른 워크스페이스에서 Git 작업(푸시, 풀, 강제 푸시 등)을 실행 중입니다. 작업이 겹치지 않도록 완료된 후 이 작업을 사용하세요.",
       "actionModel": {
         "on": "켜짐",
         "off": "꺼짐",
@@ -518,6 +531,28 @@
         "notPng": "저장소 아이콘은 PNG 파일이어야 합니다.",
         "tooLarge": "저장소 아이콘 이미지는 256 KB 이하여야 합니다."
       }
+    },
+    "editorFormatOnSave": {
+      "title": "저장 시 포맷",
+      "description": "수동 저장 및 자동 저장 전에 텍스트를 포맷합니다. 설정 > 프로젝트에서 포맷터 명령을 설정하세요. 기본적으로 꺼져 있습니다.",
+      "keywords": "포맷터 저장 시 포맷 prettier biome gofmt"
+    },
+    "editorInsertFinalNewline": {
+      "title": "마지막 줄바꿈 삽입",
+      "description": "비어 있지 않은 코드 파일을 저장할 때 끝에 줄바꿈이 없으면 추가합니다. 기본적으로 꺼져 있습니다.",
+      "keywordNewline": "줄바꿈",
+      "keywordEndOfFile": "파일 끝"
+    },
+    "repositoryFormatter": {
+      "title": "포맷터 명령",
+      "description": "저장 시 포맷에 이 프로젝트의 포맷터를 사용합니다.",
+      "saveFailed": "포맷터 설정을 저장하지 못했습니다.",
+      "command": "명령",
+      "saving": "저장 중…",
+      "save": "포맷터 저장",
+      "commandHelp": "워크스페이스 루트에서 파일의 호스트에서 실행됩니다. stdin에서 버퍼를 읽고 포맷된 텍스트만 stdout으로 출력해야 합니다. 경로에는 ${file} 또는 ${relativeFile}을 사용하세요. 인수는 셸을 거치지 않고 직접 전달됩니다. --write를 사용하지 마세요. 이 프로젝트에서 비활성화하려면 비워 두세요.",
+      "include": "포함할 glob (한 줄에 하나씩)",
+      "includeHelp": "워크스페이스 루트에 대한 상대 경로와 일치시킵니다. 일치하는 glob이 없으면 포맷하지 않습니다. *와 **는 점으로 시작하는 이름을 건너뜁니다. 예: .github/**/*.yml처럼 명시하세요. 이 명령을 사용하려면 일반 > 편집기에서 저장 시 포맷을 켜세요."
     }
   },
   "menu": {
@@ -1310,7 +1345,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "구조화된 에이전트 세션은 아직 사용할 수 없습니다. 잠시 후 다시 시도하세요.",
         "gone": "이 채팅은 더 이상 이 호스트에 없으므로 여기에서 다시 열 수 없습니다.",
-        "hostCannotOpen": "Orca가 업데이트될 때까지 이 채팅을 다시 열 수 없습니다."
+        "hostCannotOpen": "Orca가 업데이트될 때까지 이 채팅을 다시 열 수 없습니다.",
+        "worktreeDeleted": "워크트리가 삭제되었습니다.",
+        "folderWorkspaceRemoved": "폴더 워크스페이스가 제거되었습니다."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "프로비저닝된 루트 레시피는 스파스 체크아웃을 지원하지 않습니다."
@@ -1320,7 +1357,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "워크스페이스 외부의 파일은 아직 페어링된 서버에서 미리 볼 수 없습니다.",
           "webClientUnavailable": "문서 미리보기는 웹 클라이언트에서 사용할 수 없습니다."
         }
       },
@@ -1643,7 +1679,6 @@
         "9c3ba11a05": "상태:",
         "934d87ab96": "체크 세부 정보 로드 중…",
         "71c11aff84": "모든 체크 다시 실행",
-        "e31651a224": "실패한 체크 다시 실행",
         "1b56e28faa": "재실행",
         "f4b1292569": "이 체크에 기본 AI agent 시작",
         "9a1004fc76": "체크 새로고침",
@@ -2113,8 +2148,6 @@
         "25690a3855": "PR에서 워크스페이스 시작",
         "a459866967": "PR에 연결된 워크스페이스 재개",
         "347034903a": "GitHub 링크 복사",
-        "5a01ca7253": "조회된 상태를 GitHub와 동기화하지 못했습니다.",
-        "996a1897d2": "이 PR에 대해 본 상태를 동기화할 수 없습니다.",
         "e0b15c793f": "GitHub 링크를 복사하지 못했습니다.",
         "992e799227": "GitHub 링크가 복사되었습니다.",
         "61bfc81ada": "이 PR에 연결된 워크스페이스를 열 수 없습니다.",
@@ -2142,7 +2175,6 @@
         "662bc2998d": "상태:",
         "d8e82b7f15": "체크 세부 정보 로드 중…",
         "54cddd1858": "모든 체크 다시 실행",
-        "68605516dd": "실패한 체크 다시 실행",
         "522d9353e1": "재실행",
         "0fa8b8faec": "이 체크에 기본 AI agent 시작",
         "5d0f42766d": "체크 새로고침",
@@ -3607,7 +3639,7 @@
             "copyLinkFailed": "링크를 복사하지 못했습니다.",
             "downloadOpenWithDefaultApp": "기본 앱 다운로드 및 열기",
             "downloadOpenFailed": "'{{value0}}'을(를) 다운로드하지 못했습니다.",
-            "openInThisGroup": "이 그룹에서 열기",
+            "openInNewTab": "새 탭에서 열기",
             "openInThisGroupRefused": "이 그룹에서 {{value0}}을(를) 열 수 없습니다"
           },
           "TerminalQuickCommandsSubmenu": {
@@ -4016,7 +4048,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "다른 계정 없음",
-            "9332ba8684": "다음으로 전환",
             "d450654fa2": "Claude 계정",
             "11e2354daf": "Claude 사용 런타임",
             "3dd7ddfae1": "Claude 세부정보 및 계정 전환 도구 열기",
@@ -5750,11 +5781,7 @@
           "93cbea12c2": "메모",
           "dbe2d18972": "추가 {{value0}} 작업",
           "2c67730e07": "Orca에서 열기",
-          "e42941631a": "Linear에서 보기",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "이슈 편집",
-          "b22f058067": "GitHub에서 보기",
-          "e97d8f2876": "이슈 #{{value0}}",
           "3ea2702e62": "연결됨 {{value0}} #{{value1}}",
           "b105fd3057": "연결된 Linear {{value0}}",
           "3f2649eeb8": "연결된 이슈 #{{value0}}",
@@ -5777,8 +5804,6 @@
           "cliCreatedFromShell": "`orca worktree create`로 생성",
           "cliStartupAgent": "{{value0}}(으)로 시작됨",
           "cliCreated": "Orca CLI로 생성됨",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Jira에서 보기",
           "linkedJira": "연결된 Jira {{value0}}",
           "openInOrcaBrowser": "Orca 브라우저에서 열기"
         },
@@ -6690,6 +6715,7 @@
       },
       "settings": {
         "AccountsPane": {
+          "locationSaveFailed": "계정 위치를 저장할 수 없습니다. 다시 시도하세요.",
           "c2d2751587": "계정 삭제",
           "dbb9626ed1": "취소",
           "63843e37e2": "Claude 계정을 삭제하시겠습니까?",
@@ -7038,7 +7064,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "컴퓨터 사용 열기",
-          "79209b37b9": "쿠키 가져오기가 적합하지 않은 경우 컴퓨터 사용은 로컬 앱을 제어할 수 있으며 해당되는 경우 기존 로그인 브라우저 세션을 사용할 수 있습니다. Computer Use 스킬을 설치하십시오. macOS에도 개인정보 보호 권한이 필요합니다.",
+          "79209b37b9": "쿠키 가져오기가 적합하지 않은 경우 컴퓨터 사용은 로컬 앱을 제어할 수 있으며 해당되는 경우 기존 로그인 브라우저 세션을 사용할 수 있습니다. Orca Computer Use 스킬을 설치하십시오. macOS에도 개인정보 보호 권한이 필요합니다.",
           "333984cf90": "기존 브라우저 세션 사용"
         },
         "BrowserUseEnableSwitch": {
@@ -7158,7 +7184,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "agents가 로컬 데스크톱 앱을 검사하고 작동할 수 있습니다.",
-          "93255aaf18": "Computer Use 스킬",
+          "93255aaf18": "Orca Computer Use 스킬",
           "45f8e22c2e": "열기",
           "d95d1cfab8": "새로고침",
           "0c29da5805": "준비됨",
@@ -7439,7 +7465,6 @@
           "9d3e56ca36": "변경 사항 적용",
           "f96688b6bc": "취소",
           "b7ddae600c": "완료",
-          "e4bda7ce6f": "이 시스템에는 Ghostty 구성이 없습니다.",
           "b58d4c9051": "지원되지 않는 키",
           "674b5ccd6b": "가져올 새 설정이 없습니다. 현재 설정이 이미 일치합니다.",
           "a4c5dec640": "업데이트할 설정",
@@ -8001,8 +8026,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "명령 템플릿",
-          "2b2f38652b": "사용자 지정 명령",
-          "0ffb081b3a": "기본 에이전트 사용",
           "f4310cf63f": "에이전트",
           "1cd88d470a": "사용자 정의",
           "403876bb48": "글로벌 사용",
@@ -8543,7 +8566,7 @@
           "902f5dee1f": "선택 시 복사",
           "9129b7e805": "터미널 패널 위에 마우스를 올리면 클릭하지 않고도 활성화됩니다.",
           "8eefeaa3da": "마우스를 따라 포커스 이동",
-          "96fe15def8": "터미널 패널의 마우스 및 클립보드 동작.",
+          "96fe15def8": "터미널 패널의 스크롤, 마우스 및 클립보드 동작.",
           "45721f3e67": "터미널 상호작용",
           "9c0b1c1792": "켜짐",
           "c1fc9e9444": "GPU 가속",
@@ -9228,7 +9251,7 @@
               "terminal": "터미널",
               "chat": "채팅",
               "click": "클릭",
-              "actions": "행위",
+              "actions": "작업",
               "popover": "팝오버",
               "menu": "메뉴",
               "disable": "비활성화"
@@ -10580,7 +10603,8 @@
                   "supportedAgents": "이 레시피에 지원되는 에이전트: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}}은(는) 이 텍스트 생성 레시피를 실행할 수 없습니다. 아래에서 지원되는 에이전트 중 하나를 선택하세요.",
                   "resolveComments": "선택한 해결되지 않은 PR 또는 MR 댓글에서 agent를 시작합니다.",
-                  "fixPushFailure": "pre-push 훅이나 git push가 실패할 때 에이전트를 시작합니다."
+                  "fixPushFailure": "pre-push 훅이나 git push가 실패할 때 에이전트를 시작합니다.",
+                  "commitMessageSharedModel": "PR 상세 정보, 브랜치 이름 및 채팅 이름에서도 별도 모델을 선택하지 않으면 이 모델을 사용할 수 있습니다. 해당 항목의 ‘기본값과 동일’ 옵션에 사용할 모델이 표시됩니다."
                 }
               }
             }
@@ -12396,13 +12420,16 @@
         "AppearanceThemeControl": {
           "useTerminalTheme": "이 테마의 터미널 색상 사용",
           "matchTerminal": "Terminal에 맞춤",
-          "dynamic": "동적"
+          "dynamic": "동적",
+          "searchThemes": "테마 검색…",
+          "noThemes": "검색과 일치하는 테마가 없습니다."
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "아이콘 테마",
             "description": "활성화된 플러그인의 파일 및 폴더 아이콘입니다.",
-            "builtIn": "기본 제공"
+            "builtIn": "기본 제공",
+            "search": "아이콘 테마 검색…"
           },
           "lightTheme": "라이트 테마",
           "darkTheme": "다크 테마",
@@ -12738,6 +12765,9 @@
         },
         "PluginContributionActionNewFile": {
           "create": "만들기"
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "일치하는 항목이 없습니다."
         }
       },
       "right": {
@@ -13362,6 +13392,7 @@
                 "baseCommitLabel": "기본 커밋:",
                 "failingChecks_one": "실패한 검사 {{count}}개",
                 "failingChecks_other": "실패한 검사 {{count}}개",
+                "pipelineFailed": "{{name}} 실패",
                 "pendingChecks_one": "대기 중인 검사 {{count}}개",
                 "pendingChecks_other": "대기 중인 검사 {{count}}개",
                 "unresolvedChecks_one": "미해결 검사 {{count}}개",
@@ -13780,7 +13811,7 @@
                       "a1b2c3d4e5": "코드 분석",
                       "b2c3d4e5f6": "코드 라인",
                       "7f3e1a9c24": "{{value0}} — 생성됨: {{value1}}줄 추가, {{value2}}줄 삭제",
-                      "c8d5b21e07": "원천",
+                      "c8d5b21e07": "소스 코드",
                       "7a04c6f8b3": "생성됨"
                     }
                   }
@@ -17857,7 +17888,7 @@
           "size": "크기",
           "updated": "업데이트됨",
           "expires": "만료",
-          "actions": "행위"
+          "actions": "작업"
         },
         "ArtifactsPageSkeleton": {
           "loading": "아티팩트 로드 중"
@@ -18414,6 +18445,7 @@
       "failureWords": {
         "theAgent": "에이전트",
         "providerStartFailed": "{{agent}}이(가) 시작을 마치기 전에 중지되었습니다.",
+        "savedConversationMissing": "{{agent}}에서 이 채팅의 저장된 대화를 찾을 수 없습니다.",
         "runCommandAgain": "/{{command}}을(를) 다시 실행하세요.",
         "sendToTryAgain": "다시 시도하려면 메시지를 보내세요.",
         "sendAgainToTryOnceMore": "메시지를 다시 보내 한 번 더 시도하세요.",
@@ -18467,6 +18499,7 @@
         "attachmentNotAFile": "이 메시지의 이미지가 파일이 아니어서 메시지가 전송되지 않았습니다.",
         "attachmentNoSource": "이 메시지의 이미지에 보낼 파일이 없어 메시지가 전송되지 않았습니다.",
         "attachmentInvalid": "이 메시지의 첨부 파일은 에이전트에 보낼 수 없습니다.",
+        "attachmentsExpired": "{{names}}이(가) 만료되었습니다.",
         "attachmentUnreadable": "이 메시지의 첨부 파일을 읽을 수 없어 메시지가 전송되지 않았습니다.",
         "emptyMessage": "이 메시지가 비어 있어 전송되지 않았습니다.",
         "commandUnavailable": "이 명령은 {{agent}} 채팅에서 사용할 수 없어 전송되지 않았습니다.",
@@ -18554,6 +18587,7 @@
         "recordFailed": "Orca가 이 내용을 채팅 기록에 저장하지 못했습니다.",
         "attachmentExpired": "이 첨부 파일이 만료되었습니다.",
         "reattachFile": "제거한 후 다시 첨부하세요.",
+        "reattachFiles": "제거한 후 다시 첨부하세요.",
         "conversationCleared": "이 대화는 지워졌습니다.",
         "openCurrentConversation": "계속하려면 현재 대화를 여세요.",
         "clearUnfinished": "마지막 /clear가 완료되지 않았습니다.",
@@ -18800,8 +18834,6 @@
         "toggleDetails": "턴 세부정보 전환"
       },
       "jumpToLatest": "최신으로 이동",
-      "newRowsAnnouncement": "자리를 비운 동안 새 메시지가 도착했습니다",
-      "newRowsMarker": "새 메시지",
       "find": {
         "label": "채팅에서 찾기",
         "noResults": "결과 없음",
@@ -18815,7 +18847,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "채팅 UI에서 계속하려면 이 호스트의 Orca를 업데이트하세요.",
-        "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요."
+        "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요.",
+        "exitUnconfirmed": "{{agent}}이(가) 다른 터미널에서 이 대화를 실행 중입니다. 그곳에서 종료하거나 해당 터미널을 닫은 후 다시 시도하세요."
       },
       "state": {
         "loading": {
@@ -18903,8 +18936,11 @@
         "emptyAnswer": "빈 답변",
         "cancelled": "취소",
         "resolved": "해결됨",
-        "resolver": "{{device}}에 답변됨",
-        "cancelledBy": "{{device}}에 취소됨"
+        "resolver": "{{device}}에서 답변됨",
+        "cancelledBy": "{{device}}에서 취소됨",
+        "thisComputer": "이 컴퓨터",
+        "computer": "컴퓨터",
+        "otherDevice": "다른 기기"
       },
       "notices": {
         "contextCleared": "컨텍스트 지워짐",
@@ -19019,8 +19055,14 @@
         "unnamedSender": "Agent",
         "messageFromCoordinator": "코디네이터의 메시지",
         "startedWorker": "워커 시작됨",
+        "handedOffToAgent": "에이전트에게 넘김",
+        "startedAgent": "에이전트 시작됨",
         "taskFromCoordinator": "코디네이터의 작업",
-        "updateFromWorker": "워커의 업데이트"
+        "updateFromWorker": "워커의 업데이트",
+        "senderReplaced": "{{name}}이(가) 더 이상 해당 터미널에서 실행되지 않습니다. 현재 다른 에이전트가 실행 중입니다. 필요하면 사이드바에서 해당 터미널을 여세요.",
+        "senderAmbiguous": "Orca가 {{name}}이(가) 실행 중인 터미널을 확인할 수 없습니다. 사이드바에서 여세요.",
+        "senderNotRunning": "{{name}}이(가) 더 이상 실행되지 않습니다. 작업을 계속하려면 사이드바에서 새 에이전트를 시작하세요.",
+        "unnamedSenderSubject": "에이전트"
       },
       "goal": {
         "placeholder": "목표를 설명하고, 최상의 결과를 위해 측정 가능한 결과를 정의하세요.",
@@ -19305,6 +19347,31 @@
         "switchAccount": "계정 전환",
         "addAccount": "계정 추가…",
         "accountUnavailable": "이 채팅을 다른 계정으로 옮길 수 없습니다. 다른 에이전트에게 인계하세요."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "자동 계속을 취소하지 못했습니다. 다시 시도하세요.",
+        "openSetting": "한도가 재설정되면 자동으로 계속하기",
+        "cancelled": "Orca가 이 채팅을 자동으로 계속하지 않습니다.",
+        "scheduled": "Orca가 {{time}}에 이 채팅을 계속합니다.",
+        "cancel": "계속하지 않기"
+      },
+      "settings": "채팅 설정",
+      "textAttachmentPreview": {
+        "copiedContents": "내용을 복사했습니다",
+        "textAttachment": "텍스트 첨부 파일",
+        "byteSize": "{{size}}바이트",
+        "copyContents": "내용 복사",
+        "saveFile": "파일 저장",
+        "copyTooLarge": "이 파일은 너무 커서 복사할 수 없습니다. 대신 저장하세요.",
+        "exportError": "첨부 파일을 내보낼 수 없습니다. 다시 시도하세요.",
+        "unreadableReply": "첨부 파일 응답을 읽을 수 없습니다. 다시 시도하세요.",
+        "incompleteReply": "첨부 파일이 변경되었거나 응답이 불완전합니다. 닫고 다시 시도하세요.",
+        "notText": "이 파일은 텍스트로 미리 볼 수 없습니다. 저장한 후 다른 앱에서 여세요.",
+        "openFailed": "첨부 파일을 열 수 없습니다. 다시 시도하세요.",
+        "hostUpdate": "이 호스트에서는 아직 텍스트 첨부 파일을 열 수 없습니다. 해당 호스트의 Orca를 업데이트한 후 다시 시도하세요.",
+        "hostUnavailable": "첨부 파일 호스트를 사용할 수 없습니다. 다시 연결한 후 시도하세요.",
+        "connectionChanged": "연결이 변경되었습니다. 이 첨부 파일을 닫고 다시 여세요.",
+        "readFailed": "호스트에서 이 첨부 파일을 읽을 수 없습니다. 다시 연결하고 시도하세요. 파일이 삭제되었거나 변경되었을 수 있습니다."
       }
     },
     "tab": {
@@ -19424,7 +19491,7 @@
           "reviewPresence": "PR / 씨",
           "reviewProvider": "공급자",
           "ticketPresence": "연계티켓",
-          "host": "주인",
+          "host": "호스트",
           "repo": "저장소",
           "pathPrefix": "경로는 다음으로 시작됩니다.",
           "blockerMode": "블로커 매치",
@@ -19464,7 +19531,7 @@
             "name": "워크스페이스",
             "repo": "저장소",
             "path": "길",
-            "host": "주인",
+            "host": "호스트",
             "workspaceStatus": "상태",
             "agent": "에이전트",
             "git": "Git",
@@ -19485,7 +19552,7 @@
           "agent": {
             "working": "작업 중",
             "permission": "당신을 기다리고 있습니다",
-            "idle": "게으른"
+            "idle": "유휴 상태"
           },
           "review": {
             "open": "열림",
@@ -19613,6 +19680,7 @@
       "detectingAgents": "이 워크스페이스 호스트에서 에이전트를 찾는 중…",
       "detectionFailed": "이 워크스페이스 호스트에서 에이전트를 찾을 수 없습니다.",
       "noAgents": "이 워크스페이스 호스트에서 활성화된 에이전트를 찾지 못했습니다.",
+      "onlySourceFamilyDetected": "이 워크스페이스 호스트에서 사용할 수 있는 에이전트는 {{agent}}와 사용 한도를 공유하는 에이전트뿐입니다. 다른 에이전트를 활성화하거나 설치하세요.",
       "context": "컨텍스트",
       "modeFocused": "핵심 컨텍스트 전달(권장)",
       "modeFocusedDescription": "최신 상태와 현재 워크스페이스를 사용하고 필요한 경우에만 이전 세부 정보를 읽습니다.",
@@ -19667,7 +19735,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "복사 시 여백 자르기",
         "copyTrimsGutterDescription": "복사한 텍스트에서 에이전트 출력의 왼쪽 여백을 제거합니다. 선택한 모든 줄에 공통된 들여쓰기만 제거됩니다.",
-        "copyOnSelectDescription": "터미널이나 채팅에서 선택한 내용을 클립보드에 자동으로 복사합니다."
+        "copyOnSelectDescription": "터미널이나 채팅에서 선택한 내용을 클립보드에 자동으로 복사합니다.",
+        "scrollOnUserInput": "입력 시 맨 아래로 스크롤",
+        "scrollOnUserInputDescription": "위로 스크롤한 상태에서 입력하거나 붙여넣으면 최신 출력으로 이동합니다. 현재 위치를 유지하려면 끄세요."
       },
       "terminal": {
         "clipboard": {
@@ -19682,6 +19752,15 @@
             "highlight": "강조",
             "chat": "채팅"
           }
+        },
+        "search": {
+          "typing": "타이핑",
+          "input": "입력",
+          "jump": "이동",
+          "bottom": "맨 아래",
+          "scrollback": "스크롤백",
+          "snap": "스냅",
+          "position": "위치"
         }
       },
       "nativeChat": {
@@ -19697,7 +19776,12 @@
         "queueSearchSteer": "지금 보내기",
         "shellEnvSearchVariables": "환경 변수",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "프록시"
+        "shellEnvSearchProxy": "프록시",
+        "usageLimitContinueTitle": "사용 한도가 재설정되면 채팅을 자동으로 계속하기",
+        "usageLimitContinueCopy": "한도가 재설정되면 Orca가 \"Continue where you left off.\"를 보냅니다. 재설정 시간을 알 수 있는 모든 채팅에 적용됩니다.",
+        "usageLimitContinueSearchLimit": "사용 한도",
+        "usageLimitContinueSearchReset": "재설정",
+        "usageLimitContinueToggleLabel": "사용 한도 재설정 시 채팅 계속하기 전환"
       }
     },
     "agentChildRow": {
@@ -19737,7 +19821,23 @@
     },
     "newWorkspace": {
       "agentOptional": "에이전트 [선택 사항]",
-      "createDescription": "프로젝트와 워크스페이스 이름을 선택하세요. 원하면 시작할 에이전트를 선택하세요."
+      "createDescription": "프로젝트와 워크스페이스 이름을 선택하세요. 원하면 시작할 에이전트를 선택하세요.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "이 워크스페이스를 만들기 전에 설정을 실행할지 여부를 선택하세요.",
+        "cancel": "취소",
+        "retry": "다시 시도",
+        "setupScript": "설정 스크립트",
+        "defaultTabCommands": "기본 탭 명령",
+        "setupAndDefaultTabs": "설정 및 기본 탭 명령",
+        "askRunSetup": "지금 설정을 실행할까요?",
+        "askRunDefaultTabs": "지금 기본 탭 명령을 실행할까요?",
+        "askRunSetupAndDefaultTabs": "지금 설정 및 기본 탭 명령을 실행할까요?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + 로컬",
+        "localSource": "로컬 설정"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "다른 이슈 변경이 진행 중입니다."
@@ -19824,6 +19924,14 @@
         "running": "임시 오케스트레이션 워커 · 완료 2분 후 닫힘",
         "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
         "keepOpen": "열어 두기"
+      }
+    },
+    "wslHostMark": {
+      "runsOn": "WSL에서 실행: {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "{{file}}을(를) 포맷할 수 없습니다. 포맷하지 않고 저장합니다: {{reason}}"
       }
     }
   },
@@ -20303,7 +20411,10 @@
       "title": "{{distro}}을(를) 호스트로 실행(권장)",
       "why": "Git, 파일, 터미널이 Windows 파일 공유를 거치지 않고 Linux에서 기본으로 실행됩니다.",
       "accept": "호스트로 실행",
-      "projectNotFound": "이동할 추가된 프로젝트를 찾을 수 없습니다. 사이드바의 프로젝트에서 \"{{distro}} 호스트로 이동…\"을 사용하세요."
+      "projectNotFound": "이동할 추가된 프로젝트를 찾을 수 없습니다. 사이드바의 프로젝트에서 \"{{distro}} 호스트로 이동…\"을 사용하세요.",
+      "existingTitle": "{{distro}} 호스트에 추가(권장)",
+      "existingWhy": "{{distro}}이(가) 이미 호스트로 실행 중이므로 Git, 파일, 터미널이 Windows 파일 공유를 거치지 않고 Linux에서 기본으로 실행됩니다.",
+      "existingAccept": "호스트에 추가"
     }
   },
   "editor": {
@@ -20830,6 +20941,7 @@
     "scanIssues": {
       "issuesOmitted": "추가 스캔 문제는 생략되었습니다.",
       "sessionMetadataUnreadable": "이번 스캔에서 세션 메타데이터를 읽지 못했습니다.",
+      "transcriptTooLarge": "{{label}} 대화가 너무 커서 세션 기록에 불러올 수 없습니다. {{label}}에서 직접 이어서 진행해 보세요.",
       "openCodeScannerUnavailable": "백그라운드 스캐너를 시작할 수 없어 OpenCode 기록을 건너뛰었습니다. 앱은 계속 응답합니다.",
       "openCodeScanIncomplete": "OpenCode 기록 스캔이 완료되지 않았습니다: {{detail}}",
       "openCodeWslReaderPreparing": "WSL SQLite 리더를 준비하는 중입니다. 설정이 끝나면 Vault를 새로고침하세요.",
@@ -21040,7 +21152,10 @@
         "uncheckedOther": "터미널 {{count}}개에서 Claude 실행 여부를 확인할 수 없습니다. 그곳에서 실행 중인 Claude는 다시 시작할 때까지 {{previous}}을(를) 계속 사용합니다.",
         "restartCount_other": "세션 {{count}}개 다시 시작",
         "reviewBody_other": "다른 Claude 세션 {{count}}개가 {{next}}(으)로 이동되지 않았습니다.",
-        "body_other": "Claude 세션 {{count}}개가 아직 {{previous}}에서 실행 중입니다. 다시 시작하면 각 대화가 {{next}}에서 계속됩니다. 작업 중인 세션은 유휴 상태가 된 후 다시 시작됩니다."
+        "body_other": "Claude 세션 {{count}}개가 아직 {{previous}}에서 실행 중입니다. 다시 시작하면 각 대화가 {{next}}에서 계속됩니다. 작업 중인 세션은 유휴 상태가 된 후 다시 시작됩니다.",
+        "reasonSharedSession": "다른 패널에서도 열려 있음",
+        "sharedOne": "다른 패널에서 같은 대화를 열고 있어 Claude 세션 1개가 {{previous}}에 유지됩니다. 다시 시작하면 다른 패널의 대화가 다시 열릴 수 있습니다.",
+        "sharedOther": "다른 패널에서 같은 대화를 열고 있어 Claude 세션 {{count}}개가 {{previous}}에 유지됩니다. 다시 시작하면 다른 패널의 대화가 다시 열릴 수 있습니다."
       }
     },
     "hostSignIn": {
@@ -21433,7 +21548,8 @@
       "checksNeutral": "중립",
       "allReviewChecks": "리뷰: {{count}} · 체크: {{status}}",
       "showLinked_other": "연결된 리뷰 및 작업 {{count}}개 표시",
-      "linkedCount_other": "{{count}}개 연결됨"
+      "linkedCount_other": "{{count}}개 연결됨",
+      "labels": "레이블: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "워크스페이스 링크를 변경하려면 원격 런타임을 업데이트하세요",
@@ -21939,6 +22055,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: 읽을 수 있는 백업이 없어 빈 상태로 시작합니다.",
+      "sectionKeptCurrent": "{{section}}: 현재 실행 기록이 유지됩니다",
       "sectionRestored": "{{section}}: {{time}}에 저장된 백업에서 복원됩니다.",
       "projectsForgotten": "Orca가 프로젝트와 해당 워크스페이스 세부정보를 잊습니다. 디스크의 파일은 변경되지 않습니다.",
       "newerProjectsRemoved": "해당 백업 이후에 추가한 프로젝트는 워크스페이스 세부정보와 함께 Orca에서 제거됩니다. 디스크의 파일은 변경되지 않습니다.",
@@ -21981,7 +22098,7 @@
       "noneFound": "(찾을 수 없음)",
       "sqlitePath": "SQLite 경로: {{path}}",
       "sectionsDamaged": "이 프로필의 저장된 상태 중 일부가 손상되었습니다: {{sections}}. 나머지는 모두 정상입니다.",
-      "repairCommand": "Orca를 종료한 다음 `{{command}}`를 실행하면 손상된 부분만 백업에서 교체하고 나머지는 모두 유지할 수 있습니다. Orca는 손상된 파일의 사본을 보관합니다.",
+      "repairCommand": "Orca를 종료한 다음 `{{command}}`를 실행하여 손상된 부분만 복구하고 나머지는 유지하세요. Orca는 손상된 파일의 복사본을 보관합니다.",
       "restoreWholeBackup": "대신 백업 전체를 복원하려면 `{{exportsCommand}}`를 실행한 다음 `{{rollbackCommand}}`를 실행하세요.",
       "sqliteUnreadable": "SQLite 상태를 읽을 수 없어 Orca가 활성 프로필을 안전하게 열 수 없습니다.",
       "legacyJsonPath": "기존 JSON 경로: {{path}}",
@@ -22267,6 +22384,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택을 유지하거나 인수를 사용할 수 있습니다.",
+    "catalogFailed": "{{agent}} 모델을 불러오지 못했습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
+    "catalogSignIn": "{{agent}}에 로그인하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
+    "catalogInstall": "이 호스트에 {{agent}}를 설치하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
+    "catalogUnresolved": "{{agent}} 모델이 로드되지 않았습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
+    "catalogEmpty": "{{agent}}에 사용 가능한 모델이 없습니다.",
     "search": "에이전트 및 설정 검색…",
     "configure": "{{agent}} 설정",
     "arguments": "인수",
@@ -22280,7 +22403,15 @@
     "toggleArguments": "인수 표시 전환",
     "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
     "searchAgentModels": "{{agent}} 모델 검색…",
-    "legacyModelCount": "모델 {{total}}개"
+    "legacyModelCount": "모델 {{total}}개",
+    "use": "사용",
+    "select": "에이전트 선택",
+    "promptPlaceholder": "프롬프트 추가(선택사항): 스킬은 /, 파일은 @",
+    "promptPlaceholderFilesOnly": "프롬프트 추가(선택사항): 파일은 @",
+    "workspaceStartupFailed": "{{agent}}을(를) 시작할 수 없습니다. 이 설정의 인수를 확인하고 다시 시도하세요.",
+    "sameAsTextDefault": "기본값과 동일 · {{value0}}",
+    "chatChoicesNote": "CLI 플래그가 없는 {{agent}} 모델 또는 추론 수준 선택은 채팅에 적용됩니다.",
+    "composedChoicesNote": "{{agent}}의 추론 수준 및 속도 선택은 모델 인수에 포함됩니다."
   },
   "wslMove": {
     "entry": {
@@ -22310,7 +22441,8 @@
       "changed": "이전에 이동된 후 이전 버전의 Orca가 여기에서 변경했습니다. 다시 이동하지 않습니다.",
       "chatsStay": "기존 채팅은 이 컴퓨터에 남습니다. 이 프로젝트의 새 채팅은 WSL 호스트에서 시작됩니다.",
       "browserLoginsConflict": "호스트의 브라우저 프로필이 이미 사용 중이므로 브라우저 로그인은 옮겨지지 않습니다. 이동 후 호스트의 브라우저 탭에서 다시 로그인하세요.",
-      "browserLoginsNotCarried": "브라우저 로그인은 이 호스트로 옮겨지지 않습니다. 이동 후 호스트의 브라우저 탭에서 다시 로그인하세요."
+      "browserLoginsNotCarried": "브라우저 로그인은 이 호스트로 옮겨지지 않습니다. 이동 후 호스트의 브라우저 탭에서 다시 로그인하세요.",
+      "why": "작업이 파일과 같은 Linux 안에서 실행되므로 터미널, Git, 파일 변경이 더 빠르고 안정적입니다. 프로젝트는 바뀌지 않으며, 어떤 프로젝트든 \"이 컴퓨터에서 다시 사용\"으로 되돌릴 수 있습니다."
     },
     "cancel": "취소",
     "progress": {
@@ -22685,12 +22817,14 @@
       "serveSimUnavailable": "serve-sim을 사용할 수 없습니다.",
       "serveSimNoEndpoints": "serve-sim이 스트림 엔드포인트를 반환하지 않았습니다.",
       "serveSimEndpointUnreachable": "serve-sim이 시작되었지만 스트림 엔드포인트에 연결할 수 없습니다.",
+      "deviceHubInputBlocked": "Xcode의 Device Hub가 이 시뮬레이터의 입력을 가져가서 탭과 입력이 전달되지 않습니다. Device Hub를 종료한 다음 시뮬레이터를 다시 연결하세요.",
       "androidSdkMissing": "Android SDK를 찾을 수 없습니다. Android Studio를 설치하고 ANDROID_HOME을 설정하세요.",
       "adbUnavailable": "adb를 사용할 수 없습니다.",
       "noAndroidDevices": "Android 장치나 AVD를 찾을 수 없습니다. Android Studio에서 생성하세요.",
       "androidDeviceNotRunning": "\"{{device}}\" Android 장치가 실행 중이 아닙니다. 먼저 부팅하세요.",
       "unknownDeviceOrAvd": "\"{{device}}\" 항목은 실행 중인 장치도, 알려진 AVD도 아닙니다.",
       "avdBootTimeout": "AVD \"{{avdName}}\"의 부팅이 제한 시간 내에 완료되지 않았습니다.",
+      "avdExitedBeforeBoot": "AVD \"{{avdName}}\"이(가) 부팅을 마치기 전에 중지되었습니다: {{detail}}",
       "scrcpyDownloadFailed": "scrcpy 서버를 다운로드하지 못했습니다: {{detail}}",
       "scrcpyServerInvalid": "다운로드한 scrcpy 서버가 유효하지 않거나 불완전했습니다."
     },

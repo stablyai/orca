@@ -46,18 +46,18 @@ vi.mock('../codex-cli/command', () => ({
   resolveCodexCommand: resolveCodexCommandMock
 }))
 
-vi.mock('../wsl-interop-spawn-directory', () => ({
+vi.mock('../wsl/execution/wsl-interop-spawn-directory', () => ({
   resolveWslInteropSpawnCwd: () => 'C:\\Windows'
 }))
 vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
 
-vi.mock('../codex/codex-state-db', () => ({
+vi.mock('../codex/history/index/codex-state-db', () => ({
   isCodexStateDbBackfillPending: isBackfillPendingMock
 }))
 
-vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: startBackfillRecoveryMock,
   hasCodexStateDbBackfillRecoveryGivenUp: backfillGaveUpMock
 }))

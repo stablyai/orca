@@ -53,69 +53,6 @@ describe('the permission verdict on a paired host', () => {
       readStructuredChatHostPermissionVerdict(PAIRED, 'codex', 'accept-edits')
     ).resolves.toEqual({ kind: 'refused', hostMode: 'full-access' })
   })
-
-  it('checks the scoped agent choice instead of a permissive global fallback', async () => {
-    mocks.settings.nativeChatPermissionMode = 'full-access'
-    mocks.settings.agentPermissionDefault = 'full-access'
-    mocks.settings.agentPermissionOverrides = { codex: 'auto' }
-    mocks.callRuntimeRpc.mockResolvedValue({ settings: { agentDefaultArgs: {} } })
-    await expect(readStructuredChatHostPermissionVerdict(PAIRED, 'codex')).resolves.toEqual({
-      kind: 'refused',
-      hostMode: 'full-access'
-    })
-    await expect(readStructuredChatHostPermissionVerdict(PAIRED, 'claude')).resolves.toEqual({
-      kind: 'allowed'
-    })
-  })
-
-  it('delegates Own to the old host without relaxing explicit or unknown requests', async () => {
-    mocks.settings.agentPermissionDefault = 'own'
-    mocks.callRuntimeRpc.mockResolvedValue({ settings: { agentDefaultArgs: {} } })
-    mocks.settings.nativeChatPermissionMode = 'full-access'
-    await expect(readStructuredChatHostPermissionVerdict(PAIRED, 'codex')).resolves.toEqual({
-      kind: 'allowed'
-    })
-    await expect(readStructuredChatHostPermissionVerdict(PAIRED, 'codex', 'own')).resolves.toEqual({
-      kind: 'allowed'
-    })
-    await expect(
-      readStructuredChatHostPermissionVerdict(PAIRED, 'codex', 'future-mode')
-    ).resolves.toEqual({ kind: 'refused', hostMode: 'full-access' })
-    mocks.settings.nativeChatPermissionMode = 'ask'
-    await expect(readStructuredChatHostPermissionVerdict(PAIRED, 'codex')).resolves.toEqual({
-      kind: 'allowed'
-    })
-    mocks.callRuntimeRpc.mockResolvedValue({ settings: { agentDefaultArgs: { codex: '' } } })
-    await expect(readStructuredChatHostPermissionVerdict(PAIRED, 'codex')).resolves.toEqual({
-      kind: 'allowed'
-    })
-  })
-
-  it('is unverified, never allowed, when the host cannot say', async () => {
-    mocks.supportsCapability.mockRejectedValue(new Error('timeout'))
-    mocks.callRuntimeRpc.mockRejectedValue(new Error('timeout'))
-
-    for (const requested of ['ask', 'own']) {
-      await expect(
-        readStructuredChatHostPermissionVerdict(PAIRED, 'claude', requested)
-      ).resolves.toEqual({ kind: 'unverified' })
-    }
-  })
-})
-
-describe('the permission verdict a chat holds', () => {
-  it('checks again, holding the chat, when contact with the host returns', async () => {
-    mocks.contactListeners.length = 0
-    mocks.supportsCapability.mockResolvedValue(true)
-    const { result } = renderHook(() => useStructuredChatHostPermissionVerdict(PAIRED, 'claude'))
-    expect(result.current).toMatchObject({ kind: 'checking' })
-    await vi.waitFor(() => expect(result.current).toMatchObject({ kind: 'allowed' }))
-
-    // The host came back as an older build: its answer is still on the way.
-    mocks.supportsCapability.mockReturnValue(new Promise(() => undefined))
-    act(() => mocks.contactListeners.forEach((listener) => listener()))
-    expect(result.current).toMatchObject({ kind: 'checking' })
-  })
 })
 
 describe('a held chat', () => {

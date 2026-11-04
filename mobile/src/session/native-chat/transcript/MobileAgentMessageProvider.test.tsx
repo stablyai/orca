@@ -19,6 +19,36 @@ const userMessage = (blocks: NativeChatMessage['blocks']): NativeChatMessage => 
 })
 describe('phone sender provider', () => {
   let renderer: ReactTestRenderer | null = null
+  it('keeps the sender name disabled when no navigation action is available', () => {
+    const from: AgentMessageSource = {
+      kind: 'agent',
+      orchestration: null,
+      senders: [
+        {
+          name: 'Known worker',
+          party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null }
+        }
+      ]
+    }
+    try {
+      act(() => {
+        renderer = create(
+          createElement(MobileNativeChatMessage, {
+            message: { ...userMessage([{ type: 'text', text: 'body' }]), from }
+          })
+        )
+      })
+      const names = findAllByHostType(renderer!.root, 'Pressable').filter((node) =>
+        findAllByHostType(node, 'Text').some((text) => text.children.includes('Known worker'))
+      )
+      expect(names).toHaveLength(1)
+      expect(names[0].props.disabled).toBe(true)
+      expect(names[0].props.accessibilityRole).toBeUndefined()
+    } finally {
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  })
   it.each([10, 100])(
     'indexes production inputs once at %i rows and isolates settled selected consumers',
     (count) => {

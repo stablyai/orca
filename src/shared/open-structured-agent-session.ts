@@ -1,5 +1,23 @@
 import type { AgentMessageSender } from './agent-session/agent-session-message-source'
 import type { OrchestrationPartyLocationResult } from './orchestration-caller-status'
+import type { AgentSessionWorkspaceKind } from './agent-session/lifecycle/agent-session-record'
+import { workspaceKindForWorktreeId } from './workspace-launch-kind'
+
+export type StructuredSessionWorkspaceRemovedDetails = {
+  workspaceKind: AgentSessionWorkspaceKind
+}
+
+export function readStructuredSessionWorkspaceRemovedDetails(
+  value: unknown
+): StructuredSessionWorkspaceRemovedDetails | undefined {
+  if (value !== null && typeof value === 'object' && 'workspaceKind' in value) {
+    const { workspaceKind } = value
+    if (workspaceKind === 'folder' || workspaceKind === 'git-worktree') {
+      return { workspaceKind }
+    }
+  }
+  return undefined
+}
 
 export type StructuredSessionOpenTarget = { sessionId: string; worktreeId: string; agent?: string }
 export type StructuredSessionOpenSource =
@@ -21,6 +39,7 @@ export type StructuredSessionOpenFailure = {
   beforeEffects: boolean
   code?: string
   surface?: 'terminal'
+  workspaceKind?: AgentSessionWorkspaceKind
 }
 export type StructuredSessionOpenTab = { id: string; sessionId: string; agent?: string }
 export type StructuredSessionOpenResult =
@@ -32,6 +51,8 @@ export type StructuredSessionOpenResult =
 type Located = OrchestrationPartyLocationResult | StructuredSessionOpenFailure
 export type StructuredSessionOpenDeps = {
   locate: (address: string, messageIds: readonly string[]) => Promise<Located>
+  /** A sender's lookup that may also open a closed worker's conversation; older hosts lack it. */
+  open?: (address: string, messageIds: readonly string[]) => Promise<Located>
   tabs: (target: StructuredSessionOpenTarget) => readonly StructuredSessionOpenTab[]
   refresh: (target: StructuredSessionOpenTarget) => Promise<void>
   activate: (
@@ -57,7 +78,10 @@ export function structuredSessionOpenFailure(error: unknown): StructuredSessionO
     return { reason: 'unsupported', beforeEffects: true, code }
   }
   if (code === 'agent_session_workspace_removed') {
-    return { reason: 'workspace-missing', beforeEffects: true }
+    const details = readStructuredSessionWorkspaceRemovedDetails(
+      error !== null && typeof error === 'object' && 'details' in error ? error.details : undefined
+    )
+    return { reason: 'workspace-missing', beforeEffects: true, ...details }
   }
   if (code === 'agent_session_identity_required') {
     return { reason: 'gone', beforeEffects: true }
@@ -162,7 +186,10 @@ export async function openStructuredAgentSession(
       return { kind: 'failed', failure: structuredSessionOpenFailure(error) }
     }
   }
-  const resolved = await resolveStructuredSessionOpenSource(source, deps.locate)
+  const resolved = await resolveStructuredSessionOpenSource(
+    source,
+    source.kind === 'sender' && deps.open ? openingOrLocating(deps.open, deps.locate) : deps.locate
+  )
   if (!current()) {
     return { kind: 'superseded' }
   }
@@ -218,6 +245,13 @@ export async function openStructuredAgentSession(
   let revealed = false
   const failure = (value: StructuredSessionOpenFailure): StructuredSessionOpenFailure => ({
     ...value,
+    ...(value.reason === 'workspace-missing'
+      ? {
+          workspaceKind:
+            value.workspaceKind ??
+            (workspaceKindForWorktreeId(target.worktreeId) === 'folder' ? 'folder' : 'git-worktree')
+        }
+      : {}),
     beforeEffects: value.beforeEffects && !revealed
   })
   try {
@@ -251,5 +285,23 @@ export async function openStructuredAgentSession(
     return current()
       ? { kind: 'failed', failure: failure(structuredSessionOpenFailure(error)) }
       : { kind: 'superseded' }
+  }
+}
+
+/** Older hosts refuse the opening call, so they keep answering the plain lookup. */
+function openingOrLocating(
+  open: NonNullable<StructuredSessionOpenDeps['open']>,
+  locate: StructuredSessionOpenDeps['locate']
+): StructuredSessionOpenDeps['locate'] {
+  return async (address, messageIds) => {
+    let opened: Located
+    try {
+      opened = await open(address, messageIds)
+    } catch (error) {
+      opened = structuredSessionOpenFailure(error)
+    }
+    return 'reason' in opened && (opened.code === 'method_not_found' || opened.code === 'forbidden')
+      ? locate(address, messageIds)
+      : opened
   }
 }

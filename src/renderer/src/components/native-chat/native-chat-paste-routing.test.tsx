@@ -3,6 +3,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as I18nModule from '@/i18n/i18n'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
@@ -24,7 +25,10 @@ const mocks = vi.hoisted(() => ({
   error: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.error } }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18nModule>()),
+  translate: (_key: string, fallback: string) => fallback
+}))
 vi.mock('../terminal-pane/terminal-clipboard-paste', () => ({
   pasteTerminalClipboard: mocks.terminalClipboard
 }))
@@ -83,6 +87,7 @@ function composerHandle(): NativeChatComposerHandle & { element: HTMLElement } {
       element.focus()
       return true
     }),
+    insertAgentReferences: () => false,
     insertTypedText: vi.fn(() => true),
     appendText: vi.fn(),
     acceptsText: () => true,

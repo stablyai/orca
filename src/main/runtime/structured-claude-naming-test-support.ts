@@ -22,9 +22,9 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime,
-  type StructuredAgentSessionRuntimeDeps
-} from './structured-agent-session-runtime'
+  stopStructuredAgentSessionRuntime
+} from './agent-session/structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
 export async function writeNativeNamingConversation(
   path: string,

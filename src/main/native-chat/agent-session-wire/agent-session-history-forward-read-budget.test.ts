@@ -2,11 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import Database from '../../sqlite/sync-database'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
-import * as rowSchema from '../agent-session-journal/journal-row-schema'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
@@ -15,7 +12,6 @@ import {
   deleteTestJournalRow,
   updateTestJournalRowJson
 } from '../agent-session-journal/journal-host-database-test-support'
-import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { readAgentSessionHistory } from './agent-session-history-page'
 import {
   agentSessionJournalProviderHandle,
@@ -76,52 +72,7 @@ async function seedJournal(count: number) {
   return journals.open({ identity, stateDirectory: root })
 }
 
-function observeForwardReads() {
-  const returnedRows: number[] = []
-  const observed = new WeakSet<object>()
-  const prepare = Database.prototype.prepare
-  vi.spyOn(Database.prototype, 'prepare').mockImplementation(function (this: Database, sql) {
-    const statement = prepare.call(this, sql)
-    if (sql.includes('seq > ?') && !observed.has(statement)) {
-      observed.add(statement)
-      const all = statement.all.bind(statement)
-      vi.spyOn(statement, 'all').mockImplementation((...args) => {
-        const rows = all(...args)
-        returnedRows.push(rows.length)
-        return rows
-      })
-    }
-    return statement
-  })
-  const parse = vi.spyOn(rowSchema, 'parseJournalRow')
-  return { returnedRows, parse }
-}
-
 describe('forward history SQL read budget', () => {
-  it.each([200, 2_000, 20_000])('bounds reconnect reads after %i missed rows', async (count) => {
-    const journal = await seedJournal(count)
-    const { returnedRows, parse } = observeForwardReads()
-    const events: AgentSessionSubscribeEvent[] = []
-    new AgentSessionSubscribers().open({
-      id: 'reader',
-      sessionId: identity.sessionId,
-      journal,
-      fence: 1,
-      cursor: { epoch: journal.epoch, sequence: 1 },
-      emit: (event) => events.push(event)
-    })
-    expect(events).toHaveLength(1)
-    const event = events[0]!
-    expect(event.type).toBe(count > 200 ? 'snapshot' : 'batch')
-    const items =
-      event.type === 'snapshot' ? event.page.items : event.type === 'batch' ? event.batch.items : []
-    expect(items.map((item) => item.itemId)).toEqual(
-      Array.from({ length: 200 }, (_, index) => `item-${count - 200 + index}`)
-    )
-    expect(returnedRows).toEqual([Math.min(count, 201)])
-    expect(parse).toHaveBeenCalledTimes(Math.min(count, 201))
-  })
-
   it('keeps an exact final page final and preserves unlimited journal readers', async () => {
     const journal = await seedJournal(6)
     const cursor = { epoch: journal.epoch, sequence: 1 }

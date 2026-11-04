@@ -1,16 +1,28 @@
-import { getClaudeAgentViewService } from '../claude/agent-view-service'
+import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { startCodexHooks } from '../codex/codex-hook-reconcile'
+import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
 import { adoptLoginShellAgentHomes } from '../agent-hooks/agent-home-login-shell'
 import { hydrateAgentCliShellPath } from '../agent-hooks/local-agent-cli-presence'
 import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
-} from '../agent-hooks/managed-agent-hook-controls'
+} from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileStartupManagedAgentHooks } from '../agent-hooks/managed-agent-hook-startup'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
+import type { AgentHookServer } from '../agent-hooks/server'
+import { installLocalHookRootEvidence } from '../agent-hooks/local-hook-root-evidence'
+
+/** SSH and WSL-host panes run beside this host, so it proves which agent owns each pane, from the
+ *  first record its startup replay reads. */
+export function startOrcadAgentHookServer(
+  server: AgentHookServer,
+  options: Parameters<AgentHookServer['start']>[0]
+): Promise<void> {
+  installLocalHookRootEvidence(server)
+  return server.start(options)
+}
 
 /**
  * Reconcile hooks at startup as well as setting changes so newly managed hosts report status immediately.

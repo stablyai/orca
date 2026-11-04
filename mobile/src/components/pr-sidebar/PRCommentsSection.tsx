@@ -19,7 +19,7 @@ import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
-} from '../../../../src/shared/pr-comment-audience'
+} from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
 import {
   getPRCommentGroupCount,
   getPRCommentGroupId,
@@ -27,7 +27,7 @@ import {
   groupPRComments,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from '../../../../src/shared/pr-comment-groups'
+} from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 import { mobilePrSidebarStyles as shared } from './mobile-pr-sidebar-styles'
 import { useNow } from '../../hooks/use-now'
@@ -86,24 +86,7 @@ export function PRCommentsSection({
   )
   const isPr = details != null && !detailsFailed && details.item.type === 'pr'
 
-  // Memoize stable per-card callback bundles so unrelated timeline updates skip cards.
-  const cardActions = useMemo<PRCommentCardActions | undefined>(
-    () =>
-      actions && isPr
-        ? {
-            reply: actions.reply,
-            toggleResolve: actions.toggleResolve,
-            editComment: actions.editComment,
-            deleteComment: actions.deleteComment,
-            isReplyBusy: actions.isReplyBusy,
-            isResolveBusy: actions.isResolveBusy,
-            isEditBusy: actions.isEditBusy,
-            isDeleteBusy: actions.isDeleteBusy,
-            prRepo: prRepo ?? null
-          }
-        : undefined,
-    [actions, isPr, prRepo]
-  )
+  const cardActions = usePRCommentCardActions(isPr ? actions : undefined, prRepo)
   const canComment = isPr && actions !== undefined && canAddRootComment(prState)
 
   const [filter, setFilter] = useState<PRCommentAudienceFilter>('all')
@@ -266,7 +249,32 @@ export function PRCommentsSection({
   )
 }
 
-function CommentGroupView({
+// Memoize stable per-card callback bundles so unrelated timeline updates skip cards.
+export function usePRCommentCardActions(
+  actions: MobilePrCommentActions | undefined,
+  prRepo: GitHubPrRepoSlug | null | undefined
+): PRCommentCardActions | undefined {
+  return useMemo<PRCommentCardActions | undefined>(
+    () =>
+      actions
+        ? {
+            reply: actions.reply,
+            toggleResolve: actions.toggleResolve,
+            editComment: actions.editComment,
+            deleteComment: actions.deleteComment,
+            isReplyBusy: actions.isReplyBusy,
+            isResolveBusy: actions.isResolveBusy,
+            isEditBusy: actions.isEditBusy,
+            isDeleteBusy: actions.isDeleteBusy,
+            prRepo: prRepo ?? null
+          }
+        : undefined,
+    [actions, prRepo]
+  )
+}
+
+/** One standalone comment or thread; resolved threads collapse. The diff screen shows threads under their line with it. */
+export function CommentGroupView({
   group,
   actions,
   now

@@ -9,7 +9,7 @@ import { applyTerminalLaunchResult } from './pty-connection/terminal-launch-resu
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { installSavedResumeStartupCancellation } from './pty-connection/saved-resume-startup-cancellation'
 import {
   createRemoteRuntimeTransportMocks,
@@ -129,6 +129,7 @@ it.each([
       showSessionRestoredBanner: note,
       reportRemoteRendererSerializerReady: callbacksReady,
       syncHiddenRendererPtyDelivery: vi.fn(),
+      catchUpMode2031: vi.fn(),
       handleRemoteOutputPauseChanged: vi.fn(),
       markHiddenOutputRestoreNeeded: vi.fn(),
       beginReattachLiveDataDeferralIfUnowned: vi.fn(),

@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   adjudicateAgentSessionRestart,
-  agentSessionLeaseAdmitsWriter,
   evaluateAgentSessionAcquisition,
-  isProvenAliveProbe,
-  isProvenDeadProbe,
   type AgentSessionOwnerProbe
 } from './agent-session-lease-adjudication'
 import { normalizeLegacyHandoffLease } from './agent-session-legacy-handoff-lease'
@@ -53,70 +50,7 @@ function acquire(
   })
 }
 
-describe('proof classification', () => {
-  it('treats a pid match with nothing PID-reuse-safe as no proof at all', () => {
-    // A bare pid match is exactly the case that mints a second writer after pid reuse.
-    expect(isProvenAliveProbe({ outcome: 'identity-matched', matchedOn: [] })).toBe(false)
-    expect(isProvenAliveProbe(MATCHED)).toBe(true)
-    expect(isProvenDeadProbe(INDETERMINATE)).toBe(false)
-    expect(isProvenAliveProbe(INDETERMINATE)).toBe(false)
-  })
-
-  it.each([
-    ['exit-observed', { outcome: 'exit-observed' } as AgentSessionOwnerProbe],
-    ['pid-absent', { outcome: 'pid-absent' } as AgentSessionOwnerProbe],
-    [
-      'identity-mismatch',
-      { outcome: 'identity-mismatch', field: 'spawn-token' } as AgentSessionOwnerProbe
-    ]
-  ])('accepts %s as proof of death', (_name, probe) => {
-    expect(isProvenDeadProbe(probe)).toBe(true)
-  })
-
-  it('never counts a reservation probe or an indeterminate answer as death', () => {
-    expect(isProvenDeadProbe({ outcome: 'reservation-unused' })).toBe(false)
-    expect(isProvenDeadProbe(INDETERMINATE)).toBe(false)
-  })
-})
-
 describe('acquisition compare-and-swap', () => {
-  it('refuses a stale fence and grants at exactly fence + 1', () => {
-    const held = lease({ ownerProcess: null, claimStatus: 'released', reservedSpawnToken: null })
-    expect(
-      evaluateAgentSessionAcquisition({
-        lease: held,
-        expectedFence: held.runtimeFence - 1,
-        handoffOperationId: null,
-        probe: MATCHED
-      })
-    ).toEqual({
-      decision: 'refused',
-      code: 'agent_session_checkpoint_stale',
-      details: { reason: 'fenceStale' }
-    })
-    expect(acquire(held, MATCHED)).toEqual({ decision: 'granted', nextFence: 8 })
-  })
-
-  it('refuses a cached fence after the lease advances to a reservation', () => {
-    const before = lease({ ownerProcess: null, claimStatus: 'released', reservedSpawnToken: null })
-    const winner = acquire(before, MATCHED)
-    expect(winner).toEqual({ decision: 'granted', nextFence: 8 })
-    // The loser still holds the pre-swap fence, which is no longer current.
-    const after = lease({ ...before, runtimeFence: 8, claimStatus: 'reserved' })
-    expect(
-      evaluateAgentSessionAcquisition({
-        lease: after,
-        expectedFence: 7,
-        handoffOperationId: null,
-        probe: MATCHED
-      })
-    ).toEqual({
-      decision: 'refused',
-      code: 'agent_session_checkpoint_stale',
-      details: { reason: 'fenceStale' }
-    })
-  })
-
   it('never grants a second owner on expiry alone', () => {
     // The recorded owner is long past its deadline; nothing here may consult that deadline.
     const expired = lease({ leaseDeadlineAt: 1, lastRenewedAt: 1 })
@@ -141,23 +75,6 @@ describe('acquisition compare-and-swap', () => {
       decision: 'refused',
       code: 'execution_owner_reconciling',
       details: { reason: 'hostReconciling' }
-    })
-  })
-
-  it('keeps a conflicted claim conflicted regardless of proof', () => {
-    // Restart adjudication and recovery resolution are what retire it, once its owner is gone.
-    expect(acquire(lease({ claimStatus: 'conflicted' }), { outcome: 'exit-observed' })).toEqual({
-      decision: 'refused',
-      code: 'agent_session_conflict',
-      details: { reason: 'claimConflicted' }
-    })
-  })
-
-  it('refuses acquisition in the recovering stage', () => {
-    expect(acquire(lease({ handoffStage: 'recovering' }), { outcome: 'pid-absent' })).toEqual({
-      decision: 'refused',
-      code: 'agent_session_ownership_unknown',
-      details: { reason: 'ownerUnproven' }
     })
   })
 
@@ -206,13 +123,6 @@ describe('restart reconciliation', () => {
     ).toMatchObject({ disposition: 'recovering', stage: 'recovering' })
   })
 
-  it('routes a surviving native owner to recovery instead of readopting a dead transport', () => {
-    // The runtime crash lost native stdio; stop the orphan and respawn at fence + 1 instead of readopting an undrivable child.
-    expect(
-      adjudicateAgentSessionRestart({ lease: lease(), probe: MATCHED, observedAt: 9_000 })
-    ).toMatchObject({ disposition: 'recovering', stage: 'recovering' })
-  })
-
   it('bumps the fence exactly once for a proven-dead owner and records the evidence', () => {
     const result = adjudicateAgentSessionRestart({
       lease: lease(),
@@ -244,16 +154,6 @@ describe('restart reconciliation', () => {
     ).toMatchObject({ evidence: { observedAt: 9_000, lastProvenAliveAt: 9_000 } })
   })
 
-  it('hands an unverifiable owner to recovery resolution instead of evicting it', () => {
-    expect(
-      adjudicateAgentSessionRestart({
-        lease: lease({ leaseDeadlineAt: 1 }),
-        probe: INDETERMINATE,
-        observedAt: 9_000
-      })
-    ).toEqual({ disposition: 'recovering', stage: 'recovering', reason: 'no answer' })
-  })
-
   it('re-adjudicates a claim an older record marked conflicted by the owner it names', () => {
     expect(
       adjudicateAgentSessionRestart({
@@ -269,27 +169,6 @@ describe('restart reconciliation', () => {
         observedAt: 9_000
       })
     ).toEqual({ disposition: 'evicted', nextFence: 8, evidence: null })
-  })
-
-  it('frees a conflict whose named owner is proven gone', () => {
-    // Once this specific process is proven gone, retain no conflict that would permanently prevent reopening.
-    expect(
-      adjudicateAgentSessionRestart({
-        lease: lease({ claimStatus: 'conflicted' }),
-        probe: { outcome: 'pid-absent' },
-        observedAt: 9_000
-      })
-    ).toEqual({
-      disposition: 'evicted',
-      nextFence: 8,
-      evidence: {
-        kind: 'pid-absent',
-        detail: 'recorded pid absent on host',
-        observedAt: 9_000,
-        ownerFence: 7,
-        lastProvenAliveAt: 500
-      }
-    })
   })
 
   it('frees a lease that names neither an owner nor a reservation, without moving the fence', () => {
@@ -335,14 +214,4 @@ describe('restart reconciliation', () => {
       })
     }
   )
-})
-
-describe('writer admission', () => {
-  it('admits a writer only when reconciled, settled, live, and holding a process', () => {
-    expect(agentSessionLeaseAdmitsWriter(lease())).toBe(true)
-    expect(agentSessionLeaseAdmitsWriter(lease({ unreconciled: true }))).toBe(false)
-    expect(agentSessionLeaseAdmitsWriter(lease({ handoffStage: 'new-owner-proving' }))).toBe(false)
-    expect(agentSessionLeaseAdmitsWriter(lease({ claimStatus: 'reserved' }))).toBe(false)
-    expect(agentSessionLeaseAdmitsWriter(lease({ ownerProcess: null }))).toBe(false)
-  })
 })

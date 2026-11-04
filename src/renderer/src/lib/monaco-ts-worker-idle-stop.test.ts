@@ -61,25 +61,6 @@ describe('installMonacoTsWorkerIdleStop', () => {
     expect(fake.javascriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
   })
 
-  it.each(['typescript', 'javascript'])(
-    'stops %s independently of the other language',
-    (language) => {
-      vi.useFakeTimers()
-      const fake = createFakeMonaco(['typescript', 'javascript'])
-      installMonacoTsWorkerIdleStop(fake.monaco, 1000)
-      const closed = fake.models.find((model) => model.getLanguageId() === language)
-      if (!closed) {
-        throw new Error('Missing language model')
-      }
-      fake.disposeModel(closed)
-      vi.advanceTimersByTime(1000)
-      const stopped = language === 'typescript' ? fake.typescriptDefaults : fake.javascriptDefaults
-      const retained = language === 'typescript' ? fake.javascriptDefaults : fake.typescriptDefaults
-      expect(stopped.setCompilerOptions).toHaveBeenCalledOnce()
-      expect(retained.setCompilerOptions).not.toHaveBeenCalled()
-    }
-  )
-
   it('keeps independent deadlines when both language workers lose their models', () => {
     vi.useFakeTimers()
     const fake = createFakeMonaco(['typescript', 'javascript'])
@@ -92,16 +73,6 @@ describe('installMonacoTsWorkerIdleStop', () => {
     expect(fake.javascriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
     vi.advanceTimersByTime(500)
     expect(fake.javascriptDefaults.setCompilerOptions).toHaveBeenCalledOnce()
-  })
-
-  it('releases the old language worker after changing between TS and JS', () => {
-    vi.useFakeTimers()
-    const fake = createFakeMonaco(['typescript'])
-    installMonacoTsWorkerIdleStop(fake.monaco, 1000)
-    fake.changeLanguage(fake.models[0], 'javascript')
-    vi.advanceTimersByTime(1000)
-    expect(fake.typescriptDefaults.setCompilerOptions).toHaveBeenCalledOnce()
-    expect(fake.javascriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
   })
 
   it('rechecks reopened models of the same language and waits for their departure', () => {

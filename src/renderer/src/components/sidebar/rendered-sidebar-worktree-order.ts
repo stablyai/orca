@@ -70,6 +70,7 @@ export function computeRenderedSidebarRows(
   const repoMap = getRepoMapFromState(state)
   const rows = planSidebarRows({
     groupBy: state.groupBy,
+    sortBy: state.sortBy,
     worktrees: [...visibleWorktrees],
     repoMap,
     prGroupOf: createSidebarPRGroupReader(repoMap, prCache),

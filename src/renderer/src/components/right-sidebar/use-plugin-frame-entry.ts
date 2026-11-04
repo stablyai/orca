@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PluginFrameGuest } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { currentPluginFrameTheme } from './plugin-panel-design-token-css'
+import { notePluginFrameIsolation } from '@/store/plugin-frame-isolation'
 
 export type PluginFrameEntryState =
   | { status: 'loading' }
@@ -72,6 +73,7 @@ export function usePluginFrameEntry(
             fail()
             return
           }
+          notePluginFrameIsolation(result.guest !== undefined)
           // Why the guest URL too: it is the document a guest loads, so a new one must remount.
           const identity = `${result.guest?.url ?? ''}\0${result.html}`
           const changed = identity !== currentHtml

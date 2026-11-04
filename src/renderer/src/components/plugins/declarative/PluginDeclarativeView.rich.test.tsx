@@ -241,4 +241,58 @@ describe('catalog 2 in the host view', () => {
       vi.useRealTimers()
     }
   })
+
+  it('drops hideBelow columns in a narrow table and rings the active row only with focus', () => {
+    // happy-dom lays nothing out; give the scroll area a height so rows come into view.
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(256)
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(320)
+    const reports: ((entries: { contentRect: { width: number } }[]) => void)[] = []
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: (entries: { contentRect: { width: number } }[]) => void) {
+          reports.push(callback)
+        }
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      }
+    )
+    view(
+      node('Table', {
+        label: 'PRs',
+        columns: [
+          { key: 'title', label: 'Title', minWidth: 'sm' },
+          { key: 'author', label: 'Author', hideBelow: 'sm' }
+        ],
+        rows: [{ key: 'a', cells: { title: 'A very long pull request title', author: 'ana' } }]
+      })
+    )
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Title',
+      'Author'
+    ])
+    expect(screen.getAllByRole('row')[1]?.className).toContain(
+      'group-focus-visible/grid:data-[active=true]:ring-1'
+    )
+    act(() => reports.forEach((report) => report([{ contentRect: { width: 300 } }])))
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Title'
+    ])
+    expect(screen.getByRole('grid').getAttribute('aria-colcount')).toBe('1')
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps a button at its own width in a default Stack, and stretches it on request', () => {
+    view(
+      node('Stack', {}, [
+        node('Button', {}, ['Natural']),
+        node('Stack', { align: 'stretch' }, [node('Button', {}, ['Wide'])])
+      ])
+    )
+    const natural = screen.getByRole('button', { name: 'Natural' }).parentElement
+    const stretched = screen.getByRole('button', { name: 'Wide' }).parentElement
+    expect(natural?.getAttribute('data-align')).toBe('default')
+    expect(stretched?.getAttribute('data-align')).toBe('stretch')
+  })
 })

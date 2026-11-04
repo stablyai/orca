@@ -4,13 +4,13 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { AGENT_SESSION_GOAL_CONTROL_COPY as COPY } from '../../shared/agent-session-goal-control-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY as COPY } from '../../shared/agent-session/view/agent-session-goal-control-copy'
 import type { AgentSessionThreadGoalChange } from '../../shared/agent-session/agent-session-thread-goal-wire'
 import { CodexAppServerRequestError } from '../codex/app-server/codex-app-server-request-error'
 import {
   CODEX_SCRIPTED_THREAD as THREAD,
   codexScriptedChild
-} from '../codex/codex-scripted-child.test-fixture'
+} from '../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
@@ -19,7 +19,7 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import {
   closeProviderProcess,
   rootOnlyProviderClosePolicy

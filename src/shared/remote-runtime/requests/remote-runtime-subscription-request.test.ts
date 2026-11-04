@@ -1,7 +1,7 @@
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
-} from '../../paired-runtime-connection'
+} from '../pairing/paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -12,8 +12,8 @@ import {
   generateKeyPair,
   publicKeyFromBase64,
   publicKeyToBase64
-} from '../../e2ee-crypto'
-import { encodePairingOffer, parsePairingCode } from '../../pairing'
+} from '../e2ee/node/e2ee-crypto'
+import { encodePairingOffer, parsePairingCode } from '../pairing/pairing'
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription

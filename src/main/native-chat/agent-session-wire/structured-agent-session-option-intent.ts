@@ -4,11 +4,9 @@ import {
 } from './structured-agent-session-resting-options'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionOptionResult } from '../../../shared/agent-session/agent-session-wire'
-import {
-  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
-  agentChatPermissionModes
-} from '../../../shared/agent-chat-permission-mode'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../../shared/agent-launch/permissions/agent-chat-permission-support'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import {
@@ -16,7 +14,7 @@ import {
   structuredAgentSessionPickReply
 } from './structured-agent-session-pick-reply'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { pickAgentSessionOption } from '../../runtime/agent-session-record-options'
+import { pickAgentSessionOption } from '../../runtime/agent-session/records/agent-session-record-options'
 
 function acceptsOptionPick(
   agents: Pick<StructuredAgentRegistry, 'definition'>,

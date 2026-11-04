@@ -8,7 +8,7 @@ import {
 } from './structured-agent-session-handing-over'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
-import { CodexAppServerTimeoutError } from '../../codex/codex-app-server-session'
+import { CodexAppServerTimeoutError } from '../../codex/app-server/codex-app-server-session'
 import {
   CODEX_INPUT_FINALIZATION_OWNER_OUTCOMES,
   HOST_TEST_SESSION as SESSION,
@@ -68,7 +68,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
     )
     const id = await permissionSend('preserve me', { personality: 'friendly' })
     await preparing.promise
-    await pick('auto')
+    await pick(failure === 'lost-steer' ? 'full-access' : 'auto')
     if (failure === 'refusal') {
       codex.routes['thread/start'] = codex.routes['thread/resume'] = () => {
         throw new AgentSessionAcquisitionRefusal('missing Codex', 'cliMissing')
@@ -119,9 +119,6 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       await vi.waitFor(() => expect(codex.connections).toHaveLength(2))
       await vi.waitFor(() => expect(continuingStructuredAgentSessionInput(journal, id)).toBe(true))
       if (failure === 'crash') {
-        await vi.waitFor(() =>
-          expect(continuingStructuredAgentSessionInput(journal, id)).toBe(true)
-        )
         expect(await row(id)).toMatchObject({ dispatchState: 'pending' })
         await assertInputRecoveredAfterSnapshot(id)
       }
@@ -144,9 +141,9 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
           expect(starts()).toHaveLength(0)
           throw new CodexAppServerRequestError(
             'thread/resume',
-            -32000,
-            'startup failed',
-            'startup failed'
+            -32001,
+            'Server overloaded; retry later.',
+            'Server overloaded; retry later.'
           )
         }
         codex.connections[1]?.handlers.onExit?.(new Error('Codex died before ready'), {
@@ -570,18 +567,21 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       signals.push(signal)
       return dispatch(input)
     })
-    const retire = deps.retireOutgrownChild
-    const retired = vi.spyOn(deps, 'retireOutgrownChild').mockImplementation(async (...args) => {
-      if (
-        boundary === 'retire' &&
-        args[1] &&
-        continuingStructuredAgentSessionInput(journal, args[1])
-      ) {
-        entered.resolve()
-        await held.promise
-      }
-      return retire(...args)
-    })
+    const retire = deps.stopPermissionTransitionChild!
+    const retired = vi
+      .spyOn(deps, 'stopPermissionTransitionChild')
+      .mockImplementation(async (...args) => {
+        if (
+          boundary === 'retire' &&
+          journal
+            .submissions()
+            .some((s) => continuingStructuredAgentSessionInput(journal, s.clientMessageId))
+        ) {
+          entered.resolve()
+          await held.promise
+        }
+        return retire(...args)
+      })
     const open = codex.routes['thread/start']!
     const opening = vi.fn(async (params: Parameters<typeof open>[0]) => {
       if (boundary === 'acquire' || boundary === 'starting-exit') {

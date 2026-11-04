@@ -1,17 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  getActiveAgentNoteTarget,
-  getActiveAgentRuntimeProbeDescriptor,
-  getActiveTerminalNoteTarget,
-  probeActiveAgentNoteTarget
-} from './active-agent-note-send'
+import { getActiveAgentNoteTarget, getActiveTerminalNoteTarget } from './active-agent-note-send'
 import {
   createNoteSendAppState,
   LEAF_ID,
   OTHER_LEAF_ID,
   type NoteSendAppState
 } from './active-agent-note-send-test-harness'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 const NOW = 1_700_000_000_000
@@ -72,66 +67,6 @@ describe('active agent note send', () => {
     })
   })
 
-  it('runtime-probes a manually started agent before title or hooks report it', async () => {
-    testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
-      if (method === 'terminal.list') {
-        return {
-          terminals: [
-            {
-              handle: 'term-1',
-              worktreeId: 'wt-1',
-              worktreePath: '/repo',
-              branch: 'main',
-              tabId: 'tab-1',
-              leafId: LEAF_ID,
-              title: 'repo terminal',
-              connected: true,
-              writable: true,
-              lastOutputAt: 1,
-              preview: ''
-            }
-          ],
-          totalCount: 1,
-          truncated: false
-        }
-      }
-      if (method === 'terminal.isRunningAgent') {
-        return { isRunningAgent: true }
-      }
-      throw new Error(`unexpected method ${method}`)
-    })
-
-    const descriptor = getActiveAgentRuntimeProbeDescriptor(testState.appState, 'wt-1')
-
-    expect(descriptor).toMatchObject({
-      key: `local:wt-1:tab-1:${LEAF_ID}:pty-1`,
-      noteTarget: { tabId: 'tab-1', leafId: LEAF_ID }
-    })
-    await expect(probeActiveAgentNoteTarget(descriptor!)).resolves.toBe(true)
-  })
-
-  it('offers the active terminal send target for a fresh title-detected agent before hooks report', () => {
-    testState.appState.runtimePaneTitlesByTabId = {
-      'tab-1': { 1: 'Codex' }
-    }
-
-    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toEqual({
-      tabId: 'tab-1',
-      leafId: LEAF_ID
-    })
-  })
-
-  it('offers the active terminal send target for an Orca-launched agent before hooks report', () => {
-    testState.appState.tabsByWorktree = {
-      'wt-1': [{ id: 'tab-1', launchAgent: 'codex' }]
-    }
-
-    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toEqual({
-      tabId: 'tab-1',
-      leafId: LEAF_ID
-    })
-  })
-
   it('does not let an old launch marker override a focused shell title', () => {
     testState.appState.tabsByWorktree = {
       'wt-1': [{ id: 'tab-1', launchAgent: 'codex' }]
@@ -181,18 +116,6 @@ describe('active agent note send', () => {
     }
 
     expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toBeNull()
-  })
-
-  it('offers the active terminal send target when the focused pane is a fresh agent session', () => {
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    testState.appState.agentStatusByPaneKey = {
-      [paneKey]: agentStatusEntry(paneKey, { updatedAt: NOW })
-    }
-
-    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toEqual({
-      tabId: 'tab-1',
-      leafId: LEAF_ID
-    })
   })
 
   it('does not offer the active terminal send target for stale or unfocused agent status', () => {

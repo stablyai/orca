@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { shallow } from 'zustand/shallow'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { mulberry32 } from '../../../../shared/agent-tui-ansi-fuzz-stream'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'

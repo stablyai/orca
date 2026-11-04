@@ -9,11 +9,6 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false,\"includePreview\":false}}"
     },
-    "66f849b2483e": {
-      "name": "prune-live-input",
-      "ordinal": 3,
-      "value": ["terminal-1", "terminal-2"]
-    },
     "727166f3bc25": {
       "known": [
         {
@@ -53,11 +48,6 @@
       "startedAt": 0,
       "settledAt": 0,
       "value": true
-    },
-    "8d0d6d7c8b3b": {
-      "name": "default-live-input",
-      "ordinal": 4,
-      "value": ["terminal-1", "terminal-2"]
     },
     "ee68ebc5fb96": {
       "name": "terminal.list#1",
@@ -117,7 +107,7 @@
             "fetch": "84e5ca07cb7a"
           },
           "state": "727166f3bc25",
-          "effects": ["66f849b2483e", "8d0d6d7c8b3b"]
+          "effects": []
         }
       }
     ]

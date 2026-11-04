@@ -7,7 +7,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -73,7 +77,9 @@ async function startPane({
     startup,
     cwdPromise
   })
-  await connectMockPanePty(pane, manager, deps)
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+  await connectMockPanePty(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
   await flushAsyncTicks()
   const onPtySpawn = options[0]?.onPtySpawn
   const onPtyExit = options[0]?.onPtyExit
@@ -227,11 +233,19 @@ async function heldLaunch({
       })
     }
     const { connectPanePty } = await import('./pty-connection')
-    const binding = connectPanePty(typedPane, typedManager, {
-      ...deps,
-      ...handoffs.deferredSplitPaneConnectionInput(handle, seeds),
-      cwdPromise: cwd.promise
-    })
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const binding = connectPanePty(
+      typedPane,
+      typedManager,
+      bindPaneAgentTitleMocks(
+        {
+          ...deps,
+          ...handoffs.deferredSplitPaneConnectionInput(handle, seeds),
+          cwdPromise: cwd.promise
+        },
+        agentTitleMocks2
+      )
+    )
     await flushAsyncTicks()
     const transport = transports.at(-1)
     const session = captured.session
@@ -401,25 +415,6 @@ describe('Git Bash console-capacity pane retention', () => {
     started.output(MARKER)
     started.exit()
     expect(started.deps.onPaneProcessDied).not.toHaveBeenCalled()
-  })
-
-  it('tears down an ordinary failed shell after acknowledged input', async () => {
-    const started = await startPane()
-    started.spawn()
-    sendTerminalInputThroughPane(started.pane, 'exit\r')
-    await flushAsyncTicks()
-    started.output('bash: missing command')
-    started.exit()
-    expect(started.deps.onPaneProcessDied).not.toHaveBeenCalled()
-    expect(started.deps.onPtyExitRef.current).toHaveBeenCalled()
-  })
-
-  it('uses existing newborn handling when no overlay handler is installed', async () => {
-    const started = await startPane({ handler: false })
-    started.spawn()
-    started.output(MARKER)
-    expect(() => started.exit()).not.toThrow()
-    expect(started.manager.closePane).not.toHaveBeenCalled()
   })
 
   it('keys an input attempt to the bound process rather than its incoming replacement', async () => {

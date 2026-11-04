@@ -1,9 +1,10 @@
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
-import type { AgentType } from '../../../../../src/shared/agent-status-types'
-import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat-paste-bytes'
+import type { AgentType } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
+import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat/input/native-chat-paste-bytes'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../../../transport/rpc-delivery-ambiguity'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
@@ -299,15 +300,27 @@ describe('useMobileNativeChatAnswerSend', () => {
   })
 
   it('clears an orphaned image paste before an answer that commits with Enter (#10228)', async () => {
-    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'read',
+        ok: true,
+        result: { terminal: {} },
+        _meta: { runtimeId: 'runtime' }
+      })
+      .mockResolvedValue(acceptedResponse())
     await mount(stubRpcClient({ sendRequest }), vi.fn(), 'grok')
     markMobileNativeChatInputStale('terminal')
 
     await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(true)
+    expect(sendRequest.mock.calls[0]?.[0]).toBe('terminal.read')
     // A stale image path would join the answer without the leading clear.
-    expect(sendRequest).toHaveBeenCalledTimes(2)
-    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '\x15', enter: false })
-    expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({ text: 'Spaces', enter: true })
+    expect(sendRequest).toHaveBeenCalledTimes(3)
+    expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({
+      text: AGENT_TUI_CLEAR_INPUT_MAX,
+      enter: false
+    })
+    expect(sendRequest.mock.calls[2]?.[1]).toMatchObject({ text: 'Spaces', enter: true })
     expect(isMobileNativeChatInputStale('terminal')).toBe(false)
   })
 
@@ -325,18 +338,29 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   it('does not answer when the healing clear is rejected, keeping the marker', async () => {
     const onSendError = vi.fn()
-    const sendRequest = vi.fn().mockResolvedValue({
-      id: 'send',
-      ok: true as const,
-      result: { send: { accepted: false } },
-      _meta: { runtimeId: 'runtime' }
-    })
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'read',
+        ok: true,
+        result: { terminal: {} },
+        _meta: { runtimeId: 'runtime' }
+      })
+      .mockResolvedValue({
+        id: 'send',
+        ok: true as const,
+        result: { send: { accepted: false } },
+        _meta: { runtimeId: 'runtime' }
+      })
     await mount(stubRpcClient({ sendRequest }), onSendError, 'grok')
     markMobileNativeChatInputStale('terminal')
 
     await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(false)
-    expect(sendRequest).toHaveBeenCalledTimes(1)
-    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '\x15', enter: false })
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({
+      text: AGENT_TUI_CLEAR_INPUT_MAX,
+      enter: false
+    })
     expect(onSendError).toHaveBeenCalledWith('Answer not sent')
     expect(isMobileNativeChatInputStale('terminal')).toBe(true)
   })

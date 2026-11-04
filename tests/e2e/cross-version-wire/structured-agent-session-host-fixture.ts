@@ -1,13 +1,13 @@
 import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../src/shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 import { vi, type Mock } from 'vitest'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
-import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
 import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import { CODEX_STRUCTURED_AGENT } from '../../../src/main/codex/codex-structured-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../../../src/main/codex/structured/launch/codex-structured-agent-definition'
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -18,11 +18,37 @@ export function structuredHostStub(
   sessionId: string,
   workspaceId: string
 ): Record<string, ReturnType<typeof vi.fn>> & {
+  getConversation: Mock<AgentSessionRecordStore['getConversation']>
   getSessionTabId: Mock<StructuredAgentSessionHost['getSessionTabId']>
   setSessionTabVisibility: Mock<StructuredAgentSessionHost['setSessionTabVisibility']>
   notifySessionTabHidden: Mock<StructuredAgentSessionHost['notifySessionTabHidden']>
 } {
   let tabId: string | null = `tab-${sessionId}`
+  const attachResult = async (): ReturnType<StructuredAgentSessionHost['attach']> => {
+    const cursor = { epoch: 'epoch-a', sequence: 0 }
+    return {
+      ok: true,
+      replayed: false,
+      fence: 1,
+      cursor,
+      value: {
+        sessionId,
+        fence: 1,
+        unconfirmedClientMessageIds: [],
+        page: {
+          sessionId,
+          epoch: cursor.epoch,
+          direction: 'tail',
+          items: [],
+          removedItemIds: [],
+          submissions: [],
+          window: { oldest: null, newest: null, nextCursor: cursor },
+          hasOlder: false,
+          hasNewer: false
+        }
+      }
+    }
+  }
   const tabs = {
     getSessionTabId: vi.fn<StructuredAgentSessionHost['getSessionTabId']>((id) =>
       id === sessionId ? tabId : null
@@ -43,7 +69,7 @@ export function structuredHostStub(
   >
   return {
     ...tabs,
-    getConversation: vi.fn(() => {
+    getConversation: vi.fn<AgentSessionRecordStore['getConversation']>(() => {
       const record = agentSessionRecordFixture()
       return agentSessionConversationView({
         ...record,
@@ -60,8 +86,10 @@ export function structuredHostStub(
     restartResumeAll: vi.fn(async () => []),
     restartContinueAll: vi.fn(async () => ({ resumed: [], continued: [] })),
     continueInterrupted: vi.fn(async () => ({ sessionId, outcome: 'superseded' })),
-    attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
-    create: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
+    // Flat like restart-resume; installableHost rebuilds the nested usageLimitContinue member.
+    cancelUsageLimitContinue: vi.fn(async () => {}),
+    attach: vi.fn(attachResult),
+    create: vi.fn(attachResult),
     // Accept create-location probes so an unstubbed harness method cannot cause every ensure to refuse.
     supportsCreate: vi.fn(() => true),
     conversationCommand: vi.fn(async () => ({
@@ -162,6 +190,9 @@ export function installableHost(
   const host = {
     ...hostCalls,
     readModelCatalog: hostCalls.modelCatalog,
+    attentionReads: {
+      sessionLocation: (id: string) => hostCalls.getConversation(id)?.location ?? null
+    },
     // The catalog read checks the session's record for a floating chat's own folder; none here.
     deps: {
       logger,
@@ -179,7 +210,8 @@ export function installableHost(
       resume: hostCalls.restartResumeAll,
       continueAfterRestart: hostCalls.restartContinueAll,
       continueInterrupted: hostCalls.continueInterrupted
-    }
+    },
+    usageLimitContinue: { cancel: hostCalls.cancelUsageLimitContinue }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a spy map standing in for the host; the dispatcher reaches only the members stubbed above, and a missing one fails the call rather than type-checking.
   return host as unknown as StructuredAgentSessionHost

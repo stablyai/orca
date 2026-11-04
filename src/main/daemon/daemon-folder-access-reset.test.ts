@@ -28,7 +28,7 @@ const {
 vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
 vi.mock('node:fs/promises', () => ({ opendir: opendirMock }))
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
-vi.mock('../macos-tcc-reset', () => ({
+vi.mock('../macos-permissions/macos-tcc-reset', () => ({
   readMacosBundleId: readMacosBundleIdMock,
   resetMacosTccPermission: resetMacosTccPermissionMock
 }))

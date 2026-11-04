@@ -1,7 +1,13 @@
+import type { agentPickerLaunchInputs } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
-import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type {
+  WorkspaceLinkedItem as FolderWorkspaceLinkedTask,
+  GitPushTarget,
+  WorkspaceLinkedItem,
+  WorkspaceStatus
+} from '../../../shared/worktree/types'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
@@ -10,12 +16,8 @@ import type {
   WorktreeCheckoutProgress
 } from '../../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
-import type {
-  GitPushTarget,
-  WorkspaceLinkedItem,
-  WorkspaceStatus
-} from '../../../shared/worktree/types'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+
+import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
@@ -82,6 +84,7 @@ export type WorktreeCreationRequest = {
   agent: TuiAgent | null
   /** Renderer-owned route decision captured at submit time and reused on retry. */
   agentLaunchRoute?: AgentLaunchRoute
+  launchInputs?: ReturnType<typeof agentPickerLaunchInputs>
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -137,6 +140,8 @@ export type PendingWorktreeCreation = {
   phaseLog?: readonly { phase: WorktreeCreationPhase; at: number }[]
   /** Chat message sent before the worktree existed; the chat launch delivers it as its first message. */
   heldChatMessage?: string
+  /** The launch owns the captured input until its replacement surface is published. */
+  chatInputHandedOff?: boolean
   request: WorktreeCreationRequest
 }
 

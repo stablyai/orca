@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { derivePipelineStatus, mapGitLabIssueInfo, mapMRInfo, mapMRState } from './mappers'
 import {
-  derivePipelineStatus,
-  mapGitLabIssueInfo,
-  mapMRInfo,
-  mapMRState,
-  mapPipelineJobStatusToCheckStatus,
-  mapPipelineJobStatusToConclusion
-} from './mappers'
+  mapGitLabPipelineJobStatusToCheckStatus as mapPipelineJobStatusToCheckStatus,
+  mapGitLabPipelineJobStatusToConclusion as mapPipelineJobStatusToConclusion
+} from '../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
 
 describe('mapPipelineJobStatusToCheckStatus', () => {
   it('classifies queued lifecycle states', () => {
@@ -291,6 +288,7 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus('success')).toBe('success')
     expect(derivePipelineStatus('failed')).toBe('failure')
     expect(derivePipelineStatus('running')).toBe('pending')
+    expect(derivePipelineStatus('waiting_for_callback')).toBe('pending')
     // Pipeline manual means blocked on human action, not failed or complete.
     expect(derivePipelineStatus('manual')).toBe('pending')
     expect(derivePipelineStatus({ status: 'manual' })).toBe('pending')

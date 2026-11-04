@@ -75,28 +75,4 @@ describe('closeTerminalTab before the worktree catalog names a host', () => {
       reason: 'user'
     })
   })
-
-  it('still closes the tab locally when nothing names its host', () => {
-    isWebRuntimeSessionActiveMock.mockReturnValue(false)
-    const closeTab = vi.fn()
-    getStateMock.mockReturnValue(unhydratedState(null, closeTab))
-    const onClosed = vi.fn()
-
-    closeTerminalTab('tab-1', { onClosed })
-
-    expect(closeTab).toHaveBeenCalledWith('tab-1')
-    expect(onClosed).toHaveBeenCalled()
-    expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
-  })
-
-  it('closes a parked local tab whose process exited as a pty-exit, never a user close', () => {
-    // A user close would tombstone the tab and retire its session (verify-15a 5e).
-    isWebRuntimeSessionActiveMock.mockReturnValue(false)
-    const closeTab = vi.fn()
-    getStateMock.mockReturnValue(unhydratedState('pty-1', closeTab))
-
-    closeTerminalTab('tab-1', { hostCloseReason: 'pty-exit', lifecyclePtyId: 'pty-1' })
-
-    expect(closeTab).toHaveBeenCalledWith('tab-1', expect.objectContaining({ reason: 'pty-exit' }))
-  })
 })

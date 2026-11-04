@@ -89,6 +89,8 @@ export type PluginFrameHostOptions = {
   renderBudget?: PanelMessageBudget
   /** One-shot activation from a press on Orca's own controls (declarative panels). */
   consumeHostActivation?: () => boolean
+  /** Called as a host call (`plugin.request` included) starts; the result runs when it settles. */
+  trackHostCall?: () => () => void
   now?: () => number
 }
 
@@ -236,7 +238,12 @@ export function createPluginFrameEnvelopeHandler(
           options.declarative.onGuestEvent?.(message.event, message.payload)
         } else {
           // A guest's shell-posted chords are page-forgeable; only the preload's count there.
-          if (context.transport !== 'guest' || context.trustedChord === true) {
+          // Why subscribed passes: it only tells `plugin shot` the editor is wired.
+          if (
+            message.event === FRAME_EVENTS.editorSubscribed ||
+            context.transport !== 'guest' ||
+            context.trustedChord === true
+          ) {
             options.editor?.onEvent(message, context)
           }
         }
@@ -278,6 +285,7 @@ export function createPluginFrameEnvelopeHandler(
       respond(pluginFailure(request.id, pluginError('unavailable', 'plugin session is not ready')))
       return
     }
+    const settled = options.trackHostCall?.()
     callHostMethod({ sessionToken, action: request.method, params: request.params })
       .then((outcome) => respond(pluginOutcomeResponse(request.id, outcome)))
       .catch((error: unknown) =>
@@ -288,5 +296,6 @@ export function createPluginFrameEnvelopeHandler(
           )
         )
       )
+      .finally(() => settled?.())
   }
 }

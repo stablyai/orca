@@ -1,4 +1,4 @@
-import type { NativeChatSessionOptionSay } from '../../../../../src/shared/native-chat-session-option-labels'
+import type { NativeChatSessionOptionSay } from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
 import { translate } from '../../../i18n/mobile-i18n'
 
 export const sayMobileNativeChatSessionOption: NativeChatSessionOptionSay = (id, values) => {
@@ -27,6 +27,8 @@ export const sayMobileNativeChatSessionOption: NativeChatSessionOptionSay = (id,
       return translate('chat.sessionOptionCopy.xhigh', 'Extra high')
     case 'max':
       return translate('chat.sessionOptionCopy.max', 'Max')
+    case 'ultracode':
+      return translate('chat.sessionOptionCopy.ultracode', 'Ultracode')
     case 'ultra':
       return translate('chat.sessionOptionCopy.ultra', 'Ultra')
     case 'minimalShort':

@@ -1,17 +1,20 @@
 // Keep actionable failures after offers are spent; retire on independent startup, successful retry or dismissal.
 
-import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type {
   AgentSessionResumeFailureInput,
   AgentSessionResumeFailureRecord
-} from '../../runtime/agent-session-recovery-capsule-entries'
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+} from '../../runtime/agent-session/records/agent-session-recovery-capsule-entries'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type {
   AgentSessionResumeFailureOutcome,
   AgentSessionResumeMarker
 } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
-import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
+import {
+  normalizeOptionalField,
+  AGENT_MODEL_MAX_LENGTH
+} from '../../../shared/agent-status/contracts/agent-status-field-normalization'
+
 import type {
   StructuredAgentSessionRestartAudience,
   StructuredAgentSessionResumeCandidate,

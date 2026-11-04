@@ -1,23 +1,26 @@
 import { dirname } from 'node:path'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type {
+  AgentSessionExecutionLocation,
+  AgentSessionWorkspaceKind
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host'
-import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { beginWatcherInstall } from '../../ipc/watcher-removal-gate'
-import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { beginWatcherInstall } from '../../workspaces/removal/watcher-removal-gate'
+import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveFloatingWorkspacePath } from '../../persistence/restoring-sessions/floating-workspace-normalization'
 import { getAppEnvironment } from '../../../shared/app-environment'
-import { resolveLocalProjectRuntimeForRepo } from '../../local-project-runtime-resolution'
-import { localWorktreePathPresence } from '../../local-worktree-path-presence'
+import { resolveLocalProjectRuntimeForRepo } from '../../workspaces/execution-host/local-project-runtime-resolution'
+import { localWorktreePathPresence } from '../../workspaces/catalog/local-worktree-path-presence'
 import {
   readAllWorktreeMetaForHost,
   readWorktreeMetaForHost
@@ -31,7 +34,10 @@ import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
 
 export class StructuredWorkspaceUnavailable extends Error {
-  constructor(readonly reason: 'removed' | 'unknown' | 'obsolete') {
+  constructor(
+    readonly reason: 'removed' | 'unknown' | 'obsolete',
+    readonly workspaceKind?: AgentSessionWorkspaceKind
+  ) {
     super('Chat workspace is unavailable')
   }
 }
@@ -65,7 +71,9 @@ export async function prepareStructuredWorkspaceAuthority(
       )
     const selected = folderNow()
     if (selected.kind !== 'selected') {
-      throw new StructuredWorkspaceUnavailable(selected.kind === 'missing' ? 'removed' : 'unknown')
+      throw selected.kind === 'missing'
+        ? new StructuredWorkspaceUnavailable('removed', 'folder')
+        : new StructuredWorkspaceUnavailable('unknown')
     }
     const row = selected.value.workspace
     path = row.folderPath
@@ -124,7 +132,7 @@ export async function prepareStructuredWorkspaceAuthority(
       (!isRuntimeFolderWorkspaceIdForRepo(owner, workspaceId) ||
         (workspaceId !== getRuntimeFolderWorkspaceRootId(owner) && !occupant))
     ) {
-      throw new StructuredWorkspaceUnavailable('removed')
+      throw new StructuredWorkspaceUnavailable('removed', 'folder')
     }
     registered = () => {
       const current = store
@@ -171,7 +179,7 @@ export async function prepareStructuredWorkspaceAuthority(
             repoPresent === 'directory' &&
             parentPresent === 'directory'
           ) {
-            throw new StructuredWorkspaceUnavailable('removed')
+            throw new StructuredWorkspaceUnavailable('removed', 'git-worktree')
           }
         }
         if (!affirmative) {

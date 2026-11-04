@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { agentSessionConversationView } from '../../../src/shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   agentSessionLeaseOwnerVerdict,
   agentSessionLeasePossiblyWriting
@@ -17,11 +17,11 @@ import { structuredAgentSessionLiveFence } from '../../../src/main/native-chat/a
 import { upgradeStoredStructuredAgentSessionOwnerExitEvidence } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-lease-release'
 import { turnVerdictFromDeathEvidence } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict'
 import { releaseStoredAgentSessionOwnerAfterSurfaceClose } from '../../../src/main/runtime/agent-session/ownership/agent-session-surface-release-transition'
-import { loadAgentSessionStoreRows } from '../../../src/main/runtime/agent-session-record-rows'
+import { loadAgentSessionStoreRows } from '../../../src/main/runtime/agent-session/records/agent-session-record-rows'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../../../src/main/runtime/agent-session-record-store-test-harness'
+} from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 // The last release before Stop recorded a delivered kill; it knows three death kinds.

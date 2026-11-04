@@ -10,7 +10,7 @@ import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { EditorPanelShell } from './EditorPanelShell'
-import { DiffNavigationProvider } from './diff-navigation-context'
+import { DiffNavigationProvider } from './diff/review/diff-navigation-context'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
@@ -33,6 +33,7 @@ import { useEditorPanelSave } from './useEditorPanelSave'
 import { isMarkdownReviewNotesEnabled } from '@/lib/markdown-review-notes-setting'
 import { useFileCustomEditors } from '@/store/plugin-custom-editors'
 import { applyCustomEditorToggle } from './custom-editor-toggle'
+import { runAfterEditorFramesFlush } from './editor-pending-flush'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -270,6 +271,12 @@ function EditorPanelInner({
     }
   }
   const handleEditorToggleChange = (next: EditorToggleValue): void => {
+    // Why: leaving a custom editor unmounts its frame, which may still hold debounced edits.
+    runAfterEditorFramesFlush(useAppStore.getState(), [activeFile.id], () =>
+      applyEditorToggle(next)
+    )
+  }
+  const applyEditorToggle = (next: EditorToggleValue): void => {
     const fileId = activeFile.id
     if (activeFile.mode === 'diff' && model.isMarkdown && next === 'rich') {
       handleOpenDiffTargetFile('rich')

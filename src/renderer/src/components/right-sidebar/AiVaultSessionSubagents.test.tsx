@@ -7,7 +7,10 @@ import { SubagentExpansionProvider } from './ai-vault-subagent-expansion'
 import { useAppStore } from '@/store'
 import { createEditorStore } from '@/store/slices/editor-slice-test-harness'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AiVaultSession, AiVaultSubagentListResult } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultSession,
+  AiVaultSubagentListResult
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { SessionSubagentsSection as ProductionSessionSubagentsSection } from './AiVaultSessionSubagents'
 
 const listSubagentSessions = vi.fn<(args: unknown) => Promise<AiVaultSubagentListResult>>()

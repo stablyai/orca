@@ -1,4 +1,4 @@
-import type { CurrentActionSelection } from '../../../../shared/source-control-action-selection'
+import type { CurrentActionSelection } from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import React from 'react'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import {
@@ -11,11 +11,11 @@ import {
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
-} from '../../../../shared/source-control-ai-actions'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RunSourceControlAgentActionStartArgs } from './runSourceControlAgentActionStart'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
+import type { SourceControlAiWriteTarget } from '../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { SourceControlAgentActionDialogForm } from './SourceControlAgentActionDialogForm'
 import { useSourceControlAgentActionDialog } from './useSourceControlAgentActionDialog'
 import { translate } from '@/i18n/i18n'
@@ -100,6 +100,7 @@ function SourceControlAgentActionEditor(
     deliveryPlan,
     canStart,
     isStarting,
+    isCreateAccepted,
     onAgentPick,
     onAgentArgsChange,
     onCommandTemplateChange,
@@ -143,6 +144,7 @@ function SourceControlAgentActionEditor(
           deliveryPlan={deliveryPlan}
           canStart={canStart}
           isStarting={isStarting}
+          isCreateAccepted={isCreateAccepted}
           startLabel={startLabel}
           onAgentPick={onAgentPick}
           onAgentArgsChange={onAgentArgsChange}

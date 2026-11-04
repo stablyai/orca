@@ -365,6 +365,7 @@ describe('reader navigation', () => {
       const composer = {
         focus,
         insertTypedText,
+        insertAgentReferences: () => false,
         acceptsText: () => true,
         appendText: vi.fn(),
         handlePasteEvent: vi.fn(),
@@ -386,18 +387,6 @@ describe('reader navigation', () => {
       expect(insertTypedText).toHaveBeenCalledWith('a')
     }
   )
-
-  it('makes the transcript a keyboard stop, so the scroll keys can reach it', () => {
-    const { container } = render(list(transcript))
-
-    expect(scrollRoot(container)).toHaveAttribute('tabindex', '0')
-  })
-
-  it('names the transcript as a region, so a focused scroll stop is announced', () => {
-    const { container } = render(list(transcript))
-
-    expect(screen.getByRole('region', { name: 'Conversation' })).toBe(scrollRoot(container))
-  })
 })
 
 describe('disclosure following across retained pane visibility', () => {

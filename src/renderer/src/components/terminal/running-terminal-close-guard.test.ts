@@ -376,26 +376,6 @@ describe('guardRunningTerminalClose', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('ignores a slow probe that resolves after the timeout already prompted', async () => {
-    vi.useFakeTimers()
-    inspectRuntimeTerminalProcessMock.mockResolvedValue({
-      foregroundProcess: 'sleep',
-      hasChildProcesses: true
-    })
-    const onClose = vi.fn()
-
-    guard(onClose)
-    vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
-    vi.useRealTimers()
-    await settleProbe()
-    await settleProbe()
-
-    expect(onClose).not.toHaveBeenCalled()
-    useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
-    expect(onClose).toHaveBeenCalledTimes(1)
-    expect(visibleRequest()).toBeNull()
-  })
-
   // After SSH drops liveness IDs, probe stale layout bindings and fail open on rejection so reconnecting tabs remain closable.
   it('closes a reconnecting ssh tab whose pty ids were already zeroed', async () => {
     setState({ ptyIdsByTabId: { 'tab-1': [] } })

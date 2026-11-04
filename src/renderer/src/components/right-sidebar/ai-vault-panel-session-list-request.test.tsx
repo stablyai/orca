@@ -3,9 +3,13 @@ import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 import { useAppStore } from '@/store'
-import { makeFolderWorkspace, makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
+import {
+  makeFolderWorkspace,
+  makeRepo,
+  makeWorktree
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { searchHit } from '../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY

@@ -20,9 +20,9 @@ import { translate } from '@/i18n/i18n'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   filterEnabledTuiAgents
-} from '../../../shared/tui-agent-selection'
+} from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { NewWorkspaceComposerAdvancedSection } from './new-workspace/NewWorkspaceComposerAdvancedSection'
 import { NewWorkspaceComposerAgentSection } from './new-workspace/NewWorkspaceComposerAgentSection'
 import { NewWorkspaceComposerFooter } from './new-workspace/NewWorkspaceComposerFooter'
@@ -38,7 +38,7 @@ import {
 import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-status'
 import { useNewWorkspaceComposerFileDrop } from './new-workspace/use-new-workspace-composer-file-drop'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
-import { buildDefaultAgentSettingsUpdate } from '../../../shared/default-agent-settings'
+import { buildDefaultAgentSettingsUpdate } from '../../../shared/agent-launch/choices/default-agent-settings'
 
 // Lazy-load the project-location browser outside boot; warming shares this module entry with the click.
 const loadSetProjectLocationDialog = (): Promise<typeof SetProjectLocationDialogModule> =>
@@ -141,53 +141,6 @@ export default function NewWorkspaceComposerCard(
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
       ? translate('auto.components.NewWorkspaceComposerCard.connect', 'Connect')
       : translate('auto.components.NewWorkspaceComposerCard.reconnect', 'Reconnect')
-  const setupConfigLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? translate(
-          'auto.components.NewWorkspaceComposerCard.setupConfigDefaultTabs',
-          'Default tab commands'
-        )
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? translate(
-            'auto.components.NewWorkspaceComposerCard.setupConfigSetupAndDefaultTabs',
-            'Setup and default tab commands'
-          )
-        : translate(
-            'auto.components.NewWorkspaceComposerCard.setupConfigSetupScript',
-            'Setup script'
-          )
-  const setupRunLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? translate(
-          'auto.components.NewWorkspaceComposerCard.runDefaultTabCommands',
-          'Run default tab commands'
-        )
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? translate(
-            'auto.components.NewWorkspaceComposerCard.runSetupAndDefaultTabCommands',
-            'Run setup and default tab commands'
-          )
-        : translate('auto.components.NewWorkspaceComposerCard.runSetupCommand', 'Run setup command')
-  const setupAskLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? translate(
-          'auto.components.NewWorkspaceComposerCard.askRunDefaultTabCommands',
-          'Run default tab commands now?'
-        )
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? translate(
-            'auto.components.NewWorkspaceComposerCard.askRunSetupAndDefaultTabCommands',
-            'Run setup and default tab commands now?'
-          )
-        : translate('auto.components.NewWorkspaceComposerCard.askRunSetup', 'Run setup now?')
-  const setupRunButtonLabel =
-    setupConfig?.kind === 'setup'
-      ? translate('auto.components.NewWorkspaceComposerCard.runSetupNow', 'Run setup now')
-      : translate('auto.components.NewWorkspaceComposerCard.runCommandsNow', 'Run commands now')
-  const setupSkipButtonLabel =
-    setupConfig?.kind === 'setup'
-      ? translate('auto.components.NewWorkspaceComposerCard.skipForNow', 'Skip for now')
-      : translate('auto.components.NewWorkspaceComposerCard.skipCommands', 'Skip commands')
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
   const agentCatalog = getAgentCatalog()
@@ -367,11 +320,6 @@ export default function NewWorkspaceComposerCard(
           onSparseEditingChange={setSparseEditing}
           sparseEditing={sparseEditing}
           branchNameInputId={branchNameInputId}
-          setupConfigLabel={setupConfigLabel}
-          setupRunLabel={setupRunLabel}
-          setupAskLabel={setupAskLabel}
-          setupRunButtonLabel={setupRunButtonLabel}
-          setupSkipButtonLabel={setupSkipButtonLabel}
           showSetupAgentStartupPolicy={showSetupAgentStartupPolicy}
           parentWorktreeId={parentWorktreeId}
           onParentWorktreeIdChange={onParentWorktreeIdChange}

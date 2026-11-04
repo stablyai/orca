@@ -1,5 +1,5 @@
 import { classifyClaudeBackgroundTaskKind } from './claude-background-task-kind'
-import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
+import { isAgentChildWorkKind } from './agent-status/child-work/agent-status-child-work-liveness'
 import { runsOrcaOrchestrationWait } from './orca-cli-invocations'
 
 const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([

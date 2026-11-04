@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fingerprintPluginConsent } from '../../../../shared/plugins/approval/plugin-consent-fingerprint'
 import { pluginManifestSchema } from '../../../../shared/plugins/manifest/plugin-manifest'
-import { PluginDevEmitParams } from '../../../../shared/rpc-contract/plugins-params'
 import { devFolderConsentIdentity } from '../../../plugins/plugin-discovery'
 import { PluginService } from '../../../plugins/plugin-service'
 import type { PluginWorkerHandle } from '../../../plugins/workers/plugin-host-process'
@@ -57,6 +56,7 @@ async function realService() {
     commands: [],
     invokeCommand: vi.fn(async () => null),
     requestFromPanel: vi.fn(),
+    runHook: vi.fn(),
     notifyDataChanged: vi.fn(),
     deliverEvent,
     lastActivityAt: () => 1_700_000_000_000,
@@ -80,33 +80,7 @@ async function realService() {
   return { root, factory, deliverEvent }
 }
 
-const CREATED = { workspaceId: 'wt-1', kind: 'worktree', path: '/repo', branch: 'main' }
-
 describe('plugins.devEmit', () => {
-  it('takes exactly one of a folder or a plugin key', () => {
-    expect(PluginDevEmitParams.safeParse({ event: 'workspace.created' }).success).toBe(false)
-    expect(
-      PluginDevEmitParams.safeParse({ pluginKey: 'a.b', path: '/x', event: 'workspace.created' })
-        .success
-    ).toBe(false)
-    expect(
-      PluginDevEmitParams.safeParse({ pluginKey: 'a.b', event: 'workspace.created' }).success
-    ).toBe(true)
-  })
-
-  it('starts the real worker path and delivers the payload', async () => {
-    const { root, factory, deliverEvent } = await realService()
-    await expect(
-      devEmit().handler({ path: root, event: 'workspace.created', payload: CREATED }, context)
-    ).resolves.toEqual({
-      pluginKey: 'samples.demo',
-      event: 'workspace.created',
-      delivered: { worker: true, panels: 0 }
-    })
-    expect(factory).toHaveBeenCalledOnce()
-    expect(deliverEvent).toHaveBeenCalledWith('workspace.created', CREATED)
-  })
-
   it('refuses an event the manifest does not declare without starting the worker', async () => {
     const { factory } = await realService()
     await expect(

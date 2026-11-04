@@ -242,4 +242,21 @@ describe('mobile structured conversation commands', () => {
     expect(await dispatchMobileStructuredCommand({ ...input, text: 'hello' })).toBeNull()
     expect(sendRequest).not.toHaveBeenCalled()
   })
+
+  it('sends /compact instructions where the host takes them and refuses them elsewhere', async () => {
+    const { input, sendRequest } = setup()
+    const text = '/compact keep the plan'
+    expect(await dispatchMobileStructuredCommand({ ...input, text })).toBe('rejected')
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(input.onError).toHaveBeenCalledWith('Use /compact without arguments.', undefined)
+
+    const taking = { ...input.controller, compactInstructions: true }
+    expect(await dispatchMobileStructuredCommand({ ...input, text, controller: taking })).toBe(
+      'accepted'
+    )
+    expect(requestFields(sendRequest.mock.calls[0])).toMatchObject({
+      command: 'compact',
+      instructions: 'keep the plan'
+    })
+  })
 })

@@ -1,6 +1,10 @@
 import type { CanUseTool, OnUserDialog, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePromptRegistry } from '../claude-prompt-registry'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStreamJsonConnectionHandlers } from '../claude-stream-json-connection'
+import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
+import { claudeLaunchSkipsPermissions } from './launch/claude-structured-spawn-options'
+import { createClaudeFullAccessPolicy } from './claude-full-access-policy'
 import {
   claudePermissionPresentation,
   claudePermissionSubject
@@ -10,6 +14,19 @@ export type ClaudePermissionCallbackDeps = {
   sessionId: string
   prompts: ClaudePromptRegistry
   emit: (event: ClaudeStructuredSessionEvent) => void
+  /** Read once per request: whether this process's Full access applied where the request arrived. */
+  fullAccessAt: (requestId: string) => boolean
+}
+
+/** Questions and plan approval need the user's answer, not a permission; Full access never answers them. */
+const USER_ANSWERED_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode'])
+
+/** The SDK forwards the CLI's flag for tools whose card is the person's answer, though its type omits it. */
+function needsUserAnswer(toolName: string, options: Parameters<CanUseTool>[2]): boolean {
+  return (
+    USER_ANSWERED_TOOLS.has(toolName) ||
+    ('requiresUserInteraction' in options && options.requiresUserInteraction === true)
+  )
 }
 
 function denySafeResult(toolUseId: string | undefined): PermissionResult {
@@ -25,8 +42,17 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
   canUseTool: CanUseTool
   onUserDialog: OnUserDialog
 } {
-  const canUseTool: CanUseTool = (toolName, input, options) =>
-    new Promise<PermissionResult | null>((resolve) => {
+  const canUseTool: CanUseTool = (toolName, input, options) => {
+    const fullAccess = deps.fullAccessAt(options.requestId)
+    // Full access approves Claude's own asks too (ask rules, ask-answering hooks, built-in safety checks).
+    if (fullAccess && toolName && !needsUserAnswer(toolName, options)) {
+      return Promise.resolve({
+        behavior: 'allow',
+        updatedInput: input,
+        ...(options.toolUseID ? { toolUseID: options.toolUseID } : {})
+      })
+    }
+    return new Promise<PermissionResult | null>((resolve) => {
       let cancel = (): void => {}
       const settle = (response: PermissionResult | null): void => {
         options.signal.removeEventListener('abort', cancel)
@@ -67,8 +93,40 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
       options.signal.addEventListener('abort', cancel, { once: true })
       deps.emit({ type: 'prompt', sessionId: deps.sessionId, prompt })
     })
+  }
 
   const onUserDialog: OnUserDialog = () => Promise.resolve({ behavior: 'cancelled' })
 
   return { canUseTool, onUserDialog }
+}
+
+type ClaudeExitHandler = NonNullable<ClaudeStreamJsonConnectionHandlers['onExit']>
+
+/** One process's permission handlers. Only Orca's Full access launch grants auto-allow; Own settings
+ *  never does, whatever Claude reports, and no other process's launch or reports carry over. */
+export function claudeLaunchPermissions(
+  deps: Omit<ClaudePermissionCallbackDeps, 'fullAccessAt'>,
+  launch: Pick<ClaudeStructuredLaunch, 'options' | 'providerSessionId'>
+): {
+  handlers: Pick<ClaudeStreamJsonConnectionHandlers, 'canUseTool' | 'onUserDialog' | 'onStdout'>
+  /** Claude's mode in wire order; null without Full access, whose launches read no stdout. */
+  orderedMode: (() => string | null | undefined) | null
+  /** Wraps the connection's exit handler: this process's permission state ends first. */
+  closeThen: (onExit: ClaudeExitHandler) => ClaudeExitHandler
+} {
+  const policy = claudeLaunchSkipsPermissions(launch.options)
+    ? createClaudeFullAccessPolicy(launch.providerSessionId)
+    : null
+  const callbacks = buildClaudePermissionCallbacks({
+    ...deps,
+    fullAccessAt: (requestId) => policy?.allows(requestId) ?? false
+  })
+  return {
+    handlers: { ...callbacks, ...(policy ? { onStdout: policy.observe } : {}) },
+    orderedMode: policy ? policy.mode : null,
+    closeThen: (onExit) => (error, exit) => {
+      policy?.close()
+      onExit(error, exit)
+    }
+  }
 }

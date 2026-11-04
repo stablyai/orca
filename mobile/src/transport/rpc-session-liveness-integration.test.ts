@@ -3,7 +3,7 @@ import { connect } from './rpc-client'
 import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 
 vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
@@ -69,6 +69,14 @@ class MockWebSocket {
 
 const sockets: MockWebSocket[] = []
 const originalWebSocket = globalThis.WebSocket
+
+function lastRequestId(socket: MockWebSocket): string {
+  const value: unknown = JSON.parse(socket.sent.at(-1)?.replace(/^encrypted:/, '') ?? 'null')
+  if (!value || typeof value !== 'object' || !('id' in value) || typeof value.id !== 'string') {
+    throw new Error('Expected a written request')
+  }
+  return value.id
+}
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -169,12 +177,9 @@ describe('physical session liveness', () => {
 
     try {
       client.notifyForeground('network-change')
-      const probe: unknown = JSON.parse(socket.sent.at(-1)?.replace(/^encrypted:/, '') ?? 'null')
-      if (!probe || typeof probe !== 'object' || !('id' in probe)) {
-        throw new Error('Expected the network probe')
-      }
+      const id = lastRequestId(socket)
       socket.onmessage?.({
-        data: `encrypted:${JSON.stringify({ id: probe.id, ok: true, result: {} })}`
+        data: `encrypted:${JSON.stringify({ id, ok: true, result: {} })}`
       })
       await vi.advanceTimersByTimeAsync(1_000)
       client.notifyForeground('app-resume')
@@ -228,24 +233,29 @@ describe('physical session liveness', () => {
     }
   })
 
-  it('counts authenticated terminal binary output as liveness', async () => {
+  it('reconnects when control probes stall while terminal and browser traffic continues', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = sockets[0]!
     socket.authenticate()
     client.notifyForeground()
-    socket.onmessage?.({
-      data: encodeTerminalStreamFrame({
-        opcode: TerminalStreamOpcode.Output,
-        streamId: 42,
-        seq: 1,
-        payload: new TextEncoder().encode('hello')
+    for (let seq = 1; seq <= 3; seq++) {
+      await vi.advanceTimersByTimeAsync(7_999)
+      socket.onmessage?.({
+        data: encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Output,
+          streamId: 42,
+          seq,
+          payload: new TextEncoder().encode('hello')
+        })
       })
-    })
-    await Promise.resolve()
-    await vi.advanceTimersByTimeAsync(24_000)
+      socket.onmessage?.({
+        data: 'encrypted:{"id":"browser-stream","ok":true,"result":{"frame":"data"}}'
+      })
+      await vi.advanceTimersByTimeAsync(1)
+    }
 
-    expect(socket.close).not.toHaveBeenCalled()
-    expect(client.getState()).toBe('connected')
+    expect(socket.close).toHaveBeenCalledOnce()
+    expect(client.getState()).toBe('reconnecting')
     client.close()
   })
 
@@ -262,6 +272,42 @@ describe('physical session liveness', () => {
     } finally {
       client.close()
     }
+  })
+
+  it.each([{ runtimeId: 'host' }, { runtimeId: 'old-host', worktrees: [], sessions: [] }])(
+    'keeps a direct socket when its current probe receives %j',
+    async (result) => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const socket = sockets[0]!
+      socket.authenticate()
+      client.notifyForeground('app-resume')
+      const id = lastRequestId(socket)
+      await vi.advanceTimersByTimeAsync(3_000)
+      socket.onmessage?.({ data: `encrypted:${JSON.stringify({ id, ok: true, result })}` })
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(client.getState()).toBe('connected')
+      client.close()
+    }
+  )
+
+  it('ignores superseded probes and unrelated RPC replies during a control check', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]!
+    socket.authenticate()
+    const request = client.sendRequest('status.get')
+    await vi.advanceTimersByTimeAsync(0)
+    const requestId = lastRequestId(socket)
+    client.notifyForeground('focus')
+    const firstProbe = lastRequestId(socket)
+    await vi.advanceTimersByTimeAsync(8_000)
+    await vi.advanceTimersByTimeAsync(7_000)
+    for (const id of [firstProbe, requestId]) {
+      socket.onmessage?.({ data: `encrypted:${JSON.stringify({ id, ok: true, result: {} })}` })
+    }
+    expect((await request).ok).toBe(true)
+    await vi.advanceTimersByTimeAsync(9_000)
+    expect(client.getState()).toBe('reconnecting')
+    client.close()
   })
 
   it('retains every queued stream when replay write fails', async () => {
@@ -293,29 +339,13 @@ describe('physical session liveness', () => {
 
     for (let index = 0; index < 3; index++) {
       client.notifyForeground()
-      const request = socket.sent
-        .map((payload) => payload.replace(/^encrypted:/, ''))
-        .flatMap((payload) => {
-          const value: unknown = JSON.parse(payload)
-          return value &&
-            typeof value === 'object' &&
-            'method' in value &&
-            value.method === 'status.get' &&
-            'id' in value &&
-            typeof value.id === 'string'
-            ? [{ id: value.id }]
-            : []
-        })
-        .at(-1)
+      const id = lastRequestId(socket)
       expect(socket.sent.filter((payload) => payload.includes('status.get'))).toHaveLength(
         index + 1
       )
-      if (!request) {
-        throw new Error('Expected a written liveness probe')
-      }
       socket.onmessage?.({
         data: `encrypted:${JSON.stringify({
-          id: request.id,
+          id,
           ok: false,
           error: { code: 'unauthorized', message: 'Unauthorized' }
         })}`

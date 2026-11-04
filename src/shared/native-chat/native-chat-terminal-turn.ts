@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../agent-status-types'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import { isInterruptedStatusMessage, type NativeChatMessage } from './native-chat-types'
 import type {
   NativeChatSettledTurn,

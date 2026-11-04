@@ -1,17 +1,19 @@
 import { memo, useContext, useState, useRef, useLayoutEffect } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ArrowUpRight, Bot } from 'lucide-react-native'
+import { ArrowUpRight, Bot, ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 import { agentMessageSendersShown } from '../../../../../src/shared/agent-session/agent-session-message-source'
 import {
   AGENT_MESSAGE_FOLDED_LINES,
   agentMessageHeading,
+  agentMessageIsCompact,
   agentMessagePrimarySender,
   agentMessageSenderCanOpen,
   agentMessageOverflows,
   agentMessageFoldLabel,
-  agentMessageCanCopy
+  agentMessageCanCopy,
+  type AgentMessageHeading
 } from '../../../../../src/shared/agent-session/agent-message-presentation'
 import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
@@ -21,8 +23,8 @@ import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButt
 import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { styles as markdownStyles } from '../../../components/mobile-markdown-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
+import { colors, spacing, pressedStyle } from '../../../theme/mobile-theme'
+import { styles } from './mobile-agent-message-card-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import {
   MobileAgentMessageOpenContext,
@@ -33,7 +35,114 @@ import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { CHAT_PROSE_SCALE } from './mobile-native-chat-message-styles'
 
-export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAgentMessageCard({
+export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAgentMessageCard(
+  props: React.ComponentProps<typeof PreviewAgentMessageCard>
+) {
+  return agentMessageIsCompact(props.message, props.from) ? (
+    <CompactAgentMessageCard {...props} />
+  ) : (
+    <PreviewAgentMessageCard {...props} />
+  )
+})
+
+function CompactAgentMessageCard({
+  message,
+  from,
+  fontScale,
+  attachments,
+  onOpenFile,
+  onLongPress,
+  status
+}: React.ComponentProps<typeof PreviewAgentMessageCard>) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const text = mobileNativeChatDisplayCopyText(message)
+  const [open, setOpen] = useMobileNativeChatDisclosure(`agent-message:${message.id}`, false)
+  const headings: Record<AgentMessageHeading, string> = {
+    started: t('chat.agentMessage.startedWorker', 'Started worker'),
+    'handed-off': t('chat.agentMessage.handedOffToAgent', 'Handed off to agent'),
+    'started-agent': t('chat.agentMessage.startedAgent', 'Started agent'),
+    task: t('chat.agentMessage.taskFromCoordinator', 'Task from coordinator'),
+    coordinator: t('chat.agentMessage.messageFromCoordinator', 'Message from coordinator'),
+    worker: t('chat.agentMessage.updateFromWorker', 'Update from worker'),
+    generic: t('chat.agentMessage.messageFrom', 'Message from')
+  }
+  const heading = headings[agentMessageHeading(from, message)]
+  const expandable =
+    agentMessageCanCopy(text) || message.blocks.some((block) => block.type === 'image-ref')
+  const Chevron = open ? ChevronUp : ChevronDown
+  return (
+    <View style={styles.compactCard} testID="agent-message-card">
+      <View style={styles.compactHeader}>
+        {expandable ? (
+          <Pressable
+            style={styles.headerToggle}
+            accessibilityRole="button"
+            accessibilityLabel={heading}
+            accessibilityState={{ expanded: open }}
+            onPress={() => setOpen(!open)}
+            onLongPress={onLongPress}
+          />
+        ) : null}
+        <View pointerEvents="none">
+          <SenderAvatar compact sender={agentMessagePrimarySender(from)} />
+        </View>
+        <Text
+          pointerEvents="none"
+          numberOfLines={1}
+          style={[
+            styles.meta,
+            styles.compactHeading,
+            agentMessageSendersShown(from).shown.length > 1 && styles.compactMultipleSenderHeading
+          ]}
+        >
+          {heading}
+        </Text>
+        <Senders compact from={from} />
+        {agentMessageCanCopy(text) ? (
+          <MobileSourceCopyButton
+            text={text}
+            accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
+          />
+        ) : null}
+        {!expandable ? (
+          <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
+        ) : null}
+        {expandable ? (
+          <View pointerEvents="none">
+            <Chevron size={14} color={colors.textMuted} />
+          </View>
+        ) : null}
+      </View>
+      {expandable && open ? (
+        <View style={styles.compactBody}>
+          {attachments}
+          <MobileMarkdown
+            content={text}
+            rangeSelectable
+            textScale={CHAT_PROSE_SCALE * fontScale}
+            onOpenFile={onOpenFile}
+            onLongPress={onLongPress}
+          />
+          {status}
+          <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
+          <Pressable
+            style={({ pressed }) => [styles.refold, pressed && pressedStyle]}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: true }}
+            onPress={() => setOpen(false)}
+          >
+            <Text style={styles.toggle}>
+              {t('chat.nativeChatUserMessageFold.showLess', 'Show less')}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+const PreviewAgentMessageCard = memo(function PreviewAgentMessageCard({
   message,
   from,
   fontScale,
@@ -65,13 +174,16 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   const height = measured ? measurement.height : 0
   const lineHeight = markdownStyles.paragraph.lineHeight * CHAT_PROSE_SCALE * fontScale
   const overflows = agentMessageOverflows(height, lineHeight)
-  const heading = {
+  const headings: Record<AgentMessageHeading, string> = {
     started: t('chat.agentMessage.startedWorker', 'Started worker'),
+    'handed-off': t('chat.agentMessage.handedOffToAgent', 'Handed off to agent'),
+    'started-agent': t('chat.agentMessage.startedAgent', 'Started agent'),
     task: t('chat.agentMessage.taskFromCoordinator', 'Task from coordinator'),
     coordinator: t('chat.agentMessage.messageFromCoordinator', 'Message from coordinator'),
     worker: t('chat.agentMessage.updateFromWorker', 'Update from worker'),
     generic: t('chat.agentMessage.messageFrom', 'Message from')
-  }[agentMessageHeading(from, message.agentStart === true)]
+  }
+  const heading = headings[agentMessageHeading(from, message)]
   return (
     <View style={styles.card} testID="agent-message-card">
       <SenderAvatar sender={agentMessagePrimarySender(from)} />
@@ -152,10 +264,16 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   )
 })
 
-function SenderAvatar({ sender }: { sender: AgentMessageSource['senders'][number] | undefined }) {
+function SenderAvatar({
+  sender,
+  compact = false
+}: {
+  sender: AgentMessageSource['senders'][number] | undefined
+  compact?: boolean
+}) {
   const view = useMobileAgentMessageView(sender)
   return (
-    <View style={styles.avatar}>
+    <View style={[styles.avatar, compact && styles.compactAvatar]}>
       {view.agentType ? (
         <MobileAgentIcon agentId={view.agentType} size={16} />
       ) : (
@@ -170,15 +288,19 @@ function SenderAvatar({ sender }: { sender: AgentMessageSource['senders'][number
   )
 }
 
-function Senders({ from }: { from: AgentMessageSource }) {
+function Senders({ from, compact = false }: { from: AgentMessageSource; compact?: boolean }) {
   const open = useContext(MobileAgentMessageOpenContext)
   const t = useMobileTranslation()
   const { shown, more } = agentMessageSendersShown(from)
   const occurrences = new Map<string, number>()
   return (
-    <View style={styles.senders}>
+    <View pointerEvents="box-none" style={[styles.senders, compact && styles.compactSenders]}>
       {shown.length === 0 ? (
-        <Text style={styles.name}>
+        <Text
+          pointerEvents={compact ? 'none' : undefined}
+          numberOfLines={compact ? 1 : undefined}
+          style={styles.name}
+        >
           {t('session.agentMessageAttribution.unnamedSender', 'an agent')}
         </Text>
       ) : null}
@@ -187,10 +309,24 @@ function Senders({ from }: { from: AgentMessageSource }) {
         const occurrence = occurrences.get(identity) ?? 0
         occurrences.set(identity, occurrence + 1)
         return (
-          <SenderName key={`${identity}:${occurrence}`} sender={sender} from={from} open={open} />
+          <SenderName
+            key={`${identity}:${occurrence}`}
+            sender={sender}
+            from={from}
+            open={open}
+            compact={compact}
+            shownCount={shown.length}
+          />
         )
       })}
-      {more > 0 ? <Text style={styles.meta}>+{more}</Text> : null}
+      {more > 0 ? (
+        <Text
+          pointerEvents={compact ? 'none' : undefined}
+          style={[styles.meta, compact && styles.compactMoreSenders]}
+        >
+          +{more}
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -198,8 +334,12 @@ function Senders({ from }: { from: AgentMessageSource }) {
 function SenderName({
   sender,
   from,
-  open
+  open,
+  compact,
+  shownCount
 }: {
+  compact: boolean
+  shownCount: number
   sender: AgentMessageSource['senders'][number]
   from: AgentMessageSource
   open: React.ContextType<typeof MobileAgentMessageOpenContext>
@@ -209,64 +349,29 @@ function SenderName({
     sender,
     t('session.agentMessageAttribution.unnamedSender', 'an agent')
   )
-  const canOpen = agentMessageSenderCanOpen(sender, open !== undefined)
+  const canOpen = open !== undefined && agentMessageSenderCanOpen(sender)
   return (
     <Pressable
       disabled={!canOpen}
       accessibilityRole={canOpen ? 'button' : undefined}
       onPress={() => open?.(from, sender)}
-      style={({ pressed }) => [styles.sender, pressed && pressedStyle]}
+      pointerEvents={canOpen ? 'auto' : 'none'}
+      style={({ pressed }) => [
+        styles.sender,
+        compact && [styles.compactSender, { maxWidth: `${100 / shownCount}%` }],
+        pressed && pressedStyle
+      ]}
     >
-      <Text style={styles.name}>{name}</Text>
-      {canOpen ? <ArrowUpRight size={14} color={colors.textPrimary} /> : null}
+      <Text numberOfLines={compact ? 1 : undefined} style={styles.name}>
+        {name}
+      </Text>
+      {canOpen ? (
+        <ArrowUpRight
+          size={14}
+          color={colors.textPrimary}
+          style={compact ? styles.compactSenderArrow : undefined}
+        />
+      ) : null}
     </Pressable>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  card: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.surface,
-    backgroundColor: colors.bgPanel
-  },
-  content: { flex: 1, minWidth: 0, gap: spacing.xs },
-  heading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm
-  },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  meta: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },
-  senders: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  sender: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  name: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    flexShrink: 1
-  },
-  toggle: { color: colors.textMuted, fontSize: typography.metaSize, paddingVertical: spacing.xs },
-  body: { position: 'absolute', left: 0, right: 0, top: 0 },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  glyph: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    borderRadius: radii.pill,
-    backgroundColor: colors.bgPanel
-  }
-}))

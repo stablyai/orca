@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fakeSearchService } from '../../shared/ai-vault-search-test-fixture'
+import { fakeSearchService } from '../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import {
   unavailableSessionSearchStatus,
   createSessionSearchClient
-} from '../../shared/ai-vault-search-client'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/search/ai-vault-search-client'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   setSessionSearchService,
   searchSessionService,

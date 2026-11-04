@@ -1,8 +1,12 @@
 import { detectProjectLaunchContext } from '../../preflight/workspace-agent-detection'
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+
 import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
-import { branchSelectorMatches, runtimePathsEqual } from '../runtime-worktree-path-identity'
+import {
+  type ResolvedWorktree,
+  branchSelectorMatches,
+  runtimePathsEqual
+} from '../runtime-worktree-path-identity'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
@@ -20,11 +24,11 @@ import type {
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
-import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
-import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'

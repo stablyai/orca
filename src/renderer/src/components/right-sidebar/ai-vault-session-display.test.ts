@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   sessionDetailConversationTurns,
   sessionPromptPreview,
   sessionPreviewSearchText
-} from './ai-vault-session-display'
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-display'
 
 const baseSession: AiVaultSession = {
   id: 'codex:1',

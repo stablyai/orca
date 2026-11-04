@@ -3,13 +3,20 @@ import { applyProviderSessionOnlyUpdate } from '@/hooks/ipc-events/agent-status-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { makeRepo, makeTerminalTab, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import {
+  makeRepo,
+  makeTerminalTab,
+  makeWorktree
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { makeAgentStatusEntry } from '@/runtime/sync-runtime-graph-test-harness'
 import { collectAiVaultTitleRequests } from '@/lib/ai-vault-tab-title-requests'
 import { resolveCliChatResumeSource } from './cli-chat-resume-source'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { AiVaultListArgs, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultListArgs,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,

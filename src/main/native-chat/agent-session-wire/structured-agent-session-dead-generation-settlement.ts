@@ -59,8 +59,9 @@ export type StructuredAgentSessionDeadGenerationInput = {
   showUnexpectedExitOutcome?: boolean
   exitFailure?: SubmissionRejectionFact
   failureTextContext?: AgentSessionFailureWordsContext
-  /** Share generation-keyed startup failure rows with delivery-loop settlement. */
-  exitedDuringStartup?: { generation: string | null; flightOwned?: boolean }
+  /** Share generation-keyed startup failure rows with delivery-loop settlement. `owned`: a start
+   *  flight or the child's open still owns its outcome and row. */
+  exitedDuringStartup?: { generation: string | null; owned?: boolean }
   /** Refine translator-unverifiable rows after observed exit proof. */
   exit?: StructuredAgentSessionWatchedExit
   unrunRejection?: SubmissionRejectionFact
@@ -104,7 +105,7 @@ export function planStructuredAgentSessionDeadGeneration(
     // Delivery owns failure rows for sends; other startup effects need their own row.
     // Existing rejection wording is terminal and must remain unchanged.
     const recordedByDeliveryLoop =
-      input.exitedDuringStartup.flightOwned ||
+      input.exitedDuringStartup.owned ||
       input.journal.submissions?.().some(isQueuedAgentJournalSubmission) ||
       hasStructuredAgentSessionStartFailureRow(allItems, startKey)
     if (!recordedByDeliveryLoop) {

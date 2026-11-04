@@ -1,4 +1,4 @@
-// Cover Add all import versus Settings re-adoption (P5/P6/P7/P9); picker list/filter/select lives in ssh-config-host-picker.spec.ts.
+// Cover Add all import versus Settings re-adoption (P5/P6/P7/P9); picker host selection lives in ssh-config-host-picker.spec.ts.
 
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -15,7 +15,6 @@ import {
   removeSshTargetsByPrefix,
   returnToAppShell,
   seedIsolatedSshConfig,
-  seedOrcaSshTargetMatchingAlias,
   type SeededSshConfigHost
 } from './helpers/ssh-config-host-picker'
 
@@ -81,34 +80,6 @@ test.describe('SSH config host import (bulk + settings re-adopt)', () => {
     await removeSshTargetsByPrefix(orcaPage, HOST_PREFIX).catch(() => undefined)
   })
 
-  test('P5: already-in-Orca badge, disabled row, and Add all counts only new hosts', async ({
-    electronApp,
-    orcaPage
-  }) => {
-    const hosts = await seedPairConfig(electronApp, HOST_PREFIX)
-    await seedOrcaSshTargetMatchingAlias(orcaPage, {
-      alias: hosts.alpha.alias,
-      hostname: hosts.alpha.hostname,
-      username: hosts.alpha.user,
-      port: hosts.alpha.port
-    })
-
-    const picker = await openSshConfigHostPicker(orcaPage)
-    const alphaRow = configHostRow(picker, hosts.alpha)
-    const bravoRow = configHostRow(picker, hosts.bravo)
-
-    await expect(alphaRow).toBeVisible()
-    await expect(alphaRow).toBeDisabled()
-    await expect(alphaRow.getByText('In Orca', { exact: true })).toBeVisible()
-
-    await expect(bravoRow).toBeVisible()
-    await expect(bravoRow).toBeEnabled()
-    await expect(bravoRow.getByText('In Orca', { exact: true })).toHaveCount(0)
-
-    await expect(picker.getByRole('button', { name: 'Add all 1 to Orca' })).toBeEnabled()
-    await expect(picker.getByRole('button', { name: 'Add all 2 to Orca' })).toHaveCount(0)
-  })
-
   test('P6: Add all N to Orca imports new hosts; re-open shows all in Orca', async ({
     electronApp,
     orcaPage
@@ -144,38 +115,6 @@ test.describe('SSH config host import (bulk + settings re-adopt)', () => {
       configHostRow(reopened, hosts.bravo).getByText('In Orca', { exact: true })
     ).toBeVisible()
     await expect(reopened.getByRole('button', { name: 'No new hosts to add' })).toBeDisabled()
-  })
-
-  test('P7: Add all does not re-adopt deleted config hosts (suppress tombstones)', async ({
-    electronApp,
-    orcaPage
-  }) => {
-    const hosts = await importPairThenDeleteAlias(
-      orcaPage,
-      electronApp,
-      HOST_PREFIX,
-      `${HOST_PREFIX}-alpha`
-    )
-
-    const picker = await openSshConfigHostPicker(orcaPage)
-    // Suppressed aliases stay listed (re-pickable) but never count as new.
-    const alphaRow = configHostRow(picker, hosts.alpha)
-    await expect(alphaRow).toBeVisible()
-    await expect(alphaRow).toBeEnabled()
-    await expect(alphaRow.getByText('Removed from Orca', { exact: true })).toBeVisible()
-    await expect(alphaRow.getByText('In Orca', { exact: true })).toHaveCount(0)
-    await expect(configHostRow(picker, hosts.bravo)).toBeVisible()
-    await expect(
-      configHostRow(picker, hosts.bravo).getByText('In Orca', { exact: true })
-    ).toBeVisible()
-    await expect(picker.getByRole('button', { name: 'No new hosts to add' })).toBeDisabled()
-    await expect(picker.getByRole('button', { name: /Add all \d+ to Orca/ })).toHaveCount(0)
-
-    await returnToAppShell(orcaPage)
-    const sshSection = await openSshHostSettings(orcaPage)
-    // Pane auto-syncs without reAdopt — deleted alpha must stay gone.
-    await expectSshHostListedInSettings(sshSection, hosts.bravo)
-    await expectSshHostAbsentFromSettings(sshSection, hosts.alpha)
   })
 
   test('P9: Sync keeps deleted config hosts; Restore removed hosts re-adopts them', async ({

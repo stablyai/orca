@@ -6,7 +6,7 @@ import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './rpc/methods/structure
 import {
   seedTestAgentSessionStoreFromNewerBuild,
   editPersistedTestAgentSessionStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from './rpc/methods/structured-agent-session-status-stream'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
@@ -31,6 +31,8 @@ import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
 import { discardStructuredWorkerSession } from './rpc/methods/orchestration-structured-worker-session'
 import { closeStructuredAgentSessionChild } from './agent-session/structured-agent-session-close'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 // CLI capability probing is outside tab authority and must not start a real CLI in this fixture.
 vi.mock('../claude/claude-cli-flag-prewarm', () => ({
@@ -45,6 +47,49 @@ vi.mock('../../shared/layout-owner-switch', () => ({
 }))
 beforeEach(() => {
   layoutOwner.main = false
+})
+
+it('captures persisted folder attention without installing the chat host or opening a conversation', async () => {
+  const profile = await authorityProfile([B])
+  await editPersistedTestAgentSessionStore(root, (persisted) => {
+    persisted.records[B].location.workspaceKind = 'folder'
+  })
+  const journals = createTrackedJournalOpener()
+  const journal = await journals.open({
+    stateDirectory: root,
+    identity: {
+      sessionId: B,
+      workspaceId: profile.workspace,
+      hostId: 'local',
+      agent: 'claude',
+      providerHandle: null
+    }
+  })
+  const cursor = journal.cursor()
+  await journals.closeAll()
+  const runtime = new AuthorityRuntime(profile.profile)
+  const ensureHost = vi
+    .spyOn(runtime, 'ensureStructuredAgentSessionHost')
+    .mockRejectedValue(new Error('acknowledgement must not install providers'))
+  const openConversation = vi.spyOn(journalFactory, 'openAgentSessionJournal')
+
+  expect(getStructuredAgentSessionHost()).toBeNull()
+  const acknowledgement = await runtime.prepareWorkspaceAttentionAcknowledgement(
+    `id:${profile.workspace}`
+  )
+  const scope = {
+    executionHostId: 'local',
+    wslDistro: null,
+    workspaceId: profile.workspace,
+    workspaceKind: 'folder'
+  }
+  expect(acknowledgement).toEqual({
+    worktree: scope,
+    reads: [{ sessionId: B, scope, observedCursor: cursor }]
+  })
+  expect(ensureHost).not.toHaveBeenCalled()
+  expect(openConversation).not.toHaveBeenCalled()
+  expect(getStructuredAgentSessionHost()).toBeNull()
 })
 
 it.each([false, true])(
