@@ -16,7 +16,7 @@ function createAssetReferenceNormalizer(replacements) {
   )
   return (content) =>
     content.replace(references, (name) =>
-      replacements.has(name) ? `@asset:${replacements.get(name)}` : '@@'
+      replacements.has(name) ? `@asset:${encodeURIComponent(replacements.get(name))}@` : '@@'
     )
 }
 
