@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
 import { NewerDaemonHoldBanner } from './NewerDaemonHoldBanner'
 import {

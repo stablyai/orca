@@ -3,7 +3,7 @@ import type {
   AiVaultSearchHit,
   AiVaultSearchRequest,
   AiVaultSearchResponse
-} from '../../../shared/ai-vault-search-types'
+} from '../../../shared/ai-vault/search/ai-vault-search-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 import { encodeMergedSearchCursor } from './ai-vault-search-merged-cursor'

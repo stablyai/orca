@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { isTerminalLeafId } from '../../../src/shared/stable-pane-id'
-import { isValidHostTerminalTabId } from '../../../src/shared/terminal-tab-id'
+import { isTerminalLeafId } from '../../../src/shared/workspace-layout/stable-pane-id'
+import { isValidHostTerminalTabId } from '../../../src/shared/workspace-layout/terminal-tab-id'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'

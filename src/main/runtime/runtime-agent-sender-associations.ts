@@ -4,7 +4,7 @@ import type {
   AgentSenderRevision
 } from '../../shared/agent-sender-associations'
 import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
 import {
   readAgentSenderPrincipals,

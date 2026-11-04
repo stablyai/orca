@@ -7,9 +7,9 @@ import type { OpenFile } from '@/store/slices/editor'
 import type {
   GitDiffResult,
   GitDiffTextResult
-} from '../../../../../../shared/git-diff-compare-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
 import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { useCombinedDiffViewRestore } from '../remember-view/use-combined-diff-view-restore'
 import { clearCombinedDiffViewMemory } from '../remember-view/combined-diff-view-cache'

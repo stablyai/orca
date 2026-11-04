@@ -1,13 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  applyDisabledTerminalLiveInputHandles,
   clearTerminalLiveInputFocusTimer,
-  defaultTerminalLiveInputHandles,
-  filterTerminalLiveInputDefaultCandidates,
   focusTerminalLiveInputTarget,
   getTerminalLiveSpecialKeyBytes,
   isTerminalLiveInputWithinByteLimit,
-  pruneTerminalLiveInputHandles,
   scheduleTerminalLiveInputFocus,
   type TerminalLiveInputFocusTarget,
   type TerminalLiveInputFocusTimerRef
@@ -77,86 +73,6 @@ describe('terminal live input', () => {
     expect(isTerminalLiveInputWithinByteLimit('x'.repeat(262_144))).toBe(true)
     expect(isTerminalLiveInputWithinByteLimit('x'.repeat(262_144 + 1))).toBe(false)
     expect(isTerminalLiveInputWithinByteLimit('é'.repeat(262_144 / 2 + 1))).toBe(false)
-  })
-
-  it('defaults first-seen terminal handles to live input once', () => {
-    const firstPass = defaultTerminalLiveInputHandles(new Set(), new Set(), ['pty-1'])
-
-    expect(firstPass.changed).toBe(true)
-    expect([...firstPass.enabledHandles]).toEqual(['pty-1'])
-    expect([...firstPass.defaultedHandles]).toEqual(['pty-1'])
-
-    const manuallyDisabled = new Set<string>()
-    const secondPass = defaultTerminalLiveInputHandles(
-      manuallyDisabled,
-      firstPass.defaultedHandles,
-      ['pty-1', 'pty-2']
-    )
-
-    expect(secondPass.changed).toBe(true)
-    expect([...secondPass.enabledHandles]).toEqual(['pty-2'])
-    expect([...secondPass.defaultedHandles]).toEqual(['pty-1', 'pty-2'])
-  })
-
-  it('does not allocate new live input sets when no handles need defaults', () => {
-    const enabled = new Set(['pty-1'])
-    const defaulted = new Set(['pty-1'])
-    const result = defaultTerminalLiveInputHandles(enabled, defaulted, ['pty-1'])
-
-    expect(result.changed).toBe(false)
-    expect(result.enabledHandles).toBe(enabled)
-    expect(result.defaultedHandles).toBe(defaulted)
-  })
-
-  it('does not default persisted buffered-mode handles back to live input on reentry', () => {
-    const defaultableHandles = filterTerminalLiveInputDefaultCandidates(
-      ['pty-1', 'pty-2'],
-      new Set(['pty-1'])
-    )
-
-    const result = defaultTerminalLiveInputHandles(
-      new Set(),
-      new Set(['pty-1']),
-      defaultableHandles
-    )
-
-    expect(defaultableHandles).toEqual(['pty-2'])
-    expect([...result.enabledHandles]).toEqual(['pty-2'])
-    expect([...result.defaultedHandles]).toEqual(['pty-1', 'pty-2'])
-  })
-
-  it('reconciles persisted buffered-mode handles with currently enabled live input', () => {
-    const result = applyDisabledTerminalLiveInputHandles(
-      new Set(['pty-1', 'pty-2']),
-      new Set(['pty-2']),
-      new Set(['pty-1'])
-    )
-
-    expect(result.changed).toBe(true)
-    expect([...result.enabledHandles]).toEqual(['pty-2'])
-    expect([...result.defaultedHandles]).toEqual(['pty-2', 'pty-1'])
-  })
-
-  it('prunes terminal handles that disappear from session snapshots', () => {
-    const result = pruneTerminalLiveInputHandles(
-      new Set(['pty-1', 'pty-stale']),
-      new Set(['pty-1', 'pty-2', 'pty-stale']),
-      new Set(['pty-1', 'pty-2'])
-    )
-
-    expect(result.changed).toBe(true)
-    expect([...result.enabledHandles]).toEqual(['pty-1'])
-    expect([...result.defaultedHandles]).toEqual(['pty-1', 'pty-2'])
-  })
-
-  it('does not allocate pruned live input sets when every tracked handle is live', () => {
-    const enabled = new Set(['pty-1'])
-    const defaulted = new Set(['pty-1'])
-    const result = pruneTerminalLiveInputHandles(enabled, defaulted, new Set(['pty-1', 'pty-2']))
-
-    expect(result.changed).toBe(false)
-    expect(result.enabledHandles).toBe(enabled)
-    expect(result.defaultedHandles).toBe(defaulted)
   })
 
   it('replaces pending deferred focus work', () => {

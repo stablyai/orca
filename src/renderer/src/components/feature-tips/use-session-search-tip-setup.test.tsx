@@ -4,8 +4,8 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault-search-client'
-import type { AiVaultSearchStatus } from '../../../../shared/ai-vault-search-types'
+import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-client'
+import type { AiVaultSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import {
   useSessionSearchTipSetup,
   type SessionSearchTipSetup

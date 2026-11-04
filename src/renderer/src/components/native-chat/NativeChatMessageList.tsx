@@ -4,7 +4,6 @@ import {
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS
 } from './native-chat-appearance-style'
 import { NativeChatJumpToLatest } from './NativeChatJumpToLatest'
-import { NativeChatNewRowsAnnouncement } from './NativeChatNewRowsMarker'
 import { useNativeChatRowTypography } from './use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
@@ -40,7 +39,6 @@ import { useNativeChatSubagentSections } from './use-native-chat-subagent-sectio
 import { toggleNativeChatExpandedKey } from './native-chat-expanded-keys'
 import { useNativeChatTurnMembership } from './use-native-chat-turn-membership'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
-import { useNativeChatNewRowsMarker } from './native-chat-new-rows-marker'
 import { useNativeChatOlderHistoryAutoload } from './use-native-chat-older-history-autoload'
 import { NativeChatOlderHistoryRow } from './NativeChatOlderHistoryRow'
 import { useNativeChatMessageRail } from './use-native-chat-message-rail'
@@ -226,18 +224,12 @@ export function NativeChatMessageList({
       ),
     [allSlots, journalItems, stopping, journalSubmissions, latestTurn, hostWork]
   )
-  const { marker: newRowsMarker, dismiss } = useNativeChatNewRowsMarker(
-    slots,
-    waitingSlots,
-    isVisible && session.readCurrent === true
-  )
   const transcriptWindow = useNativeChatTranscriptWindow({
     scrollRef,
     slots,
     isVisible,
     // Rail jumps and diff reveals share one mutually exclusive pin.
     revealIndex: nativeChatSlotIndexOf(slots, railJump?.messageId ?? revealedDiff?.messageId),
-    newRowsMarkerIndex: nativeChatSlotIndexOf(slots, newRowsMarker?.key),
     typography
   })
   const transcriptScroll = useNativeChatTranscriptScroll({
@@ -320,7 +312,7 @@ export function NativeChatMessageList({
     onLeaveEnd: readerLeavesEnd,
     onScrollGesture: transcriptScroll.forwardedGesture
   })
-  useNativeChatMessageListHandle(ref, jumpToLatest, readerInput.revealFindMatch, dismiss, allSlots)
+  useNativeChatMessageListHandle(ref, jumpToLatest, readerInput.revealFindMatch, allSlots)
   useNativeChatRailJumpLanding({
     railJump,
     slots,
@@ -381,7 +373,6 @@ export function NativeChatMessageList({
                   loadedMessageIds={loadedMessageIds}
                   context={rowContext}
                   window={transcriptWindow}
-                  newRowsMarker={newRowsMarker}
                   forwardGesture={readerInput.forwardedGesture}
                 />
                 {liveLine ? (
@@ -405,7 +396,6 @@ export function NativeChatMessageList({
             pendingId={railHistoryJump.pendingId}
           />
           <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
-          <NativeChatNewRowsAnnouncement marked={newRowsMarker !== undefined} />
         </div>
         <NativeChatDockedTaskList key={session.sessionId} messages={messages} />
       </div>

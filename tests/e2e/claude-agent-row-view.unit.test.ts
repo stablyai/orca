@@ -12,7 +12,7 @@ import { createHookListenerState } from '../../src/shared/agent-hook-listener/li
 import { seedClaudeSubagentRosterFromSnapshots } from '../../src/shared/agent-hook-listener/providers/claude-roster-state'
 import { claudeRosterToSnapshots } from '../../src/shared/claude-subagent-roster'
 import { decodeAgentSubagentsField } from '../../src/shared/agent-status/contracts/agent-status-subagent-snapshot'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { ClaudeAgentViewBridge } from '../../src/main/claude/agent-view/agent-view-bridge'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { RUNTIME_PROTOCOL_VERSION } from '../../src/shared/protocol-version'

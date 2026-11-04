@@ -4,21 +4,21 @@ import type {
   TerminalLaunchResult,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session/lifecycle/agent-session-resume'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
-import type { TerminalSideEffectFact } from '../../shared/terminal-side-effect-facts'
-import type { TerminalTitleTracker } from '../../shared/terminal-output-side-effects'
+import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
+import type { TerminalSideEffectFact } from '../../shared/terminal/output/terminal-side-effect-facts'
+import type { TerminalTitleTracker } from '../../shared/terminal/output/terminal-output-side-effects'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalAgent } from '../../shared/terminal-agent'
+import type { TerminalAgent } from '../../shared/agent-status/identity/terminal-agent'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 import type { TerminalTailWaitState } from './terminal-wait-tail-state'
 import type { TerminalCommandPaint } from './terminal-command-paint'
 import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 
 type RuntimeTerminalTailState = {

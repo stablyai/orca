@@ -1,7 +1,7 @@
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../shared/terminal-tab-types'
+} from '../../shared/workspace-layout/terminal-tab-types'
 import {
   insertLeafBeside,
   removeLayoutLeaf

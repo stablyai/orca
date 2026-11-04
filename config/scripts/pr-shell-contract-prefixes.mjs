@@ -12,7 +12,7 @@ export const SHELL_PREFIXES = [
   'src/main/runtime/structured-session-child-env',
   'src/renderer/src/components/terminal-pane/fish-color-scheme',
   'src/shared/fish-',
-  'src/shared/pty-reply-echo-shapes',
+  'src/shared/terminal/pty/ingress/pty-reply-echo-shapes',
   'src/shared/startup-shell-portability',
   'src/shared/posix-command-path-lookup',
   'src/main/wsl/filesystem/wsl-shell-cwd-report',

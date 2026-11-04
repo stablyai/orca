@@ -2,7 +2,7 @@ import React from 'react'
 import { AlertTriangle, HardDrive, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 
 export function WorkspaceCleanupInitialScanBanner({
   progress

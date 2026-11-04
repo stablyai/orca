@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { folderGroupKey } from '../../shared/ai-vault-session-filters'
+import { folderGroupKey } from '../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { cwdKey } from './session-search-file-records'
 
 // Indexed cwd keys must match the sidebar’s folder-group normalization.

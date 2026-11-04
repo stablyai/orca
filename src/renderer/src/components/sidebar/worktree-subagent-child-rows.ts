@@ -10,7 +10,7 @@ import {
   type AgentChildDisplayState
 } from '../../../../shared/agent-status/child-work/agent-status-child-work-display'
 import { buildRunningAgentChildRowModels } from '../../../../shared/running-agent-child-rows'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 /** NUL prevents collision with real pane keys; synthetic keys are never parsed for activation, which uses the parent pane. */
 function subagentRowKey(parentPaneKey: string, subagentId: string): string {

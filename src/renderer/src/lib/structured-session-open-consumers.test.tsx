@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { Tab } from '../../../shared/tab-types'
 import { useAiVaultSessionLaunchActions } from '@/components/right-sidebar/ai-vault-session-launch-actions'
 import { useAiVaultOriginalPaneActions } from '@/components/right-sidebar/ai-vault-original-pane-actions'

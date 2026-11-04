@@ -5,8 +5,9 @@ import {
 import { toast } from 'sonner'
 import { describeAiVaultResumeFailure } from '@/lib/ai-vault-resume-refusal'
 import { translate } from '@/i18n/i18n'
-import { agentLabel } from './ai-vault-session-filters'
-import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
+import './ai-vault-session-filters'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
+import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 export function notifyAiVaultSessionQueued(agent: AiVaultAgent): void {
   toast.success(

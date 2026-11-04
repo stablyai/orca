@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { BrowserClientHostCommandEvent } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { fetchBrowserClientUploadFiles } from './browser-client-upload-transfer'
 
 const event = {

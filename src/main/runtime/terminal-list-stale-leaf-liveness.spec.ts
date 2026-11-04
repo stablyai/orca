@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 export function registerTerminalListStaleLeafLivenessTests(): void {
   // Graph ptyId alone cannot prove liveness; controller inventory must demote restored leaves no provider owns (#11959).

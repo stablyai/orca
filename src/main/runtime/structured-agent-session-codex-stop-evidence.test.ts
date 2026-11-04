@@ -6,8 +6,8 @@ import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-chi
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { AGENT_SESSION_GOAL_CONTROL_COPY as COPY } from '../../shared/agent-session/view/agent-session-goal-control-copy'
 import { openCodexAppServerConnection } from '../codex/app-server/codex-app-server-connection'
-import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
-import { CODEX_SCRIPTED_THREAD as THREAD } from '../codex/codex-scripted-child.test-fixture'
+import { codexTurnLifecycleFake } from '../codex/structured/journal/codex-turn-lifecycle-fake'
+import { CODEX_SCRIPTED_THREAD as THREAD } from '../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,

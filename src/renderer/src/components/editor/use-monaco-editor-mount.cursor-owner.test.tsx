@@ -18,10 +18,10 @@ const storeRef = vi.hoisted((): { current?: StoreApi<AppState> } => ({}))
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => storeRef.current?.getState() }
 }))
-vi.mock('./monaco-markdown-doc-link-decorations', () => ({
+vi.mock('./markdown-source-tools/monaco/monaco-markdown-doc-link-decorations', () => ({
   createMarkdownDocLinkDecorationController: vi.fn()
 }))
-vi.mock('./monaco-markdown-doc-completions', () => ({
+vi.mock('./markdown-source-tools/monaco/monaco-markdown-doc-completions', () => ({
   ensureMarkdownDocCompletionProvider: vi.fn()
 }))
 vi.mock('./monaco-e2e-probe', () => ({ installMonacoE2EProbe: () => vi.fn() }))

@@ -4,8 +4,8 @@ import {
   listGuestCodexAccountHomes,
   resolveGuestCodexAccountHome
 } from '../codex-accounts/guest-codex-account-homes'
-import { reconcileCodexAccountHomeHook } from '../codex/codex-account-home-hook'
-import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
+import { reconcileCodexAccountHomeHook } from '../codex/hooks/reconciliation/codex-account-home-hook'
+import { stopCodexStateDbBackfillRecoveries } from '../codex/history/index/codex-state-db-backfill-recovery'
 import type { GetSelectedCodexHomePath } from '../ipc/pty/host-env/types'
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'

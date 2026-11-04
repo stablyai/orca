@@ -9,7 +9,7 @@ vi.mock('./command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-import { REBASE_SOURCE_FETCH_TIMEOUT_MS } from '../../shared/git-rebase-source'
+import { REBASE_SOURCE_FETCH_TIMEOUT_MS } from '../../shared/git/remotes/git-rebase-source'
 import { clearGitCapabilityStateForTests } from './command-runner/git-capability-state'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from './remote'
 

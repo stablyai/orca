@@ -1,5 +1,5 @@
-import type { BrowserClientHostCommandResult } from '../../../../shared/browser-client-host-protocol'
-import type { BrowserExpectedUrlMismatch } from '../../../../shared/browser-expected-url'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import type { BrowserExpectedUrlMismatch } from '../../../../shared/browser/client-hosting/browser-expected-url'
 
 export class BrowserClientPageCommandError extends Error {
   readonly expectedUrlMismatch?: BrowserExpectedUrlMismatch

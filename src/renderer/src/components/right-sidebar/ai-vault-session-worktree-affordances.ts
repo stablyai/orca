@@ -1,11 +1,11 @@
-import type { AiVaultScope } from '../../../../shared/ai-vault-types'
+import type { AiVaultScope } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   canJumpToAiVaultSessionWorktree,
   type AiVaultSessionWorktreeInfo,
   type AiVaultSessionWorktreeStatus
-} from '../../../../shared/ai-vault-session-worktree'
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 
 // Folder workspaces own sessions the way worktrees do, but a plain folder is never called a worktree.
 export function isAiVaultFolderWorkspaceId(workspaceId: string | null | undefined): boolean {

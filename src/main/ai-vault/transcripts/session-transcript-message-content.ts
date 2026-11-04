@@ -5,7 +5,7 @@ import {
   type DecodedToolCall
 } from './session-decoded-message'
 import { sliceAtCodeUnitLimit } from '../../../shared/surrogate-safe-text-slice'
-import type { AiVaultSessionPreviewMessage } from '../../../shared/ai-vault-types'
+import type { AiVaultSessionPreviewMessage } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { TranscriptMessage, TranscriptMessageRole } from './session-transcript-consumers'
 
 // Bound pathological messages; consumers may impose tighter limits.

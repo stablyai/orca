@@ -1,4 +1,4 @@
-import { terminalExitError } from '../../../../../../shared/terminal-start-failure'
+import { terminalExitError } from '../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveWorkerStartReadinessTimeoutMs } from '../../../../../../shared/orchestration-timing-budgets'
 import { OrcaRuntimeService } from '../../../../orca-runtime'

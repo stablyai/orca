@@ -3,12 +3,10 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { aiVaultSessionLogFilePath } from '../../../../shared/ai-vault-session-log-resource'
-import { isAiVaultSyntheticSessionPath } from '../../../../shared/ai-vault-session-deletion'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { aiVaultSessionLogFilePath } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
+import '../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { revealInFileManager } from '@/lib/reveal-in-file-manager'
-
-export { isAiVaultSyntheticSessionPath as isSyntheticAiVaultSessionPath }
 
 export function canUseLocalAiVaultSessionPathActions(
   executionHostId: ExecutionHostId | null | undefined

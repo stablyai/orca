@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
+import type { PreservedBranchCleanup } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import PreservedBranchBatchReviewModal from './PreservedBranchBatchReviewModal'
 import {
   forceDeletePreservedBranchBatch,

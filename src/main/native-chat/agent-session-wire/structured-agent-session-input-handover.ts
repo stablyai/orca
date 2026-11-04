@@ -15,11 +15,8 @@ import {
   beginSubmissionHandover,
   type StructuredAgentSessionPendingHandover
 } from './structured-agent-session-handover'
-import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
-import {
-  providerStartupFailureFact,
-  structuredAgentSessionStartFailure
-} from './structured-agent-session-failure-text'
+import { assertStructuredAgentSessionInputReady } from './structured-agent-session-input-readiness'
+import { providerStartupFailureFact } from './structured-agent-session-failure-text'
 import {
   refusedStructuredAgentSessionStart,
   failedStructuredAgentSessionInputContinuation,
@@ -32,7 +29,7 @@ import { previousExitUnverifiableRefusal } from './structured-agent-session-chil
 type StartFailure = NonNullable<ReturnType<typeof startThatFailedWhileQueued>>
 
 /** The scheduler's selected input keeps one handover while its exact child binding changes. */
-export function beginStructuredAgentSessionInputHandover(
+export async function beginStructuredAgentSessionInputHandover(
   deps: StructuredAgentSessionDeliveryLoopDeps,
   sessionId: string,
   session: StructuredAgentSessionHostSession,
@@ -47,30 +44,28 @@ export function beginStructuredAgentSessionInputHandover(
     session.journal.submission(next.clientMessageId)?.dispatchState === 'pending'
   const isBound = () => deps.sessions.get(sessionId) === session && session.child === binding
   const isCurrent = () => isBound() && !binding.close
-  const validate = (signal?: AbortSignal) => {
-    const work = deps.currentWork(sessionId)
-    if (
-      signal?.aborted ||
-      isDisposed() ||
-      !isCurrent() ||
-      binding.phase !== 'ready' ||
-      deps.stopping(sessionId) ||
-      !ownsInput() ||
-      (work && structuredAgentSessionCommandRunning(work))
-    ) {
-      const ended = session.lastEndedChild
-      throw new StructuredAgentSessionInputNotAdmitted({
-        state: 'rejected',
-        ...structuredAgentSessionStartFailure(
-          (ended && sameProviderChild(ended, binding)
-            ? structuredAgentSessionEndedChildFailure(ended)
-            : null) ?? {
-            failure: agentSessionFailureFact('cancelled', { neverReachedAgent: true })
-          },
-          deps.failureTextContext(sessionId)
-        )
-      })
+  const validate = (signal?: AbortSignal) =>
+    assertStructuredAgentSessionInputReady({
+      deps,
+      sessionId,
+      session,
+      binding,
+      next,
+      disposed: isDisposed(),
+      signal
+    })
+  try {
+    validate()
+  } catch (error) {
+    if (!(error instanceof StructuredAgentSessionInputNotAdmitted) || !error.outcome) {
+      throw error
     }
+    await session.journal.resolveDispatch({
+      clientMessageId: next.clientMessageId,
+      fence: binding.fence,
+      ...error.outcome
+    })
+    return null
   }
   return beginSubmissionHandover(
     {
@@ -251,6 +246,9 @@ export function beginStructuredAgentSessionInputHandover(
           }
           return { kind: 'ready', isCurrent }
         } catch (error) {
+          if (error instanceof StructuredAgentSessionInputNotAdmitted && error.outcome) {
+            return { kind: 'failed', fence: binding.fence, outcome: error.outcome }
+          }
           if (signal?.aborted) {
             return deps.serialize(sessionId, () => {
               const ended = session.lastEndedChild

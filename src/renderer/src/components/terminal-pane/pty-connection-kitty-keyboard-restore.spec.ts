@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   POST_REPLAY_REATTACH_RESET,
   PROCESS_BOUNDARY_GROUND
-} from '../../../../shared/terminal-mode-reset-profiles'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {

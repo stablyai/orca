@@ -3,7 +3,7 @@ import type {
   RemoveWorktreeResult
 } from '../../shared/worktree/create-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
-import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupScopeKey } from '../../shared/git/branches/preserved-branch-cleanup'
 import {
   getRepoRoutingConnectionId,
   parseExecutionHostId,

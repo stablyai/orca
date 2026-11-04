@@ -6,10 +6,10 @@ import {
 } from './agent-name-token-match'
 import { isCursorAgentTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
-import type { TerminalAgent } from '../../terminal-agent'
+import type { TerminalAgent } from '../identity/terminal-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../agent-launch/catalog/tui-agent-display-names'
 
-export { isNeutralAgentTitleWrapper } from '../../terminal-title-wrapper-segments'
+export { isNeutralAgentTitleWrapper } from './terminal-title-wrapper-segments'
 
 /** Names matched as whole tokens, paired with the agent each identifies. */
 const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [

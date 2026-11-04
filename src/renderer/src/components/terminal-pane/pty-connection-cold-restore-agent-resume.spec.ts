@@ -1,14 +1,14 @@
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   expectNoWindowStart,
   expectWindowPaintsColdRestoreOnly,
   mainLayoutApplyTransport
 } from './pty-connection-test-main-pane-start-fixtures'
-import { RESET_GRAPHIC_RENDITION } from '../../../../shared/terminal-mode-reset-profiles'
+import { RESET_GRAPHIC_RENDITION } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { UUID_RE } from './pty-connection-test-constants'
 import {
@@ -16,7 +16,8 @@ import {
   LEAF_1,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
@@ -25,7 +26,7 @@ import {
 } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
+
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals

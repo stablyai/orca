@@ -11,11 +11,11 @@ import {
   TriStateLinkedIssue
 } from './rpc-param-primitives'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
-import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
-import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
+import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
 import { DiffCommentSchema, MobileDiffReviewSchema } from '../diff-comment-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-linked-item-source-context'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachments/workspace-linked-item-source-context'
 
 export const OptionalExecutionHostId = z
   .string()
@@ -160,6 +160,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
   isArchived: OptionalBoolean,
   isUnread: OptionalBoolean,
+  // Explicit whole-workspace read intent; older hosts strip this field.
+  acknowledgeAttention: z.boolean().optional(),
   isPinned: OptionalBoolean,
   sortOrder: OptionalFiniteNumber,
   manualOrder: OptionalFiniteNumber,

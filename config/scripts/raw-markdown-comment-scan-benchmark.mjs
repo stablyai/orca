@@ -7,18 +7,63 @@ import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
 
 const baseline = process.argv[2] ?? '20ab9950654'
-const file = 'src/renderer/src/components/editor/raw-markdown-html.ts'
-async function load(contents) {
+const historicalFile = 'src/renderer/src/components/editor/raw-markdown-html.ts'
+const file = 'src/renderer/src/components/editor/rich-markdown/raw-source/raw-markdown-html.ts'
+async function load(contents, sourceFile = file) {
   const result = await build({
     stdin: {
-      contents: `${contents}\nexport { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'`,
+      contents: `${contents}\nexport { createRichMarkdownEditorCodec } from ${JSON.stringify(resolve('src/renderer/src/components/editor/rich-markdown/document/rich-markdown-source-transport.ts'))}`,
       loader: 'ts',
-      resolveDir: dirname(resolve(file))
+      resolveDir: dirname(resolve(sourceFile))
     },
     bundle: true,
     platform: 'node',
     format: 'esm',
     write: false,
+    plugins: [
+      {
+        name: 'historical-entry-dependencies',
+        setup(bundler) {
+          const historicalDependencies = new Map([
+            [
+              './details-markdown-html',
+              resolve(
+                'src/renderer/src/components/editor/rich-markdown/details/details-markdown-html.ts'
+              )
+            ],
+            [
+              './markdown-doc-links',
+              resolve('src/renderer/src/components/editor/markdown/documents/markdown-doc-links.ts')
+            ],
+            [
+              './markdown-reference-link-normalization',
+              resolve(
+                'src/renderer/src/components/editor/markdown/source-scanning/markdown-reference-link-normalization.ts'
+              )
+            ],
+            [
+              './rich-markdown-source-transport',
+              resolve(
+                'src/renderer/src/components/editor/rich-markdown/document/rich-markdown-source-transport.ts'
+              )
+            ],
+            [
+              './rich-markdown-html-superscript-link-source',
+              resolve(
+                'src/renderer/src/components/editor/rich-markdown/citations/rich-markdown-html-superscript-link-source.ts'
+              )
+            ]
+          ])
+          bundler.onResolve({ filter: /^\.\// }, (args) => {
+            if (sourceFile !== historicalFile || args.importer !== '<stdin>') {
+              return
+            }
+            const resolvedPath = historicalDependencies.get(args.path)
+            return resolvedPath ? { path: resolvedPath } : undefined
+          })
+        }
+      }
+    ],
     banner: {
       js: `import { createRequire } from 'node:module'; const require = createRequire(${JSON.stringify(resolve('package.json'))});`
     }
@@ -29,7 +74,11 @@ async function load(contents) {
 }
 const arms = {
   before: await load(
-    execFileSync('git', ['show', `${baseline}:${file}`], { encoding: 'utf8', windowsHide: true })
+    execFileSync('git', ['show', `${baseline}:${historicalFile}`], {
+      encoding: 'utf8',
+      windowsHide: true
+    }),
+    historicalFile
   ),
   after: await load(readFileSync(file, 'utf8'))
 }

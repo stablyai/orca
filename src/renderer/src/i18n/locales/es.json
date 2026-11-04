@@ -4129,7 +4129,6 @@
             "5c938d39ac": "semana",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Ninguna otra cuenta",
             "d450654fa2": "Cuenta de Claude",
             "11e2354daf": "Uso de Claude",
             "3dd7ddfae1": "Abrir detalles de Claude y cambiar de cuenta",
@@ -7614,9 +7613,6 @@
           "browserExtensions": {
             "copy": "Añade Ajustes › Navegador › Extensiones para los perfiles de navegador locales.",
             "toggleLabel": "Activar o desactivar extensiones del navegador"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Activar o desactivar el panel de orquestación"
           }
         },
         "FloatingWorkspacePane": {
@@ -9772,14 +9768,6 @@
               "extension": "extensión",
               "chrome": "chrome",
               "password": "gestor de contraseñas"
-            },
-            "orchestrationPanel": {
-              "title": "Panel de orquestación",
-              "description": "Muestra con qué agentes trabaja cada agente, junto a su chat o terminal.",
-              "orchestration": "orquestación",
-              "agents": "agentes",
-              "workers": "trabajadores",
-              "manager": "gestor"
             }
           }
         },
@@ -14789,7 +14777,6 @@
           "ae3b00ca82": "Configurar tareas de GitHub",
           "ff92d15436": "Orca te notificará cuando los agentes terminen o necesiten ayuda.",
           "b054332836": "Configurar notificaciones",
-          "04ae28d8ca": "Elige la apariencia que quieras ver durante horas.",
           "f396db9f20": "Haz que te sientas como en casa",
           "322fc50a18": "Orca funciona con cualquier agente CLI. Elige el que más usarás. Puedes cambiarlo en cualquier momento.",
           "198b148b3c": "Elija su agente predeterminado",
@@ -19335,8 +19322,6 @@
         "toggleDetails": "Alternar detalles del turno"
       },
       "jumpToLatest": "Saltar a lo último",
-      "newRowsAnnouncement": "Llegaron mensajes nuevos mientras no estabas",
-      "newRowsMarker": "Nuevo",
       "find": {
         "label": "Buscar en el chat",
         "noResults": "Sin resultados",
@@ -20355,7 +20340,32 @@
           "system": "Igual que el SO",
           "dark": "Suave a la vista",
           "light": "Brillante y nítido"
-        }
+        },
+        "looks": {
+          "activeNow": "ahora",
+          "browsePlugins": "Explorar plugins",
+          "browseThemePlugins": "Explorar plugins de temas",
+          "colorMode": "Modo de color",
+          "colorModeCaption": "Claro, oscuro o según tu sistema.",
+          "darkLook": "Estilo oscuro",
+          "darkLooks": "Estilos oscuros",
+          "lightLook": "Estilo claro",
+          "lightLooks": "Estilos claros",
+          "moreThemes": "Más temas",
+          "next": "Más estilos",
+          "orcaDark": "Orca oscuro",
+          "orcaLight": "Orca claro",
+          "pluginsHint": "Hay más temas disponibles como plugins.",
+          "previous": "Estilos anteriores",
+          "showsWhenDark": "Se muestra cuando tu sistema está en modo oscuro",
+          "showsWhenLight": "Se muestra cuando tu sistema está en modo claro",
+          "slotLabel": "Estilo a editar",
+          "sourceBuiltIn": "Integrado",
+          "sourceCommunity": "Paleta de terminal",
+          "themes": "Tema",
+          "themesCaption": "Opcional. Ve más allá con temas de la app y paletas de terminal."
+        },
+        "subtitle": "Elige claro u oscuro y, si quieres, un tema. Puedes cambiar ambos cuando quieras en Ajustes."
       },
       "integrations": {
         "capabilities": {

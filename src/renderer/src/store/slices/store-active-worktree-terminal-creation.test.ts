@@ -7,7 +7,7 @@ import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 import {
   MIXED_FOLDER,
   MIXED_GROUP
-} from '../../../../shared/folder-workspace-host-routing.test-fixture'
+} from '../../../../shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
 import { resolveTerminalPaneOwnerContext } from '@/components/terminal-pane/terminal-pane-owner-context'
 

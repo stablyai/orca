@@ -4,8 +4,8 @@ import {
   AI_VAULT_SCAN_ISSUE_COPY_ONE as EN_ONE,
   type AiVaultScanIssueCode,
   type AiVaultScanIssueText
-} from '../../../../shared/ai-vault-scan-issue-copy'
-import { classifyAiVaultScanError } from '../../../../shared/ai-vault-scan-error-message'
+} from '../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
+import { classifyAiVaultScanError } from '../../../../shared/ai-vault/scanning/ai-vault-scan-error-message'
 
 type Values = {
   distro: string | null

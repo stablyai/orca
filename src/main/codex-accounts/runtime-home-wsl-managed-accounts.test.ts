@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type * as CodexConfigMirror from '../codex/codex-config-mirror'
-import type * as CodexHomePaths from '../codex/codex-home-paths'
+import type * as CodexConfigMirror from '../codex/configuration/settings/codex-config-mirror'
+import type * as CodexHomePaths from '../codex/configuration/homes/codex-home-paths'
 import type * as LegacyWslRuntimeAuthDrain from './legacy-wsl-runtime-auth-drain'
 import type * as WslCodexAuthBatchReader from './wsl-codex-auth-batch-reader'
 import { createSettings } from './runtime-home-settings-test-fixtures'
@@ -339,14 +339,14 @@ describe('CodexRuntimeHomeService', () => {
     )
     vi.doMock('./legacy-wsl-runtime-auth-drain', () => ({ startLegacyWslRuntimeAuthDrain }))
     const startWslCodexSessionBridgeInBackground = vi.fn(() => Promise.resolve())
-    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+    vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
       startWslCodexSessionBridgeInBackground
     }))
-    vi.doMock('../codex/codex-home-paths', async (importOriginal) => ({
+    vi.doMock('../codex/configuration/homes/codex-home-paths', async (importOriginal) => ({
       ...(await importOriginal<typeof CodexHomePaths>()),
       syncCodexGlobalInstructionsIntoManagedHome: vi.fn()
     }))
-    vi.doMock('../codex/codex-config-mirror', async (importOriginal) => ({
+    vi.doMock('../codex/configuration/settings/codex-config-mirror', async (importOriginal) => ({
       ...(await importOriginal<typeof CodexConfigMirror>()),
       syncSystemConfigIntoManagedCodexHome: vi.fn()
     }))
@@ -390,9 +390,9 @@ describe('CodexRuntimeHomeService', () => {
       await expect(launch).resolves.toBe(managedHomePath)
       expect(startWslCodexSessionBridgeInBackground).toHaveBeenCalledTimes(1)
     } finally {
-      vi.doUnmock('../codex/codex-config-mirror')
-      vi.doUnmock('../codex/codex-home-paths')
-      vi.doUnmock('../codex/wsl-codex-session-bridge')
+      vi.doUnmock('../codex/configuration/settings/codex-config-mirror')
+      vi.doUnmock('../codex/configuration/homes/codex-home-paths')
+      vi.doUnmock('../codex/history/bridges/wsl-codex-session-bridge')
       vi.doUnmock('./legacy-wsl-runtime-auth-drain')
       vi.doUnmock('../wsl/discovery/distro-catalog')
       if (originalPlatform) {
@@ -522,15 +522,15 @@ describe('CodexRuntimeHomeService', () => {
       }
     }))
     const startWslCodexSessionBridgeInBackground = vi.fn(() => Promise.resolve())
-    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+    vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
       startWslCodexSessionBridgeInBackground,
       syncWslCodexSessionsIntoManagedHome: vi.fn(() => Promise.resolve())
     }))
-    vi.doMock('../codex/codex-home-paths', async (importOriginal) => ({
+    vi.doMock('../codex/configuration/homes/codex-home-paths', async (importOriginal) => ({
       ...(await importOriginal<typeof CodexHomePaths>()),
       syncCodexGlobalInstructionsIntoManagedHome: vi.fn()
     }))
-    vi.doMock('../codex/codex-config-mirror', async (importOriginal) => ({
+    vi.doMock('../codex/configuration/settings/codex-config-mirror', async (importOriginal) => ({
       ...(await importOriginal<typeof CodexConfigMirror>()),
       syncSystemConfigIntoManagedCodexHome: vi.fn()
     }))
@@ -577,9 +577,9 @@ describe('CodexRuntimeHomeService', () => {
           '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\alice\\orca\\codex-accounts\\drive-account\\home'
       })
     } finally {
-      vi.doUnmock('../codex/codex-config-mirror')
-      vi.doUnmock('../codex/codex-home-paths')
-      vi.doUnmock('../codex/wsl-codex-session-bridge')
+      vi.doUnmock('../codex/configuration/settings/codex-config-mirror')
+      vi.doUnmock('../codex/configuration/homes/codex-home-paths')
+      vi.doUnmock('../codex/history/bridges/wsl-codex-session-bridge')
       vi.doUnmock('./legacy-wsl-runtime-auth-drain')
       vi.doUnmock('./wsl-codex-auth-batch-reader')
       vi.doUnmock('../wsl/discovery/distro-catalog')
@@ -627,14 +627,14 @@ describe('CodexRuntimeHomeService', () => {
         return task
       }
     }))
-    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+    vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
       startWslCodexSessionBridgeInBackground: vi.fn(() => Promise.resolve())
     }))
-    vi.doMock('../codex/codex-home-paths', async (importOriginal) => ({
+    vi.doMock('../codex/configuration/homes/codex-home-paths', async (importOriginal) => ({
       ...(await importOriginal<typeof CodexHomePaths>()),
       syncCodexGlobalInstructionsIntoManagedHome: vi.fn()
     }))
-    vi.doMock('../codex/codex-config-mirror', async (importOriginal) => ({
+    vi.doMock('../codex/configuration/settings/codex-config-mirror', async (importOriginal) => ({
       ...(await importOriginal<typeof CodexConfigMirror>()),
       syncSystemConfigIntoManagedCodexHome: vi.fn()
     }))
@@ -657,9 +657,9 @@ describe('CodexRuntimeHomeService', () => {
         linuxHomePath: '/mnt/c/Users/alice/.codex'
       })
     } finally {
-      vi.doUnmock('../codex/codex-config-mirror')
-      vi.doUnmock('../codex/codex-home-paths')
-      vi.doUnmock('../codex/wsl-codex-session-bridge')
+      vi.doUnmock('../codex/configuration/settings/codex-config-mirror')
+      vi.doUnmock('../codex/configuration/homes/codex-home-paths')
+      vi.doUnmock('../codex/history/bridges/wsl-codex-session-bridge')
       vi.doUnmock('./legacy-wsl-runtime-auth-drain')
       vi.doUnmock('./wsl-codex-auth-batch-reader')
       vi.doUnmock('../wsl/discovery/distro-catalog')

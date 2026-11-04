@@ -1,10 +1,9 @@
-import type { BrowserExtensionAccessLists } from '../../../../shared/browser-extension-permission-warnings'
+import type { BrowserExtensionAccessLists as BrowserExtensionPermissionSummary } from '../../../../shared/browser/extensions/browser-extension-permission-warnings'
 
 /**
  * What an extension can do, read from its manifest for the install prompt and the download check.
  * hostPermissions: host_permissions, host entries of MV2 `permissions`, and content script matches.
  */
-export type BrowserExtensionPermissionSummary = BrowserExtensionAccessLists
 
 function strings(value: unknown): string[] {
   return Array.isArray(value)

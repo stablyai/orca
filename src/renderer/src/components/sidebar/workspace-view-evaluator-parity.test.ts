@@ -15,7 +15,7 @@ import { countActiveWorkspaceFilters } from '../../../../shared/workspace-view/w
 import { getWorktreeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { isWorkspaceOwnedBySomeoneElse } from '../../../../shared/workspace-creator-visibility'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { isInactiveWorkspace } from '@/lib/worktree-activity-state'

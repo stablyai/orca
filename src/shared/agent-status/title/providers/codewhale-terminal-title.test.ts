@@ -3,7 +3,7 @@ import { getAgentLabel } from '../agent-title-identity'
 import { collectAgentTitleEvidence } from '../agent-title-evidence'
 import { isDshTerminalTitle } from './dsh-terminal-title'
 import { resolvePublishedPaneAgentIdentity } from '../../../published-pane-agent-identity'
-import { resolveExplicitTerminalTitleAgentType } from '../../../terminal-title-agent-type'
+import { resolveExplicitTerminalTitleAgentType } from '../terminal-title-agent-type'
 
 describe('Codewhale terminal titles', () => {
   it('recognizes its name and the whale plus activity-verb frames', () => {

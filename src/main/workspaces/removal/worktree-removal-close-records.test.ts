@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 

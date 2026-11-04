@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
   buildAiVaultResumeShellCommand
-} from '../../shared/ai-vault-resume-command'
+} from '../../shared/ai-vault/resume/ai-vault-resume-command'
 import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   agentForksConversations,

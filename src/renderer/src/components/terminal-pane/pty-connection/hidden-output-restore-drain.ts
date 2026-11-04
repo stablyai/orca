@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
-import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
+import { redactPtyIdForDiagnostics } from '../../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
 import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 

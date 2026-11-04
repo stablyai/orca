@@ -83,6 +83,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     | 'childWorkOpen'
     | 'readStopping'
     | 'publishStatus'
+    | 'publishStatusAndSettlement'
     | 'publishGenerationEnded'
   >
 }): StructuredAgentSessionConversationDelivery {
@@ -287,7 +288,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     loop,
     afterCommit,
     afterSettleEdge: (sessionId, journal) => {
-      input.clientDelivery.publishStatus(sessionId)
+      input.clientDelivery.publishStatusAndSettlement(sessionId)
       afterCommit(sessionId, journal)
     },
     adoptOpened,

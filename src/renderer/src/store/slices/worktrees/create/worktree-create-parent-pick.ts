@@ -1,9 +1,10 @@
 import type { AppState } from '../../../types'
-import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
+
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import {
+  type WorkspaceKey,
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey

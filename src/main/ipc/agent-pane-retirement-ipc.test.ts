@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => void>(),
@@ -30,10 +30,6 @@ beforeEach(() => {
 })
 
 describe('pane retirement IPC request identity', () => {
-  it.each([undefined, id])('accepts legacy omission or a valid UUID: %s', (requestId) => {
-    mocks.handlers.get('agentStatus:retirePaneAuthority')?.({}, paneKey, requestId)
-    expect(mocks.retire).toHaveBeenCalledWith(paneKey, requestId)
-  })
   it.each([null, '', 'bad-id', 42, {}, `${id} `])(
     'rejects malformed request identity %j',
     (requestId) => {

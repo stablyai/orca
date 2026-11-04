@@ -4,13 +4,13 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import type {
   SourceControlAiSettingsPatch,
   SourceControlAiSettings
-} from '../../../../../shared/source-control-ai-types'
-import { buildBranchNamePrompt } from '../../../../../shared/branch-name-from-work'
-import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control-ai'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { buildBranchNamePrompt } from '../../../../../shared/source-control/ai/naming/branch-name-from-work'
+import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   resolveSourceControlActionCommandTemplate,
   setSourceControlActionDefault
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../../store/index'
 import { Button } from '../../ui/button'

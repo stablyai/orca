@@ -1,7 +1,7 @@
 import React from 'react'
-import type { GitConflictOperation } from '../../../../shared/git-status-types'
-import type { CheckPresentationOutcome } from '../../../../shared/provider-check-summary'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { GitConflictOperation } from '../../../../shared/git/status/git-status-types'
+import type { CheckPresentationOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { translate } from '@/i18n/i18n'
 
 export function branchDisplayName(branch: string): string {

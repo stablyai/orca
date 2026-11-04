@@ -2,7 +2,7 @@ import {
   getWrapperTitleSegments,
   isNeutralAgentTitleWrapper,
   WRAPPER_SEPARATOR
-} from '../../../terminal-title-wrapper-segments'
+} from '../terminal-title-wrapper-segments'
 
 /** Codewhale's static OSC-0 whale (focused, or motion disabled). */
 export const CODEWHALE_STATIC_WHALE = '\u{1F433}' // 🐳

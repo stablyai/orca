@@ -3,8 +3,8 @@ import { BinarySessionTranscriptError } from '../../transcripts/remote-session-c
 import { readStreamedSessionDocument } from '../../transcripts/session-document-stream'
 import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { clineMessagesPathForMetadata } from '../../../../shared/ai-vault-session-log-resource'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { clineMessagesPathForMetadata } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   createAccumulator,

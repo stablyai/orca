@@ -24,7 +24,7 @@ import {
   type PullRequestGenerationFields
 } from '@/store/slices/pull-request-generation'
 import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
-import type { HostedReviewProvider } from '../../../../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { SourceControlAi } from '../ai/use-ai'
 import { stripBaseRef } from '../../create-pull-request-base-ref-normalization'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'

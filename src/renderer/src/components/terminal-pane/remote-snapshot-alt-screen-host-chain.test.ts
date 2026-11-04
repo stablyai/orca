@@ -6,15 +6,17 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
   encodeTerminalStreamFrame
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { flushAsyncTicks, writeHeadlessTerminal } from './pty-connection-test-async'
 import {
   terminalWriteText,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type ConnectCallbacks,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
+
 import type { PtyReplayDataMeta } from './pty-transport-types'
 import {
   buildPaneConnectionDeps,

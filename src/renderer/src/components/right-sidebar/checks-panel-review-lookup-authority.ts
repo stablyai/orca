@@ -1,6 +1,6 @@
-import type { HostedReviewLookupAuthority } from '../../../../shared/hosted-review-create-confirmation'
-import type { HostedReviewLookupOutcome } from '../../../../shared/hosted-review'
-import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
+import type { HostedReviewLookupAuthority } from '../../../../shared/source-control/hosted-review/hosted-review-create-confirmation'
+import type { HostedReviewLookupOutcome } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { isPositiveHostedReviewNumber } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
 /** Separate renderable reviews, positive-unresolved evidence, accepted absence, and unknown lookups; only accepted absence permits create. */
 export type ChecksPanelReviewLookup = HostedReviewLookupAuthority

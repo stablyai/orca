@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { QuickCommandRow } from './QuickCommandRow'
 
 const clipboard = vi.hoisted(() => ({ setStringAsync: vi.fn(() => Promise.resolve(true)) }))

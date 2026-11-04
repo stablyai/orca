@@ -21,7 +21,7 @@ import {
   githubWorkItemDetailsSchema,
   hostedReviewForBranchSchema
 } from './github-pr-read-reply-schema'
-import { getProviderChecksOutcome } from '../../../src/shared/provider-check-summary'
+import { getProviderChecksOutcome } from '../../../src/shared/source-control/checks/provider-check-summary'
 import { prChecksSchema } from './github-pr-entity-reply-schema'
 import {
   reviewCreatedTerminalSchema,
