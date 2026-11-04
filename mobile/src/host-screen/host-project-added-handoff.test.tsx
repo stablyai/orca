@@ -24,7 +24,15 @@ vi.mock('../transport/host-removal-lifecycle', () => ({
 vi.mock('../host-route-exit', () => ({ leaveHostRoute: vi.fn() }))
 vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
 
+// The actions hook's module graph reaches react-native (session guards, list rows);
+// Flow sources cannot parse under vitest, so stub the surface it touches.
+vi.mock('react-native', () => ({
+  AppState: {},
+  StyleSheet: { create: (styles: unknown) => styles }
+}))
+
 import type { RpcClient } from '../transport/rpc-client'
+import { NO_SERVER_WORKSPACES } from '../worktree/server-workspaces'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import type { HostScreenState } from './use-host-screen-state'
 import type { Worktree } from '../worktree/workspace-list-sections'
@@ -64,9 +72,10 @@ function handoffWith(confirmed: Worktree[] | undefined): (repo: typeof addedRepo
       pathname: '/h/host-a',
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: navigateFromHostList (embedded: false) reads push only; every other router member is unreachable from the handoff.
       router: router as unknown as Parameters<typeof useHostWorktreeActions>[0]['router'],
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handoff path reads setOptimisticActiveWorktreeIdentity and the modal refs' null defaults; every other member is unreachable from it.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handoff path reads setOptimisticActiveWorktreeIdentity, the empty server list its session open consults, and the modal refs' null defaults; every other member is unreachable from it.
       state: {
-        setOptimisticActiveWorktreeIdentity: () => {}
+        setOptimisticActiveWorktreeIdentity: () => {},
+        serverWorkspaces: NO_SERVER_WORKSPACES
       } as unknown as HostScreenState
     })
     held.handoff = actions.handleProjectAdded
