@@ -21024,6 +21024,12 @@
       "formatOnSave": {
         "failed": "Could not format {{file}}. Saving without formatting: {{reason}}"
       }
+    },
+    "contextualTours": {
+      "addProject": {
+        "title": "Add a project",
+        "body": "Add a folder or Git repository to start working on your project."
+      }
     }
   },
   "dashboardPopout": {

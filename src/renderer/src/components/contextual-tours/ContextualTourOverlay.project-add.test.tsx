@@ -56,7 +56,9 @@ beforeEach(() => {
     },
     true
   )
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement
+  ) {
     return this.hasAttribute('data-contextual-tour-target')
       ? new DOMRect(100, 100, 30, 30)
       : new DOMRect()
