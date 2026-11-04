@@ -15,6 +15,7 @@ import {
 } from './db/messages/mailbox-pointer-enter-state'
 import { resumePendingOrchestrationMailboxPointer } from './mailbox-pointer-resume'
 import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
+import { OrchestrationTypingQuietRetry } from './orchestration-typing-quiet-retry'
 
 export type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 
@@ -30,6 +31,9 @@ function pointerEnterDelayMs(): number {
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
   private readonly state = new OrchestrationMailboxPointerState()
   private readonly coldParkedPtys = new Set<string>()
+  private readonly typingQuietRetry = new OrchestrationTypingQuietRetry(
+    (mailboxHandle, reservedTypes) => this.deps.redriveMailbox(mailboxHandle, reservedTypes)
+  )
   constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {}
 
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
@@ -106,6 +110,19 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     if (unread.length === 0) {
       return
     }
+    if (
+      this.typingQuietRetry.defer(
+        {
+          lastUserInputAt: this.deps.lastUserInputAt?.(leaf.ptyId),
+          now: this.deps.now?.() ?? performance.now(),
+          windowFocused: this.deps.isOrcaWindowFocused?.() ?? false
+        },
+        mailboxHandle,
+        options.reservedTypes
+      )
+    ) {
+      return
+    }
     const newestSequence = unread.at(-1)?.sequence
     if (newestSequence === undefined) {
       return
@@ -133,7 +150,19 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       return
     }
     stageOrchestrationMailboxPointer({
-      deps: this.deps,
+      deps: {
+        ...this.deps,
+        scheduleTypingQuietRetry: (ptyId, retryMailbox) => {
+          this.typingQuietRetry.defer(
+            {
+              lastUserInputAt: this.deps.lastUserInputAt?.(ptyId),
+              now: this.deps.now?.() ?? performance.now(),
+              windowFocused: this.deps.isOrcaWindowFocused?.() ?? false
+            },
+            retryMailbox
+          )
+        }
+      },
       state: this.state,
       terminal,
       mailboxHandle,

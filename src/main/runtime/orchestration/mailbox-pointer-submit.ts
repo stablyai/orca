@@ -13,6 +13,7 @@ import type {
   OrchestrationMailboxPointerState
 } from './mailbox-pointer-state'
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
+import { shouldDeferOrchestrationTypingQuiet } from './orchestration-typing-quiet'
 
 type PointerSubmitDependencies = {
   mailboxOwner: OrchestrationMailboxOwner
@@ -22,6 +23,10 @@ type PointerSubmitDependencies = {
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+  lastUserInputAt?: (ptyId: string) => number | undefined
+  isOrcaWindowFocused?: () => boolean
+  now?: () => number
+  scheduleTypingQuietRetry?: (ptyId: string, mailboxHandle: string) => void
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -88,6 +93,15 @@ export function submitOrchestrationMailboxPointer(
         deferredUntilIdle = true
       } else if (!queueSafe) {
         releaseWithoutRedrive = true
+      } else if (
+        shouldDeferOrchestrationTypingQuiet({
+          lastUserInputAt: deps.lastUserInputAt?.(input.ptyId),
+          now: deps.now?.() ?? performance.now(),
+          windowFocused: deps.isOrcaWindowFocused?.() ?? false
+        })
+      ) {
+        // Why: keep delivered_at and retry later unread; do not rewrite or submit the draft.
+        deps.scheduleTypingQuietRetry?.(input.ptyId, input.mailboxHandle)
       } else {
         preserveAmbiguousDelivery = true
         const db = deps.getDb()
