@@ -55,6 +55,9 @@ vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
 vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
+vi.mock('../../startup/login-shell-environment', async (importOriginal) =>
+  (await import('./pty-ipc-mock-registry')).loginShellEnvironmentModuleMock(await importOriginal())
+)
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, recoveredAgentClaim } = setupPtyIpcSuite()

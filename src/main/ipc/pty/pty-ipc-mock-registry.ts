@@ -212,3 +212,9 @@ export const codexPaneAccountRegistryModuleMock = () => ({
 export const codexBackfillRecoveryModuleMock = () => ({
   ensureCodexStateDbBackfillRecoveryStarted: ensureCodexBackfillRecoveryMock
 })
+
+// Plain-shell spawns read the login shell env; a real `zsh -l` can outlast race-test timeouts.
+export const loginShellEnvironmentModuleMock = (original: Record<string, unknown>) => ({
+  ...original,
+  resolveLoginShellEnvironment: vi.fn(async () => ({}))
+})
