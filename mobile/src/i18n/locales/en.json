@@ -644,7 +644,11 @@
       "searchProjectsPlaceholder": "Search projects…",
       "searchProjects": "Search projects",
       "hover": "Hover",
-      "agentActivityLayout": "Agent activity layout"
+      "agentActivityLayout": "Agent activity layout",
+      "savedProjectUnavailable": "Saved project selection · Unavailable projects",
+      "projectCount": "{{count}} projects",
+      "partiallySelected": "Partially selected",
+      "unavailableProjects": "Unavailable projects"
     },
     "workspaceOptionsSheet": {
       "hosts": "Hosts",

@@ -2165,6 +2165,12 @@
         "unsupportedProtocol": "Use an http, https, socks, socks4, or socks5 proxy URL."
       }
     },
+    "projectGrouping": {
+      "upgrade": {
+        "body_one": "Your {{count}} checkouts of {{project}} on {{host}} used to show as separate projects. Orca now groups every checkout of a repository into one project, here and in Session History.",
+        "body_other": "Your {{count}} checkouts of {{project}} on {{host}} used to show as separate projects. Orca now groups every checkout of a repository into one project, here and in Session History."
+      }
+    },
     "repository": {
       "iconPickErrors": {
         "notPng": "Repo icons must be PNG files.",

@@ -1034,6 +1034,7 @@
       },
       "removeAddress": "Remove these checkouts from Orca.",
       "upgrade": {
+        "body": "Your {{count}} checkouts of {{project}} on {{host}} used to show as separate projects. Orca now groups every checkout of a repository into one project, here and in Session History.",
         "body_one": "Your {{count}} checkouts of {{project}} on {{host}} used to show as separate projects. Orca now groups every checkout of a repository into one project, here and in Session History.",
         "body_other": "Your {{count}} checkouts of {{project}} on {{host}} used to show as separate projects. Orca now groups every checkout of a repository into one project, here and in Session History.",
         "gotIt": "Got it",
