@@ -3,7 +3,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { AutomationChatAgentLaunch } from './automation-chat-agent-launch'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { readAutomationRunReceipt } from './automation-run-receipt'
 import { AutomationRunLaunchError } from './headless-dispatch'
 

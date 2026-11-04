@@ -19,7 +19,7 @@ import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { AgentTerminalLaunchCompletion } from './agent-session/launch/structured-agent-session-launch-admission'
 import {
   agentLaunchNeedsPreparedCommand,

@@ -110,7 +110,7 @@ vi.mock('../../store', () => ({
   useAppStore: useAppStoreExport
 }))
 
-vi.mock('../right-sidebar/status-display', () => ({
+vi.mock('../../lib/git-path-decoration', () => ({
   buildStatusMap: () => new Map()
 }))
 

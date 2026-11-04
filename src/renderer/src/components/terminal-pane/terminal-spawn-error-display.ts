@@ -7,7 +7,7 @@ import {
   TERMINAL_HOST_CAP_HINT,
   TERMINAL_PROCESS_LIMIT_HINT,
   TERMINAL_SPAWN_ISSUE_REQUEST
-} from '../../../../shared/terminal-spawn-error-copy'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 
 /** Swaps the host's English resource-limit hints for the viewer's locale. */
 export function localizeTerminalSpawnHints(error: string): string {

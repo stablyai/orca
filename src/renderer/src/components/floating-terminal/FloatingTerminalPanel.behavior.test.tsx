@@ -27,7 +27,7 @@ vi.mock('react', async () => {
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
   return { ...actual, ...createReactHookOverrides() }
 })
-vi.mock('@/store', async () => {
+vi.mock('@/store/index', async () => {
   return (await import('./floating-terminal-panel-test-module-mocks')).createAppStoreModule()
 })
 // The probe checks element names and props without mounting these workspace children.

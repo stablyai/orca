@@ -49,12 +49,12 @@ export function NativeChatCrewFrame({
   panel,
   children
 }: {
-  /** Mounted only while the experimental setting is on, so an off panel costs no queries. */
+  /** The availability gate prevents unavailable panels from acquiring subscriptions. */
   panel: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
   const enabled = useOrchestrationPanelEnabled()
-  // The wrapper stays either way so toggling the setting never remounts the transcript.
+  // Keep transcript layout independent of panel availability.
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       {enabled ? (

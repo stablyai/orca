@@ -1,4 +1,4 @@
-import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
+import type { RemoteOpKind } from '@/components/right-sidebar/source-control/review/source-control-primary-action-types'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
 import type {
   GitBranchChangeEntry,
@@ -12,7 +12,7 @@ import type {
   GitStatusResult,
   GitUpstreamStatus
 } from '../../../../../../shared/git/status/git-status-types'
-import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import type { PendingEditorFocusRequest, PendingEditorReveal } from './pending-editor-reveal'
 import type { FileSearchWorktreeState } from './file-search-worktree-state'

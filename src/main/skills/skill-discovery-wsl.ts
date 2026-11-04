@@ -6,7 +6,7 @@ import {
 export { parseWslSkillDiscoveryOutput } from './skill-discovery-wsl-observation'
 import { posix as pathPosix } from 'node:path'
 import type { SkillDiscoveryResult, SkillSourceKind } from '../../shared/skills'
-import { quotePosixShell as quoteBashString } from '../../shared/shell-argument-quoting'
+import { quotePosixShell as quoteBashString } from '../../shared/shell/launch/shell-argument-quoting'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'

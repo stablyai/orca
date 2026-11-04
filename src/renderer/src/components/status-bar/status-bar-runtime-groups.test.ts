@@ -45,12 +45,16 @@ describe('status bar runtime switch groups', () => {
         {
           id: 'account-a',
           label: 'same@example.com (account-a)',
+          name: 'same@example.com',
+          detail: 'account-a',
           active: false,
           runtimeTarget: target
         },
         {
           id: 'account-b',
           label: 'same@example.com (account-b)',
+          name: 'same@example.com',
+          detail: 'account-b',
           active: true,
           runtimeTarget: target
         }

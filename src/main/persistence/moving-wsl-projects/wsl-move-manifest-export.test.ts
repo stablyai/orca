@@ -3,7 +3,7 @@ import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../s
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { assertOrcadMigrationManifestDigest } from '../../orcad/orcad-migration-manifest-digest'
 import {
   DORMANT_AUTOMATION,

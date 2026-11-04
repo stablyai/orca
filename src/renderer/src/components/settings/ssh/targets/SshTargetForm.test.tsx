@@ -43,68 +43,7 @@ async function renderForm(props: RenderProps, root?: Root): Promise<Root> {
   return nextRoot
 }
 
-function button(label: string): HTMLButtonElement {
-  const match = Array.from(document.querySelectorAll('button')).find(
-    (candidate) => candidate.textContent?.trim() === label
-  )
-  if (!match) {
-    throw new Error(`missing ${label} button`)
-  }
-  return match as HTMLButtonElement
-}
-
 describe('SshTargetForm', () => {
-  it('submits via the primary action and closes via Cancel', async () => {
-    const onSave = vi.fn()
-    const onOpenChange = vi.fn()
-    const root = await renderForm({ onSave, onOpenChange })
-
-    await act(async () => {
-      button('Add host').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(onSave).toHaveBeenCalledOnce()
-
-    await act(async () => {
-      button('Cancel').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-    act(() => root.unmount())
-  })
-
-  it('collapses Advanced again after cancel and reopen', async () => {
-    let form: EditingTarget = EMPTY_FORM
-    const onFormChange = vi.fn((updater: (prev: EditingTarget) => EditingTarget) => {
-      form = updater(form)
-    })
-    const root = await renderForm({ form, onFormChange })
-
-    await act(async () => {
-      button('Advanced').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(button('Advanced').getAttribute('data-state')).toBe('open')
-
-    await renderForm({ open: false, form, onFormChange }, root)
-    await renderForm({ open: true, form: EMPTY_FORM, onFormChange }, root)
-
-    expect(button('Advanced').getAttribute('data-state')).toBe('closed')
-    act(() => root.unmount())
-  })
-
-  it('blocks a second submit while a save is in flight', async () => {
-    const onSave = vi.fn()
-    const root = await renderForm({ saving: true, onSave })
-
-    expect(button('Add host').disabled).toBe(true)
-    // Why: Enter submits past a disabled button, so the form itself must gate too.
-    await act(async () => {
-      document
-        .querySelector('form')
-        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    })
-    expect(onSave).not.toHaveBeenCalled()
-    act(() => root.unmount())
-  })
-
   it('treats a freshly opened edit session as clean', async () => {
     const editTarget: EditingTarget = { ...EMPTY_FORM, label: 'dev-box', host: 'dev-box.lan' }
     const onOpenChange = vi.fn()

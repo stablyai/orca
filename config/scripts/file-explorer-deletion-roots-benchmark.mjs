@@ -7,8 +7,8 @@ import { build } from 'esbuild'
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const bundled = await build({
   stdin: {
-    contents: `export { selectDeletionRoots } from './file-explorer-batch-deletion';
-      export { isPathEqualOrDescendant } from './file-explorer-paths';`,
+    contents: `export { selectDeletionRoots } from './file-explorer/mutations/file-explorer-batch-deletion';
+      export { isPathEqualOrDescendant } from './file-explorer/navigation/file-explorer-paths';`,
     resolveDir: join(root, 'src/renderer/src/components/right-sidebar'),
     loader: 'ts'
   },

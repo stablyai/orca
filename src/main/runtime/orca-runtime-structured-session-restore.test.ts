@@ -1,6 +1,6 @@
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { afterEach, describe, expect, it, vi } from 'vitest'

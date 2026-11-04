@@ -5,7 +5,7 @@ import {
   type AgentStatusStructuredSessionSubject
 } from '../../shared/agent-status/contracts/agent-status-subject'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId

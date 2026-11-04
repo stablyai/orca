@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DaemonSession } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { ResourceSessionInventoryCache } from './resource-session-inventory-cache'
 
 function session(id: string, incarnationId?: string): DaemonSession {

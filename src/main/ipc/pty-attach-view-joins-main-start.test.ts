@@ -10,7 +10,7 @@ import {
   pendingRuntimePaneCreatesByOwnerKey,
   makePaneSpawnReservationKey
 } from './pty/pane/spawn-reservation'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'

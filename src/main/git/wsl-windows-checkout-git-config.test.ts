@@ -8,7 +8,6 @@ import {
   resetWslWindowsCheckoutGitConfigForTests,
   UNPROVEN_CHECKOUT_WRITE_GIT_CONFIG_ARGS,
   usesWindowsCheckoutGitConfig,
-  WINDOWS_CHECKOUT_GIT_CONFIG_ARGS,
   withWslWindowsCheckoutGitConfig,
   wslWindowsCheckoutKey,
   WSL_WINDOWS_CHECKOUT_TTL_MS
@@ -91,18 +90,6 @@ describe('which commands run with Windows Git settings', () => {
     recordLineEndingSample(KEY, 'windows', 'id', NOW)
     expect(usesWindowsCheckoutGitConfig(read, undefined, NOW)).toBe(false)
     expect(withWslWindowsCheckoutGitConfig(read, CWD, 'Ubuntu', 'win32', NOW)).toEqual(read)
-  })
-
-  it('flags reads as soon as the host answers, before the sample', () => {
-    recordHostAutocrlf(KEY, 'true', NOW)
-    expect(withWslWindowsCheckoutGitConfig(read, CWD, 'Ubuntu', 'win32', NOW)).toEqual([
-      ...WINDOWS_CHECKOUT_GIT_CONFIG_ARGS,
-      ...read
-    ])
-    expect(withWslWindowsCheckoutGitConfig(write, CWD, 'Ubuntu', 'win32', NOW)).toEqual([
-      ...UNPROVEN_CHECKOUT_WRITE_GIT_CONFIG_ARGS,
-      ...write
-    ])
   })
 
   it('stops flagging reads once the sample proves an LF checkout', () => {

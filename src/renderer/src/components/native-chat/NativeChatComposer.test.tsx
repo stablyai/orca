@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -8,6 +7,9 @@ import type {
 } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { clearNativeChatSessionOptionCacheForTests } from '../../../../shared/native-chat/input/native-chat-session-option-cache'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
+import { NativeChatComposer } from './NativeChatComposer'
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const mocks = vi.hoisted(() => ({
@@ -154,9 +156,6 @@ vi.mock('./use-native-chat-send-lifecycle', () => ({
     trackPendingSend: mocks.trackPendingSend
   })
 }))
-
-import { NativeChatComposer } from './NativeChatComposer'
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 
 describe('NativeChatComposer', () => {
   beforeEach(() => {

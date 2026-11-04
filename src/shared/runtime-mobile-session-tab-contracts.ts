@@ -2,7 +2,7 @@ import type { AgentStatusEntry } from './agent-status/contracts/agent-status-typ
 import type { BrowserCertificateFailure, BrowserLoadError } from './browser-workspace-types'
 import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
 import type { TerminalColorOverrides } from './terminal-themes/terminal-color-overrides'
-import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './workspace-layout/terminal-tab-types'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { StructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle'
 

@@ -9,6 +9,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { chooseOnboardingAgentSurface } from './helpers/onboarding-navigation'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   countVisibleTerminalPanes,
@@ -96,7 +97,7 @@ async function continueOnboarding(page: Page): Promise<void> {
 }
 
 async function selectCodexAgent(page: Page): Promise<void> {
-  const codexButton = page.getByRole('button', { name: 'Codex', exact: true })
+  const codexButton = page.getByRole('button', { name: /^Codex\b/ })
   const codexVisible = await codexButton
     .first()
     .waitFor({ state: 'visible', timeout: 1_000 })
@@ -352,6 +353,25 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
         force: true
       })
   })
+  const newTabStep = page.getByRole('dialog', { name: 'New agents start here', exact: true })
+  await expect(newTabStep).toBeVisible()
+  await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
+  await expect(page.getByRole('menu')).toBeVisible()
+  await expect(newTabStep).toBeHidden()
+  await expect(page.getByRole('dialog', { name: /Split a terminal pane/i })).toBeHidden()
+  await expect
+    .poll(() => page.evaluate(() => window.__store?.getState().activeContextualTourStepIndex))
+    .toBe(0)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('menu')).toBeHidden()
+  const splitStep = page.getByRole('dialog', { name: /Split a terminal pane/i })
+  await expect(splitStep).toBeVisible()
+  await splitStep.getByRole('button', { name: 'Back', exact: true }).click()
+  await expect(newTabStep).toBeVisible()
+  await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
+  await expect(newTabStep).toBeHidden()
+  await page.getByRole('menuitem', { name: /^New Terminal/ }).click()
+  await expect(page.getByRole('menu')).toBeHidden()
   await expect(page.getByRole('dialog', { name: /Split a terminal pane/i })).toBeVisible()
 }
 
@@ -416,9 +436,7 @@ test.describe('New-user golden core flow', () => {
     orcaPage
   }) => {
     await waitForSessionReady(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
-      timeout: 15_000
-    })
+    await chooseOnboardingAgentSurface(orcaPage)
 
     await selectCodexAgent(orcaPage)
     await continueOnboarding(orcaPage)

@@ -21,7 +21,9 @@ export function toAgentLaunchPreferences(
   }
   const model = composeAgentLaunchModel(agent, sessionOptions)
   const effort =
-    typeof sessionOptions.effort === 'string' && sessionOptions.effort.trim()
+    typeof sessionOptions.effort === 'string' &&
+    sessionOptions.effort.trim() &&
+    !(agent === 'claude' && sessionOptions.effort.trim() === 'ultracode')
       ? sessionOptions.effort.trim()
       : undefined
   const mode = readLaunchPermissionChoice(sessionOptions)
@@ -47,3 +49,14 @@ export function agentLaunchNeedsPreparedCommand(
 }
 
 export const agentPermissionNeedsPreparedCommand = agentLaunchNeedsPreparedCommand
+
+export function toAgentSessionOptionValues(values: Readonly<Record<string, unknown>> | undefined) {
+  return values === undefined
+    ? undefined
+    : Object.fromEntries(
+        Object.entries(values).filter(
+          (entry): entry is [string, string | boolean] =>
+            typeof entry[1] === 'string' || typeof entry[1] === 'boolean'
+        )
+      )
+}

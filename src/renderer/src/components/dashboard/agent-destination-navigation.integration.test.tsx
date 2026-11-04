@@ -9,16 +9,16 @@ import {
   seedAlreadyActiveWorktree
 } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import type * as WebRuntimeSessionEnvironment from '@/runtime/web-runtime-session-environment'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
-import WorktreeCardAgents from '../sidebar/WorktreeCardAgents'
+import WorktreeCardAgents from '../sidebar/workspace-card/activity/WorktreeCardAgents'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
-import { activateRetainedAgentRow } from '../sidebar/activate-retained-agent-row'
+import { activateRetainedAgentRow } from '../sidebar/workspace-card/activity/activate-retained-agent-row'
 
 const effects = vi.hoisted(() => ({
   rpc: vi.fn(async () => ({ ok: true })),

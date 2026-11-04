@@ -56,6 +56,7 @@ it('requests current supplied inventory after Agent Settings closes the root pro
   const entries = [entry, claude]
   vi.spyOn(inventoryModule, 'useAgentLaunchPickerInventory').mockReturnValue([])
   const onCatalogOpen = vi.fn()
+  const onOpenChange = vi.fn()
   const onOpenAgentSettings = vi.fn()
   const model = {
     state: 'settled' as const,
@@ -79,6 +80,7 @@ it('requests current supplied inventory after Agent Settings closes the root pro
             agent={agent}
             onPick={launch}
             onCatalogOpen={onCatalogOpen}
+            onOpenChange={onOpenChange}
             onOpenAgentSettings={onOpenAgentSettings}
           />
         </TooltipProvider>
@@ -89,17 +91,24 @@ it('requests current supplied inventory after Agent Settings closes the root pro
       button: 0
     })
   show('claude')
-  open()
+  fireEvent.keyDown(getByRole(document.body, 'button', { name: 'Select agent' }), { key: 'l' })
+  expect(onOpenChange).toHaveBeenLastCalledWith(true)
   fireEvent.click(getByRole(document.body, 'button', { name: 'Configure Claude' }))
   fireEvent.keyDown(document.querySelector('input[aria-label="Search models"]')!, {
     key: 'ArrowLeft'
   })
   fireEvent.click(getByRole(document.body, 'menuitem', { name: 'Agent settings…' }))
   expect(onOpenAgentSettings).toHaveBeenCalledTimes(1)
+  expect(onOpenChange.mock.calls).toEqual([[true], [false]])
   expect(onCatalogOpen.mock.calls).toEqual([['claude'], ['claude']])
   show('codex')
   expect(onCatalogOpen.mock.calls).toEqual([['claude'], ['claude']])
   open()
+  expect(onOpenChange.mock.calls).toEqual([[true], [false], [true]])
+  expect(
+    document.querySelector<HTMLInputElement>('input[placeholder="Search agents and setups…"]')
+      ?.value
+  ).toBe('')
   expect(onCatalogOpen.mock.calls).toEqual([['claude'], ['claude'], ['codex']])
 })
 afterEach(() => {
@@ -238,3 +247,45 @@ it.each(['button', 'enter'] as const)(
     )
   }
 )
+
+it('opens from a printable key on the focused trigger and seeds the search', () => {
+  const claude: AgentPickerEntry = {
+    ...entry,
+    agent: 'claude',
+    label: 'Claude',
+    rows: [{ agent: 'claude', kind: 'cli' }]
+  }
+  const entries = [entry, claude]
+  vi.spyOn(inventoryModule, 'useAgentLaunchPickerInventory').mockReturnValue([])
+  const model = {
+    state: 'settled' as const,
+    rows: entries.flatMap((entry) => entry.rows),
+    detection: {
+      detectedIds: entries.map((entry) => entry.agent),
+      isLoading: false,
+      isRefreshing: false,
+      detectionFailed: false,
+      needsServerUpdate: false,
+      refresh: async () => entries.map((entry) => entry.agent)
+    }
+  }
+  act(() =>
+    root.render(
+      <TooltipProvider>
+        <AgentLaunchPicker model={model} entries={entries} agent="codex" onPick={launch} />
+      </TooltipProvider>
+    )
+  )
+  const trigger = getByRole(document.body, 'button', { name: 'Select agent' })
+  const search = () =>
+    document.querySelector<HTMLInputElement>('input[placeholder="Search agents and setups…"]')
+  fireEvent.keyDown(trigger, { key: 'c', metaKey: true })
+  expect(search()).toBeNull()
+  fireEvent.keyDown(trigger, { key: 'l' })
+  expect(search()?.value).toBe('l')
+  expect(getByRole(document.body, 'button', { name: 'Configure Claude' })).toBeTruthy()
+  expect(document.querySelector('[aria-label="Configure Codex"]')).toBeNull()
+  fireEvent.keyDown(getByRole(document.body, 'menu'), { key: 'Escape' })
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+  expect(search()?.value).toBe('')
+})

@@ -22,11 +22,11 @@ const unitHarnesses = [
 ]
 const supportBridges = new Set([
   'src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts',
-  'src/renderer/src/components/editor/editor-model-lifetime-fixture.ts',
+  'src/renderer/src/components/editor/model-lifetime/retention/editor-model-lifetime-fixture.ts',
   // Autosave suites' store rig; it takes the editor harness's tab-layout maps.
-  'src/renderer/src/components/editor/editor-autosave-controller-test-fixture.ts',
+  'src/renderer/src/components/editor/autosave/editor-autosave-controller-test-fixture.ts',
   // Closed-saving-view save suites' rig; it builds on the autosave rig above.
-  'src/renderer/src/components/editor/editor-save-closed-view.test-fixture.ts',
+  'src/renderer/src/components/editor/save/queue/editor-save-closed-view.test-fixture.ts',
   // Browser suites' store with main drawing their tabs; it takes the browser harness's store.
   'src/renderer/src/store/slices/browser-slice-drawn-from-main.test-fixture.ts'
 ])
@@ -65,7 +65,7 @@ describe('unit support routing', () => {
         'src/renderer/src/components/native-chat/NativeChatStructuredSession.next-test-harness.tsx',
         'src/renderer/src/components/native-chat/NativeChatStructuredSession.tsx',
         'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
-        'src/main/browser/network/egress/browser-route-webrtc-egress.electron.test.ts'
+        'src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts'
       ]) {
         const result = classifyPrJobs([unitHarness, file])
         expect(result.should_run, file).toBe(true)
@@ -129,13 +129,14 @@ describe('unit support import ownership', () => {
   })
 
   it('rejects product consumers reached through an audited support bridge', () => {
-    const bridge = 'src/renderer/src/components/editor/editor-model-lifetime-fixture.ts'
+    const bridge =
+      'src/renderer/src/components/editor/model-lifetime/retention/editor-model-lifetime-fixture.ts'
     const importer = 'src/renderer/src/components/editor/product.ts'
     const synthetic = buildUnitDependencyGraph(
       new Map([
         [harness, 'export const value = 1'],
         [bridge, "import '@/runtime/web-session-tabs-sync-test-harness'"],
-        [importer, "import './editor-model-lifetime-fixture'"]
+        [importer, "import './model-lifetime/retention/editor-model-lifetime-fixture'"]
       ])
     )
     expect(productConsumers(harness, synthetic, new Set())).toEqual([importer])

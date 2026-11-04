@@ -4,7 +4,7 @@ import {
   tmuxSendKeysText,
   tmuxValue
 } from '../../shared/claude-agent-teams-tmux-compat'
-import { describeUnconfirmedAgentStop } from '../../shared/pty-liveness-verdict'
+import { describeUnconfirmedAgentStop } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import {
   formatContext,
   paneEnv,

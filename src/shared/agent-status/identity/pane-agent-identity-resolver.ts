@@ -1,6 +1,6 @@
 import { resolveCanonicalPaneAgentEvidence } from './pane-agent-identity-adapter'
 import type { PaneAgentEvidenceSource } from './pane-agent-evidence-sources'
-import type { TerminalAgent } from '../../terminal-agent'
+import type { TerminalAgent } from './terminal-agent'
 
 /** Rank identity by direct process evidence, with titles last. Discard superseded runs rather than merely ranking them lower:
  * completed-hook A/title B means stale title in the current run, but legitimate reclaim when A belongs to a replaced run.

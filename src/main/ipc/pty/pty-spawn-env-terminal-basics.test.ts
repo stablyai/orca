@@ -17,7 +17,7 @@ import {
   buildJcodeRuntimeDir,
   shouldInjectJcodeRuntimeDir
 } from '../../../shared/jcode-runtime-dir'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import {
   REMOTE_VIEWER_CLIPBOARD_ENV,

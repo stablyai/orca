@@ -12,7 +12,8 @@ import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { buildWindowsTerminalSnapshotPayload } from './windows-terminal-onboarding-telemetry'
 import { persistStep, type PersistCurrentStepResult } from './use-onboarding-flow-persistence'
-import { STEPS, type StepNumber } from './use-onboarding-flow-types'
+import { STEPS, type AgentSurface, type StepNumber } from './use-onboarding-flow-types'
+import { captureThemeLookSettings } from './onboarding-theme-look-settings'
 import {
   prepareSkippedOnboardingPreferences,
   resolveStepIndex,
@@ -48,7 +49,8 @@ type OnboardingFlowActionsArgs = {
   stepIndex: number
   setStepIndex: Dispatch<SetStateAction<number>>
   selectedAgent: TuiAgent | null
-  themeStepEntryThemeRef: { current: GlobalSettings['theme'] | null }
+  agentSurface: AgentSurface
+  themeLookBaseline: GlobalSettings | null
   setTheme: Dispatch<SetStateAction<GlobalSettings['theme']>>
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
   skipOptions: OnboardingStepSkipOptions
@@ -71,7 +73,8 @@ export function useOnboardingFlowActions({
   stepIndex,
   setStepIndex,
   selectedAgent,
-  themeStepEntryThemeRef,
+  agentSurface,
+  themeLookBaseline,
   setTheme,
   updateSettings,
   skipOptions
@@ -80,6 +83,10 @@ export function useOnboardingFlowActions({
   const nextInFlightRef = useRef(false)
   const trackCurrentStepCompleted = useCallback(
     (advancedVia: 'button' | 'keyboard'): void => {
+      // Step 1 spans the Chat/Terminal page and the agent page; only the agent page completes it.
+      if (currentStep.id === 'agent_surface') {
+        return
+      }
       const durationMs = consumeStepDurationMs()
       track('onboarding_step_completed', {
         step: currentStep.stepNumber,
@@ -200,9 +207,11 @@ export function useOnboardingFlowActions({
     const durationMs = consumeStepDurationMs()
     const preferencesSaved = await prepareSkippedOnboardingPreferences({
       currentStepId: currentStep.id,
-      themeBeforePreview: themeStepEntryThemeRef.current,
+      lookBeforePreview: themeLookBaseline ? captureThemeLookSettings(themeLookBaseline) : null,
       settingsTheme: settings?.theme,
       selectedAgent,
+      agentSurface,
+      settings,
       setTheme,
       applyTheme: applyDocumentTheme,
       updateSettings,
@@ -253,6 +262,7 @@ export function useOnboardingFlowActions({
     currentStep.id,
     currentStep.stepNumber,
     currentStep.valueKind,
+    agentSurface,
     openModal,
     selectedAgent,
     settings,
@@ -261,7 +271,7 @@ export function useOnboardingFlowActions({
     setBusyLabel,
     setError,
     setTheme,
-    themeStepEntryThemeRef
+    themeLookBaseline
   ])
 
   const dismissOnboarding = useCallback(

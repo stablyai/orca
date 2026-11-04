@@ -16,7 +16,7 @@ import {
 import {
   colorQueryReplyColorsEqual,
   normalizeColorQueryReplyColors
-} from '../../shared/pty-owner-color-query-colors'
+} from '../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 
 // IPC stores shared attributes; runtime emulators read them at reply time.
 let currentAttributes: TerminalViewAttributes | null = null

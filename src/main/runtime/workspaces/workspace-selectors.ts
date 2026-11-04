@@ -24,7 +24,7 @@ import type {
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
-import type { WorkspaceKey } from '../../../shared/folder-workspaces/folder-workspace-types'
+import type { WorkspaceKey } from '../../../shared/workspace-scope'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
