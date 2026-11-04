@@ -224,6 +224,38 @@ describe('terminal WebView touch scrolling', () => {
     expect(scrolledRows()).toBe(rowsWhileTouching)
   })
 
+  it('does not tap when a sub-row flick starts a coast', () => {
+    boot()
+
+    fireTouch('touchstart', { x: 40, y: 400 })
+    now += FRAME_MS
+    // 3px stays under both a row and the tap slop, but its release velocity still starts a coast.
+    fireTouch('touchmove', { x: 40, y: 397 })
+    fireTouch('touchend', null)
+    runFrames(30)
+
+    expect(scrolledRows()).toBeGreaterThan(0)
+    expect(
+      postMessage.mock.calls.filter(([raw]) => JSON.parse(raw).type === 'terminal-tap')
+    ).toHaveLength(0)
+  })
+
+  it('still taps when a release coast stays under a row', () => {
+    boot()
+
+    fireTouch('touchstart', { x: 40, y: 400 })
+    now += FRAME_MS
+    // Barely above the coast start velocity, but the coast carries less than a row.
+    fireTouch('touchmove', { x: 40, y: 399.8 })
+    fireTouch('touchend', null)
+    runFrames(30)
+
+    expect(scrolledRows()).toBe(0)
+    expect(
+      postMessage.mock.calls.filter(([raw]) => JSON.parse(raw).type === 'terminal-tap')
+    ).toHaveLength(1)
+  })
+
   it('does not send a resting finger’s momentum to an alternate-screen app', () => {
     buffer = { baseY: 0, type: 'alternate', viewportY: 0 }
     boot()

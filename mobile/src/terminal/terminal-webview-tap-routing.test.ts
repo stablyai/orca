@@ -146,10 +146,14 @@ describe('terminal WebView tap routing', () => {
 
   it('still posts open-url when the tap jitters a few pixels', async () => {
     // Small finger jitter must stay a tap and open the touched URL.
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
     const { posted } = boot(URL_LINE)
     await settle()
     fireTouch('touchstart', [{ x: tapX, y: tapY }])
+    now += 16
     fireTouch('touchmove', [{ x: tapX + 11, y: tapY + 4 }])
+    now += 500
     fireTouch('touchend', [])
     expect(posted.find((m) => m.type === 'open-url')?.url).toBe('https://example.com/foo')
   })
@@ -415,20 +419,29 @@ describe('terminal WebView tap routing', () => {
   })
 
   it('still taps when the touch moves less than a row', async () => {
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
     const { posted } = boot('plain output', undefined, 'none', 50)
     await settle()
     fireTouch('touchstart', [{ x: 20, y: 100 }])
+    now += 16
     fireTouch('touchmove', [{ x: 20, y: 97 }])
+    now += 500
     fireTouch('touchend', [])
     expect(posted.filter((m) => m.type === 'terminal-tap')).toHaveLength(1)
   })
 
   it('still taps when the touch moves a row and back before anything scrolls', async () => {
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
     const { posted } = boot('plain output', undefined, 'none', 50)
     await settle()
     fireTouch('touchstart', [{ x: 20, y: 100 }])
+    now += 16
     fireTouch('touchmove', [{ x: 20, y: 94 }])
+    now += 16
     fireTouch('touchmove', [{ x: 20, y: 100 }])
+    now += 500
     fireTouch('touchend', [])
     expect(posted.filter((m) => m.type === 'terminal-tap')).toHaveLength(1)
   })
