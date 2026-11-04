@@ -12,6 +12,7 @@ import {
 } from './agent-model-catalog-entry'
 import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
+import { parseNativeChatModelDetails } from '../../../shared/native-chat/input/native-chat-model-details'
 
 // Older catalogs lack serviceTiers and cannot safely construct Fast requests.
 const SCHEMA_VERSION = 3
@@ -63,6 +64,7 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
   const description = text(row.description)
   const defaultEffort = text(row.defaultEffort)
   const resolvedModel = text(row.resolvedModel)
+  const details = parseNativeChatModelDetails(row.details)
   return {
     id,
     label,
@@ -79,6 +81,7 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),
     ...(serviceTiers ? { serviceTiers } : {}),
+    ...(details ? { details } : {}),
     ...(Array.isArray(row.chatEfforts)
       ? {
           chatEfforts: row.chatEfforts

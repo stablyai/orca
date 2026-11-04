@@ -8,7 +8,12 @@ vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => f
 import { NativeChatModelCombobox } from './NativeChatModelCombobox'
 
 const CHOICES = [
-  { value: 'gpt-5.5', label: 'GPT-5.5', description: 'Frontier reasoning' },
+  {
+    value: 'gpt-5.5',
+    label: 'GPT-5.5',
+    description: 'Frontier reasoning',
+    details: { provider: 'openai', contextWindowTokens: 400_000 }
+  },
   { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex' },
   { value: 'opus', label: 'Opus 4.8' }
 ]
@@ -101,5 +106,34 @@ describe('NativeChatModelCombobox', () => {
     fireEvent.keyDown(search, { key: 'Enter' })
     fireEvent.click(screen.getByRole('option', { name: /GPT-5.2 Codex/ }))
     expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('opens the details card for the row the arrow keys reach, and closes it on typing', async () => {
+    const { search } = await renderCombobox()
+    const detailsOf = (value: string): string | null => {
+      const id = screen
+        .getAllByRole('option')
+        .find((option) => option.getAttribute('data-value') === value)
+        ?.getAttribute('aria-describedby')
+      return id ? (document.getElementById(id)?.textContent ?? null) : null
+    }
+    fireEvent.keyDown(search, { key: 'Home' })
+    await settle()
+    expect(highlightedModel()).toBe('gpt-5.5')
+    expect(detailsOf('gpt-5.5')).toContain('openai')
+
+    // A model the listing states nothing about gets no card.
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    await settle()
+    expect(detailsOf('gpt-5.5')).toBeNull()
+    expect(detailsOf('gpt-5.2-codex')).toBeNull()
+
+    fireEvent.keyDown(search, { key: 'ArrowUp' })
+    await settle()
+    expect(detailsOf('gpt-5.5')).toContain('openai')
+    fireEvent.keyDown(search, { key: 'g' })
+    fireEvent.change(search, { target: { value: 'g' } })
+    await settle()
+    expect(detailsOf('gpt-5.5')).toBeNull()
   })
 })

@@ -275,3 +275,27 @@ it('retains chat-only effort declarations across the existing discovery cache ro
     { id: model.id, efforts: model.efforts, chatEfforts: model.chatEfforts }
   ])
 })
+
+it('retains listed model details across the discovery cache round trip', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'model-details-catalog-'))
+  onTestFinished(() => fsPromises.rm(directory, { recursive: true, force: true }))
+  const store = new AgentModelCatalogStore()
+  await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+  const model = {
+    id: 'opencode/beam-free',
+    label: 'opencode/Beam Free',
+    isDefault: false,
+    efforts: [],
+    details: { provider: 'opencode', inputs: ['text' as const], contextWindowTokens: 1_048_576 }
+  }
+  store.recordSuccess('fp', 'opencode', { origin: 'probe', models: [model] }, 'discovery')
+  await store.flushPersistence()
+  const reloaded = new AgentModelCatalogStore()
+  await reloaded.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+  expect(reloaded.get('fp')?.models).toMatchObject([
+    {
+      id: 'opencode/beam-free',
+      details: { provider: 'opencode', inputs: ['text'], contextWindowTokens: 1_048_576 }
+    }
+  ])
+})

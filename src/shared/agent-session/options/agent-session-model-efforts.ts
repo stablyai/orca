@@ -3,6 +3,7 @@ import { discoveredModel } from './structured-agent-session-discovered-model'
 import type { StructuredAgentSessionOptionState } from './structured-agent-session-options'
 import type { AgentSessionModelCatalogResult, AgentSessionModelOption } from '../agent-session-wire'
 import type { CatalogModel } from './agent-session-option-catalog-types'
+import { withListedModelDetails } from '../../native-chat/input/native-chat-model-details'
 
 /** An unobserved menu cannot erase capabilities learned for the same model. */
 export function fillUnknownModelEfforts(
@@ -69,13 +70,14 @@ export function enrichStructuredAgentEfforts(
   ) {
     return state
   }
+  const listed = catalog.models.map((row) => discoveredModel(row, false, state.record.agent))
   return {
     ...state,
     catalog: {
       ...state.catalog,
-      models: fillUnknownCatalogEfforts(
-        state.catalog.models,
-        catalog.models.map((row) => discoveredModel(row, false, state.record.agent))
+      models: withListedModelDetails(
+        fillUnknownCatalogEfforts(state.catalog.models, listed),
+        listed
       )
     }
   }

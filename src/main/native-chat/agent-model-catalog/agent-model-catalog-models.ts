@@ -51,8 +51,11 @@ export function mergedAgentModelCatalogModels(
       effortsKnown: _known,
       ...rest
     } = model
+    // Session answers omit listing facts the CLI listing stated.
+    const details = model.details ?? olderModel?.details
     return {
       ...rest,
+      ...(details ? { details } : {}),
       // Efforts stay unknown only when neither listing knows this model's menu.
       ...(effortsKnown === false ? { effortsKnown } : {}),
       // Without discovery/configuration, live flags are the only available default evidence.

@@ -20387,6 +20387,20 @@
         "sonnet": "Efficient for routine tasks",
         "haiku": "Fastest for quick answers"
       },
+      "modelDetails": {
+        "provider": "Provider",
+        "inputs": "Inputs",
+        "inputText": "Text",
+        "inputImage": "Image",
+        "inputAudio": "Audio",
+        "inputVideo": "Video",
+        "reasoning": "Reasoning",
+        "supported": "Supported",
+        "notSupported": "Not supported",
+        "contextWindow": "Context window",
+        "contextTokens": "{{tokens}} tokens",
+        "free": "Free"
+      },
       "transcript": {
         "imageFallback": "Image"
       },

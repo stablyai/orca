@@ -322,6 +322,19 @@ describe('agent model catalog store', () => {
     expect(store.get('fp')!.models[0]).not.toHaveProperty('defaultEffort')
   })
 
+  it('keeps listing details for models a newer chat answer lists without them', () => {
+    const store = new AgentModelCatalogStore()
+    const details = { provider: 'opencode', reasoning: true }
+    store.recordSuccess(
+      'fp',
+      'opencode',
+      { origin: 'probe', models: [{ ...models('beam')[0]!, details }] },
+      'discovery'
+    )
+    store.recordSuccess('fp', 'opencode', success('beam'), 'live')
+    expect(store.get('fp')!.models[0]!.details).toEqual(details)
+  })
+
   it('keeps a CLI-resolved configured default through later listings and a restart', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
     const store = new AgentModelCatalogStore()

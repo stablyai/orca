@@ -3,6 +3,10 @@
 import { z } from 'zod'
 import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
+import {
+  NATIVE_CHAT_MODEL_INPUT_KINDS,
+  type NativeChatModelDetails
+} from '../../shared/native-chat/input/native-chat-model-details'
 
 export const OPENCODE_MODEL_LISTING_ARGS = ['models', '--verbose'] as const
 
@@ -14,6 +18,34 @@ const modelMetaSchema = z.looseObject({
   name: z.string().min(1).optional(),
   variants: z.record(z.string(), z.unknown()).optional()
 })
+
+// Each fact parses alone so one malformed field hides only its own row.
+const providerSchema = z.looseObject({ providerID: z.string().min(1) })
+const contextSchema = z.looseObject({ limit: z.looseObject({ context: z.number().positive() }) })
+const costSchema = z.looseObject({ cost: z.looseObject({ input: z.number(), output: z.number() }) })
+const reasoningSchema = z.looseObject({ capabilities: z.looseObject({ reasoning: z.boolean() }) })
+const inputSchema = z.looseObject({
+  capabilities: z.looseObject({ input: z.record(z.string(), z.unknown()) })
+})
+
+function modelDetails(metadata: unknown): NativeChatModelDetails | undefined {
+  const provider = providerSchema.safeParse(metadata)
+  const context = contextSchema.safeParse(metadata)
+  const cost = costSchema.safeParse(metadata)
+  const reasoning = reasoningSchema.safeParse(metadata)
+  const input = inputSchema.safeParse(metadata)
+  const inputs = input.success
+    ? NATIVE_CHAT_MODEL_INPUT_KINDS.filter((kind) => input.data.capabilities.input[kind] === true)
+    : []
+  const details: NativeChatModelDetails = {
+    ...(provider.success ? { provider: provider.data.providerID } : {}),
+    ...(inputs.length > 0 ? { inputs } : {}),
+    ...(reasoning.success ? { reasoning: reasoning.data.capabilities.reasoning } : {}),
+    ...(context.success ? { contextWindowTokens: context.data.limit.context } : {}),
+    ...(cost.success ? { free: cost.data.cost.input === 0 && cost.data.cost.output === 0 } : {})
+  }
+  return Object.keys(details).length > 0 ? details : undefined
+}
 
 function variantLabel(variant: string): string {
   return variant
@@ -30,9 +62,11 @@ function modelOption(id: string, metadata: unknown): AgentSessionModelOption {
   // This parser serves only OpenCode < 2.0, whose ACP session runs a listed default variant, else
   // the first listed one; the listing keeps the runtime's variant order.
   const runsVariant = variants.includes(DEFAULT_VARIANT) ? DEFAULT_VARIANT : variants[0]
+  const details = modelDetails(metadata)
   return {
     id,
     label: name ? `${providerId}/${name}` : id,
+    ...(details ? { details } : {}),
     // Listing proves availability, not the configured default.
     isDefault: false,
     declaredDefaultEffort: runsVariant ?? null,

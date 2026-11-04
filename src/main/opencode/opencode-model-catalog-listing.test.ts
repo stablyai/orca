@@ -59,6 +59,9 @@ describe('OpenCode verbose model listing', () => {
       valueSource: 'default',
       kind: { currentValue: 'low' }
     })
+    expect(draft.find(({ id }) => id === 'model')).toMatchObject({
+      kind: { choices: [{ value: model.id, details: { provider: 'opencode', free: true } }] }
+    })
     // Shown, never sent: OpenCode picks the same variant itself.
     expect(structuredAgentSessionMessageSelection(pickedModel)).toEqual({ model: model.id })
     expect(structuredAgentSessionSendSelection(pickedModel)).toBeUndefined()
@@ -66,5 +69,31 @@ describe('OpenCode verbose model listing', () => {
       args: ['--model', model.id],
       appliedValues: { model: model.id }
     })
+  })
+
+  it('keeps the facts a listing states for the picker card, and only those', () => {
+    const stdout = readFileSync(
+      new URL('../acp/fixtures/opencode-v1-model-listing.txt', import.meta.url),
+      'utf8'
+    )
+    const partial = [
+      'openrouter/vision',
+      '{',
+      '  "providerID": "openrouter",',
+      '  "cost": { "input": 0.5 },',
+      '  "limit": { "context": 0 },',
+      '  "capabilities": { "input": { "text": true, "image": true, "pdf": true } }',
+      '}'
+    ].join('\n')
+    const [recorded, listed] = parseOpenCodeModelListing(`${stdout}\n${partial}\n`)
+    expect(recorded?.details).toEqual({
+      provider: 'opencode',
+      inputs: ['text'],
+      reasoning: true,
+      contextWindowTokens: 1_048_576,
+      free: true
+    })
+    // A half-stated price, an empty window and absent reasoning are unknown, not false.
+    expect(listed?.details).toEqual({ provider: 'openrouter', inputs: ['text', 'image'] })
   })
 })
