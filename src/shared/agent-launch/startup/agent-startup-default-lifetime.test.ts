@@ -27,7 +27,7 @@ const settings: AgentStartupSettings = {
   }
 }
 function fresh(
-  agent: 'claude' | 'codex',
+  agent: 'claude' | 'codex' | 'pi',
   overrides: Partial<Parameters<typeof resolveAgentStartupPlanInputs>[0]> = {}
 ) {
   const plan = buildAgentStartupPlan({
@@ -172,6 +172,37 @@ describe('typed creation through the startup and recorded resume owners', () => 
     expect(() => fresh('claude', { extraAgentArgs: '--dangerously-skip-permissions' })).toThrow(
       /isn't allowed/
     )
+  })
+
+  it('replaces Pi defaults, and a provider-qualified model also drops their provider and key', () => {
+    const pi = (extraAgentArgs: string) =>
+      words(
+        fresh('pi', {
+          settings: {
+            agentDefaultArgs: { pi: '--provider host --api-key key --model old --thinking low' }
+          },
+          extraAgentArgs
+        }).launchCommand
+      )
+    expect(pi('--model=other/new --thinking high')).toEqual([
+      'pi',
+      '--model',
+      'other/new',
+      '--thinking',
+      'high'
+    ])
+    expect(pi('--model new')).toEqual([
+      'pi',
+      '--provider',
+      'host',
+      '--api-key',
+      'key',
+      '--thinking',
+      'low',
+      '--model',
+      'new'
+    ])
+    expect(() => pi('--thinking extreme')).toThrow(/--thinking accepts off/)
   })
 })
 

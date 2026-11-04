@@ -121,7 +121,7 @@ On each fresh run, Orca starts from the host's default Arguments for that agent 
 
 Saved extras use the same quoting on every host, including Windows: wrap values containing spaces in single or double quotes, and use single quotes to preserve backslashes in paths, such as `--add-dir 'C:\work\my docs'`. Orca passes these as literal arguments; shell commands and expansions are not supported.
 
-Extras accept only model and effort options, plus Claude's `--add-dir`, for Claude, Codex, CodeBuddy, Cursor, Grok, and OMP. Permission, config, prompt, and session options are rejected. Extras require a fresh session for every run, so they can't be combined with `--reuse-session`. Use `orca automations edit <automationId> --extra-agent-args=` to clear them.
+Extras accept only model and effort options, plus Claude's `--add-dir`, for Claude, Codex, CodeBuddy, Cursor, Grok, OMP, and Pi. For Pi, use `--model` and `--thinking`; a `provider/model` value also replaces the default `--provider` and `--api-key`. Permission, config, prompt, and session options are rejected. Extras require a fresh session for every run, so they can't be combined with `--reuse-session`. Use `orca automations edit <automationId> --extra-agent-args=` to clear them.
 
 ## Review and enable
 
