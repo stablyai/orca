@@ -13,6 +13,7 @@ import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
 import {
   appendTestJournalQueueRow,
+  finishTestJournalHistoricalInputs,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -138,6 +139,7 @@ describe("a Stop's queue pause", () => {
       queuedAt: journal.cursor(),
       returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
     })
+    finishTestJournalHistoricalInputs(journal)
     await journal.open()
     expect(await rig.drafts()).toEqual([
       { messageId: savedId, state: 'waiting', paused: true },

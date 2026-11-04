@@ -1,6 +1,7 @@
 import { createQueuedImageWireRecord } from './structured-agent-session-wire-record.test-fixture'
 import {
   appendTestJournalQueueRow,
+  finishTestJournalHistoricalInputs,
   openTestJournalHostDatabase
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -280,6 +281,7 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
     options: { model: 'default' },
     returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
   })
+  finishTestJournalHistoricalInputs(j)
   const wire = createQueuedImageWireRecord(
     rig.root,
     SESSION,

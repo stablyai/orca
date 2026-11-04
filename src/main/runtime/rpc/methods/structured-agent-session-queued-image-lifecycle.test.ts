@@ -6,6 +6,7 @@ import {
 } from './structured-agent-session-wire-record.test-fixture'
 import {
   appendTestJournalQueueRow,
+  finishTestJournalHistoricalInputs,
   openTestJournalHostDatabase
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
@@ -703,6 +704,7 @@ it.each([
           returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
         }
       )
+      finishTestJournalHistoricalInputs(journal())
     }
     const card = journal().queuedMessages.get(`recovery:${id}`)
     const original = journal().submission(id)!
