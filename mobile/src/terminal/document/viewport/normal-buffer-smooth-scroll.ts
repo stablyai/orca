@@ -88,6 +88,29 @@ export function queuedNormalBufferScrollReachesRow(scope: TerminalDocumentScope)
   )
 }
 
+// Coast physics shared with the surface momentum loop in surface-touch-gestures.
+export const RELEASE_VELOCITY_MAX_AGE_MS = 100
+
+export const COAST_FRAME_MS = 16
+
+export const COAST_FRICTION = 0.972
+
+export const COAST_MIN_VEL = 0.012
+
+// Tap dispatch decides the tap before the surface touchend starts momentum, so predict the coast: a release that would carry a full row is a flick, not a tap.
+export function releaseWouldCoastARow(scope: TerminalDocumentScope) {
+  if (Date.now() - scope.touchGesture.lastTime > RELEASE_VELOCITY_MAX_AGE_MS) {
+    return false
+  }
+  const vel = Math.abs(scope.touchGesture.velY)
+  if (vel <= COAST_MIN_VEL) {
+    return false
+  }
+  const carry = (vel * COAST_FRAME_MS) / (1 - COAST_FRICTION)
+  const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
+  return effectiveCellH > 0 && carry >= effectiveCellH
+}
+
 export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
   scope.pendingNormalScrollDeltaY = 0
   if (scope.normalScrollFrameId !== null) {
