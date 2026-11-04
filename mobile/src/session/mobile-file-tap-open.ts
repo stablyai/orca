@@ -221,6 +221,13 @@ async function openResolvedMobileFileTap<T extends FileTapSessionTab>(
     options.openBrowser(filesystemPathToFileUri(resolved.openTarget.absolutePath))
     return
   }
+  if (
+    classifyMobileArtifact(openedPath) === 'html' &&
+    resolved.openTarget?.kind === 'worktree-file'
+  ) {
+    pushWorktreePreview()
+    return
+  }
   const openResponse = await fileTapOpenRun.request(
     options.client,
     { worktree: resolvedWorktree, relativePath: openedPath },
