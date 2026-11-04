@@ -57,7 +57,7 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
     ptyIds: readonly string[],
     addressedPtyId: string,
     beforeAction?: () => void,
-    capturedIncarnations?: ReadonlyMap<string, string | undefined>
+    capturedIncarnations?: ReadonlyMap<string, string | null | undefined>
   ): Promise<ExplicitCloseStop> {
     let addressedPtyStop = NO_STOP
     const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS

@@ -6,7 +6,7 @@ import {
   resetAgentLaunchPanesForTests,
   trackRunningAgentLaunchPane
 } from '../agent-launch/agent-launch-pane-attachment'
-import { createAcknowledgedCloseHarness } from './__fixtures__/orca-runtime-acknowledged-terminal-close-fixture'
+import { createAcknowledgedCloseHarness } from './__fixtures__/orca-runtime-acknowledged-terminal-close.test-fixture'
 import {
   CANARY_INCARNATION_ID,
   CANARY_LEAF_ID,

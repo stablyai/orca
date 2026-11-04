@@ -81,7 +81,7 @@ export abstract class OrcaRuntimeWithTerminalSurfaceCloseOwner extends OrcaRunti
       })
       let refusal: Error | undefined
       try {
-        refusal = await store.runDurableMutation(() => {
+        refusal = await store.runDurableMutation!(() => {
           const result = mutate()
           // Only a normally returned mutation with every owner write finished is completion.
           completed = result.value === undefined && projectedPtyIds !== null

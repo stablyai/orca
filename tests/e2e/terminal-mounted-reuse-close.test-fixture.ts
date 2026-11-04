@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import { setupRetirementRuntime } from './terminal-retirement-runtime.test-fixture'
-import { installAcknowledgedCloseRelay } from '../../src/main/runtime/__fixtures__/orca-runtime-acknowledged-terminal-close-fixture'
+import { installAcknowledgedCloseRelay } from '../../src/main/runtime/__fixtures__/orca-runtime-acknowledged-terminal-close.test-fixture'
 import { installPtyInspectIpcHandlers } from '../../src/main/ipc/pty/ipc/inspect'
 import { installPtySpawnIpcHandler } from '../../src/main/ipc/pty/ipc/spawn'
 import { adoptStablePane } from '../../src/main/ipc/pty/pane/adopt-stable'

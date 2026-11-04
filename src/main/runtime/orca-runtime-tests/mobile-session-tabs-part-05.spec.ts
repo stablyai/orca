@@ -2,8 +2,12 @@ import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { durableSessionLayoutApply } from '../__fixtures__/main-layout-close-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { committingSpawn, registerLivePty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn, registerLivePty, withBoundPane } from '../bind-first-pane.test-fixture'
+import {
+  OrcaRuntimeService,
+  electronMocks,
+  getDefaultWorkspaceSession
+} from '../orca-runtime-test-mocks.spec'
 import type { RuntimeMobileSessionTabsResult } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -277,7 +281,15 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
-    const runtime = new OrcaRuntimeService(store)
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      withBoundPane(getDefaultWorkspaceSession(), {
+        worktreeId: TEST_WORKTREE_ID,
+        tabId: 'laptop-tab',
+        leafId: HEADLESS_LEAF_ID,
+        ptyId: 'laptop-created-pty'
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setNotifier({ closeTerminal } as never)
     runtime.setPtyController({
       spawn: committingSpawn(runtime, spawn),

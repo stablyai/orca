@@ -4,6 +4,7 @@ import type { ipcMain } from 'electron'
 import { testState } from '../../persistence/persistence-test-harness'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import type { Store } from '../../persistence/loading-store/store'
 
 type InvokeHandler = Parameters<typeof ipcMain.handle>[1]
 type IpcListener = Parameters<typeof ipcMain.on>[1]
@@ -34,7 +35,7 @@ vi.mock('electron', () => ({
 }))
 
 export async function installAcknowledgedCloseRelay(
-  store: ConstructorParameters<typeof OrcaRuntimeService>[0],
+  store: Store,
   runtime: OrcaRuntimeService,
   onAck: () => void = () => {}
 ) {

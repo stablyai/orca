@@ -5,8 +5,8 @@ import { vi } from 'vitest'
 import {
   closeIpc,
   installAcknowledgedCloseRelay
-} from './orca-runtime-terminal-close-relay-fixture'
-export { installAcknowledgedCloseRelay } from './orca-runtime-terminal-close-relay-fixture'
+} from './orca-runtime-terminal-close-relay.test-fixture'
+export { installAcknowledgedCloseRelay } from './orca-runtime-terminal-close-relay.test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime'
 import {
   REPO_ID,
@@ -85,7 +85,6 @@ export async function createAcknowledgedCloseHarness(lifetimeLoss: 'after-owner'
       repos: [repo],
       tabsByWorktree: session.tabsByWorktree,
       terminalLayoutsByTabId: session.terminalLayoutsByTabId,
-      terminalPtyIncarnationsByPaneKey: session.terminalPtyIncarnationsByPaneKey,
       activeWorktreeId: WORKTREE_ID,
       activeTabId: TAB_ID,
       activeTabType: 'terminal'
