@@ -57,8 +57,8 @@ function HomeSection(
           ]}
           onPress={() => hostPicker.pickHost(props.onOpen)}
         >
-          <View style={styles.status}>
-            <Icon size={18} color={colors.textSecondary} />
+          <View style={styles.tile}>
+            <Icon size={20} strokeWidth={1.8} color={colors.textPrimary} />
           </View>
           <View style={styles.text}>
             <Text style={styles.title} numberOfLines={1}>
