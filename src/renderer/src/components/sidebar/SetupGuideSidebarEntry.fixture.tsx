@@ -1,5 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
+import { Button } from '@/components/ui/button'
 
 const checklist = defineFixture({
   width: 303,
@@ -30,4 +31,25 @@ export const idle = checklist
 export const active = defineFixture({
   ...checklist,
   store: { ...checklist.store, activeModal: 'setup-guide' }
+})
+
+export const navigation = defineFixture({
+  ...checklist,
+  render: () => (
+    <div className="bg-worktree-sidebar p-2 text-worktree-sidebar-foreground">
+      <Button variant="ghost">Search</Button>
+      <SetupGuideSidebarEntry />
+      <Button variant="ghost">Tasks</Button>
+    </div>
+  )
+})
+
+export const lastNavigationEntry = defineFixture({
+  ...checklist,
+  render: () => (
+    <div className="bg-worktree-sidebar p-2 text-worktree-sidebar-foreground">
+      <Button variant="ghost">Search</Button>
+      <SetupGuideSidebarEntry />
+    </div>
+  )
 })

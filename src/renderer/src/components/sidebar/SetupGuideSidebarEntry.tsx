@@ -55,6 +55,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
     dismissed: setupGuideSidebarDismissed
   })
   const lastVisibleProgressRef = React.useRef<FeatureWallSetupProgress | null>(null)
+  const rowRef = React.useRef<HTMLDivElement>(null)
   if (showSetupGuideEntry) {
     lastVisibleProgressRef.current = setupProgress
   }
@@ -65,6 +66,16 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
       ? lastVisibleProgressRef.current
       : null
   const handleHideSetupGuide = React.useCallback(() => {
+    const row = rowRef.current
+    if (row?.contains(document.activeElement) && row.parentElement) {
+      const controls = Array.from(
+        row.parentElement.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')
+      ).filter((button) => button.tabIndex >= 0 && button.getClientRects().length > 0)
+      const lastRowControl = controls.findLastIndex((button) => row.contains(button))
+      const nextControl =
+        controls[lastRowControl + 1] ?? controls.findLast((button) => !row.contains(button))
+      nextControl?.focus({ preventScroll: true })
+    }
     setSetupGuideSidebarDismissed(true)
   }, [setSetupGuideSidebarDismissed])
 
@@ -78,6 +89,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
+          ref={rowRef}
           className={cn(
             'flex w-full items-center rounded-md text-[13px] font-medium tracking-tight transition-colors',
             setupActive
