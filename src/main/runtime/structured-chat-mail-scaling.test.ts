@@ -232,23 +232,25 @@ describe('mail work as a chat’s backlog grows', () => {
       const { runId } = await coordinatorRunAndTask()
       const journal = journalOf(COORDINATOR)
       const fence = host.deps.store.getConversation(COORDINATOR)!.currentFence
-      for (let input = 0; input < history; input += 1) {
-        const id = `earlier-${input}`
-        await journal.appendSubmission({
-          clientMessageId: id,
-          origin: 'client',
-          payloadFingerprint: id,
-          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'earlier' }] },
-          fence,
-          handoverRecorded: true
-        })
-        await journal.resolveDispatch({
-          clientMessageId: id,
-          fence,
-          state: 'accepted',
-          providerIdentity: null
-        })
-      }
+      await host.collaboratorsForTests().serialize(COORDINATOR, async () => {
+        for (let input = 0; input < history; input += 1) {
+          const id = `earlier-${input}`
+          await journal.appendSubmission({
+            clientMessageId: id,
+            origin: 'client',
+            payloadFingerprint: id,
+            body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'earlier' }] },
+            fence,
+            handoverRecorded: true
+          })
+          await journal.resolveDispatch({
+            clientMessageId: id,
+            fence,
+            state: 'accepted',
+            providerIdentity: null
+          })
+        }
+      })
       const histories = vi.spyOn(journal, 'submissions')
       await admitReports(runId, 4)
       // At most the delivery loop's own restart-hold read: none per report, none by id.
