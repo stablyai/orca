@@ -5,7 +5,7 @@ import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/age
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { PiRpcSession, PiRpcConnection } from '../pi/rpc-session'
-import { readPiEntries } from '../pi/rpc-history-catch-up'
+import { readOmpRewindEntries } from './rpc-rewind-entries'
 import { piBranchInTree } from '../pi/rpc-history-import'
 import type { PiSessionEntry } from '../pi/rpc-history-import'
 import { JsonlRpcResponseError, type JsonlRpcRecord } from '../jsonl-rpc/peer'
@@ -123,7 +123,12 @@ export async function rewindOmpSession(
   if (!(await idle())) {
     return { ok: false, reason: 'busy' }
   }
-  const answer = await read(readPiEntries(session.connection, null))
+  const sessionFile = session.sessionFile
+  if (!sessionFile) {
+    return { ok: false, reason: 'invalid-target' }
+  }
+  const entries = () => read(readOmpRewindEntries(session.connection, sessionFile, options.signal))
+  const answer = await entries()
   const candidates = answer.entries.filter((entry) => {
     const timestamp = requestTimestamp(entry)
     return (
@@ -185,7 +190,7 @@ export async function rewindOmpSession(
       if (error.message === 'Unknown command: navigate_tree') {
         return { ok: false, reason: 'unsupported' }
       }
-      const after = await read(readPiEntries(session.connection, null))
+      const after = await entries()
       if (after.leafId === entry.parentId) {
         return applied()
       }
@@ -200,6 +205,6 @@ export async function rewindOmpSession(
   if (parsed.cancelled || parsed.aborted) {
     return { ok: false, reason: 'provider-refused' }
   }
-  const after = await read(readPiEntries(session.connection, null))
+  const after = await entries()
   return after.leafId === entry.parentId ? applied() : { ok: false, reason: 'outcome-unknown' }
 }

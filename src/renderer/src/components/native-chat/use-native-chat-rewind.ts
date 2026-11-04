@@ -10,6 +10,7 @@ import {
   type AgentSessionRewindSupport
 } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { decodeOmpRewindTarget } from '../../../../shared/omp-rewind-target'
 import type { AgentSessionWriteFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
 import {
@@ -76,27 +77,35 @@ function rewindFailureReason(failure: AgentSessionWriteFailure): string | undefi
     : undefined
 }
 
-function isRewindTarget(input: RewindInput, itemId: string): boolean {
-  const opener = turnOpeners(input.state.items)
-  const keys = savedRewindKeys(input.state.submissions)
-  return input.state.items.some(
-    (item) =>
-      item.itemId === itemId &&
-      item.sequence > rewindContextFloor(input) &&
-      (keys.nativeIdentity(itemId) !== null || !keys.hasSubmission(itemId)) &&
-      isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
-  )
-}
-
-function turnOpeners(items: StructuredAgentSessionState['items']): Map<string, string> {
+function rewindTargets(
+  items: StructuredAgentSessionState['items'],
+  submissions: StructuredAgentSessionState['submissions'],
+  floor: number
+): Set<string> {
   const openers = new Map<string, string>()
+  const ompOpeners = new Set<string>()
   for (const item of items) {
-    const opener = readAgentJournalTurn(item.body)?.userItemId
-    if (opener) {
-      openers.set(item.itemId, opener)
+    const turn = readAgentJournalTurn(item.body)
+    if (turn?.userItemId) {
+      openers.set(item.itemId, turn.userItemId)
+      if (turn.providerTurnId && decodeOmpRewindTarget(turn.providerTurnId)) {
+        ompOpeners.add(turn.userItemId)
+      }
     }
   }
-  return openers
+  const keys = savedRewindKeys(submissions)
+  return new Set(
+    items
+      .filter(
+        (item) =>
+          item.sequence > floor &&
+          (keys.nativeIdentity(item.itemId) !== null ||
+            !keys.hasSubmission(item.itemId) ||
+            (ompOpeners.has(item.itemId) && !keys.omitted.has(item.itemId))) &&
+          isAgentSessionRewindTarget(item, (turn) => openers.get(turn))
+      )
+      .map((item) => item.itemId)
+  )
 }
 
 function rewindContextFloor(input: RewindInput): number {
@@ -185,7 +194,11 @@ export function useNativeChatRewind(input: RewindInput) {
       inFlight.current ||
       blockedRef.current ||
       blockedReason(captured) ||
-      !isRewindTarget(captured, itemId)
+      !rewindTargets(
+        captured.state.items,
+        captured.state.submissions,
+        rewindContextFloor(captured)
+      ).has(itemId)
     ) {
       return
     }
@@ -298,18 +311,7 @@ export function useNativeChatRewind(input: RewindInput) {
   const offered = nativeChatRewindOffered(input.support)
   const floor = rewindContextFloor(input)
   const eligibleItemIds = useMemo(() => {
-    const opener = turnOpeners(input.state.items)
-    const keys = savedRewindKeys(input.state.submissions)
-    return new Set(
-      input.state.items
-        .filter(
-          (item) =>
-            item.sequence > floor &&
-            (keys.nativeIdentity(item.itemId) !== null || !keys.hasSubmission(item.itemId)) &&
-            isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
-        )
-        .map((item) => item.itemId)
-    )
+    return rewindTargets(input.state.items, input.state.submissions, floor)
   }, [floor, input.state.items, input.state.submissions])
   // Memoize row actions and omit them entirely for providers without rewind.
   const surface = useMemo<NativeChatRewindSurface | undefined>(

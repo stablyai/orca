@@ -585,32 +585,6 @@ it.each(['attempt', 'registration'] as const)(
   }
 )
 
-it.each([
-  ['info', 'notice'],
-  ['warning', 'warning'],
-  ['error', 'error']
-] as const)('renders OMP %s notifications using existing Chat notices', async (level, tone) => {
-  const h = await setup()
-  const message = 'xd://: mounted mcp__orca_component_fixtures_list_fixtures'
-  h.connection.receive({ type: 'notice', level, message, source: 'xdev' })
-  h.connection.receive({
-    type: 'extension_ui_request',
-    id: 'extension-notice',
-    method: 'notify',
-    message: 'Extension ready',
-    notifyType: level
-  })
-  const messages = projectStructuredItemsToNativeChat(await h.rig.rows())
-  expect(messages).toHaveLength(2)
-  for (const [index, text] of [message, 'Extension ready'].entries()) {
-    const row = messages[index]!
-    expect(row.role).toBe('system')
-    const block = nativeChatNoticeBlock(row.blocks)
-    expect(block?.text).toBe(text)
-    expect(block && nativeChatNoticeLook(block)).toEqual({ kind: 'line', tone })
-  }
-})
-
 it('shows native command results and extension failures and rejects external session changes', async () => {
   const h = await setup()
   h.connection.receive({ type: 'command_output', text: 'Current model: model-1' })

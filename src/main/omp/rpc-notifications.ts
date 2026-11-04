@@ -29,6 +29,10 @@ export function receiveOmpNotification(frame: JsonlRpcRecord, session: PiRpcSess
     text = frame.text
   }
   if (frame.type === 'notice' && typeof frame.message === 'string') {
+    // Tool roster announcements repeat on reconnect and do not belong in conversation history.
+    if (frame.source === 'xdev' && frame.level === 'info') {
+      return true
+    }
     text = frame.message
   }
   if (frame.type === 'extension_error' && typeof frame.error === 'string') {

@@ -9,6 +9,8 @@ import { AGENT_SESSION_REWIND_REASONS } from '../../../../shared/agent-session/l
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../shared/agent-session/structured-agent-session-reducer'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { encodeOmpRewindTarget } from '../../../../shared/omp-rewind-target'
 import { NATIVE_CHAT_REWIND_RESET_TIMEOUT_MS, useNativeChatRewind } from './use-native-chat-rewind'
 import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
 import {
@@ -82,6 +84,61 @@ function render(props: Input) {
 }
 
 describe('structured chat rewind', () => {
+  it('offers an accepted OMP prompt once its native turn target is recorded', async () => {
+    const props = input()
+    const userId = agentJournalSubmissionKey('omp-prompt')
+    const user = item(userId, 10)
+    const turn = {
+      ...item('omp-turn', 11),
+      body: {
+        kind: 'turn',
+        turnId: 'omp-turn',
+        state: 'completed',
+        outcome: 'success',
+        userItemId: userId,
+        startedAt: 100,
+        completedAt: 200
+      }
+    } satisfies AgentJournalRenderItem
+    props.state.items = [user, turn]
+    props.state.submissions = [
+      {
+        clientMessageId: 'omp-prompt',
+        fence: 1,
+        payloadFingerprint: 'omp-prompt',
+        dispatchState: 'accepted',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 100,
+        resolvedAt: 200
+      }
+    ]
+    const view = render(props)
+    expect([...(view.result.current.surface?.eligibleItemIds ?? [])]).toEqual([])
+    view.rerender({
+      ...props,
+      state: {
+        ...props.state,
+        items: [
+          user,
+          {
+            ...turn,
+            body: {
+              ...turn.body,
+              providerTurnId: encodeOmpRewindTarget({
+                sessionFile: '/sessions/omp.jsonl',
+                timestamp: 100
+              })
+            }
+          }
+        ]
+      }
+    })
+    expect([...(view.result.current.surface?.eligibleItemIds ?? [])]).toEqual(['orca:omp-prompt'])
+    await act(() => view.result.current.request(userId, async () => true))
+    expect(readNativeChatDraftCache('pane')).toBe('text of orca:omp-prompt')
+  })
+
   it('confirms without a count, sends, and returns the message', async () => {
     const props = input()
     const onMessageReturned = vi.fn()
