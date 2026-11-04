@@ -24,7 +24,7 @@ const radioGroupItemVariants = cva(
         card: 'size-auto overflow-hidden rounded-xl border border-border p-3 text-left text-foreground transition-colors hover:bg-accent/60 data-[state=checked]:border-foreground/60 data-[state=checked]:bg-accent',
         // Preview tile above a caption; children read the checked state via group-data-[state=checked].
         media:
-          'group flex size-auto flex-col overflow-hidden rounded-xl border border-border bg-card text-left text-foreground transition-colors hover:border-foreground/30 data-[state=checked]:border-foreground data-[state=checked]:ring-1 data-[state=checked]:ring-foreground',
+          'group flex size-auto flex-col overflow-hidden rounded-xl border border-border bg-card text-left text-foreground transition-colors hover:border-foreground/30 data-[state=checked]:border-foreground/50 data-[state=checked]:ring-[3px] data-[state=checked]:ring-ring/25',
         pill: 'inline-flex h-6 items-center gap-1.5 rounded-full border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60 data-[state=checked]:border-foreground/60 data-[state=checked]:bg-accent'
       }
     },

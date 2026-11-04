@@ -2,10 +2,8 @@ import {
   ArrowLeftRight,
   ArrowUp,
   Check,
-  ChevronRight,
-  FileCode2,
+  FilePen,
   MessagesSquare,
-  Sparkles,
   SquareTerminal,
   type LucideIcon
 } from 'lucide-react'
@@ -13,6 +11,8 @@ import { Trans } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { i18n, translate } from '@/i18n/i18n'
+import { nativeChatToolRowVerb } from '@/components/native-chat/native-chat-tool-line-label'
+import { DiffLineCounts } from '@/components/right-sidebar/source-control/listing/diff-line-counts'
 import type { AgentSurface } from './use-onboarding-flow-types'
 
 type AgentSurfaceStepProps = {
@@ -159,47 +159,75 @@ const TERMINAL_LINES: {
   { id: 'complete', tone: 'step', text: 'Done. Retries capped at 3.' }
 ]
 
-// The previews contrast on purpose: chat is proportional type, bubbles and cards with no raw
-// code, while the terminal is nothing but monospace output.
+const CHAT_DIFF_LINES = [
+  { id: 'removed', kind: 'del', line: '12', text: 'return fetch(url)' },
+  { id: 'added', kind: 'add', line: '12', text: 'return withRetry(fetch, url)' }
+] as const
+
+// Mirrors the real native chat: bordered user bubble, edit row with a rendered diff, plain reply.
 function ChatPreview() {
   return (
-    <div className="flex size-full flex-col gap-3 bg-chat-canvas p-3.5 text-xs leading-snug">
-      <div className="ml-auto max-w-[80%] rounded-2xl rounded-br-md bg-foreground px-3 py-1.5 text-background">
-        {translate(
-          'components.onboarding.agentSurface.preview.userMessage',
-          'Add retry to fetchUser'
-        )}
-      </div>
-      <div className="flex items-start gap-2">
-        <span className="grid size-5 shrink-0 place-items-center rounded-full bg-muted text-foreground">
-          <Sparkles className="size-3" />
-        </span>
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="pt-0.5 text-foreground">
-            {translate(
-              'components.onboarding.agentSurface.preview.agentMessage',
-              'Failed requests now retry up to 3 times.'
-            )}
+    <div className="native-chat-appearance flex size-full flex-col bg-chat-canvas text-[10.5px] leading-[15px] text-chat-foreground">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-3.5 pt-2.5">
+        <div className="ml-auto max-w-[80%] truncate rounded-[10px] border border-chat-user-border bg-chat-user-surface px-2.5 py-1 text-chat-foreground-strong">
+          {translate(
+            'components.onboarding.agentSurface.preview.userMessage',
+            'Add retry to fetchUser'
+          )}
+        </div>
+        <div>
+          <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <FilePen className="size-3 shrink-0 text-chat-foreground-faint" />
+            <span className="text-chat-foreground-faint">{nativeChatToolRowVerb('edited')}</span>
+            <span className="text-chat-foreground-strong">{PREVIEW_FILE}</span>
+            <DiffLineCounts added={1} removed={1} />
           </div>
-          <div className="flex w-fit items-center gap-1.5 rounded-full border border-chat-code-border bg-chat-code-surface py-1 pr-2 pl-2.5">
-            <FileCode2 className="size-3 text-muted-foreground" />
-            <span className="font-medium text-foreground">{PREVIEW_FILE}</span>
-            <span className="text-status-success">+1</span>
-            <span className="text-destructive">−1</span>
-            <ChevronRight className="size-3 text-muted-foreground" />
+          <div className="mt-1 ml-[18px] overflow-hidden rounded-md border border-chat-code-border bg-chat-code-surface font-mono text-[9.5px] leading-[15px]">
+            {CHAT_DIFF_LINES.map((row) => (
+              <div
+                key={row.id}
+                className={cn(
+                  'flex whitespace-nowrap',
+                  row.kind === 'add'
+                    ? 'bg-[var(--diff-added-background)]'
+                    : 'bg-[var(--diff-removed-background)]'
+                )}
+              >
+                <span className="w-[3ch] shrink-0 pr-1 text-right text-chat-foreground-faint">
+                  {row.line}
+                </span>
+                <span
+                  className={cn(
+                    'w-3 shrink-0 text-center',
+                    row.kind === 'add' ? 'text-chat-diff-added' : 'text-chat-diff-removed'
+                  )}
+                >
+                  {row.kind === 'add' ? '+' : '-'}
+                </span>
+                <span className="truncate pr-2">{row.text}</span>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
-      <div className="mt-auto flex items-center gap-2 rounded-xl border border-chat-composer-border bg-chat-composer-surface py-1.5 pr-1.5 pl-3">
-        <span className="truncate text-muted-foreground">
+        <p className="truncate text-chat-foreground-strong">
           {translate(
-            'components.onboarding.agentSurface.preview.composerPlaceholder',
-            'Ask a follow-up…'
+            'components.onboarding.agentSurface.preview.agentMessage',
+            'Failed requests now retry up to 3 times.'
           )}
-        </span>
-        <span className="ml-auto grid size-5 place-items-center rounded-full bg-foreground text-background">
-          <ArrowUp className="size-3" strokeWidth={2.5} />
-        </span>
+        </p>
+      </div>
+      <div className="shrink-0 px-3 pt-1.5 pb-2.5">
+        <div className="flex items-center gap-2 rounded-[10px] border border-chat-composer-border bg-chat-composer-surface py-1 pr-1 pl-2.5 shadow-xs">
+          <span className="truncate text-chat-foreground-faint">
+            {translate(
+              'components.onboarding.agentSurface.preview.composerPlaceholder',
+              'Ask a follow-up…'
+            )}
+          </span>
+          <span className="ml-auto grid size-[18px] shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+            <ArrowUp className="size-2.5" strokeWidth={2.5} />
+          </span>
+        </div>
       </div>
     </div>
   )
