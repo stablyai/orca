@@ -46,7 +46,7 @@ while (Date.now() < end) {
     })
   )
   emit({ kind: 'adoption', seconds: Math.round((Date.now() - t0) / 1000), adopted: adoptedAt.size, sample: sample.length }, true)
-  if (adoptedAt.size === sample.length) break
+  // Keep observing the full window: active splices only reset once max_delay expires.
   await sleep(10_000)
 }
 

@@ -1,6 +1,7 @@
 // One Durable Object per relay host. Owns the host control socket, the session (generation,
-// resume secret, orphan grace) and the host's connection bookkeeping. Each phone connection and its
-// host data socket live in their own SpliceRelay object, so a flooding phone cannot reset this one.
+// resume secret, orphan grace) and the host's connection bookkeeping. Phone connections and their
+// host data sockets live in a pool of SpliceRelay objects (one per slot, reused across connects), so
+// a flooding phone cannot reset this one and a connect never creates a new object.
 // The control socket uses the Hibernation API; durable state lives in object storage.
 import { DurableObject } from 'cloudflare:workers'
 import nacl from 'tweetnacl'
@@ -18,6 +19,7 @@ import {
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
 import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/protocol-limits'
 import { verifyRelayJwt } from './jwt'
+import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric } from './metrics'
 import type { EdgeClaims, Env } from './env'
 import { b64, b64url, fromB64, hmacSha256, sha256B64url, timingSafeEqualStr } from './bytes'
@@ -62,6 +64,8 @@ export class HostRelay extends DurableObject<Env> {
   // events. A stored session with no live control is then treated as orphaned from this boot, so the
   // desktop can rebind within the grace and keep splices, which live in SpliceRelay objects.
   private readonly bootAt = Date.now()
+  // Slots handed out recently whose phone hasn't authorized yet (in memory; a hint only).
+  private recentPicks: { slot: number; at: number }[] = []
 
   private get pingIntervalMs(): number {
     return Number(this.env.PING_INTERVAL_MS)
@@ -343,6 +347,27 @@ export class HostRelay extends DurableObject<Env> {
     return null
   }
 
+  // ---------------- RPC from the Worker ----------------
+
+  // Picks the least-busy slot of this host's splice pool for a new phone connection, so concurrent
+  // phones land in different objects. Ties go to a random slot. Not a reservation: a slot can still
+  // hold several splices, and the 8-connection budget is enforced in authorizePhone.
+  async allocateConnId(relayHostId: string): Promise<string> {
+    const now = Date.now()
+    this.recentPicks = this.recentPicks.filter((p) => now - p.at < 15_000)
+    const load = new Array<number>(SPLICE_SLOTS).fill(0)
+    for (const connId of Object.keys(await this.conns())) {
+      const parsed = parseConnId(connId)
+      if (parsed) load[parsed.slot]++
+    }
+    for (const p of this.recentPicks) load[p.slot]++
+    const min = Math.min(...load)
+    const candidates = load.flatMap((n, slot) => (n === min ? [slot] : []))
+    const slot = candidates[Math.floor(Math.random() * candidates.length)]
+    this.recentPicks.push({ slot, at: now })
+    return makeConnId(relayHostId, slot)
+  }
+
   // ---------------- RPC from SpliceRelay ----------------
 
   // Phone presented relay-auth to its splice object. Checks the credential and the host's
@@ -367,6 +392,9 @@ export class HostRelay extends DurableObject<Env> {
         return { ok: false, code: RELAY_CLOSE_CODE.LIMIT_EXCEEDED }
       }
     }
+    const picked = parseConnId(connId)
+    const pickIndex = this.recentPicks.findIndex((p) => p.slot === picked?.slot)
+    if (pickIndex >= 0) this.recentPicks.splice(pickIndex, 1)
     const connTicket = b64url(nacl.randomBytes(32))
     conns[connId] = {
       phase: 'pending',
@@ -426,7 +454,7 @@ export class HostRelay extends DurableObject<Env> {
   // A splice object that was reset never reports its close. Ask before refusing on the budget.
   private async pruneDeadConns(conns: Record<string, Conn>): Promise<void> {
     const ids = Object.keys(conns)
-    const alive = await Promise.all(ids.map((id) => this.splice(id).isAlive().catch(() => false)))
+    const alive = await Promise.all(ids.map((id) => this.splice(id).isAlive(id).catch(() => false)))
     ids.forEach((id, i) => {
       if (!alive[i]) delete conns[id]
     })
@@ -434,13 +462,14 @@ export class HostRelay extends DurableObject<Env> {
   }
 
   private splice(connId: string) {
-    return this.env.SPLICE_RELAY.get(this.env.SPLICE_RELAY.idFromName(connId))
+    const object = parseConnId(connId)?.object ?? connId
+    return this.env.SPLICE_RELAY.get(this.env.SPLICE_RELAY.idFromName(object))
   }
 
   private async closeSplices(filter: (c: Conn) => boolean, code: number, reason: string): Promise<void> {
     const conns = await this.conns()
     const ids = Object.keys(conns).filter((id) => filter(conns[id]))
-    await Promise.all(ids.map((id) => this.splice(id).closeSplice(code, reason).catch(() => {})))
+    await Promise.all(ids.map((id) => this.splice(id).closeSplice(id, code, reason).catch(() => {})))
     for (const id of ids) delete conns[id]
     await this.ctx.storage.put('conns', conns)
   }

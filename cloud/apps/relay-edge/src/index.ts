@@ -1,8 +1,10 @@
-// Relay edge Worker: stateless router. Every socket is owned by the host's Durable Object.
+// Relay edge Worker: stateless router. Control sockets live in the host's object; phone and host
+// data sockets live in the host's pooled splice objects.
 import { HostRelay } from './host-relay'
 import { SpliceRelay } from './splice-relay'
 import type { Env } from './env'
 import { HOST_ID, verifyRelayJwt } from './jwt'
+import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 
 export { HostRelay, SpliceRelay }
 
@@ -19,14 +21,14 @@ function forward(
   relayHostId: string,
   extra: Record<string, string>,
   target: 'host' | 'splice' = 'host',
-  connId = ''
+  spliceObject = ''
 ): Promise<Response> {
   const headers = new Headers(request.headers)
   for (const name of INTERNAL_HEADERS) headers.delete(name)
   headers.set('x-edge-origin', new URL(request.url).origin)
   for (const [name, value] of Object.entries(extra)) headers.set(name, value)
   const init = new Request(request.url, { method: 'GET', headers })
-  if (target === 'splice') return env.SPLICE_RELAY.get(env.SPLICE_RELAY.idFromName(connId)).fetch(init)
+  if (target === 'splice') return env.SPLICE_RELAY.get(env.SPLICE_RELAY.idFromName(spliceObject)).fetch(init)
   return env.HOST_RELAY.get(env.HOST_RELAY.idFromName(relayHostId)).fetch(init)
 }
 
@@ -45,7 +47,10 @@ export default {
     const abortSplice = url.pathname.match(/^\/__spike\/abort-splice\/([^/]+)$/)
     if (abortSplice && env.SPIKE_ADMIN === '1') {
       const connId = decodeURIComponent(abortSplice[1])
-      return forward(env, request, '', { 'x-edge-kind': 'abort', 'x-edge-conn-id': connId }, 'splice', connId)
+      const parsed = parseConnId(connId)
+      if (!parsed) return reject(429)
+      // Resets the whole slot object: every splice currently in that slot.
+      return forward(env, request, '', { 'x-edge-kind': 'abort', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
     if (env.SPIKE_DEBUG === '1') {
       if (url.pathname === '/__spike/info') {
@@ -73,18 +78,23 @@ export default {
       if (!isUpgrade) return reject(426)
       // 429 for malformed ids matches the GCE cells.
       if (!HOST_ID.test(phone[1])) return reject(429)
-      // Each phone connection gets its own splice object, named by a fresh connId.
-      const connId = `${phone[1]}.${crypto.randomUUID()}`
-      return forward(env, request, phone[1], { 'x-edge-kind': 'phone', 'x-edge-conn-id': connId }, 'splice', connId)
+      // The host object picks the least-busy slot of its splice pool, so concurrent phones land in
+      // different objects (isolation) and reuse existing ones (no object creation per connect).
+      const host = env.HOST_RELAY.get(env.HOST_RELAY.idFromName(phone[1]))
+      const connId = await host
+        .allocateConnId(phone[1])
+        .catch(() => makeConnId(phone[1], Math.floor(Math.random() * SPLICE_SLOTS)))
+      const parsed = parseConnId(connId)!
+      return forward(env, request, phone[1], { 'x-edge-kind': 'phone', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
 
     const data = url.pathname.match(/^\/v1\/host\/data\/([^/]+)$/)
     if (data) {
       if (!isUpgrade) return reject(426)
       const connId = decodeURIComponent(data[1])
-      const relayHostId = connId.split('.', 1)[0]
-      if (connId.length > 128 || !HOST_ID.test(relayHostId)) return reject(429)
-      return forward(env, request, relayHostId, { 'x-edge-kind': 'data', 'x-edge-conn-id': connId }, 'splice', connId)
+      const parsed = parseConnId(connId)
+      if (!parsed) return reject(429)
+      return forward(env, request, parsed.relayHostId, { 'x-edge-kind': 'data', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
     return reject(404)
   }

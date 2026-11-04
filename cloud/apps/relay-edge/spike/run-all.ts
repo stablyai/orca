@@ -388,6 +388,23 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
     await sleep(500)
   }
 
+  // Pool: concurrent phones get distinct slots of the host's splice pool, and every connId names a
+  // pooled object (`<relayHostId>.<slot>`), so connects reuse objects instead of creating them.
+  {
+    const opensBefore = main.events.opens.length
+    const batch = [openPhone(ctx), openPhone(ctx), openPhone(ctx), openPhone(ctx)]
+    await waitFor(() => batch.every((p) => p.hello !== null || p.closed !== null), 8000)
+    const ids = main.events.opens.slice(opensBefore).map((o: { connId: string }) => o.connId)
+    const slotOf = (id: string) => id.match(new RegExp(`^${ctx.relayHostId}\\.([0-7])\\.[0-9a-f-]{36}$`))?.[1]
+    const slots = ids.map(slotOf)
+    const ok = batch.every((p) => (p.hello as any)?.ok === true)
+    record('Pool: concurrent phones land in distinct pooled slots (connId <host>.<slot>.<uuid>)',
+      ok && ids.length === 4 && slots.every((s) => s !== undefined) && new Set(slots).size === 4,
+      `slots=${slots.join(',')} hellos=${batch.map((p) => (p.hello as any)?.ok).join(',')}`)
+    for (const p of batch) p.ws.close()
+    await sleep(500)
+  }
+
   // R4: phone connect latency through the extra RPC hop (local).
   {
     const samples: number[] = []

@@ -38,7 +38,8 @@
         // Per-deploy override: --durable-objects-code-update-mode "deferred 120s"
         "code_update_strategy": { "mode": "deferred", "max_delay": 300 }
       },
-      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_spike" }],
+      // Analytics Engine is not enabled on the account; metrics fall back to a no-op.
+      // "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_spike" }],
       "vars": {
         "RELAY_JWT_AUDIENCE": "orca-relay",
         "PING_INTERVAL_MS": "45000",

@@ -33,14 +33,19 @@ Result: **17/17 pass** (default), **17/17** with `GUARD=1` (one of those checks 
   - credential commands: invite, install, confirm and revoke all return `control-error unsupported` in the spike;
   - the director epoch check.
 
-## R4 splice: PASS. Mitigation = one object per splice. Drop the flood guard
+## R4 splice: PASS. Mitigation = pooled splice objects per host. Drop the flood guard
+- **Pool (latency fix):** on Cloudflare, creating a new object cost ~220 ms per phone connect (fresh-object upgrade p50 274 ms vs 50 ms for an existing object). Splices now go to a reused pool of 8 objects per host (`<relayHostId>.<slot>`).
+  - connId is `<relayHostId>.<slot>.<uuid>`.
+  - The Worker asks HostRelay (`allocateConnId`, one RPC) for the least-busy slot. Concurrent phones get distinct slots (local check: 4 concurrent → 4 slots).
+  - A slot object can hold several splices, keyed by connId, if the hint collides.
+  - State of closed or reset splices is deleted, so reused objects don't accumulate it.
 - Correctness unchanged: text/binary type preserved; 8 MiB text and binary host→phone; ~0.9 MiB phone→host (the desktop caps inbound at 1 MiB).
 - The slow-reader risk itself is unchanged: Workers WebSockets have no `bufferedAmount`, `send()` never fails, and local RSS grew 243→760 MB for 256 MiB pushed at a paused phone.
 - **Isolation (the mitigation):**
   - While flooding one paused phone, the host control kept answering pings (6 during the flood) and a second phone on the same host echoed 16/16.
   - Resetting one splice object (`ctx.abort`) dropped only that phone (1006). Control and the other splice stayed up.
   - The host reclaimed the dead slot by probing `isAlive()` when its 8-connection budget filled: 6/6 new phones were accepted, and the 9th was refused with 4429.
-  - So on Cloudflare the worst case is one phone's object hitting the 128 MB cap and being reset. That phone reconnects; the host and its other phones don't notice.
+  - So on Cloudflare the worst case is one slot object hitting the 128 MB cap and being reset. That drops the phone(s) in that slot (normally one); the host and its other slots don't notice.
 - **RPC hop cost (local):** phone open → `relay-hello` p50 21.0 ms, p95 21.7 ms; `authorizePhone` RPC p50 1 ms, max 11 ms (n=33). Add one intra-colo RPC on Cloudflare (to measure).
 - **Silent-bytes flood guard** (`SPLICE_SILENT_BYTES_MAX`, tested at 32 MiB per 10 s): **drop it.**
   - It cut the flood at 33 MiB and closed 4429, with RSS rising 242→298 MB.
@@ -49,7 +54,7 @@ Result: **17/17 pass** (default), **17/17** with `GUARD=1` (one of those checks 
 - **Still needs Cloudflare:**
   - what the runtime actually does when a socket's outbound queue grows (limit, close code), and when an object hits 128 MB;
   - real cross-object RPC latency;
-  - cost of 2 objects per active phone (requests and duration).
+  - cost of the pool (requests and duration), and phone connect latency with the pool.
 
 ## R2 local part: PASS (with one caveat)
 - Generation floor and resume state live in object storage.

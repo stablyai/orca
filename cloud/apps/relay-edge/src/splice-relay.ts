@@ -1,7 +1,8 @@
-// One Durable Object per phone connection (connId). Owns the phone socket and the host data socket
-// for that connection and forwards frames between them. Isolating each splice in its own object
-// means a slow or flooding phone can only exhaust (or get reset) its own object, never the host's
-// control socket or the host's other splices.
+// Pooled splice objects: each host has up to SPLICE_SLOTS of them (`<relayHostId>.<slot>`), reused
+// across phone connects so a connect never pays for creating a new object. An object holds the
+// phone socket and host data socket of every splice in its slot (normally one; more only when the
+// host's slot hint collides) and forwards frames between them. A slow or flooding phone can only
+// exhaust (or get reset) its own slot's object, never the host's control socket or other slots.
 import { DurableObject } from 'cloudflare:workers'
 import { HostDataAuthSchema } from '../../../packages/relay-contract/src/control-messages'
 import { RelayAuthSchema } from '../../../packages/relay-contract/src/credential-messages'
@@ -10,55 +11,59 @@ import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/prot
 import { timingSafeEqualStr } from './bytes'
 import type { Env } from './env'
 import { metric } from './metrics'
+import { parseConnId } from './splice-slot'
 
 type State = {
   connId: string
   relayHostId: string
-  phase: 'auth' | 'pending' | 'spliced' | 'closed'
+  phase: 'auth' | 'pending' | 'spliced'
   deadline: number
   connTicket?: string
   generation?: number
   credentialKind?: 'invite' | 'resume'
 }
-type SocketTag = 'phone' | 'data'
+type SocketKind = 'phone' | 'data'
 // Per-direction flood guard: bytes forwarded to a peer since that peer last sent anything.
 type GuardAttachment = { silentBytes: number; windowStart: number }
 
 const NO_DEADLINE = Number.MAX_SAFE_INTEGER
+const KEY_PREFIX = 'splice:'
 
 export class SpliceRelay extends DurableObject<Env> {
-  // Spike traffic counters, in memory only (reset if the object hibernates mid-splice).
+  // Spike traffic counters per connId, in memory only (lost if the object hibernates mid-splice).
   // [bytes to host, frames to host, bytes to phone, frames to phone]
-  private traffic = [0, 0, 0, 0]
+  private traffic = new Map<string, number[]>()
 
   async fetch(request: Request): Promise<Response> {
     const kind = request.headers.get('x-edge-kind')
     if (kind === 'abort') this.ctx.abort('spike reset')
     const connId = request.headers.get('x-edge-conn-id') ?? ''
-    const relayHostId = connId.split('.', 1)[0]
+    const parsed = parseConnId(connId)
+    if (!parsed) return new Response(null, { status: 404 })
     const pair = new WebSocketPair()
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket]
     const now = Date.now()
     if (kind === 'phone') {
-      if ((await this.state()) !== undefined) return new Response(null, { status: 409 })
-      this.ctx.acceptWebSocket(server, ['phone'])
+      if ((await this.state(connId)) !== undefined) return new Response(null, { status: 409 })
+      await this.sweepOrphans()
+      this.ctx.acceptWebSocket(server, ['phone', connId])
       metric(this.env, 'phone_open')
       server.serializeAttachment({ silentBytes: 0, windowStart: now } satisfies GuardAttachment)
       await this.save({
         connId,
-        relayHostId,
+        relayHostId: parsed.relayHostId,
         phase: 'auth',
         deadline: now + RELAY_PROTOCOL_LIMITS.firstFrameDeadlineMs
       })
     } else if (kind === 'data') {
-      const state = await this.state()
-      if (!state || state.phase !== 'pending' || this.ctx.getWebSockets('data').length > 0) {
+      const state = await this.state(connId)
+      if (!state || state.phase !== 'pending' || this.socket(connId, 'data')) {
         // Unknown or already-attached connection: same answer as a bad ticket.
         this.ctx.acceptWebSocket(server, ['reject'])
         server.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'invalid host data ticket')
         return new Response(null, { status: 101, webSocket: client })
       }
-      this.ctx.acceptWebSocket(server, ['data'])
+      this.ctx.acceptWebSocket(server, ['data', connId])
       server.serializeAttachment({ silentBytes: 0, windowStart: now } satisfies GuardAttachment)
     } else {
       return new Response(null, { status: 404 })
@@ -68,11 +73,12 @@ export class SpliceRelay extends DurableObject<Env> {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    const tag = this.tag(ws)
-    const state = await this.state()
-    if (!state || !tag) return
-    if (state.phase === 'spliced') return this.forward(ws, tag, message)
-    if (tag === 'phone') {
+    const id = this.identify(ws)
+    if (!id) return
+    const state = await this.state(id.connId)
+    if (!state) return
+    if (state.phase === 'spliced') return this.forward(ws, id.connId, id.kind, message)
+    if (id.kind === 'phone') {
       if (state.phase === 'auth') await this.onRelayAuth(ws, state, message)
       return // pending: the phone waits for relay-hello before sending E2EE frames
     }
@@ -89,16 +95,18 @@ export class SpliceRelay extends DurableObject<Env> {
 
   // ---------------- RPC from HostRelay ----------------
 
-  async closeSplice(code: number, reason: string): Promise<void> {
-    const state = await this.state()
-    for (const ws of this.ctx.getWebSockets()) this.close(ws, code, reason)
-    if (state && state.phase !== 'closed') await this.save({ ...state, phase: 'closed', deadline: NO_DEADLINE })
-    await this.ctx.storage.deleteAlarm()
+  async closeSplice(connId: string, code: number, reason: string): Promise<void> {
+    for (const ws of this.ctx.getWebSockets(connId)) this.close(ws, code, reason)
+    await this.forget(connId)
+    await this.reschedule()
   }
 
-  async isAlive(): Promise<boolean> {
-    const state = await this.state()
-    return state !== undefined && state.phase !== 'closed' && this.ctx.getWebSockets('phone').length > 0
+  async isAlive(connId: string): Promise<boolean> {
+    if ((await this.state(connId)) === undefined) return false
+    if (this.socket(connId, 'phone') !== null) return true
+    await this.forget(connId) // its sockets died in a reset; drop the leftover state
+    await this.reschedule()
+    return false
   }
 
   // ---------------- phone auth ----------------
@@ -119,7 +127,7 @@ export class SpliceRelay extends DurableObject<Env> {
       return
     }
     const started = Date.now()
-    const host = this.env.HOST_RELAY.get(this.env.HOST_RELAY.idFromName(state.relayHostId))
+    const host = this.host(state.relayHostId)
     let result: Awaited<ReturnType<typeof host.authorizePhone>>
     try {
       result = await host.authorizePhone(state.connId, credential)
@@ -162,10 +170,11 @@ export class SpliceRelay extends DurableObject<Env> {
       }
     }
     if (ok) {
-      const host = this.env.HOST_RELAY.get(this.env.HOST_RELAY.idFromName(state.relayHostId))
-      ok = await host.confirmSplice(state.connId, state.generation ?? -1).catch(() => false)
+      ok = await this.host(state.relayHostId)
+        .confirmSplice(state.connId, state.generation ?? -1)
+        .catch(() => false)
     }
-    const phone = this.ctx.getWebSockets('phone')[0]
+    const phone = this.socket(state.connId, 'phone')
     if (!ok || !phone) {
       this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'invalid host data ticket')
       return
@@ -191,16 +200,16 @@ export class SpliceRelay extends DurableObject<Env> {
 
   // ---------------- splice ----------------
 
-  private forward(from: WebSocket, tag: SocketTag, message: string | ArrayBuffer): void {
-    const peer = this.ctx.getWebSockets(tag === 'phone' ? 'data' : 'phone')[0]
+  private forward(from: WebSocket, connId: string, kind: SocketKind, message: string | ArrayBuffer): void {
+    const peer = this.socket(connId, kind === 'phone' ? 'data' : 'phone')
     if (!peer) return
     // The sender spoke, so its own inbound direction is evidently being read.
     const fromGuard = from.deserializeAttachment() as GuardAttachment
     if (fromGuard.silentBytes !== 0) from.serializeAttachment({ silentBytes: 0, windowStart: Date.now() })
+    const size = typeof message === 'string' ? message.length : message.byteLength
     const budget = Number(this.env.SPLICE_SILENT_BYTES_MAX ?? '0')
     if (budget > 0) {
       const g = peer.deserializeAttachment() as GuardAttachment
-      const size = typeof message === 'string' ? message.length : message.byteLength
       const windowMs = Number(this.env.SPLICE_SILENT_WINDOW_MS ?? '10000')
       const now = Date.now()
       const next =
@@ -209,14 +218,15 @@ export class SpliceRelay extends DurableObject<Env> {
           : { silentBytes: g.silentBytes + size, windowStart: g.windowStart }
       peer.serializeAttachment(next)
       if (next.silentBytes > budget) {
-        for (const ws of this.ctx.getWebSockets()) this.close(ws, RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'splice flood')
+        for (const ws of this.ctx.getWebSockets(connId)) this.close(ws, RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'splice flood')
         return
       }
     }
-    const size = typeof message === 'string' ? message.length : message.byteLength
-    const i = tag === 'phone' ? 0 : 2
-    this.traffic[i] += size
-    this.traffic[i + 1] += 1
+    const counters = this.traffic.get(connId) ?? [0, 0, 0, 0]
+    const i = kind === 'phone' ? 0 : 2
+    counters[i] += size
+    counters[i + 1] += 1
+    this.traffic.set(connId, counters)
     try {
       peer.send(message)
     } catch {
@@ -227,56 +237,89 @@ export class SpliceRelay extends DurableObject<Env> {
   // ---------------- lifecycle ----------------
 
   private async teardown(ws: WebSocket, code: number): Promise<void> {
-    const tag = this.tag(ws)
-    const state = await this.state()
-    if (!state || state.phase === 'closed' || tag === null) return
-    metric(this.env, 'phone_close', 1, `${tag}:${code}`)
-    metric(this.env, 'splice_bytes', this.traffic[0] + this.traffic[2], '', this.traffic)
+    const id = this.identify(ws)
+    if (!id) return
+    const state = await this.state(id.connId)
+    if (!state) return
+    const counters = this.traffic.get(id.connId) ?? [0, 0, 0, 0]
+    metric(this.env, 'phone_close', 1, `${id.kind}:${code}`)
+    metric(this.env, 'splice_bytes', counters[0] + counters[2], '', counters)
     const reason = code === 1000 ? '' : 'peer dropped'
-    for (const other of this.ctx.getWebSockets()) if (other !== ws) this.close(other, RELAY_CLOSE_CODE.PEER_DROPPED, reason)
-    await this.save({ ...state, phase: 'closed', deadline: NO_DEADLINE })
-    await this.ctx.storage.deleteAlarm()
-    const host = this.env.HOST_RELAY.get(this.env.HOST_RELAY.idFromName(state.relayHostId))
-    await host.spliceClosed(state.connId).catch(() => {})
+    for (const other of this.ctx.getWebSockets(id.connId)) {
+      if (other !== ws) this.close(other, RELAY_CLOSE_CODE.PEER_DROPPED, reason)
+    }
+    await this.forget(id.connId)
+    await this.reschedule()
+    await this.host(state.relayHostId).spliceClosed(state.connId).catch(() => {})
   }
 
   async alarm(): Promise<void> {
-    const state = await this.state()
-    if (!state || state.phase === 'closed' || Date.now() < state.deadline) return this.reschedule()
-    const phone = this.ctx.getWebSockets('phone')[0]
-    if (state.phase === 'pending') {
-      if (phone) this.close(phone, RELAY_CLOSE_CODE.HOST_OFFLINE, 'attach-timeout')
-    } else if (phone) {
-      this.close(phone, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame timeout')
+    const now = Date.now()
+    for (const state of await this.states()) {
+      if (now < state.deadline) continue
+      const phone = this.socket(state.connId, 'phone')
+      if (state.phase === 'pending') {
+        if (phone) this.close(phone, RELAY_CLOSE_CODE.HOST_OFFLINE, 'attach-timeout')
+      } else if (phone) {
+        this.close(phone, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame timeout')
+      }
+      const data = this.socket(state.connId, 'data')
+      if (data) this.close(data, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame timeout')
+      await this.forget(state.connId)
+      await this.host(state.relayHostId).spliceClosed(state.connId).catch(() => {})
     }
-    for (const ws of this.ctx.getWebSockets('data')) this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame timeout')
-    await this.save({ ...state, phase: 'closed', deadline: NO_DEADLINE })
-    const host = this.env.HOST_RELAY.get(this.env.HOST_RELAY.idFromName(state.relayHostId))
-    await host.spliceClosed(state.connId).catch(() => {})
+    await this.reschedule()
   }
 
   private async reschedule(): Promise<void> {
-    const state = await this.state()
-    if (!state || state.deadline === NO_DEADLINE) {
+    const next = Math.min(NO_DEADLINE, ...(await this.states()).map((s) => s.deadline))
+    if (next === NO_DEADLINE) {
       await this.ctx.storage.deleteAlarm()
       return
     }
-    await this.ctx.storage.setAlarm(Math.max(state.deadline, Date.now() + 1))
+    await this.ctx.storage.setAlarm(Math.max(next, Date.now() + 1))
   }
 
   // ---------------- helpers ----------------
 
-  private async state(): Promise<State | undefined> {
-    return this.ctx.storage.get<State>('splice')
+  private async state(connId: string): Promise<State | undefined> {
+    return this.ctx.storage.get<State>(KEY_PREFIX + connId)
+  }
+
+  private async states(): Promise<State[]> {
+    return [...(await this.ctx.storage.list<State>({ prefix: KEY_PREFIX })).values()]
   }
 
   private async save(state: State): Promise<void> {
-    await this.ctx.storage.put<State>('splice', state)
+    await this.ctx.storage.put<State>(KEY_PREFIX + state.connId, state)
   }
 
-  private tag(ws: WebSocket): SocketTag | null {
-    const tags = this.ctx.getTags(ws)
-    return tags.includes('phone') ? 'phone' : tags.includes('data') ? 'data' : null
+  // A reset drops sockets without close events. Every live splice has its phone socket from the
+  // start, so state without one is left over and can go (the host prunes its own bookkeeping).
+  private async sweepOrphans(): Promise<void> {
+    for (const state of await this.states()) {
+      if (this.socket(state.connId, 'phone') === null) await this.forget(state.connId)
+    }
+  }
+
+  // Closed splices are deleted, not kept: the object is reused and connIds are never reused.
+  private async forget(connId: string): Promise<void> {
+    this.traffic.delete(connId)
+    await this.ctx.storage.delete(KEY_PREFIX + connId)
+  }
+
+  private host(relayHostId: string) {
+    return this.env.HOST_RELAY.get(this.env.HOST_RELAY.idFromName(relayHostId))
+  }
+
+  private identify(ws: WebSocket): { kind: SocketKind; connId: string } | null {
+    const [kind, connId] = this.ctx.getTags(ws)
+    if ((kind !== 'phone' && kind !== 'data') || !connId) return null
+    return { kind, connId }
+  }
+
+  private socket(connId: string, kind: SocketKind): WebSocket | null {
+    return this.ctx.getWebSockets(connId).find((ws) => this.ctx.getTags(ws)[0] === kind) ?? null
   }
 
   private phoneFail(ws: WebSocket, code: number): void {
