@@ -40,33 +40,38 @@ export function syncClaudeProfileSettings(
   if (current.kind === 'unavailable' && !(current.error instanceof SyntaxError)) {
     throw new ClaudeProfileSurfaceError('unreadable', 'Profile Claude settings are unreadable')
   }
-  const synced = readClaudeProfileObject(record)
-  // Without a record the default home wins whole, as every sync did before records.
-  const last = current.kind === 'present' && synced.kind === 'present' ? synced.value : null
+  const lastSync = readClaudeProfileObject(record)
   const digests = digestSettings(defaults)
-  const settings = current.kind === 'present' ? { ...current.value } : {}
-  for (const key of new Set([...Object.keys(digests), ...Object.keys(last ?? settings)])) {
-    if (last && last[key] === digests[key]) {
-      continue
-    }
-    if (Object.hasOwn(defaults, key)) {
-      settings[key] = defaults[key]
-    } else {
-      delete settings[key]
+  // Without a record the default home wins whole, as every sync did before records.
+  let settings = { ...defaults }
+  if (current.kind === 'present' && lastSync.kind === 'present') {
+    const last = lastSync.value
+    settings = { ...current.value }
+    for (const key of new Set([...Object.keys(digests), ...Object.keys(last)])) {
+      if (last[key] === digests[key]) {
+        continue
+      }
+      if (Object.hasOwn(defaults, key)) {
+        settings[key] = defaults[key]
+      } else {
+        delete settings[key]
+      }
     }
   }
-  let outcome: ClaudeProfileSurfaceOutcome = 'unchanged'
-  if (
+  const unchanged =
     current.kind === 'present'
-      ? JSON.stringify(settings) !== JSON.stringify(current.value)
-      : current.kind === 'unavailable' || input.kind === 'present'
-  ) {
+      ? JSON.stringify(settings) === JSON.stringify(current.value)
+      : current.kind === 'absent' && input.kind === 'absent'
+  let outcome: ClaudeProfileSurfaceOutcome = 'unchanged'
+  if (!unchanged) {
     writeFileAtomically(target, `${JSON.stringify(settings, null, 2)}\n`, {
       mode: input.kind === 'present' ? statSync(source).mode & 0o777 : 0o600
     })
     outcome = 'synced'
   }
-  if (JSON.stringify(digests) !== JSON.stringify(synced.kind === 'present' ? synced.value : null)) {
+  if (
+    JSON.stringify(digests) !== JSON.stringify(lastSync.kind === 'present' ? lastSync.value : null)
+  ) {
     writeFileAtomically(record, `${JSON.stringify(digests)}\n`, { mode: 0o600 })
   }
   return outcome

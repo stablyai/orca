@@ -123,7 +123,7 @@ describe('Claude profile refresh from the default home', () => {
     await provision(f)
     expect(fs.statSync(join(f.profileHome, 'statusline.sh')).mode & 0o777).toBe(0o755)
   })
-  it('copies settings whole, proxy key and auth included, over profile edits', async () => {
+  it('copies settings, proxy key and auth included, and default-home changes win over profile edits', async () => {
     const f = fixture()
     const settings = {
       futureFeature: true,
