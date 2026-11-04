@@ -1,6 +1,4 @@
 import { journalInputOrder, setJournalInputOrder } from './journal-input-order'
-// Track writes through objects, iterators and collection entries; finalize only after COMMIT.
-
 import type { JournalReducerState } from './journal-reducer'
 import {
   JournalDraftMap,
@@ -8,6 +6,7 @@ import {
   type JournalDraftAccess,
   type JournalEntryChange
 } from './journal-transition-collections'
+// Track writes through objects, iterators and collection entries; finalize only after COMMIT.
 
 type DraftNode = {
   original: object
@@ -288,6 +287,7 @@ export function isolateJournalTransition<T>(
   untracked: (key: string, value: unknown) => unknown
   adopt: () => JournalReducerState
   tracked: () => number
+  input: <V>(value: V) => V
   trackedDerived: () => number
 } {
   const draft = new JournalDraft()
@@ -300,6 +300,7 @@ export function isolateJournalTransition<T>(
   const result = fold(candidate)
   return {
     state: candidate,
+    input: (value) => draft.wrap(value, () => undefined, 'input'),
     result,
     changes: (reset) =>
       draft.changes(reset).filter((entry) => !entry.path.startsWith('@inputOrder')),

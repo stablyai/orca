@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { recoverLegacyStructuredAgentSessionOutbox } from './structured-agent-session-legacy-outbox'
 
 const mocks = vi.hoisted(() => ({
   outline: vi.fn(),
@@ -19,8 +19,6 @@ vi.mock('./structured-agent-session-message-hand-back', () => ({
 vi.mock('./structured-agent-session-pending-sends', () => ({
   setStructuredAgentSessionSendNotice: mocks.notice
 }))
-
-import { recoverLegacyStructuredAgentSessionOutbox } from './structured-agent-session-legacy-outbox'
 
 const SESSION = 'session-1'
 const KEY = `orca:desktopStructuredAgentSessionOutbox:v1:${SESSION}`

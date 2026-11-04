@@ -6,7 +6,10 @@ import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import {
+  createCodexHistoryTranslator,
+  createCodexJournalTranslator
+} from './codex-structured-journal-translation'
 import { MAX_CODEX_GENERIC_TURN_BUCKETS } from './codex-structured-journal-limits'
 
 function setup() {
@@ -117,7 +120,7 @@ describe('compaction provider generation compatibility', () => {
     const { rows, sink, translator, send } = setup()
     send('thread/compacted')
     translator.dispose()
-    const restored = createCodexJournalTranslator({ sink })
+    const restored = createCodexHistoryTranslator({ sink })
     expect(
       restored.restoreThread('thread', {
         turns: [{ id: 'turn', items: [{ id: 'renumbered', type: 'contextCompaction' }] }]

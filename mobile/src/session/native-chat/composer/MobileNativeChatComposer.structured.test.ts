@@ -1,3 +1,4 @@
+import { markRpcDeliveryUnknown } from '../../../transport/rpc-delivery-ambiguity'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import {
@@ -27,13 +28,6 @@ import { findByHostType } from '../../../test-support/react-test-renderer-host-n
 import type { RpcClient } from '../../../transport/rpc-client'
 import { structuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
 import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
-vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
-vi.mock('../../../platform/media-picker', () => ({
-  useMediaPicker: () => ({ pickImages: async () => [] })
-}))
-vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
-}))
 import { createElement, type ComponentProps } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -41,6 +35,13 @@ import {
   MobileNativeChatComposer as NativeChatComposer,
   MobileNativeChatDraftComposer
 } from './MobileNativeChatComposer'
+vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('../../../platform/media-picker', () => ({
+  useMediaPicker: () => ({ pickImages: async () => [] })
+}))
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
+}))
 
 const getNoComposerEditGeneration = () => 0
 
@@ -146,9 +147,13 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     )
   const drawers = () => renderer!.root.findAll((node) => node.props.onHidden !== undefined)
 
-  it.each(['', 'See this'])(
-    'sends an ordinary image with %j text through the real RPC and clears its visible chip',
-    async (text) => {
+  it.each([
+    ['', 'accepted'],
+    ['See this', 'accepted'],
+    ['See this', 'unknown']
+  ] as const)(
+    'keeps an ordinary image with %j text after a real RPC %s result and clears its visible chip',
+    async (text, outcome) => {
       const scope = mobileNativeChatScopeKey('host', 'worktree', `image-rpc-${text}`)!
       resetMobileNativeChatDraftInputsForTests()
       setMobileNativeChatDraftText(scope, text)
@@ -157,11 +162,16 @@ describe('MobileNativeChatComposer on a structured chat', () => {
         images: [{ id: 'photo', path: '/remote/photo.png', previewUri: 'file:///phone-photo.png' }]
       }))
       let publish: ((data: unknown) => void) | undefined
-      const sendRequest = vi.fn<RpcClient['sendRequest']>(async (method) =>
-        method === 'agentSession.send'
-          ? mutationOk(structuredSendResultFixture('accepted'))
-          : ok({ models: [], current: {} })
-      )
+      let sessionView: ReturnType<typeof useMobileStructuredAgentSession> | undefined
+      const sendRequest = vi.fn<RpcClient['sendRequest']>(async (method) => {
+        if (method === 'agentSession.send') {
+          if (outcome === 'unknown') {
+            throw markRpcDeliveryUnknown(new Error('connection lost'))
+          }
+          return mutationOk(structuredSendResultFixture('accepted'))
+        }
+        return ok({ models: [], current: {} })
+      })
       const client: RpcClient = {
         sendRequest,
         subscribe: (_m, _p, listener) => {
@@ -189,6 +199,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
           composerScopeKey: scope,
           onSendError: vi.fn()
         })
+        sessionView = session
         const drafts = useMobileNativeChatDrafts({
           hostId: 'host',
           worktreeId: 'worktree',
@@ -243,6 +254,16 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       })
       expect(readMobileNativeChatDraftInputs(scope).images).toEqual([])
       expect(labelled('Remove image')).toEqual([])
+      if (outcome === 'unknown') {
+        expect(sessionView!.session.messages).toHaveLength(1)
+        expect(sessionView!.session.messages[0]?.blocks).toEqual([
+          { type: 'text', text },
+          { type: 'image-ref', path: '/remote/photo.png' }
+        ])
+        expect(Object.values(sessionView!.imagePreviewsByMessageId)).toEqual([
+          ['file:///phone-photo.png']
+        ])
+      }
     }
   )
 

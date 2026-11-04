@@ -219,7 +219,8 @@ const prefix = z
   )
 
 function plain(state: JournalReducerState): unknown {
-  const { inputEntries, inputCards, ...ordinary } = state
+  const { inputEntries, inputCards, contextBoundary, inputs: _inputs, ...ordinary } = state
+  expect(contextBoundary).toBe(1)
   expect([...inputEntries]).toEqual([])
   expect([...inputCards]).toEqual([['card-2', { introduced: 11 }]])
   const fields: Record<string, unknown> = ordinary

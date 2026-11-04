@@ -127,9 +127,10 @@ export function registerJournalUnsentSendHoldQueueTests(
       const reopened = await fixture.open()
       await fixture.hold(reopened)
 
-      expect(reopened.queuedMessages.get('A')?.queuedAt?.epoch).not.toBe(
-        reopened.queuedMessages.get('B')?.queuedAt?.epoch
-      )
+      const a = reopened.queuedMessages.get('A')!.queuedAt!
+      const b = reopened.queuedMessages.get('B')!.queuedAt!
+      expect(a.epoch).toBe(b.epoch)
+      expect(a.sequence).toBeLessThan(b.sequence)
       expect(fixture.cardOrder(reopened)).toEqual(['A', 'B'])
     })
   })
