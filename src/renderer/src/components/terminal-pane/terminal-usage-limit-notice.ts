@@ -6,6 +6,9 @@ export type TerminalUsageLimitNotice = {
   sessionId: string
   turnEndedAt: number
   terminal: string
+  connectionId: string | null
+  mainStateStartedAt: number
+  turnStartedAt: number | undefined
   window: AgentSessionUsageLimit['window']
   resetsAt: number | undefined
 }
@@ -37,6 +40,9 @@ export function terminalUsageLimitNotice(
     sessionId: row.providerSession.id,
     turnEndedAt: row.turnEndedAt,
     terminal: row.terminalHandle,
+    connectionId: row.connectionId ?? null,
+    mainStateStartedAt: row.mainAgent.stateStartedAt,
+    turnStartedAt: row.turnStartedAt,
     window: row.mainAgent.usageLimit.window,
     resetsAt: row.mainAgent.usageLimit.resetsAt
   }

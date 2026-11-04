@@ -31,10 +31,10 @@ export function TerminalUsageLimitOverlay({
           type="button"
           variant="ghost"
           size="xs"
-          className="min-w-0 truncate px-1"
+          className="min-w-0 shrink px-1"
           onClick={() => setCollapsed(false)}
         >
-          {title}
+          <span className="truncate">{title}</span>
         </Button>
         {onContinue ? (
           <Button type="button" size="xs" disabled={pending || actionDisabled} onClick={onContinue}>

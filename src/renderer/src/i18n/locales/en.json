@@ -21809,7 +21809,22 @@
       "count_other": "{{count}} running terminals"
     },
     "restartedInputNotSent": "The terminal restarted while you were typing, so some input may not have reached it. Check the new shell before typing it again.",
-    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent."
+    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent.",
+    "usageLimit": {
+      "resetUnknown": "Reset time unavailable.",
+      "legacy": "Send a message in the terminal to continue.",
+      "explanation": "Send “continue” to {{agent}} to try again.",
+      "sent": "Continue was sent to {{agent}}. Check the terminal for its reply.",
+      "draft": "Continue is in {{agent}}’s draft. Review and send it in the terminal.",
+      "unknown": "Couldn’t confirm whether {{agent}} received Continue. Check the terminal before trying again.",
+      "existingDraft": "{{agent}} already has a draft. Send or clear it in the terminal, then try again.",
+      "permission": "{{agent}} is waiting for a choice. Resolve it in the terminal, then try again.",
+      "changed": "This {{agent}} turn changed. Check the terminal, then try again.",
+      "inProgress": "Continue is already being sent to {{agent}}. Check the terminal before trying again.",
+      "unavailable": "Couldn’t continue {{agent}}. Check the terminal connection, then try again.",
+      "minimize": "Minimize",
+      "continue": "Continue now"
+    }
   },
   "fileExplorer": {
     "root": {

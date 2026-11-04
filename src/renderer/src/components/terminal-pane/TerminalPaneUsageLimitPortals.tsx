@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -16,6 +15,11 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import type { TerminalUsageLimitContinuationResult } from '../../../../shared/terminal-usage-limit-continuation'
 import { usageLimitWords } from '../../../../shared/agent-session/failures/agent-session-usage-limit-words'
 import { sayAgentSessionFailureTranslated } from '../native-chat/agent-session-failure-words-text'
+import {
+  attemptUsageLimitContinuation,
+  usageLimitAttemptKey,
+  useUsageLimitAttempt
+} from './terminal-usage-limit-attempt'
 import { TerminalUsageLimitOverlay } from './TerminalUsageLimitOverlay'
 import {
   terminalUsageLimitNotice,
@@ -29,33 +33,31 @@ export function TerminalPaneUsageLimitPortals({
   controller: TerminalPaneController
 }): React.JSX.Element | null {
   const target = useWorktreeRuntimeTarget(controller.worktreeId)
-  if (!target || !controller.isVisible || controller.showSshReconnectOverlay) {
+  if (!target) {
     return null
   }
   return (
     <>
       {controller.managedPanes.map((pane) => {
         const ptyId = controller.paneTransportsRef.current.get(pane.id)?.getPtyId()
-        if (
-          !ptyId ||
-          shouldShowMobileDriverOverlay(
+        if (!ptyId || controller.paneProcessExitsByPaneId[pane.id]) {
+          return null
+        }
+        const visible =
+          controller.isVisible &&
+          !controller.showSshReconnectOverlay &&
+          !(controller.effectiveChatViewMode && pane.leafId === controller.chatLeafId) &&
+          !shouldShowMobileDriverOverlay(
             getDriverForPty(ptyId).kind,
             getFitOverrideForPty(ptyId)?.mode ?? null
           )
-        ) {
-          return null
-        }
-        if (
-          controller.paneProcessExitsByPaneId[pane.id] ||
-          (controller.effectiveChatViewMode && pane.leafId === controller.chatLeafId)
-        ) {
-          return null
-        }
         return createPortal(
           <PaneUsageLimitNotice
             key={`${pane.leafId}:${ptyId}`}
             paneKey={makePaneKey(controller.tabId, pane.leafId)}
             target={target}
+            visible={visible}
+            worktreeId={controller.worktreeId}
           />,
           pane.container,
           `usage-limit-${pane.id}`
@@ -67,28 +69,28 @@ export function TerminalPaneUsageLimitPortals({
 
 export function PaneUsageLimitNotice({
   paneKey,
-  target
+  target,
+  visible = true,
+  worktreeId
 }: {
   paneKey: string
   target: RuntimeClientTarget
+  visible?: boolean
+  worktreeId?: string
 }): React.JSX.Element | null {
   const notice = useAppStore(
     useShallow((state) => terminalUsageLimitNotice(state.agentStatusByPaneKey[paneKey]))
   )
-  const capability = useStructuredAgentSessionHostCapabilityState(
-    target,
-    TERMINAL_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY
-  )
   if (!notice) {
     return null
   }
-  const host = target.kind === 'local' ? 'local' : target.environmentId
   return (
     <UsageLimitAction
-      key={JSON.stringify([host, notice.terminal, notice.sessionId, notice.turnEndedAt])}
+      key={usageLimitAttemptKey(target, notice)}
       notice={notice}
       target={target}
-      capability={capability}
+      visible={visible}
+      worktreeId={worktreeId}
     />
   )
 }
@@ -96,14 +98,19 @@ export function PaneUsageLimitNotice({
 function UsageLimitAction({
   notice,
   target,
-  capability
+  visible,
+  worktreeId
 }: {
   notice: TerminalUsageLimitNotice
   target: RuntimeClientTarget
-  capability: 'supported' | 'unsupported' | 'unknown'
-}): React.JSX.Element {
-  const [pending, setPending] = useState(false)
-  const [result, setResult] = useState<TerminalUsageLimitContinuationResult | null>(null)
+  visible: boolean
+  worktreeId?: string
+}): React.JSX.Element | null {
+  const capability = useStructuredAgentSessionHostCapabilityState(
+    target,
+    TERMINAL_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY
+  )
+  const { pending, result } = useUsageLimitAttempt(usageLimitAttemptKey(target, notice))
   const agent = structuredAgentLabel(notice.agent)
   const title = usageLimitWords(
     sayAgentSessionFailureTranslated,
@@ -136,27 +143,21 @@ function UsageLimitAction({
     if (pending || capability !== 'supported') {
       return
     }
-    setPending(true)
-    setResult(null)
-    try {
-      setResult(
-        await callRuntimeRpc<TerminalUsageLimitContinuationResult>(
-          target,
-          'terminal.continueAfterUsageLimit',
-          {
-            terminal: notice.terminal,
-            sessionId: notice.sessionId,
-            turnEndedAt: notice.turnEndedAt,
-            client: { id: 'orca-desktop', type: 'desktop' }
-          }
-        )
+    await attemptUsageLimitContinuation(target, notice, worktreeId, () =>
+      callRuntimeRpc<TerminalUsageLimitContinuationResult>(
+        target,
+        'terminal.continueAfterUsageLimit',
+        {
+          terminal: notice.terminal,
+          sessionId: notice.sessionId,
+          turnEndedAt: notice.turnEndedAt,
+          client: { id: 'orca-desktop', type: 'desktop' }
+        }
       )
-    } catch {
-      // A lost reply may follow a settled write; never offer a blind replay.
-      setResult({ status: 'unknown' })
-    } finally {
-      setPending(false)
-    }
+    )
+  }
+  if (!visible) {
+    return null
   }
   return (
     <TerminalUsageLimitOverlay

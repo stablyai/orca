@@ -5,6 +5,7 @@ import type { UseBoundStore, StoreApi } from 'zustand'
 import type { TerminalUsageLimitOverlay } from './TerminalUsageLimitOverlay'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalUsageLimitContinuationResult } from '../../../../shared/terminal-usage-limit-continuation'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -14,13 +15,22 @@ import {
 import { terminalUsageLimitNotice } from './terminal-usage-limit-notice'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 
-type State = { agentStatusByPaneKey: Record<string, AgentStatusEntry>; unrelated: number }
+type State = {
+  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  unrelated: number
+  activeWorktreeId?: string
+  activeWorkspaceExecutionHostId?: ExecutionHostId
+}
 const mocks = vi.hoisted(() => ({
   call: vi.fn<(...args: unknown[]) => Promise<TerminalUsageLimitContinuationResult>>(),
   capability: 'supported' as 'supported' | 'unknown' | 'unsupported',
   target: { kind: 'local' } as RuntimeClientTarget | null,
   renders: 0,
-  locale: 'en'
+  locale: 'en',
+  mobile: false
+}))
+vi.mock('@/lib/pane-manager/mobile-driver-state', () => ({
+  getDriverForPty: () => ({ kind: mocks.mobile ? 'mobile' : 'idle' })
 }))
 vi.mock('@/store', async () => {
   const { create } = await import('zustand')
@@ -108,9 +118,18 @@ beforeEach(() => {
   mocks.target = { kind: 'local' }
   mocks.renders = 0
   mocks.locale = 'en'
-  store.setState({ agentStatusByPaneKey: { [PANE]: row() }, unrelated: 0 })
+  mocks.mobile = false
+  store.setState({
+    agentStatusByPaneKey: { [PANE]: row() },
+    unrelated: 0,
+    activeWorktreeId: undefined,
+    activeWorkspaceExecutionHostId: undefined
+  })
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  setRow(undefined)
+})
 
 describe('terminal usage-limit overlay', () => {
   it('renders the current quota/reset, preserves CLI focus and routes one explicit continuation to its owning host', async () => {
@@ -280,6 +299,198 @@ describe('terminal usage-limit overlay', () => {
     }
   )
 
+  it('retains uncertain results through temporary pane suppression and retires them on closure', async () => {
+    mocks.call.mockRejectedValueOnce(new Error('lost reply'))
+    const pane = document.createElement('div')
+    document.body.append(pane)
+    const controller = paneController(pane)
+    const view = renderPortals(controller)
+    await act(async () => fireEvent.click(button()))
+    for (const suppressed of [
+      { ...controller, isVisible: false },
+      { ...controller, showSshReconnectOverlay: true },
+      { ...controller, effectiveChatViewMode: true, chatLeafId: LEAF },
+      controller
+    ]) {
+      mocks.mobile = suppressed === controller
+      view.rerender(portals(suppressed))
+      expect(screen.queryByRole('region')).toBeNull()
+      mocks.mobile = false
+      view.rerender(portals(controller))
+      expect(screen.getByRole('status').textContent).toContain('Couldn’t confirm whether')
+      expect(screen.queryByRole('button', { name: 'Continue now' })).toBeNull()
+    }
+    view.rerender(
+      portals({
+        ...controller,
+        paneProcessExitsByPaneId: {
+          1: { paneId: 1, exitCode: 0, reason: 'process-failed', startup: null }
+        }
+      })
+    )
+    setRow(undefined)
+    setRow(row())
+    view.rerender(portals(controller))
+    expect(button().hasAttribute('disabled')).toBe(false)
+    pane.remove()
+  })
+
+  it('settles a pending action while hidden without reviving it and resets only for a new cut', async () => {
+    let finish: (value: TerminalUsageLimitContinuationResult) => void = () => {}
+    mocks.call.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const pane = document.createElement('div')
+    document.body.append(pane)
+    const controller = paneController(pane)
+    const view = renderPortals(controller)
+    fireEvent.click(button())
+    view.rerender(portals({ ...controller, isVisible: false }))
+    expect(screen.queryByRole('region')).toBeNull()
+    view.rerender(portals(controller))
+    expect(button().hasAttribute('disabled')).toBe(true)
+    view.rerender(portals({ ...controller, isVisible: false }))
+    await act(async () => finish({ status: 'unknown' }))
+    view.rerender(portals(controller))
+    expect(screen.queryByRole('button', { name: 'Continue now' })).toBeNull()
+    setRow({ ...row(), turnEndedAt: 40 })
+    expect(button().hasAttribute('disabled')).toBe(false)
+    expect(mocks.call).toHaveBeenCalledOnce()
+    pane.remove()
+  })
+
+  it('retains an uncertain send through a full pane remount while source facts remain the same', async () => {
+    mocks.call.mockResolvedValueOnce({ status: 'input-accepted' })
+    const view = mount()
+    await act(async () => fireEvent.click(button()))
+    view.unmount()
+    const remounted = mount()
+    expect(screen.queryByRole('button', { name: 'Continue now' })).toBeNull()
+    expect(screen.getByRole('status').textContent).toContain('Continue was sent')
+    remounted.unmount()
+    setRow({ ...row(), interrupted: true })
+    setRow(row())
+    mount()
+    expect(button().hasAttribute('disabled')).toBe(false)
+    expect(mocks.call).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the attempt while children hide its end and through an atomic source pane transfer', async () => {
+    mocks.call.mockResolvedValueOnce({ status: 'unknown' })
+    const view = mount()
+    await act(async () => fireEvent.click(button()))
+    view.unmount()
+    setRow({ ...row(), state: 'working', turnEndedAt: undefined, turnEndDisposition: undefined })
+    setRow(row())
+    const restored = mount()
+    expect(screen.queryByRole('button', { name: 'Continue now' })).toBeNull()
+    restored.unmount()
+    const { createTestStore } = await import('@/store/slices/store-test-helpers')
+    const authority = createTestStore()
+    authority.setState({ agentStatusByPaneKey: { [PANE]: row() } })
+    const destination = `detached:${LEAF}`
+    authority
+      .getState()
+      .transferAgentPaneAuthority({ fromPaneKey: PANE, toPaneKey: destination, ptyId: 'pty-owned' })
+    act(() => store.setState({ agentStatusByPaneKey: authority.getState().agentStatusByPaneKey }))
+    render(
+      <TooltipProvider>
+        <PaneUsageLimitNotice paneKey={destination} target={{ kind: 'local' }} />
+      </TooltipProvider>
+    )
+    expect(screen.queryByRole('button', { name: 'Continue now' })).toBeNull()
+    expect(screen.getByRole('status').textContent).toContain('Couldn’t confirm whether')
+    expect(mocks.call).toHaveBeenCalledOnce()
+  })
+
+  it.each([10, 100])(
+    'bounds attempted-result retirement work and updates only its owner at %i panes',
+    async (count) => {
+      const rows = Object.fromEntries(
+        Array.from({ length: count }, (_, i) => [
+          `pane-${i}`,
+          {
+            ...row(),
+            paneKey: `pane-${i}`,
+            terminalHandle: `term-${i}`,
+            providerSession: { id: `session-${i}`, key: 'session_id' as const }
+          }
+        ])
+      )
+      store.setState({ agentStatusByPaneKey: rows })
+      mocks.call.mockResolvedValue({ status: 'unknown' })
+      render(
+        <TooltipProvider>
+          {Object.keys(rows).map((paneKey) => (
+            <PaneUsageLimitNotice key={paneKey} paneKey={paneKey} target={{ kind: 'local' }} />
+          ))}
+        </TooltipProvider>
+      )
+      for (const action of screen.getAllByRole('button', { name: 'Continue now' })) {
+        await act(async () => fireEvent.click(action))
+      }
+      expect(mocks.call).toHaveBeenCalledTimes(count)
+      mocks.renders = 0
+      act(() => store.setState({ unrelated: 1 }))
+      expect(mocks.renders).toBe(0)
+      let walks = 0
+      const observed = new Proxy(rows, {
+        ownKeys: () => {
+          walks++
+          return Object.keys(rows)
+        }
+      })
+      act(() => store.setState({ agentStatusByPaneKey: observed }))
+      expect(walks).toBe(1)
+      expect(mocks.renders).toBe(0)
+      act(() => store.setState({ unrelated: 2 }))
+      expect(walks).toBe(1)
+      expect(mocks.renders).toBe(0)
+      act(() =>
+        store.setState({
+          agentStatusByPaneKey: { ...rows, 'pane-0': { ...rows['pane-0'], turnEndedAt: 40 } }
+        })
+      )
+      expect(mocks.renders).toBe(1)
+      expect(screen.getAllByRole('button', { name: 'Continue now' })).toHaveLength(1)
+      expect(mocks.call).toHaveBeenCalledTimes(count)
+    }
+  )
+
+  it('settles while fully unmounted and retires even an unmounted attempt on an owning-host change', async () => {
+    let finish: (value: TerminalUsageLimitContinuationResult) => void = () => {}
+    mocks.call.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const pane = document.createElement('div')
+    document.body.append(pane)
+    const controller = paneController(pane)
+    const view = renderPortals(controller)
+    fireEvent.click(button())
+    view.unmount()
+    await act(async () => finish({ status: 'unknown' }))
+    const remounted = renderPortals(controller)
+    expect(screen.queryByRole('button', { name: 'Continue now' })).toBeNull()
+    remounted.unmount()
+    act(() =>
+      store.setState({
+        activeWorktreeId: controller.worktreeId,
+        activeWorkspaceExecutionHostId: toRuntimeExecutionHostId('replacement')
+      })
+    )
+    act(() => store.setState({ activeWorkspaceExecutionHostId: 'local' }))
+    renderPortals(controller)
+    expect(button().hasAttribute('disabled')).toBe(false)
+    expect(mocks.call).toHaveBeenCalledOnce()
+    pane.remove()
+  })
+
   it('portals only to terminal panes and suppresses a closed process or reconnecting host', () => {
     const pane = document.createElement('div')
     document.body.append(pane)
@@ -321,3 +532,28 @@ describe('terminal usage-limit overlay', () => {
     pane.remove()
   })
 })
+
+function paneController(pane: HTMLElement): TerminalPaneController {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every controller field read by the production portal.
+  return {
+    worktreeId: 'folder-workspace',
+    tabId: 'tab',
+    isVisible: true,
+    showSshReconnectOverlay: false,
+    managedPanes: [{ id: 1, leafId: LEAF, container: pane }],
+    paneProcessExitsByPaneId: {},
+    paneTransportsRef: { current: new Map([[1, { getPtyId: () => 'pty-owned' }]]) },
+    effectiveChatViewMode: false,
+    chatLeafId: null
+  } as unknown as TerminalPaneController
+}
+function portals(controller: TerminalPaneController) {
+  return (
+    <TooltipProvider>
+      <TerminalPaneUsageLimitPortals controller={controller} />
+    </TooltipProvider>
+  )
+}
+function renderPortals(controller: TerminalPaneController) {
+  return render(portals(controller))
+}
