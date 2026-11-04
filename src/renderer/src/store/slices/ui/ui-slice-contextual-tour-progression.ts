@@ -9,9 +9,22 @@ import {
 export function getContextualTourProgressionForFeatureInteraction(
   state: AppState,
   id: FeatureInteractionId
-): 'advance' | 'complete' | 'reveal-sidebar-and-advance' | null {
+):
+  | 'advance'
+  | 'complete'
+  | 'reveal-sidebar-and-advance'
+  | 'advance-to-next-step'
+  | 'reveal-sidebar'
+  | null {
   if (!state.activeContextualTourId) {
-    return null
+    // A split that finishes while its tip is paused still opens the sidebar the next tip points at.
+    const pausedTourId = state.contextualTourSessionTourId
+    return pausedTourId === 'workspace-agent-sessions' &&
+      id === 'terminal-pane-split' &&
+      !state.sidebarOpen &&
+      !state.contextualToursSeenIds.includes(pausedTourId)
+      ? 'reveal-sidebar'
+      : null
   }
   const tour = getContextualTour(state.activeContextualTourId)
   const step = tour.steps[state.activeContextualTourStepIndex]
@@ -34,5 +47,8 @@ export function getContextualTourProgressionForFeatureInteraction(
   ) {
     return 'reveal-sidebar-and-advance'
   }
-  return 'complete'
+  // Completing here would mark the tour seen and drop a next tip whose target isn't measurable yet.
+  return state.activeContextualTourStepIndex + 1 < tour.steps.length
+    ? 'advance-to-next-step'
+    : 'complete'
 }

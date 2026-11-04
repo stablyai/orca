@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useAppStore } from '@/store'
 import {
   getContextualTour,
+  hasUndoneContextualTourAction,
   type ContextualTourId,
   type ContextualTourStepAction
 } from '../../../../shared/contextual-tours'
@@ -42,6 +43,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const blockingSurfaceVisible = useAppStore((s) => s.contextualToursBlockingSurfaceVisible)
   const activeTourSuppressed = useAppStore((s) => s.activeContextualTourSuppressed)
   const keybindings = useAppStore((s) => s.keybindings)
+  const activeTourHasUndoneAction = useAppStore((s) =>
+    s.activeContextualTourId
+      ? hasUndoneContextualTourAction(
+          getContextualTour(s.activeContextualTourId),
+          s.featureInteractions
+        )
+      : false
+  )
   const activeTabId = useAppStore((s) => s.activeTabId)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const markContextualToursSeen = useAppStore((s) => s.markContextualToursSeen)
@@ -60,6 +69,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const panelRef = useRef<HTMLElement | null>(null)
   const measuredTargetRef = useRef<MeasuredContextualTourTarget | null>(null)
   const markedTourIdRef = useRef<string | null>(null)
+  const renderedStepIndexRef = useRef<number | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const focusedStepRef = useRef<string | null>(null)
   const telemetryTourIdRef = useRef<ContextualTourId | null>(null)
@@ -183,6 +193,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
       element: measurement.renderState.targetElement,
       rect: measurement.renderState.rect
     }
+    renderedStepIndexRef.current = activeStepIndex
     setRenderState((previous) =>
       areContextualTourRenderStatesEqual(previous, measurement.renderState)
         ? previous
@@ -244,13 +255,27 @@ export function ContextualTourOverlay(): JSX.Element | null {
   }, [measureTourOverlay])
 
   useEffect(() => {
-    if (!activeTourId || !renderState || markedTourIdRef.current === activeTourId) {
+    if (
+      !activeTourId ||
+      !renderState ||
+      activeTourHasUndoneAction ||
+      // A step change keeps the previous step's renderState until the new step measures.
+      renderedStepIndexRef.current !== activeStepIndex ||
+      markedTourIdRef.current === activeTourId
+    ) {
       return
     }
-    // Mark seen only after the first measured target paints so missing surfaces may retry.
+    // Mark seen only after the first measured target paints so missing surfaces may retry; a step
+    // waiting for its action stays pending through interruptions until it succeeds or is dismissed.
     markedTourIdRef.current = activeTourId
     markContextualToursSeen([activeTourId])
-  }, [activeTourId, markContextualToursSeen, renderState])
+  }, [
+    activeStepIndex,
+    activeTourHasUndoneAction,
+    activeTourId,
+    markContextualToursSeen,
+    renderState
+  ])
 
   useEffect(() => {
     if (!activeTourId || !renderState || telemetryTourIdRef.current === activeTourId) {
@@ -328,7 +353,12 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (activeTourId) {
       return
     }
-    focusedStepRef.current = null
+    // A paused tour that comes back must not take focus again: a keystroke meant for the terminal
+    // would land on its dismiss button. Only a tour that ended for good resets the focus memory.
+    const focusedTourId = focusedStepRef.current?.split(':')[0]
+    if (!focusedTourId || useAppStore.getState().contextualToursSeenIds.includes(focusedTourId)) {
+      focusedStepRef.current = null
+    }
     const previousFocus = previousFocusRef.current
     previousFocusRef.current = null
     if (previousFocus?.isConnected) {

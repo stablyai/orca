@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '../store'
-import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import { setForegroundTerminalTabIds } from '@/lib/foreground-terminal-tabs'
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { useTerminalProviderSnapshotCapability } from './terminal/use-terminal-provider-snapshot-capability'
@@ -80,9 +79,6 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
   const activeContextualTourId = useAppStore((state) => state.activeContextualTourId)
-  const hasSplitTerminalPane = useAppStore((state) =>
-    hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split')
-  )
 
   useContextualTour(
     'workspace-agent-sessions',
@@ -91,8 +87,7 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
       activeView === 'terminal' &&
       workspaceSessionReady &&
       activeTabType === 'terminal' &&
-      Boolean(activeTabId) &&
-      (!hasSplitTerminalPane || activeContextualTourId === 'workspace-agent-sessions')
+      Boolean(activeTabId)
     ),
     'workspace_agent_sessions_visible'
   )
@@ -108,7 +103,6 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
     effectiveActiveLayout,
     activeWorktreeBrowserTabIdsKey,
     activeContextualTourId,
-    hasSplitTerminalPane,
     terminalProviderSnapshotCapabilityRevision
   }
 }
