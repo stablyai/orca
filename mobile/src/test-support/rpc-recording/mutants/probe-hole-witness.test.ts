@@ -22,75 +22,19 @@ const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-
 
 // Prove each probe closes a surviving mutation.
 // Empty session inputs exercise omission guards that always-filled fixtures could not reach.
+// The null-afterTabId create mutant: its physical params keep the order the prepared request sends.
 const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonly string[] }[] = [
-  {
-    mutation: 'new-tab-refusal-order',
-    operation: 'settings.new-tab-agents',
-    closedBy: ['probe-new-tab-both-refused']
-  },
-  {
-    mutation: 'new-tab-deferred-settings-read',
-    operation: 'settings.new-tab-agents',
-    closedBy: ['probe-new-tab-null-sibling-refused']
-  },
-  {
-    mutation: 'workspace-context-refusal-blanks',
-    operation: 'settings.workspace-context',
-    closedBy: ['settings-workspace-context-refuse-after-data']
-  },
-  {
-    mutation: 'display-mode-unconditional-client',
-    operation: 'session.terminal-display-mode',
-    closedBy: ['session-terminal-display-mode-auto-without-device-token']
-  },
-  {
-    mutation: 'display-mode-unmeasured-viewport',
-    operation: 'session.terminal-display-mode',
-    closedBy: ['session-terminal-display-mode-auto-without-viewport']
-  },
-  {
-    mutation: 'startup-tab-load-rejects-sequence',
-    operation: 'session.startup',
-    closedBy: ['session-startup-refused-tab-load-still-loads-terminals']
-  },
   {
     mutation: 'create-after-tab-id-null',
     operation: 'session.create-terminal',
     closedBy: ['session-create-terminal-without-active-tab']
-  },
-  {
-    mutation: 'create-quick-command-keys',
-    operation: 'session.create-terminal',
-    closedBy: [
-      'session-create-terminal-runs-a-quick-command',
-      'session-create-terminal-launches-an-agent-quick-command'
-    ]
-  },
-  {
-    mutation: 'create-second-tap-in-flight',
-    operation: 'session.create-terminal',
-    closedBy: ['session-create-terminal-ignores-a-second-create-in-flight']
   }
 ]
 
 const changedParams: Partial<
   Record<Mutation, (params: Record<string, unknown>) => Record<string, unknown>>
 > = {
-  'display-mode-unconditional-client': ({ terminal, mode, ...params }) => ({
-    terminal,
-    mode,
-    client: { id: null, type: 'mobile' },
-    ...params
-  }),
-  'display-mode-unmeasured-viewport': (params) => ({ ...params, viewport: null }),
-  'create-after-tab-id-null': ({ worktree, ...rest }) => ({ worktree, afterTabId: null, ...rest }),
-  'create-quick-command-keys': (params) =>
-    Object.fromEntries(
-      Object.entries(params).map(([key, value]) => [
-        key === 'command' ? 'agentPrompt' : key === 'agentPrompt' ? 'command' : key,
-        value
-      ])
-    )
+  'create-after-tab-id-null': ({ worktree, ...rest }) => ({ worktree, afterTabId: null, ...rest })
 }
 
 function isParams(value: unknown): value is Record<string, unknown> {

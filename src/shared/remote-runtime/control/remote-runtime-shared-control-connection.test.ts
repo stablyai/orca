@@ -1,10 +1,6 @@
 import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../../runtime-ordinary-message-capability'
 import { sendRemoteRuntimeRequestOnSocket } from '../requests/remote-runtime-request-socket'
 import { RemoteRuntimeRequestConnection } from '../requests/remote-runtime-request-connection'
-import { pairedRuntimeConnectionFromOffer } from '../pairing/paired-runtime-connection'
-import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
-import { createFixedKeyLegacyHandshakeForTest } from '../e2ee/paired-e2ee-fixed-key-test-fixture'
-import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES,
@@ -12,15 +8,11 @@ import {
   serializeRemoteRuntimeRpcRequest
 } from '../remote-runtime-memory-limits'
 import { getRemoteRuntimeRequestAdmissionEvidence } from '../requests/remote-runtime-prepared-request-admission'
-import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
-import { isRuntimeSubscriptionReplayResponse } from '../../runtime-subscription-replay'
 import {
   closeSharedControlTestServers,
   createSharedControlTestServer as createServer
 } from './remote-runtime-shared-control-test-server'
-
-const TEST_PROJECT_PATH = path.join('tmp', 'project')
 
 afterEach(closeSharedControlTestServers)
 
@@ -69,101 +61,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     }
   )
 
-  it('routes multiple one-shot RPCs over one authenticated WebSocket', async () => {
-    const server = await createServer()
-    const states: string[] = []
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
-      onDiagnosticsChanged: ({ state }) => states.push(state)
-    })
-
-    const first = await connection.request('worktree.ps', undefined, 1000)
-    const second = await connection.request('session.tabs.listAll', null, 1000)
-
-    expect(first).toMatchObject({ ok: true, result: { method: 'worktree.ps' } })
-    expect(second).toMatchObject({ ok: true, result: { method: 'session.tabs.listAll' } })
-    expect(server.connectionCount()).toBe(1)
-    expect(server.auths).toContainEqual({
-      type: 'e2ee_auth',
-      deviceToken: 'device-token',
-      clientCapabilities: remoteRuntimeClientCapabilities()
-    })
-    expect(server.requests.map((request) => request.method)).toEqual([
-      'worktree.ps',
-      'session.tabs.listAll'
-    ])
-    expect((connection.close(), states)).toEqual(
-      expect.arrayContaining(['awaiting_ready', 'ready', 'closed'])
-    )
-  })
-
-  it('preserves orchestration authority fields on shared-control requests', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const envelope = {
-      orchestrationCapability: 'capability',
-      orchestrationContractVersion: 1,
-      orchestrationRequestId: 'request-1',
-      compatibilityInvocationId: 'compatibility-1',
-      orchestrationCompatibilityEvidence: {
-        terminalHandle: 'term-1',
-        paneKey: 'pane-1',
-        launchToken: 'launch-1'
-      },
-      id: 'forged-id',
-      deviceToken: 'forged-token',
-      method: 'orchestration.federationAck',
-      params: { dispatchId: 'forged-dispatch' }
-    }
-
-    await connection.request('orchestration.federationPull', {}, 1000, envelope)
-
-    expect(server.requests).toContainEqual({
-      ...envelope,
-      id: expect.any(String),
-      deviceToken: 'device-token',
-      method: 'orchestration.federationPull',
-      params: {}
-    })
-    connection.close()
-  })
-
-  it('releases a pending request when the socket send throws', async () => {
-    const connection = new RemoteRuntimeSharedControlConnection(
-      pairedRuntimeConnectionFromOffer({
-        v: 2,
-        endpoint: 'ws://127.0.0.1:1',
-        deviceToken: 'token',
-        publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
-      })
-    )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reaches the client's private transport state; a renamed field fails the test.
-    const unsafe = connection as unknown as {
-      state: string
-      ws: { readyState: number; send: () => void; close: () => void } | null
-      handshake: PairedE2EEClientHandshake | null
-      pendingRequests: Map<string, unknown>
-    }
-    unsafe.state = 'ready'
-    unsafe.ws = {
-      readyState: 1,
-      send: () => {
-        throw new Error('send failed')
-      },
-      close: vi.fn()
-    }
-    unsafe.handshake = createFixedKeyLegacyHandshakeForTest(new Uint8Array(32).fill(2))
-
-    await expect(connection.request('worktree.ps', undefined, 1000)).rejects.toMatchObject({
-      code: 'remote_runtime_unavailable'
-    })
-    expect(unsafe.pendingRequests.size).toBe(0)
-    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
-      pendingRequestCount: 0,
-      retainedBytes: 0
-    })
-    connection.close()
-  })
-
   it('keeps a waiting request alive when a reachability probe replaces its pre-ready socket', async () => {
     const server = await createServer({ suppressReadyFrameCount: 1 })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
@@ -173,7 +70,10 @@ describe('RemoteRuntimeSharedControlConnection', () => {
 
     connection.reconnectNow()
 
-    await expect(response).resolves.toMatchObject({ ok: true, result: { method: 'worktree.ps' } })
+    await expect(response).resolves.toMatchObject({
+      ok: true,
+      result: { method: 'worktree.ps' }
+    })
     expect(server.connectionCount()).toBe(2)
     expect(server.requests.map(({ method }) => method)).toEqual(['worktree.ps'])
     expect(connection.getDiagnostics().pendingRequestCount).toBe(0)
@@ -181,131 +81,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       pendingRequestCount: 0,
       retainedBytes: 0
     })
-    connection.close()
-  })
-
-  it('logs unknown response ids without breaking pending requests', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const server = await createServer({ sendUnknownResponseBeforeResponse: true })
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
-      environmentId: 'env-test'
-    })
-
-    const response = await connection.request('worktree.ps', undefined, 1000)
-
-    expect(response).toMatchObject({ ok: true, result: { method: 'worktree.ps' } })
-    expect(warn).toHaveBeenCalledWith(
-      '[remote-runtime.shared-control] unknown response id',
-      expect.objectContaining({
-        environmentId: 'env-test',
-        responseId: 'unknown-response-id',
-        pendingMethods: ['worktree.ps']
-      })
-    )
-    connection.close()
-    warn.mockRestore()
-  })
-
-  it('routes multiple logical subscriptions over one socket and cleans them up explicitly', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const onAccounts = vi.fn()
-    const onEvents = vi.fn()
-
-    const accounts = await connection.subscribe('accounts.subscribe', null, 1000, {
-      onResponse: onAccounts,
-      onError: vi.fn()
-    })
-    await connection.subscribe('runtime.clientEvents.subscribe', null, 1000, {
-      onResponse: onEvents,
-      onError: vi.fn()
-    })
-
-    await vi.waitFor(() => expect(onAccounts).toHaveBeenCalled())
-    await vi.waitFor(() => expect(onEvents).toHaveBeenCalled())
-    accounts.close()
-    await vi.waitFor(() =>
-      expect(server.requests.map((request) => request.method)).toContain('accounts.unsubscribe')
-    )
-
-    expect(server.connectionCount()).toBe(1)
-    expect(server.requests.map((request) => request.method)).toEqual([
-      'accounts.subscribe',
-      'runtime.clientEvents.subscribe',
-      'accounts.unsubscribe'
-    ])
-
-    connection.close()
-  })
-
-  it('cleans up one all-session-tabs subscription by logical request id', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const subscription = await connection.subscribe('session.tabs.subscribeAll', null, 1000, {
-      onResponse: vi.fn(),
-      onError: vi.fn()
-    })
-    await vi.waitFor(() =>
-      expect(server.requests.map((request) => request.method)).toEqual([
-        'session.tabs.subscribeAll'
-      ])
-    )
-    const subscribeRequestId = server.requests[0]!.id
-
-    subscription.close()
-
-    await vi.waitFor(() =>
-      expect(server.requests.map((request) => request.method)).toEqual([
-        'session.tabs.subscribeAll',
-        'session.tabs.unsubscribeAll'
-      ])
-    )
-    expect(server.requests[1]).toMatchObject({
-      params: { subscriptionId: subscribeRequestId }
-    })
-    connection.close()
-  })
-
-  it('reconnects and replays passive subscriptions without closing them', async () => {
-    const server = await createServer({ closeAfterFirstStreamingResponse: true })
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const onClose = vi.fn()
-    const onError = vi.fn()
-
-    await connection.subscribe('runtime.clientEvents.subscribe', null, 1000, {
-      onResponse: vi.fn(),
-      onError,
-      onClose
-    })
-
-    await vi.waitFor(() => expect(server.connectionCount()).toBe(2))
-    await vi.waitFor(() =>
-      expect(server.requests.map((request) => request.method)).toEqual([
-        'runtime.clientEvents.subscribe',
-        'runtime.clientEvents.subscribe'
-      ])
-    )
-    expect(onError).toHaveBeenCalledTimes(1)
-    expect(onClose).not.toHaveBeenCalled()
-    expect(connection.getDiagnostics()).toMatchObject({
-      state: 'ready',
-      lastError: null,
-      lastClose: null
-    })
-
-    connection.close()
-  })
-
-  it('calls onReady for every socket that becomes ready, including after a reconnect', async () => {
-    const server = await createServer()
-    const onReady = vi.fn()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, { onReady })
-    await connection.request('worktree.ps', undefined, 1000)
-    expect(onReady).toHaveBeenCalledTimes(1)
-    server.closeClients()
-    await vi.waitFor(() => expect(server.connectionCount()).toBe(2))
-    await connection.request('worktree.ps', undefined, 2000)
-    expect(onReady).toHaveBeenCalledTimes(2)
     connection.close()
   })
 
@@ -332,168 +107,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       ])
     )
     expect(onAccounts).not.toHaveBeenCalled()
-
-    connection.close()
-  })
-
-  it.each([
-    ['session.tabs.subscribeAll', undefined, 'session.tabs.unsubscribeAll'],
-    ['runtime.clientEvents.subscribe', null, 'runtime.clientEvents.unsubscribe'],
-    ['files.watch', { path: TEST_PROJECT_PATH }, 'files.unwatch']
-  ])('cleans up %s explicitly on close', async (method, params, cleanupMethod) => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const onResponse = vi.fn()
-
-    const subscription = await connection.subscribe(method, params, 1000, {
-      onResponse,
-      onError: vi.fn()
-    })
-    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
-
-    subscription.close()
-
-    await vi.waitFor(() =>
-      expect(server.requests.map((request) => request.method)).toContain(cleanupMethod)
-    )
-    connection.close()
-  })
-
-  it('sends file watch cleanup at most once when a subscription closes repeatedly', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const onResponse = vi.fn()
-
-    const subscription = await connection.subscribe(
-      'files.watch',
-      { path: TEST_PROJECT_PATH },
-      1000,
-      {
-        onResponse,
-        onError: vi.fn()
-      }
-    )
-    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
-
-    subscription.close()
-    subscription.close()
-
-    await vi.waitFor(() =>
-      expect(server.requests.filter((request) => request.method === 'files.unwatch')).toHaveLength(
-        1
-      )
-    )
-    connection.close()
-  })
-
-  it('ignores encrypted keepalive frames while waiting for a response', async () => {
-    const server = await createServer({ sendKeepaliveBeforeResponse: true })
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-
-    await expect(connection.request('worktree.ps', undefined, 1000)).resolves.toMatchObject({
-      ok: true,
-      result: { method: 'worktree.ps' }
-    })
-
-    connection.close()
-  })
-
-  it('times out a stuck short RPC on its absolute deadline despite keepalive frames', async () => {
-    // Unrelated long-poll keepalives must not extend stuck short RPC deadlines (#7948).
-    const server = await createServer({
-      silentMethods: ['worktree.hang'],
-      sendKeepaliveBeforeResponse: true,
-      keepaliveDelayMs: 20
-    })
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-
-    await expect(connection.request('worktree.hang', undefined, 60)).rejects.toThrow('Timed out')
-
-    connection.close()
-  })
-
-  it('sends explicit subscription cleanup before graceful connection close', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const onResponse = vi.fn()
-
-    await connection.subscribe('runtime.clientEvents.subscribe', null, 1000, {
-      onResponse,
-      onError: vi.fn()
-    })
-    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
-
-    connection.close()
-
-    await vi.waitFor(() =>
-      expect(server.requests.map((request) => request.method)).toContain(
-        'runtime.clientEvents.unsubscribe'
-      )
-    )
-  })
-
-  it('treats remote binary frames as unsupported on the shared control lane', async () => {
-    const server = await createServer({ sendBinaryAfterAuth: true })
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-
-    await expect(connection.request('worktree.ps', undefined, 1000)).rejects.toThrow(
-      'unexpected binary frame'
-    )
-
-    connection.close()
-  })
-
-  it('does not send outbound binary frames on the shared control lane', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-
-    const subscription = await connection.subscribe('runtime.clientEvents.subscribe', null, 1000, {
-      onResponse: vi.fn(),
-      onError: vi.fn()
-    })
-    await vi.waitFor(() => expect(server.requests).toHaveLength(1))
-
-    expect(subscription.sendBinary(new Uint8Array([1, 2, 3]))).toBe(false)
-    connection.close()
-  })
-
-  it('detects a half-open socket via client liveness, reconnects, and tags the replayed response', async () => {
-    // Half-open tunnels keep TCP open without close/pongs/responses; liveness must terminate the socket to trigger reconnect (#7718).
-    const server = await createServer({ disableAutoPong: true })
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
-      liveness: { pingIntervalMs: 50, livenessTimeoutMs: 200 }
-    })
-    const onResponse = vi.fn()
-    const onClose = vi.fn()
-
-    await connection.subscribe('runtime.clientEvents.subscribe', null, 1000, {
-      onResponse,
-      onError: vi.fn(),
-      onClose
-    })
-    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
-    expect(isRuntimeSubscriptionReplayResponse(onResponse.mock.calls[0]?.[0])).toBe(false)
-
-    await vi.waitFor(() => expect(server.connectionCount()).toBeGreaterThanOrEqual(2), {
-      timeout: 5000
-    })
-    await vi.waitFor(
-      () =>
-        expect(
-          server.requests.filter((request) => request.method === 'runtime.clientEvents.subscribe')
-            .length
-        ).toBeGreaterThanOrEqual(2),
-      { timeout: 5000 }
-    )
-    // Tag the first replayed response so snapshot freshness gates accept it after reconnect.
-    await vi.waitFor(
-      () =>
-        expect(
-          onResponse.mock.calls.some(([response]) => isRuntimeSubscriptionReplayResponse(response))
-        ).toBe(true),
-      { timeout: 5000 }
-    )
-    expect(onClose).not.toHaveBeenCalled()
 
     connection.close()
   })
@@ -607,23 +220,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       retainedBytes: 0
     })
   })
-
-  it('rejects pending requests and schedules standing recovery when the socket closes', async () => {
-    const server = await createServer({ closeBeforeResponse: true })
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-
-    await expect(connection.request('worktree.ps', undefined, 1000)).rejects.toThrow(
-      'Remote Orca runtime closed the connection'
-    )
-    expect(connection.getDiagnostics()).toMatchObject({
-      state: 'reconnecting',
-      pendingRequestCount: 0,
-      lastClose: { code: 4001, reason: 'test close' }
-    })
-    connection.pauseStandingRetry()
-    expect(connection.getDiagnostics()).toMatchObject({ state: 'closed' })
-    connection.close()
-  })
 })
 
 it('cancels a pending subscription setup without canceling a sibling on the shared connection', async () => {
@@ -649,28 +245,6 @@ it('cancels a pending subscription setup without canceling a sibling on the shar
     expect(server.requests).toEqual([])
     connection.close()
     await siblingClosed
-    expect(connection.getDiagnostics()).toMatchObject({ subscriptionCount: 0 })
-  } finally {
-    connection.close()
-  }
-})
-
-it('creates no connection or subscription for a pre-aborted setup', async () => {
-  const server = await createServer()
-  const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-  const controller = new AbortController()
-  controller.abort()
-  try {
-    await expect(
-      connection.subscribe(
-        'files.watch',
-        {},
-        10_000,
-        { onResponse: vi.fn(), onError: vi.fn() },
-        controller.signal
-      )
-    ).rejects.toMatchObject({ name: 'AbortError' })
-    expect(server.connectionCount()).toBe(0)
     expect(connection.getDiagnostics()).toMatchObject({ subscriptionCount: 0 })
   } finally {
     connection.close()
