@@ -27,9 +27,22 @@ export function isCrossStoreParent(child: Worktree, parent: Worktree): boolean {
   return childStore !== undefined && parentStore !== undefined && childStore !== parentStore
 }
 
+async function assertStoreSupportsCrossStoreLineage(
+  state: AppState,
+  target: RuntimeClientTarget
+): Promise<void> {
+  const status = await callRuntimeRpc<RuntimeStatus>(target, 'status.get')
+  assertCrossStoreLineageSupported(
+    status.capabilities,
+    target.kind === 'environment'
+      ? getRuntimeEnvironmentDisplayName(state, target.environmentId)
+      : 'this computer'
+  )
+}
+
 /**
  * The parent's own store names it for a child in `childTarget`'s store. Refuses before any write when
- * the child's store can't save it, or when the named install isn't the one this window verified.
+ * either store predates cross-machine parents, or the named install isn't the one this window verified.
  */
 export async function mintCrossStoreParentRef(
   state: AppState,
@@ -37,16 +50,14 @@ export async function mintCrossStoreParentRef(
   parent: Worktree,
   options: { reparent: boolean }
 ): Promise<CrossStoreParentRef> {
-  const childStatus = await callRuntimeRpc<RuntimeStatus>(childTarget, 'status.get')
-  assertCrossStoreLineageSupported(
-    childStatus.capabilities,
-    childTarget.kind === 'environment'
-      ? getRuntimeEnvironmentDisplayName(state, childTarget.environmentId)
-      : 'this computer'
-  )
+  await assertStoreSupportsCrossStoreLineage(state, childTarget)
   const parentStore = lineageStoreKeyOfRow(parent)
   if (parentStore === undefined || parentStore === lineageStoreKeyOfTarget(childTarget)) {
     throw new Error('That parent is on the same machine. Choose it as a parent there instead.')
+  }
+  // Why: an older paired server lacks the mint method; name it instead of a raw unknown-method error.
+  if (parentStore !== OWN_LINEAGE_STORE_KEY) {
+    await assertStoreSupportsCrossStoreLineage(state, targetOfStore(parentStore))
   }
   const { parent: ref } = await callRuntimeRpc<{ parent: CrossStoreParentRef }>(
     targetOfStore(parentStore),

@@ -51,4 +51,22 @@ describe('mintCrossStoreParentRef', () => {
       })
     ).rejects.toThrow("Couldn't confirm the parent's machine.")
   })
+
+  it('names an older parent server instead of calling its missing mint method', async () => {
+    callRuntimeRpc.mockImplementation(async (target: { kind: string }) => ({
+      capabilities: target.kind === 'local' ? [WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY] : []
+    }))
+
+    await expect(
+      mintCrossStoreParentRef(stateWithServerInstall('srv-install'), { kind: 'local' }, PARENT, {
+        reparent: false
+      })
+    ).rejects.toThrow('Update Orca on env-1 to nest workspaces under a parent on another machine.')
+    expect(callRuntimeRpc).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'worktree.crossStoreParentRef',
+      expect.anything(),
+      expect.anything()
+    )
+  })
 })
