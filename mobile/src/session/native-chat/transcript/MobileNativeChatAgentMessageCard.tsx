@@ -126,16 +126,6 @@ function CompactAgentMessageCard({
           />
           {status}
           <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
-          <Pressable
-            style={({ pressed }) => [styles.refold, pressed && pressedStyle]}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: true }}
-            onPress={() => setOpen(false)}
-          >
-            <Text style={styles.toggle}>
-              {t('chat.nativeChatUserMessageFold.showLess', 'Show less')}
-            </Text>
-          </Pressable>
         </View>
       ) : null}
     </View>

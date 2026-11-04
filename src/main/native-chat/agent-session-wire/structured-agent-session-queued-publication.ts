@@ -14,7 +14,7 @@ import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import {
   nextStructuredQueuedMessage,
   type StructuredQueueGateInput
-} from './structured-agent-session-queued-messages'
+} from './structured-agent-session-queued-gate'
 import {
   heldStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkHost

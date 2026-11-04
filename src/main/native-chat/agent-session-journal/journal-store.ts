@@ -70,7 +70,7 @@ export class AgentSessionJournal {
   private readonly readPublic = createJournalPublicReader(() => this.inputOrder)
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
   private reopenUnmarked: AgentJournalCursor | null = null
-  private onCommitted: ((rows?: readonly JournalRow[]) => void) | null = null
+  private onCommitted: Parameters<AgentSessionJournal['observeCommits']>[0] | null = null
   private readonly queue: JournalWriteQueue
   private readonly rowWriter: JournalCollaborators['rowWriter']
   private readonly epochController: JournalCollaborators['epochController']
@@ -117,8 +117,8 @@ export class AgentSessionJournal {
         this.queuedMessages.inputState()
         return this.projection.prepare(db, rows, savedAt, finishFold)
       },
-      commit: (rows) => {
-        this.onCommitted?.(rows)
+      commit: (rows, _savedAt, inputChanged) => {
+        this.onCommitted?.(rows, inputChanged)
         this.projection.verify()
       },
       notifyCommitted: () => this.onCommitted?.([]),
@@ -175,7 +175,9 @@ export class AgentSessionJournal {
   }
 
   /** One nonthrowing listener; undefined rows mean adopted history, an empty array means metadata. */
-  observeCommits(listener: (rows?: readonly JournalRow[]) => void): () => void {
+  observeCommits(
+    listener: (rows?: readonly JournalRow[], inputChanged?: boolean) => void
+  ): () => void {
     const registered: typeof listener = (...args) => listener(...args)
     this.onCommitted = registered
     return () => {

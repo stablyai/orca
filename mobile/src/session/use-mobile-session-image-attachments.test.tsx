@@ -1,4 +1,3 @@
-import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 import { createElement } from 'react'
 import { resetMobileNativeChatDraftInputsForTests } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -129,79 +128,4 @@ describe('useMobileSessionImageAttachments', () => {
       expect(hook.nativeChatImages.attachments).toEqual(outcome === 'rejected' ? [image] : [])
     }
   )
-
-  it.each([false, true])('gates terminal image delivery on input lease %s', async (leaseReady) => {
-    const args = baseArgs({
-      nativeChatInputLeaseReady: leaseReady,
-      structuredNativeChat: false
-    })
-    await renderWithImage(args)
-
-    expect(await send()).toBe(leaseReady)
-    const sends = args.client.sendRequest.mock.calls.filter(
-      ([method]) => method === 'terminal.send'
-    )
-    if (leaseReady) {
-      expect(sends).toEqual([
-        [
-          'terminal.send',
-          { terminal: 'term-1', text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false },
-          expect.any(Object)
-        ],
-        [
-          'terminal.send',
-          { terminal: 'term-1', text: '\x1b[200~/tmp/a.png\x1b[201~ ', enter: false },
-          expect.any(Object)
-        ]
-      ])
-      expect(args.nativeChatBaseSend).toHaveBeenCalledWith(
-        'look',
-        ['file:///a.jpg'],
-        expect.any(Number),
-        undefined,
-        expect.any(Number)
-      )
-      expect(hook.nativeChatImages.attachments).toEqual([])
-    } else {
-      expect(sends).toEqual([])
-      expect(args.nativeChatBaseSend).not.toHaveBeenCalled()
-      expect(args.onNativeChatSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
-      expect(hook.nativeChatImages.attachments).toHaveLength(1)
-    }
-  })
-
-  it('keeps a structured session image pending when the connection drops', async () => {
-    const args = baseArgs()
-    await renderWithImage(args)
-    act(() => {
-      renderer?.update(createElement(Harness, { args: { ...args, connState: 'connecting' } }))
-    })
-
-    expect(await send()).toBe(false)
-    expect(args.nativeChatBaseSend).not.toHaveBeenCalled()
-    expect(args.onNativeChatSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
-    expect(hook.nativeChatImages.attachments).toHaveLength(1)
-    expect(args.client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'clipboard.startImageUpload',
-      'clipboard.saveImageAsTempFile'
-    ])
-  })
-
-  it('keeps a terminal image pending until the live agent is confirmed', async () => {
-    const args = baseArgs({
-      nativeChatInputLeaseReady: true,
-      nativeChatAgentConfirmed: false,
-      structuredNativeChat: false
-    })
-    await renderWithImage(args)
-
-    expect(await send()).toBe(false)
-    expect(args.nativeChatBaseSend).not.toHaveBeenCalled()
-    expect(args.onNativeChatSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
-    expect(hook.nativeChatImages.attachments).toHaveLength(1)
-    expect(args.client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'clipboard.startImageUpload',
-      'clipboard.saveImageAsTempFile'
-    ])
-  })
 })

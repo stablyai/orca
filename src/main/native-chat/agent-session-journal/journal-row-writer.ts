@@ -57,9 +57,10 @@ export type JournalRowWriterDeps = {
     savedAt: number,
     finishFold?: (draft: JournalReducerState) => void
   ) => () => void
-  commit: (rows: readonly JournalRow[], savedAt: number) => void
+  commit: (rows: readonly JournalRow[], savedAt: number, inputChanged?: boolean) => void
   /** Streamed-text-only revisions may skip per-commit fsync; settlement makes them durable. */
   streamedTextRevision?: (row: JournalRow) => boolean
+  outputRevision?: (row: JournalRow) => boolean
 }
 
 export class JournalRowWriter {
@@ -76,6 +77,7 @@ export class JournalRowWriter {
       assertJournalFence(row.fence, this.deps.highestFence())
       const receipt = typeof prepareReceipt === 'function' ? prepareReceipt([row]) : prepareReceipt
       const streamed = !receipt && this.streamed([row])
+      const inputChanged = Boolean(receipt) || !this.outputOnly([row])
       this.deps.database().transaction(
         (db) => {
           if (!this.deps.prepare) {
@@ -89,7 +91,7 @@ export class JournalRowWriter {
         (adopt) => adopt?.()
       )
       receipt?.committed()
-      this.deps.commit([row], savedAt)
+      this.deps.commit([row], savedAt, inputChanged)
       return this.project([row])[0]!
     })
   }
@@ -121,6 +123,7 @@ export class JournalRowWriter {
     }
     const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
     const streamed = !receipt && this.streamed(rows)
+    const inputChanged = Boolean(receipt) || !this.outputOnly(rows)
     this.deps.database().transaction(
       (db) => {
         if (!this.deps.prepare) {
@@ -136,7 +139,7 @@ export class JournalRowWriter {
       (adopt) => adopt?.()
     )
     receipt?.committed()
-    this.deps.commit(rows, ts)
+    this.deps.commit(rows, ts, inputChanged)
     return this.project(rows)
   }
 
@@ -153,6 +156,10 @@ export class JournalRowWriter {
       epoch: row.epoch,
       sequence: row.seq
     }))
+  }
+
+  private outputOnly(rows: readonly JournalRow[]): boolean {
+    return this.deps.outputRevision !== undefined && rows.every(this.deps.outputRevision)
   }
 
   private streamed(rows: readonly JournalRow[]): boolean {

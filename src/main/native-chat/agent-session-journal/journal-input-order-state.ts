@@ -1,3 +1,4 @@
+import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageRow } from './queued-message-table'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalInputCardIndex } from './journal-input-card-index'
@@ -219,6 +220,7 @@ export function sameJournalInputCardPlace(
     prior.consumedAs === card.consumedAs &&
     prior.queuedAt?.epoch === card.queuedAt?.epoch &&
     prior.queuedAt?.sequence === card.queuedAt?.sequence &&
-    Boolean(prior.body.command) === Boolean(card.body.command)
+    Boolean(prior.body.command) === Boolean(card.body.command) &&
+    !!orchestrationMailNotice(prior.body.from) === !!orchestrationMailNotice(card.body.from)
   )
 }

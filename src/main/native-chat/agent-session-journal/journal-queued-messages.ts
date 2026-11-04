@@ -1,7 +1,10 @@
 import type { JournalReducerState } from './journal-reducer'
 import { journalInputAttemptEnded, type JournalInputWork } from './journal-input-obligations'
 import { journalInputOrder } from './journal-input-order'
-import { nextEligibleQueuedCard } from './journal-queue-mail-eligibility'
+import {
+  assertQueuedCardConsumable,
+  nextEligibleQueuedCard
+} from './journal-queue-mail-eligibility'
 import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
 import { journalAttachmentClaimReceipt } from './journal-submission-hook'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -26,7 +29,6 @@ import {
   type QueuedMessageHoldReason,
   type QueuedMessageRow
 } from './queued-message-table'
-import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import { QueuedMessageEditLeases } from './queued-message-edit-leases'
 import { queuedMessageUpdateDecision, type QueuedMessageUpdate } from './queued-message-update'
 import { queuedMessageMovePlan } from './queued-message-move'
@@ -95,14 +97,15 @@ export class JournalQueuedMessages {
   mailUnavailable: ((card: QueuedMessageRow) => boolean) | undefined
 
   /** Selection reads identity summaries; current values are resolved after edits. */
-  nextInputCard(automatic = true): QueuedMessageRow | null {
+  nextInputCard(automatic = true, steer = false): QueuedMessageRow | null {
     return nextEligibleQueuedCard({
       state: this.inputState(),
       floor: this.deps.reopenFloor(),
       get: (messageId) => this.get(messageId),
       editHeld: (messageId) => automatic && this.editLeases.isHeld(messageId),
       revisions: [this.revision(), automatic ? this.editLeases.version() : -1],
-      unavailable: this.mailUnavailable
+      unavailable: this.mailUnavailable,
+      steer
     })
   }
 
@@ -227,21 +230,9 @@ export class JournalQueuedMessages {
   assertConsumable(
     input: JournalSubmissionConsume & { consumedAs: string; fingerprint: string }
   ): void {
-    const card = this.get(input.messageId)
-    const consumable =
-      card !== null &&
-      card.state === input.expect &&
-      card.fingerprint === input.fingerprint &&
-      input.consumedAs !== input.messageId
-    if (consumable && input.yieldsToPause) {
-      const next = this.nextInputCard()
-      if (next?.messageId === input.messageId) {
-        return
-      }
-    } else if (consumable) {
-      return
-    }
-    throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
+    assertQueuedCardConsumable(input, this.get(input.messageId), () =>
+      this.nextInputCard(true, input.steer)
+    )
   }
 
   proofWitness(clientMessageId: string): JournalQueuePlan {
