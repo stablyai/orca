@@ -73,7 +73,10 @@ it.each(['direct Use', 'blur then Use'] as const)(
       terminal: {},
       structured: {},
       arguments: '',
-      ownerKey: 'buffer-owner'
+      ownerKey: 'buffer-owner',
+      agent: 'codex',
+      label: 'Codex',
+      rows: [{ agent: 'codex', kind: 'terminal' }]
     }
     const change = vi.fn()
     act(() =>
@@ -84,32 +87,34 @@ it.each(['direct Use', 'blur then Use'] as const)(
       )
     )
     const input = host.querySelector<HTMLTextAreaElement>('textarea')!
-    const text = '--model sonnet --effort high --verbose'
+    const text = '--no-alt-screen -m gpt-6.1-sol -c model_reasoning_effort=low'
     for (let length = 1; length <= text.length; length++) {
       fireEvent.change(input, { target: { value: text.slice(0, length) } })
       expect(input.value).toBe(text.slice(0, length))
       expect(change.mock.calls.at(-1)?.[0].choices.model).toBeUndefined()
       expect(host.querySelector('button[aria-label="Remove --model s"]')).toBeNull()
     }
-    fireEvent.change(input, { target: { value: '--debug' } })
+    const submit = [...host.querySelectorAll('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Launch terminal'
+    )!
     if (acceptance === 'blur then Use') {
-      fireEvent.blur(input)
+      fireEvent.blur(input, { relatedTarget: submit })
     }
-    fireEvent.click(
-      [...host.querySelectorAll('button')].find(
-        (button) => button.getAttribute('aria-label') === 'Launch terminal'
-      )!
-    )
+    expect(input.value).toBe(text)
+    fireEvent.click(submit)
     expect(onUse).toHaveBeenCalledOnce()
     const accepted = onUse.mock.calls[0][0]
     expect(accepted.pendingArguments).toBeUndefined()
-    expect(accepted.acceptedEdits?.arguments).toBe('--debug')
-    expect(accepted.arguments).toBe('--debug')
-    expect(accepted.choices.model).toBeUndefined()
-    expect(accepted.choices.options?.effort).toBeUndefined()
+    expect(accepted.acceptedEdits?.arguments).toBe(text)
+    expect(accepted.arguments).toBe('--no-alt-screen')
+    expect(accepted.choices.model).toBe('gpt-6.1-sol')
+    expect(accepted.choices.options?.effort).toBe('low')
     expect(
-      agentPickerLaunchInputs({ ...accepted, surface: 'chat' }, own).sessionOptions?.model
-    ).toBeUndefined()
+      agentPickerLaunchInputs({ ...accepted, surface: 'chat' }, own).sessionOptions
+    ).toMatchObject({
+      model: 'gpt-6.1-sol',
+      effort: 'low'
+    })
   }
 )
 

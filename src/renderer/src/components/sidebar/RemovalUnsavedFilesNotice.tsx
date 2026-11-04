@@ -6,8 +6,8 @@ import { worktreePurgeClosedFileIds } from '@/store/slices/worktrees/teardown/wo
 import {
   flushRemovalPendingEdits,
   lastViewUnsavedFiles
-} from '@/components/editor/removal-unsaved-editor-files'
-import { runAfterEditorFramesFlush } from '@/components/editor/editor-pending-flush'
+} from '@/components/editor/save/flush/removal-unsaved-editor-files'
+import { runAfterEditorFramesFlush } from '@/components/editor/save/flush/editor-pending-flush'
 import { discardedUnsavedFilesLabel, moreUnsavedFilesLabel } from './removal-unsaved-files'
 
 const MAX_LISTED_FILES = 5

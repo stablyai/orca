@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
-import { runAfterEditorFramesFlush } from './editor/editor-pending-flush'
+import { runAfterEditorFramesFlush } from './editor/save/flush/editor-pending-flush'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { isPinnedActiveEditorTab } from './terminal-workspace-model'
 import { selectWorkspaceSurface } from '@/lib/workspace-surface-reveal'

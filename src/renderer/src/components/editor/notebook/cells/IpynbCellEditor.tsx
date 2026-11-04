@@ -16,7 +16,7 @@ import {
   getIpynbCodeCellPreviewLines
 } from './ipynb-code-cell-lines'
 import type { IpynbCell } from '../document/ipynb-parse'
-import { MarkdownPreviewBody } from '../../MarkdownPreviewBody'
+import { MarkdownPreviewBody } from '../../markdown-preview/render-tree/MarkdownPreviewBody'
 import { useMonacoColorizedLines } from '../../MonacoCodeExcerpt'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'

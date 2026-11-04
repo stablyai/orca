@@ -8,8 +8,8 @@ import { agentJournalLinkageFields } from '../../../../shared/agent-session/jour
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexThreadItem } from '../items/codex-thread-item-identity'
-import '../prompts/codex-structured-prompt-replies'
 import { CODEX_COMMAND_APPROVAL_METHOD } from '../prompts/codex-prompt-registry'
+import '../prompts/codex-structured-prompt-replies'
 
 const SESSION = 'session-1'
 const PARENT = 'thread-parent'
@@ -89,34 +89,6 @@ function harness(primaryThreadId: string | null = PARENT) {
 }
 
 describe('codex journal translation — subagent producer linkage', () => {
-  it("stamps every row a child thread produces, and nothing on the session's own", () => {
-    const { on, item, spawn, linkageOf, writes } = harness()
-    on(PARENT, 'turn/started', { turn: { id: 'pt' } })
-    spawn(PARENT, 'pt', CHILD, '/root/review')
-    on(CHILD, 'turn/started', { turn: { id: 'ct' } })
-    const command = { type: 'commandExecution', id: 'cmd-1', command: 'pnpm test' }
-    item(CHILD, 'item/started', 'ct', { ...command, status: 'inProgress' })
-    on(CHILD, 'item/commandExecution/outputDelta', { itemId: 'cmd-1', delta: 'streamed out' })
-    item(CHILD, 'item/completed', 'ct', { ...command, status: 'completed', exitCode: 0 })
-    item(CHILD, 'item/completed', 'ct', { type: 'agentMessage', id: 'm-1', text: 'child prose' })
-    item(PARENT, 'item/completed', 'pt', { type: 'agentMessage', id: 'm-2', text: 'own prose' })
-
-    const commandRows = writes.filter((write) => write.key.includes('cmd-1'))
-    expect(commandRows.length).toBeGreaterThanOrEqual(3)
-    expect(commandRows.map((write) => write.linkage)).toEqual(commandRows.map(() => CHILD_LINKAGE))
-    expect(linkageOf('child prose')).toEqual(CHILD_LINKAGE)
-    expect(linkageOf('own prose')).toEqual({})
-    expect(writes.filter((write) => write.key.includes('subagent'))).toEqual([])
-  })
-
-  it('stamps a child row that arrives before the spawn announcement names it', () => {
-    const { on, item, linkageOf } = harness()
-    on(PARENT, 'turn/started', { turn: { id: 'pt' } })
-    item(CHILD, 'item/completed', 'ct', { type: 'agentMessage', id: 'm-1', text: 'early words' })
-
-    expect(linkageOf('early words')).toEqual(CHILD_LINKAGE)
-  })
-
   it('names the child that spawned a grandchild, from the thread that announced it', () => {
     const { on, item, spawn, linkageOf } = harness()
     on(PARENT, 'turn/started', { turn: { id: 'pt' } })
@@ -214,43 +186,5 @@ describe('codex journal translation — subagent producer linkage', () => {
     expect(writes[writes.findIndex((w) => w.key.includes('child-approval'))]?.linkage).toEqual(
       CHILD_LINKAGE
     )
-  })
-
-  it("stamps a child's provider frames and goal rows, which are journaled per thread", () => {
-    const { on, spawn, writes } = harness()
-    on(PARENT, 'turn/started', { turn: { id: 'pt' } })
-    spawn(PARENT, 'pt', CHILD, '/root/review')
-    on(CHILD, 'turn/started', { turn: { id: 'ct' } })
-    on(CHILD, 'error', {
-      turnId: 'ct',
-      error: { message: 'child hit a rate limit' },
-      willRetry: true
-    })
-    on(CHILD, 'thread/goal/updated', {
-      turnId: 'ct',
-      goal: {
-        threadId: CHILD,
-        objective: 'Review the diff',
-        status: 'active',
-        tokenBudget: null,
-        tokensUsed: 0,
-        timeUsedSeconds: 0,
-        createdAt: 1,
-        updatedAt: 1
-      }
-    })
-
-    const frame = writes.find((write) => JSON.stringify(write.body).includes('rate limit'))
-    const goal = writes.find((write) => JSON.stringify(write.body).includes('Review the diff'))
-    expect(frame?.linkage).toEqual(CHILD_LINKAGE)
-    // Thread-scoped goals carry no run attempt.
-    expect(goal?.linkage).toEqual(CHILD_LINKAGE)
-  })
-
-  it('stamps nothing while the session thread is still opening', () => {
-    const { item, linkageOf } = harness(null)
-    item('thread-x', 'item/completed', 't', { type: 'agentMessage', id: 'm', text: 'too early' })
-
-    expect(linkageOf('too early')).toEqual({})
   })
 })

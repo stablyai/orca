@@ -7837,9 +7837,6 @@
           "browserExtensions": {
             "copy": "Ajoute Paramètres › Navigateur › Extensions pour les profils de navigateur locaux.",
             "toggleLabel": "Activer ou désactiver les extensions de navigateur"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Activer ou désactiver le panneau d’orchestration"
           }
         },
         "FloatingWorkspacePane": {
@@ -10041,14 +10038,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "gestionnaire de mots de passe"
-            },
-            "orchestrationPanel": {
-              "title": "Panneau d’orchestration",
-              "description": "Affiche les agents avec lesquels chaque agent travaille, à côté de son chat ou de son terminal.",
-              "orchestration": "orchestration",
-              "agents": "agents",
-              "workers": "agents exécutants",
-              "manager": "gestionnaire"
             }
           }
         },
@@ -15012,7 +15001,6 @@
           "ae3b00ca82": "Configurer les tâches GitHub",
           "ff92d15436": "Orca vous préviendra quand les agents auront terminé ou auront besoin d'aide.",
           "b054332836": "Configurer les notifications",
-          "04ae28d8ca": "Choisissez le look que vous allez contempler pendant des heures.",
           "f396db9f20": "Donnez-lui vos couleurs",
           "322fc50a18": "Orca fonctionne avec tous les agents CLI. Choisissez celui que vous solliciterez le plus. Changez quand vous voulez.",
           "198b148b3c": "Choisissez votre agent par défaut",
@@ -19555,8 +19543,6 @@
         "toggleDetails": "Basculer les détails du tour"
       },
       "jumpToLatest": "Aller au dernier message",
-      "newRowsAnnouncement": "De nouveaux messages sont arrivés en votre absence",
-      "newRowsMarker": "Nouveau",
       "find": {
         "label": "Rechercher dans le chat",
         "noResults": "Aucun résultat",
@@ -20524,7 +20510,32 @@
           "system": "Faire correspondre le système d'exploitation",
           "dark": "Agréable pour les yeux",
           "light": "Lumineux et net"
-        }
+        },
+        "looks": {
+          "activeNow": "actuel",
+          "browsePlugins": "Parcourir les plugins",
+          "browseThemePlugins": "Parcourir les plugins de thèmes",
+          "colorMode": "Mode de couleur",
+          "colorModeCaption": "Clair, sombre ou selon votre système.",
+          "darkLook": "Style sombre",
+          "darkLooks": "Styles sombres",
+          "lightLook": "Style clair",
+          "lightLooks": "Styles clairs",
+          "moreThemes": "Plus de thèmes",
+          "next": "Plus de styles",
+          "orcaDark": "Orca sombre",
+          "orcaLight": "Orca clair",
+          "pluginsHint": "D’autres thèmes sont disponibles sous forme de plugins.",
+          "previous": "Styles précédents",
+          "showsWhenDark": "Affiché quand votre système est en mode sombre",
+          "showsWhenLight": "Affiché quand votre système est en mode clair",
+          "slotLabel": "Style à modifier",
+          "sourceBuiltIn": "Intégré",
+          "sourceCommunity": "Palette de terminal",
+          "themes": "Thème",
+          "themesCaption": "Facultatif. Allez plus loin avec des thèmes d’app et des palettes de terminal."
+        },
+        "subtitle": "Choisissez clair ou sombre, puis un thème si vous le souhaitez. Modifiable à tout moment dans les Réglages."
       },
       "integrations": {
         "capabilities": {

@@ -2,9 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../../shared/automation-owner-conflict'
 import {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
+  AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
+  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
+
+import type { AutomationCreateInput } from '../../../../shared/automations-types'
+import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
+import { applyAutomationLaunchSetupPatch } from '../../../../shared/automation-launch-setup'
+import {
+  encodeAutomationLaunchEdit,
+  foldAutomationSourceEdit
+} from '../../../../shared/automation-launch-source-edits'
+import { automationCopyLaunchSetup } from './automation-launch-surface'
+import { makeAutomation } from './automations-page-fixtures'
 
 const callRuntimeRpc = vi.fn()
 const getRuntimeEnvironmentStatus = vi.fn()
@@ -415,4 +427,91 @@ describe('matchAutomationOwnerConflict', () => {
     ).toBe(AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved)
     expect(matchAutomationOwnerConflict(new Error('timeout'))).toBeNull()
   })
+})
+
+const OWNER = { authority: RUNTIME, selector: { kind: 'self' } } as const
+const LEGACY_HOST = {
+  capabilities: [
+    AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+    AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+  ]
+}
+const CURRENT_HOST = {
+  capabilities: [...LEGACY_HOST.capabilities, AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY]
+}
+const INPUT: AutomationCreateInput = {
+  creationKey: 'move-1',
+  name: 'Docs pass',
+  prompt: 'go',
+  agentId: 'claude',
+  projectId: 'repo-1',
+  workspaceMode: 'new_per_run',
+  timezone: 'UTC',
+  rrule: 'FREQ=DAILY',
+  dtstart: 1
+}
+
+describe('authored launch setup capability', () => {
+  it('moves a reopened supplemental-only edit through the existing extra-args capability', async () => {
+    const current = makeAutomation({ surface: 'terminal', extraAgentArgs: '--add-dir docs' })
+    const { patch } = foldAutomationSourceEdit('claude', current, undefined, {
+      kind: 'supplemental',
+      value: '--add-dir fixtures'
+    })
+    const reopened = makeAutomation({
+      ...current,
+      ...applyAutomationLaunchSetupPatch(
+        {
+          launchSetupPatch: encodeAutomationLaunchEdit(patch, 'terminal')
+        },
+        current
+      )
+    })
+    const input = automationCopyLaunchSetup(reopened, {}, INPUT)
+    const { createAutomationForDestination } = await client()
+    getRuntimeEnvironmentStatus.mockResolvedValue(CURRENT_HOST)
+    callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1' } })
+    await createAutomationForDestination(RUNTIME, input, { selector: { kind: 'self' } })
+    expect(callRuntimeRpc.mock.calls[0]?.[2]).toMatchObject({
+      extraAgentArgs: '--add-dir fixtures'
+    })
+  })
+  it.each([
+    { arguments: { kind: 'empty' as const } },
+    {
+      sources: {
+        arguments: { kind: 'value' as const, value: '--opaque' },
+        extraAgentArgs: '--add-dir docs',
+        retiredChoices: ['model']
+      }
+    },
+    { choices: { options: { fastMode: 'true' } } },
+    { copy: { agentArgs: null, launchPreferences: { model: null } } }
+  ])(
+    'preserves a complete strict setup and refuses older destinations: %j',
+    async (launchSetupPatch) => {
+      const { createAutomationForDestination, updateAutomationForOwner } = await client()
+      getRuntimeEnvironmentStatus.mockResolvedValue({
+        capabilities: [...CURRENT_HOST.capabilities, AUTOMATION_SURFACE_RUNTIME_CAPABILITY]
+      })
+      await expect(
+        createAutomationForDestination(
+          RUNTIME,
+          { ...INPUT, launchSetupPatch },
+          { selector: { kind: 'self' } }
+        )
+      ).rejects.toThrow('Update Orca')
+      expect(callRuntimeRpc).not.toHaveBeenCalled()
+      getRuntimeEnvironmentStatus.mockResolvedValue({
+        capabilities: [
+          ...CURRENT_HOST.capabilities,
+          AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
+          AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY
+        ]
+      })
+      callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1' } })
+      await updateAutomationForOwner(OWNER, 'a1', { launchSetupPatch })
+      expect(callRuntimeRpc.mock.calls[0]?.[2]).toMatchObject({ updates: { launchSetupPatch } })
+    }
+  )
 })

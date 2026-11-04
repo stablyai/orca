@@ -64,7 +64,6 @@ export function sessionTerminalGestureMountAdapters(
             hostQueryReplyInputSupportedRef: { current: false },
             hostProgramStatusSupportedRef: { current: false },
             clearPendingLiveInputCommit: () => {},
-            toggleTerminalLiveInput: () => false,
             getTerminalRef: () => undefined,
             unsubscribeTerminal: (handle) => effect('terminal-unsubscribe', { handle }),
             subscribeToTerminal: (handle) => {

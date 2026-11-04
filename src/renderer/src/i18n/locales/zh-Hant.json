@@ -7789,9 +7789,6 @@
           "browserExtensions": {
             "copy": "為本機瀏覽器設定檔新增「設定 › 瀏覽器 › 擴充功能」。",
             "toggleLabel": "切換瀏覽器擴充功能"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "切換協作編排面板"
           }
         },
         "FloatingWorkspacePane": {
@@ -9992,14 +9989,6 @@
               "extension": "擴充功能",
               "chrome": "chrome",
               "password": "密碼管理工具"
-            },
-            "orchestrationPanel": {
-              "title": "協作編排面板",
-              "description": "在聊天或終端機旁顯示各代理程式與哪些代理程式協作。",
-              "orchestration": "協作編排",
-              "agents": "代理程式",
-              "workers": "工作代理程式",
-              "manager": "管理員"
             }
           }
         },
@@ -14861,7 +14850,6 @@
           "ae3b00ca82": "設定 GitHub 任務",
           "ff92d15436": "Orca 會在代理程式完成工作或需要協助時發出通知。",
           "b054332836": "設定通知",
-          "04ae28d8ca": "選擇你想盯著看幾個小時的主題。",
           "f396db9f20": "讓這裡有家的感覺",
           "322fc50a18": "Orca 支援所有 CLI 代理程式。選擇你最常用的一個，隨時可切換。",
           "198b148b3c": "選擇預設代理程式",
@@ -18831,7 +18819,32 @@
           "system": "與作業系統一致",
           "dark": "柔和護眼",
           "light": "明亮清晰"
-        }
+        },
+        "looks": {
+          "activeNow": "目前",
+          "browsePlugins": "瀏覽外掛程式",
+          "browseThemePlugins": "瀏覽主題外掛程式",
+          "colorMode": "色彩模式",
+          "colorModeCaption": "淺色、深色或跟隨系統。",
+          "darkLook": "深色外觀",
+          "darkLooks": "深色外觀",
+          "lightLook": "淺色外觀",
+          "lightLooks": "淺色外觀",
+          "moreThemes": "更多主題",
+          "next": "更多外觀",
+          "orcaDark": "Orca 深色",
+          "orcaLight": "Orca 淺色",
+          "pluginsHint": "更多主題以外掛程式形式提供。",
+          "previous": "上一組外觀",
+          "showsWhenDark": "系統為深色時顯示",
+          "showsWhenLight": "系統為淺色時顯示",
+          "slotLabel": "要編輯的外觀",
+          "sourceBuiltIn": "內建",
+          "sourceCommunity": "終端機調色盤",
+          "themes": "主題",
+          "themesCaption": "選用。使用 App 主題和終端機調色盤進一步自訂。"
+        },
+        "subtitle": "選擇淺色或深色，也可以再選一個主題。兩者都能隨時在設定中變更。"
       },
       "integrations": {
         "capabilities": {
@@ -19350,8 +19363,6 @@
         "stateUnverifiableCount_other": "狀態不可用：{{value0}}"
       },
       "jumpToLatest": "跳到最新訊息",
-      "newRowsAnnouncement": "你離開期間有新訊息",
-      "newRowsMarker": "新訊息",
       "find": {
         "label": "在聊天中查詢",
         "noResults": "沒有結果",
