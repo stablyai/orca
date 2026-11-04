@@ -114,7 +114,9 @@ export function appendOrderedGroups(
             icon: { kind: 'project' as const },
             repo,
             projectGroupDepth,
-            ...getProjectHeaderHostScope(ctx, group)
+            ...getProjectHeaderHostScope(ctx, group),
+            // Lets a collapsed project summarize its workspaces' activity.
+            worktreeIds: group.items.map((worktree) => worktree.id)
           }
         : groupBy === 'workspace-status'
           ? (() => {

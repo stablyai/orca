@@ -33,6 +33,14 @@ export function getProjectGroupHeaderPaddingLeft(depth: number): number {
   )
 }
 
+// Project groups read as category labels; their projects step in one full tree indent per level.
+export function getProjectGroupLabelPaddingLeft(depth: number): number {
+  return (
+    PROJECT_GROUP_HEADER_BASE_PADDING +
+    Math.min(clampDepth(depth), MAX_PROJECT_GROUP_HEADER_DEPTH) * SIDEBAR_TREE_INDENT
+  )
+}
+
 export function getWorktreeCardContentIndent(args: {
   isGrouped: boolean
   groupDepth: number

@@ -1,12 +1,9 @@
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
-import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
+import { ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
 import type { ProjectHeaderHostContext } from './project-header-host-context'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
-import { RepoIconGlyph } from '@/components/repo/repo-icon'
-import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
-
 import {
   type FolderWorkspacePathStatus,
   isConfirmedStaleFolderPathStatus
@@ -32,11 +29,10 @@ import { getSidebarHeaderVisual } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
 import {
-  getProjectGroupHeaderPaddingLeft,
+  getProjectGroupLabelPaddingLeft,
   WORKTREE_SECTION_HEADER_PADDING_LEFT
 } from './indentation'
-import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
-import { RepoScanUnavailableIndicator } from './RepoScanUnavailableIndicator'
+import { SectionHeaderTitle } from './section-header-title'
 import {
   ProjectGroupCreateWorkspaceButton,
   ProjectGroupHeaderMenu
@@ -185,6 +181,8 @@ export function renderWorktreeSectionHeaderRow(args: {
   const showHeaderCollapseAffordance =
     row.count > 0 &&
     (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader)
+  const isProjectGroupLabel = isProjectGroupHeader && !row.repo
+  const isCollapsedProject = isRepoHeader && isHeaderCollapsed && row.count > 0
   return (
     <div
       key={vItem.key}
@@ -259,7 +257,7 @@ export function renderWorktreeSectionHeaderRow(args: {
             // Why: non-project headers like "All" are flat-list labels; don't reserve project hierarchy indent.
             paddingLeft:
               isRepoHeader || isProjectGroupHeader
-                ? getProjectGroupHeaderPaddingLeft(row.projectGroupDepth ?? 0)
+                ? getProjectGroupLabelPaddingLeft(row.projectGroupDepth ?? 0)
                 : WORKTREE_SECTION_HEADER_PADDING_LEFT
           }}
           onDragOver={
@@ -319,33 +317,18 @@ export function renderWorktreeSectionHeaderRow(args: {
                 'cursor-grab active:cursor-grabbing'
             )}
           >
-            <div
-              className={cn(
-                'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
-                repoHeaderColor ? 'text-muted-foreground' : headerVisual.tone
-              )}
-            >
-              {row.repo ? (
-                <RepoIconGlyph
-                  repoIcon={row.repo.repoIcon}
-                  color={repoHeaderColor}
-                  className="size-4"
-                  iconClassName="size-3.5"
-                />
-              ) : (
-                <headerVisual.icon className="size-3" />
-              )}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-1.5">
-                <div className="min-w-0 truncate text-[13px] font-semibold leading-4">{label}</div>
-                {hostContext ? <ProjectHeaderHostLabel context={hostContext} /> : null}
-                <RepoForkIndicator upstream={row.repo?.upstream} />
-                <FolderPathStatusIndicator status={projectGroupPathStatus} />
-                {isRepoHeader ? <RepoScanUnavailableIndicator repo={row.repo!} /> : null}
-              </div>
-            </div>
+            <SectionHeaderTitle
+              row={row}
+              label={label}
+              level={isProjectGroupLabel ? 'group-label' : 'section'}
+              headerVisual={headerVisual}
+              repoHeaderColor={repoHeaderColor}
+              hostContext={hostContext}
+              projectGroupPathStatus={projectGroupPathStatus}
+              isRepoHeader={isRepoHeader}
+              isHeaderCollapsed={isHeaderCollapsed}
+              showCollapsedProjectSummary={isCollapsedProject}
+            />
           </div>
 
           <ProjectHeaderActions>
