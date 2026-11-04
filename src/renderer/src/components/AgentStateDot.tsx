@@ -64,6 +64,8 @@ export function agentStateLabel(state: AgentDotState): string {
 
 type Props = {
   state: AgentDotState
+  /** Context-specific accessible name, also used as the default hover text. */
+  label?: string
   size?: 'sm' | 'md'
   className?: string
   /** Overrides the hover tooltip; null suppresses it for an existing tooltip. */
@@ -106,6 +108,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   state,
   size = 'sm',
   className,
+  label: accessibleLabel,
   title,
   tooltipSide,
   progress
@@ -115,7 +118,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   const inner = size === 'md' ? 'size-2' : 'size-1.5'
   const icon = size === 'md' ? 'size-3' : 'size-2.5'
   const ring = progressRing(state, progress)
-  const label = withRingPercent(agentStateLabel(state), ring)
+  const label = withRingPercent(accessibleLabel ?? agentStateLabel(state), ring)
   const tooltipLabel = title === null ? null : (title ?? label)
 
   let indicator: React.JSX.Element
@@ -131,7 +134,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={agentStateLabel(state)}
+        aria-label={label}
       >
         <AgentWorkingSpinner className={inner} />
       </span>
@@ -140,7 +143,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={agentStateLabel(state)}
+        aria-label={label}
       >
         <Activity className={cn('text-agent-working', icon)} aria-hidden="true" />
       </span>
@@ -149,8 +152,9 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     // A check distinguishes reported completion from live/idle dots; sidebar StatusIndicator intentionally differs.
     indicator = (
       <span
+        role="img"
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={agentStateLabel(state)}
+        aria-label={label}
       >
         <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
       </span>
@@ -160,7 +164,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={agentStateLabel(state)}
+        aria-label={label}
       >
         <CircleDashed className={cn('text-amber-500', icon)} aria-hidden="true" />
       </span>
@@ -169,7 +173,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={agentStateLabel(state)}
+        aria-label={label}
       >
         <AgentQuestionIcon className={icon} />
       </span>
@@ -178,7 +182,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={agentStateLabel(state)}
+        aria-label={label}
       >
         <span
           className={cn(

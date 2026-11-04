@@ -21,6 +21,10 @@ import {
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
 import { DashboardHostBadge } from './DashboardHostBadge'
+import {
+  dashboardBucketLabel,
+  dashboardTurnEndedDescription
+} from '@/components/dashboard/dashboard-bucket-labels'
 
 function formatStartedAgo(startedAt: number, now: number): string {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
@@ -239,7 +243,14 @@ export const AgentKanbanCard = memo(
             >
               {heading}
             </span>
-            {card.askSummary ? null : <AgentStateDot state={displayState} className="ml-auto" />}
+            {card.askSummary ? null : (
+              <AgentStateDot
+                state={displayState}
+                className="ml-auto"
+                label={displayState === 'done' ? dashboardBucketLabel('done') : undefined}
+                title={displayState === 'done' ? dashboardTurnEndedDescription() : undefined}
+              />
+            )}
           </div>
 
           {card.lastUserMessage || card.lastAgentMessage ? (
@@ -295,7 +306,15 @@ export const AgentKanbanCard = memo(
                     key={subagent.id}
                     className="flex items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground"
                   >
-                    <AgentStateDot state={subagent.dotState} />
+                    <AgentStateDot
+                      state={subagent.dotState}
+                      label={
+                        subagent.dotState === 'done' ? dashboardBucketLabel('done') : undefined
+                      }
+                      title={
+                        subagent.dotState === 'done' ? dashboardTurnEndedDescription() : undefined
+                      }
+                    />
                     <span className="truncate">{subagent.name}</span>
                   </div>
                 ))}
