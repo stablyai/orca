@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react'
-import type { AgentPermissionMode } from '../../../../../../shared/tui-agent-permissions'
+import type { AgentPermissionMode } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../../../ui/button'
 import {

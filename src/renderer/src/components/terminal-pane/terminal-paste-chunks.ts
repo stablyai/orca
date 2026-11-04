@@ -1,4 +1,8 @@
-import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from './terminal-bracketed-paste'
+import './terminal-bracketed-paste'
+import {
+  BRACKETED_PASTE_END,
+  BRACKETED_PASTE_START
+} from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { TERMINAL_PASTE_CHUNK_MAX_BYTES } from './terminal-paste-limits'
 import type { TerminalPastePlan } from './terminal-paste-model'
 import {

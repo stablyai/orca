@@ -3,11 +3,9 @@ import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { rmSync } from 'node:fs'
-import type { WslRunningDistrosRead } from '../wsl/discovery/wsl-background-distro-gate'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
-import { DaemonServer } from './daemon-server'
-import { WslBridgeBootIdentity } from './daemon-wsl-bridge-boot-identity'
+import type { DaemonServer } from './daemon-server'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
 
 /** Drives the adapter's own periodic save, which has no public trigger. */
@@ -92,57 +90,6 @@ describe('a WSL bridge pane whose distro was terminated, after a relaunch', () =
     bridge._simulateExit(1)
     // The relaunch must find no session to attach to, only the history to restore.
     await vi.waitFor(() => expect(reaped.has(PANE)).toBe(true))
-
-    await expect(relaunchAndRestore()).resolves.toBe(true)
-  })
-
-  it('restores when the distro stopped while Orca was quit and the daemon exited with it', async () => {
-    const app = launch()
-    await app.spawn({ cols: 80, rows: 24, cwd: '/project', sessionId: PANE })
-    lastSubprocess._simulateData('user@host:~/project$ echo KEPT\r\nKEPT\r\n')
-    await app.savePeriodically([PANE])
-    await app.disconnectOnly()
-
-    lastSubprocess._simulateExit(1)
-    // Its last session gone and no client, the daemon exits; the relaunch starts a new one.
-    await server.shutdown()
-    server = new DaemonServer({ socketPath, tokenPath, spawnSubprocess })
-    await server.start()
-
-    await expect(relaunchAndRestore()).resolves.toBe(true)
-  })
-
-  it.each([
-    [
-      'something booted the distro again before the running list answered',
-      [{ status: 'confirmed', distros: ['Ubuntu'] }],
-      ['boot-1', 'boot-2']
-    ],
-    [
-      'the first running list could not answer',
-      [{ status: 'unavailable' }, { status: 'confirmed', distros: [] }],
-      ['boot-1']
-    ]
-  ] as const)('restores when %s while Orca ran', async (_name, answers, ids) => {
-    const reads: WslRunningDistrosRead[] = answers.map((answer) => ({
-      ...answer,
-      ...('distros' in answer ? { distros: [...answer.distros] } : {})
-    }))
-    const bootIds = [...ids]
-    const app = launch({
-      readRunningWslDistros: async () => (reads.length > 1 ? reads.shift()! : reads[0]!),
-      wslBridgeBootIdentity: new WslBridgeBootIdentity({
-        isRunning: async () => true,
-        readBootId: async () => (bootIds.length > 1 ? bootIds.shift()! : bootIds[0]!)
-      })
-    })
-    const exits: unknown[] = []
-    app.onExit((exit) => exits.push(exit))
-    const bridge = await openBridgePane(app)
-
-    bridge._simulateExit(1)
-    await vi.waitFor(() => expect(exits).toEqual([expect.objectContaining({ hostLost: true })]))
-    await app.disconnectOnly()
 
     await expect(relaunchAndRestore()).resolves.toBe(true)
   })

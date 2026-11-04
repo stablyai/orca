@@ -1,4 +1,4 @@
-import type { Worktree } from './workspace-list-types'
+import type { Worktree, WorktreeRowView } from './workspace-list-types'
 
 // Match desktop indentation.ts steps and its six-level cap.
 const PROJECT_GROUP_HEADER_INDENT = 10
@@ -15,10 +15,11 @@ export function projectGroupHeaderIndent(depth: number | undefined): number {
 
 // Match desktop row indentation; folder-scan groups use the header step and folder workspaces sit one level shallower.
 export function projectGroupRowIndent(
-  row: Pick<Worktree, 'workspaceKind' | 'projectGroupDepth' | 'inFolderScanGroup'>
+  row: Pick<Worktree, 'workspaceKind'>,
+  view: Pick<WorktreeRowView, 'projectGroupDepth' | 'inFolderScanGroup'>
 ): number {
-  const depth = row.projectGroupDepth ?? 0
-  if (!row.inFolderScanGroup) {
+  const depth = view.projectGroupDepth ?? 0
+  if (!view.inFolderScanGroup) {
     return cappedDepth(depth) * TREE_INDENT
   }
   return row.workspaceKind === 'folder-workspace'

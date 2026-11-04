@@ -1,4 +1,4 @@
-import { readTerminalStartFailure } from '../../shared/terminal-start-failure'
+import { readTerminalStartFailure } from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { Socket } from 'node:net'
 import { NOTIFY_PREFIX, type DaemonRequest } from './types'
 import { encodeNdjson } from './ndjson'

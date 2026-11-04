@@ -1099,6 +1099,12 @@
       "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
       "keywords": "formatter format on save prettier biome gofmt"
     },
+    "editorInsertFinalNewline": {
+      "title": "Insert Final Newline",
+      "description": "Add a line break when saving a non-empty code file that does not end with one. Off by default.",
+      "keywordNewline": "newline",
+      "keywordEndOfFile": "end of file"
+    },
     "repositoryFormatter": {
       "title": "Formatter Command",
       "description": "Use this project’s formatter for Format on Save.",
@@ -2249,7 +2255,6 @@
         "9c3ba11a05": "Status:",
         "934d87ab96": "Loading check details…",
         "71c11aff84": "Rerun all checks",
-        "e31651a224": "Rerun failed checks",
         "1b56e28faa": "Rerun",
         "f4b1292569": "Start the default AI agent on these checks",
         "9a1004fc76": "Refresh checks",
@@ -2754,7 +2759,6 @@
         "662bc2998d": "Status:",
         "d8e82b7f15": "Loading check details…",
         "54cddd1858": "Rerun all checks",
-        "68605516dd": "Rerun failed checks",
         "522d9353e1": "Rerun",
         "0fa8b8faec": "Start the default AI agent on these checks",
         "5d0f42766d": "Refresh checks",
@@ -4143,7 +4147,7 @@
             "copyFilePathFailed": "Failed to copy file path",
             "downloadOpenWithDefaultApp": "Download & open with default app",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
-            "openInThisGroup": "Open in this group",
+            "openInNewTab": "Open in new tab",
             "openInThisGroupRefused": "Couldn't open {{value0}} in this group"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -4707,7 +4711,6 @@
             "5c938d39ac": "wk",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "No other accounts",
             "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
@@ -4737,6 +4740,8 @@
             "zcodeUsageMenu": "ZCode Usage",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "signedOutAccounts": "Signed out",
+            "addAnotherAccount": "Add another account…",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
             "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account."
           },
@@ -7863,7 +7868,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
-          "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Computer Use skill; macOS also requires privacy permissions.",
+          "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.",
           "333984cf90": "Use an existing browser session"
         },
         "BrowserUseEnableSwitch": {
@@ -7983,7 +7988,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Enables agents to inspect and operate local desktop apps.",
-          "93255aaf18": "Computer Use skill",
+          "93255aaf18": "Orca Computer Use skill",
           "45f8e22c2e": "Open",
           "d95d1cfab8": "Refresh",
           "0c29da5805": "Ready",
@@ -8119,9 +8124,6 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -8183,7 +8185,9 @@
           "7ddd66fede": "Editor Word Wrap",
           "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
           "collapseUnchangedTitle": "Collapse Unchanged Regions",
-          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way."
+          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
+          "markdownDefaultView": "Default Markdown View",
+          "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -8876,8 +8880,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
-          "2b2f38652b": "Custom command",
-          "0ffb081b3a": "Use default agent",
           "f4310cf63f": "Agent",
           "1cd88d470a": "Customize",
           "403876bb48": "Use global",
@@ -9425,7 +9427,7 @@
           "902f5dee1f": "Copy on Select",
           "9129b7e805": "Hovering a terminal pane activates it without needing to click.",
           "8eefeaa3da": "Focus Follows Mouse",
-          "96fe15def8": "Mouse and clipboard behavior for terminal panes.",
+          "96fe15def8": "Scrolling, mouse, and clipboard behavior for terminal panes.",
           "45721f3e67": "Terminal Interaction",
           "9c0b1c1792": "On",
           "c1fc9e9444": "GPU Acceleration",
@@ -10334,14 +10336,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
-            },
-            "orchestrationPanel": {
-              "title": "Orchestration panel",
-              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
-              "orchestration": "orchestration",
-              "agents": "agents",
-              "workers": "workers",
-              "manager": "manager"
             }
           }
         },
@@ -10530,7 +10524,11 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "markdownDefaultView": "Default Markdown View",
+            "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.",
+            "markdownSourceKw": "source",
+            "markdownRichKw": "rich"
           }
         },
         "git": {
@@ -11466,6 +11464,7 @@
               "recipe": {
                 "options": {
                   "commitMessage": "Generate the commit message from staged changes.",
+                  "commitMessageSharedModel": "Pull request details, Branch name and Chat name can also use this model when they don’t pick their own; their “Same as default” option shows which model they use.",
                   "pullRequest": "Generate the hosted review title and description.",
                   "branchName": "Rename Orca-created branches from the initial agent task.",
                   "fixCommitFailure": "Start an agent when a commit hook or git commit fails.",
@@ -15309,7 +15308,6 @@
           "ae3b00ca82": "Set up GitHub tasks",
           "ff92d15436": "Orca will notify you when agents are done or need help.",
           "b054332836": "Set up notifications",
-          "04ae28d8ca": "Pick the look you want to stare at for hours.",
           "f396db9f20": "Make it feel like home",
           "322fc50a18": "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time.",
           "198b148b3c": "Pick your default agent",
@@ -17145,6 +17143,9 @@
           "isolationOff": "{{value0}} runs only in an isolated frame, and isolated plugin frames are turned off.",
           "heading": "This editor needs the Orca desktop app",
           "openSource": "Open Source"
+        },
+        "MarkdownDefaultViewContextMenu": {
+          "label": "Default Markdown View"
         }
       },
       "diff": {
@@ -18281,6 +18282,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "The saved run host no longer matches this project setup."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Agent launch settings require a fresh session for every run."
         }
       },
       "agent": {
@@ -19384,7 +19388,32 @@
           "system": "Match OS",
           "dark": "Easy on the eyes",
           "light": "Bright & crisp"
-        }
+        },
+        "looks": {
+          "activeNow": "now",
+          "browsePlugins": "Browse plugins",
+          "browseThemePlugins": "Browse theme plugins",
+          "colorMode": "Color mode",
+          "colorModeCaption": "Light, dark, or follow your OS.",
+          "darkLook": "Dark look",
+          "darkLooks": "Dark looks",
+          "lightLook": "Light look",
+          "lightLooks": "Light looks",
+          "moreThemes": "More themes",
+          "next": "More looks",
+          "orcaDark": "Orca Dark",
+          "orcaLight": "Orca Light",
+          "pluginsHint": "More themes are available as plugins.",
+          "previous": "Previous looks",
+          "showsWhenDark": "Shows when your system is dark",
+          "showsWhenLight": "Shows when your system is light",
+          "slotLabel": "Look to edit",
+          "sourceBuiltIn": "Built in",
+          "sourceCommunity": "Terminal palette",
+          "themes": "Theme",
+          "themesCaption": "Optional. Go further with app themes and terminal palettes."
+        },
+        "subtitle": "Choose light or dark, then optionally a theme. Change either any time in Settings."
       },
       "integrations": {
         "capabilities": {
@@ -19495,6 +19524,7 @@
         "cancelled": "This message was withdrawn before the agent started it.",
         "chatClosed": "The chat closed before this message was sent.",
         "hostRestarted": "Orca restarted before this message was sent.",
+        "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
         "commandRefused": "This command didn't run.",
@@ -19676,7 +19706,8 @@
         "orcaStopUnnamedServer": "the remote server",
         "permissionDenied": "{{agent}} denied permission. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
-        "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes)."
+        "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
+        "modelFallback": "Claude switched models: {{from}} → {{to}}."
       },
       "composer": {
         "send": "Send",
@@ -19749,6 +19780,7 @@
         "availableAfterSessionStarts": "Available after the session starts.",
         "optionUpdateFailed": "Could not update option",
         "optionValue": {
+          "ultracode": "Ultracode",
           "fast": "Fast",
           "minimal": "Minimal",
           "low": "Low",
@@ -19961,8 +19993,6 @@
         "stateUnverifiableCount_other": "{{value0}} with status unavailable"
       },
       "jumpToLatest": "Jump to latest",
-      "newRowsAnnouncement": "New messages arrived while you were away",
-      "newRowsMarker": "New",
       "find": {
         "label": "Find in chat",
         "noResults": "No results",
@@ -20165,9 +20195,9 @@
         "orcaSessionIdTooltip": "Orca's ID for this chat, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca."
       },
       "dismissDeliveryNotice": "Dismiss",
+      "editDeliveryNotice": "Edit",
       "addSelectionToChat": "Add to chat",
       "messageNotSent": "Message not sent",
-      "deliveryUnconfirmed": "Delivery unconfirmed — check chat before retrying",
       "messageSending": "Sending…",
       "userMessage": {
         "showFull": "Show full message",
@@ -20241,7 +20271,6 @@
         "continue": "Continue",
         "failed": "Couldn't continue this chat. Try again, or send a message.",
         "explanation": "Continue, and the agent first checks whether its last step finished.",
-        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
         "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
       },
       "antigravitySignIn": {
@@ -20420,7 +20449,8 @@
         "cancelled": "Orca won't continue this chat automatically.",
         "scheduled": "Orca will continue this chat at {{time}}.",
         "cancel": "Don't continue"
-      }
+      },
+      "settings": "Chat settings"
     },
     "tab": {
       "bar": {
@@ -20784,7 +20814,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Trim Gutter on Copy",
         "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.",
-        "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard."
+        "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard.",
+        "scrollOnUserInput": "Scroll to Bottom on Input",
+        "scrollOnUserInputDescription": "Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place."
       },
       "terminal": {
         "clipboard": {
@@ -20799,14 +20831,26 @@
             "whitespace": "whitespace",
             "spaces": "spaces"
           }
+        },
+        "search": {
+          "typing": "typing",
+          "input": "input",
+          "jump": "jump",
+          "bottom": "bottom",
+          "scrollback": "scrollback",
+          "snap": "snap",
+          "position": "position"
         }
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Queue follow-ups",
+        "scrollToLatestOnSendTitle": "Scroll to latest when sending",
+        "scrollToLatestOnSendCopy": "Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.",
+        "scrollToLatestOnSendSearchPosition": "position",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
-        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message.",
+        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message. Messages with images wait as cards too.",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",
         "resumeSearchRelaunch": "relaunch",
@@ -20824,7 +20868,13 @@
         "usageLimitContinueCopy": "Orca sends \"Continue where you left off.\" when the limit resets. Applies to all chats with a known reset time.",
         "usageLimitContinueSearchLimit": "usage limit",
         "usageLimitContinueSearchReset": "reset",
-        "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets"
+        "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets",
+        "idleStopTitle": "Stop idle agents after",
+        "idleStopCopy": "Ends a chat's agent once the chat has been idle this long, to free memory. The chat stays, and your next message starts the agent again. Choose Never for agents that keep working in the background between turns.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "timeout",
+        "idleStopSearchKeepAlive": "keep alive",
+        "idleStopNever": "Never"
       }
     },
     "agentChildRow": {
@@ -21196,13 +21246,6 @@
       "saveFailed": "Could not turn on Chat UI. Choose Chat in Settings → Agents.",
       "terminalSaveFailed": "Could not switch to terminal. Choose Terminal in Settings → Agents.",
       "dismiss": "Dismiss",
-      "liveSwitching": "Live switching available",
-      "liveSwitchingTitle": "Live switching 101",
-      "liveSwitchingDescription": "Right-click an agent tab to switch between Chat UI and the terminal.",
-      "liveSwitchingGotIt": "Got it",
-      "liveSwitchingTerminalTab": "Claude Code",
-      "liveSwitchingPolishTab": "Polish Bottom…",
-      "liveSwitchingCouncilTab": "Council Review",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",
       "demoReply": "Login starts in {{file}}: the browser posts to /login, the server checks the password and creates a session, then redirects you to the app. Here’s the flow:",
@@ -21655,6 +21698,7 @@
     "searchHitSourceHost": "Found on {{value0}}",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
+    "antigravityChatToCli": "Chat → CLI",
     "continueInCli": "Continue in CLI",
     "continueInCliNewTab": "Continue in CLI in New Tab",
     "subagents": {
@@ -23282,6 +23326,7 @@
     "argumentsHint": "Applies only to CLI launches.",
     "launchChat": "Launch chat",
     "launchTerminal": "Launch terminal",
+    "sameAsTextDefault": "Same as default · {{value0}}",
     "setByArguments": "Set by your Arguments",
     "searchModels": "Search models",
     "noModels": "No models match your search.",
@@ -23292,6 +23337,7 @@
     "composedChoicesNote": "{{agent}} effort and speed choices are included in the model argument.",
     "searchAgentModels": "Search {{agent}} models…",
     "legacyModelCount": "{{total}} models",
+    "use": "Use",
     "select": "Select agent",
     "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",
     "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files"
@@ -23320,6 +23366,7 @@
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
+      "agentInterrupted": "The agent was interrupted before it finished this run.",
       "watchTimedOut": "Orca stopped watching this run after 6h without a completion signal.",
       "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
       "projectSetupState": {
@@ -23657,5 +23704,8 @@
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
     }
+  },
+  "checks": {
+    "rerunUnsuccessful": "Rerun unsuccessful"
   }
 }

@@ -3,7 +3,7 @@
  * any of them is ambiguous until the user removes one entry.
  */
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { translate } from '@/i18n/i18n'
 import { WORKTREE_REMOVAL_AMBIGUOUS_ERROR } from '@/store/slices/worktrees/listing/worktree-slice-constants'

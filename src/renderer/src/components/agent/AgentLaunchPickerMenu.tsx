@@ -1,6 +1,6 @@
 import { selectWorktreesByRepo, selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import { memo, useEffect, useId, useRef, useState, type ComponentProps } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -17,21 +17,21 @@ import {
   retireAgentPickerDrafts,
   type AgentPickerSetupIdentity
 } from './AgentLaunchSetupButton'
-import { applyAgentPickerEdit } from '../../../../shared/agent-launch-picker-edits'
+import { applyAgentPickerEdit } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
-import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch-picker-rows'
+import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource
 } from './use-agent-launch-picker-inventory'
+import { searchAgentPickerSetups } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
 import {
-  searchAgentPickerSetups,
   agentPickerDraft,
   type AgentPickerDraft,
   type AgentPickerEntry,
   type AgentPickerSurface
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 export function pickerLaunchRow(
   entry: AgentPickerEntry,
@@ -63,6 +63,7 @@ export function AgentLaunchPickerMenu({
   runLaunch,
   entries,
   hideSearch,
+  initialQuery = '',
   onSelectAgent
 }: {
   model?: NewTabAgentMenuModel
@@ -76,6 +77,8 @@ export function AgentLaunchPickerMenu({
   runLaunch: Launch
   entries: AgentPickerEntry[]
   hideSearch?: boolean
+  /** Seeds the search field; read once when the menu mounts. */
+  initialQuery?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
 }) {
   useEffect(() => {
@@ -103,7 +106,7 @@ export function AgentLaunchPickerMenu({
       mode
     )
   }, [entries, draftScope, mode])
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const [activeSetup, setActiveSetup] = useState<{
     id: string
     agent: AgentPickerEntry['agent']
@@ -112,7 +115,7 @@ export function AgentLaunchPickerMenu({
   } | null>(null)
   const openSetup = activeSetup?.id ?? null
   const root = useRef<HTMLDivElement>(null)
-  const setups = searchAgentPickerSetups(entries, query)
+  const setups = setupDisabled ? [] : searchAgentPickerSetups(entries, query)
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const visible = entries.filter((entry) =>
     words.every((word) => `${entry.agent} ${entry.label}`.toLowerCase().includes(word))
@@ -156,6 +159,11 @@ export function AgentLaunchPickerMenu({
             value={query}
             density="compact"
             autoFocus
+            onFocus={(event) => {
+              // Why: a seeded query must keep the caret after the typed key.
+              const end = event.currentTarget.value.length
+              event.currentTarget.setSelectionRange(end, end)
+            }}
             placeholder={translate('agentPicker.search', 'Search agents and setups…')}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
@@ -303,6 +311,21 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     : undefined
   const closeMenu = useDropdownMenuClose()
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
+  if (setupDisabled) {
+    return (
+      <DropdownMenuItem
+        disabled={disabled || !entry.surfaces.length}
+        onSelect={() => {
+          onSelectAgent?.(entry.agent)
+          runLaunch(pickerLaunchRow(entry, selected?.surface ?? entry.defaultSurface))
+        }}
+      >
+        <AgentIcon agent={entry.agent} size={14} />
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+      </DropdownMenuItem>
+    )
+  }
   return (
     <AgentLaunchSetupButton
       submenu
@@ -321,7 +344,7 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         if (next || openSetup === setupId) {
           onSetupOpenChange(next ? { id: setupId, agent: entry.agent, preset, label } : null)
         }
-        if (next) {
+        if (next && openSetup !== setupId) {
           onSelectAgent?.(entry.agent)
         }
       }}

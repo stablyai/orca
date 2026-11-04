@@ -1,27 +1,28 @@
 import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+import {
+  getWorkspaceCleanupCandidateIdentity,
+  getWorkspaceCleanupCandidateHostId,
+  getWorkspaceCleanupHostIdentity
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
 import {
   canQueueWorkspaceCleanupCandidate,
   WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorkspaceCleanupGitState } from './workspace-cleanup-filter-sort'
 import type {
   WorkspaceCleanupAgentState,
   WorkspaceCleanupGitState,
   WorkspaceCleanupReviewState,
   WorkspaceCleanupTicketSource
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 import type { WorkspaceCleanupReviewInfo } from './workspace-cleanup-presentation'
-import {
-  getWorkspaceCleanupCandidateHostId,
-  getWorkspaceCleanupHostIdentity,
-  type WorkspaceCleanupWorktreeFacts
-} from './workspace-cleanup-host-identity'
+import type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
+
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
 export type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'

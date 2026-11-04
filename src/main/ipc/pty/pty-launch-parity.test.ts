@@ -42,7 +42,7 @@ import {
   makePaneSpawnReservationKey,
   paneSpawnReservationsByOwnerKey
 } from './pane/spawn-reservation'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { CALLER_LAUNCH_CASES } from './pty-launch-parity-caller.test-cases'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../../runtime/rpc/rpc-caller-identity'
@@ -54,6 +54,7 @@ import { probeOpenCodeLaunchCapabilities } from '../../opencode/opencode-launch-
 import { resolveOpenCodeDirectModelExecutable } from '../../opencode/opencode-model-executable'
 import { probeOpenCodeLaunchModelContext } from '../../opencode/opencode-launch-model-context'
 import { readOpenSshDefaultShell } from '../../../shared/openssh-default-shell'
+import { registerOpenCodeHostPreparationTests } from './pty-opencode-host-preparation.test-cases'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -97,7 +98,7 @@ vi.mock('../../memory/pty-registry', () =>
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../../codex/codex-pane-account-registry', () =>
+vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 // Model an OpenCode v2 install with the selected model without running its binary.
@@ -125,7 +126,7 @@ vi.mock('../../project-groups/folder-workspace-path-status', async (importOrigin
 vi.mock('../../antigravity/native-account-launch', () => ({
   prepareAntigravityAccountForLaunch: vi.fn(async () => {})
 }))
-vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 // Only managed Windows SSH-host cases supply OpenSSH DefaultShell.
@@ -187,7 +188,10 @@ function stubOpenCodeV2(): void {
     .mockResolvedValue({ primaryAgent: 'build' })
 }
 
-async function runHostCall(lanes: ParityLanes, c: HostLaunchCase): Promise<unknown> {
+async function runHostCall(
+  lanes: ParityLanes,
+  c: Pick<HostLaunchCase, 'call' | 'row' | 'workspace'>
+): Promise<unknown> {
   if (c.call.kind === 'create') {
     return lanes.runtime.createTerminal(`id:${launchWorkspaceId(c.workspace)}`, c.call.options)
   }
@@ -251,6 +255,8 @@ describe('host lane: producer call -> runtime controller -> provider', () => {
 
 const POSIX_REPO = { kind: 'repo', path: POSIX_PATH } as const
 const WORKER = HOST_LAUNCH_CASES.find((c) => c.name.startsWith('orchestration worker'))!
+
+registerOpenCodeHostPreparationTests({ stubOpenCodeV2, runHostCall })
 
 describe('launch facts outside the tables', () => {
   const suite = setupPtyIpcSuite()

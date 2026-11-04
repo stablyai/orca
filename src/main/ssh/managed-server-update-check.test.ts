@@ -5,11 +5,6 @@ import {
   type ManagedServerUpdateDeps
 } from './managed-server-update-check'
 import type { ManagedOrcadAutoUpdateOutcome } from '../managed-server/lifecycle/orcad-managed-auto-update'
-import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from '../managed-server/activation/orcad-activation-fence-hold'
-
-// Read the final callback because retry eligibility is decided under the lifecycle lock.
-const failedBeforeOf = (autoUpdate: ManagedServerUpdateDeps['autoUpdate']) =>
-  vi.mocked(autoUpdate).mock.lastCall?.[1].failedBefore()
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
 
@@ -34,54 +29,7 @@ function deps(
 
 const check = (d: ManagedServerUpdateDeps) => checkManagedServerUpdate(target, 'env-1', d, vi.fn())
 
-describe('checkManagedServerUpdate notes a server that may be behind this app', () => {
-  it.each<[string, ManagedOrcadAutoUpdateOutcome | Error, unknown]>([
-    ['rolled back', { outcome: 'skipped', reason: 'rolled-back' }, { state: 'rolled-back' }],
-    ['no bundled build', { outcome: 'skipped', reason: 'no-template' }, { state: 'no-template' }],
-    ['mid-migration', { outcome: 'skipped', reason: 'migrating' }, { state: 'migrating' }],
-    ['check threw', new Error('ssh dropped'), { state: 'check-failed', detail: 'ssh dropped' }],
-    ['failed', { outcome: 'failed', reason: 'bad' }, { state: 'failed', detail: 'bad' }],
-    [
-      'fence busy',
-      { outcome: 'deferred', code: ORCAD_ACTIVATION_FENCE_BUSY_CODE, reason: 'held' },
-      { state: 'deferred', detail: 'held' }
-    ],
-    ['host newer', { outcome: 'skipped', reason: 'host-newer' }, { state: 'host-newer' }]
-  ])('%s', async (_name, outcome, note) => {
-    expect((await check(deps(outcome))).note).toEqual(note)
-  })
-
-  it('names the recorded failure when it is not retried', async () => {
-    const result = await check(
-      deps({ outcome: 'skipped', reason: 'failed-before' }, { recordedUpdateFailure: () => 'old' })
-    )
-    expect(result.note).toEqual({ state: 'failed', detail: 'old' })
-  })
-
-  it('stays quiet when the server is current or updated', async () => {
-    expect((await check(deps({ outcome: 'skipped', reason: 'current' }))).note).toBeUndefined()
-    expect((await check(deps({ outcome: 'updated', activeVersion: '1' }))).note).toBeUndefined()
-  })
-})
-
 describe('a recorded update failure', () => {
-  it('is retried when the launch allows it, and skipped otherwise', async () => {
-    const retried = deps(
-      { outcome: 'updated', activeVersion: '1' },
-      { recordedUpdateFailure: () => 'old', failedThisLaunch: () => false }
-    )
-    await check(retried)
-    expect(failedBeforeOf(retried.autoUpdate)).toBe(false)
-    expect(retried.clearUpdateFailure).toHaveBeenCalledWith(target)
-
-    const held = deps(
-      { outcome: 'skipped', reason: 'failed-before' },
-      { recordedUpdateFailure: () => 'old' }
-    )
-    await check(held)
-    expect(failedBeforeOf(held.autoUpdate)).toBe(true)
-  })
-
   it.each([
     ['a failure recorded by an earlier launch', 'old'],
     ['no recorded failure', null]

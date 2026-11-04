@@ -6,14 +6,18 @@ import type {
   BrowserEvalResult
 } from '../../../shared/runtime-browser-contracts'
 import { BrowserError } from '../browser-error'
-import { captureFullPageScreenshot, SCREENSHOT_TIMEOUT_MS, withTimeout } from '../cdp-screenshot'
+import {
+  captureFullPageScreenshot,
+  SCREENSHOT_TIMEOUT_MS,
+  withTimeout
+} from '../cdp/commands/cdp-screenshot'
 import {
   agentBrowserScreenshotArgs,
   readAgentBrowserScreenshot
 } from './agent-browser-screenshot-arguments'
 import { readRasterImageDimensions } from '../../../shared/raster-image-dimensions'
-import { acquireElectronDebugger } from '../electron-debugger-lease'
-import { sendGuestCdpCommand } from '../guest-cdp-command'
+import { acquireElectronDebugger } from '../cdp/debugger/electron-debugger-lease'
+import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
 import { AgentBrowserBridgeUtilityCommands } from './agent-browser-bridge-page-commands'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { captureRemoteCliBrowserWorkBound } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'

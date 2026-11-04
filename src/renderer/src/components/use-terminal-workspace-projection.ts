@@ -83,6 +83,11 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
   const hasSplitTerminalPane = useAppStore((state) =>
     hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split')
   )
+  // After a split the owed tip points into the sidebar; don't watch the page for it while it's closed.
+  const nextTourTipReachable = useAppStore(
+    (state) =>
+      state.sidebarOpen || !hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split')
+  )
 
   useContextualTour(
     'workspace-agent-sessions',
@@ -92,9 +97,14 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
       workspaceSessionReady &&
       activeTabType === 'terminal' &&
       Boolean(activeTabId) &&
-      (!hasSplitTerminalPane || activeContextualTourId === 'workspace-agent-sessions')
+      nextTourTipReachable
     ),
-    'workspace_agent_sessions_visible'
+    'workspace_agent_sessions_visible',
+    {
+      // Keep this interaction counted only up to the first split, as before the tour could resume.
+      recordFeatureInteraction:
+        !hasSplitTerminalPane || activeContextualTourId === 'workspace-agent-sessions'
+    }
   )
 
   return {
@@ -108,7 +118,6 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
     effectiveActiveLayout,
     activeWorktreeBrowserTabIdsKey,
     activeContextualTourId,
-    hasSplitTerminalPane,
     terminalProviderSnapshotCapabilityRevision
   }
 }

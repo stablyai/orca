@@ -4,7 +4,7 @@ import { lstat, opendir } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { wrapRemoteCommandForPosixShell } from '../ssh-posix-command-wrapper'
 import { findSystemSsh } from './system-ssh-binary'
 import {

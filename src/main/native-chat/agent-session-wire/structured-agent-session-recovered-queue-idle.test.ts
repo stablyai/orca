@@ -16,7 +16,7 @@ it('keeps a recovered handoff consumed through natural idle unload and a history
   const rig = await createQueuedMessageTestRig({
     restartable: true,
     now: () => now,
-    idleSweep: { idleMs: IDLE_MS, intervalMs: 2_000_000_000 }
+    idleSweep: { idleMs: () => IDLE_MS, intervalMs: 2_000_000_000 }
   })
   try {
     const first = await rig.workingSend()

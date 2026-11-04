@@ -210,3 +210,14 @@ describe('readNativeChatVisualPong', () => {
     expect(readNativeChatVisualPong(data, 'c')).toBeNull()
   })
 })
+
+it('keeps ordinary themed file guests scrollable without the inline containment shell', async () => {
+  const { nativeChatVisualGuestTheme } = await import('./native-chat-visual-shell')
+  const theme = nativeChatVisualGuestTheme({
+    colorScheme: 'dark',
+    tokens: { '--background': '#111' }
+  })
+  expect(theme.css).toContain('--background:#111')
+  expect(theme.css).not.toContain('scrollbar')
+  expect(theme.css).not.toContain('overflow:hidden')
+})

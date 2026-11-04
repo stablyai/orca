@@ -1,5 +1,6 @@
-import type { TuiAgent } from './tui-agent'
-import { isTuiAgent, TUI_AGENT_CONFIG, type TuiAgentConfig } from './tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import { isTuiAgent, TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
+import type { TuiAgentConfig } from './agent-launch/catalog/tui-agent-config-types'
 
 /** Persisted agent IDs can outlive branch builds; name unknown IDs instead of throwing an unreadable property-access error. */
 export function requireTuiAgentConfig(agent: TuiAgent): TuiAgentConfig {

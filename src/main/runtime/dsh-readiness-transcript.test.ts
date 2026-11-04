@@ -6,7 +6,7 @@ import {
   getAgentLabel,
   isGeminiTerminalTitle,
   resolveExplicitTerminalTitleAgentType
-} from '../../shared/terminal-title-agent-type'
+} from '../../shared/agent-status/title/terminal-title-agent-type'
 
 // Raw dsh-tui 0.10.2 / @deepseek-ai/dsh 0.1.5-rc.1 capture; agent-pty-transcript-capture.md.
 const TRANSCRIPT = readFileSync(join(__dirname, '__fixtures__', 'dsh-tui-ready-no-key.txt'), 'utf8')

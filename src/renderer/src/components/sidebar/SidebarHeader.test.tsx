@@ -4,9 +4,12 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SidebarHeader from './SidebarHeader'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { makeFolderWorkspace, makeProjectGroup } from './folder-workspace-composer-submit-fixtures'
+import {
+  makeFolderWorkspace,
+  makeProjectGroup
+} from './workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -72,11 +75,11 @@ vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
   useAgentBucketCounts: () => mocks.bucketCounts
 }))
 
-vi.mock('./SidebarWorkspaceOptionsMenu', () => ({
+vi.mock('./worktree-list/controls/SidebarWorkspaceOptionsMenu', () => ({
   default: () => <button aria-label="Workspace options" type="button" />
 }))
 
-vi.mock('./workspace-options-menu-items', () => ({
+vi.mock('./worktree-list/controls/workspace-options-menu-items', () => ({
   useWorkspaceOptionsFilterBadge: () => ({
     hasAnyFilter: false,
     activeFilterCount: 0
@@ -384,6 +387,33 @@ describe('SidebarHeader', () => {
       })
     )
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
+  it('uses the ordinary stepped mode for an Open as Folder repo on SSH', async () => {
+    mockState.activeWorkspaceKey = 'worktree:notes::/home/notes'
+    mockState.activeWorktreeId = 'notes::/home/notes'
+    mockState.repos = [
+      {
+        id: 'notes',
+        kind: 'folder',
+        path: '/home/notes',
+        executionHostId: 'ssh:box'
+      }
+    ]
+    mockState.worktreesByRepo = {
+      notes: [{ id: 'notes::/home/notes', repoId: 'notes', path: '/home/notes' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.runBackgroundWorktreeCreation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'notes',
+        executionHostId: 'ssh:box',
+        worktreeCreateProgressMode: 'stepped'
+      })
+    )
   })
 
   it('keeps the setup panel for an Open as Folder repo on an environment', async () => {

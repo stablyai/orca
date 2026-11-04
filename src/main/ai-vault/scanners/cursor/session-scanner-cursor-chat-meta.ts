@@ -4,7 +4,7 @@ import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcri
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
 import { timestampIso } from '../../session-scanner-accumulator'
 import { scanIssueTextFromError } from '../../session-scan-issues'
-import type { AiVaultScanIssueText } from '../../../../shared/ai-vault-scan-issue-copy'
+import type { AiVaultScanIssueText } from '../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import { extractString, readJsonObjectIfExists } from '../../session-scanner-values'
 import { normalizeTitleText } from '../../session-scanner-text-normalization'
 

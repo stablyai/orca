@@ -1,6 +1,6 @@
 // Route supported layout intents to paired main under its IDs only when frames draw the workspace and layout.intents.v1 is supported (H5c). Close/start/name RPCs retain server terminal-side effects. Editor opens preserve window-proposed IDs (H5d).
 
-import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { isWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 
 import type {
   LayoutApplyReply,

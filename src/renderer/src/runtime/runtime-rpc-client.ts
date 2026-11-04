@@ -192,6 +192,19 @@ export async function runtimeEnvironmentSupportsCapability(
   capability: RuntimeCapability,
   timeoutMs?: number
 ): Promise<boolean> {
+  const [supported] = await runtimeEnvironmentSupportsCapabilities(
+    environmentId,
+    [capability],
+    timeoutMs
+  )
+  return supported
+}
+
+export async function runtimeEnvironmentSupportsCapabilities(
+  environmentId: string,
+  capabilities: readonly RuntimeCapability[],
+  timeoutMs?: number
+): Promise<boolean[]> {
   const trimmed = environmentId.trim()
   const cached = runtimeCompatibilityChecks.get(trimmed)
   // Capability reads must discard rejected probes like ordinary RPCs or a recovered host stays blocked until failure TTL.
@@ -204,8 +217,10 @@ export async function runtimeEnvironmentSupportsCapability(
         cached.statusCheckedAt !== null &&
         Date.now() - cached.statusCheckedAt < RUNTIME_CAPABILITY_STATUS_TTL_MS
       ) {
-        const supported = cached.status.capabilities?.includes(capability) === true
-        if (!supported) {
+        const supported = capabilities.map(
+          (capability) => cached.status?.capabilities?.includes(capability) === true
+        )
+        if (supported.includes(false)) {
           // Keep protocol proof for this legacy call; next capability decision must observe in-place upgrades.
           cached.statusCheckedAt = null
         }
@@ -216,10 +231,12 @@ export async function runtimeEnvironmentSupportsCapability(
     }
   }
   const status = await getRuntimeEnvironmentStatus(trimmed, timeoutMs)
-  const supported = status.capabilities?.includes(capability) === true
+  const supported = capabilities.map(
+    (capability) => status.capabilities?.includes(capability) === true
+  )
   const resolved = runtimeCompatibilityChecks.get(trimmed)
   // Why runtimeId: a status publication may have replaced the entry with its own copy.
-  if (!supported && resolved?.status?.runtimeId === status.runtimeId) {
+  if (supported.includes(false) && resolved?.status?.runtimeId === status.runtimeId) {
     resolved.statusCheckedAt = null
   }
   return supported

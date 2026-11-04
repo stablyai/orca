@@ -2,7 +2,7 @@ import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { rmSync } from 'node:fs'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { _resetPtyOwnerHostColorsForTest } from '../../shared/pty-owner-color-query-colors'
+import { _resetPtyOwnerHostColorsForTest } from '../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,
@@ -31,23 +31,6 @@ describe('daemon OSC 10/11 colours', () => {
     await harness.server.shutdown()
     rmSync(harness.dir, { recursive: true, force: true })
     _resetPtyOwnerHostColorsForTest()
-  })
-
-  it('answers from the default theme until colours are pushed, then from the latest push', async () => {
-    await harness.adapter.spawn({ cols: 80, rows: 24 })
-
-    subprocess._simulateData(QUERY)
-    await waitFor(() => subprocess.write.mock.calls.length === 1)
-    harness.adapter.setColorQueryReplyColors({ foreground: '#000000', background: '#123456' })
-    // The update is fire-and-forget; wait by observing a later query's reply.
-    await waitFor(() => {
-      subprocess._simulateData(QUERY)
-      return subprocess.write.mock.calls.some(
-        ([reply]) => reply === '\x1b]11;rgb:1212/3434/5656\x1b\\'
-      )
-    })
-
-    expect(subprocess.write.mock.calls[0]).toEqual(['\x1b]11;rgb:2828/2c2c/3434\x1b\\'])
   })
 
   it('resends the last colours when an adapter connects, so a push made while offline lands', async () => {

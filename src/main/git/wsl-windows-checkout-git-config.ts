@@ -1,5 +1,8 @@
 import { win32 } from 'node:path'
-import { findGitSubcommandIndex, isWslDirectGitReadCommand } from './wsl-direct-git-read-commands'
+import {
+  findGitSubcommandIndex,
+  isWslDirectGitReadCommand
+} from '../../shared/git/commands/git-command-classification'
 
 /** autocrlf normalizes CRLF; minimal stat avoids drvfs rehashes from Windows index metadata (Git >=2.25). */
 export const WINDOWS_CHECKOUT_GIT_CONFIG_ARGS: readonly string[] = [

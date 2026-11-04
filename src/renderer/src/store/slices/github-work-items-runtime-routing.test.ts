@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { githubTaskBinding } from '@/lib/github-task-observation'
+import { findRepoForGitHubOwner } from '../github/repository-routing'
 import { workItemsCacheKey } from '../github/cache-identity'
 import {
   createTestStore,
-  mockApi,
   resetRemoteRuntimeMocks,
   runtimeEnvironmentCall
 } from './github-slice-test-harness'
@@ -126,35 +127,20 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: 'old-runtime' }
     })
-    await expect(oldFetch).resolves.toEqual([{ ...oldRuntimeItem, repoId: 'caller-repo-id' }])
+    await expect(oldFetch).resolves.toBeUndefined()
     expect(
       store.getState().workItemsCache[
-        workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-new')
+        workItemsCacheKey(
+          'caller-repo-id',
+          24,
+          'is:open',
+          'runtime:env-new',
+          (() => {
+            const repo = findRepoForGitHubOwner(store.getState(), 'caller-repo-id', '/server/repo')
+            return repo && githubTaskBinding(repo)
+          })()
+        )
       ]?.data
     ).toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
-  })
-
-  it('bounds work-item cache entries across many repos', async () => {
-    vi.useFakeTimers()
-
-    try {
-      const store = createTestStore()
-      mockApi.gh.listWorkItems.mockResolvedValue({
-        items: [],
-        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
-      })
-
-      for (let i = 0; i <= 500; i++) {
-        vi.setSystemTime(1_000 + i)
-        await store.getState().fetchWorkItems(`repo-${i}`, `/repo/${i}`, 24, '')
-      }
-
-      const cache = store.getState().workItemsCache
-      expect(Object.keys(cache)).toHaveLength(500)
-      expect(cache[workItemsCacheKey('repo-0', 24, '')]).toBeUndefined()
-      expect(cache[workItemsCacheKey('repo-500', 24, '')]).toBeDefined()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

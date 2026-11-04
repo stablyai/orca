@@ -1,7 +1,7 @@
 // Windowless layout-owner fixture applies commands in memory and starts main-owned terminals immediately.
 import { vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'

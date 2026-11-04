@@ -1,6 +1,14 @@
+import type {
+  CacheEntry,
+  HostedReviewBranchCacheIdentity,
+  HostedReviewBranchCacheOptions
+} from './hosted-review-branch-cache-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { HostedReviewForBranchOutcome, HostedReviewInfo } from '../../shared/hosted-review'
-import { cachedHostedReviewOutcome } from '../../shared/hosted-review'
+import type {
+  HostedReviewForBranchOutcome,
+  HostedReviewInfo
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import { cachedHostedReviewOutcome } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   __resetHostedReviewActiveClaimsForTests,
   isActiveBranch,
@@ -51,39 +59,9 @@ import {
 const FOUND_REVIEW_TTL_MS = 60_000
 const MAX_ENTRIES = MAX_BRANCH_MAP_ENTRIES
 
-type CacheEntry = {
-  review: HostedReviewInfo | null
-  fetchedAt: number
-  headOid: string | null
-  /** When the lookup that produced this answer began, for straggler ordering. */
-  startedAt: number
-}
-
 const entries = new Map<string, CacheEntry>()
 // NUL cannot occur in paths/branches, preventing invalidation prefixes from crossing identity components.
 const KEY_SEPARATOR = '\0'
-
-export type HostedReviewBranchCacheIdentity = {
-  repoPath: string
-  executionHostId: ExecutionHostId
-  branch: string
-  linkedGitHubPR?: number | null
-  fallbackGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
-  localGitExecOptions?: unknown
-}
-
-export type HostedReviewBranchCacheOptions = {
-  /** The worktree's checked-out HEAD oid, for merged-at-head visibility. */
-  headOid: string | null
-  /** Set by surfaces that only ever render the selected worktree. */
-  active?: boolean
-  force?: boolean
-  userRefresh?: boolean
-}
 
 export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIdentity): string {
   return [

@@ -1,8 +1,11 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
-import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
-import type { AgentStatusEntry, AgentWorkingMode } from '../../../shared/agent-status-types'
-import type { AgentRowState } from '../../../shared/agent-row-decay-state'
+import type { AgentChildRowModel } from '../../../shared/agent-status/presentation/agent-child-row-model'
+import { agentVerdictDisplayMark } from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import type {
+  AgentStatusEntry,
+  AgentWorkingMode
+} from '../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentRowState } from '../../../shared/agent-status/presentation/agent-row-decay-state'
 
 /** Share row-state mapping across sidebar, dashboard and notes so new states cannot diverge. */
 export function agentRowDotState(

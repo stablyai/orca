@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   makeState,
   LEAF_ID,

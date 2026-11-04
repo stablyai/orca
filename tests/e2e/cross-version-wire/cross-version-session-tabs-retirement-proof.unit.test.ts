@@ -92,7 +92,7 @@ function exitProof(): Record<string, unknown> {
 async function loadBuild(ref: string | null): Promise<Build> {
   if (ref === null) {
     const [ledger, proof, retirement] = await Promise.all([
-      import('../../../src/shared/terminal-retirement-proof-ledger'),
+      import('../../../src/shared/workspace-layout/terminal-retirement-proof-ledger'),
       import('../../../src/main/runtime/mobile-session-terminal-retirement-proof'),
       import('../../../src/main/runtime/mobile-session-terminal-retirement')
     ])

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
-import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
+import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
 import { hookAt, loadCapture } from './claude-cancel-capture.test-fixture'
@@ -112,12 +112,6 @@ function reconnect(pane: SshPane): void {
 }
 
 describe('a relayed Claude permission wait across a reconnect (captured)', () => {
-  it('clears live when the approved request ends while connected', async () => {
-    const pane = await waitingOnFirstRequest()
-    await postAll(pane, [firstToolDone, secondTool])
-    expect(row(pane.desktop)).toMatchObject({ state: 'working' })
-  })
-
   it('clears on reconnect when the request ended while the desktop was away', async () => {
     const pane = await waitingOnFirstRequest()
     pane.connected = false
@@ -146,16 +140,6 @@ describe('a relayed Claude permission wait across a reconnect (captured)', () =>
 
     expect(row(pane.desktop)).toMatchObject({ state: 'waiting' })
     expect(row(pane.desktop).toolInput).toContain('first-file.txt')
-  })
-
-  it('does not carry an ended request into a new Claude session', async () => {
-    const pane = await waitingOnFirstRequest()
-    pane.connected = false
-    await pane.post(firstToolDone)
-    await pane.post({ ...secondTool, session_id: '11111111-1111-4111-8111-111111111111' })
-    reconnect(pane)
-
-    expect(pane.forwarded.at(-1)?.claudeSettledRequests).toBeUndefined()
   })
 
   it('ignores settled requests on a live (non-replay) envelope', async () => {

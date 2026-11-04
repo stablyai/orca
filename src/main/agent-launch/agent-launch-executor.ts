@@ -4,11 +4,12 @@ import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
 
 import { assertAgentPromptRequestActive } from '../runtime/orca-runtime-core'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   type AgentLaunchResult,
-  withoutReservedAgentCreateFields
-} from '../../shared/agent-launch-intent'
+  withoutReservedAgentCreateFields,
+  type AgentLaunchModeReceipt
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
 import {
   combineLaunchWarnings,
   ignoredStructuredLaunchInputsWarning
@@ -25,12 +26,12 @@ import {
 import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   resolveAgentLaunchModeOnHost,
-  type AgentLaunchModeReceipt,
   type AgentLaunchModeSettlement,
   DEFAULT_LAUNCH_VOCABULARY,
   downgradeAgentLaunchModeForStructuredRefusal,
   warnStructuredLaunchDowngrade
 } from './agent-launch-mode'
+
 import {
   assertLegacyHostTarget,
   createLaunchPromptInputs,
@@ -49,7 +50,7 @@ import {
   recoverCreatedWorkspace
 } from './agent-launch-created-workspace'
 
-export type { AgentLaunchExecution, AgentLaunchPublishedSurface } from './agent-launch-execution'
+export type { AgentLaunchExecution } from './agent-launch-execution'
 
 export async function executeAgentLaunch(
   execution: AgentLaunchExecution

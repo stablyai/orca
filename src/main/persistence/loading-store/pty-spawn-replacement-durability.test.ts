@@ -1,4 +1,4 @@
-import { isTerminalSessionStorageCapacityFailure } from '../../../shared/terminal-session-state-save-failure'
+import { isTerminalSessionStorageCapacityFailure } from '../../../shared/workspace-session/terminal-session-state-save-failure'
 import { afterEach, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { deferred, fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'

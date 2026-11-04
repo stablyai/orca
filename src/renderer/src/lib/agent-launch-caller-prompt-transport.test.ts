@@ -1,7 +1,7 @@
 // Cross each caller’s delivery mode with agent injection policy to verify argv, paste or environment transport and submission.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 import {
   createLaunchFunnelStore,

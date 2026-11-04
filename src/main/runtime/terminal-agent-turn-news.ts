@@ -1,9 +1,9 @@
 // Share desktop completion/input timing and hook rows; phone/connector listeners choose wording and transport.
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
-import { mainAgentTurnInterrupted } from '../../shared/agent-lead-status-fold'
-import { agentTurnEndedOnPurpose } from '../../shared/agent-main-agent-verdict'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import { AGENT_DONE_QUIET_MS } from '../../shared/agent-transitions'
+import { mainAgentTurnInterrupted } from '../../shared/agent-status/lifecycle/agent-lead-status-fold'
+import { agentTurnEndedOnPurpose } from '../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { AGENT_DONE_QUIET_MS } from '../../shared/agent-status/lifecycle/agent-transitions'
 import { isPiCompatibleAgentType } from '../../shared/pi-agent-kind'
 
 export type TerminalAgentTurnNewsItem = {
