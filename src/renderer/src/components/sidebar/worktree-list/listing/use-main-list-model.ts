@@ -72,11 +72,11 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const feed = useDesktopSidebarFeed()
   const pending = useSyncExternalStore(subscribeSidebarPendingLayer, readSidebarPendingLayer)
   const endedCreationIds = useSyncExternalStore(subscribeEndedCreations, readEndedCreations)
-  const [pendingCreationKeys, hiddenCreationKeys] = useAppStore(
-    useShallow((s) => [
-      selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations),
-      selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations, 'hidden')
-    ])
+  const pendingCreationKeys = useAppStore(
+    useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
+  )
+  const hiddenCreationKeys = useAppStore(
+    useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations, 'hidden'))
   )
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
