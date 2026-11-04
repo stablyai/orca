@@ -1,5 +1,5 @@
-import type { AiVaultSearchScopeIdentity } from '../../../../shared/ai-vault-search-scope'
-import type { AiVaultScope } from '../../../../shared/ai-vault-types'
+import type { AiVaultSearchScopeIdentity } from '../../../../shared/ai-vault/search/ai-vault-search-scope'
+import type { AiVaultScope } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 // `all` sends nothing, which still means every session the host has.
 export function aiVaultSearchScopeIdentity(args: {

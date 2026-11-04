@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as BackgroundDistroGate from '../wsl-background-distro-gate'
+import type * as BackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
 import type * as NodeFs from 'node:fs'
 
 const mocks = vi.hoisted(() => ({
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   loadHooks: vi.fn((_path: string) => null)
 }))
 
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundDistroGate>()),
   readWslDistroRunningState: mocks.readWslDistroRunningState
 }))
@@ -23,7 +23,7 @@ vi.mock('node:fs', async (importOriginal) => ({
   mkdirSync: mocks.mkdirSync,
   rmSync: mocks.rmSync
 }))
-vi.mock('../git/check-ignored-paths', () => ({
+vi.mock('../git/source-control/check-ignored-paths', () => ({
   checkIgnoredPaths: vi.fn(async () => new Set(['']))
 }))
 vi.mock('./hooks', () => ({ loadHooks: mocks.loadHooks }))

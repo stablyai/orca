@@ -1,4 +1,4 @@
-import { CODEX_PERMISSION_CONFIG_ROOTS } from '../../shared/agent-permission-args'
+import { CODEX_PERMISSION_CONFIG_ROOTS } from '../../shared/agent-launch/permissions/agent-permission-args'
 import { parseTomlKeyPath } from './config-toml-key-path'
 import { StructuredAgentArgumentsError } from '../native-chat/structured-agent-arguments-error'
 

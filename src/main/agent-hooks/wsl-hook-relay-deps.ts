@@ -3,8 +3,8 @@ import { bindRemoteClaudeInterruptReconciliation } from '../ssh/ssh-agent-hook-i
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
-import { isAgentStatusHooksEnabled } from './managed-agent-hook-controls'
-import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
+import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { agentHookServer } from './server'
 import {
   createLocalPtyInventoryReader,
@@ -17,7 +17,7 @@ import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers
 import { getOpenCode2PluginSource, getOpenCodePluginSource } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import { codexHookService } from '../codex/hook-service'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import type { PluginSources } from '../../wsl-guest/plugin-overlay'
 import {
   resolveWslHookRelayBundle,
@@ -25,15 +25,18 @@ import {
   spawnWslRelayProcess
 } from './wsl-hook-relay-launch'
 import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
-import { resolveWslDefaultDistro as resolveSharedWslDefaultDistro } from '../wsl/wsl-default-distro'
-import { deferUntilWslDistroRunning, isWslDistroRunning } from '../wsl-background-distro-gate'
-import { isWslAgentHookRelayEnabled } from '../../shared/agent-hook-relay'
+import { resolveWslDefaultDistro as resolveSharedWslDefaultDistro } from '../wsl/discovery/wsl-default-distro'
+import {
+  deferUntilWslDistroRunning,
+  isWslDistroRunning
+} from '../wsl/discovery/wsl-background-distro-gate'
+import { isWslAgentHookRelayEnabled } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { wslBridgePtyPresence, type WslBridgePtyPresence } from './wsl-bridge-pty-presence'
 import {
   readDaemonBridgeSessions,
   type DaemonBridgeSessionVerdict
 } from './wsl-bridge-daemon-sessions'
-import { blockedWslDistroForExec } from '../wsl/wsl-background-exec-gate'
+import { blockedWslDistroForExec } from '../wsl/discovery/wsl-background-exec-gate'
 
 // Concurrent wsl.exe spawns can trigger transient E_UNEXPECTED failures.
 export const WSL_RELAY_TRANSIENT_RETRY_DELAY_MS = 2_000

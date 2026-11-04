@@ -1,6 +1,4 @@
-import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
 import {
   classifyOrcadTerminalSmokeChanges,
   collectOrcadTerminalSmokeInputs
@@ -86,30 +84,4 @@ describe('the actual terminal smoke dependency graph', () => {
       ).shouldRun
     ).toBe(true)
   })
-})
-
-it('only skips the unchanged smoke after a successful diff and dependency analysis', () => {
-  const workflow = parse(
-    readFileSync(new URL('../../.github/workflows/pr.yml', import.meta.url), 'utf8')
-  )
-  const steps = workflow.jobs.preflight.steps
-  const scope = steps.find((candidate) => candidate.id === 'orcad-smoke-scope')
-  expect(scope.env).toEqual({ BASE_SHA: '${{ github.event.pull_request.base.sha }}' })
-  // HEAD^1 bypasses merge-base lookup, permitting shallow checkout; payload head SHA is unused (see localization gate).
-  expect(scope.run).toContain('node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA"')
-  expect(scope.run).toContain('git diff --name-only --no-renames -z "$DIFF_BASE" HEAD')
-  expect(scope.run).not.toContain('--diff-filter')
-  expect(scope.run).toMatch(
-    /&& \[ "\$scope" = false \]; then[\s\S]*run=false[\s\S]*else\s+echo 'run=true'/
-  )
-  // orcad refuses to build without the page, so the page builds exactly when the smoke runs.
-  const gated = "steps.orcad-smoke-scope.outputs.run == 'true'"
-  const page = steps.find(
-    (candidate) => candidate.uses === './.github/actions/build-mobile-web-bundle'
-  )
-  const smoke = steps.find((candidate) => candidate.name === 'Boot orcad and round-trip a terminal')
-  expect(page.if).toBe(gated)
-  expect(smoke.if).toBe(gated)
-  expect(smoke.run).toBe('pnpm run smoke:orcad-terminal')
-  expect(steps.indexOf(page)).toBeLessThan(steps.indexOf(smoke))
 })

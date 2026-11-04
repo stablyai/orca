@@ -5,26 +5,29 @@ import {
   clearAiVaultBackgroundRestartCircuit,
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
-} from './session-scanner-background'
-import { getCachedWslDistros, hasCachedWslDistros } from '../wsl'
+} from './scan-service/session-scanner-background'
+import { getCachedWslDistros, hasCachedWslDistros } from '../wsl/discovery/distro-catalog'
 import {
   listLastKnownRunningWslHomeDirs,
   readRunningWslHomeDirsUnlessStopped
-} from '../wsl/wsl-home-unless-stopped'
+} from '../wsl/discovery/wsl-home-unless-stopped'
 import {
   carryOverUnconfirmedWslSessions,
   resetAiVaultWslSessionCarryover
 } from './ai-vault-wsl-session-carryover'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
+import { filterPathsToRunningWslDistrosAsync } from '../wsl/filesystem/wsl-running-path-filter'
 import {
   isAiVaultScanCancelledError,
   type AiVaultListArgs,
   type AiVaultListResult
-} from '../../shared/ai-vault-types'
-import { aiVaultLocalScanKey, aiVaultLocalScanScopeKey } from '../../shared/ai-vault-local-scan-key'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import {
+  aiVaultLocalScanKey,
+  aiVaultLocalScanScopeKey
+} from '../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { managedOpenCodeAccountDataDirs } from '../opencode/opencode-managed-account-data-dirs'
-import { prepareOpenCodeWslReaders } from './opencode-wsl-runtime-preparation'
+import { prepareOpenCodeWslReaders } from './scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
 import {
@@ -40,7 +43,7 @@ import {
   requestedAiVaultSessionDepth,
   truncateAiVaultListResult,
   type AiVaultSessionDepth
-} from '../../shared/ai-vault-session-depth'
+} from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 
 // Desktop and runtime RPC share this cache to avoid duplicate scans when mobile and desktop open together.
 const AI_VAULT_CACHE_TTL_MS = 60_000

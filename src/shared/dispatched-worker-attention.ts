@@ -1,6 +1,9 @@
 import type { AgentSessionAttentionEdge } from './agent-session/agent-session-attention'
-import { detectAgentStatusFromTitle } from './agent-detection'
-import type { AgentStatusOrchestrationContext, AgentStatusState } from './agent-status-types'
+import { detectAgentStatusFromTitle } from './agent-status/title/agent-title-status'
+import type {
+  AgentStatusOrchestrationContext,
+  AgentStatusState
+} from './agent-status/contracts/agent-status-types'
 
 type ReadOrchestration = () => AgentStatusOrchestrationContext | undefined
 

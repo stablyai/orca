@@ -8,7 +8,7 @@ import {
   emptyCrew,
   type OrchestrationCrewSnapshot
 } from '../../../../shared/orchestration-crew'
-import { runtimeHostStatusBlockedReason } from '../../../../shared/runtime-host-status'
+import { runtimeHostStatusBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/runtime-protocol-compat'
 import type { CrewFollowSource } from './orchestration-crew-follow'
 

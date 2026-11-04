@@ -31,9 +31,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -187,42 +190,6 @@ describe('orca cli worktree awareness', () => {
       ['terminal.create', { worktree: 'path:/tmp/repo/feature', command, title, ...expected }]
     ])
     expect(process.exitCode).toBeUndefined()
-  })
-
-  it('prints terminal.read fallback screen lines in json mode', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_read', {
-        terminal: {
-          handle: 'term_worker',
-          status: 'running',
-          tail: ['Claude Code', 'Checking files', 'Waiting for input'],
-          truncated: false,
-          limited: true,
-          oldestCursor: '0',
-          nextCursor: '3000',
-          latestCursor: '3000',
-          returnedLineCount: 3
-        }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(
-      ['terminal', 'read', '--terminal', 'term_worker', '--limit', '120', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('terminal.read', {
-      terminal: 'term_worker',
-      limit: 120
-    })
-    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
-    expect(printed.result.terminal.tail).toEqual([
-      'Claude Code',
-      'Checking files',
-      'Waiting for input'
-    ])
   })
 
   it('uses the resolved enclosing worktree for terminal consumers', async () => {

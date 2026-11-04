@@ -1,4 +1,4 @@
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 
 export type SessionOptionValue = string | boolean
 
@@ -37,6 +37,8 @@ export type SessionOptionDescriptor = {
         currentValue: boolean
       }
   valueSource: SessionOptionValueSource
+  /** Model-pill display only; currentValue remains the accepted selection. */
+  reportedModel?: string
   /** Explicit lane is required: dispatched cannot distinguish PTY from structured transports. */
   transport: NativeChatLiveOptionTransport
   settable: boolean

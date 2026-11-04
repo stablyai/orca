@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { AiVaultSearchRequestSchema } from '../../shared/ai-vault-search-contract'
-import { fakeSearchService } from '../../shared/ai-vault-search-test-fixture'
+import { AiVaultSearchRequestSchema } from '../../shared/ai-vault/search/ai-vault-search-contract'
+import { fakeSearchService } from '../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import {
   installSessionSearchScopeCatalogSource,
   resetSessionSearchScopeCatalogForTests

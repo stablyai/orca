@@ -29,14 +29,14 @@ vi.mock('../../workspace-hooks/issue-command-file', () => ({
   readIssueCommandUnlessWslStopped: mocks.localRead,
   writeIssueCommandUnlessWslStopped: mocks.localWrite
 }))
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 vi.mock('node:fs/promises', () => ({
   readFile: mocks.localFileRead,
   stat: mocks.localStat
 }))
-vi.mock('../../../shared/setup-script-imports', () => ({
+vi.mock('../../../shared/workspace-setup/setup-script-imports', () => ({
   inspectSetupScriptImportCandidates: async (
     read: (path: string) => Promise<unknown>,
     options?: { fileExists: (path: string) => Promise<boolean> }

@@ -9,8 +9,9 @@ import {
   generateKeyPair,
   publicKeyFromBase64,
   publicKeyToBase64
-} from '../../../shared/e2ee-crypto'
-import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
 
 export const TARGET = 'runtime:env-1'

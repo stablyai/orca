@@ -9,7 +9,10 @@ import { useActivityThreadActionBindings } from '@/components/activity/use-activ
 import { ActivityThreadListPane } from '@/components/activity/activity-thread-list-pane'
 import { useAgentPaneThreads } from '@/components/activity/use-agent-pane-threads'
 import { ActivityThreadOptionsMenu } from '@/components/activity/activity-thread-controls'
-import type { ActivityGroupBy, ThreadReadFilter } from '@/components/activity/activity-thread-types'
+import type {
+  ActivityGroupBy,
+  ThreadReadFilter
+} from '../../../../shared/agents-view-thread-filters'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,

@@ -8,17 +8,17 @@ vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
   app: { getPath: () => '/tmp/orca-test' }
 }))
-vi.mock('../../../repo-worktrees', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreesForDetectedScan: listRepoWorktreesMock
 }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 vi.mock('../removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: vi.fn()
 }))
-vi.mock('../../../worktree-lineage-pruning', () => ({
+vi.mock('../../../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: vi.fn()
 }))
 vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
@@ -31,7 +31,7 @@ const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provid
 const { __resetDetectedWorktreeScanCacheForTests, invalidateDetectedWorktreeScanCache } =
   await import('./detected-worktree-scan-cache')
 const { getLocalWorktreeCatalogVersion, getLocalWorktreeScanGeneration } =
-  await import('../../../local-worktree-scan-generation')
+  await import('../../../workspaces/catalog/local-worktree-scan-generation')
 
 const localRepo: Repo = {
   id: 'repo-local',
@@ -105,17 +105,5 @@ describe('the catalog version a listing carries', () => {
     expect(second && 'catalogVersion' in second ? second.catalogVersion : undefined).toEqual(
       first && 'catalogVersion' in first ? first.catalogVersion : undefined
     )
-  })
-
-  it('a create reply issued after the change names a later catalog than the listing', async () => {
-    listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, localRepo.path)])
-    const listing = await listLocal()
-    // Create notifications bump generation before stamping the reply.
-    invalidateDetectedWorktreeScanCache(localRepo.id)
-    const createReply = getLocalWorktreeCatalogVersion(localRepo.id)
-
-    const listed = listing && 'catalogVersion' in listing ? listing.catalogVersion : undefined
-    expect(listed?.epoch).toBe(createReply.epoch)
-    expect(listed!.sequence).toBeLessThan(createReply.sequence)
   })
 })

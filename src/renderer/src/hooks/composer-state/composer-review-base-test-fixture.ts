@@ -161,9 +161,12 @@ export function useReviewBaseSelectionFixture(initialReview?: GitHubWorkItem) {
     actionableHostIds: new Set([LOCAL_EXECUTION_HOST_ID]),
     projectGroups: [folderGroup],
     projectHostSetups: [],
+    projectOptions: [],
     projects: [],
     repos: [repo, replacementRepo],
     setRepoId,
+    setSelectedProjectHostSetupOverrideId: vi.fn(),
+    setSelectedProjectHostSetupOverrideHostId: vi.fn(),
     selectedWorkspaceTarget: { status: 'unavailable', reason: 'no-eligible-repo' },
     workspaceHostScope: LOCAL_EXECUTION_HOST_ID
   })

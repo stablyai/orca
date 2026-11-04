@@ -8,7 +8,7 @@ import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 import {
   OPENCODE_STARTUP_PROMPT_NONCE_ENV,
   OPENCODE_STARTUP_PROMPT_SHA256_ENV
-} from '../../shared/opencode-startup-prompt'
+} from '../../shared/agent-launch/startup/opencode-startup-prompt'
 import { OpenCodeStartupPromptClaims } from './opencode-startup-prompt-claims'
 
 type OpenCodePromptRuntime = Pick<

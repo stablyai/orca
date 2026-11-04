@@ -1,4 +1,4 @@
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { SessionOptionValue } from './native-chat-session-options'
 import {
   cloneNativeChatSessionOptionRecord,

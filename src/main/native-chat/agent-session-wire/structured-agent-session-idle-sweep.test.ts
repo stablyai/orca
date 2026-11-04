@@ -2,8 +2,8 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journa
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentChildWorkKind } from '../../../shared/agent-status-child-work'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkKind } from '../../../shared/agent-status/child-work/agent-status-child-work'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   collectSubscriber,
   createRestTestRig,

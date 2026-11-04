@@ -1,13 +1,13 @@
 import { expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { buildQuickComposerStartup } from '../hooks/composer-state/quick-startup-plan'
-import { buildAgentResumeStartupPlan } from '../../../shared/tui-agent-startup'
-import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
+import { buildAgentResumeStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   buildAiVaultLocalResumeStartup,
   buildAiVaultForkStartup,
   resolveAiVaultCopiedSessionAgentArgs
-} from '../../../shared/ai-vault-resume-startup'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
 vi.mock('@/lib/telemetry', () => ({ tuiAgentToAgentKind: (agent: string) => agent }))
 
 it.each(['claude', 'codex'] as const)(

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseManualNetworkAddress } from './manual-address'
-import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-pairing-protocol-limits'
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../remote-runtime/pairing/mobile-pairing-protocol-limits'
 
 describe('parseManualNetworkAddress', () => {
   describe('IPv4', () => {

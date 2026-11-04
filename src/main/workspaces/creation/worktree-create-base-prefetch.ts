@@ -1,7 +1,7 @@
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import { isFullGitObjectId } from '../../git/commit-object-ref'
-import { hasLocalWorktreeBaseRef } from '../../git/worktree-base-ref-probe'
+import { hasLocalWorktreeBaseRef } from '../../git/worktrees/creation/worktree-base-ref-probe'
 import { getBaseRefDefault } from '../../git/repo-default-base-ref'
 import { resolveWorktreeCreateBase } from './worktree-create-base'
 

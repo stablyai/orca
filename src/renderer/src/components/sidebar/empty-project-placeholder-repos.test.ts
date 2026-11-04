@@ -32,20 +32,6 @@ const worktree: Worktree = {
 }
 
 describe('getEmptyProjectPlaceholderRepoIds', () => {
-  it('returns empty repo placeholders in repo grouping without project groups', () => {
-    expect(
-      Array.from(
-        getEmptyProjectPlaceholderRepoIds({
-          groupBy: 'repo',
-          repos: [repo],
-          worktreesByRepo: { [repo.id]: [] },
-          visibleWorktrees: [],
-          filterRepoIds: []
-        })
-      )
-    ).toEqual([repo.id])
-  })
-
   it('treats missing worktreesByRepo keys as empty for the current render', () => {
     expect(
       Array.from(

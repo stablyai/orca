@@ -133,11 +133,17 @@ describe('live reader copies through the existing local-content callback', () =>
   })
 
   it.each([
-    ['relative path', tab, tab.relativePath],
+    ['full host path', tab, tab.filePath],
     [
-      'host path fallback',
-      { ...tab, relativePath: '', filePath: 'C:\\workspace\\notes.md' },
+      'Windows host path',
+      { ...tab, filePath: 'C:\\workspace\\notes.md' },
       'C:\\workspace\\notes.md'
+    ],
+    ['relative fallback', { ...tab, filePath: '' }, tab.relativePath],
+    [
+      'UNC host path',
+      { ...tab, filePath: '\\\\server\\share\\notes.md' },
+      '\\\\server\\share\\notes.md'
     ]
   ])('copies the %s without a host connection', async (_name, markdownTab, expected) => {
     act(() => renderer!.update(createElement(Probe, { doc, markdownTab })))
@@ -158,10 +164,15 @@ describe('live reader copies through the existing local-content callback', () =>
   })
 
   it('copies the current tab path after switching documents', async () => {
-    const nextTab = { ...tab, id: 'next-doc', relativePath: 'notes/next.md' }
+    const nextTab = {
+      ...tab,
+      id: 'next-doc',
+      relativePath: 'notes/next.md',
+      filePath: '/remote/workspace/notes/next.md'
+    }
     act(() => renderer!.update(createElement(Probe, { doc, markdownTab: nextTab })))
     const button = renderer!.root.findByProps({ accessibilityLabel: 'Copy Markdown path' })
     await act(async () => button.props.onPress())
-    expect(writeText.mock.calls).toEqual([[nextTab.relativePath]])
+    expect(writeText.mock.calls).toEqual([[nextTab.filePath]])
   })
 })

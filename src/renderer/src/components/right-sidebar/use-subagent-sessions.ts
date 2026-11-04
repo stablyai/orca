@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { withAiVaultSessionCwdAliases } from '../../../../shared/ai-vault-session-cwd-aliases'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { withAiVaultSessionCwdAliases } from '../../../../shared/ai-vault/scanning/ai-vault-session-cwd-aliases'
 
 type SubagentListState = {
   sessions: AiVaultSession[]

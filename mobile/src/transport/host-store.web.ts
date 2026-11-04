@@ -1,6 +1,6 @@
 // Read the shell’s init.host instead of an absent web keychain; otherwise routes would show Host not found.
 import { readPageHostProfile } from '../mobile-web-shell/bridge/page-host-profile'
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { HostCatalogEntry, HostProfile } from './types'
 
 // The page gets no device credential or public key; RPC uses the shell’s paired client.

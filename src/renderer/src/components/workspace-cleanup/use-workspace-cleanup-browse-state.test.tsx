@@ -8,10 +8,12 @@ import {
   createWorkspaceCleanupBrowseSlice,
   resetWorkspaceCleanupBrowsePersistTimer
 } from '@/store/slices/workspace-cleanup-browse'
-import { createDefaultWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
-import { listAppliedWorkspaceCleanupFilters } from '../../../../shared/workspace-cleanup-applied-filters'
-import { useWorkspaceCleanupBrowseState } from './use-workspace-cleanup-browse-state'
-import type { WorkspaceCleanupBrowseController } from './use-workspace-cleanup-browse-state'
+import { createDefaultWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
+import { listAppliedWorkspaceCleanupFilters } from '../../../../shared/workspace-cleanup/workspace-cleanup-applied-filters'
+import {
+  useWorkspaceCleanupBrowseState,
+  type WorkspaceCleanupBrowseController
+} from './use-workspace-cleanup-browse-state'
 
 const store = create<AppState>()(
   (...a) =>

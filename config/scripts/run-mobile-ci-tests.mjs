@@ -1,8 +1,8 @@
 import { runProcess } from '@orca/process-host'
-import { mkdtempSync, mkdirSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
@@ -26,6 +26,35 @@ const onTerminate = () => {
 }
 process.on('SIGINT', onInterrupt)
 process.on('SIGTERM', onTerminate)
+
+// The phone/host contract tests are typechecked by their own program; prove Bun actually ran and
+// passed them, with assertions, and Node did not. Their names come from that program's roots.
+function checkContractTestMembership() {
+  const config = JSON.parse(readFileSync(join(root, 'mobile/tsconfig.test.node.json'), 'utf8'))
+  const expected = config.files.filter((file) => /\.test\.tsx?$/.test(file))
+  const read = (role) => {
+    const file = join(scratch, role, 'results.json')
+    return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')).testResults ?? []) : []
+  }
+  const name = (entry) => relative(join(root, 'mobile'), entry.name).replaceAll('\\', '/')
+  const bun = new Map(read('bun').map((entry) => [name(entry), entry]))
+  const node = new Set(read('node').map(name))
+  const problems = []
+  for (const file of expected) {
+    const assertions = bun.get(file)?.assertionResults ?? []
+    if (
+      bun.get(file)?.status !== 'passed' ||
+      assertions.length === 0 ||
+      assertions.some((assertion) => assertion.status !== 'passed')
+    ) {
+      problems.push(`${file} did not run and pass every assertion under Bun`)
+    }
+    if (node.has(file)) {
+      problems.push(`${file} ran under Node`)
+    }
+  }
+  return problems
+}
 
 async function runRole(role, program, runtimeArgs) {
   const owned = join(scratch, role)
@@ -83,6 +112,10 @@ try {
     } else if (result.value.code !== 0) {
       exitCode ||= result.value.code ?? 1
     }
+  }
+  for (const problem of checkContractTestMembership()) {
+    console.error(`::error::${problem}`)
+    exitCode ||= 1
   }
   process.exitCode = signalExitCode ?? exitCode
 } finally {

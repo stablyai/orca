@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitStatusResult } from '../../../shared/git-status-types'
+import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import type * as RepoWorktrees from '../../repo-worktrees'
+import type * as RepoWorktrees from '../../workspaces/catalog/repo-worktrees'
 
 const boundary = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
@@ -23,7 +23,7 @@ vi.mock('node:fs/promises', () => ({
     throw new Error('no gitdir pointer')
   })
 }))
-vi.mock('../../repo-worktrees', async (importOriginal) => ({
+vi.mock('../../workspaces/catalog/repo-worktrees', async (importOriginal) => ({
   ...(await importOriginal<typeof RepoWorktrees>()),
   listRepoWorktrees: boundary.list
 }))
@@ -31,7 +31,7 @@ vi.mock('../../git/source-control/status-read', () => ({ getStatus: boundary.sta
 vi.mock('../../git/command-runner/git-exec-file', () => ({
   gitExecFileAsync: vi.fn(async () => ({ stdout: '0\n', stderr: '' }))
 }))
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 vi.mock('../../workspaces/cleanup/workspace-cleanup-scan-snapshot', () => ({

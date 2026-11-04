@@ -1,15 +1,15 @@
-import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
   resolveEnvironment
-} from '../../shared/runtime-environment-store'
-import { readPersistedEnvironmentStore } from '../../shared/runtime-environment-store-file'
-import { writeRuntimeEnvironmentSidecarEntry } from '../../shared/runtime-environment-sidecar'
+} from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { readPersistedEnvironmentStore } from '../../shared/remote-runtime/host-store/runtime-environment-store-file'
+import { writeRuntimeEnvironmentSidecarEntry } from '../../shared/remote-runtime/host-store/runtime-environment-sidecar'
 import type { SshTarget } from '../../shared/ssh-types'
 
 const mocks = vi.hoisted(() => ({

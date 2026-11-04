@@ -1,4 +1,4 @@
-import type { AiVaultScope } from '../../../../shared/ai-vault-types'
+import type { AiVaultScope } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 export const DEFAULT_AI_VAULT_SCOPE: AiVaultScope = 'workspace'
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
   getDeleteWorktreeChangeCheckStates,

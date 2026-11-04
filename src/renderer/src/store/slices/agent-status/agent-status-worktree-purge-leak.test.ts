@@ -1,6 +1,6 @@
 /** Bulk worktree purge must clear pane status/unread/input maps like single removal. External scans/project removal/hydration run no terminal teardown; missed entries otherwise leak for renderer lifetime and leave unread dock badges. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AppState } from '../../types'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type * as AgentStatusModule from '@/lib/agent-status'

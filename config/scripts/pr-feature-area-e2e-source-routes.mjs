@@ -17,7 +17,7 @@ function featureRoute(id, specs, prefixes) {
 export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   featureRoute(
     'feature.automations-ui',
-    ['automation-prompt-disclosure', 'automation-runs-dashboard'],
+    ['automation-prompt-disclosure'],
     [`${COMPONENTS}automations/`]
   ),
   featureRoute(
@@ -87,7 +87,6 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['project-group-creation-visibility', 'project-group-manual-sort'],
     ['src/main/project-groups/', 'src/renderer/src/store/project-groups/']
   ),
-  featureRoute('feature.usage-overview', ['usage-overview'], [`${COMPONENTS}stats/`]),
   featureRoute(
     'feature.new-workspace',
     [

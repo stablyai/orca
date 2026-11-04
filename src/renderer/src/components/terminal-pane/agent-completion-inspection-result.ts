@@ -1,5 +1,5 @@
-import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
-import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
+import type { RecognizedAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
+import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { admitRemoteForegroundEvidence } from '../../../../shared/remote-foreground-evidence-admission'
 import { isClientOnlyUnverifiableInspection } from '../../../../shared/terminal-process-inspection'

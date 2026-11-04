@@ -9,9 +9,9 @@ import {
   generateRuntimePullRequestFields
 } from '@/runtime/runtime-git-generation-client'
 import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/runtime-git-client-context'
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import type { ResolveSourceControlAiResult } from '../../../../shared/source-control-ai'
-import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control-ai-types'
+import type { HostedReviewCreationEligibility } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { ResolveSourceControlAiResult } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
+import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type { PullRequestFieldRevisions } from '@/store/slices/pull-request-generation'
 import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
 import { stripBaseRef } from './create-pull-request-base-ref-normalization'

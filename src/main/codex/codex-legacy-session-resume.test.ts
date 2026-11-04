@@ -15,7 +15,7 @@ import type * as NodeFsPromises from 'node:fs/promises'
 import {
   codexRolloutHardlinkIdentity,
   dedupeCodexRolloutFileAliases
-} from '../ai-vault/codex-session-root-dedup'
+} from '../ai-vault/scanners/codex/codex-session-root-dedup'
 import { prepareLegacySharedCodexSessionResume } from './codex-legacy-session-resume'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 

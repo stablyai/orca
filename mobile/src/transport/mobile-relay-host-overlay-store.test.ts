@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
+import { MobileRelayEndpointSchema } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn(),

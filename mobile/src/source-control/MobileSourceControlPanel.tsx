@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useHostConnectionInputs } from '../transport/client-context-connection-metrics'
 import { View } from 'react-native'
 import { GitBranch, RefreshCw } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -11,6 +12,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
+import { useMobileSourceControlRefresh } from './use-mobile-source-control-refresh'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
 import { MobileSourceControlHeader } from './MobileSourceControlHeader'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
@@ -119,7 +121,7 @@ export function MobileSourceControlPanel({
       lastPrHeadRef.current = statusHead
     }
   }, [statusBranch, statusHead])
-  const prBranch = statusBranch ?? lastPrBranchRef.current
+  const prBranch = status ? statusBranch : lastPrBranchRef.current
   const prHeadSha = statusHead ?? lastPrHeadRef.current
   const prController = useMobilePrSidebarController({
     client,
@@ -218,17 +220,13 @@ export function MobileSourceControlPanel({
       ? insets.bottom
       : Math.max(barHeight, insets.bottom)
 
-  const onRefresh = useCallback(() => {
-    void loadStatus({ preserveReadyOnFailure: true, rereadSettings: true })
-    if (!isHostedRepo) {
-      return
-    }
-    if (activeTab === 'pr') {
-      void refetchPr({ includeDetails: true })
-      return
-    }
-    void refetchPr({ includeDetails: false })
-  }, [activeTab, isHostedRepo, loadStatus, refetchPr])
+  const onRefresh = useMobileSourceControlRefresh({
+    client,
+    worktreeId,
+    loadStatus,
+    prController,
+    includeDetails: activeTab === 'pr'
+  })
   // Changes: the rarer git actions, then Refresh, then Force push last and red.
   const changesMenuGroups = useMemo(
     () => [
@@ -246,6 +244,7 @@ export function MobileSourceControlPanel({
     ],
     [gitMenu, ioBusy, onRefresh, t]
   )
+  const hostConnection = useHostConnectionInputs(hostId)
   const { prTab, prMenuGroups, branchCompare } = useMobileSourceControlPrTab({
     state,
     activeTab,
@@ -259,6 +258,7 @@ export function MobileSourceControlPanel({
     onRefresh,
     openersRef: prOpeners,
     openScreen: openHubScreen,
+    hostConnection,
     shared: nextStep
   })
 
@@ -346,6 +346,7 @@ export function MobileSourceControlPanel({
         <View style={activeTab === 'changes' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
           <MobileSourceControlContent
             state={state}
+            stageAllInBar={nextStep.view.kind === 'composer' && primaryAction.kind === 'stage'}
             bottomInset={barInset}
             onOpenCommits={openCommitsScreen}
           />

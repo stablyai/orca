@@ -4,8 +4,8 @@ import type { AgentMessageSender } from '../../shared/agent-session/agent-sessio
 import {
   getAgentRowConversationName,
   type ConversationNameTab
-} from '../../shared/agent-row-conversation-name'
-import type { AgentType } from '../../shared/agent-status-types'
+} from '../../shared/agent-status/presentation/agent-row-conversation-name'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { structuredAgentSessionIdFromTabId } from '../../shared/agent-session/view/structured-agent-session-tab-id'
 import type { TerminalTab } from '../../shared/terminal-tab-types'

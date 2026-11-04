@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { isUnreadableError } from '../../shared/secure-file'
 import { AtomicSnapshotWriter } from '../persistence/atomic-snapshot-writer'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { DeliveredNotificationIdentity } from '../../shared/mobile-notification-identity'
 import {
   isStructuredAttentionOrigin,
@@ -11,6 +12,10 @@ import {
 
 export type DeliveredNotificationRecord = DeliveredNotificationIdentity & {
   structuredOrigin?: StructuredAttentionOrigin
+  worktreeId?: string
+  paneKey?: string
+  workspaceExecutionHostId?: ExecutionHostId | null
+  executionHost?: `runtime:${string}`
 }
 type RecordEntry = DeliveredNotificationRecord & { dismissedThrough: number; expiresAt: number }
 const LIMIT = 4096
@@ -72,6 +77,12 @@ export class MobileNotificationDismissalStore {
           notificationId: event.notificationId,
           notificationEpoch: event.notificationEpoch,
           notificationSeq: event.notificationSeq,
+          ...(event.workspaceExecutionHostId !== undefined
+            ? { workspaceExecutionHostId: event.workspaceExecutionHostId }
+            : {}),
+          ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
+          ...(event.paneKey ? { paneKey: event.paneKey } : {}),
+          ...(event.executionHost ? { executionHost: event.executionHost } : {}),
           ...(event.structuredOrigin ? { structuredOrigin: event.structuredOrigin } : {}),
           dismissedThrough: kept.find(same)?.dismissedThrough ?? -1,
           expiresAt: now + RETENTION_MS
@@ -130,16 +141,31 @@ export class MobileNotificationDismissalStore {
     )
   }
 
-  liveDeliveries(prefix = ''): DeliveredNotificationRecord[] {
+  liveDeliveries(): DeliveredNotificationRecord[] {
     const now = Date.now()
     return this.entries
-      .filter((entry) => entry.notificationId.startsWith(prefix) && isLive(entry, now))
-      .map(({ notificationId, notificationEpoch, notificationSeq, structuredOrigin }) => ({
-        notificationId,
-        notificationEpoch,
-        notificationSeq,
-        ...(structuredOrigin ? { structuredOrigin } : {})
-      }))
+      .filter((entry) => isLive(entry, now))
+      .map(
+        ({
+          notificationId,
+          notificationEpoch,
+          notificationSeq,
+          structuredOrigin,
+          workspaceExecutionHostId,
+          worktreeId,
+          paneKey,
+          executionHost
+        }) => ({
+          notificationId,
+          notificationEpoch,
+          notificationSeq,
+          ...(structuredOrigin ? { structuredOrigin } : {}),
+          ...(worktreeId ? { worktreeId } : {}),
+          ...(paneKey ? { paneKey } : {}),
+          ...(workspaceExecutionHostId !== undefined ? { workspaceExecutionHostId } : {}),
+          ...(executionHost ? { executionHost } : {})
+        })
+      )
   }
 
   reconcile(delivered: readonly DeliveredNotificationIdentity[]): DeliveredNotificationIdentity[] {

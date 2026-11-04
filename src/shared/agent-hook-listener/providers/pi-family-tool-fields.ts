@@ -1,5 +1,5 @@
 import type { ToolSnapshot } from '../listener-event'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
 import { deriveToolInputPreview, hasOwnField, readString, toolUpdate } from '../tool-input-preview'
 import { clearActiveToolFieldsUpdate, deriveInteractivePrompt } from '../interactive-tool'
 import { serializeOmpPlanReviewPrompt } from '../../omp-plan-review-prompt'

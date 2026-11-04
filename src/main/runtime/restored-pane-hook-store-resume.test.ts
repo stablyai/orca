@@ -1,6 +1,6 @@
 // verify-15a parity: a host whose daemon restarted resumed nothing and replayed the pane's launch.
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 

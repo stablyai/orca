@@ -3,7 +3,7 @@ import { ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY } from '../../shared/orcad-run
 import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   emptyOrcadActivationRecord,
   type OrcadActivationRecord

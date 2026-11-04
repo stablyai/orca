@@ -2,13 +2,13 @@ import type {
   RuntimeNativeChatFileContext,
   RuntimeTerminalPathResolution
 } from '../../../shared/runtime-types'
-import { parseWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { relativePathInsideRoot, resolveRuntimePath } from '../../../shared/cross-platform-path'
 import { homedir } from 'node:os'
 import { resolveTerminalAbsolutePath } from './terminal-file-path'
 import { requireRuntimeFileProvider, runtimeFileRouteForTarget } from '../files/file-target'
 import { isSafeMobileRelativePath } from '../files/mobile-file-kind'
-import { isENOENT } from '../../ipc/filesystem/filesystem-path-containment'
+import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import type { RuntimeFileCommandHost } from '../files/file-command-host'
 import type { RuntimeTerminalArtifacts } from './artifacts/terminal-artifacts'
 

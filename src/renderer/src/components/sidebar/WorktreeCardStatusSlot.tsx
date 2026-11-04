@@ -1,3 +1,4 @@
+import { getProviderChecksOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
 import React from 'react'
 import { Bell, GitBranch, Moon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -5,7 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
-import { FilledBellIcon } from './WorktreeCardHelpers'
+import { FilledBellIcon, checksLabel } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 import { useIsSleepingWorktree } from './use-worktree-sleep-state'
@@ -86,13 +87,19 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
   if (review.state === 'draft') {
     return translate('workspace.reviewStatus.draft', '{{review}}: Draft', values)
   }
-  if (review.status === 'failure') {
+  const outcome = review.status
+    ? getProviderChecksOutcome(review.checksSummary, review.status)
+    : undefined
+  if (outcome === 'cancelled') {
+    return `${getReviewLabel(review)}: ${checksLabel(outcome)}`
+  }
+  if (outcome === 'failure') {
     return translate('workspace.reviewStatus.checksFailed', '{{review}} checks: Failed', values)
   }
-  if (review.status === 'pending') {
+  if (outcome === 'pending') {
     return translate('workspace.reviewStatus.checksPending', '{{review}} checks: Pending', values)
   }
-  if (review.status === 'success') {
+  if (outcome === 'success') {
     return translate('workspace.reviewStatus.checksPassing', '{{review}} checks: Passing', values)
   }
   return translate('workspace.reviewStatus.open', '{{review}}: Open', values)
@@ -115,6 +122,7 @@ export function WorktreeCardStatusSlot({
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
+  const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
   const status = useWorktreeActivityStatus(worktreeId)
   const isSleeping = useIsSleepingWorktree(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
@@ -145,7 +153,7 @@ export function WorktreeCardStatusSlot({
           ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
           : statusLabel
   const reviewLabel =
-    reviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
+    isReviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
       ? `${passiveStatusLabel} · ${translate('workspace.links.lastKnownStatus', 'Last known status')}`
       : passiveStatusLabel
   const passiveStatusAnnouncement =
@@ -155,11 +163,11 @@ export function WorktreeCardStatusSlot({
   // Working/permission own the lane; retain unread in accessible copy and restore its dot afterward.
   const showNewCardUnreadAlert =
     newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
-  const reviewStaleRef = reviewStale ? observeOffscreenAnimation : undefined
+  const reviewStaleRef = isReviewStale ? observeOffscreenAnimation : undefined
   const reviewStatusIconClassName = cn(
     compactReviewAndBranchStatusIconClassName,
     // Same last-known treatment as the hover card's reference rows.
-    reviewStale && 'shimmer shimmer-duration-2400 shimmer-steps-30'
+    isReviewStale && 'shimmer shimmer-duration-2400 shimmer-steps-30'
   )
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const sleepingStatusIcon = <Moon className={sleepingStatusIconClassName} aria-hidden="true" />

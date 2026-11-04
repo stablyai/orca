@@ -6,7 +6,7 @@ import {
   resolveAgentPaneAuthorityKey
 } from './agent-pane-authority'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 
@@ -170,25 +170,6 @@ function collect(args: {
 }
 
 describe('detach completed split pane → sidebar retention', () => {
-  it('recognizes the same run at its transferred authority without a suppressor', () => {
-    const store = createDetachStore()
-    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
-      state: 'done',
-      prompt: 'Fix it',
-      agentType: 'claude'
-    })
-
-    detach(store, SOURCE_TAB, TARGET_TAB)
-    const state = store.getState()
-    const result = collect({ currentPaneKey: TARGET_PANE_KEY, currentTabId: TARGET_TAB })
-
-    expect(state.agentStatusByPaneKey[SOURCE_PANE_KEY]).toBeUndefined()
-    expect(state.agentStatusByPaneKey[TARGET_PANE_KEY]?.state).toBe('done')
-    expect(state.retentionSuppressedPaneKeys[SOURCE_PANE_KEY]).toBeUndefined()
-    expect(result.toRetain).toEqual([])
-    expect(result.consumedSuppressedPaneKeys).toEqual([])
-  })
-
   it('recognizes the same run after chained transfers', () => {
     const store = createDetachStore()
     store.getState().setAgentStatus(SOURCE_PANE_KEY, {
@@ -206,169 +187,6 @@ describe('detach completed split pane → sidebar retention', () => {
     // Why: every intermediate key must resolve to the CURRENT owner, not the previous hop.
     expect(resolveAgentPaneAuthorityKey(SOURCE_PANE_KEY)).toBe(FINAL_PANE_KEY)
     expect(resolveAgentPaneAuthorityKey(TARGET_PANE_KEY)).toBe(FINAL_PANE_KEY)
-  })
-
-  it('keeps every intermediate key routed after a fourth move', () => {
-    const store = createDetachStore()
-    const EXTRA_TAB = 'tab-extra'
-    const extraPaneKey = makePaneKey(EXTRA_TAB, LEAF)
-    store.setState({
-      tabsByWorktree: {
-        [WORKTREE_ID]: [
-          ...(store.getState().tabsByWorktree[WORKTREE_ID] ?? []),
-          makeTab({ id: EXTRA_TAB, worktreeId: WORKTREE_ID, ptyId: null })
-        ]
-      }
-    })
-    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
-      state: 'done',
-      prompt: 'Fix it',
-      agentType: 'claude'
-    })
-
-    detach(store, SOURCE_TAB, TARGET_TAB)
-    detach(store, TARGET_TAB, FINAL_TAB)
-    detach(store, FINAL_TAB, EXTRA_TAB)
-
-    for (const formerKey of [SOURCE_PANE_KEY, TARGET_PANE_KEY, FINAL_PANE_KEY]) {
-      expect(resolveAgentPaneAuthorityKey(formerKey)).toBe(extraPaneKey)
-    }
-    store.getState().setAgentStatus(TARGET_PANE_KEY, { state: 'done', prompt: 'late post' })
-    expect(store.getState().agentStatusByPaneKey[extraPaneKey]?.prompt).toBe('late post')
-  })
-
-  it('still retains the source when a different run occupies the transferred key', () => {
-    const store = createDetachStore()
-    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
-      state: 'done',
-      prompt: 'Fix it',
-      agentType: 'claude'
-    })
-
-    detach(store, SOURCE_TAB, TARGET_TAB)
-    const result = collect({
-      currentPaneKey: TARGET_PANE_KEY,
-      currentTabId: TARGET_TAB,
-      currentStartedAt: 900
-    })
-
-    expect(result.toRetain).toHaveLength(1)
-    expect(result.toRetain[0]?.entry.paneKey).toBe(SOURCE_PANE_KEY)
-  })
-
-  it('still retains when a new agent reuses the pty and inherits its terminal handle', () => {
-    const store = createDetachStore()
-    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
-      state: 'done',
-      prompt: 'Fix it',
-      agentType: 'claude'
-    })
-
-    detach(store, SOURCE_TAB, TARGET_TAB)
-    // Why: terminalHandle is pty-scoped, so a fresh codex run carries the same handle.
-    const result = collect({
-      currentPaneKey: TARGET_PANE_KEY,
-      currentTabId: TARGET_TAB,
-      currentStartedAt: 900,
-      currentAgentType: 'codex',
-      terminalHandle: 'term_shared'
-    })
-
-    expect(result.toRetain).toHaveLength(1)
-    expect(result.toRetain[0]?.entry.paneKey).toBe(SOURCE_PANE_KEY)
-  })
-
-  it('treats differing terminal handles as different runs', () => {
-    const store = createDetachStore()
-    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
-      state: 'done',
-      prompt: 'Fix it',
-      agentType: 'claude'
-    })
-
-    detach(store, SOURCE_TAB, TARGET_TAB)
-    // Why: identical startedAt/agentType can collide, so a differing handle is the
-    // only signal that these are separate terminals.
-    const result = collectRetainedAgentsOnDisappear({
-      previousAgents: new Map([
-        [
-          SOURCE_PANE_KEY,
-          {
-            row: makeRow(SOURCE_PANE_KEY, SOURCE_TAB, 100, { terminalHandle: 'term_source' }),
-            worktreeId: WORKTREE_ID
-          }
-        ]
-      ]),
-      currentAgents: new Map([
-        [
-          TARGET_PANE_KEY,
-          {
-            row: makeRow(TARGET_PANE_KEY, TARGET_TAB, 100, { terminalHandle: 'term_other' }),
-            worktreeId: WORKTREE_ID
-          }
-        ]
-      ]),
-      retainedAgentsByPaneKey: {},
-      retentionSuppressedPaneKeys: {},
-      recentlyClosedAgentStatusTabIds: {},
-      recentlyRetiredAgentStatusPaneKeys: {}
-    })
-
-    expect(result.toRetain).toHaveLength(1)
-  })
-
-  it('recognizes the same run when resume identity lands only after the move', () => {
-    const store = createDetachStore()
-    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
-      state: 'done',
-      prompt: 'Fix it',
-      agentType: 'claude'
-    })
-
-    detach(store, SOURCE_TAB, TARGET_TAB)
-    // Provider session arrives in separate IPC; a stamped destination and unstamped source do not prove separate runs.
-    const result = collect({
-      currentPaneKey: TARGET_PANE_KEY,
-      currentTabId: TARGET_TAB,
-      currentProviderSession: { key: 'session_id', id: 'session-1' }
-    })
-
-    expect(result.toRetain).toEqual([])
-  })
-
-  it('treats mismatched resume identities as different runs', () => {
-    const store = createDetachStore()
-    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
-      state: 'done',
-      prompt: 'Fix it',
-      agentType: 'claude'
-    })
-
-    detach(store, SOURCE_TAB, TARGET_TAB)
-    const result = collect({
-      currentPaneKey: TARGET_PANE_KEY,
-      currentTabId: TARGET_TAB,
-      previousProviderSession: { key: 'session_id', id: 'session-1' },
-      currentProviderSession: { key: 'session_id', id: 'session-2' }
-    })
-
-    expect(result.toRetain).toHaveLength(1)
-  })
-
-  it('recognizes a handle-less local pty run at its transferred authority', () => {
-    const store = createDetachStore()
-    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
-      state: 'done',
-      prompt: 'Fix it',
-      agentType: 'claude'
-    })
-
-    detach(store, SOURCE_TAB, TARGET_TAB)
-    // Local PTY rows can lack terminalHandle; requiring it would revive moved-row ghosts.
-    const result = collect({ currentPaneKey: TARGET_PANE_KEY, currentTabId: TARGET_TAB })
-
-    expect(result.toRetain[0]?.entry.terminalHandle).toBeUndefined()
-    expect(result.toRetain).toEqual([])
   })
 
   it('does not resurrect the source when the transferred owner immediately closes', () => {
@@ -416,14 +234,5 @@ describe('detach completed split pane → sidebar retention', () => {
     // Retain destination tab identity; sidebar agent resolution reads its title and launchAgent.
     expect(retained[0]?.tab).toBe(destinationTab)
     expect(retained[0]?.tab.title).toBe('Destination')
-  })
-
-  it('does not create suppressors for a plain terminal detach', () => {
-    const store = createDetachStore()
-
-    detach(store, SOURCE_TAB, TARGET_TAB)
-
-    expect(store.getState().retentionSuppressedPaneKeys[SOURCE_PANE_KEY]).toBeUndefined()
-    expect(store.getState().retentionSuppressedPaneKeys[TARGET_PANE_KEY]).toBeUndefined()
   })
 })

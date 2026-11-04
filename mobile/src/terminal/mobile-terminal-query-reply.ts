@@ -1,4 +1,4 @@
-import { isTerminalQueryReply } from '../../../src/shared/terminal-query-reply'
+import { isTerminalQueryReply } from '../../../src/shared/terminal/protocol/queries/terminal-query-reply'
 import { PROGRAM_STATUS_OSC_PREFIX } from '../../../src/shared/program-status/protocol'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { terminalInputSend } from './mobile-terminal-operations'

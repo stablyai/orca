@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   gitLabPipelineJobsToPRChecks,
   gitLabPipelineToPRCheck
-} from '../../../../../shared/gitlab-pipeline-checks'
+} from '../../../../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey

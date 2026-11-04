@@ -1,7 +1,7 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import type { CsvFilePreview } from './csv/csv-file-content'
 import type { RuntimeFileReadArgs } from '@/runtime/runtime-file-client-types'
 

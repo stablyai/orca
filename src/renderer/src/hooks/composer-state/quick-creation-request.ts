@@ -1,9 +1,9 @@
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { AgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
@@ -32,6 +32,7 @@ export type QuickCreationRequestInput = {
   pushTarget: GitPushTarget | undefined
   agent: TuiAgent | null
   agentLaunchRoute?: WorktreeCreationRequest['agentLaunchRoute']
+  launchInputs?: WorktreeCreationRequest['launchInputs']
   linkedLinearIssue: string | undefined
   linkedLinearIssueWorkspaceId: string | undefined
   linkedLinearIssueOrganizationUrlKey: string | undefined
@@ -59,6 +60,7 @@ export type QuickCreationRequestInput = {
 export type QuickSubmitOptions = {
   setupOnly?: boolean
   launchChoice?: AgentLaunchChoice
+  launchInputs?: WorktreeCreationRequest['launchInputs']
 }
 
 export function buildQuickCreationRequest(
@@ -95,6 +97,7 @@ export function buildQuickCreationRequest(
     ...(input.pushTarget ? { pushTarget: input.pushTarget } : {}),
     agent: input.agent,
     ...(input.agentLaunchRoute ? { agentLaunchRoute: input.agentLaunchRoute } : {}),
+    ...(input.launchInputs ? { launchInputs: input.launchInputs } : {}),
     ...(input.linkedLinearIssue ? { linkedLinearIssue: input.linkedLinearIssue } : {}),
     ...(input.linkedLinearIssueWorkspaceId !== undefined
       ? { linkedLinearIssueWorkspaceId: input.linkedLinearIssueWorkspaceId }

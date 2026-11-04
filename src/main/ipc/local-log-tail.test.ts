@@ -18,11 +18,11 @@ vi.mock('electron', () => ({
 
 vi.mock('node:fs', () => ({ watch: watchMock }))
 
-vi.mock('./local-file-access-resolution', () => ({
+vi.mock('./filesystem/access/local-file-access-resolution', () => ({
   resolveUserNamedRegularFile: resolveAuthorizedPathMock
 }))
 
-vi.mock('../ai-vault/local-log-tail-reader', () => ({
+vi.mock('../ai-vault/transcripts/local-log-tail-reader', () => ({
   readLocalLogTailRange: readRangeMock
 }))
 

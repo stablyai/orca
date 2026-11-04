@@ -1,6 +1,6 @@
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getActiveWorkspaceReviewKey } from './worktree-attachment-editing'
 import type {

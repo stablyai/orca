@@ -42,13 +42,15 @@ vi.mock('./client/lookup/pr-number-lookup', () => ({
 vi.mock('./client/lookup/branch-lookup-resolution', () => ({
   resolvePRForBranchOutcome: mocks.resolve
 }))
-vi.mock('../ipc/github-work-item-mutation-events', () => ({
+vi.mock('../ipc/source-control/github-work-item-mutation-events', () => ({
   broadcastGitHubWorkItemMutation: vi.fn()
 }))
-vi.mock('../project-runtime-git-options', () => ({ getLocalProjectGhExecOptions: () => ({}) }))
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
+  getLocalProjectGhExecOptions: () => ({})
+}))
 
 import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
-import { registerGitHubPRMutationHandlers } from '../ipc/github-pr-mutation-handlers'
+import { registerGitHubPRMutationHandlers } from '../ipc/source-control/github-pr-mutation-handlers'
 import { RuntimeGitHubReviewMutationCommands } from '../runtime/runtime-github-review-mutation-commands'
 
 const local: Repo = { id: 'local', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }

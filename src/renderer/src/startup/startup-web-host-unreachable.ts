@@ -5,7 +5,7 @@ import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
 } from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 
 // Web transport messages the shared classifier doesn't list: the connection waiter's deadline and
 // a socket that dropped mid-request.

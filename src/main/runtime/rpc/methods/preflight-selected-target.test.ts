@@ -33,7 +33,7 @@ const { refresh, deliver } = vi.hoisted(() => ({
 }))
 vi.mock('./agent-launch-terminal-prompt', () => ({ deliverTerminalAgentLaunchPrompt: deliver }))
 // These ownership cases use a running distro; the stopped-distro contract is separate.
-vi.mock('../../../wsl/wsl-background-exec-gate', () => ({
+vi.mock('../../../wsl/discovery/wsl-background-exec-gate', () => ({
   assertWslDistroRunningForExec: async () => {},
   runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
 }))

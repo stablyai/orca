@@ -10,7 +10,7 @@ import {
   getStoredTextDiffResult
 } from '@/components/editor/large-diff-section-content'
 import type { DiffSection } from '@/components/editor/diff-section-types'
-import type { GitDiffResult } from '../../../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../../../shared/git/diff/git-diff-compare-types'
 import type {
   GitHubOwnerRepo,
   GitHubPRFile,
