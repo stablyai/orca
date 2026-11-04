@@ -21,12 +21,23 @@ type ResolvedAgentLaunchIntent = Omit<AgentLaunchIntent, 'sessionOptions'> & {
  * Use launch scope: floating workspaces have no Git worktree record, and folder rows are synthetic. */
 async function agentLaunchTarget(
   params: AgentLaunchParams,
-  runtime: Pick<OrcaRuntimeService, 'showTerminalWorkspaceLaunchScope'>
+  runtime: Pick<
+    OrcaRuntimeService,
+    'showTerminalWorkspaceLaunchScope' | 'resolveManagedTerminalWorkspaceTarget'
+  >
 ): Promise<AgentLaunchTarget> {
   if (params.target.kind !== 'existing') {
     return { kind: params.target.kind, create: { ...params.target.create } }
   }
-  const workspace = await runtime.showTerminalWorkspaceLaunchScope(params.target.worktree)
+  const workspace = params.reuseTerminal
+    ? (
+        await runtime.resolveManagedTerminalWorkspaceTarget(
+          params.target.worktree,
+          undefined,
+          false
+        )
+      ).scope
+    : await runtime.showTerminalWorkspaceLaunchScope(params.target.worktree)
   return {
     kind: 'existing',
     worktree: workspace.id,

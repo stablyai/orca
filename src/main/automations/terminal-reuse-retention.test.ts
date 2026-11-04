@@ -131,6 +131,8 @@ it('retains repeated delivered input through old-turn Done until the live CLI co
     folderWorkspace: null
   })
   const runtime = Object.assign(new OrcaRuntimeService(store), external, {
+    resolveManagedTerminalWorkspaceTarget:
+      OrcaRuntimeService.prototype.resolveManagedTerminalWorkspaceTarget,
     getTerminalWorktreeIdForHandle: () => automation.workspaceId,
     getPtyExecutionHostMetadata: () => ({ executionHostId: 'local' }),
     getTerminalPromptRequestBinding: rig.runtime.getTerminalPromptRequestBinding.bind(rig.runtime),

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   OrcaRuntimeService,
   detectInstalledAgentsWithShellPathHydrationMock
@@ -19,10 +19,16 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { PREFLIGHT_RUNTIME_CAPABILITIES } from '../../../../shared/preflight-runtime-capabilities'
 import { launchHeadlessAutomationAgent } from '../../../automations/headless-automation-agent-launch'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import { bindPaneFirst } from '../../bind-first-pane.test-fixture'
+import {
+  openTestAgentSessionRecordStore,
+  readPersistedTestAgentSessionStore
+} from '../../agent-session/records/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { readAutomationRunReceipt } from '../../../automations/automation-run-receipt'
 import type * as WorkspaceAgentDetection from '../../../preflight/workspace-agent-detection'
 
-const { refresh, deliver } = vi.hoisted(() => ({
-  deliver: vi.fn(async () => true),
+const { refresh } = vi.hoisted(() => ({
   refresh: vi.fn(async () => ({
     agents: ['codex'],
     addedPathSegments: [],
@@ -31,7 +37,6 @@ const { refresh, deliver } = vi.hoisted(() => ({
     pathFailureReason: 'none'
   }))
 }))
-vi.mock('./agent-launch-terminal-prompt', () => ({ deliverTerminalAgentLaunchPrompt: deliver }))
 // These ownership cases use a running distro; the stopped-distro contract is separate.
 vi.mock('../../../wsl/discovery/wsl-background-exec-gate', () => ({
   assertWslDistroRunningForExec: async () => {},
@@ -45,24 +50,70 @@ vi.mock('../../../preflight/workspace-agent-detection', async (original) => ({
 const platform = process.platform
 afterEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
 describe('qualified discovery at the runtime RPC boundary', () => {
   it('reuses an exact saved SSH folder without importing fresh path refusal, but refuses a missing selected folder before input', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.UTC(2026, 10, 3))
+    const directory = await mkdtemp(join(tmpdir(), 'pr-33492-selected-folder-'))
+    onTestFinished(async () => {
+      await closeTestJournalHostDatabase(directory)
+      await rm(directory, { recursive: true, force: true })
+    })
+    const records = await openTestAgentSessionRecordStore(directory)
+    expect((await readPersistedTestAgentSessionStore(directory)).operations).toEqual({})
+
     const folder = makeFolderWorkspace({
       id: 'dup',
       folderPath: '/unserved/remote',
       executionHostId: 'ssh:a%2Fb'
     })
     const folders = [folder]
-    const runtime = new OrcaRuntimeService({ ...store, getFolderWorkspaces: () => folders })
     const repo: Repo = {
       ...store.getRepos()[0]!,
       id: 'repo-1',
       path: '/unserved/remote',
       connectionId: 'a/b'
     }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getFolderWorkspaces: () => folders,
+      getProjectGroups: () => [makeFolderProjectGroup()],
+      getRepos: () => [repo],
+      getRepo: () => repo
+    })
+    vi.spyOn(runtime, 'openAgentSessionRecordStore').mockResolvedValue(records)
+    vi.spyOn(runtime, 'openedAgentSessionRecordStore').mockReturnValue(records)
+    const writes: { ptyId: string; data: string }[] = []
+    runtime.setPtyController({
+      write: (ptyId, data) => {
+        writes.push({ ptyId, data })
+        // Controlled PTY render acknowledgement; the launch receipt comes from the real writer.
+        runtime.onPtyData(ptyId, '› draft\n\x1b[?25h', Date.now())
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => 'claude'
+    })
+    const ptyId = 'selected-folder-live'
+    const tabId = '11111111-1111-4111-8111-111111111111'
+    const leafId = '22222222-2222-4222-8222-222222222222'
+    const paneKey = `${tabId}:${leafId}`
+    const incarnationId = 'selected-folder-incarnation'
+    const handle = runtime.preAllocateHandleForPty(ptyId)
+    bindPaneFirst(runtime, { worktreeId: 'folder:dup', tabId, leafId, ptyId }, 'ssh:a%2Fb')
+    runtime.registerPty(ptyId, 'folder:dup', 'a/b', { tabId, leafId, incarnationId })
+    expect(runtime.getTerminalHandleForPaneKey(paneKey)).toBe(handle)
+    expect(runtime.getTerminalPtyIdForHandle(handle)).toBe(ptyId)
+    expect(runtime.getPtyExecutionHostMetadata(ptyId)).toMatchObject({
+      executionHostId: 'ssh:a%2Fb',
+      incarnationId
+    })
+    expect(await runtime.isTerminalRunningAgent(handle)).toBe(true)
+    const create = vi.spyOn(runtime, 'createTerminal')
     const automation: Automation = {
       id: 'saved-folder',
       name: 'Saved folder',
@@ -100,43 +151,67 @@ describe('qualified discovery at the runtime RPC boundary', () => {
       workspaceId: 'folder:dup',
       sessionKind: 'terminal',
       chatSessionId: null,
-      terminalSessionId: 'tab-old',
-      terminalPaneKey: 'tab-old:leaf',
-      terminalPtyId: 'pty-old',
+      terminalSessionId: tabId,
+      terminalPaneKey: paneKey,
+      terminalPtyId: ptyId,
       outputSnapshot: null,
       precheckResult: null,
       usage: null,
       error: null
     }
-    Object.defineProperties(runtime, {
-      getAgentStatusRowsForPane: {
-        value: () => [{ state: 'done', agentType: 'claude', receivedAt: 1 }]
-      },
-      getTerminalHandleForPaneKey: { value: () => 'live-handle' },
-      getTerminalPtyIdForHandle: { value: () => 'pty-old' },
-      getTerminalWorktreeIdForHandle: { value: () => 'folder:dup' },
-      getPtyExecutionHostMetadata: { value: () => ({ executionHostId: 'ssh:a%2Fb' }) }
-    })
     const request = {
       automation,
-      run: { id: 'current', title: 'Current', scheduledFor: 2, trigger: 'scheduled' as const },
+      run: {
+        id: 'current',
+        title: 'Current',
+        createdAt: Date.now(),
+        scheduledFor: 2,
+        trigger: 'scheduled' as const
+      },
       target: { ok: true as const, repo, cwd: repo.path },
       runs: [previous]
     }
-    deliver.mockClear()
-    await expect(
-      runtime.showManagedTerminalWorkspace('id:folder:dup', 'ssh:a%2Fb')
-    ).rejects.toThrow('folder_workspace_path_unavailable')
+    await expect(runtime.showTerminalWorkspaceLaunchScope('id:folder:dup')).rejects.toThrow(
+      'folder_workspace_path_unavailable'
+    )
     await expect(launchHeadlessAutomationAgent(runtime, request)).resolves.toMatchObject({
-      terminalHandle: 'live-handle',
+      terminalHandle: handle,
       workspaceId: 'folder:dup'
     })
-    expect(deliver).toHaveBeenCalledTimes(1)
+    expect(writes.map((write) => write.ptyId)).toEqual([ptyId, ptyId])
+    expect(writes.map((write) => write.data)).toEqual([
+      `\x1b[200~${automation.prompt}\x1b[201~`,
+      '\r'
+    ])
+    expect(readAutomationRunReceipt(records, request.run)).toMatchObject({
+      kind: 'terminal',
+      accepted: true,
+      launch: {
+        worktreeId: 'folder:dup',
+        outcome: { kind: 'terminal', handle },
+        prompt: { outcome: 'handed-to-terminal' }
+      }
+    })
+    expect(create).not.toHaveBeenCalled()
+    await expect(launchHeadlessAutomationAgent(runtime, request)).resolves.toMatchObject({
+      terminalHandle: handle,
+      workspaceId: 'folder:dup'
+    })
+    expect(writes).toHaveLength(2)
+    const beforeMissing = await readPersistedTestAgentSessionStore(directory)
     folders.splice(folders.indexOf(folder), 1)
-    await expect(launchHeadlessAutomationAgent(runtime, request)).rejects.toThrow(
-      'selector_not_found'
-    )
-    expect(deliver).toHaveBeenCalledTimes(1)
+    await expect(
+      runtime.resolveManagedTerminalWorkspaceTarget('id:folder:dup', 'ssh:a%2Fb', false)
+    ).rejects.toThrow('selector_not_found')
+    await expect(
+      launchHeadlessAutomationAgent(runtime, {
+        ...request,
+        run: { ...request.run, id: 'missing-selected' }
+      })
+    ).rejects.toThrow('could not confirm')
+    expect(await readPersistedTestAgentSessionStore(directory)).toEqual(beforeMissing)
+    expect(writes).toHaveLength(2)
+    expect(create).not.toHaveBeenCalled()
   })
 
   it.each([false, true])(

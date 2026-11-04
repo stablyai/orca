@@ -211,6 +211,8 @@ it.each([
       }
     })
     const runtime = Object.assign(new OrcaRuntimeService(store), external, {
+      resolveManagedTerminalWorkspaceTarget:
+        OrcaRuntimeService.prototype.resolveManagedTerminalWorkspaceTarget,
       getTerminalWorktreeIdForHandle: () => automation.workspaceId,
       getPtyExecutionHostMetadata: () => ({ executionHostId: 'local' }),
       getTerminalPromptRequestBinding: rig.runtime.getTerminalPromptRequestBinding.bind(
@@ -553,6 +555,8 @@ it.each(['zero', 'partial', 'unknown', 'accepted', 'abort'] as const)(
     })
     const binding = rig.runtime.getTerminalPromptRequestBinding(rig.handle)
     const runtime = Object.assign(new OrcaRuntimeService(store), external, {
+      resolveManagedTerminalWorkspaceTarget:
+        OrcaRuntimeService.prototype.resolveManagedTerminalWorkspaceTarget,
       getTerminalWorktreeIdForHandle: () => automation.workspaceId,
       getPtyExecutionHostMetadata: () => ({ executionHostId: 'local' }),
       getTerminalPaneKey: (handle: string) =>
