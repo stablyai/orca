@@ -206,6 +206,7 @@ Funciona com **qualquer agente CLI** — se roda em um terminal, roda no Orca.
   <a href="https://github.com/mistralai/mistral-vibe"><kbd><img src="https://www.google.com/s2/favicons?domain=mistral.ai&sz=64" alt="Logotipo do Mistral Vibe" width="16" valign="middle" /> Mistral Vibe</kbd></a> &nbsp;
   <a href="https://github.com/QwenLM/qwen-code"><kbd><img src="https://www.google.com/s2/favicons?domain=qwenlm.github.io&sz=64" alt="Logotipo do Qwen Code" width="16" valign="middle" /> Qwen Code</kbd></a> &nbsp;
   <a href="https://support.atlassian.com/rovo/docs/install-and-run-rovo-dev-cli-on-your-device/"><kbd><img src="https://www.google.com/s2/favicons?domain=atlassian.com&sz=64" alt="Logotipo do Rovo Dev" width="16" valign="middle" /> Rovo Dev</kbd></a> &nbsp;
+  <a href="https://minimax.io"><kbd><img src="https://www.google.com/s2/favicons?domain=minimax.io&sz=64" alt="Logotipo do MiniMax" width="16" valign="middle" /> MiniMax</kbd></a> &nbsp;
   <kbd>+ qualquer agente CLI</kbd>
 </p>
 
