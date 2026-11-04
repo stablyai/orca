@@ -89,7 +89,10 @@ export function MobileNativeChatFloatingControls({
 
   return (
     <>
-      <PaneEdgeNavigationOverlay target={agentSessionTarget} />
+      <PaneEdgeNavigationOverlay
+        target={agentSessionTarget}
+        bottomRightOffset={showJumpToTail ? 50 : 0}
+      />
       <View pointerEvents="box-none" style={styles.floatingControls}>
         <Animated.View
           pointerEvents={showJumpToTail ? 'box-none' : 'none'}

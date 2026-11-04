@@ -38,7 +38,7 @@ export function EdgeNavigationSettingsSection({
       title={t('components.terminalShortcutSettings.edgeArrowsSection', '4-SIDE EDGE ARROWS')}
       footer={t(
         'components.terminalShortcutSettings.edgeArrowsDescription',
-        'Render sticky navigation arrows at all four inner edges of terminal, agent session, and content windows.'
+        'Render sticky navigation arrows or a zoom-stable two-thumb Gamepad HUD inside terminal, agent session, and content windows.'
       )}
     >
       <View style={styles.controlRow}>
@@ -66,6 +66,11 @@ export function EdgeNavigationSettingsSection({
               accessibilityLabel: t('navigation.edgeArrows.orbsLabel', 'Floating Orbs')
             },
             {
+              value: 'gamepad',
+              label: t('navigation.edgeArrows.gamepadShort', 'Pad'),
+              accessibilityLabel: t('navigation.edgeArrows.gamepadLabel', 'Gamepad HUD')
+            },
+            {
               value: 'off',
               label: t('navigation.edgeArrows.offShort', 'Off'),
               accessibilityLabel: t('navigation.edgeArrows.offLabel', 'Off')
@@ -81,7 +86,7 @@ export function EdgeNavigationSettingsSection({
         )}
         subtitle={t(
           'components.terminalShortcutSettings.edgeSwitcherChipDescription',
-          'Tap the top-right pane badge to cycle Pills, Strips, and Orbs live'
+          'Use the bottom-right pane controls to cycle Pills, Strips, Orbs, and Gamepad or open settings'
         )}
         accessory={
           <MobileSwitch

@@ -3,12 +3,18 @@ import { act, create } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GlobalEdgeNavigationProvider } from './GlobalEdgeNavigationProvider'
 import { ScreenEdgeNavigationOverlay } from './ScreenEdgeNavigationOverlay'
-import { type EdgeDirection, type EdgeNavigationTarget } from './edge-navigation-context'
+import {
+  PaneEdgeNavigationOverlay,
+  type EdgeDirection,
+  type EdgeNavigationTarget
+} from './edge-navigation-context'
+import { computeZoomStableHudMetrics } from './use-zoom-stable-viewport'
 import { useSessionEdgeNavigation } from '../../session/use-session-edge-navigation'
 import type { MobileSessionController } from '../../session/use-mobile-session-controller'
 
 const storage = vi.hoisted(() => new Map<string, string>())
 const appState = vi.hoisted(() => ({ listener: (_state: string) => {} }))
+const platformState = vi.hoisted(() => ({ OS: 'ios' as 'ios' | 'web' }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
@@ -30,7 +36,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   Pressable: 'Pressable',
   Modal: 'Modal',
-  Platform: { OS: 'ios' },
+  Platform: platformState,
   AppState: {
     currentState: 'active',
     addEventListener: (_name: string, listener: (state: string) => void) => {
@@ -55,11 +61,12 @@ afterEach(() => {
   act(() => renderer?.unmount())
   renderer = undefined
   storage.clear()
+  platformState.OS = 'ios'
   vi.useRealTimers()
 })
 
-describe('ScreenEdgeNavigationOverlay (sticky pane 4-side controls)', () => {
-  it('anchors 4-side arrows sticky inside pane bounds, lifts above bottomInset, repeats on hold, and cycles all 3 flavours', async () => {
+describe('ScreenEdgeNavigationOverlay (sticky pane 4-side & zoom-stable gamepad controls)', () => {
+  it('places arrow-keys settings dock bottom-right, lifts above bottomInset/bottomRightOffset, repeats on hold, and cycles Pills -> Strips -> Orbs -> Gamepad -> Pills', async () => {
     vi.useFakeTimers()
     const events: string[] = []
     let repeatTimer: ReturnType<typeof setInterval> | null = null
@@ -97,7 +104,11 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side controls)', () => {
         createElement(
           GlobalEdgeNavigationProvider,
           null,
-          createElement(ScreenEdgeNavigationOverlay, { target, bottomInset: 260 })
+          createElement(PaneEdgeNavigationOverlay, {
+            target,
+            bottomInset: 260,
+            bottomRightOffset: 50
+          })
         )
       )
     })
@@ -107,6 +118,10 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side controls)', () => {
     act(() => {
       layer.props.onLayout({ nativeEvent: { layout: { width: 360, height: 420 } } })
     })
+
+    // Bottom-right settings dock sits at bottom: 6 + 50 = 56, right: 8 (never top-right)
+    const settingsDock = renderer!.root.findByProps({ testID: 'edge-arrow-settings-dock' })
+    expect(settingsDock.props.style).toEqual(expect.arrayContaining([{ bottom: 56, right: 8 }]))
 
     const upStyle = renderer!.root
       .findByProps({ testID: 'edge-arrow-up' })
@@ -143,7 +158,13 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side controls)', () => {
     })
     expect(events).toEqual(['hold:down', 'repeat:down', 'repeat:down', 'stop:down'])
 
-    // Cycle Pills (default) -> Strips -> Orbs -> Pills via in-pane quick-switcher chip
+    // Tapping bottom-right settings icon opens the mode sheet directly
+    await act(async () => {
+      renderer!.root.findByProps({ testID: 'edge-arrow-settings-button' }).props.onPress()
+    })
+    expect(renderer!.root.findAllByType('Modal' as unknown as string)).toHaveLength(1)
+
+    // Cycle Pills -> Strips -> Orbs -> Gamepad -> Pills via bottom-right quick-switcher chip
     await act(async () => {
       renderer!.root.findByProps({ testID: 'edge-arrow-flavour-chip' }).props.onPress()
     })
@@ -157,6 +178,15 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side controls)', () => {
     expect(renderer!.root.findByProps({ testID: 'edge-arrow-up' }).props['data-flavour']).toBe(
       'orbs'
     )
+
+    await act(async () => {
+      renderer!.root.findByProps({ testID: 'edge-arrow-flavour-chip' }).props.onPress()
+    })
+    expect(renderer!.root.findByProps({ testID: 'edge-arrow-up' }).props['data-flavour']).toBe(
+      'gamepad'
+    )
+    expect(renderer!.root.findByProps({ testID: 'gamepad-dpad-cluster' })).toBeDefined()
+    expect(renderer!.root.findByProps({ testID: 'gamepad-action-cluster' })).toBeDefined()
 
     await act(async () => {
       renderer!.root.findByProps({ testID: 'edge-arrow-flavour-chip' }).props.onPress()
@@ -185,10 +215,15 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side controls)', () => {
     expect(renderer!.root.findAllByProps({ testID: 'pane-edge-arrows-layer' })).toHaveLength(0)
   })
 
-  it('routes useSessionEdgeNavigation between terminal key chords and content-window tab switching', async () => {
+  it('routes useSessionEdgeNavigation across terminal D-pad/action chords (Tab, Alt+M, Esc, Enter) and content-window tab switching', async () => {
     const sentInputs: unknown[] = []
     const switchedTabs: string[] = []
     const leftSession = vi.fn()
+    let modifierState: { ctrl: 'once' | 'off'; alt: 'off'; shift: 'off' } = {
+      ctrl: 'once',
+      alt: 'off',
+      shift: 'off'
+    }
 
     function SessionHarness({ contentWindow }: { contentWindow: boolean }) {
       const tabA = {
@@ -212,8 +247,12 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side controls)', () => {
         canSend: true,
         visibleTabs: contentWindow ? [tabA, tabB] : [],
         dockKeys: {
-          modifiers: { ctrl: 'once', alt: 'off', shift: 'off' },
-          takeModifiers: () => ({ ctrl: 'once', alt: 'off', shift: 'off' })
+          modifiers: modifierState,
+          takeModifiers: () => {
+            const snapshot = modifierState
+            modifierState = { ctrl: 'off', alt: 'off', shift: 'off' }
+            return snapshot
+          }
         },
         prepareAccessoryPress: (input: unknown) => ({
           tap: () => {
@@ -238,6 +277,16 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side controls)', () => {
       })
     }
 
+    storage.set(
+      'orca:terminal-accessory-layout',
+      JSON.stringify({
+        version: 2,
+        orderedBuiltInIds: ['escape', 'tab'],
+        visibleBuiltInIds: ['escape', 'tab'],
+        edgeNavigationMode: 'gamepad'
+      })
+    )
+
     await act(async () => {
       renderer = create(
         createElement(
@@ -248,6 +297,7 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side controls)', () => {
       )
     })
 
+    // D-pad right with Ctrl once -> Ctrl+Right
     const rightBtn = renderer!.root.findByProps({ testID: 'edge-arrow-right' })
     act(() => {
       rightBtn.props.onPressIn()
@@ -255,6 +305,20 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side controls)', () => {
       rightBtn.props.onPress()
     })
     expect(sentInputs).toEqual([{ bytes: '\x1b[1;5C' }])
+
+    // Gamepad diamond action cluster -> Tab (north), Alt+M (west), Esc (east), Enter (south)
+    sentInputs.length = 0
+    for (const id of ['north', 'west', 'east', 'south'] as const) {
+      act(() => {
+        renderer!.root.findByProps({ testID: `gamepad-action-${id}` }).props.onPress()
+      })
+    }
+    expect(sentInputs).toEqual([
+      { bytes: '\t' },
+      { bytes: '\x1bm' },
+      { bytes: '\x1b' },
+      { bytes: '\r' }
+    ])
 
     await act(async () => {
       renderer!.update(
@@ -266,12 +330,33 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side controls)', () => {
       )
     })
 
-    const leftBtn = renderer!.root.findByProps({ testID: 'edge-arrow-left' })
+    // In content-window mode, Gamepad West triggers previous-tab fallback
     act(() => {
-      leftBtn.props.onPressIn()
-      leftBtn.props.onPressOut()
-      leftBtn.props.onPress()
+      renderer!.root.findByProps({ testID: 'gamepad-action-west' }).props.onPress()
     })
     expect(switchedTabs).toEqual(['tab-a'])
+  })
+
+  it('counter-scales and anchors HUD metrics against pinch-zoomed visualViewport', () => {
+    const unzoomed = computeZoomStableHudMetrics(
+      { left: 0, top: 60, width: 390, height: 700 },
+      { scale: 1, offsetLeft: 0, offsetTop: 0, width: 390, height: 760 }
+    )
+    expect(unzoomed.isZoomAdjusted).toBe(false)
+    expect(unzoomed.inverseScale).toBe(1)
+    expect(unzoomed.width).toBe(390)
+    expect(unzoomed.height).toBe(700)
+
+    const pinched2x = computeZoomStableHudMetrics(
+      { left: 0, top: 60, width: 390, height: 700 },
+      { scale: 2, offsetLeft: 80, offsetTop: 120, width: 195, height: 350 }
+    )
+    expect(pinched2x.isZoomAdjusted).toBe(true)
+    expect(pinched2x.scale).toBe(2)
+    expect(pinched2x.inverseScale).toBe(0.5)
+    expect(pinched2x.left).toBe(80)
+    expect(pinched2x.top).toBe(60)
+    expect(pinched2x.width).toBe(390)
+    expect(pinched2x.height).toBe(700)
   })
 })

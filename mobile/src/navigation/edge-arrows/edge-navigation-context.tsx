@@ -10,6 +10,7 @@ import {
 export { GlobalEdgeNavigationContext, useGlobalEdgeNavigation, type GlobalEdgeNavigationValue }
 
 export type EdgeDirection = 'up' | 'down' | 'left' | 'right'
+export type GamepadActionId = 'north' | 'west' | 'east' | 'south'
 
 export type EdgeNavigationPressHandle = {
   readonly tap: () => void | Promise<unknown>
@@ -27,6 +28,8 @@ export type EdgeNavigationTarget = {
     direction: EdgeDirection,
     paneNode?: unknown
   ) => EdgeNavigationPressHandle
+  readonly canPerformAction?: (action: GamepadActionId) => boolean
+  readonly performAction?: (action: GamepadActionId, paneNode?: unknown) => void | Promise<unknown>
 }
 
 const SCROLL_REPEAT_INTERVAL_MS = 140
@@ -40,13 +43,13 @@ export function scrollPaneViewport(
   paneNode: unknown,
   direction: EdgeDirection
 ): { scrolled: boolean; nearBottom: boolean } {
-  if (typeof document === 'undefined' || typeof window === 'undefined') {
+  if (globalThis.document === undefined || globalThis.window === undefined) {
     return { scrolled: false, nearBottom: false }
   }
   const vertical = direction === 'up' || direction === 'down'
   const sign = direction === 'up' || direction === 'left' ? -1 : 1
   const hostRoot =
-    typeof HTMLElement !== 'undefined' && paneNode instanceof HTMLElement
+    globalThis.HTMLElement !== undefined && paneNode instanceof globalThis.HTMLElement
       ? (paneNode.parentElement ?? paneNode)
       : null
 
@@ -175,6 +178,7 @@ let activeSheetOwnerToken: symbol | null = null
 export function PaneEdgeNavigationOverlay(props: {
   target: EdgeNavigationTarget
   bottomInset?: number
+  bottomRightOffset?: number
 }): ReactNode {
   const nav = useGlobalEdgeNavigation()
   const [ownerToken] = useState(() => Symbol('edge-sheet-owner'))
@@ -201,7 +205,11 @@ export function PaneEdgeNavigationOverlay(props: {
 
   return (
     <>
-      <ScreenEdgeNavigationOverlay target={props.target} bottomInset={props.bottomInset} />
+      <ScreenEdgeNavigationOverlay
+        target={props.target}
+        bottomInset={props.bottomInset}
+        bottomRightOffset={props.bottomRightOffset}
+      />
       {canRenderSheet ? (
         <EdgeNavigationModeSheet
           visible={nav.sheetVisible}

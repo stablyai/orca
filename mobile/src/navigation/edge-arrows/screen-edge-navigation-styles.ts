@@ -10,6 +10,18 @@ export const screenEdgeNavigationStyles = themedStyleSheet(() => ({
     bottom: 0,
     zIndex: 920
   },
+  zoomHudFill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0
+  },
+  zoomHudCounterScaled: {
+    position: 'absolute',
+    transformOrigin: 'top left'
+  },
+
   // Shared base
   edgeControlBase: {
     position: 'absolute',
@@ -71,6 +83,57 @@ export const screenEdgeNavigationStyles = themedStyleSheet(() => ({
     opacity: 0.8
   },
 
+  // Flavour 4: Gamepad HUD (two-thumb console D-pad + diamond action cluster)
+  gamepadHousing: {
+    position: 'absolute',
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.translucentFill
+  },
+  gamepadCenterHub: {
+    position: 'absolute',
+    left: 43,
+    top: 43,
+    width: 24,
+    height: 24,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.composerBorder,
+    backgroundColor: colors.bgRaised,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  gamepadDpadButton: {
+    width: 36,
+    height: 34,
+    borderRadius: radii.control,
+    opacity: 0.92
+  },
+  gamepadActionButton: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.composerBorder,
+    backgroundColor: colors.composerSurface,
+    opacity: 0.92
+  },
+  gamepadActionPrimary: {
+    borderColor: colors.accentBlue,
+    backgroundColor: colors.bgRaised
+  },
+  gamepadActionLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textPrimary
+  },
+
   chevronGlyph: {
     borderTopWidth: 2.2,
     borderRightWidth: 2.2,
@@ -103,18 +166,35 @@ export const screenEdgeNavigationStyles = themedStyleSheet(() => ({
     backgroundColor: colors.accentBlue
   },
 
-  flavourChip: {
+  // Bottom-right arrow-keys settings & quick-switcher dock
+  settingsDock: {
     position: 'absolute',
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4
+  },
+  flavourChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.xs,
-    height: 26,
+    height: 28,
     paddingHorizontal: spacing.sm,
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.composerBorder,
     backgroundColor: colors.composerSurface,
-    opacity: 0.86
+    opacity: 0.88
+  },
+  settingsIconButton: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.composerBorder,
+    backgroundColor: colors.composerSurface,
+    opacity: 0.88
   },
   flavourChipPressed: {
     backgroundColor: colors.bgRaised,
@@ -129,6 +209,11 @@ export const screenEdgeNavigationStyles = themedStyleSheet(() => ({
   flavourChipText: {
     fontSize: 11,
     fontWeight: '600',
+    color: colors.textSecondary
+  },
+  settingsGlyphText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: colors.textSecondary
   },
 

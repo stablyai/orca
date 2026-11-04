@@ -7,6 +7,7 @@ import {
 import {
   cycleEdgeNavigationMode,
   DEFAULT_EDGE_NAVIGATION_MODE,
+  EDGE_NAVIGATION_MODES,
   isEdgeSwitcherChipHidden,
   resolveEdgeNavigationMode,
   setTerminalEdgeNavigationMode,
@@ -16,13 +17,14 @@ import {
 describe('edge navigation preference in terminal-accessory-layout', () => {
   it('resolves unset default layouts to pills with switcher chip visible while preserving exact default keys', () => {
     const layout = getDefaultTerminalAccessoryLayout(false)
+    expect(EDGE_NAVIGATION_MODES).toEqual(['pills', 'strips', 'orbs', 'gamepad', 'off'])
     expect(resolveEdgeNavigationMode(layout)).toBe(DEFAULT_EDGE_NAVIGATION_MODE)
     expect(resolveEdgeNavigationMode(layout)).toBe('pills')
     expect(isEdgeSwitcherChipHidden(layout)).toBe(false)
   })
 
-  it('normalizes stored v2 layouts across pills, strips, orbs, off, and unknown values', () => {
-    for (const mode of ['pills', 'strips', 'orbs', 'off'] as const) {
+  it('normalizes stored v2 layouts across pills, strips, orbs, gamepad, off, and unknown values', () => {
+    for (const mode of ['pills', 'strips', 'orbs', 'gamepad', 'off'] as const) {
       const normalized = normalizeTerminalAccessoryLayoutPreference({
         version: 2,
         orderedBuiltInIds: ['escape', 'tab'],
@@ -47,10 +49,11 @@ describe('edge navigation preference in terminal-accessory-layout', () => {
     expect(isEdgeSwitcherChipHidden(fallbackMode)).toBe(false)
   })
 
-  it('cycles through all three active flavours in deterministic order', () => {
+  it('cycles through all four active flavours including gamepad in deterministic order', () => {
     expect(cycleEdgeNavigationMode('pills')).toBe('strips')
     expect(cycleEdgeNavigationMode('strips')).toBe('orbs')
-    expect(cycleEdgeNavigationMode('orbs')).toBe('pills')
+    expect(cycleEdgeNavigationMode('orbs')).toBe('gamepad')
+    expect(cycleEdgeNavigationMode('gamepad')).toBe('pills')
     expect(cycleEdgeNavigationMode('off')).toBe('pills')
   })
 
@@ -63,14 +66,14 @@ describe('edge navigation preference in terminal-accessory-layout', () => {
       },
       ['escape', 'tab']
     )
-    const stripped = setTerminalEdgeNavigationMode(base, 'strips', ['escape', 'tab'])
-    expect(stripped.edgeNavigationMode).toBe('strips')
-    expect(stripped.orderedBuiltInIds).toEqual(['tab', 'escape'])
-    expect(stripped.visibleBuiltInIds).toEqual(['tab'])
-    expect(stripped.directionPadEnabled).toBe(false)
+    const gamepadLayout = setTerminalEdgeNavigationMode(base, 'gamepad', ['escape', 'tab'])
+    expect(gamepadLayout.edgeNavigationMode).toBe('gamepad')
+    expect(gamepadLayout.orderedBuiltInIds).toEqual(['tab', 'escape'])
+    expect(gamepadLayout.visibleBuiltInIds).toEqual(['tab'])
+    expect(gamepadLayout.directionPadEnabled).toBe(false)
 
-    const hiddenChip = setTerminalEdgeSwitcherChipHidden(stripped, true, ['escape', 'tab'])
-    expect(hiddenChip.edgeNavigationMode).toBe('strips')
+    const hiddenChip = setTerminalEdgeSwitcherChipHidden(gamepadLayout, true, ['escape', 'tab'])
+    expect(hiddenChip.edgeNavigationMode).toBe('gamepad')
     expect(hiddenChip.edgeSwitcherChipHidden).toBe(true)
     expect(isEdgeSwitcherChipHidden(hiddenChip)).toBe(true)
   })

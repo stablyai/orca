@@ -5,7 +5,7 @@ import { TERMINAL_ACCESSORY_KEYS, type TerminalAccessoryKey } from './terminal-a
 
 export const TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY = 'orca:terminal-accessory-layout'
 
-export type EdgeNavigationMode = 'pills' | 'strips' | 'orbs' | 'off'
+export type EdgeNavigationMode = 'pills' | 'strips' | 'orbs' | 'gamepad' | 'off'
 
 export type TerminalAccessoryLayout = {
   orderedBuiltInIds: string[]
@@ -36,7 +36,10 @@ function optionalEdgeFields(candidate: {
   edgeSwitcherChipHidden?: unknown
 }): Pick<TerminalAccessoryLayout, 'edgeNavigationMode' | 'edgeSwitcherChipHidden'> {
   const m = candidate.edgeNavigationMode
-  const mode = m === 'pills' || m === 'strips' || m === 'orbs' || m === 'off' ? m : undefined
+  const mode =
+    m === 'pills' || m === 'strips' || m === 'orbs' || m === 'gamepad' || m === 'off'
+      ? m
+      : undefined
   return {
     ...(mode !== undefined ? { edgeNavigationMode: mode } : {}),
     ...(candidate.edgeSwitcherChipHidden === true ? { edgeSwitcherChipHidden: true } : {})

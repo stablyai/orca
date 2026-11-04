@@ -36,6 +36,13 @@ export function EdgeNavigationModeSheet({
       label: t('navigation.edgeArrows.modeOrbsOption', 'Floating Orbs (compact buttons)')
     },
     {
+      key: 'gamepad',
+      label: t(
+        'navigation.edgeArrows.modeGamepadOption',
+        'Gamepad HUD (zoom-stable D-pad + actions)'
+      )
+    },
+    {
       key: 'off',
       label: t('navigation.edgeArrows.modeOffOption', 'Off (hide 4-side edge arrows)')
     }
@@ -55,7 +62,7 @@ export function EdgeNavigationModeSheet({
           <Text style={styles.sheetMessage}>
             {t(
               'navigation.edgeArrows.sheetMessage',
-              'Choose how sticky navigation arrows appear inside terminal, agent session, and content windows.'
+              'Choose how sticky navigation arrows or the zoom-stable Gamepad HUD appear inside terminal, agent session, and content windows.'
             )}
           </Text>
 

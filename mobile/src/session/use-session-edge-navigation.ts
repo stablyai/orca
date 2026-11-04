@@ -3,8 +3,10 @@ import {
   createRepeatingDirectionHandle,
   scrollPaneViewport,
   type EdgeDirection,
-  type EdgeNavigationTarget
+  type EdgeNavigationTarget,
+  type GamepadActionId
 } from '../navigation/edge-arrows/edge-navigation-context'
+import { createTerminalKeyChordInput } from '../terminal/terminal-key-chord-input'
 import { hasStickyModifier } from '../terminal/terminal-sticky-modifiers'
 import type { TerminalArrowKey } from './TerminalArrowPad'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -73,6 +75,7 @@ export function useSessionEdgeNavigation({
       obscured,
       modifierActive,
       canNavigate: () => canSend,
+      canPerformAction: () => canSend,
       preparePress: (direction: EdgeDirection) => {
         const current = controllerRef.current
         const arrowKey = arrowKeyForDirection(direction)
@@ -86,6 +89,27 @@ export function useSessionEdgeNavigation({
           hold: (delayMs) => press.hold(delayMs),
           stop: () => current.stopAccessoryRepeat()
         }
+      },
+      performAction: (action: GamepadActionId) => {
+        const current = controllerRef.current
+        const modifiers = current.dockKeys.takeModifiers()
+        const input =
+          action === 'west'
+            ? createTerminalKeyChordInput({
+                key: 'm',
+                ctrl: modifiers.ctrl !== 'off',
+                alt: true,
+                shift: modifiers.shift !== 'off'
+              })
+            : action === 'north'
+              ? terminalDockKeyInput('tab', modifiers)
+              : action === 'east'
+                ? terminalDockKeyInput('escape', modifiers)
+                : terminalDockKeyInput('enter', modifiers)
+        if (!input) {
+          return undefined
+        }
+        return current.prepareAccessoryPress(input).tap()
       }
     }),
     [canSend, hostId, modifierActive, obscured, worktreeId]
