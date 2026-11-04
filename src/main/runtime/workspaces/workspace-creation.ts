@@ -76,11 +76,9 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         repoId: repo.id,
         keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
       })
-      try {
-        return await this.createInResolvedProject(request, repo, creation, rearm, events)
-      } finally {
+      return this.createInResolvedProject(request, repo, creation, rearm, events).finally(() =>
         creation?.close()
-      }
+      )
     })
   }
 
@@ -185,10 +183,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       rearm,
       timing
     })
-    const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
-      localCreate
-    const settings = createSettings
-    const { lineage, workspaceLineage, warnings: lineageWarnings } = metadataResult
+    const { worktree, worktreePath, includeCopyWarning, created, addResult } = localCreate
+    const { lineage, workspaceLineage, warnings: lineageWarnings } = localCreate.metadataResult
 
     let {
       setup,
@@ -202,7 +198,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       request: args,
       repo,
       worktreePath,
-      settings,
+      settings: createSettings,
       runtimeTarget: this.getLocalGitExecutionOptionArgs(repo)[0],
       shouldUseSetupRunner:
         this.authoritativeWindowId !== null ||
