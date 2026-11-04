@@ -180,4 +180,29 @@ describe('browser tab create with a split pane', () => {
       split: { sourceGroupId: 'g-terminal', splitDirection: 'right' }
     })
   })
+  it('splits beside the active pane when the caller is unknown, even if that pane holds a browser tab', () => {
+    const state = storeState()
+    mocks.getState.mockReturnValue({
+      ...state,
+      activeBrowserTabIdByWorktree: { [WT]: 'browser-1' },
+      unifiedTabsByWorktree: {
+        [WT]: [
+          ...state.unifiedTabsByWorktree[WT],
+          { id: 'u-browser', entityId: 'browser-1', groupId: 'g-active', contentType: 'browser' }
+        ]
+      }
+    })
+
+    mocks.createListener?.({
+      requestId: 'r7',
+      worktreeId: WT,
+      url: 'https://example.com',
+      split: 'right',
+      splitFromTabId: 'stale-tab'
+    })
+
+    expect(mocks.createBrowserTab.mock.calls[0]?.[2]).toMatchObject({
+      split: { sourceGroupId: 'g-active', splitDirection: 'right' }
+    })
+  })
 })
