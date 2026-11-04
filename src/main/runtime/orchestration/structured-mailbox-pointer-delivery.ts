@@ -60,7 +60,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     if (!target && !hasStructuredMailSends(this.deps.getDb(), mailboxHandle)) {
       // Nothing to settle or send: keep nothing for it. A pass still running forgets it itself, after
       // it has seen what this cleanup marked.
-      if (!this.inFlight.has(mailboxHandle)) {
+      if (!this.inFlight.has(mailboxHandle) && this.authority.retired(mailboxHandle)) {
         this.settledState.forget(mailboxHandle)
         this.discovery.forget(mailboxHandle)
         this.parking.unpark(mailboxHandle)
@@ -214,10 +214,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     if (target) {
       this.parking.park(mailboxHandle, target.sessionId, reservedTypes)
     }
-    const owner = target?.sessionId ?? null
     const { resend, released } = await this.settledState.settleMailbox(
       mailboxHandle,
-      owner,
+      target?.sessionId ?? null,
       this.authority.ended(mailboxHandle),
       {
         db,
@@ -236,7 +235,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       this.discover(mailboxHandle)
     }
     if (!target || this.authority.ended(mailboxHandle)) {
-      if (!hasStructuredMailSends(db, mailboxHandle)) {
+      if (!hasStructuredMailSends(db, mailboxHandle) && this.authority.retired(mailboxHandle)) {
         this.parking.unpark(mailboxHandle)
         this.discovery.forget(mailboxHandle)
         this.settledState.forget(mailboxHandle)

@@ -5,7 +5,10 @@ import { settleStructuredMailSends } from './structured-mail-custody'
  *  every mailbox once, as nothing here is known yet. */
 export class StructuredMailSettledState {
   /** The owner a mailbox was last settled for, and its change count then. */
-  private readonly settled = new Map<string, { owner: string | null; change: number }>()
+  private readonly settled = new Map<
+    string,
+    { owner: string | null; change: number; complete: boolean }
+  >()
   private readonly changes = new Map<string, number>()
   /** Each session's last status and fence. */
   private readonly edges = new Map<string, string>()
@@ -17,14 +20,21 @@ export class StructuredMailSettledState {
 
   needsSettling(mailboxHandle: string, owner: string | null): boolean {
     const last = this.settled.get(mailboxHandle)
-    return last?.owner !== owner || last.change !== (this.changes.get(mailboxHandle) ?? 0)
+    return (
+      !last?.complete ||
+      last.owner !== owner ||
+      last.change !== (this.changes.get(mailboxHandle) ?? 0)
+    )
   }
 
   /** Settle under the change count read before it, so a change during the settle runs it again. */
   async settle<T>(mailboxHandle: string, owner: string | null, run: () => Promise<T>): Promise<T> {
-    const change = this.changes.get(mailboxHandle) ?? 0
+    const entry = { owner, change: this.changes.get(mailboxHandle) ?? 0, complete: false }
+    this.settled.set(mailboxHandle, entry)
     const settled = await run()
-    this.settled.set(mailboxHandle, { owner, change })
+    if (this.settled.get(mailboxHandle) === entry) {
+      entry.complete = true
+    }
     return settled
   }
 

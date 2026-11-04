@@ -141,6 +141,10 @@ export class StructuredMailAuthority {
     )
   }
 
+  retired(mailboxHandle: string): boolean {
+    return this.ended(mailboxHandle) || this.unresolved(mailboxHandle) === 'elsewhere'
+  }
+
   /** A resolver that found no chat where the database names one cannot decide. */
   private unresolved(mailboxHandle: string): 'elsewhere' | 'unverifiable' {
     if (this.deps.unresolvedCustody) {
