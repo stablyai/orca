@@ -23210,6 +23210,8 @@
       "editorCopyContext": "Copy Context",
       "editorPreviousChange": "Go to Previous Change",
       "editorNextChange": "Go to Next Change",
+      "editorNavigateBack": "Go Back",
+      "editorNavigateForward": "Go Forward",
       "editorAddReviewNote": "Add Review Note",
       "sourceControlSendReviewNotes": "Send Review Notes to Agent",
       "fileExplorerUndo": "Undo file operation",

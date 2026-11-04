@@ -17,6 +17,30 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     }
   },
   {
+    id: 'editor.navigateBack',
+    title: 'Go Back',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'navigation', 'history', 'back', 'cursor'],
+    defaultBindings: {
+      darwin: ['Mod+BracketLeft'],
+      linux: ['Alt+ArrowLeft'],
+      win32: ['Alt+ArrowLeft']
+    }
+  },
+  {
+    id: 'editor.navigateForward',
+    title: 'Go Forward',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'navigation', 'history', 'forward', 'cursor'],
+    defaultBindings: {
+      darwin: ['Mod+BracketRight'],
+      linux: ['Alt+ArrowRight'],
+      win32: ['Alt+ArrowRight']
+    }
+  },
+  {
     id: 'chat.find',
     title: 'Find in chat',
     group: 'Chat',
