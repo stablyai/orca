@@ -1,7 +1,7 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { notifyNativeChatComposerState } from './native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
+import type { ClipboardEventHandler, KeyboardEventHandler, RefObject, ReactNode } from 'react'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
@@ -92,6 +92,7 @@ export type NativeChatComposerFieldProps = {
   goalMode?: NativeChatComposerGoalMode
   agent?: string
   launchPrompt?: { placeholder: string }
+  workspaceFooter?: ReactNode
 }
 
 export type NativeChatComposerImageAttachment = {
@@ -177,7 +178,8 @@ export function NativeChatComposerField({
   sessionOptionsPickerRequest,
   goalMode,
   agent,
-  launchPrompt
+  launchPrompt,
+  workspaceFooter
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
   const optionCount =
@@ -423,6 +425,7 @@ export function NativeChatComposerField({
               />
             </div>
           </div>
+          {workspaceFooter}
         </div>
       </div>
     </div>

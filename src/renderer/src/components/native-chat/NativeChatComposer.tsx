@@ -1,7 +1,6 @@
 import { NativeChatTextAttachmentScope } from './NativeChatTextAttachments'
 import { forwardRef } from 'react'
 import { NativeChatComposerPane } from './NativeChatComposerPane'
-import { NativeChatComposerWorkspace } from './NativeChatComposerWorkspace'
 import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
@@ -19,12 +18,6 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         enabled={Boolean(props.structuredTransport)}
       >
         <NativeChatComposerPane {...props} ref={ref} />
-        {!props.editSession && (
-          <NativeChatComposerWorkspace
-            terminalTabId={props.terminalTabId}
-            structuredTransport={props.structuredTransport}
-          />
-        )}
       </NativeChatTextAttachmentScope>
     )
   }

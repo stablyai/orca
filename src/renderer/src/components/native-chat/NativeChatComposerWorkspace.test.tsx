@@ -3,7 +3,11 @@ import { Profiler } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import {
+  makeWorktree,
+  makeFolderWorkspace,
+  TEST_REPO
+} from '@/store/slices/worktrees-slice-test-fixtures'
 import { makeTab } from '@/store/slices/store-session-test-harness'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatComposerWorkspace } from './NativeChatComposerWorkspace'
@@ -34,6 +38,8 @@ beforeEach(() => {
     detectedWorktreesByRepo: {},
     tabsByWorktree: { [wt.id]: [makeTab({ id: 'tab-1', worktreeId: wt.id })] },
     unifiedTabsByWorktree: {},
+    folderWorkspaces: [],
+    structuredSessionLaunchDirectoryByTabId: {},
     activeWorktreeId: wt.id,
     activeWorkspaceExecutionHostId: 'local'
   })
@@ -66,18 +72,33 @@ describe('chat composer workspace', () => {
     expect(screen.queryByRole('button', { name: 'Copy feature/composer' })).toBeNull()
   })
 
-  it('distinguishes detached HEAD and never invents a branch for a folder', () => {
+  it('copies the full detached HEAD and never invents a branch for a folder', async () => {
     useAppStore.setState({
       worktreesByRepo: { [TEST_REPO.id]: [{ ...wt, branch: '', head: 'a1b2c3d4e5f6' }] }
     })
     render(<Footer />)
     expect(screen.getByRole('button', { name: 'Copy Detached HEAD · a1b2c3d' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Detached HEAD · a1b2c3d' }))
+    expect(clipboard).toHaveBeenCalledWith('a1b2c3d4e5f6')
+    await act(async () => {})
     act(() =>
       useAppStore.setState({
-        worktreesByRepo: { [TEST_REPO.id]: [{ ...wt, branch: '', head: '' }] }
+        folderWorkspaces: [
+          makeFolderWorkspace({
+            name: 'notes',
+            folderPath: '/work/notes',
+            executionHostId: 'local'
+          })
+        ],
+        tabsByWorktree: {
+          'folder:folder-1': [
+            makeTab({ id: 'tab-1', worktreeId: 'folder:folder-1', executionHostId: 'local' })
+          ]
+        }
       })
     )
     expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.getByText('notes')).toBeTruthy()
   })
 
   it('does not render for unrelated store writes or another workspace branch update', () => {
@@ -114,13 +135,17 @@ describe('chat composer workspace', () => {
     const remote = { ...wt, hostId: 'runtime:box' as const, branch: 'refs/heads/remote-branch' }
     useAppStore.setState({
       repos: [TEST_REPO, { ...TEST_REPO, executionHostId: 'runtime:box' }],
-      worktreesByRepo: { [TEST_REPO.id]: [wt, remote] }
+      worktreesByRepo: { [TEST_REPO.id]: [wt, remote] },
+      activeWorkspaceExecutionHostId: 'runtime:box'
     })
     const localCommits = vi.fn()
     render(
       <TooltipProvider>
         <Profiler id="local" onRender={localCommits}>
-          <NativeChatComposerWorkspace terminalTabId="tab-1" />
+          <NativeChatComposerWorkspace
+            terminalTabId="tab-1"
+            structuredTransport={{ worktreeId: wt.id, runtimeEnvironmentId: null }}
+          />
         </Profiler>
         <NativeChatComposerWorkspace
           terminalTabId="remote-tab"
@@ -138,5 +163,12 @@ describe('chat composer workspace', () => {
     )
     expect(screen.getByRole('button', { name: 'Copy remote-new' })).toBeTruthy()
     expect(localCommits).not.toHaveBeenCalled()
+    act(() =>
+      useAppStore.setState({
+        worktreesByRepo: { [TEST_REPO.id]: [{ ...wt, branch: 'local-new' }, remote] }
+      })
+    )
+    expect(screen.getByRole('button', { name: 'Copy local-new' })).toBeTruthy()
+    expect(localCommits).toHaveBeenCalledTimes(1)
   })
 })

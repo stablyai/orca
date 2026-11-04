@@ -9,6 +9,7 @@ import { useNativeChatDraft } from './use-native-chat-draft'
 import { useNativeChatDraftEvents } from './use-native-chat-draft-events'
 import { useNativeChatComposerRecall } from './use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
+import { NativeChatComposerWorkspace } from './NativeChatComposerWorkspace'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { nativeChatComposerSendState } from './native-chat-composer-send-state'
@@ -404,6 +405,14 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}
           agent={agent}
           launchPrompt={launchPrompt}
+          workspaceFooter={
+            !editSession && !launchPrompt ? (
+              <NativeChatComposerWorkspace
+                terminalTabId={terminalTabId}
+                structuredTransport={structuredTransport}
+              />
+            ) : undefined
+          }
           {...fieldOverrides}
         />
       </div>
