@@ -40,6 +40,8 @@ export async function launchAgentWithPrompt(args: {
   actionId: SourceControlLaunchActionId | null
   prompt: string
   launchSource: string
+  /** Runs after agent resolution so its owner-side check is fresh at launch; a refusal starts nothing. */
+  admitLaunch?: () => Promise<{ ok: true } | { ok: false; message: string }>
 }): Promise<MobilePromptedAgentLaunch> {
   if (!supportsMobileExistingAgentLaunch(args.hostCapabilities)) {
     return {
@@ -85,6 +87,10 @@ export async function launchAgentWithPrompt(args: {
         "This action's saved prompt is empty. Update Source Control AI settings on your computer."
       )
     }
+  }
+  const admission = args.admitLaunch ? await args.admitLaunch() : null
+  if (admission && !admission.ok) {
+    return { kind: 'not-started', message: admission.message }
   }
   const launched = await launchAgentInExistingWorkspace({
     client: args.client,

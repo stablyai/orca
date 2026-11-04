@@ -2926,6 +2926,11 @@
       "skip": "Skip",
       "stop": "Stop",
       "yes": "Yes"
+    },
+    "reviewActionRebaseCheck": {
+      "hostOutdated": "Update Orca on your computer to start this action; it cannot report whether a rebase is in progress.",
+      "active": "A rebase is in progress in this workspace. Continue or abort it before starting this action.",
+      "unverifiable": "Could not verify that no rebase is in progress in this workspace, so the action was not started."
     }
   },
   "chat": {

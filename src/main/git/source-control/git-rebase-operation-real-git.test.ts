@@ -44,6 +44,12 @@ function createConflictingRepo(): { main: string; review: string; root: string }
   return { main, review, root }
 }
 
+function gitAtLeast(major: number, minor: number): boolean {
+  const [, maj = '0', min = '0'] =
+    /(\d+)\.(\d+)/.exec(execFileSync('git', ['--version'], { encoding: 'utf8' })) ?? []
+  return Number(maj) > major || (Number(maj) === major && Number(min) >= minor)
+}
+
 function pausedRebase(cwd: string, ...args: string[]): void {
   const result = spawnSync('git', ['rebase', ...args], { cwd, encoding: 'utf8' })
   expect(result.status).toBe(1)
@@ -66,17 +72,21 @@ describe('readRebaseOperation on real Git', () => {
     })
   })
 
-  it('reports an apply-backend rebase in the main worktree', async () => {
-    const { main } = createConflictingRepo()
-    const git = gitIn(main)
-    git('worktree', 'remove', '--force', join(main, '..', 'review'))
-    git('checkout', '--quiet', 'feature')
-    pausedRebase(main, '--apply', 'main')
-    await expect(readRebaseOperation(main)).resolves.toEqual({
-      state: 'active',
-      branch: 'refs/heads/feature'
-    })
-  })
+  // `rebase --apply` names the backend explicitly only on Git 2.26+ (2.25 used it by default).
+  it.skipIf(!gitAtLeast(2, 26))(
+    'reports an apply-backend rebase in the main worktree',
+    async () => {
+      const { main } = createConflictingRepo()
+      const git = gitIn(main)
+      git('worktree', 'remove', '--force', join(main, '..', 'review'))
+      git('checkout', '--quiet', 'feature')
+      pausedRebase(main, '--apply', 'main')
+      await expect(readRebaseOperation(main)).resolves.toEqual({
+        state: 'active',
+        branch: 'refs/heads/feature'
+      })
+    }
+  )
 
   it('keeps a detached-HEAD rebase active without a branch, and quit leaves a verified detach', async () => {
     const { review } = createConflictingRepo()
@@ -103,6 +113,12 @@ describe('readRebaseOperation on real Git', () => {
       state: 'none',
       headDetached: false
     })
+  })
+
+  it('does not prove a detach from an empty HEAD', async () => {
+    const { review } = createConflictingRepo()
+    writeFileSync(join(gitIn(review)('rev-parse', '--absolute-git-dir'), 'HEAD'), '')
+    await expect(readRebaseOperation(review)).resolves.toEqual({ state: 'unverifiable' })
   })
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(

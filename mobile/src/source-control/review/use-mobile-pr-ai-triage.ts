@@ -4,6 +4,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { launchAgentWithPrompt, promptedLaunchNotice } from './pr-ai-triage-launch'
+import { confirmNoRebaseBeforeMobileReviewAction } from './mobile-review-action-rebase-check'
 import {
   resolveMobileAgentLaunchAvailability,
   type MobileAgentLaunchAvailability
@@ -17,6 +18,9 @@ const TRIAGE_LAUNCH = {
   // Desktop's Resolve comments with AI action and launch source.
   'resolve-comments': { actionId: 'resolveComments', launchSource: 'task_page' }
 } as const
+
+/** Local recovers this checkout's paused Git operation; review works on the hosted review. */
+export type PrAiTriageScope = 'review' | 'local'
 
 export type PrAiTriageLaunchNotice = {
   success: string | null
@@ -72,7 +76,11 @@ export function useMobilePrAiTriage(input: Input) {
   }, [])
 
   const launch = useCallback(
-    async (key: PrAiTriageKey, buildPrompt: () => string | Promise<string>): Promise<boolean> => {
+    async (
+      key: PrAiTriageKey,
+      buildPrompt: () => string | Promise<string>,
+      scope: PrAiTriageScope = 'review'
+    ): Promise<boolean> => {
       if (inFlightRef.current || busyKey !== null) {
         return false
       }
@@ -91,7 +99,11 @@ export function useMobilePrAiTriage(input: Input) {
           hostCapabilities,
           worktreeId,
           prompt,
-          ...TRIAGE_LAUNCH[key]
+          ...TRIAGE_LAUNCH[key],
+          // Review actions need the desktop rule: no launch while the owner is rebasing.
+          ...(scope === 'review'
+            ? { admitLaunch: () => confirmNoRebaseBeforeMobileReviewAction(client, worktreeId) }
+            : {})
         })
         const notice = promptedLaunchNotice(result, workspaceLabel)
         if (notice.succeeded) {

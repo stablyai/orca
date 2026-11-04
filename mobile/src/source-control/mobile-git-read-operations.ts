@@ -21,6 +21,20 @@ export const gitStatusHostPayloadRead = bindDeferredRpcOperation(
   })
 )
 
+// Older hosts omit the verdict, which is unverified rather than proof that no rebase is running.
+export const gitRebaseVerdictRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'git.status-rebase-verdict',
+    method: 'git.status',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant(
+      'rebase-verdict',
+      z.looseObject({ rebaseOperation: z.enum(['active', 'none', 'unverifiable']).optional() })
+    )
+  })
+)
+
 // Unreadable projected status remains null for callers’ fallback paths.
 export const gitStatusProjectionReader: RpcCompatibleReader<
   unknown,

@@ -11,6 +11,7 @@ import {
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
+import { isFullGitObjectId } from '../commit-object-ref'
 import { runWithGitReadCacheInvalidation } from './git-read-cache-invalidation'
 import { resolveGitDir, resolveVerifiedGitDir } from './resolve-git-dir'
 
@@ -109,11 +110,16 @@ export async function readRebaseOperation(
   }
   let head: string
   try {
-    head = await readFile(path.join(gitDir, 'HEAD'), 'utf-8')
+    head = (await readFile(path.join(gitDir, 'HEAD'), 'utf-8')).trim()
   } catch {
     return UNVERIFIABLE
   }
-  return { state: 'none', headDetached: !head.trimStart().startsWith('ref:') }
+  // Only a symref or a full object id is a HEAD; empty or torn content proves nothing. Reftable's
+  // `ref: refs/heads/.invalid` stub reads as attached, which only withholds a detach proof.
+  if (/^ref:\s*refs\//.test(head)) {
+    return { state: 'none', headDetached: false }
+  }
+  return isFullGitObjectId(head) ? { state: 'none', headDetached: true } : UNVERIFIABLE
 }
 
 /** Treat inaccessible paths as absent without throwing. */
