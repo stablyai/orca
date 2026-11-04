@@ -209,4 +209,47 @@ describe('unread worktree tab completion', () => {
       )
     ).toEqual({ status: 'done', unread: false })
   })
+
+  it('marks the latest done agent unread even when another agent in the same worktree is working', () => {
+    const workingRow: RuntimeWorktreeAgentRow = {
+      paneKey: 'tab-work:leaf-1',
+      parentPaneKey: null,
+      state: 'working',
+      agentType: 'claude',
+      prompt: 'still running',
+      taskTitle: null,
+      displayName: null,
+      lastAssistantMessage: null,
+      toolName: null,
+      toolInput: null,
+      interrupted: false,
+      stateStartedAt: 400,
+      updatedAt: 400
+    }
+    const doneRow: RuntimeWorktreeAgentRow = {
+      paneKey: 'tab-done-mixed:leaf-1',
+      parentPaneKey: null,
+      state: 'done',
+      agentType: 'claude',
+      prompt: 'finished',
+      taskTitle: null,
+      displayName: null,
+      lastAssistantMessage: 'All done',
+      toolName: null,
+      toolInput: null,
+      interrupted: false,
+      stateStartedAt: 350,
+      updatedAt: 350
+    }
+    expect(
+      resolveHostWorktreeRowStatus(
+        { worktreeId: 'wt-mixed', unread: true, agents: [doneRow, workingRow] },
+        'working',
+        400
+      )
+    ).toEqual({ status: 'working', unread: true })
+    expect(resolveHostAgentRowDotState(doneRow, 400)).toBe('unread')
+    expect(resolveHostAgentRowDotState(workingRow, 400)).toBe('working')
+    expectOffscreen('tab-done-mixed', 350, 'unread')
+  })
 })

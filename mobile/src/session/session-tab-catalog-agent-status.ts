@@ -160,6 +160,11 @@ export function reconcileTerminalAgentStatusWithCatalog(
     (typeof options?.parentTabId === 'string' && typeof options?.leafId === 'string'
       ? `${options.parentTabId}:${options.leafId}`
       : null) ||
+    (typeof options?.tabId === 'string' &&
+    typeof options?.leafId === 'string' &&
+    !options.tabId.includes('::')
+      ? `${options.tabId}:${options.leafId}`
+      : null) ||
     (typeof options?.tabId === 'string' && options.tabId.includes('::')
       ? options.tabId.replace('::', ':')
       : null)

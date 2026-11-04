@@ -134,7 +134,11 @@ export function reconcileWorktreeAgentRowWithSessionDone<T extends Record<string
   const rowUpdatedAt = typeof row.updatedAt === 'number' ? row.updatedAt : -Infinity
   const rowStateStartedAt =
     typeof row.stateStartedAt === 'number' ? row.stateStartedAt : rowUpdatedAt
-  if (sessionDone.updatedAt > rowUpdatedAt && sessionDone.updatedAt >= rowStateStartedAt) {
+  if (
+    sessionDone.updatedAt >= rowUpdatedAt &&
+    sessionDone.updatedAt >= rowStateStartedAt &&
+    (sessionDone.updatedAt > rowUpdatedAt || sessionDone.stateStartedAt >= rowStateStartedAt)
+  ) {
     return {
       ...row,
       state: 'done',
@@ -172,6 +176,7 @@ export function resolveHostWorktreeRowStatus(
   status: WorktreeStatus,
   now: number
 ): { status: WorktreeStatus; unread: boolean } {
+  syncUnreadWorktreeForTabStatus(item, now)
   const agents = item.agents
   let hasUnreadAgent = false
   let hasInTurnAgent = false
@@ -199,8 +204,10 @@ export function resolveHostWorktreeRowStatus(
       }
     }
   }
-  const rawUnread = Boolean(item.unread) && (!hasAcknowledgedAgent || hasUnreadAgent)
-  const unread = rawUnread || hasUnreadAgent
+  const unread =
+    agents && agents.length > 0
+      ? hasUnreadAgent
+      : Boolean(item.unread) && (!hasAcknowledgedAgent || hasUnreadAgent)
   const effectiveStatus: WorktreeStatus =
     (status === 'working' || status === 'monitoring') &&
     (hadSupersededAgent || hasUnreadAgent) &&
@@ -259,10 +266,7 @@ export function syncUnreadWorktreeForTabStatus(worktree: unknown, receivedAt = D
   if (!isUnread) {
     return
   }
-  const covered = prepared.some(
-    (item) =>
-      isInTurnDotState(item.rawState) || hasUnacknowledgedTabCompletion(item.keys, item.rawState)
-  )
+  const covered = prepared.some((item) => hasUnacknowledgedTabCompletion(item.keys, item.rawState))
   if (covered) {
     return
   }

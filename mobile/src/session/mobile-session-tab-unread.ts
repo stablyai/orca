@@ -10,7 +10,6 @@ import {
   clearLatchedUnreadTabKeys,
   consumeWorktreeUnreadForTabCompletion,
   hasUnacknowledgedTabCompletion,
-  isInTurnDotState,
   recordCatalogAgentTabState,
   restoreLatchedUnreadTabKeys,
   setLatchedUnreadTabKeys
@@ -148,8 +147,7 @@ export function seedUnreadWorktreeSessionTabs(
     return
   }
   for (const tab of tabs) {
-    const rawState = resolveRawSessionTabDotState(tab, now)
-    if (isMobileSessionTabUnreadBeforeView(tab, now) || isInTurnDotState(rawState)) {
+    if (isMobileSessionTabUnreadBeforeView(tab, now)) {
       return
     }
   }
