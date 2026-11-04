@@ -43,7 +43,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
     path: ['linear', 'list-issues'],
     summary: 'List Linear issues with MCP-compatible filters',
     usage:
-      'orca linear list-issues [--team <team>] [--cycle <cycle>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--order-by createdAt|updatedAt] [--project <project>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]',
+      'orca linear list-issues [--team <team>] [--cycle <cycle>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--order-by createdAt|updatedAt] [--project <project>] [--milestone <milestone|null>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'team',
@@ -55,6 +55,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
       'cursor',
       'order-by',
       'project',
+      'milestone',
       'release',
       'assignee',
       'delegate',
@@ -69,13 +70,15 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
       'orca linear list-issues --team ENG --state started --assignee me --json',
       'orca linear list-issues --query auth --updated-at -P7D --json',
       'orca linear list-issues --assignee me --priority 1 --limit 100 --json',
+      'orca linear list-issues --project PDS --milestone "Phase 1" --json',
       'orca linear list-issues --cursor <cursor> --json'
     ],
     notes: [
       'Omitting --limit returns every match (result.meta.limit is null); --limit <n> caps the read.',
       'JSON sets result.truncated when a cap held results back; text prints truncated: showing N.',
       'Reuse --cursor from the previous page. Issued cursors bind the workspace; raw Linear cursors still need --workspace.',
-      '--priority is 0=none, 1=urgent, 2=high, 3=medium, 4=low. JSON includes priorityLabel on each issue.'
+      '--priority is 0=none, 1=urgent, 2=high, 3=medium, 4=low. JSON includes priorityLabel on each issue.',
+      '--milestone matches a project milestone by name or id; null lists issues without one. JSON includes projectMilestone on each issue.'
     ]
   },
   {

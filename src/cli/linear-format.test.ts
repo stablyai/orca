@@ -174,6 +174,85 @@ describe('linear-format', () => {
     )
   })
 
+  it('adds a milestone column only when a listed issue has a milestone', () => {
+    const issue = {
+      id: 'issue-1',
+      identifier: 'ENG-1',
+      title: 'Fix auth',
+      url: 'https://linear.app/acme/issue/ENG-1',
+      labels: [],
+      state: { name: 'Todo' },
+      assignee: { displayName: 'Ada' },
+      workspace: { id: 'workspace-1', name: 'Acme' }
+    }
+    const result = (issues: LinearMcpIssueListResult['issues']): LinearMcpIssueListResult => ({
+      issues,
+      truncated: false,
+      meta: {
+        limit: null,
+        returned: issues.length,
+        hasMore: false,
+        orderBy: 'updatedAt',
+        workspaceId: 'workspace-1',
+        partial: false,
+        workspaceErrors: []
+      }
+    })
+    const row = (identifier: string, milestone?: string) =>
+      [
+        identifier.padEnd(10),
+        'Todo'.padEnd(14),
+        'Ada'.padEnd(18),
+        ...(milestone === undefined ? [] : [milestone.padEnd(20)]),
+        'Fix auth'
+      ].join(' ')
+
+    expect(formatLinearMcpIssueList(result([{ ...issue, projectMilestone: null }]))).toBe(
+      row('ENG-1')
+    )
+    expect(
+      formatLinearMcpIssueList(
+        result([
+          { ...issue, projectMilestone: { id: 'm-1', name: `Phase${OSC_52} 1` } },
+          { ...issue, identifier: 'ENG-2', projectMilestone: null }
+        ])
+      )
+    ).toBe([row('ENG-1', 'Phase 1'), row('ENG-2', '-')].join('\n'))
+  })
+
+  it('prints the issue milestone and its target date', () => {
+    const output = formatLinearIssue({
+      issue: {
+        id: 'issue-1',
+        identifier: 'ENG-1',
+        title: 'Fix auth',
+        url: 'https://linear.app/acme/issue/ENG-1',
+        project: { id: 'project-1', name: 'Launch' },
+        projectMilestone: { id: 'm-1', name: 'Phase 1', targetDate: '2026-12-01' },
+        labels: []
+      },
+      meta: {
+        requested: {
+          current: false,
+          include: {
+            comments: false,
+            children: false,
+            attachments: false,
+            relations: false,
+            activity: false
+          },
+          depth: 0
+        },
+        resolved: { id: 'issue-1', identifier: 'ENG-1', workspaceId: 'w', workspaceName: 'Acme' },
+        partial: false,
+        includeErrors: [],
+        sections: {}
+      }
+    })
+
+    expect(output.split('\n')).toContain('Milestone: Phase 1 (target 2026-12-01)')
+  })
+
   it('strips control sequences from Linear-provided warning text', () => {
     printLinearMcpIssueListWarnings({
       issues: [],

@@ -32,6 +32,7 @@ const MCP_ISSUE_LIST_KEYS = [
   'cursor',
   'orderBy',
   'project',
+  'milestone',
   'release',
   'assignee',
   'delegate',

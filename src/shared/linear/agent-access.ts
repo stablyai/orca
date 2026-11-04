@@ -80,6 +80,7 @@ export type {
   LinearIssueListResult,
   LinearProjectListResult,
   LinearIssueRelation,
+  LinearIssueProjectMilestone,
   LinearIssueSummary,
   LinearNamedEntity,
   LinearSearchIssueSummary,

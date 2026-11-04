@@ -8,10 +8,11 @@ const schema = buildSchema(`
     id: String, identifier: String, title: String, url: String, description: String,
     priority: Int, estimate: Float, dueDate: String, branchName: String,
     createdAt: String, updatedAt: String, state: Named, team: Named, project: Named,
-    cycle: Named, assignee: User, labels(first: Int): Labels,
+    cycle: Named, projectMilestone: Milestone, assignee: User, labels(first: Int): Labels,
     children(first: Int, after: String): Issues
   }
   type Named { id: String, name: String, type: String, color: String, key: String, url: String }
+  type Milestone { id: String, name: String, targetDate: String }
   type User { id: String, displayName: String, avatarUrl: String }
   type Label { id: String, name: String, color: String }
   type Labels { nodes: [Label], pageInfo: PageInfo }
@@ -26,6 +27,7 @@ const issue = {
   team: { id: 'team', color: 'blue' },
   project: { id: 'project', url: 'https://linear.app/project' },
   cycle: { id: 'cycle', name: 'Sprint' },
+  projectMilestone: { id: 'milestone', name: 'Phase 1', targetDate: '2026-12-01' },
   labels: { nodes: [{ id: 'label', name: 'Bug', color: 'red' }], pageInfo: { hasNextPage: false } }
 }
 const agentProjection = {
@@ -33,6 +35,7 @@ const agentProjection = {
   state: { id: 'state' },
   team: { color: 'blue' },
   cycle: issue.cycle,
+  projectMilestone: issue.projectMilestone,
   labels: { nodes: [{ color: 'red' }], pageInfo: { hasNextPage: false } }
 }
 
@@ -50,6 +53,7 @@ it('drawer selection never invokes agent-only resolvers that could hide readable
   expect(cycle).not.toHaveBeenCalled()
   expect(result.data).not.toHaveProperty('issue.createdAt')
   expect(result.data).not.toHaveProperty('issue.cycle')
+  expect(result.data).not.toHaveProperty('issue.projectMilestone')
   expect(result.data).toMatchObject({
     issue: { id: issue.id, project: { url: issue.project.url }, children: { nodes: [] } }
   })

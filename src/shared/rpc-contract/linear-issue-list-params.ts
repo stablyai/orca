@@ -23,6 +23,7 @@ export const McpListIssues = z
     cursor: OptionalString,
     orderBy: z.enum(['createdAt', 'updatedAt']).optional(),
     project: OptionalString,
+    milestone: OptionalString,
     release: OptionalString,
     assignee: OptionalString,
     delegate: OptionalString,

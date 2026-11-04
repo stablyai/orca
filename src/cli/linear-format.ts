@@ -7,6 +7,7 @@ import type {
   LinearIssueListResult,
   LinearMcpIssueListResult,
   LinearIssueContextResult,
+  LinearIssueProjectMilestone,
   LinearIssueTaskUpdateResult,
   LinearIssueRelationWriteResult,
   LinearSaveIssueResult,
@@ -36,6 +37,9 @@ export function formatLinearIssue(result: LinearIssueContextResult): string {
     `Assignee: ${safe(issue.assignee?.displayName ?? 'unassigned')}`,
     `Project: ${safe(issue.project?.name ?? 'none')}`
   ]
+  if (issue.projectMilestone?.name) {
+    lines.push(`Milestone: ${formatMilestone(issue.projectMilestone)}`)
+  }
   lines.push(`Priority: ${formatPriority(issue.priority)}`)
   lines.push(`Estimate: ${issue.estimate ?? 'none'}`)
   if (issue.labels.length > 0) {
@@ -76,7 +80,7 @@ export function formatLinearSearch(result: LinearSearchResult): string {
     return 'No Linear issues found.'
   }
   return appendLinearListTruncation(
-    result.issues.map(formatSearchRow).join('\n'),
+    result.issues.map((issue) => formatSearchRow(issue)).join('\n'),
     result.issues.length,
     result.truncated ?? result.meta.limitReached
   )
@@ -127,7 +131,7 @@ export function formatLinearIssueList(result: LinearIssueListResult): string {
     return 'No Linear issues found.'
   }
   return appendLinearListTruncation(
-    result.issues.map(formatSearchRow).join('\n'),
+    result.issues.map((issue) => formatSearchRow(issue)).join('\n'),
     result.issues.length,
     result.truncated ?? result.meta.hasMore
   )
@@ -137,8 +141,16 @@ export function formatLinearMcpIssueList(result: LinearMcpIssueListResult): stri
   if (result.issues.length === 0) {
     return 'No Linear issues found.'
   }
+  // Keep the historical four-column row unless some issue actually has a milestone.
+  const showMilestone = result.issues.some((issue) => issue.projectMilestone?.name)
   return appendLinearListTruncation(
-    result.issues.map(formatSearchRow).join('\n'),
+    result.issues
+      .map((issue) =>
+        showMilestone
+          ? formatSearchRow(issue, safe(issue.projectMilestone?.name ?? '-'))
+          : formatSearchRow(issue)
+      )
+      .join('\n'),
     result.issues.length,
     result.truncated ?? result.meta.hasMore
   )
@@ -262,10 +274,16 @@ export function printLinearProjectListWarnings(result: LinearProjectListResult):
   }
 }
 
-function formatSearchRow(issue: LinearSearchIssueSummary): string {
+function formatSearchRow(issue: LinearSearchIssueSummary, milestone?: string): string {
   const state = safe(issue.state?.name ?? 'unknown')
   const assignee = safe(issue.assignee?.displayName ?? 'unassigned')
-  return `${safe(issue.identifier).padEnd(10)} ${state.padEnd(14)} ${assignee.padEnd(18)} ${safe(issue.title)}`
+  const milestoneColumn = milestone === undefined ? '' : `${milestone.padEnd(20)} `
+  return `${safe(issue.identifier).padEnd(10)} ${state.padEnd(14)} ${assignee.padEnd(18)} ${milestoneColumn}${safe(issue.title)}`
+}
+
+function formatMilestone(milestone: LinearIssueProjectMilestone): string {
+  const name = safe(milestone.name ?? '')
+  return milestone.targetDate ? `${name} (target ${safe(milestone.targetDate)})` : name
 }
 
 function formatPriority(priority: number | null | undefined): string {
