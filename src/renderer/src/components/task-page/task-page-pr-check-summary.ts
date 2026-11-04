@@ -1,4 +1,4 @@
-import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
+import { summarizeProviderChecks } from '../../../../shared/source-control/checks/provider-check-summary'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { ProviderCheckSummary } from '../../../../shared/github/pull-request-types'
 

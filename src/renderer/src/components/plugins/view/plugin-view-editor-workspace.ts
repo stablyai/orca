@@ -1,4 +1,4 @@
-import { toWorktreeRelativePath } from '../../../../../shared/terminal-links'
+import { toWorktreeRelativePath } from '../../../../../shared/terminal/links/terminal-links'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspace-types'
 import { getFolderWorkspaceWorktreeHostId } from '../../../../../shared/folder-workspace-worktree'

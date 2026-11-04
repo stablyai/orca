@@ -18,7 +18,10 @@ import {
   isSettledWrite,
   type WriteSettlement
 } from '../../../../shared/pty-write-settlement'
-import { isDrivingInputKind, type TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import {
+  isDrivingInputKind,
+  type TerminalInputKind
+} from '../../../../shared/terminal/input/terminal-input-kind'
 
 type RuntimeWriteDeps = Pick<PtyRuntimeControllerDeps, 'runtime'>
 

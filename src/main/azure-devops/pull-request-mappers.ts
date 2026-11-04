@@ -1,4 +1,4 @@
-import { summarizeProviderChecks } from '../../shared/provider-check-summary'
+import { summarizeProviderChecks } from '../../shared/source-control/checks/provider-check-summary'
 import type {
   CheckStatus,
   PRMergeableState,

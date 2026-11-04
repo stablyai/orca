@@ -3,7 +3,7 @@ import * as AgentNameTokenMatchModule from '../../../../shared/agent-status/titl
 import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
 import * as Evidence from '../../../../shared/agent-status/title/agent-title-evidence'
 import * as Frames from '../../../../shared/agent-status/title/agent-title-name-anchoring'
-import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
+import { createTerminalTitleTracker } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolveTabAgentFromSignalSnapshot } from '../../../../shared/tab-agent-from-signals'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'

@@ -1,4 +1,4 @@
-import { getProviderChecksOutcome } from '../provider-check-summary'
+import { getProviderChecksOutcome } from '../source-control/checks/provider-check-summary'
 import type { CheckStatus, ProviderCheckSummary } from './pull-request-types'
 import {
   canShowGitHubPRAutoMergeControl,

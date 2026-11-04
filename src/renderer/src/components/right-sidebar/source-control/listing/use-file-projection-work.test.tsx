@@ -6,11 +6,11 @@ import { create } from 'zustand'
 import type { AppState } from '@/store'
 import { toBranchCompareSnapshot } from '@/store/slices/editor/git/git-status-reconciliation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import type * as FileNameSortModule from '../../../../../../shared/file-name-sort'
-import type * as SourceControlTreeModule from '../../../../../../shared/source-control-tree'
+import type * as SourceControlTreeModule from '../../../../../../shared/source-control/listing/source-control-tree'
 import type * as SubmoduleExpansionModule from './submodule-expansion'
 import type * as FileProjectionModule from './use-file-projection'
 import type * as RowOpeningModule from './use-row-opening'
@@ -44,26 +44,29 @@ vi.mock('../../../../../../shared/file-name-sort', async (importOriginal) => {
   }
 })
 
-vi.mock('../../../../../../shared/source-control-tree', async (importOriginal) => {
-  const actual = await importOriginal<typeof SourceControlTreeModule>()
-  return {
-    ...actual,
-    buildGitStatusSourceControlTree: (
-      ...args: Parameters<typeof actual.buildGitStatusSourceControlTree>
-    ) => {
-      counters.buildGitStatusSourceControlTree += 1
-      return actual.buildGitStatusSourceControlTree(...args)
-    },
-    buildSourceControlTree: ((...args: unknown[]) => {
-      counters.buildSourceControlTree += 1
-      return (actual.buildSourceControlTree as (...a: unknown[]) => unknown)(...args)
-    }) as typeof actual.buildSourceControlTree,
-    flattenSourceControlTree: ((...args: unknown[]) => {
-      counters.flattenSourceControlTree += 1
-      return (actual.flattenSourceControlTree as (...a: unknown[]) => unknown)(...args)
-    }) as typeof actual.flattenSourceControlTree
+vi.mock(
+  '../../../../../../shared/source-control/listing/source-control-tree',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof SourceControlTreeModule>()
+    return {
+      ...actual,
+      buildGitStatusSourceControlTree: (
+        ...args: Parameters<typeof actual.buildGitStatusSourceControlTree>
+      ) => {
+        counters.buildGitStatusSourceControlTree += 1
+        return actual.buildGitStatusSourceControlTree(...args)
+      },
+      buildSourceControlTree: ((...args: unknown[]) => {
+        counters.buildSourceControlTree += 1
+        return (actual.buildSourceControlTree as (...a: unknown[]) => unknown)(...args)
+      }) as typeof actual.buildSourceControlTree,
+      flattenSourceControlTree: ((...args: unknown[]) => {
+        counters.flattenSourceControlTree += 1
+        return (actual.flattenSourceControlTree as (...a: unknown[]) => unknown)(...args)
+      }) as typeof actual.flattenSourceControlTree
+    }
   }
-})
+)
 
 vi.mock('./submodule-expansion', async (importOriginal) => {
   const actual = await importOriginal<typeof SubmoduleExpansionModule>()

@@ -1,3 +1,4 @@
+import type { EditorFileTabProps } from './editor-file-tab-props'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
@@ -12,19 +13,18 @@ import { detectLanguage } from '@/lib/language-detect'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
-import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
-import type { GitFileStatus } from '../../../../shared/git-status-types'
-import type { OpenFile } from '../../store/slices/editor'
+import { STATUS_COLORS } from '../right-sidebar/status-display'
+import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
+
 import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
-import type { TabDragItemData } from '../tab-group/useTabDragSplit'
+
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
   getTabRootStateClasses,
-  getTabStripBorderClasses,
-  type DropIndicator
+  getTabStripBorderClasses
 } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
@@ -58,27 +58,7 @@ export default function EditorFileTab({
   dragData,
   dropIndicator,
   includeTopTabBorder = true
-}: {
-  file: OpenFile & { tabId?: string }
-  isActive: boolean
-  isPinned: boolean
-  hasTabsToRight: boolean
-  hasTabsToLeft: boolean
-  tabCount: number
-  gitStatus: GitFileStatus | null
-  onActivate: () => void
-  onClose: () => void
-  onCloseOthers: () => void
-  onCloseToRight: () => void
-  onCloseToLeft: () => void
-  onCloseSplitPane?: () => void
-  onCloseAll: () => void
-  onMakePermanent?: () => void
-  onTogglePin: () => void
-  dragData: TabDragItemData
-  dropIndicator?: DropIndicator
-  includeTopTabBorder?: boolean
-}): React.JSX.Element {
+}: EditorFileTabProps): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
   // Keep dragged tabs anchored; only the insertion bar moves.

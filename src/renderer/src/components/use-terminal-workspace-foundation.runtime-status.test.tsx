@@ -5,7 +5,8 @@ import { afterEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { useTerminalWorkspaceFoundation } from './use-terminal-workspace-foundation'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
-import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import '../../../shared/protocol-version'
+import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 const original = useAppStore.getState()

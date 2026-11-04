@@ -6,12 +6,12 @@ import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
+import { getQuickCommandDisplayPreview } from '../terminal/quick-commands'
 import {
-  getQuickCommandDisplayPreview,
   getTerminalQuickCommandBody,
-  isAgentQuickCommand
-} from '../terminal/quick-commands'
+  isTerminalAgentQuickCommand as isAgentQuickCommand
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-commands'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 

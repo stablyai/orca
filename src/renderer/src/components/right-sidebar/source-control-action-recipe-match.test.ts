@@ -3,7 +3,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
-import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')

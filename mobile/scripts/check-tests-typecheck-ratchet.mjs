@@ -46,10 +46,6 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
     'src/transport/web-bundle/mobile-web-bundle-host-slow-link.test.ts',
     'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop bundle RPC handlers, which does not check against RN libs, and its implementation sources keep their normal checks'
-  ],
-  [
-    'src/worktree/workspace-row-desktop-contract.test.ts',
-    'Checked transfer: strict Node program over emitted phone/host declarations (tsconfig.test.node.json)'
   ]
 ])
 

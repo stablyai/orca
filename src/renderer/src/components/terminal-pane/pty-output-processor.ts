@@ -13,14 +13,14 @@ import {
   enqueueOrderedPtyEffects,
   removeSuppressedCursorNativeTitles
 } from './pty-output-effect-ordering'
-import { createBellDetector } from '../../../../shared/terminal-bell-detector'
+import { createBellDetector } from '../../../../shared/terminal/output/terminal-bell-detector'
 import type { PtyDataMeta } from './pty-dispatcher'
 import {
   createPtyOutputSideEffectQueue,
   type PendingPtySideEffect
 } from './pty-output-side-effect-queue'
 import { createPtyOutputTitleObserver } from './pty-output-title-observer'
-import { advancePartialEscapeTail } from '../../../../shared/terminal-partial-escape-tail'
+import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 
 type PtyOutputCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']

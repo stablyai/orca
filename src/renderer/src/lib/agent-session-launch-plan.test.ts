@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import type { AgentLaunchRouteStore } from './agent-launch-route-input'
 
 const mocks = vi.hoisted(() => ({

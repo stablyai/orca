@@ -17,7 +17,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import {
   TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT,
   TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT
-} from '../../../shared/terminal-scrollback-limits'
+} from '../../../shared/terminal/replay/terminal-scrollback-limits'
 import { errorMessage } from '../../../shared/error-message'
 
 const SNAPSHOT_DIR_NAME = 'terminal-scrollback'

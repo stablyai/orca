@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { RemoteDropdownCopy } from '../../../../shared/source-control-dropdown-remote-copy'
+import type { RemoteDropdownCopy } from '../../../../shared/source-control/dropdown/source-control-dropdown-remote-copy'
 import {
   localizedFastForwardCount,
   localizedForcePushWithLease,

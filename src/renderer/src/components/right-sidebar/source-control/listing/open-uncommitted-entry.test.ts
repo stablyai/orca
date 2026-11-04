@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore } from '@/store/slices/editor-slice-test-harness'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { openUncommittedEntry } from './open-uncommitted-entry'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
