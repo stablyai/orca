@@ -851,6 +851,7 @@ describe('worktree RPC methods', () => {
         createdAt: 1
       }
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler calls only these methods.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,

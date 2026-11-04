@@ -9,6 +9,7 @@ import {
 } from '../../../shared/sidebar-list/worktree-lineage-projection'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { getIndexedAllWorktrees } from './worktree-repo-index'
+import { selectWorktreesByRepo } from './workspace-record-selectors'
 import type { AppState } from './types'
 
 type CrossStoreLineageInputs = Pick<
@@ -37,7 +38,7 @@ function storeIdentityKey(view: CrossStoreLineageView): string {
 }
 
 let cached: {
-  worktreesByRepo: AppState['worktreesByRepo']
+  rowsByRepo: AppState['worktreesByRepo']
   worktreeLineageById: AppState['worktreeLineageById']
   crossStoreLineageByStoreKey: AppState['crossStoreLineageByStoreKey']
   identityKey: string
@@ -59,8 +60,9 @@ export function selectSidebarLineageParentIdentities(
   }
   const view = buildView(state)
   const identityKey = storeIdentityKey(view)
+  const worktreesByRepo = selectWorktreesByRepo(state)
   if (
-    cached?.worktreesByRepo === state.worktreesByRepo &&
+    cached?.rowsByRepo === worktreesByRepo &&
     cached.worktreeLineageById === state.worktreeLineageById &&
     cached.crossStoreLineageByStoreKey === state.crossStoreLineageByStoreKey &&
     cached.identityKey === identityKey
@@ -68,11 +70,11 @@ export function selectSidebarLineageParentIdentities(
     return cached.parents
   }
   const rows = new Map(
-    getIndexedAllWorktrees(state.worktreesByRepo).map((row) => [getWorktreeHostIdentity(row), row])
+    getIndexedAllWorktrees(worktreesByRepo).map((row) => [getWorktreeHostIdentity(row), row])
   )
   const parents = resolveSidebarLineageParentIdentities(state.worktreeLineageById, rows, view)
   cached = {
-    worktreesByRepo: state.worktreesByRepo,
+    rowsByRepo: worktreesByRepo,
     worktreeLineageById: state.worktreeLineageById,
     crossStoreLineageByStoreKey: state.crossStoreLineageByStoreKey,
     identityKey,
