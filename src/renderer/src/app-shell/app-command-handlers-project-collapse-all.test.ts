@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { computeRenderedSidebarRows } from '../components/sidebar/worktree-list/listing/rendered-sidebar-worktree-order'
@@ -154,6 +155,33 @@ describe('collapse / expand all projects app command', () => {
     expect(renderedWorktreeIds()).toEqual([])
     expect(collapsed.has('host:ssh:box')).toBe(true)
     expect(collapsed.size).toBe(2)
+
+    expect(runToggle(shortcutInput())).toBe(true)
+    expect(useAppStore.getState().collapsedGroups).toEqual(new Set(['host:ssh:box']))
+    expect(renderedWorktreeIds()).toEqual([worktree.id])
+  })
+
+  it('expands a visible collapsed project group whose projects sit under a collapsed host', () => {
+    const group: ProjectGroup = {
+      id: 'g1',
+      name: 'Group',
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 0,
+      updatedAt: 0
+    }
+    seed({
+      repos: [repo, { ...otherRepo, connectionId: 'box', projectGroupId: group.id }],
+      projectGroups: [group],
+      sshTargetLabels: new Map([['box', 'Box']]),
+      visibleWorkspaceHostIds: ['local', 'ssh:box'],
+      collapsedGroups: new Set(['host:ssh:box', 'project-group:g1', 'project:repo:repo-1'])
+    })
+    expect(renderedWorktreeIds()).toEqual([])
 
     expect(runToggle(shortcutInput())).toBe(true)
     expect(useAppStore.getState().collapsedGroups).toEqual(new Set(['host:ssh:box']))

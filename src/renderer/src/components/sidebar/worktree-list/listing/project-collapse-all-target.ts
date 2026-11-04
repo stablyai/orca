@@ -34,15 +34,18 @@ export function resolveProjectCollapseAllToggleKeys(state: AppState): string[] {
     return []
   }
   const { collapsedGroups } = state
+  const visibleKeys = getProjectHeaderCollapseKeys(state, collapsedGroups)
   // Decide from visible headers so ones hidden under a collapsed group cannot block expand-all.
-  const anyExpanded = getProjectHeaderCollapseKeys(state, collapsedGroups).some(
-    (key) => !collapsedGroups.has(key)
-  )
+  const anyExpanded = visibleKeys.some((key) => !collapsedGroups.has(key))
   // Keep host sections collapsed so projects hidden under a collapsed host stay untouched.
   const hostOnlyCollapsedGroups = new Set(
     [...collapsedGroups].filter((key) => key.startsWith('host:'))
   )
-  return getProjectHeaderCollapseKeys(state, hostOnlyCollapsedGroups).filter(
-    (key) => collapsedGroups.has(key) !== anyExpanded
-  )
+  // Keep visible keys too: a collapsed group shows a global header, but expanding it for this
+  // pass can move that header under a collapsed host, where it drops out.
+  const keys = new Set([
+    ...visibleKeys,
+    ...getProjectHeaderCollapseKeys(state, hostOnlyCollapsedGroups)
+  ])
+  return [...keys].filter((key) => collapsedGroups.has(key) !== anyExpanded)
 }
