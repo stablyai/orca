@@ -20504,7 +20504,13 @@
         "queueSearchSteer": "Steuern",
         "shellEnvSearchVariables": "Umgebungsvariablen",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "Proxy"
+        "shellEnvSearchProxy": "Proxy",
+        "idleStopTitle": "Inaktive Agenten beenden nach",
+        "idleStopCopy": "Beendet den Agenten eines Chats, sobald der Chat so lange inaktiv war, um Speicher freizugeben. Der Chat bleibt erhalten, und deine nächste Nachricht startet den Agenten erneut. Wähle Nie für Agenten, die zwischen Durchgängen im Hintergrund weiterarbeiten.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "Zeitlimit",
+        "idleStopSearchKeepAlive": "aktiv halten",
+        "idleStopNever": "Nie"
       }
     },
     "agentChildRow": {

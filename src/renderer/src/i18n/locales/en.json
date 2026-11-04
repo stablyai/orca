@@ -20865,7 +20865,13 @@
         "usageLimitContinueCopy": "Orca sends \"Continue where you left off.\" when the limit resets. Applies to all chats with a known reset time.",
         "usageLimitContinueSearchLimit": "usage limit",
         "usageLimitContinueSearchReset": "reset",
-        "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets"
+        "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets",
+        "idleStopTitle": "Stop idle agents after",
+        "idleStopCopy": "Ends a chat's agent once the chat has been idle this long, to free memory. The chat stays, and your next message starts the agent again. Choose Never for agents that keep working in the background between turns.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "timeout",
+        "idleStopSearchKeepAlive": "keep alive",
+        "idleStopNever": "Never"
       }
     },
     "agentChildRow": {

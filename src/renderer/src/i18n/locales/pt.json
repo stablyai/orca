@@ -21469,7 +21469,13 @@
         "queueSearchSteer": "orientar",
         "shellEnvSearchVariables": "variáveis de ambiente",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "idleStopTitle": "Parar agentes inativos após",
+        "idleStopCopy": "Encerra o agente de um chat quando o chat fica inativo por esse tempo, para liberar memória. O chat continua e sua próxima mensagem inicia o agente de novo. Escolha Nunca para agentes que continuam trabalhando em segundo plano entre os turnos.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "tempo limite",
+        "idleStopSearchKeepAlive": "manter ativo",
+        "idleStopNever": "Nunca"
       }
     },
     "jiraIssueAssigneeField": {

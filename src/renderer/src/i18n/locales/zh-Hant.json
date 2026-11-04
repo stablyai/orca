@@ -20190,7 +20190,13 @@
         "queueSearchSteer": "立即傳送",
         "shellEnvSearchVariables": "環境變數",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "代理"
+        "shellEnvSearchProxy": "代理",
+        "idleStopTitle": "閒置多久後停止代理",
+        "idleStopCopy": "聊天閒置達到此時長後，結束該聊天的代理以釋放記憶體。聊天會保留，你傳送下一則訊息時代理會重新啟動。如果代理在輪次之間仍會在背景繼續工作，請選擇「永不」。",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "逾時",
+        "idleStopSearchKeepAlive": "保持運作",
+        "idleStopNever": "永不"
       }
     },
     "agentChildRow": {

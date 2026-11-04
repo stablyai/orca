@@ -21193,7 +21193,13 @@
         "queueSearchSteer": "направить агента",
         "shellEnvSearchVariables": "переменные окружения",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "прокси"
+        "shellEnvSearchProxy": "прокси",
+        "idleStopTitle": "Останавливать неактивных агентов через",
+        "idleStopCopy": "Завершает агента чата, когда чат простаивает столько времени, чтобы освободить память. Чат сохраняется, а следующее сообщение снова запускает агента. Выберите «Никогда» для агентов, которые продолжают работать в фоне между ходами.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "тайм-аут",
+        "idleStopSearchKeepAlive": "поддерживать активным",
+        "idleStopNever": "Никогда"
       }
     },
     "agentChildRow": {

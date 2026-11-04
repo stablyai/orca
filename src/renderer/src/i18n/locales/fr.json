@@ -20611,7 +20611,13 @@
         "usageLimitContinueCopy": "Orca envoie « Continue where you left off. » quand la limite est réinitialisée. S’applique à tous les chats dont l’heure de réinitialisation est connue.",
         "usageLimitContinueSearchLimit": "limite d’utilisation",
         "usageLimitContinueSearchReset": "réinitialisation",
-        "usageLimitContinueToggleLabel": "Activer ou désactiver la reprise des chats à la réinitialisation d’une limite"
+        "usageLimitContinueToggleLabel": "Activer ou désactiver la reprise des chats à la réinitialisation d’une limite",
+        "idleStopTitle": "Arrêter les agents inactifs après",
+        "idleStopCopy": "Arrête l'agent d'un chat une fois que le chat est resté inactif aussi longtemps, pour libérer de la mémoire. Le chat est conservé et votre prochain message relance l'agent. Choisissez Jamais pour les agents qui continuent de travailler en arrière-plan entre les tours.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "délai",
+        "idleStopSearchKeepAlive": "maintenir actif",
+        "idleStopNever": "Jamais"
       }
     },
     "agentChildRow": {

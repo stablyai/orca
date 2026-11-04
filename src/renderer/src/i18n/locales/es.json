@@ -20282,7 +20282,13 @@
         "usageLimitContinueCopy": "Orca envía \"Continue where you left off.\" cuando se restablece el límite. Se aplica a todos los chats con una hora de restablecimiento conocida.",
         "usageLimitContinueSearchLimit": "límite de uso",
         "usageLimitContinueSearchReset": "restablecer",
-        "usageLimitContinueToggleLabel": "Activar o desactivar la continuación de chats al restablecerse un límite de uso"
+        "usageLimitContinueToggleLabel": "Activar o desactivar la continuación de chats al restablecerse un límite de uso",
+        "idleStopTitle": "Detener agentes inactivos tras",
+        "idleStopCopy": "Cierra el agente de un chat cuando el chat lleva este tiempo inactivo, para liberar memoria. El chat se conserva y tu siguiente mensaje vuelve a iniciar el agente. Elige Nunca para agentes que siguen trabajando en segundo plano entre turnos.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "tiempo de espera",
+        "idleStopSearchKeepAlive": "mantener activo",
+        "idleStopNever": "Nunca"
       },
       "TerminalInteraction": {
         "copyTrimsGutter": "Recortar margen al copiar",

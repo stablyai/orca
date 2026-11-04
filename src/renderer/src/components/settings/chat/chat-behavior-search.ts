@@ -38,6 +38,19 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.usageLimitContinueSearchReset', 'reset')
     ]
   },
+  idleStop: {
+    targetSectionId: 'chat-idle-stop',
+    title: translate('components.settings.nativeChat.idleStopTitle', 'Stop idle agents after'),
+    description: translate(
+      'components.settings.nativeChat.idleStopCopy',
+      "Ends a chat's agent once the chat has been idle this long, to free memory. The chat stays, and your next message starts the agent again. Choose Never for agents that keep working in the background between turns."
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.idleStopSearchIdle', 'idle'),
+      translate('components.settings.nativeChat.idleStopSearchTimeout', 'timeout'),
+      translate('components.settings.nativeChat.idleStopSearchKeepAlive', 'keep alive')
+    ]
+  },
   queueFollowUps: {
     targetSectionId: 'chat-queue-follow-ups',
     title: translate('components.settings.nativeChat.followUpBehaviorTitle', 'Queue follow-ups'),
