@@ -313,6 +313,63 @@ describe('orca cli browser page targeting', () => {
       { timeoutMs: 60_000 }
     )
   })
+
+  it("creates a tab in the calling terminal's worktree when cwd is outside every worktree", async () => {
+    const caller = buildWorktree('/tmp/repo/caller', 'caller')
+    queueFixtures(
+      callMock,
+      worktreeListFixture([caller, buildWorktree('/tmp/repo/other', 'other')]),
+      okFixture('req_tab_create', { browserPageId: 'page-1' })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.stubEnv('ORCA_WORKTREE_ID', caller.id)
+
+    await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/scratch')
+
+    expect(callMock).toHaveBeenLastCalledWith(
+      'browser.tabCreate',
+      { url: 'https://example.com', worktree: caller.id },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  it("creates a tab in the calling terminal's folder workspace when cwd is outside it", async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/other', 'other')]),
+      okFixture('req_tab_create', { browserPageId: 'page-1' })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.stubEnv('ORCA_WORKTREE_ID', '')
+    vi.stubEnv('ORCA_WORKSPACE_ID', 'folder:fw-1')
+
+    await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/scratch')
+
+    expect(callMock).toHaveBeenLastCalledWith(
+      'browser.tabCreate',
+      { url: 'https://example.com', worktree: 'folder:fw-1' },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  it('prefers the worktree enclosing cwd over the calling terminal worktree', async () => {
+    const caller = buildWorktree('/tmp/repo/caller', 'caller')
+    queueFixtures(
+      callMock,
+      worktreeListFixture([caller, buildWorktree('/tmp/repo/other', 'other')]),
+      okFixture('req_tab_create', { browserPageId: 'page-1' })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.stubEnv('ORCA_WORKTREE_ID', caller.id)
+
+    await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/repo/other/src')
+
+    expect(callMock).toHaveBeenLastCalledWith(
+      'browser.tabCreate',
+      { url: 'https://example.com', worktree: 'id:repo::/tmp/repo/other' },
+      { timeoutMs: 60_000 }
+    )
+  })
 })
 
 describe('orca cli browser identity', () => {

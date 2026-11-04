@@ -196,7 +196,23 @@ export async function getBrowserWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  return optionalCurrentWorktreeSelector(cwd, client, purpose)
+  // An Orca terminal knows its workspace; without this an unmanaged cwd lands in the focused one.
+  return (
+    (await optionalCurrentWorktreeSelector(cwd, client, purpose)) ??
+    (await callerTerminalWorkspaceSelector(client))
+  )
+}
+
+async function callerTerminalWorkspaceSelector(client: RuntimeClient) {
+  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
+  if (terminalWorktreeId?.trim()) {
+    const scoped = await resolveCallerPaneWorktreeSelector(terminalWorktreeId, client)
+    if (scoped) {
+      return scoped
+    }
+  }
+  const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
+  return folderWorkspaceId?.startsWith('folder:') ? folderWorkspaceId : undefined
 }
 
 export async function getTerminalHandle(
@@ -265,18 +281,10 @@ export async function getEmulatorWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
-  if (terminalWorktreeId?.trim()) {
-    const scoped = await resolveCallerPaneWorktreeSelector(terminalWorktreeId, client)
-    if (scoped) {
-      return scoped
-    }
-  }
-  const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
-  if (folderWorkspaceId?.startsWith('folder:')) {
-    return folderWorkspaceId
-  }
-  return optionalCurrentWorktreeSelector(cwd, client)
+  return (
+    (await callerTerminalWorkspaceSelector(client)) ??
+    (await optionalCurrentWorktreeSelector(cwd, client))
+  )
 }
 
 export async function getEmulatorCommandTarget(
