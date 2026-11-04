@@ -202,6 +202,7 @@ it('preserves a task boundary without inventing a successor until real output ar
     completedAt: Date.parse(at(13))
   })
   expect(before.items.filter((item) => item.body.kind === 'turn')).toHaveLength(2)
+  expect(c.rows().filter((row) => row === '(continued-outside)')).toHaveLength(1)
   const continued = before.items.find(
     (item) =>
       item.body.kind === 'message' &&
@@ -231,7 +232,8 @@ it('preserves a task boundary without inventing a successor until real output ar
   expect(c.journal.item(scope.turnItemId)?.body).toMatchObject({ kind: 'turn', state: 'completed' })
   expect(c.journal.item(turn.itemId)).toEqual(turn)
   expect(after.items.filter((item) => item.body.kind === 'turn')).toHaveLength(3)
-  expect(c.rows().filter((row) => row === '(continued-outside)')).toHaveLength(1)
+  // Each separate catch-up appends one genuine outside stretch.
+  expect(c.rows().filter((row) => row === '(continued-outside)')).toHaveLength(2)
   expect(await c.open('a1')).toBe(true)
   expect(c.journal.snapshot()).toEqual(after)
   expect((await c.replay()).snapshot()).toEqual(after)
