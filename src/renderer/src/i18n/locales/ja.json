@@ -19396,6 +19396,11 @@
         "hostUnavailable": "添付ファイルのホストを利用できません。再接続して再試行してください。",
         "connectionChanged": "接続が変更されました。添付ファイルを閉じてから開き直してください。",
         "readFailed": "ホスト上の添付ファイルを読み取れません。再接続してもう一度お試しください。ファイルが削除または変更された可能性があります。"
+      },
+      "composerWorkspace": {
+        "copyFailed": "コピーできませんでした",
+        "copyIdentity": "{{value0}} をコピー",
+        "projectCheckout": "プロジェクトのチェックアウト"
       }
     },
     "tab": {

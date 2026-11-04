@@ -19905,6 +19905,11 @@
         "hostUnavailable": "El host del archivo adjunto no está disponible. Vuelve a conectarte y a intentarlo.",
         "connectionChanged": "La conexión cambió. Cierra este archivo adjunto y vuelve a abrirlo.",
         "readFailed": "No se pudo leer este archivo adjunto en su host. Vuelve a conectarte y a intentarlo. Es posible que el archivo se haya eliminado o modificado."
+      },
+      "composerWorkspace": {
+        "copyFailed": "No se pudo copiar",
+        "copyIdentity": "Copiar {{value0}}",
+        "projectCheckout": "Checkout del proyecto"
       }
     },
     "tab": {

@@ -19792,6 +19792,11 @@
         "hostUnavailable": "附件所在的主機無法使用。請重新連線後重試。",
         "connectionChanged": "連線已變更。請關閉並重新開啟此附件。",
         "readFailed": "無法在主機上讀取此附件。請重新連線後再試一次。檔案可能已被移除或變更。"
+      },
+      "composerWorkspace": {
+        "copyFailed": "複製失敗",
+        "copyIdentity": "複製 {{value0}}",
+        "projectCheckout": "專案工作副本"
       }
     },
     "tab": {

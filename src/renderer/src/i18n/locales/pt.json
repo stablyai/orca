@@ -21054,6 +21054,11 @@
         "hostUnavailable": "O host do anexo está indisponível. Reconecte-se e tente novamente.",
         "connectionChanged": "A conexão mudou. Feche este anexo e abra-o novamente.",
         "readFailed": "Não foi possível ler este anexo no host. Reconecte-se e tente novamente. O arquivo pode ter sido removido ou alterado."
+      },
+      "composerWorkspace": {
+        "copyFailed": "Falha ao copiar",
+        "copyIdentity": "Copiar {{value0}}",
+        "projectCheckout": "Checkout do projeto"
       }
     },
     "tab": {

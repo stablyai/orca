@@ -20083,6 +20083,11 @@
         "hostUnavailable": "Ekin ana bilgisayarı kullanılamıyor. Yeniden bağlanıp tekrar deneyin.",
         "connectionChanged": "Bağlantı değişti. Bu eki kapatıp yeniden açın.",
         "readFailed": "Bu ek ana bilgisayarında okunamıyor. Yeniden bağlanıp tekrar deneyin. Dosya silinmiş veya değiştirilmiş olabilir."
+      },
+      "composerWorkspace": {
+        "copyFailed": "Kopyalanamadı",
+        "copyIdentity": "{{value0}} kopyala",
+        "projectCheckout": "Proje çalışma kopyası"
       }
     },
     "tab": {

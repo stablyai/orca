@@ -19337,6 +19337,11 @@
         "hostUnavailable": "附件所在主机不可用。请重新连接后重试。",
         "connectionChanged": "连接已更改。请关闭并重新打开此附件。",
         "readFailed": "无法在主机上读取此附件。请重新连接后重试。文件可能已被删除或更改。"
+      },
+      "composerWorkspace": {
+        "copyFailed": "复制失败",
+        "copyIdentity": "复制 {{value0}}",
+        "projectCheckout": "项目工作副本"
       }
     },
     "tab": {

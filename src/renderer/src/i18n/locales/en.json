@@ -20450,7 +20450,12 @@
         "scheduled": "Orca will continue this chat at {{time}}.",
         "cancel": "Don't continue"
       },
-      "settings": "Chat settings"
+      "settings": "Chat settings",
+      "composerWorkspace": {
+        "copyFailed": "Failed to copy",
+        "copyIdentity": "Copy {{value0}}",
+        "projectCheckout": "Project checkout"
+      }
     },
     "tab": {
       "bar": {

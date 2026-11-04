@@ -20125,6 +20125,11 @@
         "hostUnavailable": "L’hôte de la pièce jointe est indisponible. Reconnectez-vous et réessayez.",
         "connectionChanged": "La connexion a changé. Fermez cette pièce jointe et rouvrez-la.",
         "readFailed": "Impossible de lire cette pièce jointe sur son hôte. Reconnectez-vous et réessayez. Le fichier a peut-être été supprimé ou modifié."
+      },
+      "composerWorkspace": {
+        "copyFailed": "Échec de la copie",
+        "copyIdentity": "Copier {{value0}}",
+        "projectCheckout": "Checkout du projet"
       }
     },
     "tab": {
