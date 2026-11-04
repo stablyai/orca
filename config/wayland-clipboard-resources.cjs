@@ -1,7 +1,9 @@
 const { spawnSync } = require('node:child_process')
 const { chmodSync, existsSync } = require('node:fs')
 const { join } = require('node:path')
-const { collectNativeBinaries } = require('./scripts/native-build/linux/verify-linux-glibc-floor.cjs')
+const {
+  collectNativeBinaries
+} = require('./scripts/native-build/linux/verify-linux-glibc-floor.cjs')
 
 function ensureBundledWaylandClipboard(archEnum, root = join(__dirname, '..'), run = spawnSync) {
   const arch = { 1: 'x64', 3: 'arm64' }[archEnum]
@@ -10,7 +12,11 @@ function ensureBundledWaylandClipboard(archEnum, root = join(__dirname, '..'), r
   }
   const result = run(
     process.execPath,
-    [join(root, 'config', 'scripts', 'native-build', 'linux', 'build-wayland-clipboard.mjs'), '--arch', arch],
+    [
+      join(root, 'config', 'scripts', 'native-build', 'linux', 'build-wayland-clipboard.mjs'),
+      '--arch',
+      arch
+    ],
     { cwd: root, stdio: 'inherit' }
   )
   if (

@@ -10,14 +10,22 @@ function electronBuilderNativeRebuild(context) {
 function runElectronBuilderNativeRebuild(context, runner = execFileSync, runtime = {}) {
   const args = buildNativeRebuildArgs(context, runtime)
   if (readPlatformName(context?.platform) === 'win32') {
-    runner(process.execPath, ['config/scripts/native-build/windows/build-windows-cli-launcher.mjs'], {
-      cwd: projectDir,
-      stdio: 'inherit'
-    })
+    runner(
+      process.execPath,
+      ['config/scripts/native-build/windows/build-windows-cli-launcher.mjs'],
+      {
+        cwd: projectDir,
+        stdio: 'inherit'
+      }
+    )
     // Packaging rejects a hook built for another machine, so build the one this package targets.
     runner(
       process.execPath,
-      ['config/scripts/native-build/windows/build-windows-agent-hook.mjs', '--arch', readArchName(context?.arch)],
+      [
+        'config/scripts/native-build/windows/build-windows-agent-hook.mjs',
+        '--arch',
+        readArchName(context?.arch)
+      ],
       { cwd: projectDir, stdio: 'inherit' }
     )
   }

@@ -9,7 +9,11 @@ const {
   staleConptySourceBuildError
 } = require('../../native-build/node-addons/node-pty-job-ownership.cjs')
 const { normalizeNodePtyWindowsArch } = require('../../../packaged-runtime-node-modules.cjs')
-const { PE_MACHINE, describePeMachine, readPeMachine } = require('../../native-build/windows/windows-pe-machine.cjs')
+const {
+  PE_MACHINE,
+  describePeMachine,
+  readPeMachine
+} = require('../../native-build/windows/windows-pe-machine.cjs')
 
 // Follow loader order: it swallows failed requires, first loadable candidate wins and upstream prebuild is last fallback.
 function packagedConptyCandidates(resourcesDir, targetArch) {

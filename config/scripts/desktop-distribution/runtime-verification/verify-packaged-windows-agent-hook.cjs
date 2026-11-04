@@ -2,7 +2,11 @@
 
 const { existsSync } = require('node:fs')
 const { join } = require('node:path')
-const { PE_MACHINE, describePeMachine, readPeMachine } = require('../../native-build/windows/windows-pe-machine.cjs')
+const {
+  PE_MACHINE,
+  describePeMachine,
+  readPeMachine
+} = require('../../native-build/windows/windows-pe-machine.cjs')
 
 // electron-builder's `Arch` enum values for the Windows slices Orca can package.
 const ARCH_BY_ELECTRON_BUILDER_ENUM = { 1: 'x64', 3: 'arm64' }

@@ -5,7 +5,9 @@ const { connect } = require('node:net')
 const { tmpdir } = require('node:os')
 const { join, relative } = require('node:path')
 const { setTimeout: delay } = require('node:timers/promises')
-const { macTerminalHostPaths } = require('../../macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
+const {
+  macTerminalHostPaths
+} = require('../../macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
 const {
   daemonProtocolVersion
 } = require('../../../../src/shared/local-build-compatibility-contract.json')

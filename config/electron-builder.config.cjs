@@ -26,7 +26,9 @@ const {
 const {
   assertNoWindowsExecutablesInRuntimeNodeModules
 } = require('./packaged-windows-only-runtime-files.cjs')
-const { verifyLinuxGlibcFloor } = require('./scripts/native-build/linux/verify-linux-glibc-floor.cjs')
+const {
+  verifyLinuxGlibcFloor
+} = require('./scripts/native-build/linux/verify-linux-glibc-floor.cjs')
 const {
   verifyPackagedWindowsAgentHook
 } = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-windows-agent-hook.cjs')
@@ -34,12 +36,16 @@ const {
   ensureBundledWaylandClipboard,
   finalizePackagedWaylandClipboard
 } = require('./wayland-clipboard-resources.cjs')
-const { writeMacBuildCompatibility } = require('./scripts/desktop-distribution/macos/mac-build-compatibility.cjs')
+const {
+  writeMacBuildCompatibility
+} = require('./scripts/desktop-distribution/macos/mac-build-compatibility.cjs')
 const {
   MOBILE_WEB_BUNDLE_DIR,
   assertMobileWebBundleBuilt
 } = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs')
-const { verifyPackagedPluginResources } = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-plugin-resources.cjs')
+const {
+  verifyPackagedPluginResources
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-plugin-resources.cjs')
 const {
   assertPackagedServeSelectionEntry,
   assertPackagedWebClient
@@ -60,7 +66,9 @@ const {
   orcadTemplateNodeModulesExtraResource,
   orcadTemplateMacSignIgnore
 } = require('./scripts/orcad-distribution/template/packaged-orcad-template.cjs')
-const { verifySkillsCliRuntime } = require('./scripts/runtime-verification/skills-cli/verify-skills-cli-runtime.cjs')
+const {
+  verifySkillsCliRuntime
+} = require('./scripts/runtime-verification/skills-cli/verify-skills-cli-runtime.cjs')
 const { assertNotDarkBuild } = require('./dark-build-switches.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
 const {
@@ -586,7 +594,9 @@ module.exports = {
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
-    ...(isMacRelease ? { sign: resolve(__dirname, './scripts/desktop-distribution/macos/sign-mac-app.mjs') } : {}),
+    ...(isMacRelease
+      ? { sign: resolve(__dirname, './scripts/desktop-distribution/macos/sign-mac-app.mjs') }
+      : {}),
     signIgnore: [
       ...bundledRipgrepMacSignIgnore,
       ...orcadTemplateMacSignIgnore,

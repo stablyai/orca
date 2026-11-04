@@ -5,7 +5,9 @@
 const { accessSync, constants, existsSync } = require('node:fs')
 const { join } = require('node:path')
 const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
-const { assertWindowsProcessTreeCreationTime } = require('../windows/windows-process-tree-creation-time.cjs')
+const {
+  assertWindowsProcessTreeCreationTime
+} = require('../windows/windows-process-tree-creation-time.cjs')
 const { nodePtyNativeModuleName } = require('./native-build-entry.cjs')
 
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']

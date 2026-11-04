@@ -2,7 +2,9 @@ const { createHash } = require('node:crypto')
 const { existsSync, readFileSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
 const { ORCAD_TEMPLATE_MANIFEST_FILENAME } = require('../../../../src/shared/orcad-artifacts.ts')
-const { orcadAgentBrowserNativeName } = require('../../../../src/shared/orcad-agent-browser-name.ts')
+const {
+  orcadAgentBrowserNativeName
+} = require('../../../../src/shared/orcad-agent-browser-name.ts')
 const { verifyPackagedOrcadTemplate } = require('./verify-packaged-orcad-template.cjs')
 
 function sha256(path) {

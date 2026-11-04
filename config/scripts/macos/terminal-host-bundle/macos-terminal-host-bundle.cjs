@@ -289,12 +289,16 @@ function assembleMacTerminalHost({ appPath, nodeExecutable, iconPath, info }) {
 }
 
 async function loadNodeRuntimePin() {
-  return import(pathToFileURL(resolve(__dirname, '../../../../src/shared/node-runtime-pin.ts')).href)
+  return import(
+    pathToFileURL(resolve(__dirname, '../../../../src/shared/node-runtime-pin.ts')).href
+  )
 }
 
 async function pinnedDarwinNode(arch) {
   const { ensurePinnedNodeExecutable } = await import(
-    pathToFileURL(resolve(__dirname, '../../orcad-distribution/prebuilds/pinned-node-downloads.mjs')).href
+    pathToFileURL(
+      resolve(__dirname, '../../orcad-distribution/prebuilds/pinned-node-downloads.mjs')
+    ).href
   )
   return ensurePinnedNodeExecutable({ target: `darwin-${arch}` })
 }

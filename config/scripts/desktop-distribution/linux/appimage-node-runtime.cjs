@@ -7,14 +7,18 @@ const {
   APPIMAGE_NODE_RUNTIME_SEGMENTS,
   appImageNodeRuntimeTarget
 } = require('../../../../src/shared/appimage-node-runtime.ts')
-const { runTerminalHostRoundTrip } = require('../runtime-verification/verify-packaged-daemon-entry.cjs')
+const {
+  runTerminalHostRoundTrip
+} = require('../runtime-verification/verify-packaged-daemon-entry.cjs')
 
 const appImageNodeRuntimeFpmArgs = ['--exclude', APPIMAGE_NODE_RUNTIME_FPM_EXCLUDE]
 const PTY_ROUND_TRIP_TIMEOUT_MS = 20_000
 
 async function ensurePinnedNode(target) {
   const { ensurePinnedNodeExecutable } = await import(
-    pathToFileURL(resolve(__dirname, '../../orcad-distribution/prebuilds/pinned-node-downloads.mjs')).href
+    pathToFileURL(
+      resolve(__dirname, '../../orcad-distribution/prebuilds/pinned-node-downloads.mjs')
+    ).href
   )
   return ensurePinnedNodeExecutable({ target })
 }

@@ -2,7 +2,11 @@
 
 const { existsSync, readFileSync } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
-const { PE_MACHINE, describePeMachine, readPeMachine } = require('../windows/windows-pe-machine.cjs')
+const {
+  PE_MACHINE,
+  describePeMachine,
+  readPeMachine
+} = require('../windows/windows-pe-machine.cjs')
 
 const NODE_PTY_JOB_EXPORTS = [
   'listJobProcessIds',

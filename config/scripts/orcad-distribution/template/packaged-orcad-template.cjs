@@ -44,7 +44,10 @@ function isOrcadTemplateRequired(env = process.env) {
 }
 
 // Why: electron-builder only warns on a missing extraResources source.
-function assertOrcadTemplateBuilt(projectDir = join(__dirname, '../../..', '..'), env = process.env) {
+function assertOrcadTemplateBuilt(
+  projectDir = join(__dirname, '../../..', '..'),
+  env = process.env
+) {
   const manifest = join(
     projectDir,
     orcadTemplateExtraResource.from,
