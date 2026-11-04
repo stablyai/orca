@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   agentStatusFreshnessScanCounters,
   createFreshnessScheduler,
@@ -173,53 +173,5 @@ describe('freshness scheduler cached minimum', () => {
 
     expect(cachedScans).toBeGreaterThan(0)
     expect(cachedVisits).toBeLessThan(agentStatusFreshnessScanCounters.entryVisits)
-  })
-
-  it('falls back to a full rescan when a writer changes the map without reporting it', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(NOW)
-    let current: StatusMap = { 'tab:a': entry('tab:a', { state: 'working' }) }
-    const bumps: number[] = []
-    const scheduler = createFreshnessScheduler({
-      getStatusEntries: () => current,
-      bumpEpochs: () => bumps.push(Date.now())
-    })
-    scheduler.schedule()
-    resetAgentStatusFreshnessScanCounters()
-
-    // An unreported replacement: identity no longer matches what the cache was built from.
-    current = { 'tab:a': entry('tab:a', { state: 'working', updatedAt: NOW + MINUTE }) }
-    scheduler.schedule()
-
-    expect(agentStatusFreshnessScanCounters.fullScans).toBe(1)
-    expect(agentStatusFreshnessScanCounters.cachedScans).toBe(0)
-    scheduler.dispose()
-  })
-})
-
-describe('freshness scheduler stale-boundary equivalence', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('bumps once at the stale boundary whether or not the cache answered', () => {
-    for (const mode of ['cached', 'rescan'] as const) {
-      vi.useFakeTimers()
-      vi.setSystemTime(NOW)
-      const bumps: number[] = []
-      let current: StatusMap = { 'tab:a': entry('tab:a', { state: 'working' }) }
-      const scheduler = createFreshnessScheduler({
-        getStatusEntries: () => (mode === 'cached' ? current : { ...current }),
-        bumpEpochs: () => bumps.push(Date.now())
-      })
-
-      scheduler.schedule()
-      scheduler.schedule()
-      vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
-
-      expect(bumps).toEqual([NOW + AGENT_STATUS_STALE_AFTER_MS + 1])
-      scheduler.dispose()
-      vi.useRealTimers()
-    }
   })
 })

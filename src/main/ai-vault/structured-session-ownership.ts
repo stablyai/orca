@@ -12,14 +12,14 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
-import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { historyRowFallsBackToChatLabel } from '../../shared/structured-chat-row-name'
-import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
+import type { AiVaultSearchResponse } from '../../shared/ai-vault/search/ai-vault-search-types'
 import {
   redactForTransport,
   type SessionSearchTransport
-} from '../../shared/ai-vault-search-transport'
-import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/search/ai-vault-search-transport'
+import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/structured-agent-session-host-refusal'
 import {

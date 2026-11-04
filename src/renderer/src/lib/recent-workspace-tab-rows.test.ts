@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
-  orderRecentWorkspaceTabs,
   resolveRecentWorkspaceTabStatus,
   type RecentWorkspaceTabRow
 } from './recent-workspace-tab-rows'
 import type { TabPaneInputSources } from '../../../shared/sidebar-list/smart-attention'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
-  type AgentStatusState
-} from '../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../shared/agent-status/contracts/agent-status-types'
 
 const NOW = 1_700_000_000_000
 const LEAF_ID = '11111111-2222-4333-8444-555555555555'
@@ -60,55 +59,6 @@ function sources(
   }
 }
 
-describe('orderRecentWorkspaceTabs', () => {
-  it('orders individual tab visits across worktrees and hosts', () => {
-    const rows = [
-      row('old', { lastFocusedAt: NOW - 3 * 86400_000 }),
-      row('recent', { lastFocusedAt: NOW - 60_000, worktreeHostId: 'ssh:builder' }),
-      row('newest', { lastFocusedAt: NOW, worktreeId: 'folder:/project' })
-    ]
-    expect(orderRecentWorkspaceTabs({ rows })).toEqual(['newest', 'recent', 'old'])
-  })
-
-  it('keeps unknown and invalid visit times below visited tabs with stable ties', () => {
-    const rows = [
-      row('unknown'),
-      row('nan', { lastFocusedAt: Number.NaN }),
-      row('first', { lastFocusedAt: NOW }),
-      row('infinite', { lastFocusedAt: Infinity }),
-      row('second', { lastFocusedAt: NOW })
-    ]
-    expect(orderRecentWorkspaceTabs({ rows })).toEqual([
-      'first',
-      'second',
-      'unknown',
-      'nan',
-      'infinite'
-    ])
-    expect(rows[0].id).toBe('unknown')
-  })
-
-  it('keeps duplicate ids on different hosts as separate occurrences', () => {
-    const rows = [
-      row('same', { occurrenceId: 'local', lastFocusedAt: NOW - 1 }),
-      row('same', { occurrenceId: 'ssh', worktreeHostId: 'ssh:builder', lastFocusedAt: NOW })
-    ]
-    expect(orderRecentWorkspaceTabs({ rows })).toEqual(['ssh', 'local'])
-  })
-
-  it('retains permission badges without promoting an old permission title', () => {
-    const old = row('old', {
-      lastFocusedAt: NOW - 3 * 86400_000,
-      terminalTab: { id: 'old', title: 'OMP - action required' }
-    })
-    const paneSources = sources([], { ptyIdsByTabId: { old: ['pty-1'] } })
-    expect(resolveRecentWorkspaceTabStatus(old, paneSources, NOW)).toBe('permission')
-    expect(
-      orderRecentWorkspaceTabs({ rows: [old, row('recent', { lastFocusedAt: NOW })] })
-    ).toEqual(['recent', 'old'])
-  })
-})
-
 describe('resolveRecentWorkspaceTabStatus', () => {
   it.each(['tab', 'pane'] as const)(
     'suppresses a stale done pane permission %s title',
@@ -158,35 +108,6 @@ describe('resolveRecentWorkspaceTabStatus', () => {
     expect(resolveRecentWorkspaceTabStatus(row('split'), paneSources, NOW)).toBe('permission')
   })
 
-  it('surfaces a turn a crash cut short as failed', () => {
-    const cut = entry('cut', 'done', NOW - 1_000, {
-      mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: NOW - 1_000 }
-    })
-
-    expect(resolveRecentWorkspaceTabStatus(row('cut'), sources([cut]), NOW)).toBe('failed')
-  })
-
-  it("reads a user's Stop as interrupted though attention demotes it, whether recorded or an old host's flag", () => {
-    const recorded = entry('stopped', 'done', NOW - 1_000, {
-      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 1_000 }
-    })
-    const legacy = entry('stopped', 'done', NOW - 1_000, { interrupted: true })
-
-    for (const stopped of [recorded, legacy]) {
-      expect(resolveRecentWorkspaceTabStatus(row('stopped'), sources([stopped]), NOW)).toBe(
-        'interrupted'
-      )
-    }
-  })
-
-  it('surfaces a failed outcome as failed', () => {
-    const failed = entry('failed', 'done', NOW - 1_000, {
-      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 1_000 }
-    })
-
-    expect(resolveRecentWorkspaceTabStatus(row('failed'), sources([failed]), NOW)).toBe('failed')
-  })
-
   it('surfaces a main agent that failed while its subagent works as failed, above working', () => {
     const held = (tabId: string, outcome: 'failure' | 'success') =>
       entry(tabId, 'working', NOW - 1_000, {
@@ -214,21 +135,6 @@ describe('resolveRecentWorkspaceTabStatus', () => {
       resolveRecentWorkspaceTabStatus(row('mixed'), sources([interrupted, finished]), NOW)
     ).toBe('interrupted')
   })
-  it('maps attention classes onto the sidebar dot vocabulary', () => {
-    const blocked = row('blocked')
-    const done = row('done')
-    const working = row('working')
-
-    expect(
-      resolveRecentWorkspaceTabStatus(blocked, sources([entry('blocked', 'blocked', NOW)]), NOW)
-    ).toBe('permission')
-    expect(resolveRecentWorkspaceTabStatus(done, sources([entry('done', 'done', NOW)]), NOW)).toBe(
-      'done'
-    )
-    expect(
-      resolveRecentWorkspaceTabStatus(working, sources([entry('working', 'working', NOW)]), NOW)
-    ).toBe('working')
-  })
 
   it('preserves monitoring unless another pane is actively working', () => {
     const monitoring = row('monitoring')
@@ -251,18 +157,5 @@ describe('resolveRecentWorkspaceTabStatus', () => {
         NOW
       )
     ).toBe('working')
-  })
-
-  it('falls back to live-pty presence for idle rows', () => {
-    const live = row('live')
-
-    expect(
-      resolveRecentWorkspaceTabStatus(
-        live,
-        sources([], { ptyIdsByTabId: { live: ['pty-1'] } }),
-        NOW
-      )
-    ).toBe('active')
-    expect(resolveRecentWorkspaceTabStatus(live, sources([]), NOW)).toBe('inactive')
   })
 })

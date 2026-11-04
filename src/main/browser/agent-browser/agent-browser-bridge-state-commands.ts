@@ -15,14 +15,14 @@ import type {
 import { BrowserError } from '../browser-error'
 import { parseShellArgs, stripAgentBrowserTargetArgs } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeInteractionCommands } from './agent-browser-bridge-interaction-commands'
-import { sendGuestCdpCommand } from '../guest-cdp-command'
+import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
 import {
   toBrowserConsoleResult,
   toBrowserNetworkLogResult,
   type AgentBrowserConsoleOutput,
   type AgentBrowserNetworkOutput
 } from './agent-browser-log-entries'
-import { touchEmulationParams } from '../guest-touch-emulation'
+import { touchEmulationParams } from '../cdp/input/guest-touch-emulation'
 
 export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridgeInteractionCommands {
   async cookieGet(
@@ -118,6 +118,12 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
       )
       // Metrics-only resize can leave the compositor at its old size and crop remote screencasts.
       await sendGuestCdpCommand(wc, 'Emulation.setVisibleSize', { width, height }).catch(() => {})
+      this.browserManager.showAgentViewportInPane(target.webContentsId, {
+        width,
+        height,
+        deviceScaleFactor: scale,
+        mobile
+      })
 
       return {
         width,

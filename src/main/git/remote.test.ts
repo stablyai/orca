@@ -4,12 +4,13 @@ const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
 }))
 
-vi.mock('./runner', () => ({
+vi.mock('./command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-import { REBASE_SOURCE_FETCH_TIMEOUT_MS } from '../../shared/git-rebase-source'
-import { clearGitCapabilityStateForTests } from './git-capability-state'
+import { REBASE_SOURCE_FETCH_TIMEOUT_MS } from '../../shared/git/remotes/git-rebase-source'
+import { clearGitCapabilityStateForTests } from './command-runner/git-capability-state'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from './remote'
 
 const REBASE_OPERATION_OPTIONS = {

@@ -1,9 +1,9 @@
 import { realpath } from 'node:fs/promises'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import type { CodexWslRuntimeHookTarget } from './codex-wsl-hook-install-plan'
 import { codexHookService } from './hook-service'
-import { runAsWslUserAct } from '../wsl/wsl-unc-access-gate'
+import { runAsWslUserAct } from '../wsl/filesystem/wsl-unc-access-gate'
 import {
   isAbsolutePosixPathWithoutDotSegments,
   resolveManagedWslCodexHome,

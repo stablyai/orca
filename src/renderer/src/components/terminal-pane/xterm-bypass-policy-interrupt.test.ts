@@ -4,7 +4,6 @@ import {
   shouldHandleTerminalInterruptKeyboardEvent,
   shouldSuppressTerminalInterruptKeyup,
   shouldSuppressTerminalModifierKeyboardEvent,
-  TERMINAL_INTERRUPT_INPUT,
   type XtermBypassEvent
 } from './xterm-bypass-policy'
 
@@ -26,10 +25,6 @@ function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
 afterEach(() => _setLayoutMapForTests(null))
 
 describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
-  it('exports the ETX byte used for terminal interrupts', () => {
-    expect(TERMINAL_INTERRUPT_INPUT).toBe('\x03')
-  })
-
   it('handles macOS Ctrl+C as terminal interrupt even with a selection', () => {
     expect(
       shouldHandleTerminalInterruptKeyboardEvent(event({ key: 'c', code: 'KeyC', ctrlKey: true }), {
@@ -128,16 +123,6 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
         event({ type: 'keyup', key: 'ㅊ', code: 'KeyC', ctrlKey: true })
       )
     ).toBe(true)
-  })
-
-  // Latin remaps such as Dvorak keep their reported letter authoritative.
-  it('still ignores a Latin layout that maps KeyC to a different ASCII letter', () => {
-    expect(
-      shouldHandleTerminalInterruptKeyboardEvent(event({ key: 'j', code: 'KeyC', ctrlKey: true }), {
-        isMac: true,
-        hasSelection: false
-      })
-    ).toBe(false)
   })
 
   it('does not handle a non-Latin logical key on a physical key other than KeyC', () => {

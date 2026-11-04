@@ -8,7 +8,7 @@ import {
   extendWorkspaceCleanupFrozenRowOrder,
   useWorkspaceCleanupRowOrder
 } from './use-workspace-cleanup-row-order'
-import type { WorkspaceCleanupSortState } from '../../../../shared/workspace-cleanup-filter-model'
+import type { WorkspaceCleanupSortState } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 type Row = { worktreeId: string }
 

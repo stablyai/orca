@@ -1,3 +1,4 @@
+import * as gitSpawn from '../../git/command-runner/git-spawn'
 import { describe, expect, it, vi } from 'vitest'
 import { realpath } from 'node:fs/promises'
 import * as folderPathStatus from '../../project-groups/folder-workspace-path-status'
@@ -7,7 +8,6 @@ import {
   OrcaRuntimeService,
   execFileSync,
   getRepoUpstreamMock,
-  gitRunner,
   join,
   mkdir,
   mkdirSync,
@@ -555,7 +555,7 @@ describe('OrcaRuntimeService', () => {
   it('keeps project clone setup on the cloned host-qualified repo', async () => {
     const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-project-clone-'))
     const clonePath = join(destination, 'orca')
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {
@@ -621,7 +621,7 @@ describe('OrcaRuntimeService', () => {
     mkdirSync(existingFolder, { recursive: true })
     execFileSync('git', ['init'], { cwd: existingFolder, stdio: 'ignore' })
     const spawnSpy = vi
-      .spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+      .spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
       .mockImplementation(() => {
         // If the guard regresses, record the attempted clone without reaching the network.
         const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }

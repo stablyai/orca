@@ -1,3 +1,4 @@
+import { getProviderChecksOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
 import React from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getReviewChecksTone } from './worktree-review-helpers'
@@ -86,10 +87,13 @@ export function ReviewStateBadge({
 }
 
 export function ReviewChecksBadge({
-  status
+  status: coarseStatus,
+  checksSummary
 }: {
+  checksSummary?: WorktreeCardPrDisplay['checksSummary']
   status: WorktreeCardPrDisplay['status']
 }): React.JSX.Element | null {
+  const status = coarseStatus ? getProviderChecksOutcome(checksSummary, coarseStatus) : undefined
   if (!status || status === 'neutral') {
     return null
   }
@@ -102,6 +106,16 @@ export function ReviewChecksBadge({
     }
   )
 
+  if (status === 'cancelled') {
+    return (
+      <MetadataStatusBadge
+        label={label}
+        className="border-border bg-muted/30 text-muted-foreground"
+      >
+        <CircleX />
+      </MetadataStatusBadge>
+    )
+  }
   if (status === 'success') {
     return (
       <MetadataStatusBadge
@@ -167,10 +181,13 @@ export function reviewStateLabel(
 }
 
 export function ReviewChecksIndicator({
-  status
+  status: coarseStatus,
+  checksSummary
 }: {
+  checksSummary?: WorktreeCardPrDisplay['checksSummary']
   status: WorktreeCardPrDisplay['status']
 }): React.JSX.Element | null {
+  const status = coarseStatus ? getProviderChecksOutcome(checksSummary, coarseStatus) : undefined
   if (!status || status === 'neutral') {
     return null
   }
@@ -181,7 +198,12 @@ export function ReviewChecksIndicator({
       status: checksLabel(status)
     }
   )
-  const Icon = status === 'success' ? CircleCheck : status === 'failure' ? CircleX : Clock
+  const Icon =
+    status === 'success'
+      ? CircleCheck
+      : status === 'failure' || status === 'cancelled'
+        ? CircleX
+        : Clock
   return (
     <Tooltip>
       <TooltipTrigger asChild>

@@ -283,7 +283,8 @@
       "stoppedManually": "수동으로 중지됨",
       "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
       "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
-      "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트)."
+      "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
+      "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "이 대화에서 계속할 수 있습니다.",
@@ -330,7 +331,10 @@
       "emptyAnswer": "빈 답변",
       "resolved": "해결됨",
       "resolver": "{{device}}에서 답변됨",
-      "unavailable": "선택한 답변을 사용할 수 없습니다."
+      "unavailable": "선택한 답변을 사용할 수 없습니다.",
+      "thisPhone": "이 휴대전화",
+      "computer": "컴퓨터",
+      "otherDevice": "다른 기기"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
@@ -525,6 +529,24 @@
     "agentMessage": {
       "handedOffToAgent": "에이전트에게 넘김",
       "startedAgent": "에이전트 시작됨"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "첨부 파일 응답을 읽을 수 없습니다. 다시 시도하세요.",
+      "incompleteReply": "첨부 파일이 변경되었거나 응답이 불완전합니다. 닫고 다시 시도하세요.",
+      "notText": "이 파일은 텍스트로 미리 볼 수 없습니다. 저장한 후 다른 앱에서 여세요.",
+      "openFailed": "첨부 파일을 열 수 없습니다. 다시 시도하세요.",
+      "hostUpdate": "이 호스트는 아직 텍스트 첨부 파일을 열 수 없습니다. 해당 호스트에서 Orca를 업데이트한 후 다시 시도하세요.",
+      "copyTooLarge": "파일이 너무 커서 복사할 수 없습니다. 대신 저장하세요.",
+      "connectionChanged": "연결이 변경되었습니다. 첨부 파일을 다시 열어 보세요.",
+      "hostChanged": "첨부 파일의 호스트가 변경되었습니다. 닫은 후 다시 여세요.",
+      "readFailed": "첨부 파일을 읽을 수 없습니다. 다시 연결한 후 시도하세요. 파일이 삭제되었거나 변경되었을 수 있습니다.",
+      "copyFrame": "이 첨부 파일을 전체 복사하려면 예정된 휴대전화 업데이트가 필요합니다.",
+      "copyFailed": "첨부 파일을 복사할 수 없습니다. 다시 시도하세요.",
+      "pastedText": "붙여넣은 텍스트",
+      "textAttachment": "텍스트 첨부 파일",
+      "byteSize": "{{size}}바이트",
+      "saveUpdate": "저장 기능은 휴대전화 업데이트에서 제공될 예정입니다.",
+      "fullCopySaveUpdate": "이 첨부 파일의 전체 복사와 저장 기능은 휴대전화 업데이트에서 제공될 예정입니다."
     }
   },
   "common": {
@@ -799,7 +821,8 @@
     },
     "prSidebar": {
       "loading": "PR 로드 중…",
-      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다."
+      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다.",
+      "retryLoading": "PR 로드 다시 시도"
     },
     "protocolBlockScreen": {
       "backToHosts": "호스트로 돌아가기",
@@ -1639,7 +1662,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "현재 브랜치를 확인할 수 없습니다.",
-      "providerUnavailable": "이 제공자에서는 호스팅 PR 패널을 사용할 수 없습니다."
+      "githubRemoteRequired": "이 탭에서 풀 리퀘스트 세부 정보를 보려면 GitHub 원격 저장소가 필요합니다. 지원되는 다른 서비스에서는 변경 사항에서 리뷰를 만들고 브라우저에서 여세요."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "사용자 목록을 불러오지 못했습니다.",
@@ -1834,6 +1857,7 @@
       "attachmentAtMost": "{{agent}}은(는) 메시지 하나에 이미지를 최대 {{limit}}개까지 받을 수 있어 이 메시지가 전송되지 않았습니다.",
       "attachmentEmpty": "이 메시지의 이미지가 비어 있어 메시지가 전송되지 않았습니다.",
       "attachmentInvalid": "이 메시지의 첨부 파일은 에이전트에 보낼 수 없습니다.",
+      "attachmentsExpired": "{{names}}이(가) 만료되었습니다.",
       "attachmentLargerThan": "이 메시지의 이미지가 {{size}}MB보다 커서 메시지가 전송되지 않았습니다.",
       "attachmentNoSource": "이 메시지의 이미지에 보낼 파일이 없어 메시지가 전송되지 않았습니다.",
       "attachmentNotAFile": "이 메시지의 이미지가 파일이 아니어서 메시지가 전송되지 않았습니다.",
@@ -2038,7 +2062,7 @@
     },
     "prActionsEngine": {
       "mergeFailed": "PR을 병합하지 못했습니다.",
-      "refreshFailed": "PR을 새로고침하지 못했습니다."
+      "refreshFailed": "풀 리퀘스트를 새로 고치지 못했습니다."
     },
     "prAiTriageLaunch": {
       "agentStarted": "에이전트 시작됨",
@@ -2419,6 +2443,7 @@
       "queueTooLarge": "대기열에 쌓인 텍스트가 너무 많습니다.",
       "quitTerminalAgent": "여기에서 채팅을 계속하려면 해당 에이전트를 종료하세요.",
       "reattachFile": "제거한 후 다시 첨부하세요.",
+      "reattachFiles": "제거한 후 다시 첨부하세요.",
       "recordFailed": "Orca가 이 내용을 채팅 기록에 저장하지 못했습니다.",
       "recordUnreadable": "Orca가 이 채팅의 저장된 상태를 읽지 못했습니다.",
       "reopenChat": "다시 확인하려면 채팅을 다시 여세요.",
@@ -2645,6 +2670,9 @@
       "title": "음성",
       "toggleMode": "토글",
       "updateFailed": "업데이트하지 못했습니다."
+    },
+    "agents": {
+      "permissionOwnAll": "에이전트 자체 설정"
     }
   },
   "sourceControl": {
@@ -3190,7 +3218,6 @@
       "pipelineJobs_one": "작업 {{count}}개",
       "pipelineJobs_other": "작업 {{count}}개",
       "rerunAll": "모두 재실행",
-      "rerunFailed": "실패한 체크 재실행",
       "subIssueTitle": "하위 이슈 제목",
       "subIssues": "하위 이슈"
     },
@@ -3421,7 +3448,6 @@
       "requestReview": "리뷰 요청",
       "requestReviewers": "리뷰어 요청",
       "rerunAll": "모두 재실행",
-      "rerunFailed": "실패한 체크 재실행",
       "reviewers": "리뷰어",
       "viewFile": "보기"
     },

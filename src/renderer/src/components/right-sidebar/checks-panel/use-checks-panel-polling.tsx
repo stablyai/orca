@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   gitLabPipelineJobsToPRChecks,
   gitLabPipelineToPRCheck
-} from '../../../../../shared/gitlab-pipeline-checks'
+} from '../../../../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey
@@ -208,7 +208,11 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         targetMRNumber,
         targetHeadSha
       )
-      if (isRequestCurrent?.() === false) {
+      // Without commitAsCurrent the caller only reads for the selected review; skip a target the panel doesn't own.
+      if (
+        isRequestCurrent?.() === false ||
+        (!commitAsCurrent && !isCurrentAsyncResult(requestKey))
+      ) {
         return
       }
       if (commitAsCurrent) {

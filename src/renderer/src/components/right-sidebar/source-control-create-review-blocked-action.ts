@@ -1,7 +1,7 @@
 import type {
   HostedReviewCreationBlockedReason,
   HostedReviewCreationEligibility
-} from '../../../../shared/hosted-review'
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { hostedReviewCreateFailureMessage } from './hosted-review-create-failure-copy'
 
 type ClickableBlockedCreateReviewReason = Extract<

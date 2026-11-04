@@ -1,4 +1,4 @@
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-types'
 import type { SessionOptionDescriptor } from '../../native-chat/input/native-chat-session-options'
 import type { TrackedNativeChatSessionOption } from '../../native-chat/input/native-chat-session-option-state'

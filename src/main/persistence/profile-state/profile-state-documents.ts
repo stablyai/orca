@@ -1,7 +1,6 @@
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
 import { withProfileStateReadSnapshot } from './profile-state-read-snapshot'
 import type Database from '../../sqlite/sync-database'
-import { readCurrentAutomationRunsState } from './profile-state-automation-runs-storage'
 import {
   PROFILE_STATE_META_LEGACY_JSON_ACCEPTANCE,
   PROFILE_STATE_DOCUMENT_VERSION,
@@ -94,7 +93,6 @@ export function importProfileStateJson(
     if (options.expectedRevision !== undefined && actualRevision !== options.expectedRevision) {
       throw new ProfileStateRevisionConflictError(options.expectedRevision, actualRevision)
     }
-    readCurrentAutomationRunsState(db, actualRevision)
     const revision = actualRevision + 1
     clearProfileStateAutomationRuns(db)
     db.exec('DELETE FROM profile_state_documents')

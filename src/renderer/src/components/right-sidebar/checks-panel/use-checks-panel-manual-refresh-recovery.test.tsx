@@ -10,7 +10,7 @@ import {
   hostedReviewForBranchReply,
   type HostedReviewForBranchArgs,
   type HostedReviewInfo
-} from '../../../../../shared/hosted-review'
+} from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
 import { selectChecksPanelReview } from '../checks-panel-review'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'

@@ -1,4 +1,4 @@
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionWriteFailure } from '../failures/agent-session-write-failure'
 import type {
   SessionOptionDescriptor,

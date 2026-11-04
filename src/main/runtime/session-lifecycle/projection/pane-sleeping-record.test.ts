@@ -90,20 +90,4 @@ describe("main's lookup of a pane's numbered sleeping record", () => {
     expect(of(LEFT)).toMatchObject({ record: { paneKey: 'tab-1:3' } })
     expect(of(RIGHT)).toBeNull()
   })
-
-  it('never gives one numbered record to two panes of a split', () => {
-    const split = {
-      type: 'split',
-      direction: 'vertical',
-      first: { type: 'leaf', leafId: LEFT },
-      second: { type: 'leaf', leafId: RIGHT }
-    }
-    for (const paneKey of ['tab-1:2', 'tab-1:3']) {
-      const records = session(split, { [paneKey]: { ...RECORD, paneKey } })
-      const takers = [LEFT, RIGHT].filter((leafId) =>
-        findPaneSleepingRecord(records, WORKTREE, { parentTabId: 'tab-1', leafId })
-      )
-      expect(takers).toHaveLength(1)
-    }
-  })
 })

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { createDefaultWorkspaceCleanupBrowseState } from '../../../shared/workspace-cleanup-browse-state'
+import { createDefaultWorkspaceCleanupBrowseState } from '../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
   closeTestStores,
   createSqliteTestStore,

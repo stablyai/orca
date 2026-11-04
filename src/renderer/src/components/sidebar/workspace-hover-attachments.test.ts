@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { getWorkspaceHoverAttachments } from './workspace-hover-attachments'
 const workspace: Worktree = {
   id: 'repo::/repo/feature',

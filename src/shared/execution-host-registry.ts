@@ -1,4 +1,7 @@
-import type { RuntimeEnvironmentStatus, RuntimeHostBlockedReason } from './runtime-host-status'
+import type {
+  RuntimeEnvironmentStatus,
+  RuntimeHostBlockedReason
+} from './remote-runtime/host-status/runtime-host-status'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
@@ -16,7 +19,7 @@ import { evaluateRuntimeCompat, type RuntimeCompatVerdict } from './protocol-com
 import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION, RUNTIME_PROTOCOL_VERSION } from './protocol-version'
 import type { RuntimeStatus } from './runtime-types'
 import type { SshConnectionState, SshConnectionStatus } from './ssh-types'
-import type { RuntimeEnvironmentSource } from './runtime-environments'
+import type { RuntimeEnvironmentSource } from './remote-runtime/host-catalog/runtime-environments'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
 import {

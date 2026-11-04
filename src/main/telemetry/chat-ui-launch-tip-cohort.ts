@@ -45,14 +45,7 @@ export function ensureChatUiLaunchTipCohort(store: Store): ChatUiLaunchTipCohort
       return undefined
     }
     const draw = randomInt(10)
-    const cohort: ChatUiLaunchTipCohort =
-      draw < 7
-        ? 'control'
-        : draw === 7
-          ? 'treatment-center'
-          : draw === 8
-            ? 'treatment'
-            : 'treatment-live-switch'
+    const cohort: ChatUiLaunchTipCohort = draw < 7 ? 'control' : 'treatment'
     const targeting =
       cohort === 'control' ? undefined : assignTargeting(settings.agentDefaultSurface)
     store.updateSettings({

@@ -4,7 +4,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
 } from '../../shared/agent-session/agent-session-background-task-wire'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   observeCodexExecutionFrame,
   readCodexBackgroundTaskFrame,

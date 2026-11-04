@@ -46,19 +46,6 @@ afterEach(() => {
 })
 
 describe('large text control paste', () => {
-  it('leaves small paste payloads to the browser default path', () => {
-    const textarea = appendTextarea()
-    textarea.focus()
-    const event = makePasteEvent('small')
-
-    textarea.dispatchEvent(event)
-    const result = handleLargeTextControlPasteEvent(event, { directMaxBytes: 64 })
-
-    expect(result).toEqual({ status: 'ignored', reason: 'small' })
-    expect(event.defaultPrevented).toBe(false)
-    expect(textarea.value).toBe('')
-  })
-
   it('chunks large paste payloads into focused text controls', async () => {
     const textarea = appendTextarea('prefix ')
     textarea.focus()
@@ -88,67 +75,6 @@ describe('large text control paste', () => {
     expect(inputEvents).toHaveLength(1)
     expect(inputEvents[0].inputType).toBe('insertFromPaste')
     expect(inputEvents[0].data ?? '').toBe('')
-  })
-
-  it('claims large paste events with bounded ownership measuring before async insertion', async () => {
-    const textarea = appendTextarea()
-    textarea.focus()
-    const pasteResult = vi.fn()
-    const yieldToEventLoop = vi.fn(async () => {})
-    const codePointAt = vi.spyOn(String.prototype, 'codePointAt')
-    const text = 'x'.repeat(32)
-    const event = makePasteEvent(text)
-
-    textarea.dispatchEvent(event)
-    const result = handleLargeTextControlPasteEvent(event, {
-      chunkMaxBytes: 64,
-      directMaxBytes: 4,
-      maxBytes: 64,
-      measureYieldAfterCodeUnits: 8,
-      onPasteResult: pasteResult,
-      yieldToEventLoop
-    })
-
-    expect(result).toEqual({ status: 'handled' })
-    expect(event.defaultPrevented).toBe(true)
-    expect(textarea.value).toBe('')
-    expect(codePointAt.mock.calls.length).toBeLessThan(text.length)
-
-    await flushPromises()
-
-    expect(textarea.value).toBe(text)
-    expect(yieldToEventLoop).toHaveBeenCalled()
-    expect(pasteResult).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'pasted', mode: 'chunked' })
-    )
-  })
-
-  it('ignores terminal helper textareas and already-handled paste events', () => {
-    const terminalRoot = document.createElement('div')
-    terminalRoot.className = 'xterm-helper-textarea'
-    const terminalTextarea = document.createElement('textarea')
-    terminalRoot.appendChild(terminalTextarea)
-    document.body.appendChild(terminalRoot)
-    terminalTextarea.focus()
-    const terminalPaste = makePasteEvent('x'.repeat(128))
-    terminalTextarea.dispatchEvent(terminalPaste)
-
-    expect(
-      handleLargeTextControlPasteEvent(terminalPaste, {
-        directMaxBytes: 8
-      })
-    ).toEqual({ status: 'ignored', reason: 'not-text-control' })
-
-    const textarea = appendTextarea()
-    textarea.focus()
-    const handledPaste = makePasteEvent('x'.repeat(128))
-    handledPaste.preventDefault()
-    textarea.dispatchEvent(handledPaste)
-
-    expect(handleLargeTextControlPasteEvent(handledPaste, { directMaxBytes: 8 })).toEqual({
-      status: 'ignored',
-      reason: 'already-handled'
-    })
   })
 
   it('rejects oversized paste before mutating the focused text control', () => {

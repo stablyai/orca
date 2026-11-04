@@ -12,12 +12,13 @@ import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acqu
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
+import { AgentSessionStartEndings } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
 import {
   createCodexTurnOpenWaits,
   type CodexTurnOpenWaits
 } from './codex-structured-turn-open-wait'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexSkillReport } from './codex-structured-skill-report'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
@@ -30,7 +31,7 @@ import type {
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { StructuredAgentSessionProviderOpen } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
-import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexSandboxPolicy } from './codex-structured-sandbox-policy'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
@@ -150,6 +151,7 @@ export type CodexSession = {
   /** Provider facts from this acquisition, not another copy of the chat's selected mode. */
   permissions?: {
     acquiredMode: AgentChatPermissionChoice
+    appliedMode?: AgentChatPermissionChoice
     acquiredSandbox?: CodexSandboxPolicy
     launchSandboxIntact: boolean
     cwd: string
@@ -255,6 +257,8 @@ export function createCodexAcquisitionAttempt(): CodexAcquisitionAttempt {
 
 export class CodexAcquisitionRegistry {
   private readonly attempts = new Map<string, CodexAcquisitionAttempt>()
+  /** Children that ended on their own before they were ready answer for it, open included. */
+  readonly endings = new AgentSessionStartEndings()
   private closing = false
 
   get size(): number {
@@ -315,6 +319,7 @@ export class CodexAcquisitionRegistry {
 
   close(): void {
     this.closing = true
+    this.endings.clear()
   }
 }
 

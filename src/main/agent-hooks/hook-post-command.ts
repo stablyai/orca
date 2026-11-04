@@ -1,5 +1,5 @@
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
-import { ORCA_HOOK_RAW_JSON_TRANSPORT } from '../../shared/agent-hook-types'
+import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { ORCA_HOOK_RAW_JSON_TRANSPORT } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 
 // Older curl needs C numeric parsing; keep the parent script's UTF-8 locale unchanged.
 export function posixCurlCommand(curlCommand = 'curl'): string {
@@ -12,6 +12,8 @@ export function buildPosixAgentHookPostCommand(
 ): string[] {
   const curlCommand = posixCurlCommand(options.curlCommand ?? 'curl')
   const indent = options.indent ?? '  '
+  // Only Claude's capture sets this; the host checks the attachment itself before trusting it.
+  const tmux = source === 'claude'
   // Names the decision format the script prints; absent, Orca never waits on plugins.
   const decision = options.decisionHeaderVar
     ? [`  ${indent}-H "X-Orca-Hook-Decision: \${${options.decisionHeaderVar}:-}" \\`]
@@ -28,6 +30,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}-H "X-Orca-Agent-Hook-Meta-Encoding: base64" \\`,
     `  ${indent}-H "X-Orca-Agent-Hook-Meta: \${orca_hook_metadata}" \\`,
     `  ${indent}-H "X-Orca-Agent-Process: \${orca_agent_process:-}" \\`,
+    ...(tmux ? [`  ${indent}-H "X-Orca-Tmux-Pane: \${orca_tmux_pane:-}" \\`] : []),
     ...decision,
     `  ${indent}--data-binary @-`,
     'else',
@@ -44,6 +47,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}--data-urlencode "env=\${ORCA_AGENT_HOOK_ENV}" \\`,
     `  ${indent}--data-urlencode "version=\${ORCA_AGENT_HOOK_VERSION}" \\`,
     `  ${indent}--data-urlencode "agentProcess=\${orca_agent_process:-}" \\`,
+    ...(tmux ? [`  ${indent}--data-urlencode "tmuxPane=\${orca_tmux_pane:-}" \\`] : []),
     `  ${indent}--data-urlencode "payload@-"`,
     'fi'
   ]

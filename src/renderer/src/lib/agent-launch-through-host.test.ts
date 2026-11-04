@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
-import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
-import { resolveAgentSessionOptionLaunch } from '../../../shared/agent-session/options/agent-session-option-launch'
-import { terminalSessionOptionInputs } from '../../../shared/tui-agent-launch-command'
+
+import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => ({
@@ -89,13 +90,60 @@ describe('a desktop AI-button launch', () => {
     })
   })
 
-  // Nothing reads a click's launch record, so its launch carries no operation and writes none.
-  it('names no operation, and each click has its own pane', () => {
-    const first = launch().tabId
-    const second = launch().tabId
-    expect(queuedLaunch(first)?.launch).not.toHaveProperty('operationId')
-    expect(second).not.toBe(first)
+  it('carries the source-owned Terminal base and exact raw bytes through the real generic pane wire and startup', () => {
+    const raw = `-c 'model="true"'  --search`
+    const projection = projectSourceControlActionLaunch(
+      {
+        agentArgs: raw,
+        launchPreferences: {
+          agentId: 'codex',
+          modelSelection: {
+            base: 'default',
+            options: { effort: { agentId: 'codex', value: 'high' } }
+          }
+        }
+      },
+      'codex',
+      { basePrompt: 'Fix checks' }
+    )
+    const { tabId } = launchAgentThroughHost({
+      agent: 'codex',
+      worktreeId: WT,
+      prompt: 'Fix checks',
+      ...projection
+    })
+    const wire = queuedLaunch(tabId)!.launch
+    expect(wire).toEqual({
+      agent: 'codex',
+      target: { kind: 'existing', worktree: `id:${WT}` },
+      agentArgs: raw,
+      sessionOptions: { effort: 'high' }
+    })
+    const startup = buildAgentStartupPlan({
+      ...resolveAgentStartupPlanInputs({
+        agent: wire.agent,
+        settings: { agentCmdOverrides: { codex: 'cx' } },
+        agentArgs: wire.agentArgs,
+        sessionOptions: wire.sessionOptions,
+        platform: 'linux',
+        shell: 'posix',
+        isRemote: false
+      }),
+      prompt: '',
+      allowEmptyPromptLaunch: true
+    })
+    expect(startup?.launchCommand).toBe(
+      `cx '-c' 'model="true"' '--search' '-c' 'model_reasoning_effort=high'`
+    )
+    expect(startup?.launchConfig.agentArgs).toBe(raw)
+    expect(JSON.stringify(store.getState().pendingStartupByTabId[tabId])).not.toContain(
+      'chatSessionOptions'
+    )
+    expect(JSON.stringify(store.getState().tabsByWorktree[WT])).not.toContain('chatLaunchOptions')
+    settleAgentLaunchPaneStart(tabId, launchTab(tabId)!.agentLaunchPane!.leafId, 'pty-proof')
   })
+
+  // Nothing reads a click's launch record, so its launch carries no operation and writes none.
 
   it("says the agent started once its pane's spawn returns, and not when main says it failed", async () => {
     const started = launch()
@@ -116,33 +164,7 @@ describe('a desktop AI-button launch', () => {
   })
 
   // The own pane's chain, as main plans it: string wire, the agent's strict preferences, the host.
-  it('keeps saved Cursor booleans to the terminal model, same-scope or yielding to own args', () => {
-    const argv = (sessionOptions: Record<string, string | boolean>) => {
-      const { tabId } = launchAgentThroughHost({
-        agent: 'cursor',
-        worktreeId: WT,
-        prompt: 'p',
-        sessionOptions
-      })
-      const preferences = toAgentLaunchPreferences(
-        queuedLaunch(tabId)?.launch.sessionOptions,
-        'cursor'
-      )
-      return resolveAgentSessionOptionLaunch('cursor', { ...preferences }, [], false).args.join(' ')
-    }
-    const thinking = { model: 'claude-opus-4-8', thinking: 'true', effort: 'high' }
-    const yielded = terminalSessionOptionInputs({
-      agent: 'cursor',
-      sessionOptions: thinking,
-      yieldToAgentArgs: true,
-      agentArgs: '--force',
-      shell: 'posix'
-    }).sessionOptions!
-    expect(argv(thinking)).toBe('--model claude-opus-4-8-thinking-high')
-    expect(argv(yielded)).toBe('--model claude-opus-4-8-thinking-high')
-    expect(argv({ ...thinking, thinking: false })).toBe('--model claude-opus-4-8-high')
-    expect(argv({ model: 'gpt-5.3-codex', fastMode: true })).toBe('--model gpt-5.3-codex-fast')
-  })
+
   it('keeps inactive launches in their requested group without revealing Terminal', () => {
     const initial = store.getState()
     const activeTabId = initial.activeTabId

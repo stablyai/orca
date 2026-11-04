@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { getAgentLabel as getSharedAgentLabel } from './agent-title-identity'
+import { getAgentLabel as getSharedAgentLabel } from './agent-status/title/agent-title-identity'
 import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
-import { isOpenCodeNativeTitle } from './opencode-terminal-title'
+import { isOpenCodeNativeTitle } from './agent-status/title/providers/opencode-terminal-title'
 import {
   isClaudeIdentityFrameTitle,
-  isGrokRotatingWorkingTitle,
+  isGrokRotatingWorkingTitle
+} from './agent-status/title/agent-title-core'
+import {
   resolveExplicitTerminalTitleAgentType,
   resolveTerminalTitleAgentType,
   resolveTerminalTitlePolicyAgentType

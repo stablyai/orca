@@ -214,7 +214,7 @@ function verifySkillsCliRuntime(outDir, artifactRoot = dirname(outDir), options 
   }
   const list = parseJson('skills list', runCli(absoluteOutDir, ['skills', 'list', '--json']))
   const topicNames = new Set(list.topics?.map((topic) => topic.name))
-  for (const topic of ['orca-cli', 'computer-use']) {
+  for (const topic of ['orca-cli', 'orca-computer-use']) {
     if (!topicNames.has(topic)) {
       throw new Error(`[verify-skills-cli-runtime] skills list omitted ${topic}`)
     }

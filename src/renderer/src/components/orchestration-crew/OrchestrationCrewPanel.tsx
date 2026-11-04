@@ -74,6 +74,10 @@ function sortCrewRows(rows: readonly OrchestrationCrewRow[]): OrchestrationCrewR
     .map(({ row }) => row)
 }
 
+function disclosureKey(section: string, party: string): string {
+  return JSON.stringify([section, party])
+}
+
 function crewTabSummary(
   workers: number,
   looks: readonly CrewRowLook[]
@@ -107,12 +111,16 @@ function crewTabSummary(
 }
 
 export function OrchestrationCrewPanel(props: PanelProps): React.JSX.Element | null {
-  const snapshot = useOrchestrationCrew(props.target, props.party)
+  const snapshot = useOrchestrationCrew(
+    props.target,
+    props.isVisible === false ? null : props.party
+  )
   return <CrewPanelContent {...props} snapshot={snapshot} />
 }
 
 export function CrewPanelContent({
   target,
+  party,
   canMention,
   mention,
   snapshot,
@@ -120,10 +128,35 @@ export function CrewPanelContent({
   surface = 'chat'
 }: PanelProps & { snapshot: OrchestrationCrewSnapshot }): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
+  const scope = JSON.stringify([
+    target.kind,
+    target.kind === 'environment' ? target.environmentId : null,
+    party
+  ])
+  const [disclosures, setDisclosures] = useState(() => ({ scope, keys: new Set<string>() }))
+  const toggleDisclosure = useCallback(
+    (key: string) => {
+      setDisclosures((previous) => {
+        const keys = new Set(previous.scope === scope ? previous.keys : [])
+        if (keys.has(key)) {
+          keys.delete(key)
+        } else {
+          keys.add(key)
+        }
+        return { scope, keys }
+      })
+    },
+    [scope]
+  )
   const root = useRef<HTMLDivElement>(null)
   const tab = useRef<HTMLButtonElement>(null)
   const collapse = useRef<HTMLButtonElement>(null)
   const restore = useRef(false)
+  const closePanel = useCallback(() => {
+    restore.current = true
+    setOpen(false)
+    setDisclosures({ scope, keys: new Set() })
+  }, [scope])
   // Hosts pass a new mention function each render; rows get one stable function so their memo holds.
   const latestMention = useRef(mention)
   useLayoutEffect(() => {
@@ -148,6 +181,26 @@ export function CrewPanelContent({
     }),
     [snapshot]
   )
+  const currentDisclosureKeys = useMemo(
+    () =>
+      new Set([
+        ...managedBy.map((row) => disclosureKey('Managed by', row.partyKey)),
+        ...managing.map((row) => disclosureKey('Managing', row.partyKey)),
+        ...talkingWith.map((row) => disclosureKey('Talking with', row.partyKey))
+      ]),
+    [managedBy, managing, talkingWith]
+  )
+  if (disclosures.scope !== scope) {
+    setDisclosures({ scope, keys: new Set() })
+  } else if (
+    snapshot.status === 'ok' &&
+    [...disclosures.keys].some((key) => !currentDisclosureKeys.has(key))
+  ) {
+    setDisclosures({
+      scope,
+      keys: new Set([...disclosures.keys].filter((key) => currentDisclosureKeys.has(key)))
+    })
+  }
   // One row per party: a party in two sections shows once in the tab and keeps one look.
   const parties = useMemo(() => {
     const seen = new Set<string>()
@@ -182,19 +235,22 @@ export function CrewPanelContent({
       }
       event.preventDefault()
       event.stopPropagation()
-      restore.current = true
-      setOpen(false)
+      closePanel()
     }
     pane.addEventListener('keydown', onKeyDown, true)
     return () => pane.removeEventListener('keydown', onKeyDown, true)
-  }, [open, visible])
+  }, [open, visible, closePanel])
   if (!visible) {
     return null
   }
   const summary = crewTabSummary(managing.length, looks)
   const changeOpen = (value: boolean) => {
+    if (!value) {
+      closePanel()
+      return
+    }
     restore.current = true
-    setOpen(value)
+    setOpen(true)
   }
   const sections = [
     ['Managed by', translate('components.orchestrationCrew.managedBy', 'Managed by'), managedBy],
@@ -213,7 +269,7 @@ export function CrewPanelContent({
       data-pane-prevent-terminal-focus
       data-native-chat-typing-redirect-ignore="true"
       // z-15: above terminal text and the chat rail, below the pane title strip (z-20) so its buttons stay usable.
-      className="pointer-events-none absolute inset-0 z-[15] text-foreground"
+      className="pointer-events-none absolute inset-0 z-[15] text-foreground [--crew-border:color-mix(in_srgb,var(--foreground)_20%,var(--border))] [--crew-surface:color-mix(in_srgb,var(--foreground)_7%,var(--card))]"
       onMouseDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         event.stopPropagation()
@@ -226,7 +282,7 @@ export function CrewPanelContent({
           // (their frame stops there); terminals keep the bottom quarter, where the CLI's prompt sits.
           // The header (and its collapse button) always shows: in a pane too short for both, it wins.
           className={cn(
-            'pointer-events-auto absolute right-2.5 top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] flex min-h-[calc(var(--spacing)*9+2px)] w-78 max-w-[calc(100%-var(--spacing)*5)] flex-col overflow-hidden rounded-[12px] border border-border bg-card text-card-foreground shadow-floating',
+            'pointer-events-auto absolute right-2.5 top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] flex min-h-[calc(var(--spacing)*9+2px)] w-78 max-w-[calc(100%-var(--spacing)*5)] flex-col overflow-hidden rounded-[12px] border border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating',
             surface === 'terminal'
               ? 'max-h-[calc(75%-var(--orca-pane-title-height)-var(--spacing)*2)]'
               : 'max-h-[calc(100%-var(--orca-pane-title-height)-var(--spacing)*4)]'
@@ -274,6 +330,9 @@ export function CrewPanelContent({
                       isVisible={isVisible}
                       canMention={canMention}
                       mention={stableMention}
+                      disclosureKey={disclosureKey(key, row.partyKey)}
+                      expanded={disclosures.keys.has(disclosureKey(key, row.partyKey))}
+                      toggleDisclosure={toggleDisclosure}
                     />
                   ))}
                 </section>
@@ -286,7 +345,7 @@ export function CrewPanelContent({
           <TooltipTrigger asChild>
             <Button
               ref={tab}
-              variant="outline"
+              variant="orchestration-tab"
               size="xs"
               className="pointer-events-auto absolute top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] right-0 max-w-[min(20rem,100%)]"
               aria-label={translate(

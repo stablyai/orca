@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
+import * as terminalThemeSelection from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { resetSystemPrefersDarkSubscriptionForTests } from '../terminal-pane/use-system-prefers-dark'
 import { useNativeChatAppearanceStyle } from './native-chat-appearance-style'
@@ -78,7 +78,7 @@ describe('shared chat appearance hook', () => {
     expect(resolveColors).toHaveBeenCalledTimes(4)
   })
 
-  it('ignores terminal size changes while matching is off', () => {
+  it('ignores terminal size but follows the editor font while matching is off', () => {
     const settings = createGlobalSettingsFixture({ nativeChatAppearance: { fontSize: 18 } })
     const { result, rerender } = renderHook(
       (current: GlobalSettings) => useNativeChatAppearanceStyle(current),
@@ -87,5 +87,7 @@ describe('shared chat appearance hook', () => {
     const style = result.current
     rerender({ ...settings, terminalFontSize: settings.terminalFontSize + 1 })
     expect(result.current).toBe(style)
+    rerender({ ...settings, editorFontFamily: 'D2CodingLigature Nerd Font' })
+    expect(result.current['--chat-code-font-family']).toContain('D2CodingLigature Nerd Font')
   })
 })

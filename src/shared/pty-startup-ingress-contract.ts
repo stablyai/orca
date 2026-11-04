@@ -1,6 +1,6 @@
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
-import type { TerminalOscColorQueryReplyColors } from './terminal-osc-color-reply'
+import type { TerminalOscColorQueryReplyColors } from './terminal/protocol/queries/terminal-osc-color-reply'
 
 export type PtyIngressEmission = {
   data: string

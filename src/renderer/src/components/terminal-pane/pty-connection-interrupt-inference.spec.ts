@@ -14,7 +14,11 @@ import {
   createPane,
   createManager
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
@@ -61,6 +65,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       'handles focused Ctrl+C for %s without guessing Codex cancellation',
       async (agentType) => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -89,7 +95,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
           return { dispose: vi.fn() }
         }) as typeof pane.terminal.onData)
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks)
+        )
         if (!onDataHandler) {
           throw new Error('expected onData handler to be registered')
         }
@@ -136,6 +146,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('clears stale working pane title after inferred interrupt applies', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { resolveWorktreeStatus } = await import('@/lib/worktree-status')
       vi.mocked(window.api.agentStatus.inferInterrupt).mockResolvedValue(true)
       const transport = createMockTransport()
@@ -180,7 +192,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         })
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
@@ -208,6 +224,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('clears unchanged title-only working indicators after acknowledged interrupt input', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -239,7 +257,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         })
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
@@ -256,6 +278,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('does not clear title-only working indicators when interrupt writes are unacknowledged', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       delete transport.sendInputAccepted
       transportFactoryQueue.push(transport)
@@ -276,7 +300,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       }) as typeof pane.terminal.onData)
       const deps = createDeps()
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+      )
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
@@ -294,6 +322,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('infers exact Ctrl+C terminal input when keydown capture misses the press', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -316,7 +346,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         return { dispose: vi.fn() }
       }) as typeof pane.terminal.onData)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks5)
+      )
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
@@ -337,6 +371,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('marks bracketed paste as stale after acknowledged Ctrl+C input', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { pasteTerminalText } = await import('./terminal-bracketed-paste')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
@@ -352,7 +388,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         return { dispose: vi.fn() }
       }) as typeof pane.terminal.onData)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks6)
+      )
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
@@ -366,6 +406,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('infers captured Ctrl+C even when xterm emits an enhanced keyboard sequence', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -390,7 +432,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         return { dispose: vi.fn() }
       }) as typeof pane.terminal.onData)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks7)
+      )
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
@@ -413,6 +459,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('infers interrupt for an explicit working status even if the title is already non-agent', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -442,7 +490,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         return { dispose: vi.fn() }
       }) as typeof pane.terminal.onData)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks8)
+      )
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
@@ -470,6 +522,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('keeps inferred interrupted status after the pane settles on a non-agent title', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -523,7 +577,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         })
       })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
+      )
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
@@ -543,6 +601,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('does not infer exact interrupt input when the transport cannot acknowledge writes', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       delete transport.sendInputAccepted
       transportFactoryQueue.push(transport)
@@ -566,7 +626,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         return { dispose: vi.fn() }
       }) as typeof pane.terminal.onData)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks10)
+      )
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
@@ -580,6 +644,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('removes agent status and pane title on PTY exit after inferred interrupt', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       vi.mocked(window.api.agentStatus.inferInterrupt).mockResolvedValue(true)
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
@@ -611,7 +677,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       }) as typeof pane.terminal.onData)
       const deps = createDeps()
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks11)
+      )
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
@@ -647,6 +717,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks12 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -666,7 +738,11 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         const pane = createPane(1)
         pane.terminal.element = terminalTarget.target
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks12)
+        )
         // Kitty flags 3 report repeat type and disambiguate Escape without the exact-byte fallback.
         for (const { event, data } of [
           { event: keyEvent({ key: 'Escape', repeat: true }), data: '\x1b[27;1:2u' },
@@ -709,6 +785,8 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('removes the terminal key listener on dispose before a remount adds another', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks13 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const firstTransport = createMockTransport()
       const secondTransport = createMockTransport()
       transportFactoryQueue.push(firstTransport, secondTransport)
@@ -719,14 +797,18 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       const firstConnection = connectPanePty(
         pane as never,
         createManager(1) as never,
-        createDeps() as never
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks13)
       )
       expect(terminalTarget.handlers.size).toBe(1)
 
       firstConnection.dispose()
       expect(terminalTarget.handlers.size).toBe(0)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks13)
+      )
       expect(terminalTarget.handlers.size).toBe(1)
       expect(
         terminalTarget.target.addEventListener.mock.calls.filter(([type]) => type === 'keydown')

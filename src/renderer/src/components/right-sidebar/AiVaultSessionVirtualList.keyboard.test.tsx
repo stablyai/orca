@@ -7,7 +7,8 @@ import { useAppStore } from '@/store'
 import { z } from 'zod'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { AgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
@@ -28,7 +29,12 @@ vi.mock('./AiVaultSessionRow', () => ({
 }))
 // The host's side of a resumed chat: it admits the chat, then the launch settles as the test says.
 const launch = vi.hoisted(
-  (): { sessionId: string; settlement: StructuredAgentLaunchSettlement } => ({
+  (): {
+    sessionId: string
+    settlement: StructuredAgentLaunchSettlement
+    /** The host's admission refused before any tab opened. */
+    refusedBeforeSurface?: Error
+  } => ({
     sessionId: 'new',
     settlement: { kind: 'structured', sessionId: 'new' }
   })
@@ -57,7 +63,9 @@ vi.mock(
     }) => ({
       sessionId: null,
       tab: null,
-      settlement: args.openAdmitted()?.settlement,
+      settlement: launch.refusedBeforeSurface
+        ? Promise.resolve({ kind: 'failed', error: launch.refusedBeforeSurface })
+        : args.openAdmitted()?.settlement,
       cancel: vi.fn()
     })
   })
@@ -439,6 +447,45 @@ describe('Session History keyboard selection', () => {
       expect(toastError).toHaveBeenCalledTimes(refused ? 1 : 0)
     }
   )
+
+  // Another terminal runs the conversation: the host refuses before any tab opens, so the one
+  // notice is the toast and this chat stays.
+  it('keeps this chat and toasts once when the host refuses the resume before anything opens', async () => {
+    const workspaceId = 'repo-1::/repo'
+    useAppStore.setState(useAppStore.getInitialState(), true)
+    useAppStore.setState({ activeWorktreeId: workspaceId })
+    useAppStore.getState().createUnifiedTab(workspaceId, 'agent-session', {
+      id: 'old',
+      entityId: 'old',
+      executionHostId: LOCAL_EXECUTION_HOST_ID,
+      agentSessionAgent: 'claude'
+    })
+    main = await drawTabsFromMain(useAppStore)
+    const dismiss = vi.fn()
+    launch.refusedBeforeSurface = new StructuredAgentSessionCreateRefusalError(
+      'agent_session_conflict',
+      'agent_session_conflict',
+      { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
+    )
+    try {
+      await resumeHere.resumeAiVaultSessionHere({
+        session: session(0),
+        here: { tabId: 'old', workspaceId, agent: 'claude', dismiss, confirm: vi.fn() },
+        actions: { canJumpToOriginalPane: false, resumeInNewChatWorkspaceId: workspaceId },
+        jump: vi.fn()
+      })
+      await main?.settle()
+    } finally {
+      launch.refusedBeforeSurface = undefined
+    }
+    expect(useAppStore.getState().groupsByWorktree[workspaceId]?.[0]?.tabOrder).toEqual(['old'])
+    expect(dismiss).not.toHaveBeenCalled()
+    expect(toastError.mock.calls).toEqual([
+      [
+        'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.'
+      ]
+    ])
+  })
 
   it('follows the chat the host says holds the row: this one, another open one, or a closed one', async () => {
     const workspaceId = 'repo-1::/repo'

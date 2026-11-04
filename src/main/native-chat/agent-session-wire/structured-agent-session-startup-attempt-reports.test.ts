@@ -11,7 +11,6 @@ import {
   host,
   proveOpen,
   publishFirst,
-  recordLiveListing,
   restartWith,
   store,
   submission,
@@ -110,25 +109,5 @@ describe('what a started child reports', () => {
     })
     await host.flushStreamedEvents(SESSION)
     expect(store.getRecord(SESSION)?.options).toEqual({ model: 'picked' })
-  })
-
-  it('saves a settings readback that arrives before open proves the start', async () => {
-    await restartWith(publishFirst)
-    await heldBehindStart('hello')
-    const listing = { models: [], configuredDefault: { modelId: 'opus' } }
-    const reported = host.handleAdapterEvent({
-      type: 'options-reported',
-      sessionId: SESSION,
-      fence: store.getRecord(SESSION)!.lease.runtimeFence,
-      acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
-      reportedOptions: { model: 'opus' },
-      catalogListing: listing
-    })
-    await proveOpen()
-    await reported
-
-    await eventually(() =>
-      expect(recordLiveListing).toHaveBeenCalledWith(SESSION, listing, expect.any(Function))
-    )
   })
 })

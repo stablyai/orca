@@ -153,16 +153,33 @@ describe('creating a tab directly into a new split', () => {
       ).toEqual(layoutProjection(chained.store.getState(), chained.sourceGroupId, chainedGroupId!))
     }
   )
+})
 
-  it('records the pane interaction the empty split used to record', () => {
+describe('creating a tab shown in another pane', () => {
+  it('shows the new tab in its pane without making that pane the active one', () => {
     const { store, sourceGroupId } = seededStore()
-    const recordFeatureInteraction = vi.fn()
-    store.setState({ recordFeatureInteraction })
-
-    store.getState().createTab(WT, undefined, undefined, {
-      split: { ...SPLIT, sourceGroupId }
+    const browserGroupId = store
+      .getState()
+      .createEmptySplitGroup(WT, sourceGroupId, 'right', { activate: false })!
+    store.getState().createUnifiedTab(WT, 'browser', {
+      id: 'browser-old',
+      targetGroupId: browserGroupId,
+      activate: false
+    })
+    store.getState().createUnifiedTab(WT, 'browser', {
+      id: 'browser-new',
+      targetGroupId: browserGroupId,
+      activate: false,
+      showInGroup: true
     })
 
-    expect(recordFeatureInteraction).toHaveBeenCalledWith('terminal-panes')
+    const state = store.getState()
+    expect(state.groupsByWorktree[WT].find((g) => g.id === browserGroupId)?.activeTabId).toBe(
+      'browser-new'
+    )
+    expect(state.activeGroupIdByWorktree[WT]).toBe(sourceGroupId)
+    expect(
+      state.unifiedTabsByWorktree[WT].find((tab) => tab.id === 'browser-new')?.lastFocusedAt
+    ).toBeUndefined()
   })
 })

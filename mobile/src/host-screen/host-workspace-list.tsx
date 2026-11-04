@@ -185,7 +185,7 @@ export function HostWorkspaceList({
           scrollEventThrottle={16}
           sections={sections}
           extraData={colorScheme}
-          keyExtractor={(w) => w.sectionListKey ?? getWorktreeRowIdentity(w)}
+          keyExtractor={({ row, view }) => view.sectionListKey ?? getWorktreeRowIdentity(row)}
           stickySectionHeadersEnabled={false}
           // Why: keep the search IME up while tapping clear.
           keyboardShouldPersistTaps="handled"
@@ -275,20 +275,21 @@ export function HostWorkspaceList({
               colors={[colors.textSecondary]}
             />
           }
-          renderItem={({ item }) => (
+          renderItem={({ item: { row: item, view } }) => (
             <WorktreeListRow
               item={item}
+              view={view}
               isReadOnly={isReadOnly}
               now={now}
               status={getWorktreeDotStatus(item)}
               repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
               repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
-              hideRepo={state.view.groupBy === 'repo' && !item.showProjectName}
+              hideRepo={state.view.groupBy === 'repo' && !view.showProjectName}
               cardDetails={cardDetails}
               agentActivityDisplayMode={state.view.agentActivityDisplayMode}
               onPress={actions.openWorktreeSession}
               onAgentPress={actions.openWorktreeSession}
-              statusLive={connState === 'connected' && !item.hostContextHealthLabel}
+              statusLive={connState === 'connected' && !view.hostContextHealthLabel}
               onLongPress={
                 item.workspaceKind === 'folder-workspace' ? undefined : state.setActionTarget
               }

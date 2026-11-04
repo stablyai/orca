@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { DiffSection } from '../../diff-section-types'
 import type { CombinedDiffFileTreeMode } from '../resolve-changes/combined-diff-section-identity'
 import { handleCombinedDiffFileTreeNavigation } from './combined-diff-file-tree-navigation'

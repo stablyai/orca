@@ -1,5 +1,5 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 
 export type PetAnimationName =
   | 'idle'

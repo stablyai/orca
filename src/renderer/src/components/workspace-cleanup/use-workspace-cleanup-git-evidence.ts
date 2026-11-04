@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import { selectWorkspaceCleanupGitEvidenceTargets } from './workspace-cleanup-git-evidence'
 import {
-  selectWorkspaceCleanupGitEvidenceTargets,
-  WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
-} from './workspace-cleanup-git-evidence'
+  type WorkspaceCleanupCandidate,
+  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT as WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type WorkspaceCleanupGitEvidenceState = {

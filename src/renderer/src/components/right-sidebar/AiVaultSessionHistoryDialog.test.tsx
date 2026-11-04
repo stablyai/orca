@@ -8,7 +8,10 @@ import { useAppStore } from '@/store'
 import { makeRepo, makeWorktree } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { openAgentSessionHistoryModal } from './agent-session-history-modal'
 import { resolveAiVaultPanelSessionListRequest } from './ai-vault-panel-session-list-request'
-import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 import { AI_VAULT_VIEW_OPTIONS_STORAGE_KEY } from './ai-vault-view-options-persistence'
 

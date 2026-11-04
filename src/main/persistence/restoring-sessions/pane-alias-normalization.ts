@@ -1,5 +1,5 @@
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
-import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { canRegisterPaneKeyAlias, isOpaqueRemintedPaneKey } from '../../../shared/pane-key-alias'
 import {
   isTerminalLeafId,

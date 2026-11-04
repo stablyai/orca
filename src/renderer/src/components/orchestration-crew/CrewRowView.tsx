@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -38,7 +38,10 @@ export const CrewRowView = memo(function CrewRowView({
   target,
   isVisible,
   canMention,
-  mention: mentionRows
+  mention: mentionRows,
+  disclosureKey,
+  expanded,
+  toggleDisclosure
 }: {
   row: OrchestrationCrewRow
   look: CrewRowLook
@@ -46,15 +49,16 @@ export const CrewRowView = memo(function CrewRowView({
   isVisible: boolean
   canMention: boolean
   mention: (rows: OrchestrationCrewRow[]) => void
+  disclosureKey: string
+  expanded: boolean
+  toggleDisclosure: (key: string) => void
 }) {
   // memo() skips the parent re-render a language switch relies on.
   useUiLanguageRevision()
-  // A pending question already shows on the row's second line, so rows start collapsed.
-  const [expanded, setExpanded] = useState(false)
   const open = () => {
     void openOrchestrationCrewAgent(row, target)
   }
-  const toggle = () => setExpanded((value) => !value)
+  const toggle = () => toggleDisclosure(disclosureKey)
   const mention = () => mentionRows([row])
   const mentionable = canMention && Boolean(row.sendAddress)
   return (
@@ -123,7 +127,7 @@ export const CrewRowView = memo(function CrewRowView({
         </p>
       ) : null}
       {expanded ? (
-        <div className="col-span-2 pt-2">
+        <div className="col-span-2 min-w-0 pt-2">
           <CrewRowDetails row={row} />
         </div>
       ) : null}

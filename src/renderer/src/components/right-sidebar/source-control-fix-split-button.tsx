@@ -11,10 +11,10 @@ import { cn } from '@/lib/utils'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
-} from '../../../../shared/source-control-ai-actions'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
+import type { SourceControlAiWriteTarget } from '../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { translate } from '@/i18n/i18n'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
 

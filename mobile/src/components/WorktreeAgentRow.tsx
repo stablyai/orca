@@ -1,4 +1,4 @@
-import { agentNoUpdateLabel } from '../../../src/shared/agent-row-decay-state'
+import { agentNoUpdateLabel } from '../../../src/shared/agent-status/presentation/agent-row-decay-state'
 import { memo, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
@@ -14,7 +14,7 @@ import {
 } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
-import type { AgentChildRowModel } from '../../../src/shared/agent-child-row-model'
+import type { AgentChildRowModel } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
 import { mobileAgentChildRowText } from '../session/mobile-agent-child-row-text'
 
 export const AGENT_ROW_INDENT_PER_DEPTH = 14
@@ -28,6 +28,7 @@ type Props = {
   childRow?: AgentChildRowModel
   isReadOnly?: boolean
   onPress?: (paneKey: string) => void
+  onLongPress?: () => void
   trailing?: ReactNode
 }
 
@@ -40,6 +41,7 @@ function WorktreeAgentRowComponent({
   childRow,
   isReadOnly,
   onPress,
+  onLongPress,
   trailing
 }: Props) {
   useMobileColorScheme()
@@ -83,15 +85,17 @@ function WorktreeAgentRowComponent({
       <Text style={styles.time}>{ts}</Text>
     </View>
   )
-  return childRow ? (
+  return onPress ? (
     <Pressable
       style={({ pressed }) => pressed && pressedStyle}
-      disabled={isReadOnly || !onPress}
+      disabled={isReadOnly}
       accessibilityRole="button"
       onPress={(event) => {
         event.stopPropagation()
-        onPress?.(agent.paneKey)
+        onPress(agent.paneKey)
       }}
+      onLongPress={onLongPress}
+      delayLongPress={400}
     >
       {content}
     </Pressable>

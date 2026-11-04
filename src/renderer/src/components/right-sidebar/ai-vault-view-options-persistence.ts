@@ -5,7 +5,7 @@ import {
   type AiVaultGroup,
   type AiVaultSearchSort,
   type AiVaultSort
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   DEFAULT_AI_VAULT_GROUP,
   DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,

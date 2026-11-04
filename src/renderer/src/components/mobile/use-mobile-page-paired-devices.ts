@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { useMobilePairingDevicePolling } from '../settings/mobile-pairing-device-polling'
+import { useMobilePairingDevicePolling } from '../settings/mobile/pairing/mobile-pairing-device-polling'
 import type { PairedDevice, StepIndex } from './MobileHero'
 import {
   shouldShowPairedAfterDeviceRefresh,

@@ -1,5 +1,8 @@
 import { vi } from 'vitest'
-import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type {
+  AgentLaunchResult,
+  AgentLaunchResult as AgentLaunchPublishedSurface
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
@@ -7,9 +10,9 @@ import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-send-con
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { AgentPaneWorkspace } from '../agent-hooks/agent-transition-detector'
 import type { LaunchedAgentForeground } from '../runtime/launched-agent-foreground'
-import type { AgentLaunchPublishedSurface } from '../agent-launch/agent-launch-execution'
+
 import type { ExternalConversationLinkStore } from './external-conversation-links'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
 import type { AgentSessionResumeResult } from '../runtime/session-lifecycle/projection/resume-agent-session-in-workspace'
 import type { ConversationTerminal } from './external-conversation-seam'
