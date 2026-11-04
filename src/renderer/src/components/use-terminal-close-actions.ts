@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
-import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
+import { isProvenProcessExit } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-pane/terminal-parked-tab-watchers'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'

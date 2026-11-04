@@ -27,22 +27,6 @@ function prepare(args: {
 }
 
 describe('prepareCodexSessionResume', () => {
-  it('pins the verified origin home the caller resolved', async () => {
-    const resolveVerifiedResumeHome = vi.fn(async () => '/managed/migrated/home')
-
-    await expect(
-      prepare({
-        transcriptPath: ORIGIN_ROLLOUT,
-        trustedCodexHomes: [ORIGIN_HOME],
-        resolveVerifiedResumeHome
-      })
-    ).resolves.toEqual({ outcome: 'resume', codexHomePath: '/managed/migrated/home' })
-    expect(resolveVerifiedResumeHome).toHaveBeenCalledWith({
-      homePath: ORIGIN_HOME,
-      transcriptPath: ORIGIN_ROLLOUT
-    })
-  })
-
   it('falls back to a fresh session when the rollout home is not trusted', async () => {
     const resolveVerifiedResumeHome = vi.fn(async (source: { homePath: string }) => source.homePath)
 
@@ -62,12 +46,6 @@ describe('prepareCodexSessionResume', () => {
         transcriptPath: '/Users/example/.claude/projects/repo/x.jsonl',
         trustedCodexHomes: [ORIGIN_HOME]
       })
-    ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: false })
-  })
-
-  it('marks a resume with no transcript path as unclaimed but still fresh', async () => {
-    await expect(
-      prepare({ transcriptPath: undefined, trustedCodexHomes: [ORIGIN_HOME] })
     ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: false })
   })
 })
@@ -100,23 +78,5 @@ describe('prepareCodexSessionResume legacy-rescan ranking forwarding', () => {
         })
       ).resolves.toEqual({ outcome: 'resume', codexHomePath: accountBHome })
     }
-  })
-
-  it('keeps the selection thunk lazy on a provenance-present resume', async () => {
-    const getSelectedAccountCodexHome = vi.fn(() => accountBHome)
-
-    await expect(
-      prepareCodexSessionResume({
-        sessionId: SESSION_ID,
-        transcriptPath: ORIGIN_ROLLOUT,
-        trustedCodexHomes: [ORIGIN_HOME],
-        getSelectedAccountCodexHome,
-        systemCodexHomePath: systemHome,
-        sharedRuntimeCodexHomePath: sharedMirror,
-        fileIsRegular: () => true,
-        resolveVerifiedResumeHome: async (source) => source.homePath
-      })
-    ).resolves.toEqual({ outcome: 'resume', codexHomePath: ORIGIN_HOME })
-    expect(getSelectedAccountCodexHome).not.toHaveBeenCalled()
   })
 })

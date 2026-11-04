@@ -22,7 +22,7 @@ import type { GitConflictOperation } from '../../../../../../shared/git/status/g
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { useSourceControlAi } from './use-ai'
 import type { SourceControlAiControllerParams } from './controller-types'
-import { deferred } from '../../source-control-hook-test-harness'
+import { deferred } from '../panel/source-control-hook-test-harness'
 const { mutationInFlight, detectAgents, launchAgent } = vi.hoisted(() => ({
   mutationInFlight: vi.fn(),
   detectAgents: vi.fn(),

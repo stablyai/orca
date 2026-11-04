@@ -4,7 +4,7 @@ import {
   type FleetAgentStatusEvidence,
   type FleetEvidenceBinding
 } from '../../shared/orchestration-fleet-agent-status-evidence'
-import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { isValidTerminalTabId } from '../../shared/workspace-layout/terminal-tab-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 export type AgentStatusRuntimeEnrichment = Pick<

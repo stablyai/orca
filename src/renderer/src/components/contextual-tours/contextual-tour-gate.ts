@@ -72,13 +72,23 @@ export function hasContextualTourTarget(selector: string, root?: ParentNode): bo
 
 export function getContextualTourStartStepIndex(
   tour: ContextualTour,
-  targetExists: (selector: string) => boolean
+  targetExists: (selector: string) => boolean,
+  isStepDone: (step: ContextualTourStep) => boolean = () => false,
+  resumeStepIndex?: number
 ): number | null {
   const requiredStepIndex = tour.steps.findIndex((step) => step.requiredForStart === true)
-  const startIndex = Math.max(requiredStepIndex, 0)
+  const firstStepIndex = Math.max(resumeStepIndex ?? requiredStepIndex, 0)
+  let startIndex = firstStepIndex
+  // Resume at the first unfinished step; a finished action step never shows again.
+  while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
+    startIndex += 1
+  }
   const step = tour.steps[startIndex]
   if (!step || !targetExists(step.targetSelector)) {
     return null
+  }
+  if (resumeStepIndex !== undefined || startIndex > firstStepIndex) {
+    return startIndex
   }
   return tour.steps.findIndex(
     (candidate, index) => index <= startIndex && targetExists(candidate.targetSelector)
@@ -138,6 +148,7 @@ export function getContextualTourRequestDecision(args: {
   blockingSurfaceVisible: boolean
   targetExists: (selector: string) => boolean
   startStepIndex?: number
+  isStepDone?: (step: ContextualTourStep) => boolean
 }): ContextualTourRequestDecision {
   if (!args.persistedUIReady) {
     return { kind: 'blocked', reason: 'persisted-ui-not-ready' }
@@ -164,10 +175,13 @@ export function getContextualTourRequestDecision(args: {
     return { kind: 'blocked', reason: 'blocking-surface' }
   }
 
-  const stepIndex =
-    args.startStepIndex ?? getContextualTourStartStepIndex(args.tour, args.targetExists)
-  const step = stepIndex === null ? undefined : args.tour.steps[stepIndex]
-  if (stepIndex === null || !step || !args.targetExists(step.targetSelector)) {
+  const stepIndex = getContextualTourStartStepIndex(
+    args.tour,
+    args.targetExists,
+    args.isStepDone,
+    args.startStepIndex
+  )
+  if (stepIndex === null) {
     return { kind: 'blocked', reason: 'missing-start-target' }
   }
   return { kind: 'start', stepIndex }

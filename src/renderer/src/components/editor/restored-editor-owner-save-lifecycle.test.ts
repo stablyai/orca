@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { attachEditorAutosaveController } from './editor-autosave-controller'
-import { requestEditorFileSave } from './editor-autosave'
+import { attachEditorAutosaveController } from './autosave/editor-autosave-controller'
+import { requestEditorFileSave } from './autosave/editor-autosave'
 import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-owner'
-import { withLoadedBaselines } from './editor-autosave-controller-test-fixture'
+import { withLoadedBaselines } from './autosave/editor-autosave-controller-test-fixture'
 
 const mocks = vi.hoisted(() => ({ writeRuntimeFile: vi.fn() }))
 

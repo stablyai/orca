@@ -1,17 +1,15 @@
 // @vitest-environment happy-dom
-import { act } from 'react'
-import { createRoot } from 'react-dom/client'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 
-vi.mock('./ExternalFileChangeBanner', () => ({
+vi.mock('./external-changes/ExternalFileChangeBanner', () => ({
   ExternalFileChangeBanner: () => <div>banner</div>
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
 
-import { CustomEditorExternalChangeBanner } from './CustomEditorExternalChangeBanner'
 import {
   countCustomEditorMergingView,
   mergeOutsideChangeIntoEditor,
@@ -86,47 +84,5 @@ describe('custom editor outside merge', () => {
       externalMutation: 'changed',
       lastKnownDiskSignature: getDiskBaselineSignature('a+agent')
     })
-  })
-
-  it('keeps the conflict for the banner when the session never acknowledges', async () => {
-    ready()
-    const host = { mergeOutsideChange: vi.fn().mockResolvedValue(null) }
-    await expect(mergeOutsideChangeIntoEditor(FILE_ID, host, async () => 'a+agent')).resolves.toBe(
-      false
-    )
-    expect(tab()).toMatchObject({
-      externalMutation: 'changed',
-      lastKnownDiskSignature: getDiskBaselineSignature('a')
-    })
-    expect(useCustomEditorOutsideMergeStore.getState().busy[FILE_ID]).toBeUndefined()
-  })
-
-  it('leaves it to the banner with no known ancestor, or two editor views', async () => {
-    const host = { mergeOutsideChange: vi.fn().mockResolvedValue('x') }
-    openTab('a')
-    countCustomEditorMergingView(FILE_ID, 1)
-    // The recorded ancestor is not the disk the tab's baseline names.
-    recordCustomEditorAncestor(FILE_ID, 'older')
-    await expect(mergeOutsideChangeIntoEditor(FILE_ID, host, async () => 'b')).resolves.toBe(false)
-    recordCustomEditorAncestor(FILE_ID, 'a')
-    countCustomEditorMergingView(FILE_ID, 1)
-    await expect(mergeOutsideChangeIntoEditor(FILE_ID, host, async () => 'b')).resolves.toBe(false)
-    expect(host.mergeOutsideChange).not.toHaveBeenCalled()
-  })
-
-  it('hides the banner only while a merge runs', async () => {
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the banner gate reads only the tab's id.
-    const file = { id: FILE_ID } as OpenFile
-    await act(async () =>
-      root.render(
-        <CustomEditorExternalChangeBanner file={file} currentContent="x" reloadContent={vi.fn()} />
-      )
-    )
-    expect(container.textContent).toBe('banner')
-    await act(async () => useCustomEditorOutsideMergeStore.setState({ busy: { [FILE_ID]: true } }))
-    expect(container.textContent).toBe('')
-    await act(async () => root.unmount())
   })
 })

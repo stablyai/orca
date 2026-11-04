@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
 import { normalizeHookPayload } from './normalize-hook-payload'
-import { makePaneKey } from '../../stable-pane-id'
+import { makePaneKey } from '../../workspace-layout/stable-pane-id'
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 

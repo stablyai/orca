@@ -1,4 +1,4 @@
-import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeWorktreeTerminalCloseResult } from '../../shared/runtime-types'
 
 type WorktreePtyStopVerdict = Pick<

@@ -1,6 +1,7 @@
 import type { AppState } from '../../types'
 import type { FeatureInteractionId } from '../../../../../shared/feature-interactions'
 import { getContextualTour } from '../../../../../shared/contextual-tours'
+import { isPausedActionTour } from './ui-slice-tour-actions'
 import {
   getNextVisibleContextualTourStepIndex,
   hasContextualTourTarget
@@ -9,7 +10,24 @@ import {
 export function getContextualTourProgressionForFeatureInteraction(
   state: AppState,
   id: FeatureInteractionId
-): 'advance' | 'complete' | 'reveal-sidebar-and-advance' | null {
+):
+  | 'advance'
+  | 'complete'
+  | 'reveal-sidebar-and-advance'
+  | 'advance-to-next-step'
+  | 'reveal-sidebar'
+  | null {
+  if (
+    state.activeContextualTourId !== 'workspace-agent-sessions' &&
+    id === 'terminal-pane-split' &&
+    !state.sidebarOpen &&
+    state.contextualToursStartedThisSession.includes('workspace-agent-sessions') &&
+    isPausedActionTour(state, 'workspace-agent-sessions')
+  ) {
+    // A split that finishes while its tip is paused (no tour, or another one, showing) still opens
+    // the sidebar the next tip points at.
+    return 'reveal-sidebar'
+  }
   if (!state.activeContextualTourId) {
     return null
   }
@@ -34,5 +52,8 @@ export function getContextualTourProgressionForFeatureInteraction(
   ) {
     return 'reveal-sidebar-and-advance'
   }
-  return 'complete'
+  // Completing here would mark the tour seen and drop a next tip whose target isn't measurable yet.
+  return state.activeContextualTourStepIndex + 1 < tour.steps.length
+    ? 'advance-to-next-step'
+    : 'complete'
 }

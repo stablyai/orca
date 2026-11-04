@@ -1,4 +1,4 @@
-import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
+import type { PtyCreationDisposition } from '../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { SubprocessHandle } from './session-subprocess-handle'

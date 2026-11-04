@@ -77,6 +77,7 @@ export async function openStructuredAgentSessionProviderChild(
     )
   } finally {
     startupAttempts.disown(sessionId, child)
+    context.publishStatus?.(sessionId)
     attempt.end()
     retire()
   }

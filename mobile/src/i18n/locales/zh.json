@@ -5,10 +5,13 @@
       "connecting": "正在连接到主机…",
       "connectingTo": "正在连接到 {{name}}…",
       "default": "系统默认",
+      "fableWindow": "Fable",
       "hostNotFound": "未找到主机",
       "invalidSnapshot": "主机返回的账户快照无效",
       "loadingAccounts": "正在加载账户…",
       "manageAccountsHint": "请在桌面的“设置 → 账户”中添加账户或重新进行账户身份验证。",
+      "mcpWindow": "MCP",
+      "otherAgents": "其他智能体",
       "refreshAccounts": "刷新账户",
       "sessionWindow": "5小时",
       "switchFailed": "无法切换账户",
@@ -110,13 +113,8 @@
       "tryAgain": "重试"
     },
     "terminalSettings": {
-      "autocomplete": "自动补全与自动纠正",
-      "autocompleteOff": "关闭",
-      "autocompleteOn": "开启",
       "defaultText": "默认（100%）",
       "keepPhoneSize": "保持手机尺寸（默认）",
-      "keyboardInputDescription": "自动补全、自动纠正和拼写建议仅适用于缓冲命令输入。点击键盘上方的双箭头按钮，从实时输入切换到缓冲输入，即可先编辑命令，再点击“发送”。默认关闭，以免改写命令、选项或路径。",
-      "keyboardInputHeading": "键盘输入",
       "largeText": "大（125%）",
       "largerText": "更大（150%）",
       "largestText": "最大（200%）",
@@ -1685,15 +1683,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "关闭键盘",
       "sendKey": "发送 {{label}}",
-      "modifierHint": "应用于下一个按键。双击可保持启用。",
       "typeCharacter": "输入 {{character}}",
       "interrupt": "中断终端",
       "keysModeLabel": "按键模式：输入内容直接发送到终端。切换到消息模式",
       "messageModeLabel": "消息模式：输入后发送。切换到按键模式",
-      "keysMode": "按键",
-      "messageMode": "消息",
       "moreKeys": "更多按键和操作",
-      "showKeyboard": "显示键盘"
+      "showKeyboard": "显示键盘",
+      "dismissKeyboardHint": "隐藏软键盘，并保持当前终端会话打开。",
+      "switchToDesktopMode": "切换到桌面模式",
+      "switchToPhoneMode": "切换到手机模式",
+      "pasteFromClipboard": "从剪贴板粘贴",
+      "paste": "粘贴",
+      "addCustomShortcut": "添加自定义快捷键"
     },
     "activeContent": {
       "createTab": "创建标签页",
@@ -1804,11 +1805,7 @@
     },
     "commandDock": {
       "liveInputHint": "输入的文本会直接发送到当前终端",
-      "liveInputLabel": "终端实时输入",
-      "sendCommand": "发送命令",
-      "messageAgentPlaceholder": "向 {{agent}} 发送消息",
-      "writeCommandPlaceholder": "输入命令后发送",
-      "theAgent": "智能体"
+      "liveInputLabel": "终端实时输入"
     },
     "contentRow": {
       "dismissCreationWarning": "关闭工作区创建警告"
@@ -2490,14 +2487,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "无法保存布局",
       "saveFailedMessage": "此布局暂时生效。请再次选择以重试保存。"
-    },
-    "terminalArrowPad": {
-      "label": "方向键",
-      "hint": "点击一侧可按一次方向键，或按住并拖动以重复",
-      "up": "上",
-      "down": "下",
-      "left": "左",
-      "right": "右"
     },
     "terminalMoreKeys": {
       "sendKey": "发送 {{label}}",

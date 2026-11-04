@@ -1,10 +1,10 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { checkRunDetailsOwnerScope } from '../source-control/checks/check-run-details-owner-scope'
 import type { Tab } from '../tab-types'
-import { normalizeTerminalLayoutPtyOwnership } from '../terminal-layout-pty-ownership'
-import { sanitizeTerminalLayoutPaneTitles } from '../terminal-pane-title-sanitization'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import { normalizeTerminalLayoutPtyOwnership } from './terminal-layout-pty-ownership'
+import { sanitizeTerminalLayoutPaneTitles } from './terminal-pane-title-sanitization'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { childRecord, pickStoredFields } from './stored-record-fields'
 import { readCanonicalPtyOwners, resolveCanonicalPtyClaim } from './legacy-terminal-row-claims'
 import { resolveGroupOrder, type OrderCandidate } from './workspace-layout-load-order'
@@ -22,7 +22,7 @@ import {
 import type { WorkspaceLoadArgs } from './workspace-layout-load-types'
 import { restoresSavedContentTab } from './saved-editor-tab-restore'
 import type { LayoutTab, LayoutTerminalTab, WorkspaceLayout } from './workspace-layout-model'
-import { pruneGroupLayout } from '../workspace-session-terminal-tab-close'
+import { pruneGroupLayout } from '../workspace-session/workspace-session-terminal-tab-close'
 
 function takeRows({ session, key, terminalHomes }: WorkspaceLoadArgs) {
   const rows: TerminalTab[] = []

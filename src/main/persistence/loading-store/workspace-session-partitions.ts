@@ -1,11 +1,11 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { parseWorkspaceSessionSalvaging } from '../../../shared/workspace-session-salvage'
-import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-host-field-ownership'
+import { parseWorkspaceSessionSalvaging } from '../../../shared/workspace-session/workspace-session-salvage'
+import { withoutRedundantGlobalFields } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 
 export function workspaceSessionSalvageLogDetails(result: {
   droppedCount: number

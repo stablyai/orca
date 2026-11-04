@@ -24,6 +24,9 @@ function wireClaudeModel(entry: ListedModel): WireClaudeModel {
     ...(entry.description ? { description: entry.description } : {}),
     isDefault: entry.isDefault,
     efforts: entry.efforts,
+    ...(entry.efforts.some(({ value }) => value === 'xhigh')
+      ? { chatEfforts: [{ value: 'ultracode', label: 'Ultracode' }] }
+      : {}),
     ...(entry.declaredDefaultEffort !== undefined
       ? { declaredDefaultEffort: entry.declaredDefaultEffort }
       : {}),

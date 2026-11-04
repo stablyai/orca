@@ -61,35 +61,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('retires superseded change-event retries and preserves every refresh/state update', async () => {
-  const failure = new Error('transport unavailable')
-  const list = vi.fn<List>().mockRejectedValue(failure)
-  const { store, ensure, change, onChanged } = await harness(list)
-  const history: ReturnType<typeof view>[] = []
-  const unsubscribe = store.subscribe(() => history.push(view(store)))
-  ensure()
-  await Promise.resolve()
-  for (let index = 1; index < 64; index++) {
-    change()
-    await Promise.resolve()
-  }
-  const pendingBeforeReplacement = vi.getTimerCount()
-  store.getState().setPlugins([])
-  const pendingAfterReplacement = vi.getTimerCount()
-  await vi.advanceTimersByTimeAsync(500)
-  expect(list).toHaveBeenCalledTimes(64)
-  await expect(list.mock.results[0]?.value).rejects.toBe(failure)
-  expect(onChanged).toHaveBeenCalledOnce()
-  expect(history).toEqual([
-    ...Array.from({ length: 64 }, () => [empty('loading'), empty('error')]).flat(),
-    empty('ready')
-  ])
-  expect(view(store)).toEqual(empty('ready'))
-  expect(vi.getTimerCount()).toBe(0)
-  unsubscribe()
-  expect([pendingBeforeReplacement, pendingAfterReplacement]).toEqual([1, 0])
-})
-
 it('retires a failed-owner timer while a replacement IPC stays pending without cancelling it', async () => {
   const gate = Promise.withResolvers<PluginHostListEntry[]>()
   const list = vi

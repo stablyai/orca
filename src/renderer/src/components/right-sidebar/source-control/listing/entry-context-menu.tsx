@@ -20,7 +20,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-ow
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import { CONFLICT_RESOLUTION_ICONS, getLocalizedConflictResolutionLabel } from './conflict-label'
-import { OpenInContextSubmenu } from '@/components/right-sidebar/open-in-context-submenu'
+import { OpenInContextSubmenu } from '@/components/file-actions/OpenInContextSubmenu'
 
 type SourceControlEntryContextMenuProps = {
   currentWorktreeId: string

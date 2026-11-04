@@ -1,12 +1,12 @@
-import { titleShowsNoAgent } from './shell-process-detection'
-import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
+import { titleShowsNoAgent } from './agent-status/process/shell-process-detection'
+import { resolveExplicitTerminalTitleAgentType } from './agent-status/title/terminal-title-agent-type'
 import {
   resolveCompatibleAgentTypeForOwner,
   shareCompatibleTitleIdentityGroup
 } from './agent-status/title/agent-title-owner'
 import { isOpenCodeNativeTitle } from './agent-status/title/providers/opencode-terminal-title'
 import { resolvePaneAgentOwnerRecord } from './agent-status/identity/pane-agent-owner'
-import type { TerminalAgent } from './terminal-agent'
+import type { TerminalAgent } from './agent-status/identity/terminal-agent'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import { agentTypeToIconAgent } from './agent-status/presentation/agent-type-icon-agent'
 

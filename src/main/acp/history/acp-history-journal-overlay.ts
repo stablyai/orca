@@ -32,6 +32,7 @@ export class AcpHistoryJournalOverlay {
       epoch,
       item,
       canonicalItemId: (key) => key,
+      presentationRemoved: () => false,
       itemBody: (key) => item(key)?.body ?? null,
       visitItems: visitItemsWithLinkage,
       visitItemsWithLinkage
