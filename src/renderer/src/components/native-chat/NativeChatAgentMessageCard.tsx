@@ -85,7 +85,6 @@ function CompactAgentMessageCard({
   const target = owner?.target ?? runtimeContext?.target
   const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
   const disclosure = useNativeChatDisclosure(`agent-message:${message.id}`, false)
-  const trigger = useRef<HTMLButtonElement>(null)
   const labelId = useId()
   const bodyId = useId()
   const expandable =
@@ -104,7 +103,6 @@ function CompactAgentMessageCard({
       >
         {expandable ? (
           <button
-            ref={trigger}
             type="button"
             aria-labelledby={labelId}
             aria-controls={bodyId}
@@ -186,19 +184,6 @@ function CompactAgentMessageCard({
             timestamp={message.timestamp}
             className="text-muted-foreground @sm:hidden"
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-expanded={disclosure.open}
-            aria-controls={bodyId}
-            onClick={() => {
-              toggle()
-              trigger.current?.focus({ preventScroll: true })
-            }}
-          >
-            {translate('components.native-chat.userMessage.showLess', 'Show less')}
-          </Button>
         </div>
       </NativeChatExpandable>
     </div>
@@ -364,7 +349,7 @@ function AgentMessageAvatar({
       )}
       {!namedSource && view.dot ? (
         // Flex square: the chat line box would stretch a shrink-wrapped badge into a pill.
-        <span className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full border border-border bg-card ring-2 ring-card">
+        <span className="absolute -right-0.5 -bottom-0.5 flex size-3.5 items-center justify-center rounded-full border border-border bg-card">
           <AgentStateDot state={view.dot} size="md" progress={view.progress} />
         </span>
       ) : null}

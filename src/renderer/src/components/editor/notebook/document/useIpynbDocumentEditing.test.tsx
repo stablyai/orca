@@ -2,15 +2,18 @@
 import { useState } from 'react'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPendingEditorBuffer } from '../../editor-pending-flush'
+import { flushPendingEditorBuffer } from '../../save/flush/editor-pending-flush'
 import { parseIpynb } from './ipynb-parse'
 import { useIpynbDocumentEditing } from './useIpynbDocumentEditing'
 import { rebaseIpynbSourceDrafts } from './ipynb-source-drafts'
 import { EMPTY_EDITOR_BUFFER_VIEW_INDEX as NO_SHARING } from '@/store/slices/editor/buffers/editor-buffer-views'
-import type * as StaleViewEdit from '../../editor-stale-view-edit'
-import { notifyStaleViewEditRejected, staleViewEditEpoch } from '../../editor-stale-view-edit'
+import type * as StaleViewEdit from '../../save/flush/editor-stale-view-edit'
+import {
+  notifyStaleViewEditRejected,
+  staleViewEditEpoch
+} from '../../save/flush/editor-stale-view-edit'
 
-vi.mock('../../editor-stale-view-edit', async (importOriginal) => ({
+vi.mock('../../save/flush/editor-stale-view-edit', async (importOriginal) => ({
   ...(await importOriginal<typeof StaleViewEdit>()),
   notifyStaleViewEditRejected: vi.fn(),
   staleViewEditEpoch: vi.fn(() => 0)

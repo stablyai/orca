@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildHeadlessMobileSessionEditorTabs } from '../../src/main/runtime/mobile-session-editor-projection'
-import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../src/shared/workspace-session/workspace-session-state-types'
 import { buildOwnedEditorFileId } from '../../src/renderer/src/store/slices/editor/file-ids/editor-file-ids'
 import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
 import {

@@ -14,7 +14,7 @@ import {
 } from './helpers/terminal'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import { splitMarkerEchoCommand } from './terminal-marker-echo-command'
-import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
+import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 
 function seededRepoPath(): string {
   const repoPath = existsSync(TEST_REPO_PATH_FILE)

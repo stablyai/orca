@@ -7,60 +7,19 @@ describe('dismissTerminalKeyboard', () => {
     const calls: string[] = []
     const clearPendingLiveInputFocus = vi.fn(() => calls.push('clear'))
     const liveInput = { blur: vi.fn(() => calls.push('live-blur')) }
-    const commandInput = { blur: vi.fn(() => calls.push('command-blur')) }
     const dismissKeyboard = vi.fn(() => calls.push('dismiss'))
 
-    dismissTerminalKeyboard({
-      clearPendingLiveInputFocus,
-      commandInput,
-      dismissKeyboard,
-      liveInput
-    })
+    dismissTerminalKeyboard({ clearPendingLiveInputFocus, dismissKeyboard, liveInput })
 
-    expect(calls).toEqual(['clear', 'live-blur', 'command-blur', 'dismiss'])
+    expect(calls).toEqual(['clear', 'live-blur', 'dismiss'])
   })
 
-  it('dismisses the keyboard without a live input handle', () => {
-    const commandInput = { blur: vi.fn() }
-    const dismissKeyboard = vi.fn()
-
-    dismissTerminalKeyboard({
-      clearPendingLiveInputFocus: vi.fn(),
-      commandInput,
-      dismissKeyboard,
-      liveInput: null
-    })
-
-    expect(commandInput.blur).toHaveBeenCalledTimes(1)
-    expect(dismissKeyboard).toHaveBeenCalledTimes(1)
-  })
-
-  it('dismisses the keyboard without a buffered command input handle', () => {
-    const liveInput = { blur: vi.fn() }
-    const dismissKeyboard = vi.fn()
-
-    dismissTerminalKeyboard({
-      clearPendingLiveInputFocus: vi.fn(),
-      commandInput: undefined,
-      dismissKeyboard,
-      liveInput
-    })
-
-    expect(liveInput.blur).toHaveBeenCalledTimes(1)
-    expect(dismissKeyboard).toHaveBeenCalledTimes(1)
-  })
-
-  it('still clears focus and dismisses when both input handles are missing', () => {
+  it('still clears focus and dismisses when the input handle is missing', () => {
     const calls: string[] = []
     const clearPendingLiveInputFocus = vi.fn(() => calls.push('clear'))
     const dismissKeyboard = vi.fn(() => calls.push('dismiss'))
 
-    dismissTerminalKeyboard({
-      clearPendingLiveInputFocus,
-      commandInput: undefined,
-      dismissKeyboard,
-      liveInput: null
-    })
+    dismissTerminalKeyboard({ clearPendingLiveInputFocus, dismissKeyboard, liveInput: null })
 
     expect(calls).toEqual(['clear', 'dismiss'])
   })

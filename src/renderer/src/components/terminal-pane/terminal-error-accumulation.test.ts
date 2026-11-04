@@ -9,7 +9,7 @@ import {
   terminalErrorForPane
 } from './terminal-error-accumulation'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
-import { PTY_ALLOCATION_HINT } from '../../../../shared/terminal-spawn-error-copy'
+import { PTY_ALLOCATION_HINT } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 
 const MULTILINE_ERROR = 'Remote terminal write failed.\nThe remote runtime rejected the request.'
 

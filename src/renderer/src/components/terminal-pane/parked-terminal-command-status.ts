@@ -2,7 +2,7 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { resolvePaneAgentOwner } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { isShellProcess } from '../../../../shared/shell-process-detection'
+import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'

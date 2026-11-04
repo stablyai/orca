@@ -1,6 +1,6 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TerminalModes } from './terminal-modes'
-import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { TerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
 
 export type TerminalSnapshot = {
   snapshotAnsi: string

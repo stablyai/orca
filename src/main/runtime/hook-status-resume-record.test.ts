@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyOutcome } from '../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.

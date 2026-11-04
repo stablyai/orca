@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { expect, type Page } from '@stablyai/playwright-test'
-import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../src/shared/shell/launch/shell-argument-quoting'
 
 export type RuntimeRpcCall = <TResult>(method: string, params: unknown) => Promise<TResult>
 

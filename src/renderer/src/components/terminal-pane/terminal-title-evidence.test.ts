@@ -8,7 +8,7 @@ import { resolvePaneTitleDecision } from './terminal-title-evidence'
 import { installTitleSpawnBell } from './pty-connection/title-spawn-bell'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './pty-connection/confirmed-shell-agent-title'
 
-import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import { isNormalizedAgentTitleStamp } from '../../../../shared/agent-status/title/agent-title-status'
 
 vi.mock('@/store/index', () => ({

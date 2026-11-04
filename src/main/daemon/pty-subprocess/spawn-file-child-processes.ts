@@ -9,7 +9,7 @@ import {
 } from '../../../shared/process-table-index'
 import { hasControllingTty } from '../../../shared/posix-controlling-terminal'
 import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
-import type { PtyChildProcessVerdict } from '../../../shared/terminal-process-inspection'
+import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
 import { readWindowsConsoleAttachedProcessIds } from '../../providers/windows-console-attached-processes'
 import { isWindowsShellAloneInJob } from '../../providers/windows-shell-alone-in-job'

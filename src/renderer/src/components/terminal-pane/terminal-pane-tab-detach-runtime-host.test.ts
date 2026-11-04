@@ -12,7 +12,7 @@ import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 const moveOnHost = vi.hoisted(() => vi.fn())
 const paneMoveHost = vi.hoisted(() => vi.fn())
 const moveLocally = vi.hoisted(() => vi.fn())

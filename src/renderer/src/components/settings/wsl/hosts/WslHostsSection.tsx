@@ -14,7 +14,10 @@ import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-hos
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { LoadingSpinner } from '../../../LoadingSpinner'
-import { AddRemoteHostDialog, type AddRemoteHostMode } from '../../../sidebar/AddRemoteHostDialog'
+import {
+  AddRemoteHostDialog,
+  type AddRemoteHostMode
+} from '../../../sidebar/host-admission/ssh/AddRemoteHostDialog'
 import { HostRemoveDialog } from '../../../sidebar/HostRemoveDialog'
 import {
   openWslHostsExperimentalSetting,

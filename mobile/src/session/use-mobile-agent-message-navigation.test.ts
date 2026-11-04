@@ -135,7 +135,6 @@ function mount(
         activeSessionTabTypeRef: { current: null },
         activeHandleRef: { current: null },
         terminalUnsubsRef: { current: new Map() },
-        defaultTerminalHandlesToLiveInput: vi.fn(),
         subscribeToTerminal: vi.fn(),
         unsubscribeTerminal: vi.fn(),
         showToast: toast

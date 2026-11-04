@@ -6,7 +6,7 @@ import {
   type DispatchInput
 } from './crew-recipient-owner-queries'
 import type { OrcaSessionId } from '../../../../shared/orca-session-address'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { OrchestrationDb } from '../db'
 import {
   createLineageRunningSessionResolver,

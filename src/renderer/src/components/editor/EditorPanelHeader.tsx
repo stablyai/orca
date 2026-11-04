@@ -9,8 +9,8 @@ import EditorViewToggle, {
   CUSTOM_EDITOR_SOURCE_METADATA,
   NOTEBOOK_VIEW_MODE_METADATA,
   SVG_VIEW_MODE_METADATA
-} from './EditorViewToggle'
-import type { CustomEditorToggleValue, EditorToggleValue } from './EditorViewToggle'
+} from './view-mode/EditorViewToggle'
+import type { CustomEditorToggleValue, EditorToggleValue } from './view-mode/EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { DiffNotesSendMenu } from './diff/review/DiffNotesSendMenu'
 import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'

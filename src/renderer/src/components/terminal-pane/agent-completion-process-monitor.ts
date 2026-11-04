@@ -6,11 +6,11 @@ import {
   recognizeAgentProcess,
   type RecognizedAgentProcess
 } from '../../../../shared/agent-status/process/agent-process-recognition'
-import { isShellProcess } from '../../../../shared/shell-process-detection'
+import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import {
   clientOnlyUnverifiableInspection,
   isClientOnlyUnverifiableInspection
-} from '../../../../shared/terminal-process-inspection'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { ProcessMonitorOptions } from './agent-completion-process-types'
 import { createAgentCompletionPollScheduler } from './agent-completion-poll-scheduler'
 import {

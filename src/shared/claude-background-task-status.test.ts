@@ -12,7 +12,7 @@ import {
 } from './agent-hook-listener/providers/claude-roster-state'
 import { normalizeHookPayload } from './agent-hook-listener/normalization/normalize-hook-payload'
 import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
-import { makePaneKey } from './stable-pane-id'
+import { makePaneKey } from './workspace-layout/stable-pane-id'
 
 const SOURCE_PANE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
 const TARGET_PANE = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')

@@ -3,7 +3,7 @@ import { useAppStore } from '../store'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
-import { runAfterEditorFramesFlush } from './editor/editor-pending-flush'
+import { runAfterEditorFramesFlush } from './editor/save/flush/editor-pending-flush'
 import {
   collectBrowserWebviewIds,
   destroyWebviewsRemovedFromStore

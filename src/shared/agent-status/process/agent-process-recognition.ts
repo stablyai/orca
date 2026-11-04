@@ -6,7 +6,7 @@ import {
 import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import { NODE_PACKAGE_SCRIPT_ENTRYPOINTS } from './agent-node-package-entrypoints'
 import type { AgentType } from '../contracts/agent-status-types'
-import type { TerminalAgent } from '../../terminal-agent'
+import type { TerminalAgent } from '../identity/terminal-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from '../../command-token-scanner'
 import {

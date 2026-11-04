@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServer } from './server'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))

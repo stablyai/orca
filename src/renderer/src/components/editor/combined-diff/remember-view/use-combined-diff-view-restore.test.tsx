@@ -18,7 +18,7 @@ import {
 import { useCombinedDiffViewRestore } from './use-combined-diff-view-restore'
 import { createStore } from 'zustand/vanilla'
 import { createEditorModelRegistry } from '@/lib/editor-model-registry'
-import { attachClosedEditorTabCleanup } from '../../closed-editor-tab-controller'
+import { attachClosedEditorTabCleanup } from '../../model-lifetime/retention/closed-editor-tab-controller'
 import type { OpenFile } from '@/store/slices/editor'
 
 function buildAllModeEntrySet(

@@ -1,11 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
 const requestEditorFileClose = vi.hoisted(() => vi.fn<(fileId: string) => void>())
-vi.mock('../editor/editor-autosave', () => ({ requestEditorFileClose }))
+vi.mock('../editor/autosave/editor-autosave', () => ({ requestEditorFileClose }))
 
 import { useAppStore } from '../../store'
 import { makeOpenFile, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
-import { registerEditorFrameFlush } from '../editor/editor-pending-flush'
+import { registerEditorFrameFlush } from '../editor/save/flush/editor-pending-flush'
 import { createWorkspaceTabCloseCommands } from './workspace-tab-close-commands'
 
 const worktreeId = 'wt'

@@ -1,6 +1,6 @@
 import { agentPromptObservationSignal } from './agent-prompt-signals'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
-import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
+import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
 import type { RuntimeTerminalPromptDelivery } from '../../../../shared/runtime-terminal-send-contract'
 import { OrcaRuntimeWithResolveTerminalPane } from '../recovery/resolve-terminal-pane'

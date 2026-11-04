@@ -12,7 +12,7 @@ import { localDesktopSession, sleepingRecord } from './workspace-layout-profile.
 import { publishWorkspaceLayout } from './workspace-layout-published'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import { GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 type Origin = SleepingAgentSessionRecord['origin']
 const ORIGINS: readonly Origin[] = ['live', 'quit', 'worktree-sleep', undefined]

@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { renameRuntimePath } from '@/runtime/runtime-file-mutation-client'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
+import { requestEditorSaveQuiesce } from '@/components/editor/autosave/editor-autosave'
 import {
   beginEditorPathMove,
   settleEditorPathMove

@@ -102,6 +102,6 @@ src/shared/ephemeral-vm-recipe-process.ts
 src/shared/ephemeral-vm-recipe-runner.ts
 src/shared/fish-binary-requirement.ts
 src/shared/process-table-ps-capture.ts
-src/shared/pty-slave-line-discipline-echo.ts
-src/shared/shell-process-readiness.ts
+src/shared/terminal/pty/native-process/pty-slave-line-discipline-echo.ts
+src/shared/terminal/pty/native-process/shell-process-readiness.ts
 src/wsl-guest/preflight-handler.ts
