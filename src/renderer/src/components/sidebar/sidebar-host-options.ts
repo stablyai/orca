@@ -22,11 +22,11 @@ import type { SshConnectionState, SshConnectionStatus } from '../../../../shared
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
   RuntimeEnvironmentStatus,
   RuntimeHostBlockedReason
-} from '../../../../shared/runtime-host-status'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import { sshConnectFailureText } from '@/ssh/ssh-host-server-status-copy'

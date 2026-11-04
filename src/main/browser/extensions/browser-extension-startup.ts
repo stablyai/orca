@@ -1,7 +1,7 @@
 import { removeRetiredBrowserExtensionProfileStorage } from './profile-storage/browser-extension-retired-profile-storage'
 import { app, webContents } from 'electron'
 import { isBrowserExtensionNativePage } from './api-runtime/browser-extension-native-page'
-import { BROWSER_EXTENSIONS_CHANGED_CHANNEL } from '../../../shared/browser-extension-types'
+import { BROWSER_EXTENSIONS_CHANGED_CHANNEL } from '../../../shared/browser/extensions/browser-extension-types'
 import {
   installBrowserExtensionApiHost,
   getBrowserExtensionProfileIdForSession

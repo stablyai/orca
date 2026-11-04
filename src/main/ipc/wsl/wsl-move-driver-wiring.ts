@@ -5,10 +5,10 @@
  */
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
-import { encodePairingOffer } from '../../../shared/pairing'
-import { getPreferredPairingOffer } from '../../../shared/runtime-environments'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { findWslHostDeployment } from '../../../shared/runtime-environment-wsl-host-store'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { findWslHostDeployment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import {
   WSL_MOVE_PROGRESS_CHANNEL,
   type WslMoveProgressEvent

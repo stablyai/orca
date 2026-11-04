@@ -5,11 +5,11 @@ import {
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupDismissal
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupCandidateIdentity
-} from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 import { withCleanupVisitEvidence } from '../../../../shared/workspace-last-active'

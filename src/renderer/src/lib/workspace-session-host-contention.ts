@@ -4,7 +4,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
+import { normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId } from '../../../shared/workspace-scope'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
 import { pickPrimaryHostForClaims } from '../../../shared/workspace-session-contested-primary-host'
 import {
@@ -26,7 +26,6 @@ const WORKTREE_KEYED_FIELDS = (
 ).filter((field) => WORKSPACE_SESSION_FIELD_OWNERSHIP[field] === 'worktreeKeyed')
 
 /** Share session-key normalization with partition adoption so read and write cannot drift. */
-export const normalizeWorkspaceSessionKeyToWorktreeId = normalizeWorkspaceSessionKeyToWorkspaceId
 
 function resolveClaimedHostId(
   worktree: WorkspaceRuntimeOwnerProjection,

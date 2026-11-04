@@ -2,8 +2,8 @@ import { webFrameMain } from 'electron'
 import {
   BROWSER_EXTENSION_EVENT_CHANNEL,
   type BrowserExtensionEventPayload
-} from '../../../../shared/browser-extension-channels'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
+} from '../../../../shared/browser/extensions/browser-extension-channels'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import type { HostSessionState, WorkerContext } from './browser-extension-contexts'
 import {
   browserExtensionFrameRevision,

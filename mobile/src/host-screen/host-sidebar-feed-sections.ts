@@ -3,7 +3,7 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
-import { folderWorkspaceToWorktree } from '../../../src/shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { getFolderWorkspaceHostId } from '../../../src/shared/sidebar-list/folder-workspace-host-id'
 import type { HostSectionRow } from '../../../src/shared/sidebar-list/host-section-rows'
 import type { GroupHeaderRow } from '../../../src/shared/sidebar-list/row-types'

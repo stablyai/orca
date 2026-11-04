@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type {
   BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
-} from '../../../../shared/browser-client-host-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BrowserHostCommandLedger } from '../../../runtime/browser-host/browser-host-command-ledger'
 import { BrowserClientHostCommandDispatcher } from './browser-client-host-command-dispatcher'
 

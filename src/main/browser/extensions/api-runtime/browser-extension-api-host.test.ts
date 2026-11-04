@@ -72,7 +72,7 @@ const {
   BROWSER_EXTENSION_EVENT_CHANNEL,
   BROWSER_EXTENSION_INVOKE_CHANNEL,
   BROWSER_EXTENSION_FRAME_LIFETIME_CHANNEL
-} = await import('../../../../shared/browser-extension-channels')
+} = await import('../../../../shared/browser/extensions/browser-extension-channels')
 const surface = await import('../../../../preload/browser-extension-api-surface')
 const registry = await import('./browser-extension-namespace-registry')
 const host = await import('./browser-extension-api-host')

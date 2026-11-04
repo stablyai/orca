@@ -1,6 +1,6 @@
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
+import type { AiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import {
   readCanonicalPtyOwners,

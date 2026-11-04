@@ -5,7 +5,7 @@ import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
 } from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
-import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { presentAgentLaunchTab } from './agent-launch-tab-presentation'
 import { useAppStore } from '../store'
 import { resolveUnifiedTabCreatePlacement } from '../store/slices/tabs/tabs-create-placement'

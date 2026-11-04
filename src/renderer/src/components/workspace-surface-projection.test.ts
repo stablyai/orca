@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
 import { getIndexedWorktreeMap } from '../store/worktree-repo-index'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
 const SHARED_WORKTREE_ID = 'repo-shared::/work/orca-feature'

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceWorktree
-} from '../../../../shared/workspace-space-types'
+} from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { selectSpaceWindowAnalysis } from './space-window-state'
 
 function worktree(topLevelItems: WorkspaceSpaceWorktree['topLevelItems']): WorkspaceSpaceWorktree {

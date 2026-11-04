@@ -2,7 +2,7 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeReferenceStack } from './WorktreeReferenceStack'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { referenceAttachment, referenceReview } from './workspace-reference-fixtures.test-support'
 import { summarizeProviderChecks } from '../../../../shared/source-control/checks/provider-check-summary'
 
