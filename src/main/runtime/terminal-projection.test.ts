@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'
+import type { TerminalCursorContext } from '../../shared/terminal/input/terminal-composer-draft'
 import {
   projectTerminalTailLines,
   projectTerminalVisibleLines

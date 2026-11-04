@@ -1,5 +1,5 @@
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { WorkspaceDecisionInputs } from './workspace-space-decision-details'
 import { getPaneKeyTabId } from './workspace-space-presentation'
 

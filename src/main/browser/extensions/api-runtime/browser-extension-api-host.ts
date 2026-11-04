@@ -2,12 +2,12 @@ import { ipcMain } from 'electron'
 import {
   BROWSER_EXTENSION_INVOKE_CHANNEL,
   type BrowserExtensionInvokeResult
-} from '../../../../shared/browser-extension-channels'
+} from '../../../../shared/browser/extensions/browser-extension-channels'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
-} from '../../../../shared/browser-extension-url'
-import { BROWSER_EXTENSION_API_SCHEME } from '../../../../shared/browser-extension-worker-api'
+} from '../../../../shared/browser/extensions/browser-extension-url'
+import { BROWSER_EXTENSION_API_SCHEME } from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import type { BrowserExtensionCaller } from './browser-extension-namespace-registry'
 import { detachWorkerEventStream } from './browser-extension-worker-event-stream'
 import {

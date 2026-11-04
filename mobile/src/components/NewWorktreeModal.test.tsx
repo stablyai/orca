@@ -61,7 +61,7 @@ import {
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
-import { MOBILE_RELAY_HOSTS_LIST_METHOD } from '../../../src/shared/mobile-relay-hosts-contract'
+import { MOBILE_RELAY_HOSTS_LIST_METHOD } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { NewWorktreeModal } from './NewWorktreeModal'
 import { NewWorktreeModalController } from './NewWorktreeModalController'
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'

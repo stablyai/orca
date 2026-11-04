@@ -1,6 +1,9 @@
 import { countAgentTuiInputLines } from './agent-tui-input-clear'
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../orchestration-timing-budgets'
-import { iterateTerminalInputChunks, TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../terminal-input'
+import {
+  iterateTerminalInputChunks,
+  TERMINAL_INPUT_CHUNK_MAX_BYTES
+} from '../../terminal/input/terminal-input'
 import type { TerminalAgent } from '../../terminal-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 

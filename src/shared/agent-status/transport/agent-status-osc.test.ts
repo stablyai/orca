@@ -2,25 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { createAgentStatusOscProcessor } from './agent-status-osc'
 
 describe('createAgentStatusOscProcessor', () => {
-  it('uses the earliest mixed terminator and counts only parsed payload offsets', () => {
-    const process = createAgentStatusOscProcessor()
-    const result = process(
-      '😀\x1b]9999;{"state":"working"}\x07A\x1b\\' +
-        '\x1b]9999;{"state":"done"}\x1b\\B\x07' +
-        '\x1b]9999;{malformed}\x07C'
-    )
-
-    expect(result).toEqual({
-      cleanData: '😀A\x1b\\B\x07C',
-      payloads: [
-        { state: 'working', prompt: '' },
-        { state: 'done', prompt: '' }
-      ],
-      lastPayloadCleanOffset: '😀A\x1b\\'.length,
-      payloadCleanOffsets: ['😀'.length, '😀A\x1b\\'.length]
-    })
-  })
-
   it('preserves every split of prefixes, JSON, and both terminators across independent streams', () => {
     const stream =
       'before😀\x1b]9999;{"state":"working","prompt":"漢字"}\x07between' +

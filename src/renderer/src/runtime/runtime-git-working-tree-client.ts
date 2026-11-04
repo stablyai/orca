@@ -1,9 +1,9 @@
 import {
   requireGitStageWorktreeScopeReceipt,
   type GitStageWorktreeScope
-} from '../../../shared/git-stage-worktree-scope'
+} from '../../../shared/git/paths/git-stage-worktree-scope'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
-import type { ConflictResolution } from '../../../shared/source-control-entry-actions'
+import type { ConflictResolution } from '../../../shared/source-control/listing/source-control-entry-actions'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'

@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { deriveTaskPagePRCheckSummary } from './task-page/task-page-pr-check-summary'
 import { getCheckCountChips, getCheckCounts } from './pr-check-counts'
 import { derivePipelineStatus } from '../../../main/gitlab/mappers'
-import { gitLabPipelineJobsToPRChecks } from '../../../shared/gitlab-pipeline-checks'
-import { derivePRCheckStatus, derivePRCheckStatusFromRollup } from '../../../shared/pr-check-status'
+import { gitLabPipelineJobsToPRChecks } from '../../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
+import {
+  derivePRCheckStatus,
+  derivePRCheckStatusFromRollup
+} from '../../../shared/source-control/checks/pr-check-status'
 import {
   getProviderChecksLabel,
   summarizeProviderChecks
-} from '../../../shared/provider-check-summary'
+} from '../../../shared/source-control/checks/provider-check-summary'
 import type { GitLabPipelineJob } from '../../../shared/gitlab-types'
 import type { PRCheckDetail } from '../../../shared/github/check-types'
 import type { ProviderCheckSummary } from '../../../shared/github/pull-request-types'

@@ -1,9 +1,9 @@
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { classifyRuntimeEnvironmentHost } from '../../../shared/runtime-environment-host-kind'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { classifyRuntimeEnvironmentHost } from '../../../shared/remote-runtime/host-catalog/runtime-environment-host-kind'
 import type {
   SshManagedServerStatus,
   SshManagedServerUpdateNote,

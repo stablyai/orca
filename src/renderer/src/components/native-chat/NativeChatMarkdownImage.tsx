@@ -27,7 +27,7 @@ import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
 import { jiraImageReference } from '../../../../shared/jira/jira-attachment-image'
-import { filesystemPathToFileUri } from '../../../../shared/file-uri-path'
+import { filesystemPathToFileUri } from '../../../../shared/file-links/file-uri-path'
 import {
   createNativeChatFileHref,
   routeNativeChatHref

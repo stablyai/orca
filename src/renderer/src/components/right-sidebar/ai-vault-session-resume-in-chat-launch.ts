@@ -5,8 +5,8 @@ import {
 } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { agentLabel } from '../../../../shared/ai-vault-session-filters'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
   CLI_CONVERSATION_ADOPTING_AGENTS,
   type CliConversationRowAgent

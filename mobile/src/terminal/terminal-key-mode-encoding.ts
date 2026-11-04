@@ -1,7 +1,7 @@
 import {
   encodeTerminalShiftEnter,
   TERMINAL_KITTY_SHIFT_ENTER_INPUT
-} from '../../../src/shared/terminal-modified-enter-encoding'
+} from '../../../src/shared/terminal/protocol/input-modes/terminal-modified-enter-encoding'
 import type { TerminalModes } from './terminal-webview-contract'
 
 // eslint-disable-next-line no-control-regex -- unmodified CSI cursor keys

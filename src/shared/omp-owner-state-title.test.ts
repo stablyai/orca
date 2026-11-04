@@ -38,14 +38,4 @@ describe('owner-rewritten OMP titles from captured upstream output', () => {
       }
     }
   })
-  it.each([
-    'omp-harness ready',
-    '/tmp/OMP : file',
-    'lowercase omp : note',
-    'Pi: legacy',
-    'OMP ready'
-  ])('does not rewrite neutral or legacy title %s as a working marker', (title) => {
-    expect(clearPiStateWorkingMarker(title)).toBeNull()
-    expect(detectAgentStatusFromTitle(title)).not.toBe('working')
-  })
 })

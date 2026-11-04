@@ -1,6 +1,9 @@
 import type { AppState } from '../../types'
 import { buildAgentNotificationId } from '../../../../../shared/agent-notification-id'
 import { parsePaneKey } from '../../../../../shared/stable-pane-id'
+import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
+import { notificationExecutionHostForOwner } from '../../../../../shared/notification-source'
+import { notificationDeliveryId } from '../../../../../shared/notification-delivery-id'
 
 export function resolvePaneKeyWorktreeIdFromTabs(state: AppState, paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
@@ -16,24 +19,31 @@ export function resolvePaneKeyWorktreeIdFromTabs(state: AppState, paneKey: strin
 }
 
 export function collectAcknowledgedAgentNotificationId({
+  state,
   ids,
   worktreeId,
   paneKey,
+  ptyId,
   stateStartedAt,
   previousAckAt
 }: {
+  state: AppState
   ids: Set<string>
   worktreeId: string | null | undefined
   paneKey: string
+  ptyId?: string | null
   stateStartedAt: number | null | undefined
   previousAckAt: number
 }): void {
-  if (typeof stateStartedAt !== 'number' || previousAckAt >= stateStartedAt) {
+  if (!worktreeId || typeof stateStartedAt !== 'number' || previousAckAt >= stateStartedAt) {
     return
   }
   const id = buildAgentNotificationId({ worktreeId, paneKey, stateStartedAt })
   if (id) {
-    ids.add(id)
+    const owner = resolveTerminalNotificationOwner(state, worktreeId, { paneKey, ptyId })
+    if (owner) {
+      ids.add(notificationDeliveryId(id, notificationExecutionHostForOwner(owner)))
+    }
   }
 }
 

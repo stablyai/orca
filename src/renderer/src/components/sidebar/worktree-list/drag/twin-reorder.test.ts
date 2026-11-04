@@ -80,6 +80,7 @@ function renderedHosts(worktrees: Worktree[]): string[] {
 function planRows(worktrees: Worktree[]) {
   return planSidebarRows({
     groupBy: 'repo',
+    sortBy: 'manual',
     worktrees,
     repoMap,
     repoOfWorktree: createHostScopedRepoOf(repos, repoMap),
@@ -161,6 +162,30 @@ describe('reordering same-id primaries on separate machines', () => {
     const { applied } = dropCard(twins, 'ssh:vm-a', 3)
 
     expect(renderedHosts(applied)).toEqual(['ssh:vm-b', 'ssh:vm-c', 'ssh:vm-a'])
+  })
+
+  const feature = {
+    ...primary('ssh:vm-c', 50),
+    id: `${REPO_ID}::/home/dev/feature`,
+    path: '/home/dev/feature',
+    isMainWorktree: false
+  }
+
+  it('drops a ranked primary past a linked worktree, writing only that primary', () => {
+    const { writes, applied } = dropCard([...twins.slice(0, 2), feature], 'ssh:vm-b', 3)
+
+    expect(writes.map((entry) => entry.executionHostId)).toEqual(['ssh:vm-b'])
+    expect(renderedHosts(applied)).toEqual(['ssh:vm-a', 'ssh:vm-c', 'ssh:vm-b'])
+  })
+
+  it('drops a primary past a linked worktree when unranked rows materialize ranks', () => {
+    const unranked = [...twins.slice(0, 2), feature].map(
+      ({ manualOrder: _manualOrder, ...row }) => row
+    )
+    const { writes, applied } = dropCard(unranked, 'ssh:vm-b', 3)
+
+    expect(writes.map((entry) => entry.executionHostId).sort()).toEqual([...HOSTS])
+    expect(renderedHosts(applied)).toEqual(['ssh:vm-a', 'ssh:vm-c', 'ssh:vm-b'])
   })
 
   it('materializes a rank for every copy when none has one yet', () => {

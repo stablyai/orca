@@ -2,7 +2,7 @@
 import { mocks, hostMocks } from './launch-work-item-direct-test-fixture'
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { sourceControlActionRecipeEntry } from '../../../shared/source-control-action-selection'
+import { sourceControlActionRecipeEntry } from '../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import * as preparation from './launch-work-item-direct-route-preparation'

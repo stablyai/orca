@@ -2,17 +2,17 @@ import {
   pairedRuntimeBrowserClientHostId,
   pairedRuntimeBrowserClientHostsPage
 } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { prepareRuntimeEnvironmentBrowserPlacement } from './runtime-environment-browser-placement'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { classifyRuntimeEnvironmentHost } from '../../../shared/runtime-environment-host-kind'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { classifyRuntimeEnvironmentHost } from '../../../shared/remote-runtime/host-catalog/runtime-environment-host-kind'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeEnvironmentStatus
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type {
   MobileDesktopRelayHosts,
   MobileDesktopRelayHostWatch

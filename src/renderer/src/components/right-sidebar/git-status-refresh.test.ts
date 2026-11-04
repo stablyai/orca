@@ -5,7 +5,10 @@ import {
   refreshGitStatusForWorktreeStrict,
   type GitStatusRefreshDeps
 } from './git-status-refresh'
-import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type {
+  GitStatusResult,
+  GitUpstreamStatus
+} from '../../../../shared/git/status/git-status-types'
 
 function makeDeps(): GitStatusRefreshDeps {
   return {

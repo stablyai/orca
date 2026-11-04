@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildResourcePtyRows, groupResourcePtyRows } from './resource-pty-view-model'
 import type { PtyListedSession } from '../../../../shared/pty-listed-session'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   makeFolderWorkspace,
   makeRepo,

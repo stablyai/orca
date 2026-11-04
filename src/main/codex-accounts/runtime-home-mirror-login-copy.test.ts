@@ -16,10 +16,13 @@ import {
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
-vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
-}))
+vi.mock(
+  '../codex/configuration/shared-server/codex-daemon-socket-path-guard',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    applyCodexDaemonSocketGuard: (config: string) => config
+  })
+)
 
 vi.mock('electron', () => ({
   app: {

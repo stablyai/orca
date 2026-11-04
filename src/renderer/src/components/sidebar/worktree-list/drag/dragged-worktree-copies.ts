@@ -4,7 +4,7 @@ import type {
   Worktree
 } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../../../../store/types'
 import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktree-helpers'

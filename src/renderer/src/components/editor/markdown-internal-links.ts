@@ -2,7 +2,7 @@ import {
   filesystemPathHrefToFileUri,
   filesystemPathToFileUri,
   fileUriToFilesystemPath
-} from '../../../../shared/file-uri-path'
+} from '../../../../shared/file-links/file-uri-path'
 import {
   isWindowsAbsolutePathLike,
   relativePathInsideRoot

@@ -7,12 +7,7 @@ import type {
 import type { OrcaRuntimeWithRuntimeId as IdentityState } from './runtime-identity-state'
 import type { OrcaRuntimeWithStopRequestedPtyIds as ServiceState } from './runtime-service-state'
 import type { OrcaRuntimeWithPreservedBranchCleanup as HostServices } from './runtime-host-services'
-import type { RuntimeFileCommandSurface } from '../runtime-file-command-surface'
-import type { RuntimeGitCommandSurface } from '../runtime-git-command-surface'
-import type { RuntimeRepositoryCommandSurface } from '../runtime-repository-command-surface'
-import type { RuntimeReviewCommandSurface } from '../runtime-review-command-surface'
-import type { RuntimeServiceCommandSurface } from '../runtime-service-command-surface'
-import type { RuntimeSkillCommandSurface } from '../runtime-skill-command-contract'
+
 import type { RuntimeEdgeCommandSurface } from '../runtime-edge-command-controller'
 import type { OrcaRuntimeWithListManagedWorktrees as ListManagedWorktrees } from '../workspaces/managed-workspace-operations'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
@@ -27,13 +22,31 @@ import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
 
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
-import { installRuntimeFileCommandSurface } from '../runtime-file-command-surface'
-import { installRuntimeGitCommandSurface } from '../runtime-git-command-surface'
-import { installRuntimeRepositoryCommandSurface } from '../runtime-repository-command-surface'
-import { installRuntimeReviewCommandSurface } from '../runtime-review-command-surface'
-import { installRuntimeServiceCommandSurface } from '../runtime-service-command-surface'
+import {
+  type RuntimeFileCommandSurface,
+  installRuntimeFileCommandSurface
+} from '../runtime-file-command-surface'
+import {
+  type RuntimeGitCommandSurface,
+  installRuntimeGitCommandSurface
+} from '../runtime-git-command-surface'
+import {
+  type RuntimeRepositoryCommandSurface,
+  installRuntimeRepositoryCommandSurface
+} from '../runtime-repository-command-surface'
+import {
+  type RuntimeReviewCommandSurface,
+  installRuntimeReviewCommandSurface
+} from '../runtime-review-command-surface'
+import {
+  type RuntimeServiceCommandSurface,
+  installRuntimeServiceCommandSurface
+} from '../runtime-service-command-surface'
 import { RuntimeSkillCommands } from '../runtime-skill-command-surface'
-import { installRuntimeSkillCommandSurface } from '../runtime-skill-command-contract'
+import {
+  type RuntimeSkillCommandSurface,
+  installRuntimeSkillCommandSurface
+} from '../runtime-skill-command-contract'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { RuntimeClientSettingsController } from '../runtime-client-settings'
 import { RuntimeSessionSearchSettingsController } from '../runtime-session-search-settings'
@@ -46,7 +59,7 @@ import { registerConptyDa1OverrideInstaller } from '../terminal-model-query-auth
 import { registerTerminalViewAttributesApplier } from '../terminal-view-attribute-store'
 import { RuntimeMachineName } from '../runtime-machine-name'
 import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal-scrollback-policy'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The constructor installs every checked canonical surface.
 export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {

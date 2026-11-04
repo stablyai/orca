@@ -1,7 +1,7 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { RESET_GRAPHIC_RENDITION } from '../../../../shared/terminal-mode-reset-profiles'
+import { RESET_GRAPHIC_RENDITION } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   terminalWriteText,

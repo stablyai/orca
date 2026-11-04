@@ -14,7 +14,7 @@ import * as pickerCatalog from '../../../../../shared/agent-session/options/agen
 import * as reconciliation from '../../../../../shared/agent-launch/choices/agent-choice-reconciliation'
 import * as launchProfile from '../../../../../shared/agent-launch/choices/agent-launch-profile'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
-import { canonicalSourceControlActionSelection } from '../../../../../shared/source-control-action-selection'
+import { canonicalSourceControlActionSelection } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { pickerLocaleFixture } from '../__fixtures__/settings-persistence-test-fixture'
@@ -24,7 +24,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type {
   AiActionId,
   SourceControlActionLaunchPreferences
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import {
   loadHostStructuredAgents,
@@ -32,11 +32,11 @@ import {
   resetHostStructuredAgentsForTests
 } from '@/runtime/host-structured-agents'
 import { TooltipProvider } from '../../ui/tooltip'
-import type { RepoSourceControlAiOverrides } from '../../../../../shared/source-control-ai-types'
+import type { RepoSourceControlAiOverrides } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   getDefaultSourceControlAiSettings,
   normalizeSourceControlAiSettings
-} from '../../../../../shared/source-control-ai'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { RepositorySourceControlAiActionRows } from '../repository/source-control/RepositorySourceControlAiActionRows'
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
 
@@ -368,7 +368,7 @@ it('labels an own raw Sonnet recipe from the same source as its setup chips', as
     expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
   )
   const { projectSourceControlActionLaunch } =
-    await import('../../../../../shared/source-control-action-launch-preferences')
+    await import('../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences')
   const { resolveAgentStartupPlanInputs } =
     await import('../../../../../shared/agent-launch/startup/agent-startup-plan-inputs')
   const startupModule = await import('../../../../../shared/agent-launch/startup/tui-agent-startup')

@@ -1,7 +1,7 @@
 import { appendFile, mkdir, stat, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
+import { isAiVaultScanCancelledError } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { parseAgentSessionFileCached } from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'

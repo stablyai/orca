@@ -2,7 +2,7 @@ import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostLeaseAuthority
-} from '../../../../shared/browser-client-host-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 
 type BrowserClientPageAuthority = Pick<
   BrowserClientHostedPageInventory,

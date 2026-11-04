@@ -52,7 +52,7 @@ function routesDeclaring(token) {
 describeClosure(
   'the routes that render an HTML artifact',
   () => {
-    it('declares external navigation on exactly the routes whose closure asks for it', async () => {
+    it('declares external navigation for HTML renderers and their explorer opener', async () => {
       const asking = []
       for (const [route, mod] of PAGE_ROUTE_MODULES) {
         const closure = await mobileWebAppRouteClosure(mod)
@@ -60,10 +60,14 @@ describeClosure(
           asking.push(route)
         }
       }
-      // Require nonempty route census; file-preview route has no HTML-preview closure and intentionally stays absent.
-      expect(asking).toEqual(['/h/[hostId]/session/[worktreeId]'])
+      // Require nonempty route census; the file preview renders HTML files as well as the session's tabs.
+      expect(asking).toEqual([
+        '/h/[hostId]/files/preview/[worktreeId]',
+        '/h/[hostId]/session/[worktreeId]'
+      ])
+      // The explorer pushes the preview in-document, which route-handoff allows only when the opener holds every grant the preview declares.
       expect([...routesDeclaring(externalNavigationGrantToken())].sort()).toEqual(
-        [...asking].sort()
+        [...asking, '/h/[hostId]/files/[worktreeId]'].sort()
       )
     })
 
@@ -87,7 +91,7 @@ describeClosure(
       expect(closure.local).toContain(SEAM)
       expect(closure.local).not.toContain(NATIVE)
       expect(linkGrantCallers(closure)).toEqual(['src/components/MobileHtmlPreview.tsx'])
-      // Session’s file reader mounts preview in-domain; no separate preview route owns this grant.
+      // The session’s tab reader uses the same preview and grant seam.
       expect(closure.local).toContain('src/session/MobileSessionFileReader.tsx')
       // Require inerting implementation too: sandbox-only change would leave dead anchors (ruling 37.2).
       expect(closure.local).toContain('src/components/html-preview-inert-links.ts')

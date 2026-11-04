@@ -1,7 +1,7 @@
 import {
   createPairedE2EEFramingPolicy,
   type PairedE2EEFramingPolicy
-} from '../../../src/shared/paired-e2ee-framing-policy'
+} from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-framing-policy'
 import {
   hydrateE2EEV2HostLatch,
   isHostLatchedToE2EEV2,

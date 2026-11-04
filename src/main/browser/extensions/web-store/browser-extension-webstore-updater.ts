@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import {
   hasBrowserExtensionWarnings,
   newBrowserExtensionWarnings
-} from '../../../../shared/browser-extension-permission-warnings'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+} from '../../../../shared/browser/extensions/browser-extension-permission-warnings'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   forgetHeldBrowserExtensionUpdate,
   getHeldBrowserExtensionUpdate,

@@ -9,7 +9,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
-} from '../../../../shared/workspace-space-types'
+} from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 
 export type WorkspaceSpaceSortKey = 'size' | 'name' | 'repo' | 'activity'

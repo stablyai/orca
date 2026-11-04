@@ -3,7 +3,7 @@ import { GitMerge, GitPullRequestArrow, RefreshCw, Sparkles, TriangleAlert } fro
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
+import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 
 export function ConflictSummaryCard({
   conflictOperation,

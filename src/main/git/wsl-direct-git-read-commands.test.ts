@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { classifyGitCommand, isWslDirectGitReadCommand } from './wsl-direct-git-read-commands'
+import {
+  classifyGitCommand,
+  isWslDirectGitReadCommand
+} from '../../shared/git/commands/git-command-classification'
 
 describe('isWslDirectGitReadCommand', () => {
   it.each([

@@ -1,7 +1,7 @@
-import { readGitCommandFailureText } from '../git-command-failure-text'
-import { retryOnGitLockContention } from '../git-lock-contention'
-import { parseGitRevListAheadBehindCounts } from '../git-rev-list-output'
-import { isShowRefNoMatchError } from '../git-show-ref-no-match'
+import { readGitCommandFailureText } from '../git/commands/git-command-failure-text'
+import { retryOnGitLockContention } from '../git/commands/git-lock-contention'
+import { parseGitRevListAheadBehindCounts } from '../git/refs/git-rev-list-output'
+import { isShowRefNoMatchError } from '../git/refs/git-show-ref-no-match'
 import type { LocalBaseRefRefreshResult } from './base-ref-drift-types'
 
 /** Share one policy across local/WSL main and SSH relay. exec rejects nonzero exits with Git output attached. */

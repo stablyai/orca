@@ -15,8 +15,8 @@ import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-
 import { createTestParams } from './structured-agent-session-create-test-fixture'
 import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
 import { effectiveAgentSessionOptions } from '../../../shared/agent-session-default-model'
-import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
-import { resolvedCodexMessageOptions } from '../../codex/codex-structured-message-options'
+import { optionSession } from '../../codex/structured/catalog/codex-structured-option-session.test-fixture'
+import { resolvedCodexMessageOptions } from '../../codex/structured/turns/codex-structured-message-options'
 
 let rig: QueuedMessageTestRig
 beforeEach(async () => {

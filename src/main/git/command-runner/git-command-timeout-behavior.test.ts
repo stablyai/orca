@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from './git-exec-file'
-import { GitCommandTimeoutError } from './git-command-timeout'
+import { GitCommandTimeoutError } from '../../../shared/git/commands/git-command-timeout'
 import { gitStreamStdout } from './git-stream-stdout'
 
 const tempRoots: string[] = []

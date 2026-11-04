@@ -1,6 +1,6 @@
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 
 export const referenceRepo: Repo = {

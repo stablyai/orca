@@ -29,7 +29,7 @@ import {
   adapterFor,
   fakeCodex,
   THREAD_ID
-} from '../../codex/codex-structured-session-adapter-fixture'
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,

@@ -2,7 +2,7 @@ import { lstat, realpath } from 'node:fs/promises'
 import type {
   AiVaultDeleteSessionResult,
   AiVaultSessionDeleteRemoval
-} from '../../shared/ai-vault-session-deletion'
+} from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import {
   validateAiVaultSessionDeleteTarget,
