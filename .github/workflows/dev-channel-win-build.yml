@@ -241,7 +241,11 @@ jobs:
         shell: bash
         run: |
           if [[ "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" != '' ]]; then
-            node config/scripts/release-javascript-artifact.mjs restore
+            RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs'
+            if [ ! -f "$RELEASE_JAVASCRIPT_ARTIFACT" ]; then
+              RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release-javascript-artifact.mjs'
+            fi
+            node "$RELEASE_JAVASCRIPT_ARTIFACT" restore
             pnpm run build:release:host
           else
             pnpm build:release

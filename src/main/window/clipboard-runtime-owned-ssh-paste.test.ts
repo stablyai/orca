@@ -1,6 +1,6 @@
 // #17679: nested Remote Server → SSH paste must resolve on the runtime; this process owns no SSH filesystem.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 const { handleMock, callRuntimeEnvironmentMock, fsWriteFileMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),

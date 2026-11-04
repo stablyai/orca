@@ -7,14 +7,17 @@ export { FULL_SHARD_COUNT } from './ci-unit-matrix.mjs'
 
 const RUNTIME_ENTRY_POINTS = new Set([
   'config/vitest.config.ts',
-  'config/scripts/run-vitest.mjs',
+  'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
   ...UNIT_SETUP_FILES
 ])
 
 function isUnitRuntimeEntryPoint(file) {
   return (
     RUNTIME_ENTRY_POINTS.has(file) ||
-    (/^config\/scripts\/vitest[^/]*\.(?:ts|mjs)$/.test(file) && !file.includes('.test.'))
+    (/^config\/scripts\/(?:test-runtime\/environment\/|test-runtime\/execution-policy\/|test-runtime\/dom\/|test-runtime\/module-cache\/|test-runtime\/node-worker\/|test-runtime\/sqlite-admission\/)?vitest[^/]*\.(?:ts|mjs)$/.test(
+      file
+    ) &&
+      !file.includes('.test.'))
   )
 }
 

@@ -259,7 +259,7 @@ it.each([
   }
 })
 
-const registry = 'config/scripts/vitest-node-runtime-files.mjs'
+const registry = 'config/scripts/test-runtime/sqlite-admission/vitest-node-runtime-files.mjs'
 const unrelatedSshUnit = 'src/main/ssh/pinned-runtime-materializer-context.test.ts'
 
 function qualificationTree(extra = {}) {

@@ -135,7 +135,7 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
   if (related.length > 0 || colocated.length > 0) {
     const vitest = (selection) =>
       step(node, [
-        'config/scripts/run-vitest.mjs',
+        'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
         ...selection,
         '--config',
         'config/vitest.config.ts',

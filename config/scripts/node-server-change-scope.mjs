@@ -19,11 +19,11 @@ const BUILD_SCRIPTS = [
   'config/scripts/build-windows-security-addon.mjs',
   'config/scripts/run-node-server-tests.mjs',
   'config/vitest.config.ts',
-  'config/scripts/vitest-dom-setup.ts',
-  'config/scripts/happy-dom-offscreen-canvas.ts',
-  'config/scripts/happy-dom-mutation-observer-retention.ts',
-  'config/scripts/vitest-host-ports-setup.ts',
-  'config/scripts/vitest-real-agent-home-write-guard.ts'
+  'config/scripts/test-runtime/dom/vitest-dom-setup.ts',
+  'config/scripts/test-runtime/dom/happy-dom-offscreen-canvas.ts',
+  'config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.ts',
+  'config/scripts/test-runtime/environment/vitest-host-ports-setup.ts',
+  'config/scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts'
 ]
 const NODE_SERVER_POLICY_TESTS = new Set([
   'config/scripts/node-server-change-scope.test.mjs',
@@ -181,7 +181,7 @@ export async function classifyNodeServerChanges(
     (file) =>
       (ALWAYS_FILES.has(file) && !(modifiedOnly && NODE_SERVER_POLICY_TESTS.has(file))) ||
       (ALWAYS_PREFIXES.some((prefix) => file.startsWith(prefix)) && !isSourceUnitTest(file)) ||
-      /^config\/scripts\/[^/]*orcad[^/]*$/.test(file) ||
+      /^config\/scripts\/(?:test-runtime\/environment\/)?[^/]*orcad[^/]*$/.test(file) ||
       selectors.some((selector) => file.includes(selector))
   )
   if (forced) {

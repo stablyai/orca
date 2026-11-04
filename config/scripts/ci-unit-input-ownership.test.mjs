@@ -97,7 +97,10 @@ describe('checked indirect unit inputs', () => {
       buildUnitDependencyGraph(original, undefined, records, dependencyInputs).opaque.has(helper)
     ).toBe(true)
     const sources = new Map(original)
-    sources.set('config/scripts/vitest-dom-setup.ts', 'configureDifferentRuntime()')
+    sources.set(
+      'config/scripts/test-runtime/dom/vitest-dom-setup.ts',
+      'configureDifferentRuntime()'
+    )
     expect(graph(sources).opaque.has(helper)).toBe(true)
   })
 

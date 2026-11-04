@@ -105,7 +105,7 @@ export function buildUnitDependencyGraph(
   const runtime = unitConsumers(
     [
       'config/vitest.config.ts',
-      'config/scripts/run-vitest.mjs',
+      'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
       'config/scripts/ci-unit-dependency-graph.mjs',
       'config/scripts/ci-unit-input-ownership.mjs',
       'config/scripts/ci-unit-selection.mjs',

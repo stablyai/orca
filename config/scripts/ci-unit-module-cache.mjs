@@ -44,7 +44,7 @@ export async function moduleCachePolicyHash(root = ROOT) {
     root,
     entryPoints: [
       'config/vitest.config.ts',
-      'config/scripts/run-vitest.mjs',
+      'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
       'config/scripts/ci-unit-timing-reporter.mjs',
       ...runnerScripts
     ]

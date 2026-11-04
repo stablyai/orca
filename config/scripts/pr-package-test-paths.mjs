@@ -118,8 +118,15 @@ const WINDOWS_PROCESS_PROBE_PREFIXES = [
   'config/nsis/',
   'config/scripts/nsis-process-check',
   'config/scripts/idle-cpu-process-sampling',
+  'config/scripts/performance/idle-cpu/idle-cpu-process-sampling',
   'config/vitest.config.',
   'config/scripts/vitest-',
+  'config/scripts/test-runtime/environment/vitest-',
+  'config/scripts/test-runtime/execution-policy/vitest-',
+  'config/scripts/test-runtime/dom/vitest-',
+  'config/scripts/test-runtime/module-cache/vitest-',
+  'config/scripts/test-runtime/node-worker/vitest-',
+  'config/scripts/test-runtime/sqlite-admission/vitest-',
   'config/scripts/ci-unit-',
   'config/scripts/workspace-source-exports',
   'config/dark-build-switches.',
@@ -135,7 +142,7 @@ export const WINDOWS_PACKAGE_TESTS = [
   ...LINUX_PACKAGE_TESTS,
   // The "Test Windows installer process probe" step runs these serially.
   'config/scripts/nsis-process-check.test.mjs',
-  'config/scripts/idle-cpu-process-sampling.test.mjs'
+  'config/scripts/performance/idle-cpu/idle-cpu-process-sampling.test.mjs'
 ]
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

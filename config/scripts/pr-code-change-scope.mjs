@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
 import { SHELL_PREFIXES } from './pr-shell-contract-prefixes.mjs'
+import { XTERM_PREFIXES } from './pr-xterm-patch-prefixes.mjs'
 import {
   isCloudTestRunnerInput,
   isWindowsProcessProbePath,
@@ -121,13 +122,6 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/filesystem/permission-errors',
   'src/shared/node-cli-command-resolution',
   'src/shared/windows-batch-spawn'
-]
-
-const XTERM_PREFIXES = [
-  'config/patches/xterm-upstream.json',
-  'config/patches/@xterm',
-  'config/patches/xterm-src/',
-  'config/scripts/regenerate-xterm-patches'
 ]
 
 const ORCAD_BROWSER_PREFIXES = [

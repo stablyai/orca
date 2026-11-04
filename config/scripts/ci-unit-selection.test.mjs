@@ -29,9 +29,9 @@ const files = [...sources.keys()].filter((file) => file.endsWith('.test.ts')).so
 describe('conservative unit selection', () => {
   it.each([
     'config/vitest.config.ts',
-    'config/scripts/run-vitest.mjs',
+    'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
     ...UNIT_SETUP_FILES,
-    'config/scripts/vitest-node-runtime-worker.mjs'
+    'config/scripts/test-runtime/node-worker/vitest-node-runtime-worker.mjs'
   ])('retains every test for a transitive dependency of %s', (runtime) => {
     const sources = new Map([
       ['src/input.ts', 'export const value = 1'],

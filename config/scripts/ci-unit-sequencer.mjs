@@ -1,6 +1,6 @@
 import { relative } from 'node:path'
 import { readFileSync } from 'node:fs'
-import RuntimeSequencer from './vitest-runtime-sequencer.mjs'
+import RuntimeSequencer from './test-runtime/execution-policy/vitest-runtime-sequencer.mjs'
 import { balanceFiles, readTimingBaseline, writeAssignment } from './ci-shard-assignment.mjs'
 
 export default class TimingSequencer extends RuntimeSequencer {

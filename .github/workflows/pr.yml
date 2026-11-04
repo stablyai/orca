@@ -562,14 +562,14 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
           ORCA_BALANCE_UNIT_SHARDS: '1'
         run: >-
-          node config/scripts/run-vitest.mjs run --config config/vitest.config.ts
+          node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts
           --maxWorkers=4 --isolate --retry=0 --bail=0
           config/scripts/mobile-release-check-scope.test.mjs
           config/scripts/mobile-test-change-scope.test.mjs
           config/scripts/pr-ready-check-reuse.test.mjs
           config/scripts/win32-test-lane-registration.test.mjs
-          config/scripts/vitest-node-runtime-boundary.test.ts
-          config/scripts/vitest-sqlite-runtime-boundary.test.ts
+          config/scripts/test-runtime/node-worker/vitest-node-runtime-boundary.test.ts
+          config/scripts/test-runtime/sqlite-admission/vitest-sqlite-runtime-boundary.test.ts
 
       # Report failure through the separate required check without blocking unrelated consumers.
       - name: Smoke process-host package on Node 18
@@ -759,7 +759,7 @@ jobs:
       - name: Verify xterm patches match the pinned upstream build
         env:
           WORK_DIR: ${{ runner.temp }}/xterm-patch-build
-        run: node config/scripts/regenerate-xterm-patches.mjs --check --work-dir="$WORK_DIR"
+        run: node config/scripts/terminal-dependencies/xterm-patches/regenerate-xterm-patches.mjs --check --work-dir="$WORK_DIR"
 
   shell_contracts:
     name: shell contracts
@@ -1332,7 +1332,7 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
           config/scripts/nsis-process-check.test.mjs
-          config/scripts/idle-cpu-process-sampling.test.mjs
+          config/scripts/performance/idle-cpu/idle-cpu-process-sampling.test.mjs
 
       - name: Resolve the Windows Rust build scope
         id: rust-scope

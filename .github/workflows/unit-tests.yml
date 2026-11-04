@@ -158,7 +158,7 @@ jobs:
         run: |
           ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
           export ORCA_SHARD_SOURCE_SHA
-          node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
+          node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts \
             --shard=${{ matrix.shard.index }}/${{ matrix.shard.count }} \
             ${{ inputs.runner == 'blacksmith-8vcpu-ubuntu-2404' && '--maxWorkers=8' || (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404' || inputs.runner == 'ubuntu-24.04') && '--maxWorkers=4' || '' }}
 

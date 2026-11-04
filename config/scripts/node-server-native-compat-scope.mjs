@@ -84,7 +84,7 @@ function isTestInput({ status, file }) {
   // Build policy and process-host fixtures can be read without a static import.
   if (
     file.startsWith('src/packages/') ||
-    /^config\/scripts\/[^/]*(?:orcad|node-server|node-pty|native|glibc|pinned-node|node-runtime|workspace-source-exports|script-module-dependencies)[^/]*$/.test(
+    /^config\/scripts\/(?:test-runtime\/node-worker\/|test-runtime\/sqlite-admission\/|test-runtime\/environment\/)?[^/]*(?:orcad|node-server|node-pty|native|glibc|pinned-node|node-runtime|workspace-source-exports|script-module-dependencies)[^/]*$/.test(
       file
     )
   ) {

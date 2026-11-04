@@ -16,7 +16,7 @@ import {
 } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { fetchPristinePackage } from './regenerate-xterm-patches.mjs'
+import { fetchPristinePackage } from './terminal-dependencies/xterm-patches/regenerate-xterm-patches.mjs'
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 const PACKAGE = '@xterm/addon-serialize'

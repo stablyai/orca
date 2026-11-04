@@ -14,13 +14,13 @@ export const UNIT_INCLUDE = [
 ]
 
 export const UNIT_SETUP_FILES = [
-  'config/scripts/vitest-real-agent-home-write-guard.ts',
-  'config/scripts/vitest-bun-node-builtins.ts',
-  'config/scripts/vitest-dom-setup.ts',
-  'config/scripts/vitest-host-ports-setup.ts',
-  'config/scripts/vitest-caller-identity-env-setup.ts',
-  'config/scripts/vitest-inherited-git-env-setup.ts',
-  'config/scripts/vitest-orcad-feature-readiness-reset.ts'
+  'config/scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts',
+  'config/scripts/test-runtime/environment/vitest-bun-node-builtins.ts',
+  'config/scripts/test-runtime/dom/vitest-dom-setup.ts',
+  'config/scripts/test-runtime/environment/vitest-host-ports-setup.ts',
+  'config/scripts/test-runtime/environment/vitest-caller-identity-env-setup.ts',
+  'config/scripts/test-runtime/environment/vitest-inherited-git-env-setup.ts',
+  'config/scripts/test-runtime/environment/vitest-orcad-feature-readiness-reset.ts'
 ]
 
 export const UNIT_EXCLUDE = [

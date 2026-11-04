@@ -24,7 +24,7 @@ import {
   isDevBundleInUse,
   selectStaleDevBundleDirs
 } from './dev-electron-bundle-cache.mjs'
-import { startDevStorageReclaim } from './dev-storage-reclaim.mjs'
+import { startDevStorageReclaim } from './worktree-storage/dev-storage-reclaim.mjs'
 import {
   announceDevInstance,
   dropInheritedDevInstanceEnv,
