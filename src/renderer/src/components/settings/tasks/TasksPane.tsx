@@ -30,7 +30,7 @@ import { useIntegrationProviderStatusRefresh } from '../../../hooks/use-integrat
 import { useTaskSourceProviderReadiness } from './use-task-source-provider-readiness'
 import { translate } from '@/i18n/i18n'
 import { TaskPromptTemplateSetting } from '../TaskPromptTemplateSetting'
-import { normalizeLinkedWorkItemPromptTemplate } from '../../../../shared/linked-work-item-prompt-settings'
+import { normalizeLinkedWorkItemPromptTemplate } from '../../../../../shared/linked-work-item-prompt-settings'
 
 type TasksPaneProps = {
   settings: GlobalSettings

@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import { translateSearchKeyword } from './settings-search-keywords'
-import type { SettingsSearchEntry } from './settings-search'
+import { translateSearchKeyword } from './search/settings-search-keywords'
+import type { SettingsSearchEntry } from './search/settings-search'
 
 export function getTaskPromptTemplateSearchEntry(): SettingsSearchEntry {
   return {

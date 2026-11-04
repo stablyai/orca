@@ -3,9 +3,9 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import { getTaskPromptTemplateSearchEntry } from './task-prompt-template-search'
-import { useDebouncedSettingsTextDraft } from './use-debounced-settings-text-draft'
+import { useDebouncedSettingsTextDraft } from './form-controls/use-debounced-settings-text-draft'
 
 export function TaskPromptTemplateSetting({
   value,

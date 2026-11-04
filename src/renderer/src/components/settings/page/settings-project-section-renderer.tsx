@@ -14,7 +14,36 @@ import { translate } from '@/i18n/i18n'
 import { getProjectPromptTemplateOwner } from '../../../../../shared/project-prompt-template-owner'
 import type { SettingsRenderContext } from './settings-render-context'
 
-export function renderProjectSettingsSections(context: SettingsRenderContext): React.ReactNode {
+export type ProjectSettingsRenderContext = {
+  model: Pick<
+    SettingsRenderContext['model'],
+    | 'settingsProjectList'
+    | 'settingsProjectHostSelection'
+    | 'settingsProjectSetupSelection'
+    | 'repos'
+    | 'projectHostSetups'
+    | 'repoHooksMap'
+    | 'updateRepo'
+    | 'removeProjectAllHosts'
+    | 'updateProject'
+  >
+  navigation: Pick<
+    SettingsRenderContext['navigation'],
+    'projectByRepoId' | 'getSectionSearchEntries'
+  >
+  terminal: Pick<SettingsRenderContext['terminal'], 'isWindowsTerminalHost'> & {
+    windowsTerminalCapabilities: Pick<
+      SettingsRenderContext['terminal']['windowsTerminalCapabilities'],
+      'wslAvailable' | 'wslDistros' | 'isLoading'
+    >
+  }
+  interactions: Pick<SettingsRenderContext['interactions'], 'writeSourceControlAiSettings'>
+  view: Pick<SettingsRenderContext['view'], 'isSectionMounted'>
+}
+
+export function renderProjectSettingsSections(
+  context: ProjectSettingsRenderContext
+): React.ReactNode {
   const { model, navigation, terminal, view, interactions } = context
   return model.settingsProjectList.map((settingsProject) => {
     const repoSectionId = `repo-${settingsProject.representativeRepoId}`

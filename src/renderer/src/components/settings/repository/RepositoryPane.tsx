@@ -37,8 +37,8 @@ import {
   RepositoryFormatterSection,
   getRepositoryFormatterSearchEntry
 } from './RepositoryFormatterSection'
-import { TaskPromptTemplateSetting } from '../TaskPromptTemplateSetting'
 import { getTaskPromptTemplateSearchEntry } from '../task-prompt-template-search'
+import { RepositoryTaskPromptTemplateSetting } from './RepositoryTaskPromptTemplateSetting'
 
 export { getRepositoryPaneSearchEntries }
 
@@ -318,16 +318,10 @@ export function RepositoryPane({
         />
 
         {project && updateProject ? (
-          <TaskPromptTemplateSetting
-            key={`task-prompt:${project.id}`}
-            scope="project"
-            value={project.linkedWorkItemPromptTemplate ?? ''}
+          <RepositoryTaskPromptTemplateSetting
+            project={project}
             globalTemplate={settings?.linkedWorkItemPromptTemplate}
-            commit={async (value) =>
-              (await updateProject(project.id, {
-                linkedWorkItemPromptTemplate: value.trim() ? value : null
-              })) === true
-            }
+            updateProject={updateProject}
             forceVisible={forceFullPaneForRepoMatch}
           />
         ) : null}
