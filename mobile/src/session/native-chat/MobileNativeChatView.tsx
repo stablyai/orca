@@ -19,6 +19,8 @@ import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/t
 import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { MobileNativeChatInputLockStatus } from './composer/MobileNativeChatInputLockStatus'
+import type { MobileNativeChatHostOutage } from './mobile-native-chat-host-outage'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
 import { MobileNativeChatEmptyStateView } from '../MobileNativeChatEmptyStateView'
@@ -111,6 +113,8 @@ type ChatViewProps = MobileNativeChatSendProps &
     onRemoveAttachment?: (id: string) => void
     isAttaching?: boolean
     inputLockReason?: MobileNativeChatInputLockReason | null
+    /** Why a `disconnected` lock holds: which host is out, and Reconnect when it can help. */
+    hostOutage?: MobileNativeChatHostOutage | null
     // Report send failures here only while mounted; the route uses a toast otherwise.
     sendErrorMessage?: string | null
     onClearSendError?: () => void
@@ -175,6 +179,7 @@ export function MobileNativeChatView({
   onMicPressIn,
   onMicPressOut,
   inputLockReason,
+  hostOutage = null,
   sendErrorMessage,
   onClearSendError,
   onDismissSendError,
@@ -375,12 +380,11 @@ export function MobileNativeChatView({
           {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
           collapsedPrompt={collapsedPrompt}
         />
-        <Text
-          style={lockReason === 'waiting' ? styles.inputLockStatus : undefined}
-          accessibilityLiveRegion="polite"
-        >
-          {lockReason === 'waiting' ? composerPlaceholder : null}
-        </Text>
+        <MobileNativeChatInputLockStatus
+          lockReason={lockReason}
+          waitingText={composerPlaceholder}
+          hostOutage={hostOutage}
+        />
         <MobileNativeChatSendErrorBanner
           message={sendErrorMessage}
           onDismiss={onDismissSendError}

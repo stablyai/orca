@@ -21,6 +21,7 @@ import { nativeChatAskRequiresTerminal } from '../../../../src/shared/native-cha
 import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { MobileNativeChatNoticeContext } from '../mobile-native-chat-notice-context'
 import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-image-preview'
+import type { MobileNativeChatHostOutage } from './mobile-native-chat-host-outage'
 import { useMobileNativeChatMarkdownLinks } from './use-mobile-native-chat-markdown-links'
 import { MobileMarkdownLinksContext } from '../../components/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/types'
@@ -57,6 +58,7 @@ type Props = {
   onOpenUrlInOrca?: (url: string) => void
   /** Opens a host terminal tab in this chat's workspace running `command`. */
   onRunInTerminal: (command: string) => void
+  hostOutage?: MobileNativeChatHostOutage | null
 }
 
 // Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
@@ -85,7 +87,8 @@ export function MobileNativeChatOverlay({
   keyboardInset,
   hostName,
   onOpenUrlInOrca,
-  onRunInTerminal
+  onRunInTerminal,
+  hostOutage = null
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
@@ -315,6 +318,7 @@ export function MobileNativeChatOverlay({
                       onMicPressIn={onMicPressIn}
                       onMicPressOut={onMicPressOut}
                       inputLockReason={inputLockReason}
+                      hostOutage={hostOutage}
                       sendErrorMessage={
                         continueFailed
                           ? t(

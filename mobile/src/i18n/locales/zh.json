@@ -561,6 +561,12 @@
       "byteSize": "{{size}} 字节",
       "saveUpdate": "保存功能将在手机更新中提供。",
       "fullCopySaveUpdate": "完整复制和保存此附件的功能将在手机更新中提供。"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} 正在重新连接…",
+      "stopped": "{{hostName}} 已停止。请在你的电脑上启动它。",
+      "server": "服务器",
+      "unavailable": "无法从手机访问 {{hostName}}。请在你的电脑上打开它的一个项目。"
     }
   },
   "common": {

@@ -1,6 +1,7 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { useRelayHosts } from '../worktree/relay-hosts-feed'
+import { serverHostDesktopReach, type ServerHostDesktopReach } from '../worktree/server-workspaces'
 import {
   scopeRpcClientToExecutionHost,
   workspaceRouteExecutionHost
@@ -21,6 +22,7 @@ export function useWorkspaceServer(args: {
     client: RpcClient | null
     state: ConnectionState
     name: string | null
+    desktopReach: ServerHostDesktopReach | undefined
     gates: HostStatusGates
     desktopCapabilities: readonly string[]
   } | null
@@ -44,6 +46,7 @@ export function useWorkspaceServer(args: {
             client: serverClient,
             state,
             name: selectedHost?.label ?? null,
+            desktopReach: selectedHost ? serverHostDesktopReach(selectedHost) : undefined,
             gates,
             desktopCapabilities
           }

@@ -600,6 +600,12 @@
       "byteSize": "{{size}} octets",
       "saveUpdate": "L’enregistrement sera disponible dans une mise à jour du téléphone.",
       "fullCopySaveUpdate": "La copie intégrale et l’enregistrement de cette pièce jointe seront disponibles dans une mise à jour du téléphone."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} se reconnecte…",
+      "stopped": "{{hostName}} est arrêté. Démarrez-le sur votre ordinateur.",
+      "server": "Le serveur",
+      "unavailable": "{{hostName}} n’est pas disponible depuis votre téléphone. Ouvrez l’un de ses projets sur votre ordinateur."
     }
   },
   "common": {

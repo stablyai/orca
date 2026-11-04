@@ -561,6 +561,12 @@
       "byteSize": "{{size}}바이트",
       "saveUpdate": "저장 기능은 휴대전화 업데이트에서 제공될 예정입니다.",
       "fullCopySaveUpdate": "이 첨부 파일의 전체 복사와 저장 기능은 휴대전화 업데이트에서 제공될 예정입니다."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}}에 다시 연결하는 중…",
+      "stopped": "{{hostName}}이(가) 중지되었습니다. 컴퓨터에서 시작하세요.",
+      "server": "서버",
+      "unavailable": "휴대폰에서 {{hostName}}을(를) 사용할 수 없습니다. 컴퓨터에서 해당 프로젝트 중 하나를 여세요."
     }
   },
   "common": {

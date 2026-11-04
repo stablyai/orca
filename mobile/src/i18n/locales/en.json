@@ -3184,6 +3184,12 @@
       "messageFromCoordinator": "Message from coordinator",
       "updateFromWorker": "Update from worker",
       "messageFrom": "Message from"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} is reconnecting…",
+      "stopped": "{{hostName}} is stopped. Start it on your computer.",
+      "server": "The server",
+      "unavailable": "{{hostName}} isn't available from your phone. Open one of its projects on your computer."
     }
   },
   "sourceControl": {

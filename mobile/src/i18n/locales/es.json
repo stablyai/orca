@@ -600,6 +600,12 @@
       "byteSize": "{{size}} bytes",
       "saveUpdate": "Guardar estará disponible en una actualización del teléfono.",
       "fullCopySaveUpdate": "Copiar todo y Guardar para este adjunto estarán disponibles en una actualización del teléfono."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} se está reconectando…",
+      "stopped": "{{hostName}} está detenido. Inícialo en tu ordenador.",
+      "server": "El servidor",
+      "unavailable": "{{hostName}} no está disponible desde tu teléfono. Abre uno de sus proyectos en tu ordenador."
     }
   },
   "common": {

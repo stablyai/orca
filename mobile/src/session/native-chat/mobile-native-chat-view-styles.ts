@@ -12,11 +12,17 @@ export const styles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
-  inputLockStatus: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
+  inputLockStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xs
+  },
+  inputLockStatus: {
+    flexShrink: 1,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
   },
   sendError: {
     alignItems: 'center',

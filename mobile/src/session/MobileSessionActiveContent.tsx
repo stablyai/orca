@@ -6,6 +6,7 @@ import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
+import { mobileNativeChatHostOutage } from './native-chat/mobile-native-chat-host-outage'
 import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/mobile-native-chat-dictation-preview-context'
@@ -127,6 +128,23 @@ export function MobileSessionActiveContent({
   )
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
+  const forceReconnect = controller.forceReconnectHost
+  const nativeChatHostOutage =
+    nativeChatOverlayInputLockReason === 'disconnected'
+      ? mobileNativeChatHostOutage(
+          {
+            pairedHostState: controller.pairedHostState,
+            pairedVerdict: controller.connectionVerdict,
+            hostName: hostTitle,
+            reconnect:
+              controller.showConnectionRetry && hostId && forceReconnect
+                ? () => void forceReconnect(hostId)
+                : null,
+            server: controller.workspaceServer
+          },
+          t
+        )
+      : null
   const nativeChatImageSource = useMemo(
     () => (client ? { client, worktreeId } : undefined),
     [client, worktreeId]
@@ -364,6 +382,7 @@ export function MobileSessionActiveContent({
                 // A workspace routed to another server stops with that server, whose name the phone lacks.
                 hostName={executionHost === undefined && hostProfile ? hostTitle : null}
                 onOpenUrlInOrca={openUrlInOrca}
+                hostOutage={nativeChatHostOutage}
                 onRunInTerminal={(command) =>
                   void controller.handleCreateTerminal(undefined, {
                     startupCommand: command,
