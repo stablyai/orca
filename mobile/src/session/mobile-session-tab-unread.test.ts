@@ -6,10 +6,13 @@ import {
   resolveHostWorktreeRowStatus
 } from './catalog-worktree-unread-status'
 import {
+  buildRecentSessionCardFromTab,
   clearTabCompletionTrackerForTests,
+  isMobileSessionTabUnreadBeforeView,
   resolveMobileSessionTabDotState,
   seedUnreadWorktreeSessionTabs,
-  setCatalogWorktreesForTabStatus
+  setCatalogWorktreesForTabStatus,
+  syncRecentCardWithLiveTab
 } from './mobile-terminal-tab-agent'
 
 function doneTerminalTab(id: string, stamp: number, isActive = false) {
@@ -251,5 +254,51 @@ describe('unread worktree tab completion', () => {
     expect(resolveHostAgentRowDotState(doneRow, 400)).toBe('unread')
     expect(resolveHostAgentRowDotState(workingRow, 400)).toBe('working')
     expectOffscreen('tab-done-mixed', 350, 'unread')
+  })
+
+  it('preserves unread state across structured agent-session keys and pre-render recent card snapshots', () => {
+    const structuredDoneRow: RuntimeWorktreeAgentRow = {
+      paneKey: 'structured-agent-session-sid-1:leaf-1',
+      parentPaneKey: null,
+      state: 'done',
+      agentType: 'claude',
+      prompt: 'consensus check',
+      taskTitle: null,
+      displayName: null,
+      lastAssistantMessage: 'Resolved',
+      toolName: null,
+      toolInput: null,
+      interrupted: false,
+      stateStartedAt: 500,
+      updatedAt: 500
+    }
+    setCatalogWorktreesForTabStatus(
+      [{ worktreeId: 'wt-structured', unread: true, agents: [structuredDoneRow] }],
+      500
+    )
+    const activeStructuredTab = {
+      type: 'agent-session' as const,
+      id: 'agent-session:sid-1',
+      title: '共识与现实冲突',
+      sessionId: 'sid-1',
+      agent: 'claude' as const,
+      isActive: true,
+      chatStatus: { state: 'done' as const, updatedAt: 500 }
+    }
+    // Pre-render recent card snapshot / reconciliation must not wipe unreadBeforeView.
+    const card = buildRecentSessionCardFromTab({
+      hostId: 'host-1',
+      worktreeId: 'wt-structured',
+      worktreeName: 'main',
+      tab: activeStructuredTab,
+      now: 500
+    })
+    expect(card.agentState).toBe('done')
+    expect(
+      syncRecentCardWithLiveTab({ ...card, agentState: 'unread' }, activeStructuredTab, {
+        isActiveOnScreen: true
+      }).agentState
+    ).toBe('done')
+    expect(isMobileSessionTabUnreadBeforeView(activeStructuredTab, 500)).toBe(true)
   })
 })

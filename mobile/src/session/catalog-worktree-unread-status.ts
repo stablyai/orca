@@ -81,9 +81,21 @@ function catalogAgentTabId(paneKey: string): string {
   return colonIdx === -1 ? paneKey : paneKey.slice(0, colonIdx)
 }
 
+function catalogAgentSessionKeys(tabId: string): string[] {
+  if (!tabId.startsWith('structured-agent-session-')) {
+    return []
+  }
+  const sessionId = tabId.slice('structured-agent-session-'.length)
+  return sessionId ? [`session:${sessionId}`, `tab:agent-session:${sessionId}`] : []
+}
+
 function catalogAgentTabKeys(paneKey: string, tabCount: number): string[] {
   const tabId = catalogAgentTabId(paneKey)
-  const keys = [`pane:${paneKey}`, `tab:${paneKey.replace(':', '::')}`]
+  const keys = [
+    `pane:${paneKey}`,
+    `tab:${paneKey.replace(':', '::')}`,
+    ...catalogAgentSessionKeys(tabId)
+  ]
   if (tabCount === 1) {
     keys.push(`tab:${tabId}`)
   }
@@ -92,7 +104,12 @@ function catalogAgentTabKeys(paneKey: string, tabCount: number): string[] {
 
 function catalogAgentLookupKeys(paneKey: string): string[] {
   const tabId = catalogAgentTabId(paneKey)
-  return [`pane:${paneKey}`, `tab:${paneKey.replace(':', '::')}`, `tab:${tabId}`]
+  return [
+    `pane:${paneKey}`,
+    `tab:${paneKey.replace(':', '::')}`,
+    `tab:${tabId}`,
+    ...catalogAgentSessionKeys(tabId)
+  ]
 }
 
 export function recordSessionSupersededDone(

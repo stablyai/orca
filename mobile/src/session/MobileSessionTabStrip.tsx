@@ -89,12 +89,12 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
   const visitUnreadRef = useRef<{
     worktreeId: string | null | undefined
     userSwitchedTab: boolean
-    initialActiveChecked: boolean
+    checkedActiveTabIds: Set<string>
     latchedUnreadTabId: string | null
   }>({
     worktreeId: undefined,
     userSwitchedTab: false,
-    initialActiveChecked: false,
+    checkedActiveTabIds: new Set(),
     latchedUnreadTabId: null
   })
   if (visitUnreadRef.current.worktreeId !== controller.worktreeId) {
@@ -104,7 +104,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     visitUnreadRef.current = {
       worktreeId: controller.worktreeId,
       userSwitchedTab: false,
-      initialActiveChecked: false,
+      checkedActiveTabIds: new Set(),
       latchedUnreadTabId: null
     }
   }
@@ -135,15 +135,20 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
       const isActive = tabId === activeSessionTabId
       const visit = visitUnreadRef.current
       let state: AgentDotState | undefined
-      if (isActive && !visit.userSwitchedTab && !visit.initialActiveChecked) {
+      if (
+        isActive &&
+        !visit.userSwitchedTab &&
+        !visit.latchedUnreadTabId &&
+        !visit.checkedActiveTabIds.has(tabId)
+      ) {
         const unreadBeforeView = isMobileSessionTabUnreadBeforeView(tab, now, tabId)
         state = resolveMobileSessionTabDotState(tab, now, { isActiveOnScreen: true, tabId })
         if (unreadBeforeView) {
           visit.latchedUnreadTabId = tabId
-          visit.initialActiveChecked = true
+          visit.checkedActiveTabIds.add(tabId)
           latchInitialActiveTabUnread(tab, tabId)
         } else if (state !== undefined) {
-          visit.initialActiveChecked = true
+          visit.checkedActiveTabIds.add(tabId)
         }
       } else {
         state = resolveMobileSessionTabDotState(tab, now, { isActiveOnScreen: isActive, tabId })

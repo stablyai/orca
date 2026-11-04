@@ -179,8 +179,32 @@ function getOrCreateTrackerEntry(keys: readonly string[]): TabCompletionTrackerE
   if (keys.length === 0) {
     return null
   }
-  const existing = keys.map((key) => tabCompletionTracker.get(key)).find(Boolean)
-  const entry = existing ?? { sawInTurn: false, unread: false }
+  const existing = Array.from(
+    new Set(
+      keys
+        .map((key) => tabCompletionTracker.get(key))
+        .filter((item): item is TabCompletionTrackerEntry => Boolean(item))
+    )
+  )
+  let entry: TabCompletionTrackerEntry
+  if (existing.length === 0) {
+    entry = { sawInTurn: false, unread: false }
+  } else if (existing.length === 1) {
+    entry = existing[0]
+  } else {
+    const unread = existing.some((item) => item.unread)
+    const sawInTurn = existing.some((item) => item.sawInTurn)
+    const catalogSawInTurn = existing.some((item) => item.catalogSawInTurn)
+    const acks = existing
+      .map((item) => item.acknowledgedDoneAt)
+      .filter((stamp): stamp is number => stamp !== undefined)
+    entry = {
+      sawInTurn,
+      ...(catalogSawInTurn ? { catalogSawInTurn: true } : {}),
+      unread,
+      ...(!unread && !sawInTurn && acks.length > 0 ? { acknowledgedDoneAt: Math.max(...acks) } : {})
+    }
+  }
   keys.forEach((key) => tabCompletionTracker.set(key, entry))
   return entry
 }
@@ -189,10 +213,21 @@ export function buildTabCompletionKeys(args: {
   id?: string | null
   terminal?: string | null
   paneKey?: string | null
+  sessionId?: string | null
 }): string[] {
   const keys: string[] = []
+  const sid =
+    args.sessionId ||
+    (args.id?.startsWith('agent-session:')
+      ? args.id.slice('agent-session:'.length)
+      : args.id?.startsWith('structured-agent-session-')
+        ? args.id.slice('structured-agent-session-'.length)
+        : null)
   if (args.id) {
     keys.push(`tab:${args.id}`)
+  }
+  if (sid) {
+    keys.push(`session:${sid}`, `tab:agent-session:${sid}`, `tab:structured-agent-session-${sid}`)
   }
   if (args.terminal) {
     keys.push(`pty:${args.terminal}`)
@@ -200,7 +235,7 @@ export function buildTabCompletionKeys(args: {
   if (args.paneKey) {
     keys.push(`pane:${args.paneKey}`)
   }
-  return keys
+  return Array.from(new Set(keys))
 }
 
 export function resolveTrackedTabCompletionState(args: {
@@ -241,23 +276,11 @@ export function resolveTrackedTabCompletionState(args: {
   }
   if (rawState === 'done') {
     entry.catalogSawInTurn = false
-    const hasUnacknowledgedCompletion = entry.unread || entry.sawInTurn
     if (isActiveOnScreen === true) {
       entry.sawInTurn = false
       entry.unread = false
       if (doneStamp !== undefined) {
         entry.acknowledgedDoneAt = Math.max(entry.acknowledgedDoneAt ?? 0, doneStamp)
-      }
-      return finish('done')
-    }
-    if (isActiveOnScreen === false) {
-      if (hasUnacknowledgedCompletion) {
-        entry.sawInTurn = false
-        entry.unread = true
-        return finish('unread')
-      }
-      if (doneStamp !== undefined && entry.acknowledgedDoneAt === undefined) {
-        entry.acknowledgedDoneAt = doneStamp
       }
       return finish('done')
     }

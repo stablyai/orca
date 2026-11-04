@@ -31,11 +31,12 @@ export function resolveSessionTabPaneKey(
   if (tab.agentStatus?.paneKey) {
     return tab.agentStatus.paneKey
   }
-  if (tab.parentTabId && tab.leafId) {
-    return `${tab.parentTabId}:${tab.leafId}`
+  const normalizedLeafId = tab.leafId ? (/^pane:(\d+)$/.exec(tab.leafId)?.[1] ?? tab.leafId) : null
+  if (tab.parentTabId && normalizedLeafId) {
+    return `${tab.parentTabId}:${normalizedLeafId}`
   }
-  if (tabId && tab.leafId && !tabId.includes('::')) {
-    return `${tabId}:${tab.leafId}`
+  if (tabId && normalizedLeafId && !tabId.includes('::')) {
+    return `${tabId}:${normalizedLeafId}`
   }
   if (tabId?.includes('::')) {
     return tabId.replace('::', ':')
@@ -48,6 +49,7 @@ type SessionTabStatus = {
   parentTabId?: string | null
   leafId?: string | null
   terminal?: string | null
+  sessionId?: string | null
   isActive?: boolean
   type?: MobileSessionTab['type']
   agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
@@ -104,7 +106,8 @@ export function resolveMobileSessionTabDotState(
     keys: buildTabCompletionKeys({
       id: tabId,
       terminal: tab.terminal,
-      paneKey: resolveSessionTabPaneKey(tab, tabId)
+      paneKey: resolveSessionTabPaneKey(tab, tabId),
+      sessionId: tab.sessionId
     }),
     rawState,
     doneStamp: resolveTabDoneStamp(tab, tabId),
@@ -122,7 +125,8 @@ export function isMobileSessionTabUnreadBeforeView(
     buildTabCompletionKeys({
       id: tabId,
       terminal: tab.terminal,
-      paneKey: resolveSessionTabPaneKey(tab, tabId)
+      paneKey: resolveSessionTabPaneKey(tab, tabId),
+      sessionId: tab.sessionId
     }),
     rawState
   )
@@ -133,7 +137,8 @@ export function latchInitialActiveTabUnread(tab: SessionTabStatus, tabId = tab.i
     buildTabCompletionKeys({
       id: tabId,
       terminal: tab.terminal,
-      paneKey: resolveSessionTabPaneKey(tab, tabId)
+      paneKey: resolveSessionTabPaneKey(tab, tabId),
+      sessionId: tab.sessionId
     })
   )
 }
@@ -163,7 +168,8 @@ export function seedUnreadWorktreeSessionTabs(
         keys: buildTabCompletionKeys({
           id: tab.id,
           terminal: tab.type === 'terminal' ? tab.terminal : undefined,
-          paneKey: resolveSessionTabPaneKey(tab)
+          paneKey: resolveSessionTabPaneKey(tab),
+          sessionId: tab.type === 'agent-session' ? tab.sessionId : undefined
         }),
         stamp,
         isActive

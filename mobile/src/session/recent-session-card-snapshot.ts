@@ -4,7 +4,6 @@ import type { MobileSessionTab, MobileSessionTabType } from './mobile-session-ro
 import {
   buildTabCompletionKeys,
   getMobileSessionTabTitle,
-  resolveMobileSessionTabDotState,
   resolveMobileTerminalTabAgentId,
   resolveRawSessionTabDotState,
   resolveTabDoneStamp,
@@ -57,6 +56,10 @@ export function resolveLiveTabDotState(
       : tab.type
         ? resolveRawSessionTabDotState(tab)
         : undefined
+  const isActiveOnScreen = options?.isActiveOnScreen ?? tab.isActive
+  if (isActiveOnScreen === true && rawState === 'done') {
+    return 'done'
+  }
   const resolved = resolveTrackedTabCompletionState({
     keys: buildTabCompletionKeys({
       id: tab.id || options?.card?.tabId,
@@ -65,7 +68,7 @@ export function resolveLiveTabDotState(
     }),
     rawState,
     doneStamp: tab.doneStamp ?? resolveTabDoneStamp(tab),
-    isActiveOnScreen: options?.isActiveOnScreen ?? tab.isActive,
+    isActiveOnScreen,
     previousCardState: fallbackState
   })
   return resolved && resolved !== 'idle' ? resolved : undefined
@@ -212,7 +215,7 @@ export function buildRecentSessionCardFromTab(p: {
       : t.type === 'terminal'
         ? resolveMobileTerminalTabAgentId(t, hostAgentIdentity)
         : undefined
-  const rawState = resolveMobileSessionTabDotState(t, now)
+  const rawState = resolveRawSessionTabDotState(t, now)
   const agentState = rawState && rawState !== 'idle' ? rawState : undefined
   const leafId = t.type === 'terminal' && t.leafId ? t.leafId : undefined
   const terminalHandle = t.type === 'terminal' && t.terminal ? t.terminal : undefined
