@@ -8,7 +8,7 @@ import type {
   PRInfo
 } from '../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
-import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
+import type { HostedReviewInfo } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { RpcResponse } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'

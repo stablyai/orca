@@ -1,5 +1,5 @@
 /** Route main’s drop markers outside transport data: empty chunks are ambiguous after OSC stripping, and remote-runtime streams never use main’s gate. */
-import type { PtyModelRestoreNeededEvent } from '../../../../shared/pty-model-restore-marker'
+import type { PtyModelRestoreNeededEvent } from '../../../../shared/terminal/replay/pty-model-restore-marker'
 
 const ptyModelRestoreNeededHandlers = new Map<string, (event: PtyModelRestoreNeededEvent) => void>()
 let modelRestoreNeededChannelAttached = false

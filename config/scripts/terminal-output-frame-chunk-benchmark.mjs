@@ -93,13 +93,14 @@ if (CHUNK_SOURCE.includes('for (const part of data)')) {
 }
 
 const { TERMINAL_STREAM_CHUNK_BYTES } = await import(
-  new URL('../../src/shared/terminal-multiplex-flow-control.ts', import.meta.url).href
+  new URL('../../src/shared/terminal/stream/terminal-multiplex-flow-control.ts', import.meta.url)
+    .href
 )
 const { measureClipboardTextByteLength } = await import(
   new URL('../../src/shared/clipboard-text.ts', import.meta.url).href
 )
 const { TerminalStreamOpcode, encodeTerminalStreamJson, encodeTerminalStreamText } = await import(
-  new URL('../../src/shared/terminal-stream-protocol.ts', import.meta.url).href
+  new URL('../../src/shared/terminal/stream/terminal-stream-protocol.ts', import.meta.url).href
 )
 const { exceedsTerminalStreamChunkBytes, iterateTerminalOutputFrameChunks } = await import(
   new URL('../../src/main/runtime/rpc/terminal-output-frame-chunks.ts', import.meta.url).href

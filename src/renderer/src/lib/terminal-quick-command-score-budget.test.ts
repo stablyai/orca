@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { searchTerminalQuickCommands } from './terminal-quick-command-search'
 
 it.each(['Review', 'codex'])('does not scan prompts that cannot improve the %s match', (query) => {

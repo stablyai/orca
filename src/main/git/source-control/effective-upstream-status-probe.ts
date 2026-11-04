@@ -1,9 +1,9 @@
-import type { GitUpstreamStatus } from '../../../shared/git-status-types'
+import type { GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
 import {
   getEffectiveGitUpstreamStatus,
-  getGitUpstreamStatusForUpstreamName,
-  splitRemoteBranchName
-} from '../../../shared/git-effective-upstream'
+  getGitUpstreamStatusForUpstreamName
+} from '../../../shared/git/remotes/git-effective-upstream'
+import { splitRemoteBranchName } from '../../../shared/git/remotes/git-remote-branch-name'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'

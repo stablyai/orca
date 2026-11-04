@@ -1,5 +1,8 @@
 import { translate } from '@/i18n/i18n'
-import type { AiVaultSearchSort, AiVaultSort } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultSearchSort,
+  AiVaultSort
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 export type AiVaultSortOption<Value extends string> = { value: Value; label: string }
 

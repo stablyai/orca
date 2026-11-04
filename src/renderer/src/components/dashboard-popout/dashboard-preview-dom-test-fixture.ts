@@ -1,7 +1,7 @@
 import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
 import { vi, type Mock } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import {
   openStandaloneTerminal,
   type StandaloneTerminal

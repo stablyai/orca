@@ -3,7 +3,7 @@ import {
   createTerminalTitleTracker,
   STALE_WORKING_TITLE_TIMEOUT_MS,
   type TerminalTitleFactMeta
-} from '../../../../shared/terminal-output-side-effects'
+} from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolvePaneTitleDecision } from './terminal-title-evidence'
 import { installTitleSpawnBell } from './pty-connection/title-spawn-bell'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './pty-connection/confirmed-shell-agent-title'

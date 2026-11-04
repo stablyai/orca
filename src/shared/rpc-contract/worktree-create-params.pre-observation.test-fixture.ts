@@ -1,7 +1,7 @@
 // Frozen schema from 3bfcda1bf043af8d83371b2f131a65f2056f7970; original SHA256 cf787898b4d3bfe154c97637c71e2d47b6032cefd7e90956c14f2a72a968fe4d.
 import { z } from 'zod'
-import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
-import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
+import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { workspaceSourceSchema } from '../telemetry-events'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'

@@ -1,12 +1,12 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PairingOffer } from '../../../../shared/mobile-relay-pairing-offer'
+import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks
 } from '../../../../shared/remote-runtime/remote-runtime-client'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
-import type { BrowserClientHostCommandResult } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()

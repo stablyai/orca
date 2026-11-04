@@ -4,7 +4,7 @@ import {
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
   GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
 } from '../../../shared/task-source-runtime-capabilities'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../shared/source-control-runtime-capabilities'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'

@@ -22,7 +22,7 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { translate } from '@/i18n/i18n'
 
-const DiffViewer = lazy(() => import('./DiffViewer'))
+const DiffViewer = lazy(() => import('./diff/monaco-view/DiffViewer'))
 
 type DiskReadState =
   | { kind: 'loading' }

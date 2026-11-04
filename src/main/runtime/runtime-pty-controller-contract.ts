@@ -1,5 +1,8 @@
-import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
-import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
+import type {
+  TerminalLimitStatus,
+  TerminalLimitUpdate
+} from '../../shared/terminal/runtime-policy/terminal-limit-policy'
+import type { TerminalViewAttributes } from '../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
 import type { RuntimePaneCreateClaim } from '../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
@@ -29,7 +32,7 @@ import type {
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { StartupCwdFallback } from '../../shared/startup-cwd-fallback'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type { PaneResumeOutcome } from '../../shared/workspace-layout/workspace-layout-published'
 
 export type PtyInventoryRefreshOptions = {

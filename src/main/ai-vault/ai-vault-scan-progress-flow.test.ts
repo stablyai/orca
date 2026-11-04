@@ -2,7 +2,10 @@ import { link, mkdir, mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultScanProgress, AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
+import type {
+  AiVaultScanProgress,
+  AiVaultScanWork
+} from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import {
   localAiVaultScanProgress,
   onLocalAiVaultScanProgress,

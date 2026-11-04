@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createMobileRelayPairingFixtures,
   encodePairingFixturePayload
-} from '../../../src/shared/mobile-relay-pairing-fixtures'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-pairing-fixtures'
 import { decodePairingUrl } from './pairing'
 
 describe('mobile relay pairing contract', () => {

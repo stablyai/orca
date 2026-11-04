@@ -32,6 +32,8 @@ export const sayMobileNativeChatSessionOption: NativeChatSessionOptionSay = (id,
       return translate('chat.sessionOptionCopy.xhigh', 'Extra high')
     case 'max':
       return translate('chat.sessionOptionCopy.max', 'Max')
+    case 'ultracode':
+      return translate('chat.sessionOptionCopy.ultracode', 'Ultracode')
     case 'ultra':
       return translate('chat.sessionOptionCopy.ultra', 'Ultra')
     case 'minimalShort':

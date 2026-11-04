@@ -7,7 +7,7 @@ import {
 import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 import { scopeRpcClientToExecutionHost } from './execution-host-scoped-rpc-client'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
@@ -521,7 +521,7 @@ describe('mobile relay RPC session', () => {
 
 import { withGitHubTargetOperation } from '../tasks/github-work-item-operation'
 import { githubIssueUpdate } from '../tasks/mobile-task-item-state-operations'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as githubExact } from '../../../src/shared/source-control-runtime-capabilities'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as githubExact } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 
 it('carries captured GitHub authority through the production relay physical await without replay', async () => {
   vi.clearAllMocks()

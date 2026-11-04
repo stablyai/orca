@@ -1,16 +1,14 @@
-import { SourceControlTextActionAgentPicker } from '../../SourceControlTextActionAgentPicker'
-import {
-  hasOwnActionOverride,
-  readActionRecipeTextDraft
-} from './repository-source-control-ai-draft'
+import { SourceControlTextActionAgentPicker } from '../../source-control/text-actions/SourceControlTextActionAgentPicker'
+import { hasOwnActionOverride } from './repository-source-control-ai-draft'
+import { readActionRecipeTextDraft } from './repository-source-control-ai-recipe-text'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 import { useRepositoryActionPickerInputs } from './use-repository-action-picker-inputs'
 import { shallow } from 'zustand/shallow'
 import { sameAgentLaunchPickerModel } from '../../../tab-bar/new-tab-agent-menu-model'
-import { selectSourceControlActionRecipe } from '../../../../../../shared/source-control-action-selection'
+import { selectSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { RepositorySourceControlAiActionRowsProps } from './repository-source-control-ai-action-rows-props'
-import { sourceControlActionExecutionArgs } from '../../../../../../shared/source-control-action-launch-preferences'
+import { sourceControlActionExecutionArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import type { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import type { NativeChatDefaultSettings } from '../../../../../../shared/structured-native-chat-launch-route'
 import {
@@ -20,13 +18,13 @@ import {
 import { memo, useMemo, type JSX } from 'react'
 import { invalidateAgentPickerDrafts } from '../../../agent/agent-launch-picker-drafts'
 
-import { isCustomAgentId } from '../../../../../../shared/commit-message-agent-spec'
+import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 
 import {
   type SourceControlActionId,
   SOURCE_CONTROL_ACTION_IDS,
   SOURCE_CONTROL_ACTION_LABELS
-} from '../../../../../../shared/source-control-ai-actions'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
 import { RepositorySourceControlAiActionSaveControls } from '../../source-control/RepositorySourceControlAiActionSaveControls'
@@ -53,9 +51,9 @@ import {
 import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository-settings-targets'
 import { translate } from '@/i18n/i18n'
 import { SourceControlActionOptionField } from '../../../agent/launch-settings/AgentChoiceOptionField'
-import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control-launch-agent-selection'
+import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { captureSourceControlActionSelection } from '../../../../../../shared/source-control-ai-operation-policy'
+import { captureSourceControlActionSelection } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 
 export function RepositorySourceControlAiActionRows(
   props: RepositorySourceControlAiActionRowsProps

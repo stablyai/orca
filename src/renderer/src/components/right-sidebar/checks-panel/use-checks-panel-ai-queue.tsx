@@ -1,5 +1,5 @@
 import { useSavedSourceControlActionStart } from '../use-saved-source-control-action-start'
-import { captureSourceControlActionSelection } from '../../../../../shared/source-control-ai-operation-policy'
+import { captureSourceControlActionSelection } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   checksPanelReviewStableKey,
   clearPendingPRCommentAiAck,
@@ -10,10 +10,10 @@ import type { ChecksAgentComposerState } from './panel-state-types'
 import type { ChecksPanelAiAcknowledgementState } from './use-checks-panel-ai-acknowledgement'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { toast } from 'sonner'
-import { buildResolvePullRequestConflictsPrompt } from '../SourceControl'
-import { buildPRCommentsResolutionPrompt } from '../../../../../shared/github/pr-comments-resolution-prompt'
+import { buildResolvePullRequestConflictsPrompt } from '../../../../../shared/source-control/recovery/source-control-conflict-prompts'
+import { buildPRCommentsResolutionPrompt } from '../../../../../shared/source-control/review-comments/pr-comments-resolution-prompt'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
-import type { PRCommentGroup } from '../../../../../shared/pr-comment-groups'
+import type { PRCommentGroup } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { translate } from '@/i18n/i18n'
 
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'

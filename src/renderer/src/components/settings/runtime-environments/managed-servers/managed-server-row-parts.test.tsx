@@ -5,7 +5,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OrcadManagedRuntimeStatus } from '../../../../../../shared/orcad-managed-runtime'
-import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
 import {
   ManagedServerConfirmations,

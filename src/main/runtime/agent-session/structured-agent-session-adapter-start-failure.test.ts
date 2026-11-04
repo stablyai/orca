@@ -12,7 +12,7 @@ import {
 } from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { piScriptedChild } from '../../pi/pi-scripted-child.test-fixture'
-import { codexScriptedChild } from '../../codex/codex-scripted-child.test-fixture'
+import { codexScriptedChild } from '../../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
 import { acpScriptedChild } from '../../acp/acp-scripted-child.test-fixture'
 import type { ScriptedAgentChild } from '../structured-agent-scripted-child.test-fixture'
 import {

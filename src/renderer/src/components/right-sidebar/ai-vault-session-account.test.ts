@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { resolveAiVaultSessionAccount } from './ai-vault-session-account'
 import { aiVaultSearchHitToSession } from './ai-vault-search-session'
-import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
+import { searchHit } from '../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
 
 vi.mock('../../store', () => ({ useAppStore: vi.fn() }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))

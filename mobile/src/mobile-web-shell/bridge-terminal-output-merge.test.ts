@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
-import * as byteCounter from '../../../src/shared/terminal-stream-json-byte-length'
+import * as byteCounter from '../../../src/shared/terminal/stream/terminal-stream-json-byte-length'
 import {
   BridgeTerminalOutputBacklog,
   terminalStreamMaxPayloadBytes

@@ -17,7 +17,7 @@ import {
   type RemoteRuntimeInputSegment
 } from './remote-runtime-input-journal'
 import type { AcceptedInputOptions } from './pty-preconnect-input-buffer'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import { isSshSignInPendingTerminalError } from './terminal-ssh-sign-in-error'
 import { terminalCreateThemeParams } from './terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
@@ -42,15 +42,13 @@ import type {
   RuntimeTerminalSend,
   RuntimeTerminalShow
 } from '../../../../shared/runtime-types'
-import {
-  SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
-  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { agentResumeHostAuthorityCapability } from '../../runtime/agent-resume-host-authority-capability'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
-} from '../../../../shared/terminal-input'
+} from '../../../../shared/terminal/input/terminal-input'
 import type {
   IpcPtyTransportOptions,
   PtyConnectResult,

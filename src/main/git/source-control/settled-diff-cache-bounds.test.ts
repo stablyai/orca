@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import { MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS, SettledDiffCache } from './settled-diff-cache'
 import type { WorktreeDiffStamp } from './worktree-diff-stamp'
 

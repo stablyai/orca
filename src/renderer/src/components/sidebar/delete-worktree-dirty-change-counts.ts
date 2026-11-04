@@ -1,5 +1,5 @@
 import type { Repo } from '../../../../shared/repo-types'
-import type { GitFileStatus, GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitFileStatus, GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDeleteState } from '../../store/slices/worktree-helpers'

@@ -1,5 +1,5 @@
-import type { SynchronizedOutputLatchState } from '../../../../shared/terminal-synchronized-output-scan'
-import type { Mode2031ReplyScanState } from '../../../../shared/terminal-color-scheme-protocol'
+import type { SynchronizedOutputLatchState } from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
+import type { Mode2031ReplyScanState } from '../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 
 export type PendingPtyData = {
   data: string

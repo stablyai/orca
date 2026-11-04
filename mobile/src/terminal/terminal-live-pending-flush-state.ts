@@ -200,5 +200,5 @@ function queueTerminalLiveSend(
   drainTerminalLiveMirrorSends(state)
   return request
 }
-import { getTerminalInputByteLength } from '../../../src/shared/terminal-input'
+import { getTerminalInputByteLength } from '../../../src/shared/terminal/input/terminal-input'
 import { TERMINAL_LIVE_INPUT_MAX_BYTES } from './terminal-live-input'

@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/mobile-relay-close-codes'
-import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
+import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
+import {
+  MobileEndpointSupervisor,
+  type MobileEndpointSupervisorDependencies
+} from './mobile-endpoint-supervisor'
 import {
   dependencies,
   FakeLogicalClient,
@@ -9,7 +12,7 @@ import {
   relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
-import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor'
+
 import type { RpcClient } from './rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))

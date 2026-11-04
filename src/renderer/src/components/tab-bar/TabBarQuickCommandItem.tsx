@@ -3,7 +3,7 @@ import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react'
 import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'

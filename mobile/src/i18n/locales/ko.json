@@ -110,13 +110,8 @@
       "tryAgain": "다시 시도"
     },
     "terminalSettings": {
-      "autocomplete": "자동 완성 및 자동 수정",
-      "autocompleteOff": "꺼짐",
-      "autocompleteOn": "켜짐",
       "defaultText": "기본 (100%)",
       "keepPhoneSize": "휴대폰 크기로 유지(기본값)",
-      "keyboardInputDescription": "자동 완성, 자동 수정, 맞춤법 제안은 버퍼 방식의 명령어 입력에만 적용됩니다. 키보드 위의 이중 화살표 버튼을 눌러 실시간 입력에서 전환한 다음, 명령어를 수정하고 '보내기'를 누르세요. 명령어, 플래그, 경로가 자동으로 바뀌지 않도록 기본적으로 꺼져 있습니다.",
-      "keyboardInputHeading": "키보드 입력",
       "largeText": "크게 (125%)",
       "largerText": "더 크게 (150%)",
       "largestText": "가장 크게 (200%)",
@@ -1684,15 +1679,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "키보드 닫기",
       "sendKey": "{{label}} 보내기",
-      "modifierHint": "다음 키에 적용됩니다. 두 번 탭하면 계속 켜집니다.",
       "typeCharacter": "{{character}} 입력",
       "interrupt": "터미널 중단",
       "keysModeLabel": "키 모드: 입력 내용이 터미널로 바로 전송됩니다. 메시지 모드로 전환",
       "messageModeLabel": "메시지 모드: 작성한 뒤 전송합니다. 키 모드로 전환",
-      "keysMode": "키",
-      "messageMode": "메시지",
       "moreKeys": "더 많은 키와 작업",
-      "showKeyboard": "키보드 표시"
+      "showKeyboard": "키보드 표시",
+      "dismissKeyboardHint": "소프트웨어 키보드를 숨기고 현재 터미널 세션을 열린 상태로 유지합니다.",
+      "switchToDesktopMode": "데스크톱 모드로 전환",
+      "switchToPhoneMode": "휴대폰 모드로 전환",
+      "pasteFromClipboard": "클립보드에서 붙여넣기",
+      "paste": "붙여넣기",
+      "addCustomShortcut": "사용자 지정 단축키 추가"
     },
     "activeContent": {
       "createTab": "탭 만들기",
@@ -1803,11 +1801,7 @@
     },
     "commandDock": {
       "liveInputHint": "입력한 텍스트가 활성 터미널로 바로 전송됩니다.",
-      "liveInputLabel": "실시간 터미널 입력",
-      "sendCommand": "명령 보내기",
-      "messageAgentPlaceholder": "{{agent}}에게 메시지 보내기",
-      "writeCommandPlaceholder": "명령을 작성한 후 전송",
-      "theAgent": "에이전트"
+      "liveInputLabel": "실시간 터미널 입력"
     },
     "contentRow": {
       "dismissCreationWarning": "워크스페이스 생성 경고 닫기"
@@ -2489,14 +2483,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "레이아웃을 저장할 수 없습니다",
       "saveFailedMessage": "현재는 이 레이아웃이 적용됩니다. 다시 선택하여 저장을 재시도하세요."
-    },
-    "terminalArrowPad": {
-      "label": "방향키",
-      "hint": "한쪽을 탭하면 방향키를 한 번 누르고, 길게 눌러 드래그하면 반복합니다",
-      "up": "위",
-      "down": "아래",
-      "left": "왼쪽",
-      "right": "오른쪽"
     },
     "terminalMoreKeys": {
       "sendKey": "{{label}} 보내기",

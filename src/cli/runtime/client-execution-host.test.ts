@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RuntimeClient } from './client'
 import { addEnvironmentFromPairingCode } from './environments'
-import { encodePairingOffer } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 
 const transport = vi.hoisted(() => ({ local: vi.fn(), remote: vi.fn(), remotePreflight: vi.fn() }))

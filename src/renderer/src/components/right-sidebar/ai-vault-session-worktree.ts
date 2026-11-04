@@ -1,23 +1,14 @@
 import { useMemo } from 'react'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   buildAiVaultSessionWorktreeMap,
   type AiVaultSessionWorktreeInfo
-} from '../../../../shared/ai-vault-session-worktree'
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 
-export {
-  aiVaultWorktreeCompactPath,
-  canJumpToAiVaultSessionWorktree,
-  resolveAiVaultSessionWorktreeDisplay,
-  resolveAiVaultSessionWorktreeInfo,
-  withAiVaultCurrentWorktreeStatus,
-  type AiVaultSessionWorktreeInfo,
-  type AiVaultSessionWorktreeStatus
-} from '../../../../shared/ai-vault-session-worktree'
 export {
   aiVaultResumeInSessionWorkspaceLabel,
   aiVaultSessionWorkspaceHeading,

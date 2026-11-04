@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>

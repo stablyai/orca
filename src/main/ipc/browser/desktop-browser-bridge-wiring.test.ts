@@ -40,16 +40,22 @@ vi.mock('../runtime-environments/runtime-environment-manual-disconnect', async (
     isRuntimeEnvironmentManuallyDisconnected: facadeMocks.isRuntimeEnvironmentManuallyDisconnected
   }
 })
-vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  resolveEnvironment: (_userDataPath: string, environmentId: string) => ({ environmentId })
-}))
-vi.mock('../../../shared/runtime-environments', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  getOrcadSshDeployment: ({ environmentId }: { environmentId: string }) => ({
-    sshTargetId: environmentId.slice('env-'.length)
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    resolveEnvironment: (_userDataPath: string, environmentId: string) => ({ environmentId })
   })
-}))
+)
+vi.mock(
+  '../../../shared/remote-runtime/host-catalog/runtime-environments',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    getOrcadSshDeployment: ({ environmentId }: { environmentId: string }) => ({
+      sshTargetId: environmentId.slice('env-'.length)
+    })
+  })
+)
 
 import { listDesktopBrowserBridgeCandidates } from './desktop-browser-bridge-wiring'
 

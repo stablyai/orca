@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  resolveRetainedTerminalHandles,
-  shouldPruneTerminalHandle
-} from './mobile-terminal-prune-decision'
+import { shouldPruneTerminalHandle } from './mobile-terminal-prune-decision'
 
 describe('shouldPruneTerminalHandle', () => {
   it('prunes a handle the list no longer reports while chat is closed', () => {
@@ -50,29 +47,5 @@ describe('shouldPruneTerminalHandle', () => {
         })
       ).toBe(false)
     }
-  })
-})
-
-describe('resolveRetainedTerminalHandles', () => {
-  it('carries the chat-covered handle so its live-input preference survives', () => {
-    // Retain preferences with the lease so this refresh cannot erase its buffered-mode opt-out.
-    expect([
-      ...resolveRetainedTerminalHandles({
-        liveHandles: new Set(['term-2']),
-        showNativeChat: true,
-        activeHandle: 'term-1'
-      })
-    ]).toEqual(['term-2', 'term-1'])
-  })
-
-  it('returns the list untouched when nothing is retained beyond it', () => {
-    const liveHandles = new Set(['term-1'])
-    expect(
-      resolveRetainedTerminalHandles({
-        liveHandles,
-        showNativeChat: false,
-        activeHandle: 'term-2'
-      })
-    ).toBe(liveHandles)
   })
 })

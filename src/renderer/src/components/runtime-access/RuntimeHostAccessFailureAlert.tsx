@@ -1,7 +1,7 @@
 import type {
   RemotePairingFailure,
   RemotePairingFailureKind
-} from '../../../../shared/remote-pairing-verification'
+} from '../../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { translate } from '@/i18n/i18n'
 import { translateRemotePairingFailureDescription } from '@/lib/remote-pairing-copy'
 import { remoteServerPairingFailureMessage } from '@/lib/remote-server-pairing-error-copy'

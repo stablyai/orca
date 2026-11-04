@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'

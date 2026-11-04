@@ -39,7 +39,7 @@ import {
   type BrowserClientDownloadRouteOutcome
 } from '../../client-hosts/file-transfers/browser-client-download-relay'
 import { BrowserClientFileChannelTransport } from '../../client-hosts/file-transfers/browser-client-file-channel-transport'
-import type { BrowserClientHostedPageInventory } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   registerBrowserClientDownloadRouter,
   resetBrowserClientDownloadRouting,
