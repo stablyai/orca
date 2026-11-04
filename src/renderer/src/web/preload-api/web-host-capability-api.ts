@@ -71,6 +71,12 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
       }
       return callRuntimeResult<string[]>('preflight.detectAgents').catch(() => [])
     },
+    detectMonitors: async () => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return []
+      }
+      return callRuntimeResult<string[]>('preflight.detectMonitors').catch(() => [])
+    },
     refreshAgents: () =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult('preflight.refreshAgents')

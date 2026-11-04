@@ -30,6 +30,9 @@ export const preflightApi = {
   detectAgents: (
     args?: PreflightRuntimeContext & { enabledOnly?: boolean; wakeWslDistro?: boolean }
   ): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents', args),
+  detectMonitors: (
+    args?: PreflightRuntimeContext & { wakeWslDistro?: boolean }
+  ): Promise<string[]> => ipcRenderer.invoke('preflight:detectMonitors', args),
   onWslDistroRunning: (callback: (distro: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, distro: string): void => callback(distro)
     ipcRenderer.on('preflight:wslDistroRunning', listener)

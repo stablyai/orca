@@ -5,6 +5,7 @@ import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { useTabAgentMenuLaunch } from './QuickLaunchButton'
 import type { TabCreateMenuOption } from './tab-create-menu-options'
 import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
+import type { SystemMonitorDescriptor } from '../../../../shared/system-monitors'
 
 export type TabBarCreateMenuController = {
   agentMenu: NewTabAgentMenuModel
@@ -17,6 +18,8 @@ export type TabBarCreateMenuController = {
   setCreateMenuQuery: (query: string) => void
   createMenuOptions: TabCreateMenuOption[]
   windowsShellEntries: WindowsShellMenuEntry[] | undefined
+  systemMonitors: readonly SystemMonitorDescriptor[]
+  handleLaunchSystemMonitor: (monitor: SystemMonitorDescriptor) => void
   handleSelectCreateMenuOption: (option: TabCreateMenuOption) => void
   launchAgentFromNewTabEntry: (option: TabAgentLaunchOption) => boolean | Promise<boolean>
   runPendingNewTabMenuFocusAfterClose: () => void

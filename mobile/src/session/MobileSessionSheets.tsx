@@ -19,9 +19,11 @@ import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileAllowAutoCloseActions } from './mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './MobileAgentSessionTabActionSheet'
+import { useMobileSystemMonitorsSheet } from './MobileSystemMonitorsSheet'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
+  const { systemMonitorsAction, systemMonitorsModal } = useMobileSystemMonitorsSheet(controller)
   const terminalWorkerActions = useMobileAllowAutoCloseActions(
     controller.client,
     controller.actionTarget && { terminal: controller.actionTarget.handle }
@@ -127,6 +129,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               void handleCreateTerminal()
             }
           },
+          systemMonitorsAction,
           // Why: browser/markdown creation resolve a real worktree on the host
           // (browser.tabCreate, files.createFile); the floating sentinel is
           // terminal-only over RPC, so those options hide there.
@@ -389,6 +392,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         ]}
         onClose={() => setDeleteKeyTarget(null)}
       />
+      {systemMonitorsModal}
     </>
   )
 }
