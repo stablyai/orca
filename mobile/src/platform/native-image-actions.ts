@@ -49,11 +49,10 @@ function namedForMime(file: FsFile, folder: Directory, mime: string): FsFile {
 async function download(url: string): Promise<Ready> {
   const folder = freshFolder()
   const file = await FsFile.downloadFileAsync(url, folder)
-  if (!isKnownRasterImageMimeType(file.type)) {
-    throw new Error('the link is not an image the phone can save')
-  }
-  if (file.size > CLIPBOARD_IMAGE_MAX_SOURCE_BYTES) {
-    throw tooLarge()
+  const raster = isKnownRasterImageMimeType(file.type)
+  if (!raster || file.size > CLIPBOARD_IMAGE_MAX_SOURCE_BYTES) {
+    folder.delete()
+    throw raster ? tooLarge() : new Error('the link is not an image the phone can save')
   }
   return { file: namedForMime(file, folder, file.type), mime: file.type }
 }

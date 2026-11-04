@@ -29,6 +29,7 @@ export function TransientToast({
   useMobileColorScheme()
   return message ? (
     <View
+      accessibilityLiveRegion="polite"
       pointerEvents="none"
       style={[mobileSessionReviewCommentStyles.toast, { bottom: bottomInset + spacing.lg }]}
     >

@@ -1,6 +1,9 @@
 import { useMemo } from 'react'
 import { readRasterImageDataUri } from '../../../src/shared/image-data-uri'
-import type { BridgeImageRunParams } from '../mobile-web-shell/bridge/bridge-image-verbs'
+import type {
+  BridgeImageOperation,
+  BridgeImageRunParams
+} from '../mobile-web-shell/bridge/bridge-image-verbs'
 import {
   NativeVerbError,
   useNativeVerbs,
@@ -37,13 +40,26 @@ function refusal(error: unknown): unknown {
     : error
 }
 
+// The shell stages one image at a time, so every action in this document waits for the one before it, even from a closed viewer.
+let previous: Promise<unknown> = Promise.resolve()
+
+// The phone cannot save an SVG; drop the ones the URL names before offering actions that would fail.
+function isWebRaster(uri: string): boolean {
+  try {
+    const url = new URL(uri)
+    return url.protocol === 'https:' && !/\.svgz?$/i.test(url.pathname)
+  } catch {
+    return false
+  }
+}
+
 // The page holds host and inline images as base64 data URIs and stages them; the shell downloads web images itself.
 function imageAction(verbs: NativeVerbs, uri: string): ImageAction | null {
   const data = readRasterImageDataUri(uri)
-  if (!data && !/^https:/i.test(uri)) {
+  if (!data && !isWebRaster(uri)) {
     return null
   }
-  return async (operation) => {
+  const act = async (operation: BridgeImageOperation) => {
     try {
       const source: BridgeImageRunParams['source'] = data
         ? {
@@ -56,6 +72,11 @@ function imageAction(verbs: NativeVerbs, uri: string): ImageAction | null {
     } catch (error) {
       throw refusal(error)
     }
+  }
+  return (operation) => {
+    const next = previous.then(() => act(operation))
+    previous = next.catch(() => {})
+    return next
   }
 }
 

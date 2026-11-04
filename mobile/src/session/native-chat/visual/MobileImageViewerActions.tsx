@@ -36,25 +36,20 @@ export function MobileImageViewerActions({
   const act = useMemo(() => imageActions?.forImage(uri) ?? null, [imageActions, uri])
   const [menuOpen, setMenuOpen] = useState(false)
   const { message, showToast } = useTransientToast()
-  // The shell stages one image at a time, so a second action waits for the first to finish.
-  const [busy, setBusy] = useState(false)
   if (!act) {
     return null
   }
   const run = (operation: BridgeImageOperation) => {
-    setBusy(true)
-    act(operation)
-      .then(
-        () => {
-          if (operation === 'copy') {
-            showToast(t('chat.nativeChatImageViewer.imageCopied', 'Image copied'))
-          } else if (operation === 'save') {
-            showToast(t('chat.nativeChatImageViewer.imageSaved', 'Image saved'))
-          }
-        },
-        (error: unknown) => showToast(failureMessage(t, operation, error))
-      )
-      .finally(() => setBusy(false))
+    act(operation).then(
+      () => {
+        if (operation === 'copy') {
+          showToast(t('chat.nativeChatImageViewer.imageCopied', 'Image copied'))
+        } else if (operation === 'save') {
+          showToast(t('chat.nativeChatImageViewer.imageSaved', 'Image saved'))
+        }
+      },
+      (error: unknown) => showToast(failureMessage(t, operation, error))
+    )
   }
   return (
     <>
@@ -74,7 +69,6 @@ export function MobileImageViewerActions({
             id: 'copy',
             label: t('chat.nativeChatImageViewer.copyImage', 'Copy image'),
             icon: Copy,
-            disabled: busy,
             onPress: () => run('copy')
           },
           {
@@ -82,7 +76,6 @@ export function MobileImageViewerActions({
             label: t('chat.nativeChatImageViewer.saveImage', 'Save image'),
             icon: Download,
             closeBeforePress: true,
-            disabled: busy,
             onPress: () => run('save')
           },
           {
@@ -90,7 +83,6 @@ export function MobileImageViewerActions({
             label: t('chat.nativeChatImageViewer.share', 'Share…'),
             icon: Share,
             closeBeforePress: true,
-            disabled: busy,
             onPress: () => run('share')
           }
         ]}
