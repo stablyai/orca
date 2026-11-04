@@ -16,9 +16,12 @@ vi.mock('./runtime-client', async () => {
 })
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: mocks.addEnvironmentFromPairingCodeMock,
-  listEnvironments: mocks.listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: mocks.listEnvironmentsMock
 }))
 vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
@@ -30,7 +33,7 @@ import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index
 import { buildWorktree, okFixture } from './test-fixtures'
 import { RuntimeClientError } from './runtime/types'
 import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../shared/jira/jira-agent-capability'
-import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachment-capabilities'
+import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachments/workspace-attachment-capabilities'
 
 const site = {
   id: 'site-1',

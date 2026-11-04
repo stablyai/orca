@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
-import type { TerminalProcessInspection } from '../../../shared/terminal-process-inspection'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { TerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { describe, expect, it, vi } from 'vitest'
 import { collectWslMoveGateInputs, type WslMoveGateFactSources } from './wsl-move-gate-facts'
 import {

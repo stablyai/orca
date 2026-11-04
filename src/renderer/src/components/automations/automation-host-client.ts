@@ -128,13 +128,14 @@ export async function listAutomationsForTarget(
 /** Fetch one automation’s history; list usage comes from authority projections so page cost cannot scale with all retained runs. */
 export async function listAutomationRunsForTarget(
   target: AutomationHostTarget,
-  automationId: string
+  automationId: string,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<AutomationRun[]> {
   const result = await callRuntimeRpc<{ runs: AutomationRun[] }>(
     target,
     'automation.runs',
     { automationId },
-    { timeoutMs: 15_000 }
+    { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
   )
   return result.runs
 }

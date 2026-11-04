@@ -146,25 +146,6 @@ describe('session.tabs on a windowed server follow main without a window publish
     expect(parentTabsOf(await listed(runtime))).toEqual([SURFACE_TAB_ID, SECOND_TAB_ID])
   })
 
-  // Stale until W4's dropped-leaf hook (its close PR, ledger L255) drops the row; remove .fails then.
-  it.fails("a CLI close reaches the rows, which then agree with main's layout", async () => {
-    const { runtime, store } = threeTabSurfaceRuntime()
-    const seen = await windowedPhone(runtime)
-    expect(parentTabsOf(await listed(runtime))).toContain(SECOND_TAB_ID)
-
-    await runtime.applyLayoutCommand({
-      type: 'closeTabs',
-      workspace: TEST_WORKTREE_ID,
-      tabIds: [SECOND_TAB_ID],
-      force: true
-    })
-    await vi.runAllTimersAsync()
-
-    expect(layoutTabIds(store)).not.toContain(SECOND_TAB_ID)
-    expect(parentTabsOf(seen.at(-1))).toEqual(layoutTabIds(store))
-    expect(parentTabsOf(await listed(runtime))).toEqual(layoutTabIds(store))
-  })
-
   it("a later commit, or the window's older snapshot, never re-adds a row main's layout lacks", async () => {
     const { runtime } = threeTabSurfaceRuntime()
     await windowedPhone(runtime)

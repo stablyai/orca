@@ -1,14 +1,14 @@
 import {
   agentJournalSubmissionKey,
   boundJournalKeyComponent
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
-import { agentSessionHostStatusBody } from '../../../shared/agent-session-host-status-rows'
+import { agentSessionHostStatusBody } from '../../../shared/agent-session/view/agent-session-host-status-rows'
 import {
   subagentFoldKey,
   subagentItemBlock
@@ -32,6 +32,24 @@ export function historyEntryBytes(
   submissionBytes: ReadonlyMap<string, number>
 ): number {
   return Buffer.byteLength(JSON.stringify(item), 'utf8') + (submissionBytes.get(item.itemId) ?? 0)
+}
+
+/** Count removal IDs and submissions alongside the exact items sent to a reader. */
+export function historyContentBytes(
+  items: readonly HistoryItemForm[],
+  removedItemIds: readonly string[],
+  submissionBytes: ReadonlyMap<string, number>
+): number {
+  return (
+    items.reduce(
+      (total, { item, bytes }) => total + bytes + (submissionBytes.get(item.itemId) ?? 0),
+      0
+    ) +
+    removedItemIds.reduce(
+      (total, itemId) => total + Buffer.byteLength(JSON.stringify(itemId), 'utf8') + 1,
+      0
+    )
+  )
 }
 
 // Snapshot arrays change with submissions, so cache serialization once per paged snapshot.

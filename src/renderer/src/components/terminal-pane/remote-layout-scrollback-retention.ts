@@ -1,4 +1,4 @@
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 

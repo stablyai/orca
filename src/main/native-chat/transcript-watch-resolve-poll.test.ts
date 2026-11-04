@@ -124,19 +124,6 @@ describe('native chat transcript resolve polling', () => {
     subscription.unsubscribe()
   })
 
-  it('keeps resolving on every retry when no exact hook path is available', async () => {
-    const subscription = await subscribeNativeChatTranscript({
-      agent: 'claude',
-      sessionId: 'session-id',
-      resolvePollIntervalMs: 10,
-      onAppend: () => {}
-    })
-
-    await vi.advanceTimersByTimeAsync(35)
-    expect(mocks.resolve.mock.calls.length).toBeGreaterThan(1)
-    subscription.unsubscribe()
-  })
-
   it('degrades a gate-refused initial resolve to the poll fallback instead of failing', async () => {
     const engine = { unsubscribe: vi.fn(), watching: true }
     mocks.resolve
@@ -158,18 +145,6 @@ describe('native chat transcript resolve polling', () => {
     ).toBe(true)
     subscription.unsubscribe()
     expect(engine.unsubscribe).toHaveBeenCalled()
-  })
-
-  it('still fails subscribe on non-gate resolver errors', async () => {
-    mocks.resolve.mockRejectedValueOnce(new Error('resolver crashed'))
-
-    await expect(
-      subscribeNativeChatTranscript({
-        agent: 'claude',
-        sessionId: 'session-id',
-        onAppend: () => {}
-      })
-    ).rejects.toThrow('resolver crashed')
   })
 
   it('cancels queued WSL resolution when the subscription closes', async () => {

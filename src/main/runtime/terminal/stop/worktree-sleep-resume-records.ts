@@ -4,12 +4,12 @@ import {
   normalizeAgentProviderSession,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session-resume'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
-import type { AgentProcessVerdict } from '../../../../shared/agent-process-presence'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentProcessVerdict } from '../../../../shared/agent-status/process/agent-process-presence'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 
 /** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */

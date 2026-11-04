@@ -3,8 +3,8 @@ import type {
   ResumableTuiAgent,
   SavedResumeStartupSource,
   SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
-import type { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 
 export type PendingStartupCommand = {
   command: string
@@ -22,6 +22,7 @@ export type FreshSpawnOptions = {
 export type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   agent: ResumableTuiAgent
   resumeProviderSession: AgentProviderSessionMetadata
+  connectionId?: string | null
   /** Built from the pane's saved facts, so the host refuses it for a chat's conversation. */
   resumeOrigin: 'saved'
   launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']

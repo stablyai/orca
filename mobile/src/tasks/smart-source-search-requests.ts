@@ -10,7 +10,7 @@ import {
   buildJiraTextMatchJql
 } from '../../../src/shared/jira/jira-search-input-jql'
 import { jiraIssueSearchRead } from './mobile-jira-operations'
-import { repoBaseRefSearchRead } from './mobile-workspace-source-operations'
+import { repoBaseRefSearchRead } from '../source-control/mobile-repo-base-ref-operations'
 import {
   githubWorkItemSearchRead,
   gitlabWorkItemSearchRead,

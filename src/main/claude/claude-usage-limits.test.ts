@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { latestNativeChatUsageLimitCut } from '../../shared/native-chat/native-chat-usage-limit-cut'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   adapterFor,
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
   USER_MESSAGE
-} from './claude-structured-session-test-support'
+} from './structured/claude-structured-session-test-support'
 import { assistantFrame, frame, setup, userFrame } from './claude-context-usage-test-support'
 
 // Seconds, as Claude sends them; two hours out so no reset passes mid-test.

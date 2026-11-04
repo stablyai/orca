@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const filePreviewStyles = themedStyleSheet(() => ({
@@ -8,40 +8,7 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgBase
   },
   header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  meta: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
+    backgroundColor: colors.bgBase
   },
   state: {
     flex: 1,
@@ -60,13 +27,106 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     fontSize: typography.bodySize,
     textAlign: 'center'
   },
-  saveButton: {
+  scroll: {
+    flex: 1,
+    backgroundColor: colors.bgBase
+  },
+  textContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xl
+  },
+  textPreview: {
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    fontSize: 13,
+    lineHeight: 19
+  },
+  markdownContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xl
+  },
+  modeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs
+  },
+  modeSwitch: {
+    backgroundColor: colors.bgPanel
+  },
+  truncatedNote: {
+    marginBottom: spacing.md,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  imageContainer: {
+    flex: 1,
+    backgroundColor: colors.bgBase
+  },
+  editContainer: {
+    flex: 1,
+    backgroundColor: colors.bgBase,
+    padding: spacing.lg
+  },
+  saveErrorText: {
+    marginBottom: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
+  previewSaveErrorText: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
+  editInput: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    // iOS zooms the page when a field under 16px takes focus; a literal, not the seam, avoids an extra shared chunk.
+    fontSize: 16,
+    lineHeight: 22,
+    padding: 0
+  }
+}))
+
+export const chatAttachmentPreviewStyles = themedStyleSheet(() => ({
+  ...filePreviewStyles,
+  header: {
+    backgroundColor: colors.bgPanel,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
+  },
+  topBar: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md
+  },
+  backButton: {
     width: 36,
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
+    borderRadius: 6,
+    borderCurve: 'circular'
+  },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  title: {
+    color: colors.textPrimary,
+    fontSize: typography.titleSize,
+    fontWeight: '600'
+  },
+  meta: {
+    marginTop: 2,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
   },
   saveButtonDisabled: {
     opacity: 0.42
@@ -78,79 +138,5 @@ export const filePreviewStyles = themedStyleSheet(() => ({
   textContent: {
     padding: spacing.md,
     paddingBottom: spacing.xl
-  },
-  textPreview: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: 13,
-    lineHeight: 19
-  },
-  markdownContent: {
-    padding: spacing.md,
-    paddingBottom: spacing.xl
-  },
-  modeContainer: {
-    flex: 1,
-    backgroundColor: colors.editorSurface
-  },
-  modeToolbar: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
-    padding: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel
-  },
-  modeToggle: {
-    width: 34,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.row,
-    backgroundColor: 'transparent',
-    opacity: 0.72
-  },
-  modeToggleActive: {
-    backgroundColor: colors.bgRaised,
-    opacity: 1
-  },
-  truncatedNote: {
-    marginBottom: spacing.md,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  imageContainer: {
-    flex: 1,
-    backgroundColor: colors.editorSurface
-  },
-  imageScrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md
-  },
-  image: {
-    backgroundColor: colors.editorSurface
-  },
-  editContainer: {
-    flex: 1,
-    backgroundColor: colors.editorSurface,
-    padding: spacing.md
-  },
-  saveErrorText: {
-    marginBottom: spacing.sm,
-    color: colors.statusRed,
-    fontSize: typography.metaSize
-  },
-  editInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: 13,
-    lineHeight: 19,
-    padding: 0
   }
 }))

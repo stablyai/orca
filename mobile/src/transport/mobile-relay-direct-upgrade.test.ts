@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { RelayRoutingHostRemovedError } from './host-store'
 import {
   createMobileRelayDirectUpgradeJournal,

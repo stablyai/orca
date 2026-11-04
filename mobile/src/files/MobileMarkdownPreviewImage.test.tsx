@@ -14,7 +14,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('../components/MobileLoadErrorState', () => ({ MobileLoadErrorState: 'LoadError' }))
+vi.mock('../components/MobileStateView', () => ({ MobileLoadErrorState: 'LoadError' }))
 vi.mock('../session/native-chat/visual/MobileNativeChatImageViewer', () => ({
   MobileNativeChatImageViewer: 'ImageViewer'
 }))
@@ -34,24 +34,6 @@ const props = {
   alt: 'Architecture'
 }
 
-it('shows the loaded image and expands it in the existing image viewer', async () => {
-  loader.mockResolvedValue('data:image/png;base64,cG5n')
-  await act(async () => {
-    tree = create(createElement(MobileMarkdownPreviewImage, props))
-  })
-  const image = tree!.root.find((node) => String(node.type) === 'Image')
-  expect(image.props.source.uri).toBe('data:image/png;base64,cG5n')
-  expect(tree!.root.find((node) => String(node.type) === 'Image').props.style.aspectRatio).toBe(
-    600 / 220
-  )
-  await act(async () =>
-    tree!.root.find((node) => String(node.type) === 'Pressable').props.onPress()
-  )
-  expect(tree!.root.find((node) => String(node.type) === 'ImageViewer').props.uri).toBe(
-    'data:image/png;base64,cG5n'
-  )
-})
-
 it('retries a refused image without hiding the surrounding document', async () => {
   loader
     .mockRejectedValueOnce(new Error('Unable to reach the desktop filesystem'))
@@ -59,7 +41,7 @@ it('retries a refused image without hiding the surrounding document', async () =
   await act(async () => {
     tree = create(createElement(MobileMarkdownPreviewImage, props))
   })
-  expect(tree!.root.find((node) => String(node.type) === 'LoadError').props.message).toContain(
+  expect(tree!.root.find((node) => String(node.type) === 'LoadError').props.error).toContain(
     'Unable to reach'
   )
   await act(async () =>

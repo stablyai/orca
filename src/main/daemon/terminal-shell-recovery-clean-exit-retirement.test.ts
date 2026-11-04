@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
-import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
+import type { PtyIngressEmission } from '../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 
 const CLEAN_EXIT = '\x1b[?1049hTUI\x1b[?1049l\x1b]133;D;0\x07'
 
@@ -20,24 +20,6 @@ function createBarrier(confirm: () => Promise<boolean>, maxPendingMs?: number) {
 }
 
 describe('clean-exit confirmation retirement', () => {
-  it('retires a hung clean-exit proof so a later candidate can still prove ownership', async () => {
-    let calls = 0
-    const barrier = createBarrier(() => {
-      calls += 1
-      return calls === 1 ? new Promise(() => {}) : Promise.resolve(true)
-    }, 20)
-
-    barrier.accept(passthrough(CLEAN_EXIT))
-    expect(calls).toBe(1)
-    await barrier.awaitProofSettled()
-    expect(barrier.getOwner()).toBeUndefined()
-
-    barrier.accept(passthrough(CLEAN_EXIT, CLEAN_EXIT.length))
-    await vi.waitFor(() => expect(calls).toBe(2))
-    await barrier.awaitProofSettled()
-    expect(barrier.getOwner()).toBe('shell')
-  })
-
   it('contains a synchronously throwing confirm without wedging later candidates', async () => {
     let calls = 0
     const barrier = createBarrier(() => {

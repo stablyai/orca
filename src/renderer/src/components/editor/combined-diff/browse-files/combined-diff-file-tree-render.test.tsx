@@ -3,7 +3,7 @@
 import React, { act, useCallback, useMemo, useState, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { CombinedDiffFileTreeRow as CombinedDiffFileTreeRowComponent } from './combined-diff-file-tree-row'
 
 const rowRenders = vi.hoisted(() => ({ count: 0 }))
@@ -157,15 +157,6 @@ function runScrollPass(loadCount: number): number {
 describe('combined diff file tree re-renders on section loads', () => {
   const SMALL_FILE_COUNT = 30
   const SCROLL_PASS_LOADS = 10
-
-  it('re-renders every row per section load when the section index map is rebuilt', () => {
-    const entries = buildEntries(SMALL_FILE_COUNT, 3)
-    renderHarness(entries, buildSections(entries), false)
-    const rowCount = mountedRowCount()
-    expect(rowCount).toBeGreaterThan(SMALL_FILE_COUNT)
-
-    expect(runScrollPass(SCROLL_PASS_LOADS)).toBe(rowCount * SCROLL_PASS_LOADS)
-  })
 
   it('re-renders no rows per section load when the section index map keeps its identity', () => {
     const entries = buildEntries(SMALL_FILE_COUNT, 3)

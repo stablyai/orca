@@ -1,3 +1,4 @@
+import type { NotificationAttentionAcknowledgement } from './notification-settings-types'
 import type { CreateWorktreeResult } from './worktree/create-types'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -5,14 +6,19 @@ import type {
   WorktreeStartupLaunch
 } from './worktree/launch-types'
 import type { SshConnectionState } from './ssh-types'
-import type { TerminalSideEffectBatch } from './terminal-side-effect-facts'
+import type { TerminalSideEffectBatch } from './terminal/output/terminal-side-effect-facts'
 import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
 import type { RuntimeNavigationTarget } from './runtime-navigation'
 import type { WorktreeSortOrderUpdate } from './worktree/sort-order-update'
 import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-feed-contract'
 
 export type RuntimeClientEvent =
+  | {
+      type: 'notificationAttentionAcknowledged'
+      acknowledgement: NotificationAttentionAcknowledgement
+    }
   | { type: 'reposChanged' }
+  | { type: 'nativeChatQueueFollowUpsChanged'; queueFollowUps: boolean }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */
   | { type: 'workspaceViewChanged' }
   | {
@@ -65,6 +71,7 @@ export type RuntimeClientEvent =
 export type RuntimeClientEventStreamMessage =
   | ({ type: 'ready'; subscriptionId: string } & {
       snapshot?: {
+        nativeChatQueueFollowUps?: boolean
         repos?: unknown[]
         sshStates?: { targetId: string; state: SshConnectionState }[]
       }

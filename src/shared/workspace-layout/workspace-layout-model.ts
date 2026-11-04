@@ -1,15 +1,15 @@
 // Per-execution-host layout data; view selection, content facts and drafts stay beside it. Disk-field tables assign each persisted field one source.
 
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
-import type { AgentType } from '../agent-status-types'
-import type { AiVaultSessionTitle } from '../ai-vault-session-title'
-import type { PersistedClientHostedBrowserPage } from '../client-hosted-browser-page-record'
-import type { ClosedTerminalPanesByPaneKey } from '../closed-terminal-panes'
-import type { ClosedTerminalTabTombstone } from '../closed-terminal-tab-tombstones'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
+import type { AgentType } from '../agent-status/contracts/agent-status-types'
+import type { AiVaultSessionTitle } from '../ai-vault/contracts/ai-vault-session-title'
+import type { PersistedClientHostedBrowserPage } from '../workspace-session/client-hosted-browser-page-record'
+import type { ClosedTerminalPanesByPaneKey } from './closed-terminal-panes'
+import type { ClosedTerminalTabTombstone } from './closed-terminal-tab-tombstones'
 import type { ExecutionHostId } from '../execution-host'
 import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
-import type { TerminalGrid, TerminalPaneLayoutNode, TerminalTab } from '../terminal-tab-types'
-import type { PersistedOpenFile } from '../workspace-session-state-types'
+import type { TerminalGrid, TerminalPaneLayoutNode, TerminalTab } from './terminal-tab-types'
+import type { PersistedOpenFile } from '../workspace-session/workspace-session-state-types'
 import type { BrowserWorkspace } from '../browser-workspace-types'
 import type { LayoutEditorView } from './layout-editor-view'
 

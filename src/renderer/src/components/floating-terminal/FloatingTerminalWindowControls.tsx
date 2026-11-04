@@ -12,7 +12,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   isTuiAgentEnabled
-} from '../../../../shared/tui-agent-selection'
+} from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 

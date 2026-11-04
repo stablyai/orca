@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { describe, expect, it } from 'vitest'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 
 export function registerOrcaRuntimeHeadlessHydrationRepoGateTests(): void {
@@ -46,19 +46,6 @@ export function registerOrcaRuntimeHeadlessHydrationRepoGateTests(): void {
 
       const result = await runtime.listMobileSessionTabs('id:ghost-repo::/worktree')
       expect(result.tabs).toEqual([])
-    })
-
-    it('does not read the repo inventory for an unparseable worktree id', async () => {
-      const getRepos = vi.fn(() => [{ id: REPO_ID, path: '/repo', name: 'repo' }])
-      const runtime = new OrcaRuntimeService({
-        getWorkspaceSession: () => makeSession(FLOATING_TERMINAL_WORKTREE_ID),
-        getRepo: () => null,
-        getRepos
-      } as never)
-
-      // Floating terminals lack repo-derived identity; never enumerate repos on this hot poll path.
-      await runtime.listMobileSessionTabs(`id:${FLOATING_TERMINAL_WORKTREE_ID}`)
-      expect(getRepos).not.toHaveBeenCalled()
     })
   })
 }

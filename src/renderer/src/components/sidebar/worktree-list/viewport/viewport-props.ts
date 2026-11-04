@@ -3,7 +3,7 @@ import type React from 'react'
 import type { AppState } from '@/store/types'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import type { PendingSidebarRowReveal, PendingSidebarWorktreeReveal } from '@/store/slices/ui'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -19,8 +19,8 @@ import type {
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
-import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
+import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
+import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 import type {
   ShouldShowWorkspaceBoardDropIndicator,
   WorktreeDropCommitContext,

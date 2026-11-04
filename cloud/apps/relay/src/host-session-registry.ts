@@ -32,7 +32,7 @@ import type { RawData } from 'ws'
 import type { RelayConfig } from './config.js'
 import type { AssignmentLeaseClass } from './assignment/assignment-lease.js'
 import type { AssignmentLeaseShadow } from './assignment/assignment-lease-shadow.js'
-import type { RelayAssignmentStore } from './assignment-store.js'
+import type { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { CellAdmitMode, CellReserveBook } from './cell-reserve-book.js'
 import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell-reserve-contract.js'
 import { SeatDriftConfirmation, unbackedSeatReason, type UnbackedSeatReason } from './cell-seat-drift.js'
@@ -1619,17 +1619,15 @@ export class HostSessionRegistry {
       return
     }
     const assignmentReadStartedAt = performance.now()
-    // Combined is staging-only compatibility; stamped cells require the durable director epoch.
     const assignmentValid =
       admittedFromMemory ||
-      (this.config.role === 'combined'
-        ? hello.data.assignmentEpoch === 1
-        : await this.assignments.verifyCellAssignment({
-            userId: identity.sub,
-            relayHostId: identity.relayHostId,
-            cellId: this.config.cellId,
-            assignmentEpoch: hello.data.assignmentEpoch
-          }))
+      (await this.assignments.verifyCellAssignment({
+        userId: identity.sub,
+        relayHostId: identity.relayHostId,
+        cellId: this.config.cellId,
+        assignmentEpoch: hello.data.assignmentEpoch,
+        allowUnassignedBootstrap: this.config.role === 'combined'
+      }))
     // The database answer decides; the lease is only compared with it.
     if (leaseShadow && leaseCheck && !admittedFromMemory) {
       leaseShadow.record(
@@ -1638,7 +1636,6 @@ export class HostSessionRegistry {
         performance.now() - assignmentReadStartedAt
       )
     }
-    // The `combined` role compares the epoch without querying but is still labelled db.
     if (!admittedFromMemory) path = 'db'
     if (!assignmentValid) {
       refuse(RELAY_CLOSE_CODE.WRONG_CELL, 'wrong assignment epoch')

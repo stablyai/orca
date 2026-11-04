@@ -1,3 +1,4 @@
+import { CrewChanges } from '../crew/crew-changes'
 import Database from '../../../sqlite/sync-database'
 import { attachOrchestrationDbMethods } from './attach-orchestration-db-methods'
 import type { MailHandBack } from './messages/helper-mailbox-hand-back'
@@ -19,6 +20,7 @@ import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-work
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 
 class OrchestrationDbCore {
+  readonly crewChanges = new CrewChanges()
   db: Database.Database
 
   // Cache Dispatch emptiness to skip per-terminal queries on 16ms graph ticks for users without orchestration.
@@ -47,6 +49,18 @@ class OrchestrationDbCore {
     // After every open step that creates Runs, before any step that deletes work.
     installRemovedWorkCapture(this.db, removedWorkCaptureWasIntact)
     backfillStructuredWorkerOrcaSessionIds(this.db)
+    this.db.exec(`
+      DROP INDEX IF EXISTS idx_dispatch_creator_account_work;
+      CREATE INDEX IF NOT EXISTS idx_dispatch_creator_mailbox_work
+        ON dispatch_contexts(creator_dispatch_id, status);
+      CREATE INDEX IF NOT EXISTS idx_runs_current_coordinator_handle ON runs(coordinator_handle);
+      CREATE INDEX IF NOT EXISTS idx_messages_native_account_work
+        ON messages(run_id, to_handle, type)
+        WHERE read = 0 AND delivered_at IS NULL AND delivery_contract <> 'audit_only';
+      CREATE INDEX IF NOT EXISTS idx_messages_native_direct_work
+        ON messages(to_handle, type)
+        WHERE read = 0 AND delivered_at IS NULL AND delivery_contract <> 'audit_only';
+    `)
     reconcileSettledWorkerDispatches(this.db)
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)
     rememberCurrentRunCoordinatorHandles.call(this as unknown as OrchestrationDb)

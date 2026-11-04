@@ -1,6 +1,6 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
-import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
+import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -191,7 +191,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
         })
         const structured = resolveStructuredWorkerForDispatch(db, params.dispatch)
         if (structured) {
-          const stop = await stopStructuredWorker(structured, params.dispatch, runtime)
+          const stop = await stopStructuredWorker(structured, runtime)
           if (!stop.stopped) {
             // Only proven exit settles; if no close was issued, the receipt must not claim one.
             return unknownReceipt(

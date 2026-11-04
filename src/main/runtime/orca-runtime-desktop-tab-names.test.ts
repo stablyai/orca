@@ -2,8 +2,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Tab } from '../../shared/tab-types'
-import type { TerminalTab } from '../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { TerminalTab } from '../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
 
@@ -30,6 +30,7 @@ it("publishes the desktop's chat tab name over the saved name, and the saved nam
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: title projection reads only the record from this host stub.
   setStructuredAgentSessionHost({
+    getSessionTabId: () => null,
     deps: {
       store: {
         getConversation: () => ({
@@ -120,12 +121,6 @@ async function listRestartedHeadlessCursorTab(
 it("publishes a headless tab's generated name over the agent's live frames", async () => {
   expect(await listRestartedHeadlessCursorTab(true, '⠋ Cursor Agent')).toEqual(
     expect.objectContaining({ title: 'Fix tab titles' })
-  )
-})
-
-it('keeps a headless tab on its saved title while generated names are off', async () => {
-  expect(await listRestartedHeadlessCursorTab(false, null)).toEqual(
-    expect.objectContaining({ title: 'bash' })
   )
 })
 

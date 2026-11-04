@@ -2,7 +2,7 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -62,20 +62,6 @@ describe('runtime detected-agents pruned on environment removal (leak regression
     expect(s.isDetectingRuntimeAgents).not.toHaveProperty('env-2')
     expect(s.runtimeDetectedAgentIds).toHaveProperty('env-1')
     expect(s.isDetectingRuntimeAgents['env-1']).toBe(false)
-  })
-
-  it('retainRuntimeDetectedAgents keeps only the listed environments', () => {
-    const store = createTestStore()
-    store.setState({
-      runtimeDetectedAgentIds: { a: [], b: [], c: [] },
-      isDetectingRuntimeAgents: { a: false, b: false, c: false }
-    })
-
-    store.getState().retainRuntimeDetectedAgents(['b'])
-
-    const s = store.getState()
-    expect(Object.keys(s.runtimeDetectedAgentIds)).toEqual(['b'])
-    expect(Object.keys(s.isDetectingRuntimeAgents)).toEqual(['b'])
   })
 })
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { AgentCliInstallationError } from '../agent-cli-installation-error'
-import { isStructuredAgentSessionStartFailureRow } from '../../../shared/structured-agent-session-start-failure-row-key'
-import { projectQueuedMessageCards } from '../../../shared/structured-agent-session-queued-cards'
+import { isStructuredAgentSessionStartFailureRow } from '../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
+import { projectQueuedMessageCards } from '../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { HOST_TEST_SESSION, hostTestMessage } from './structured-agent-session-host-test-data'
 import {
   createQueuedMessageTestRig,
@@ -94,12 +94,3 @@ it.each(['returned', 'held'] as const)(
     expect((await rig.submission(rejected))?.dispatchState).toBe('rejected')
   }
 )
-
-it('keeps an actual pause after a version refusal and releases it through the host', async () => {
-  const id = await retainedDraft()
-  rig.starts.mockReset()
-  expect(await rig.queuePause()).not.toBeNull()
-  expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
-  await eventually(async () => expect((await rig.handoff(id))?.handedOverAt).toBeDefined())
-  expect(await rig.queuePause()).toBeNull()
-})

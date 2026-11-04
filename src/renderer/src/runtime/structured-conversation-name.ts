@@ -4,7 +4,7 @@ import { isAgentSessionConversationName } from '../../../shared/agent-session/ag
 import type {
   AgentSessionNamingError,
   AgentSessionConversationName
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store'
 import {
   structuredAgentSessionOwnerForTab,

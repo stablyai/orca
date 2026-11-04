@@ -1,7 +1,12 @@
 import React, { useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { HostRowIcon } from '@/components/host-row-icon'
-import { isRepoHeaderActionTarget } from '../../project-header-drag-contract'
+import {
+  useWslHostDistro,
+  WslHostMark,
+  wslHostRunsOnLabel
+} from '@/components/wsl-host-mark/WslHostMark'
+import { isRepoHeaderActionTarget } from '../drag/project-header-drag-contract'
 import type { ProjectHeaderHostContext } from './project-header-host-context'
 
 export function ProjectHeaderHostLabel({
@@ -9,6 +14,11 @@ export function ProjectHeaderHostLabel({
 }: {
   context: ProjectHeaderHostContext
 }): React.JSX.Element {
+  const wslDistro = useWslHostDistro(context.hostId)
+  if (wslDistro) {
+    // The header's identity tooltip names the host, so the mark has none of its own.
+    return <WslHostMark distro={wslDistro} withTooltip={false} />
+  }
   return (
     <span className="flex min-w-0 max-w-1/2 shrink-0 items-center gap-1 text-xs font-normal leading-4 text-muted-foreground">
       <HostRowIcon hostId={context.hostId} className="size-3.5 shrink-0" />
@@ -46,6 +56,7 @@ function ProjectHeaderIdentityTooltip({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const actionOwnsTooltip = useRef(false)
+  const wslDistro = useWslHostDistro(context.hostId)
   return (
     <Tooltip
       open={open}
@@ -79,7 +90,7 @@ function ProjectHeaderIdentityTooltip({
         sideOffset={8}
         className="max-w-80 whitespace-normal break-words text-left"
       >
-        {label} — {context.label}
+        {label} — {wslDistro ? wslHostRunsOnLabel(wslDistro) : context.label}
         {context.detail !== context.label ? <div>{context.detail}</div> : null}
       </TooltipContent>
     </Tooltip>

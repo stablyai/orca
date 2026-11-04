@@ -10,7 +10,7 @@ import type {
   BrowserHistoryEntry,
   BrowserPageDocLocation
 } from '../../../../../shared/browser-workspace-types'
-import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-doc-history'
+import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-session/workspace-doc-history'
 import {
   formatBrowserHistoryUrl,
   historyHost,

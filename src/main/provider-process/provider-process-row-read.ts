@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
 import { runPsInProcess } from '../../shared/libproc-process-table'
-import { parseProcessTable, type ProcessTableRow } from '../pty-process-table-parser'
+import {
+  parseProcessTable,
+  type ProcessTableRow
+} from '../pty/process-retirement/pty-process-table-parser'
 
 const PROCESS_ROW_TIMEOUT_MS = 2_000
 

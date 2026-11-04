@@ -1,5 +1,5 @@
 import type { TerminalModes } from './types'
-import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal-mode-reset-profiles'
+import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 
 // Restore kitty flags separately after screen switches, which swap their state.
 export function buildRehydrateSequences(modes: TerminalModes): string {

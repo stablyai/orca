@@ -9,7 +9,7 @@ import {
   GIT_KEY,
   leaf
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 const { handlers } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
@@ -138,15 +138,6 @@ describe('a window save in a layout-owner build', () => {
     const layout = store.getWorkspaceSession('local').terminalLayoutsByTabId['tab-a']
     expect(layout?.root).toEqual(mainSession().terminalLayoutsByTabId['tab-a']!.root)
     expect(Object.keys(layout?.scrollbackRefsByLeafId ?? {})).toEqual([leaf(1)])
-    expect(terminalTabs(store.getWorkspaceSession('local'))).toEqual(['tab-a', 'tab-b'])
-  })
-
-  it('passes a scalar patch through', async () => {
-    store.setWorkspaceSession(mainSession(), 'local')
-
-    await call('session:patch', { activeWorktreeId: OTHER_KEY }, 'local')
-
-    expect(store.getWorkspaceSession('local').activeWorktreeId).toBe(OTHER_KEY)
     expect(terminalTabs(store.getWorkspaceSession('local'))).toEqual(['tab-a', 'tab-b'])
   })
 

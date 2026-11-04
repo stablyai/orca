@@ -3,11 +3,12 @@ import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { applyDocumentTheme } from '@/lib/document-theme'
+import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
 import { track } from '@/lib/telemetry'
 import { buildAgentPickedPayload } from './agent-picked-payload'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { STEPS } from './use-onboarding-flow-types'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
@@ -153,27 +154,26 @@ export function useOnboardingFlow(
   const [initialStartTime] = useState(() => Date.now())
   const startTimeRef = useRef<number>(initialStartTime)
 
-  // Unmount-only restoration needs the latest persisted theme without rerunning on settings changes.
-  const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')
-  persistedThemeRef.current = settings?.theme ?? 'dark'
-  const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
-  const themeStepEntryCapturedRef = useRef(false)
+  // Unmount-only restoration needs the latest painted theme without rerunning on settings changes;
+  // painted, because Match Terminal can paint the mode the setting doesn't ask for.
+  const paintedTheme = resolvePaintedTheme(settings, settings?.theme ?? 'dark')
+  const paintedThemeRef = useRef<GlobalSettings['theme']>(paintedTheme)
   useEffect(() => {
-    if (currentStep.id !== 'theme') {
-      themeStepEntryCapturedRef.current = false
-      return
-    }
-    if (!settings || themeStepEntryCapturedRef.current) {
-      return
-    }
-    // Why: capture entry theme so "Skip to project setup" keeps the preference the user arrived with.
-    themeStepEntryCapturedRef.current = true
-    themeStepEntryThemeRef.current = settings.theme
-  }, [currentStep.id, settings])
+    paintedThemeRef.current = paintedTheme
+  }, [paintedTheme])
+  // Why per entry: "Skip to project setup" keeps the look the user arrived with, and each pick
+  // replaces only its own mode's slot from here.
+  const [themeLookBaseline, setThemeLookBaseline] = useState<GlobalSettings | null>(null)
+  if (currentStep.id !== 'theme' && themeLookBaseline) {
+    setThemeLookBaseline(null)
+  } else if (currentStep.id === 'theme' && settings && !themeLookBaseline) {
+    setThemeLookBaseline(settings)
+  }
 
+  const previewTheme = resolvePaintedTheme(settings, theme)
   useEffect(() => {
-    applyDocumentTheme(theme)
-  }, [theme])
+    applyDocumentTheme(previewTheme)
+  }, [previewTheme])
 
   useEffect(() => {
     void refreshPreflightStatus()
@@ -220,7 +220,7 @@ export function useOnboardingFlow(
     useOnboardingFlowTelemetry({
       remappedLastCompletedStep,
       currentStep,
-      persistedThemeRef,
+      paintedThemeRef,
       preflightStatus,
       preflightStatusLoading,
       linearStatus,
@@ -280,7 +280,7 @@ export function useOnboardingFlow(
     stepIndex,
     setStepIndex,
     selectedAgent,
-    themeStepEntryThemeRef,
+    themeLookBaseline,
     setTheme,
     updateSettings,
     skipOptions
@@ -299,6 +299,8 @@ export function useOnboardingFlow(
     setYoloPermissions: setYoloPermissionsInteractive,
     theme,
     setTheme: setThemeInteractive,
+    themeLookBaseline,
+    setThemeLookBaseline,
     busyLabel,
     detectedSet,
     isDetectingAgents,

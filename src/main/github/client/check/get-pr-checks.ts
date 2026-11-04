@@ -3,7 +3,7 @@ import {
   githubRepoContext,
   ghRepoExecOptions
 } from '../../github-repository-identity'
-import { runCoalescedProbe, type CoalescedProbes } from '../../../git/coalesced-probe'
+import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
@@ -242,7 +242,7 @@ export function getPRChecks(
   prNumber: number,
   headSha?: string,
   prRepo?: GitHubApiRepository | null,
-  options?: { noCache?: boolean },
+  options?: { noCache?: boolean; userRefresh?: boolean },
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckDetail[]> {
@@ -258,8 +258,13 @@ export function getPRChecks(
         ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
       )
     ])
-    return runCoalescedProbe(checksReads, key, () =>
-      readPRChecks(repoPath, prNumber, headSha, prRepo, options, connectionId, localGitOptions)
+    return runCoalescedProbe(
+      checksReads,
+      key,
+      () =>
+        readPRChecks(repoPath, prNumber, headSha, prRepo, options, connectionId, localGitOptions),
+      undefined,
+      { userRefresh: options?.userRefresh === true }
     )
   })
 }

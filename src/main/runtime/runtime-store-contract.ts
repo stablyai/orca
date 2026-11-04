@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { VoiceSettings } from '../../shared/speech-types'
 
@@ -103,6 +103,7 @@ export type RuntimeStore = {
   getMobileClientTabSelections?: Store['getMobileClientTabSelections']
   setMobileClientTabSelections?: Store['setMobileClientTabSelections']
   getSettings(): {
+    browserClientHostedRemoteEnabled?: GlobalSettings['browserClientHostedRemoteEnabled']
     autoRenameBranchFromWork?: GlobalSettings['autoRenameBranchFromWork']
     nativeChatAutoName?: GlobalSettings['nativeChatAutoName']
     notifications?: GlobalSettings['notifications']
@@ -122,6 +123,8 @@ export type RuntimeStore = {
     // Read by worktree placement: decides whether this project's worktrees
     // mirror into a WSL distro instead of the Windows drive.
     localWindowsRuntimeDefault?: GlobalSettings['localWindowsRuntimeDefault']
+    // Stage 1 is opt-in: WSL-host-only explanations and routing need the setting on.
+    experimentalWslHosts?: GlobalSettings['experimentalWslHosts']
     refreshLocalBaseRefOnWorktreeCreate: boolean
     localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string
@@ -130,6 +133,7 @@ export type RuntimeStore = {
     newWorkspaceSetupOnly?: GlobalSettings['newWorkspaceSetupOnly']
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
+    agentLaunchChoices?: GlobalSettings['agentLaunchChoices']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
     agentPermissionDefault?: GlobalSettings['agentPermissionDefault']
@@ -145,7 +149,7 @@ export type RuntimeStore = {
     followSymlinkedDirectories?: GlobalSettings['followSymlinkedDirectories']
     tabAutoGenerateTitle?: GlobalSettings['tabAutoGenerateTitle']
     terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
-    experimentalNativeChat?: GlobalSettings['experimentalNativeChat']
+    agentDefaultSurface?: GlobalSettings['agentDefaultSurface']
     nativeChatProviders?: GlobalSettings['nativeChatProviders']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
@@ -184,6 +188,7 @@ export type RuntimeStore = {
     nativeChatSessionOptions?: GlobalSettings['nativeChatSessionOptions']
     nativeChatPermissionMode?: GlobalSettings['nativeChatPermissionMode']
     nativeChatQueueFollowUps?: GlobalSettings['nativeChatQueueFollowUps']
+    nativeChatAutoContinueAfterUsageLimit?: GlobalSettings['nativeChatAutoContinueAfterUsageLimit']
     nativeChatInlineVisuals?: GlobalSettings['nativeChatInlineVisuals']
     nativeChatInheritShellEnvironment?: GlobalSettings['nativeChatInheritShellEnvironment']
     nativeChatShellEnvironmentVariables?: GlobalSettings['nativeChatShellEnvironmentVariables']

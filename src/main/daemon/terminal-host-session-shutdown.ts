@@ -1,6 +1,6 @@
 import type { Session } from './session'
 import type { TakePendingOutputResult, TerminalSnapshot } from './types'
-import { killWithDescendantSweep } from '../pty-descendant-termination'
+import { killWithDescendantSweep } from '../pty/process-retirement/pty-descendant-termination'
 import { terminateShutdownDescendants } from './terminal-descendant-shutdown'
 
 async function disposeLiveSession(session: Session): Promise<void> {

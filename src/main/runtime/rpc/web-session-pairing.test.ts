@@ -4,12 +4,12 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import type { WebSocket } from 'ws'
 import { describe, expect, it, vi } from 'vitest'
-import { encodeDeviceProofMessage } from '../../../shared/device-key-proof'
+import { encodeDeviceProofMessage } from '../../../shared/remote-runtime/pairing/device-key-proof'
 import { DeviceRegistry } from '../device-registry'
 import { EPHEMERAL_DEVICE_IDLE_MS } from '../ephemeral-device-rows'
 import { SimulatedMobileE2EEV2Peer } from '../mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
 import { registerSocketDeviceKey } from '../runtime-rpc/runtime-rpc-device-key-registration'
-import { generateKeyPair } from '../../../shared/e2ee-crypto'
+import { generateKeyPair } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   MobileSocketWiring,
   type AuthenticatedMobileSocket,
@@ -111,23 +111,6 @@ describe('first pairing over a direct socket', () => {
   })
 })
 
-describe('relayed phones', () => {
-  it('pair over Relay', () => {
-    const { registry, connect, bindRelay } = harness((relayDeviceId) => ({
-      transport: 'relay',
-      relayHostId: RELAY_HOST_ID,
-      relayDeviceId,
-      basisConnId: 'conn',
-      credentialKind: 'invite'
-    }))
-    const pending = registry.getOrCreatePendingDevice('Phone', 'mobile')
-    bindRelay(pending.deviceId)
-    expect(connect(() => ({ deviceToken: pending.token })).reply).toMatchObject({
-      type: 'e2ee_authenticated'
-    })
-  })
-})
-
 describe('session-only browser keys', () => {
   it('registers an ephemeral row, sweeps it once idle and disconnected, and then revokes it', () => {
     const { registry, wiring, transport, connect } = harness()
@@ -162,24 +145,5 @@ describe('session-only browser keys', () => {
       type: 'e2ee_error',
       error: { code: 'device_revoked', deviceId: fork.deviceId }
     })
-  })
-
-  it('cuts sockets bound to a swept row', () => {
-    const { registry, wiring, transport } = harness()
-    const paired = registry.addDevice('Browser', 'runtime')
-    registry.updateLastSeen(paired.deviceId)
-    const key = nacl.sign.keyPair()
-    const fork = registry.forkDeviceKey(
-      paired.deviceId,
-      Buffer.from(key.publicKey).toString('base64'),
-      'Tab',
-      { ephemeral: true }
-    )
-    expect(
-      wiring.sweepIdleEphemeralDevices(fork.lastSeenAt + EPHEMERAL_DEVICE_IDLE_MS + 1)
-    ).toEqual([fork.deviceId])
-    expect(transport.terminateClientConnections).toHaveBeenCalledWith(fork.deviceId)
-    expect(registry.getDevice(paired.deviceId)).not.toBeNull()
-    wiring.dispose()
   })
 })

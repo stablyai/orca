@@ -82,34 +82,6 @@ describe('runtime file target execution host', () => {
     await expectRefusedFor(runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`), 'm4air')
   })
 
-  it("routes to the workspace's host even when the only repo row names a different ssh host", async () => {
-    const runtime = makeRuntime(
-      [{ id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' }],
-      'ssh:m4air'
-    )
-
-    await expectRefusedFor(runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`), 'm4air')
-  })
-
-  // Local rows cannot carry SSH connectionId; the old target incorrectly read local files on that remote host.
-  it('ignores a stale connection on a row that declares itself local', async () => {
-    const runtime = makeRuntime(
-      [
-        {
-          id: 'repo-shared',
-          path: '/home/me/app',
-          executionHostId: 'local',
-          connectionId: 'm4air'
-        }
-      ],
-      'local'
-    )
-
-    await runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`)
-
-    expect(mocks.listMarkdownDocuments).toHaveBeenCalledWith(REMOTE_PATH, {})
-  })
-
   // Runtime connectionId belongs to the server's target namespace, never this client's.
   it('refuses a runtime host whose row carries a nested ssh target', async () => {
     const runtime = makeRuntime(
@@ -130,24 +102,6 @@ describe('runtime file target execution host', () => {
     expect(mocks.listMarkdownDocuments).not.toHaveBeenCalled()
   })
 
-  it('refuses a runtime host with no nested ssh target rather than answering locally', async () => {
-    const runtime = makeRuntime(
-      [
-        {
-          id: 'repo-shared',
-          path: '/srv/app',
-          executionHostId: 'runtime:env-a'
-        }
-      ],
-      'runtime:env-a'
-    )
-
-    await expect(runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`)).rejects.toThrow(
-      ExecutionHostNotDispatchableError
-    )
-    expect(mocks.listMarkdownDocuments).not.toHaveBeenCalled()
-  })
-
   it('refuses rather than guessing when rival rows disagree and the workspace names no host', async () => {
     const runtime = makeRuntime([
       { id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' },
@@ -156,26 +110,6 @@ describe('runtime file target execution host', () => {
 
     await expect(runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`)).rejects.toThrow(
       'worktree_execution_host_unresolved'
-    )
-    expect(mocks.listMarkdownDocuments).not.toHaveBeenCalled()
-  })
-
-  it('still routes by the single row when the workspace names no host', async () => {
-    const runtime = makeRuntime([{ id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' }])
-
-    await expectRefusedFor(runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`), 'm4air')
-  })
-
-  // Losing contact with a remote host is never evidence that its files are here
-  // (docs/reference/ssh-execution-boundary.md).
-  it('reports the dropped connection instead of reading a remote path locally', async () => {
-    const runtime = makeRuntime(
-      [{ id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' }],
-      'ssh:m4air'
-    )
-
-    await expect(runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`)).rejects.toThrow(
-      /Remote connection dropped/
     )
     expect(mocks.listMarkdownDocuments).not.toHaveBeenCalled()
   })

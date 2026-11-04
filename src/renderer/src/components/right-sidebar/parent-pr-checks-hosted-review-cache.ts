@@ -1,11 +1,11 @@
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 import {
   getWorktreeCardPrDisplay,
   isCachedMergedBranchPRCurrentForWorktree
-} from '@/components/sidebar/worktree-card-pr-display'
+} from '@/components/sidebar/workspace-card/review/worktree-card-pr-display'
 import type { ParentPrChecksCacheEntry } from './parent-pr-checks-row-types'
 
 export function canUseParentPrChecksHostedReviewCacheEntry(

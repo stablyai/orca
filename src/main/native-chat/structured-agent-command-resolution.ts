@@ -2,7 +2,7 @@ import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   resolveCliCommand,
   resolveExecutableCommand
@@ -10,7 +10,7 @@ import {
 import {
   hasExplicitTuiLaunchCommand,
   structuredAgentCommandPlan
-} from '../../shared/tui-agent-launch-command-override'
+} from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError

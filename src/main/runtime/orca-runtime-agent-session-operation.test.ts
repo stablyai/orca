@@ -6,10 +6,11 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeCreateAgentSessionRequest,
   RuntimeCreateAgentSessionResult
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
-import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
-import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
+import { buildAgentStartupPlan } from '../../shared/agent-launch/startup/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { tokenizeStartupCommand } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 
@@ -47,15 +48,18 @@ function createRuntime(
   provider?: Pick<
     IPtyProvider,
     'supportsAgentSessionClaims' | 'supportsAgentSessionCreateOperations'
-  >
+  >,
+  settings: Record<string, unknown> = {}
 ) {
   const runtime = new OrcaRuntimeService(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this operation fixture supplies only getSettings; terminal scope and PTY dependencies are installed below.
     {
       getSettings: () => ({
         disabledTuiAgents: [],
         agentCmdOverrides: {},
         agentDefaultArgs: {},
-        agentDefaultEnv: {}
+        agentDefaultEnv: {},
+        ...settings
       })
     } as never,
     undefined,
@@ -141,6 +145,34 @@ describe('agent-session execution namespace', () => {
       expect.objectContaining({ signal })
     )
   })
+
+  it.each(['claude', 'codex'] as const)(
+    'ensures existing %s with raw fallback and genuine picks, excluding fresh map',
+    async (agent) => {
+      const runtime = createRuntime(undefined, {
+        agentPermissionDefault: 'own',
+        agentLaunchChoices: { [agent]: { model: 'fresh-only', options: { effort: 'high' } } },
+        agentDefaultArgs: { [agent]: '--model literal' },
+        agentDefaultEnv: { [agent]: { KEEP: 'yes' } }
+      })
+      const create = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+      for (const launchPreferences of [undefined, { model: 'picked', effort: 'low' }]) {
+        await runtime.ensureAgentSession({
+          kind: 'explicit',
+          worktree: 'id:worktree-1',
+          agent,
+          providerSession: { key: 'session_id', id: 'continuing' },
+          ...(launchPreferences ? { launchPreferences } : {})
+        })
+        const applied = create.mock.calls.at(-1)?.[1]
+        expect(applied?.command).toContain('continuing')
+        expect(applied?.command).toContain(launchPreferences ? 'picked' : 'literal')
+        expect(applied?.command).not.toContain('fresh-only')
+        expect(applied?.command).not.toContain('high')
+        expect(applied?.env).toMatchObject({ KEEP: 'yes' })
+      }
+    }
+  )
 
   it('retains compiled policy through args-only host reconstruction and repeated recorded resume', async () => {
     const launch = buildAgentStartupPlan({

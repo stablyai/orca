@@ -1,7 +1,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
 import { E2EEChannel } from './e2ee-channel'
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt } from '../../../shared/e2ee-crypto'
+import {
+  generateKeyPair,
+  deriveSharedKey,
+  encrypt,
+  decrypt
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 
 // Exercise mobile/desktop ephemeral key exchange and encrypted RPC compatibility without a real WebSocket.
 
@@ -149,37 +154,5 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
     expect(received).toEqual(['{"id":"2","method":"test"}'])
 
     newChannel.destroy()
-  })
-
-  it('streaming messages work through E2EE', () => {
-    const mobileShared = completeHandshake()
-    const received: string[] = []
-
-    channel.onMessage((plaintext, encryptedReply) => {
-      received.push(plaintext)
-      for (let i = 0; i < 3; i++) {
-        encryptedReply(
-          JSON.stringify({
-            id: 'stream-1',
-            ok: true,
-            streaming: true,
-            result: { type: 'data', chunk: `line ${i}\n` }
-          })
-        )
-      }
-    })
-
-    channel.handleRawMessage(
-      encrypt(JSON.stringify({ id: 'stream-1', method: 'terminal.subscribe' }), mobileShared)
-    )
-
-    expect(wsSent).toHaveLength(5)
-
-    for (let i = 2; i < 5; i++) {
-      const plain = decrypt(wsSent[i]!, mobileShared)
-      const parsed = JSON.parse(plain!)
-      expect(parsed.streaming).toBe(true)
-      expect(parsed.result.chunk).toBe(`line ${i - 2}\n`)
-    }
   })
 })

@@ -11,8 +11,8 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { isUnclaimedRunningSleepRecord, markResumedRecordLive } from './sleep-record-pane-claim'
 import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleeping-error'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
@@ -31,8 +31,8 @@ import { getDaemonHistoryDir } from '../../../daemon/daemon-launch-paths'
 import { HistoryReader } from '../../../daemon/history-reader'
 import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
 import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
@@ -302,6 +302,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
               }
             : {}),
           ...(automatic ? { refuseSleptWorktree: true } : {}),
+          reopensPane: true,
           // Only resumes from this pane's record show the window banner.
           ...(resumedRecord ? { resumesSleepingRecord: true as const } : {})
         }

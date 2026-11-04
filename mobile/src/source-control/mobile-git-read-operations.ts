@@ -1,10 +1,10 @@
+import { z } from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   gitBranchCompareResultSchema,
-  gitCommitCompareResultSchema,
-  gitDiffResultSchema
+  gitCommitCompareResultSchema
 } from './git-compare-reply-schema'
 import { gitHistoryResultSchema } from './git-history-reply-schema'
 import { gitStatusHostPayloadSchema, gitStatusProjectionSchema } from './git-status-reply-schema'
@@ -68,12 +68,13 @@ export const gitBranchCompareRead = bindDeferredRpcOperation(
   })
 )
 
-export const gitBranchDiffRead = bindDeferredRpcOperation(
+// Older hosts refuse the method; the caller hides the menu item rather than failing.
+export const gitRemoteCommitUrlRead = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'git.branch-diff',
-    method: 'git.branchDiff',
+    name: 'git.remote-commit-url',
+    method: 'git.remoteCommitUrl',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('branch-diff', gitDiffResultSchema)
+    read: rpcResultVariant('remote-commit-url', z.string().nullable())
   })
 )

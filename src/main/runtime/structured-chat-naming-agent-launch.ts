@@ -1,13 +1,13 @@
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import {
   claudeConfigDirEnvPatch,
   withoutInheritedClaudeConfigDir
 } from '../claude/claude-config-dir-pin'
-import { resolveClaudeStructuredLaunchHome } from '../claude/claude-structured-launch-home'
+import { resolveClaudeStructuredLaunchHome } from '../claude/structured/launch/claude-structured-launch-home'
 import type { CommitMessageGenerationTarget } from '../text-generation/source-control-text-generation-types'
 
 /** Default naming follows the native account binding; explicit recipes retain CLI routing. */

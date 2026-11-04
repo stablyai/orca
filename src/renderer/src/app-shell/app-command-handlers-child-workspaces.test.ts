@@ -22,7 +22,7 @@ vi.mock('../store', () => ({
   useAppStore: Object.assign(vi.fn(), { getState: () => mocks.store })
 }))
 
-vi.mock('../components/sidebar/child-workspaces-toggle-target', () => ({
+vi.mock('../components/sidebar/workspace-card/identity/child-workspaces-toggle-target', () => ({
   getRenderedLineageChipKeys: () => new Set<string>(),
   resolveChildWorkspacesToggleGroupKey: () => mocks.target.groupKey
 }))

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { pickStoredFields } from '../../shared/workspace-layout/stored-record-fields'
-import { titleAfterConfirmedShell } from '../../shared/terminal-pane-title-reset'
+import { titleAfterConfirmedShell } from '../../shared/workspace-layout/terminal-pane-title-reset'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RUNTIME_LEAF_PTY_FACT_FIELDS } from './runtime-leaf-record-projection'
 import {
@@ -28,7 +28,7 @@ import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-term
 import type { RuntimeSyncedTab } from '../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
-// Window-owned builds capture the mirror; layout-owner builds use main layout. runtime-leaf-record-projection.test.ts pins both projections to this fixture.
+// Window-owned builds capture the mirror; layout-owner builds use main layout.
 
 type MirrorMaps = {
   tabs: Map<string, RuntimeSyncedTab>

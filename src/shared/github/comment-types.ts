@@ -38,6 +38,8 @@ export type PRComment = {
   line?: number
   /** Start line of the review annotation range (1-based). Absent for single-line comments. */
   startLine?: number
+  /** A thread root's last diff lines, ending on `line`; absent from older hosts and non-GitHub sources. */
+  diffHunk?: string
   /** Provider-reported bot identity beats login heuristics (qodo/coderabbit use varied names). Absent when non-GitHub gh fallbacks cannot report it. */
   isBot?: boolean
 }

@@ -2,9 +2,10 @@ import { OrcaRuntimeWithBindPtyIncarnationHandle } from '../identity/terminal-ha
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import {
   buildPtyTerminalWaitBlockedResult,
+  buildPtyTerminalWaitExitError,
   buildPtyTerminalWaitResult
 } from '../../terminal-wait-results'
-import type { AgentStatus } from '../../../../shared/agent-detection'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { detectExplicitIdleStatusFromTitle } from '../../terminal-wait-detection'
 import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
 import {
@@ -15,7 +16,7 @@ import {
 import { ptyTuiIdleEvidence } from '../../tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
 import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
-import { detectTerminalComposerDraft } from '../../../../shared/terminal-composer-draft'
+import { detectTerminalComposerDraft } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
@@ -38,7 +39,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       } else {
         // Why: after exit, conditions like tui-idle can never be satisfied — reject now instead of spinning the poll until timeout on a dead process.
         this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
+        waiter.reject(buildPtyTerminalWaitExitError(pty))
       }
     }
   }

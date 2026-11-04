@@ -5,11 +5,11 @@ import { resolveDropdownItems } from './source-control-dropdown-items'
 import type {
   DropdownActionInputs,
   DropdownItem
-} from '../../../../shared/source-control-dropdown-item-types'
+} from '../../../../shared/source-control/dropdown/source-control-dropdown-item-types'
 import {
   hasUsableHostedReviewPushTarget,
   resolveHostedReviewActionUpstreamStatus
-} from '../../../../shared/hosted-review-push-target'
+} from '../../../../shared/source-control/hosted-review/hosted-review-push-target'
 
 function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionInputs {
   return {

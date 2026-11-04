@@ -45,6 +45,7 @@
       "scannerStopped": "The session scanner stopped unexpectedly. Refresh to try again.",
       "scopePathsTruncated": "Only the first {{limit}} project paths were scanned.",
       "sessionMetadataUnreadable": "Session metadata could not be read this scan.",
+      "transcriptTooLarge": "A {{label}} conversation is too large to load in Session History. Try resuming it in {{label}} directly.",
       "wslDistroNotRunning": "WSL transcript files are unavailable because WSL distro '{{distro}}' is not running. Open a terminal in it to start it.",
       "wslDistroUnverifiable": "WSL transcript files are unavailable because WSL didn't answer whether '{{distro}}' is running. Try again shortly.",
       "wslSessionsFromLastScan": "WSL could not be checked; its sessions are from the last scan.",
@@ -175,6 +176,9 @@
         "ExternalAutomationManagers": {
           "automationCount_one": "{{count}} automation",
           "automationCount_other": "{{count}} automations"
+        },
+        "capturedOwner": {
+          "hostReselection": "Edit the automation and reselect its host before running it."
         },
         "externalScope": {
           "uncheckedHostCount_one": "External automation managers on {{count}} host could not be checked.",
@@ -1274,6 +1278,7 @@
       "hostUpdateRequired": "Update Orca on this host to use extra arguments."
     },
     "runFailures": {
+      "agentInterrupted": "The agent was interrupted before it finished this run.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
       "automationChanged": "The automation changed before this run could launch.",
@@ -1543,6 +1548,7 @@
         "attachmentTotalTooLarge": "The images on this message are too large together, so the message was not sent.",
         "attachmentUnreadable": "An attachment on this message couldn't be read, so the message was not sent.",
         "attachmentUnsupportedType": "{{agent}} accepts only PNG, JPEG, GIF, and WebP images, so this message was not sent.",
+        "attachmentsExpired": "{{names}} expired.",
         "backgroundTaskNotStopped": "The background task wasn't stopped.",
         "backgroundTasksNotStopped": "The background tasks weren't stopped.",
         "cancelUnconfirmed": "Cancellation was not confirmed.",
@@ -1610,6 +1616,7 @@
         "runCommandAgain": "Run /{{command}} again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+        "savedConversationMissing": "{{agent}} couldn't find this chat's saved conversation.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "sendToTryAgain": "Send your message to try again.",
         "sessionNotRestored": "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages.",
@@ -1645,6 +1652,7 @@
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
+        "modelFallback": "Claude switched models: {{from}} → {{to}}.",
         "orcaStopCanContinue": "You can continue in this conversation.",
         "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
         "orcaStopQuit": "Orca on {{machine}} was closed while this response was in progress.",
@@ -1829,6 +1837,7 @@
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "historyUnusable": "Unable to load this chat.",
         "hostReconciling": "Orca is still checking on this chat after restarting.",
+        "mailOwnerUnconfirmed": "Orca couldn't confirm this message is still meant for this chat.",
         "messageNotSaved": "Couldn't save your message.",
         "messageTooLarge": "It is over the 256 KB limit for one message.",
         "messagesUnsettled": "A message you sent earlier isn't confirmed yet.",
@@ -1853,6 +1862,7 @@
         "queueTooLarge": "Too much text is waiting in the queue.",
         "quitTerminalAgent": "Quit that agent to continue the chat here.",
         "reattachFile": "Remove it and attach it again.",
+        "reattachFiles": "Remove them and attach them again.",
         "recordFailed": "Orca couldn't save this to the chat's history.",
         "recordUnreadable": "Orca couldn't read this chat's saved state.",
         "reopenChat": "Reopen the chat to check again.",
@@ -1889,6 +1899,12 @@
           "startWorkspaceFromIssue": "Start a workspace from any GitHub issue or pull request, prefilled with its title and context"
         }
       }
+    },
+    "orchestrationCrew": {
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you",
+      "workers_one": "{{count}} worker",
+      "workers_other": "{{count}} workers"
     },
     "tab": {
       "bar": {
@@ -1961,6 +1977,8 @@
       "androidDeviceNotRunning": "Android device \"{{device}}\" is not running. Boot it first.",
       "androidSdkMissing": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
       "avdBootTimeout": "AVD \"{{avdName}}\" did not finish booting in time.",
+      "avdExitedBeforeBoot": "AVD \"{{avdName}}\" stopped before it finished booting: {{detail}}",
+      "deviceHubInputBlocked": "Xcode's Device Hub has taken over input for this simulator, so taps and typing won't reach it. Quit Device Hub, then attach the simulator again.",
       "disabled": "Mobile Emulator is disabled in Settings.",
       "noAndroidDevices": "No Android devices or AVDs found. Create one in Android Studio.",
       "noDeviceSpecified": "No emulator device specified. Choose a default device in Settings > Mobile Emulator or pass a device.",
@@ -2111,6 +2129,10 @@
   },
   "settings": {
     "agents": {
+      "defaultSurfaceKeptChat_one": "{{agents}} stays as a chat, as you set.",
+      "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} stays in the terminal, as you set.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} stay in the terminal, as you set.",
       "permissionOverrideMore_one": "and {{count}} more",
       "permissionOverrideMore_other": "and {{count}} more",
       "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
@@ -2244,6 +2266,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} is already a host.",
         "distroStopped": "{{distro}} stopped since the list was read. Choose Start and add to start it.",
+        "distroUnverifiable": "WSL didn’t answer whether {{distro}} is running. Refresh the list, or add it from the dialog, which starts it if needed.",
         "notRegistered": "{{distro}} is not an installed WSL distro. Run {{command}} in a Windows terminal to see the installed ones, or reinstall it and try again.",
         "sshManaged": "{{distro}} already runs the Orca server for “{{server}}”, which this computer reaches over SSH. Remove that server first; moving it to a WSL host isn’t supported yet.",
         "wsl1": "{{distro}} runs WSL 1, which Orca no longer supports. Convert it to WSL 2 in a Windows terminal with: {{command}}"

@@ -1,7 +1,7 @@
 import './unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentHookServer, agentHookServer } from '../../agent-hooks/server'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { stubRuntime } from './terminal-multiplex-test-harness'

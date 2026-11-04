@@ -1,4 +1,4 @@
-import type { PtyCreationDisposition } from '../../../shared/claimed-agent-pty-owner'
+import type { PtyCreationDisposition } from '../../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 import type { TerminalCreationWork } from '../terminal-creation-work'
 import { createDaemonPtyPhysicalOwner, type DaemonPtyPhysicalOwner } from './subprocess-handle'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
@@ -93,7 +93,7 @@ export async function spawnNativeDaemonPty(args: {
       attempt.resolve({ kind: 'failed', completion: Promise.resolve() })
       throw error
     }
-    const physical = createDaemonPtyPhysicalOwner(proc)
+    const physical = createDaemonPtyPhysicalOwner(proc, shellPath)
     unpublishedOwner = physical
     attempt.resolve({
       kind: 'physical',

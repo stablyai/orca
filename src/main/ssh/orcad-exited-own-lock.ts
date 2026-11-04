@@ -21,7 +21,7 @@ import {
   ORCAD_STATE_MUTATION_LOCK_DIRNAME
 } from '../managed-server/host-state/orcad-state-snapshot-members'
 import { CMD_EXE_COMMAND_LINE_MAX_CHARS } from '../providers/windows-shell-args'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import type { InstallLockExitedOwnerProof } from '../managed-server/install/remote-install-lock'
 import { isWindowsRemoteHost, joinRemotePath } from './ssh-remote-platform'
 

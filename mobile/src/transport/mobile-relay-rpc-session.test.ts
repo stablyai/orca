@@ -1,3 +1,4 @@
+import type { SendRequestOptions } from './rpc-client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BrowserScreencastOpcode,
@@ -6,7 +7,7 @@ import {
 import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 import { scopeRpcClientToExecutionHost } from './execution-host-scoped-rpc-client'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
@@ -59,8 +60,7 @@ function openSession() {
   })
 }
 
-async function confirmResume() {
-  const session = openSession()
+async function confirmResume(session = openSession()) {
   fakes.linkOptions!.onHello({
     type: 'relay-hello',
     ok: true,
@@ -107,8 +107,11 @@ async function confirmResume() {
   return { session, confirmationRequest: request, capabilityRequest }
 }
 
-async function authenticateSession(capabilitySupported = true) {
-  const { session, confirmationRequest, capabilityRequest } = await confirmResume()
+async function authenticateSession(
+  capabilitySupported = true,
+  pendingSession?: ReturnType<typeof openSession>
+) {
+  const { session, confirmationRequest, capabilityRequest } = await confirmResume(pendingSession)
   expect(session.getState()).toBe('handshaking')
   fakes.linkOptions!.onText(
     JSON.stringify(
@@ -128,7 +131,9 @@ async function authenticateSession(capabilitySupported = true) {
     )
   )
   await vi.waitFor(() => expect(session.getState()).toBe('connected'))
-  fakes.sendText.mockClear()
+  if (!pendingSession) {
+    fakes.sendText.mockClear()
+  }
   return { session, confirmationRequest, capabilityRequest }
 }
 
@@ -315,6 +320,51 @@ describe('mobile relay RPC session', () => {
     )
   })
 
+  it('keeps the configured connect default for omitted options and honors explicit timeouts', async () => {
+    vi.useFakeTimers()
+    const session = openSession()
+    const settled = vi.fn()
+    const pending = session.sendRequest('status.get').then(
+      (result) => {
+        settled(result)
+        return result
+      },
+      (error: unknown) => {
+        settled(error)
+        throw error
+      }
+    )
+    const short = session
+      .sendRequest('status.get', undefined, { timeoutMs: 5 })
+      .catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await short).toEqual(new Error('relay session connection timed out'))
+    expect(settled).not.toHaveBeenCalled()
+    expect(fakes.sendText).not.toHaveBeenCalled()
+
+    await authenticateSession(true, session)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fakes.sendText).toHaveBeenCalledTimes(3)
+    const request: { id: string; method: string } = JSON.parse(fakes.sendText.mock.calls[2]![0])
+    expect(request.method).toBe('status.get')
+    fakes.linkOptions!.onText(JSON.stringify({ id: request.id, ok: true, result: { ready: true } }))
+    await expect(pending).resolves.toEqual({ id: request.id, ok: true, result: { ready: true } })
+    expect(settled).toHaveBeenCalledOnce()
+    session.close()
+
+    fakes.sendText.mockClear()
+    const unconnected = openSession()
+    const expired = vi.fn()
+    const defaultWait = unconnected.sendRequest('status.get').catch(expired)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(expired).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    await defaultWait
+    expect(expired).toHaveBeenCalledExactlyOnceWith(new Error('relay session connection timed out'))
+    expect(fakes.sendText).not.toHaveBeenCalled()
+    unconnected.close()
+  })
+
   it('rejects pending RPC work when the physical link fails', async () => {
     const { session } = await authenticateSession()
     const pending = session.sendRequest('status.get')
@@ -467,4 +517,92 @@ describe('mobile relay RPC session', () => {
       expect(frame.id).not.toBe('x')
     }
   })
+})
+
+import { withGitHubTargetOperation } from '../tasks/github-work-item-operation'
+import { githubIssueUpdate } from '../tasks/mobile-task-item-state-operations'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as githubExact } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
+
+it('carries captured GitHub authority through the production relay physical await without replay', async () => {
+  vi.clearAllMocks()
+  fakes.sendText.mockReturnValue(true)
+  const { session } = await authenticateSession()
+  const retire = true
+  const client = {
+    ...session,
+    sendRequest: (method: string, params?: unknown, options?: SendRequestOptions) => {
+      const result = session.sendRequest(method, params, options)
+      if (method === 'github.updateIssue' && retire) {
+        session.close()
+      }
+      return result
+    }
+  }
+  const attempt = () =>
+    withGitHubTargetOperation({
+      client,
+      params: { repo: 'id:clone' },
+      ownerRepo: { owner: 'fork', repo: 'widgets' },
+      send: (selected, exact, options) =>
+        githubIssueUpdate.request(
+          selected,
+          { repo: 'id:clone', number: 93, updates: { state: 'closed' }, ...exact },
+          options
+        )
+    })
+  const pending = attempt()
+  const rejected = expect(pending).rejects.toThrow()
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+  const probe = JSON.parse(fakes.sendText.mock.calls[0][0])
+  fakes.linkOptions!.onText(
+    JSON.stringify({
+      id: probe.id,
+      ok: true,
+      result: {
+        runtimeId: 'a',
+        hostDescriptor: { installationId: 'a' },
+        capabilities: [githubExact]
+      }
+    })
+  )
+  await rejected
+  expect(fakes.sendText.mock.calls.map(([raw]) => JSON.parse(raw).method)).toEqual(['status.get'])
+  session.close()
+  vi.clearAllMocks()
+  fakes.sendText.mockReturnValue(true)
+  const { session: fresh } = await authenticateSession()
+  const retry = withGitHubTargetOperation({
+    client: fresh,
+    params: { repo: 'id:clone' },
+    ownerRepo: { owner: 'fork', repo: 'widgets' },
+    send: (selected, exact, options) =>
+      githubIssueUpdate.request(
+        selected,
+        { repo: 'id:clone', number: 93, updates: { state: 'closed' }, ...exact },
+        options
+      )
+  })
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+  const status = JSON.parse(fakes.sendText.mock.calls[0][0])
+  fakes.linkOptions!.onText(
+    JSON.stringify({
+      id: status.id,
+      ok: true,
+      result: {
+        runtimeId: 'b',
+        hostDescriptor: { installationId: 'b' },
+        capabilities: [githubExact]
+      }
+    })
+  )
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+  const operation = JSON.parse(fakes.sendText.mock.calls[1][0])
+  expect(operation).toMatchObject({
+    method: 'github.updateIssue',
+    expectedRuntimeSource: { sourceId: 'b', runtimeId: 'b' },
+    params: { ownerRepo: { owner: 'fork' } }
+  })
+  fakes.linkOptions!.onText(JSON.stringify({ id: operation.id, ok: true, result: { ok: true } }))
+  await expect(retry).resolves.toMatchObject({ ok: true })
+  fresh.close()
 })

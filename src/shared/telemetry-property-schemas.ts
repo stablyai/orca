@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { FEATURE_WALL_EXIT_ACTIONS, FEATURE_WALL_TOUR_DEPTH_STEPS } from './feature-wall-tour-depth'
-import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
+import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './workspace-setup/setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
 import type { GlobalSettings } from './global-settings-types'
 
@@ -200,7 +200,6 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'terminalLinkActionPopoverEnabled',
   'experimentalMobile',
   'experimentalPet',
-  'experimentalNativeChat',
   'experimentalBrowserExtensions',
   'experimentalActivity',
   'experimentalAgentDashboardPopout',

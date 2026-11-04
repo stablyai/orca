@@ -4,11 +4,11 @@ import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import {
   findPaneCodexOnSharedServer,
   resolveCodexPaneHome
-} from '../../../codex/codex-shared-server-pane'
+} from '../../../codex/configuration/shared-server/codex-shared-server-pane'
 import {
   disableCodexSharedServerAutoStart,
   stopCodexSharedServer
-} from '../../../codex/codex-shared-server-fix'
+} from '../../../codex/configuration/shared-server/codex-shared-server-fix'
 import { getLegacyDaemonAdapters } from '../../../daemon/daemon-provider-routing'
 import {
   CODEX_FISH_SHELL_FUNCTION_DAEMON_PROTOCOL_VERSION,

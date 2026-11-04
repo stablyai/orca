@@ -29,10 +29,12 @@ export {
   ExternalLink,
   GitBranch,
   Lock,
+  MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   X
 } from 'lucide-react-native'
 export type { RpcClient } from '../transport/rpc-client'
@@ -46,8 +48,6 @@ export {
 export { classifyConnection } from '../transport/connection-health'
 export { StatusDot } from '../components/StatusDot'
 export { ActionSheetModal } from '../components/ActionSheetModal'
-export { BottomDrawer } from '../components/BottomDrawer'
-export { BottomDrawerModalHost } from '../components/bottom-drawer-modal-host'
 export { ConfirmModal } from '../components/ConfirmModal'
 export { MobileMarkdown } from '../components/MobileMarkdown'
 export { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -122,7 +122,6 @@ export { colors, radii, spacing, typography } from '../theme/mobile-theme'
 export type { MobileColorScheme } from '../theme/mobile-theme'
 export { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 export { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-export { triggerMediumImpact } from '../platform/haptics'
 export {
   CROSS_REPO_DISPLAY_LIMIT,
   getTaskPagePerRepoLimit,
@@ -142,7 +141,7 @@ export { hasSettledHostRepoList } from './host-repo-list'
 export { useHostRepoList } from './use-host-repo-list'
 export { isHostedTaskRepo, reconcileRepoSelection } from './hosted-repo-selection'
 export type { LinearMobileIssue } from './linear-mobile-issue-read'
-export { MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from './mobile-tui-agents'
+
 export { resolveComposerBranchSelection } from './mobile-composer-branch-selection'
 export {
   clearMobileTaskCopyFeedbackTimer,
@@ -155,9 +154,9 @@ export type {
 } from '../../../src/shared/github/pull-request-types'
 export type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 export type { SparsePreset } from '../../../src/shared/worktree/create-types'
-export type { TuiAgent } from '../../../src/shared/tui-agent'
+
 export type { SshConnectionState } from '../../../src/shared/ssh-types'
-export type { HostedReviewDecision } from '../../../src/shared/hosted-review'
+
 export {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey

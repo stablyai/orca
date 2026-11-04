@@ -1,13 +1,14 @@
+import { formatTerminalStartFailure } from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { Worktree } from '../../shared/worktree/types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
+import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
 import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../shared/setup-runner-command'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
@@ -30,7 +31,11 @@ type Ports = {
     options: TerminalCreateOptions
   ) => Promise<RuntimeTerminalCreate>
   pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
-  sendFollowup: (handle: string, followup: WorktreeStartupFollowup) => void
+  sendFollowup: (
+    handle: string,
+    followup: WorktreeStartupFollowup,
+    terminal: RuntimeTerminalCreate
+  ) => void
   provision: (
     options: WorktreeTerminalProvisioningArgs
   ) => Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }>
@@ -130,11 +135,12 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
         ...ownerSurfacing(shouldActivate)
       })
+      request.onStartupTerminalCreated?.(terminal)
       if (args.draftPaste) {
         ports.pasteDraft(terminal.handle, args.draftPaste)
       }
       if (args.startupFollowup) {
-        ports.sendFollowup(terminal.handle, args.startupFollowup)
+        ports.sendFollowup(terminal.handle, args.startupFollowup, terminal)
       }
       didSpawnStartup = true
       startupTerminalHandle = terminal.handle
@@ -300,7 +306,9 @@ function appendFailure(
   kind: 'startup' | 'initial',
   error: unknown
 ): string {
-  const message = readableWslDistroHoldText(error instanceof Error ? error.message : String(error))
+  const message = readableWslDistroHoldText(
+    formatTerminalStartFailure(error) ?? (error instanceof Error ? error.message : String(error))
+  )
   const failure = `failed to create the ${kind} terminal for ${path}: ${message}`
   const combined = warning
     ? `${warning} Also ${failure}`

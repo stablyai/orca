@@ -4,12 +4,16 @@ import type {
   RuntimeTerminalWaitBlockedReason,
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
 type ReadonlyTerminalStateRecord = {
   connected: boolean
   lastExitCode: number | null
   lastExitCause?: TerminalExitCause | null
+}
+
+export function buildPtyTerminalWaitExitError(pty: ReadonlyTerminalStateRecord): Error {
+  return Object.assign(new Error('terminal_exited'), { terminalExitCause: pty.lastExitCause })
 }
 
 export function getTerminalState(leaf: ReadonlyTerminalStateRecord): RuntimeTerminalState {

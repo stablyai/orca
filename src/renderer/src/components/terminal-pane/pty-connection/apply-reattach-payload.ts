@@ -7,7 +7,7 @@ import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION,
   RELEASE_SYNCHRONIZED_OUTPUT
-} from '../../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   buildMainModelSnapshotReplayWrites,
   hasPositiveTerminalDimensions,
@@ -285,7 +285,7 @@ export function createReattachPayloadHandlers(
         session.showSessionRestoredBanner()
       }
       if (didPrepareResume) {
-        session.clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
+        session.keepResumeRecordAfterColdRestoreSpawn(preparedStartup)
       }
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.
       session.writeInputModeGround(POST_REPLAY_MODE_RESET)

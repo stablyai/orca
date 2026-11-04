@@ -15,7 +15,7 @@ vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: vi.fn(() => false)
 }))
-vi.mock('../../../../shared/terminal-surface-id', () => ({
+vi.mock('../../../../shared/workspace-layout/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false),
   toHostSessionTabId: vi.fn((tabId: string) => tabId)
 }))
@@ -208,6 +208,22 @@ describe('closeTerminalTab unified close contract', () => {
     closeTerminalTab('term-1')
 
     expect(store.getState().activeWorktreeId).toBeNull()
+  })
+
+  it('keeps an emptied worktree selected for a caller about to open its replacement', () => {
+    seedWorktreeWithTabs(GIT_WT, {
+      terminalIds: ['term-1'],
+      groupOrder: ['u-term-1'],
+      recentTabIds: ['u-term-1'],
+      activeUnifiedTabId: 'u-term-1',
+      activeTerminalId: 'term-1',
+      includeChatTab: false
+    })
+
+    closeTerminalTab('term-1', { preserveWorktreeSelection: true })
+
+    expect(store.getState().activeWorktreeId).toBe(GIT_WT)
+    expect(store.getState().unifiedTabsByWorktree[GIT_WT]).toEqual([])
   })
 
   it('lands on an open editor tab instead of deactivating when the last terminal closes', () => {

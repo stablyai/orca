@@ -1,6 +1,6 @@
-import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
-import { projectStructuredAgentSessionStatusState } from '../../../../shared/structured-agent-session-projection'
-import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/structured-agent-session-live-turn'
+import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
+import { projectStructuredAgentSessionStatusState } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 
 const observations = new WeakMap<StructuredAgentSessionState, string>()
 

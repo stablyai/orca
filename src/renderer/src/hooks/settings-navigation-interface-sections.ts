@@ -1,12 +1,13 @@
-import { getAppearancePaneSearchEntries } from '@/components/settings/appearance-search'
-import { getChatAppearanceSearchEntries } from '@/components/settings/chat-appearance-search'
-import { getChatBehaviorSearchEntries } from '@/components/settings/chat-behavior-search'
-import { getChatNamingSearchEntry } from '@/components/settings/chat-naming-search'
-import { getChatInlineVisualsSearchEntry } from '@/components/settings/chat-inline-visuals-search'
-import { getChatPermissionSearchEntry } from '@/components/settings/chat-permission-search'
-import { getInputPaneSearchEntries } from '@/components/settings/input-search'
-import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications-search'
-import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-search'
+import { getAppearancePaneSearchEntries } from '@/components/settings/appearance/appearance-search'
+import { getChatAppearanceSearchEntries } from '@/components/settings/appearance/chat/chat-appearance-search'
+import { getChatBehaviorSearchEntries } from '@/components/settings/chat/chat-behavior-search'
+import { getChatNamingSearchEntry } from '@/components/settings/chat/chat-naming-search'
+import { getChatInlineVisualsSearchEntry } from '@/components/settings/chat/chat-inline-visuals-search'
+import { getChatLaunchSearchEntries } from '@/components/settings/chat/chat-launch-search'
+import { getChatPermissionSearchEntry } from '@/components/settings/chat/chat-permission-search'
+import { getInputPaneSearchEntries } from '@/components/settings/input/input-search'
+import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications/notifications-search'
+import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts/shortcuts-search'
 import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
@@ -17,7 +18,6 @@ export function buildInterfaceSettingsSections({
   isMac,
   isWindows,
   isWebClient,
-  nativeChatEnabled,
   hostQueuesMessages,
   typedChatPermissions,
   managedBrowserCreationEnabled,
@@ -40,30 +40,24 @@ export function buildInterfaceSettingsSections({
       }),
       group: 'interface'
     },
-    ...(nativeChatEnabled
-      ? [
-          {
-            id: 'chat',
-            title: translate('settings.appearance.chat.title', 'Chat'),
-            description: translate(
-              'settings.chat.description',
-              'Choose how chats look and behave.'
-            ),
-            icon: MessageSquare,
-            searchEntries: [
-              getChatPermissionSearchEntry(typedChatPermissions),
-              ...getChatAppearanceSearchEntries(),
-              ...getChatBehaviorSearchEntries().filter(
-                (entry) => hostQueuesMessages || entry.targetSectionId !== 'chat-queue-follow-ups'
-              ),
-              ...(showDesktopOnlySettings
-                ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]
-                : [])
-            ],
-            group: 'interface'
-          }
-        ]
-      : []),
+    {
+      id: 'chat',
+      title: translate('settings.appearance.chat.title', 'Chat UI'),
+      description: translate('settings.chat.description', 'Choose how chats look and behave.'),
+      icon: MessageSquare,
+      searchEntries: [
+        ...(showDesktopOnlySettings ? getChatLaunchSearchEntries() : []),
+        getChatPermissionSearchEntry(typedChatPermissions),
+        ...getChatAppearanceSearchEntries(),
+        ...getChatBehaviorSearchEntries().filter(
+          (entry) => hostQueuesMessages || entry.targetSectionId !== 'chat-queue-follow-ups'
+        ),
+        ...(showDesktopOnlySettings
+          ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]
+          : [])
+      ],
+      group: 'interface'
+    },
     {
       id: 'input',
       title: translate('auto.hooks.useSettingsNavigationMetadata.0c6ee88a5f', 'Input & Editing'),

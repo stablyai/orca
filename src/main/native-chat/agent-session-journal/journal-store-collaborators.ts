@@ -1,7 +1,7 @@
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalHostDatabase } from './journal-host-database'
 import { JournalContextController } from './journal-context-controller'
 import { JournalEpochController } from './journal-epoch-controller'
@@ -23,7 +23,10 @@ import type { JournalWriteBody } from './journal-write-queue'
 import { journalInputClaimsReceipt, type JournalAttachmentClaim } from './journal-submission-hook'
 import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
 import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
-import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
+import {
+  isJournalOutputRevision,
+  isJournalStreamedTextRevision
+} from './journal-streamed-text-revision'
 
 export type JournalStoreHost = {
   /** Notify readers of durable draft-only transactions that append no journal row. */
@@ -37,7 +40,8 @@ export type JournalStoreHost = {
   readOnly: () => boolean
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
-  commit: (rows: readonly JournalRow[], savedAt: number) => void
+  prepare: NonNullable<ConstructorParameters<typeof JournalRowWriter>[0]['prepare']>
+  commit: ConstructorParameters<typeof JournalRowWriter>[0]['commit']
   journal: () => AgentSessionJournal
   enqueue: JournalRowWriter['enqueue']
 }
@@ -99,8 +103,10 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     readOnly: host.readOnly,
     highestFence: () => host.state().highestFence,
     nextSequence: () => host.state().lastSequence + 1,
+    prepare: host.prepare,
     commit: host.commit,
-    streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row)
+    streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row),
+    outputRevision: (row) => isJournalOutputRevision(host.state(), row)
   })
   const inputReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) =>
     journalInputClaimsReceipt(claimAttachments, (id) => goalAttachments.isLive(id), rows, receipt)
@@ -137,6 +143,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,
+      reopenFloor: () => host.journal().reopenFloor(),
       identity: host.identity,
       rowWriter,
       queuedMessages,

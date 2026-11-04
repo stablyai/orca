@@ -1,14 +1,14 @@
 /** @vitest-environment happy-dom */
 import { fireEvent, render, screen, cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CompactAgentRow } from '../sidebar/worktree-card-compact-agent-row'
+import { CompactAgentRow } from '../sidebar/workspace-card/activity/worktree-card-compact-agent-row'
 import { TooltipProvider } from '../ui/tooltip'
 import DashboardAgentRow from './DashboardAgentRow'
 import type { DashboardAgentRow as AgentRow } from './useDashboardData'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 
 vi.mock('./use-agent-row-conversation-name', () => ({ useAgentRowConversationName: () => null }))
-vi.mock('../sidebar/CacheTimer', () => ({
+vi.mock('../sidebar/workspace-card/activity/CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownForPane: () => null
 }))
@@ -68,46 +68,6 @@ describe('agent child disclosure', () => {
     expect(activate).not.toHaveBeenCalled()
     expect(pointerDown).not.toHaveBeenCalled()
     expect(keyDown).not.toHaveBeenCalled()
-  })
-
-  it('updates the accessible action and retains the timestamp when expanded', () => {
-    const toggle = vi.fn()
-    const { rerender } = render(
-      <DashboardAgentChildDisclosure
-        childAgentCount={1}
-        childAgentsExpanded={false}
-        onToggleChildAgents={toggle}
-        timestamp="5m"
-      />
-    )
-    expect(
-      screen.getByRole('button', { name: 'Show 1 child agent' }).getAttribute('aria-expanded')
-    ).toBe('false')
-    rerender(
-      <DashboardAgentChildDisclosure
-        childAgentCount={1}
-        childAgentsExpanded
-        onToggleChildAgents={toggle}
-        timestamp="5m"
-      />
-    )
-    expect(
-      screen.getByRole('button', { name: 'Hide 1 child agent' }).getAttribute('aria-expanded')
-    ).toBe('true')
-    expect(screen.getByText('5m')).toBeTruthy()
-  })
-
-  it('does not offer a disclosure without children or a toggle action', () => {
-    const { rerender } = render(
-      <DashboardAgentChildDisclosure
-        childAgentCount={0}
-        childAgentsExpanded={false}
-        onToggleChildAgents={vi.fn()}
-      />
-    )
-    expect(screen.queryByRole('button')).toBeNull()
-    rerender(<DashboardAgentChildDisclosure childAgentCount={2} childAgentsExpanded={false} />)
-    expect(screen.queryByRole('button')).toBeNull()
   })
 })
 

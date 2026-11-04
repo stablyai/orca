@@ -1,12 +1,16 @@
-import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
-import type { AgentStatusState } from '../../shared/agent-status-types'
+import { agentSessionExecutionLocationsEqual } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
-  agentSessionAttentionSubjectPrefix,
-  attentionOriginWasRead,
-  type StructuredAttentionOrigin,
-  type StructuredAttentionRead,
-  type StructuredAttentionState
-} from '../../shared/agent-session-attention'
+  NotificationAttentionReadFrontiers,
+  notificationWasAcknowledged
+} from '../../shared/notification-attention-acknowledgement'
+import type { NotificationAttentionAcknowledgement } from '../../shared/notification-settings-types'
+import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
+import type {
+  StructuredAttentionOrigin,
+  StructuredAttentionState
+} from '../../shared/agent-session/agent-session-attention'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,
@@ -29,6 +33,7 @@ export type MobileNotificationDispatchEvent = {
   title: string
   body: string
   worktreeId?: string
+  workspaceExecutionHostId?: ExecutionHostId | null
   /** The pane the phone opens on tap; old phones ignore it and open the workspace's default tab. */
   paneKey?: string
   /** See `NotificationDispatchRequest.executionHost`; old phones ignore it and open the desktop's. */
@@ -63,6 +68,7 @@ export type MobilePushRegistrar = {
 }
 
 export class RuntimeMobileNotificationController {
+  private readonly attentionReads = new NotificationAttentionReadFrontiers()
   private readonly listeners = new Set<(event: MobileNotificationEvent) => void>()
   private readonly legacyCooldown = new Map<string, number>()
   private readonly replay = new MobileNotificationReplayBuffer()
@@ -142,13 +148,19 @@ export class RuntimeMobileNotificationController {
 
   dispatch(event: MobileNotificationEvent): void {
     if (event.type === 'notification') {
+      if (this.attentionReads.covers({ ...event, origin: event.structuredOrigin })) {
+        return
+      }
       // Decide once before recording so reconnect and buffer eviction cannot reset cooldown.
       const legacySocketAllowed =
         event.desktopAllowed !== false &&
         (event.emittedAt === undefined ||
           reserveNotificationCooldown(
             this.legacyCooldown,
-            event.attentionKey ?? event.worktreeId ?? 'global',
+            JSON.stringify([
+              event.executionHost,
+              event.attentionKey ?? event.worktreeId ?? 'global'
+            ]),
             event.emittedAt
           ))
       event = {
@@ -188,6 +200,10 @@ export class RuntimeMobileNotificationController {
   }
 
   dismiss(notificationId: string): void {
+    // Reads rebuild ids for alerts that never went out (chat panes, silenced workers); each would cost a silent push.
+    if (this.dismissalStore && !this.dismissalStore.hasLiveDelivery(notificationId)) {
+      return
+    }
     this.dispatch({ type: 'dismiss', notificationId })
   }
 
@@ -203,20 +219,35 @@ export class RuntimeMobileNotificationController {
     })
   }
 
-  retireStructuredAttention(read: StructuredAttentionRead): void {
+  acknowledgeAttention(
+    acknowledgement: NotificationAttentionAcknowledgement,
+    executionHost?: MobileNotificationDispatchEvent['executionHost']
+  ): void {
+    this.attentionReads.accept(acknowledgement, executionHost)
     for (const delivery of this.dismissalStore?.liveDeliveries() ?? []) {
-      if (attentionOriginWasRead(delivery.structuredOrigin, read)) {
+      if (
+        notificationWasAcknowledged(
+          { ...delivery, origin: delivery.structuredOrigin },
+          acknowledgement,
+          executionHost
+        )
+      ) {
         this.retireDelivery(delivery)
       }
     }
   }
 
   reconcileStructuredPromptAttention(state: StructuredAttentionState): void {
-    const prefix = agentSessionAttentionSubjectPrefix(state.scope, state.sessionId)
     const pending = new Set(state.pendingPromptIds)
-    for (const delivery of this.dismissalStore?.liveDeliveries(prefix) ?? []) {
-      const cause = delivery.structuredOrigin?.cause
-      if (cause?.kind === 'prompt' && !pending.has(cause.promptId)) {
+    for (const delivery of this.dismissalStore?.liveDeliveries() ?? []) {
+      const origin = delivery.structuredOrigin
+      if (
+        origin?.cause.kind === 'prompt' &&
+        origin.sessionId === state.sessionId &&
+        agentSessionExecutionLocationsEqual(origin.scope, state.scope) &&
+        delivery.executionHost === state.executionHost &&
+        !pending.has(origin.cause.promptId)
+      ) {
         this.retireDelivery(delivery)
       }
     }

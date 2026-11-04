@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime-core'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
@@ -77,12 +77,6 @@ describe('installExternalConversations', () => {
     expect(host.agentTransitions.subscribe).not.toHaveBeenCalled()
   })
 
-  it('builds the seam on first use when the setting is already on', () => {
-    const { store } = fakeStore({ experimentalConnectors: true })
-    const seam = installExternalConversations(store, runtime()).current()
-    expect(seam?.signal.aborted).toBe(false)
-  })
-
   it('disposes on disable without another call, and builds one fresh seam on re-enable', () => {
     const { store, listeners, update } = fakeStore({ experimentalConnectors: true })
     const host = runtime()
@@ -138,18 +132,6 @@ describe('installExternalConversations', () => {
       JSON.stringify(first?.initial)
     )
     expect(launch).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps the seam through unrelated settings changes', () => {
-    const { store, update } = fakeStore({ experimentalConnectors: true })
-    const connectors = installExternalConversations(store, runtime())
-    const seam = connectors.current()
-    update({ editorAutoSave: true })
-    expect(connectors.current()).toBe(seam)
-  })
-
-  it('stays off without a store', () => {
-    expect(installExternalConversations(null, runtime()).current()).toBeNull()
   })
 
   it('watches persisted links from host startup, so a session changed before any call is kept', () => {

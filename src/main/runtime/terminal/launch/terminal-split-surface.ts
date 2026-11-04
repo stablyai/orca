@@ -2,7 +2,7 @@ import { OrcaRuntimeWithSplitTerminal } from './terminal-split'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
 import { randomUUID } from 'node:crypto'
 import { runtimeSplitPlacement } from '../../runtime-terminal-spawn-placement'
@@ -81,6 +81,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       envToDelete: opts.envToDelete,
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
+      resolvedWorkspace: workspace,
       ...(opts.wslUserAct ? { wslUserAct: true } : {}),
       preAllocatedHandle,
       tabId: parentTabId,
@@ -115,6 +116,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
     if (createdPty) {
       recordPtySurface(
+        this.terminalIdentity,
         createdPty,
         parentTabId,
         paneKey,
@@ -122,6 +124,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       )
       createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
       createdPty.launchCommandAgent = resolveLaunchCommandPaneAgent(opts.command)
+      this.watchLaunchComposer(result.id, createdPty.launchCommandAgent)
       this.setPairedRendererSessionOwnership(
         createdPty.ptyId,
         this.pairedRendererSessionOwnedPtyIds.has(pty.ptyId)

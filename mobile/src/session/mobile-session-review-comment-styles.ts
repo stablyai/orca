@@ -9,7 +9,7 @@ export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
     height: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   diffCommentAddButtonPressed: {
     backgroundColor: colors.bgPanel
@@ -26,7 +26,7 @@ export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
   diffCommentCard: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
@@ -48,7 +48,7 @@ export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
     height: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 11
+    borderRadius: radii.control
   },
   diffCommentBody: {
     color: colors.textPrimary,
@@ -79,7 +79,7 @@ export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     fontSize: typography.metaSize
@@ -98,7 +98,7 @@ export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs
   },
@@ -135,7 +135,7 @@ export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
     fontSize: 13,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   }
 }))

@@ -6,7 +6,7 @@ import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toWebTerminalSurfaceTabId
-} from '../../src/shared/terminal-surface-id'
+} from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import {
@@ -16,7 +16,7 @@ import {
 } from './helpers/paired-electron-client'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 const PARK_DELAY_MS = 2_000
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-host-restart-background-'))

@@ -8,9 +8,9 @@ import {
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { applyAllAgentsPermission } from '../../../../shared/tui-agent-permission-choice'
-import type { AgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { applyAllAgentsPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import type { AgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export async function persistStep(
@@ -46,6 +46,7 @@ export function buildCompletedOnboardingNotificationSettings(
     ...notifications,
     enabled: true,
     agentTaskComplete: true,
+    agentNeedsInput: true,
     terminalBell: true
   }
 }

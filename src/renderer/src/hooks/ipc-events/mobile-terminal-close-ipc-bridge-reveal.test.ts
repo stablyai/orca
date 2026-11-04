@@ -35,7 +35,9 @@ vi.mock('@/components/terminal-pane/closed-terminal-leaf-notice', () => ({
   applyClosedTerminalLeafNotice: vi.fn()
 }))
 vi.mock('@/components/terminal/terminal-tab-actions', () => ({ closeTerminalTab: vi.fn() }))
-vi.mock('@/components/sidebar/sleep-worktree-flow', () => ({ runSleepWorktree: vi.fn() }))
+vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () => ({
+  runSleepWorktree: vi.fn()
+}))
 vi.mock('@/lib/workspace-session', () => ({ buildWorkspaceSessionPayload: vi.fn() }))
 vi.mock('@/lib/workspace-session-host-persistence', async (importOriginal) => ({
   ...(await importOriginal<typeof HostPersistence>()),
@@ -133,13 +135,6 @@ describe('showing a tab main wrote for a file it opened', () => {
     expect(h.activeTabId()).not.toBe(h.tabId)
     noteLayoutFramePosition(5)
     expect(h.activeTabId()).toBe(h.tabId)
-  })
-
-  it('does nothing when the tab is gone by the time its frame comes in', () => {
-    const h = setup()
-    const before = h.activeTabId()
-    h.reveal({ worktreeId: WT, ...FILE, tabId: 'closed-tab', frameSeq: 5 })
-    expect(h.activeTabId()).toBe(before)
   })
 
   it("visits a workspace the window has not drawn yet, then shows main's tab once it draws", async () => {

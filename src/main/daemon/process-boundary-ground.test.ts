@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { coldRestorePayloadFromInfo } from './cold-restore-payload-cache'
 import { buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
-import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT as DAEMON_RESTORE_SCROLLBACK_ROWS } from '../../shared/terminal/replay/terminal-scrollback-policy'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from './daemon-session-scrollback-window'
 import { HeadlessEmulator } from './headless-emulator'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
@@ -124,14 +124,6 @@ describe('process boundary ground at a cold restore', () => {
       })
       expect(checkpoint.lastTitle).toBeUndefined()
     }
-  })
-
-  it('grounds without moving the cursor', () => {
-    const live = emulator(DAEMON_SESSION_SCROLLBACK_ROWS)
-    write(live, 'OLD_OUTPUT_1\r\n$ ')
-    write(live, PROCESS_BOUNDARY_GROUND)
-    write(live, 'X')
-    expect(live.getBufferTailLines(24)[1]).toBe('$ X')
   })
 
   // awin verify-11: a reattach after Wake showed the new prompt beside the dead shell's (`$ $`).

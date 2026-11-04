@@ -1,6 +1,6 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { hookAuthority } from './agent-state-rules/agent-state-rules-engine'
 import { selectFreshExplicitAgentStatusRow } from './runtime-hook-agent-row-selection'
 import { terminalHostConnectionMatches } from './orchestration/worker-provider-session'

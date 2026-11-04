@@ -1,7 +1,7 @@
 import type {
   AgentSessionFailureCopyId,
   AgentSessionFailureCopyValues
-} from '../../../src/shared/agent-session-failure-copy'
+} from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import { translate } from '../i18n/mobile-i18n'
 
 export const SEND_FAILURE_COPY = {
@@ -109,6 +109,8 @@ export const SEND_FAILURE_COPY = {
       "An attachment on this message can't be sent to the agent.",
       values
     ),
+  attachmentsExpired: (values) =>
+    translate('session.failure.attachmentsExpired', '{{names}} expired.', values),
   attachmentUnreadable: (values) =>
     translate(
       'session.failure.attachmentUnreadable',

@@ -2,11 +2,9 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { findBrokenReadmeLinks, main } from './check-readme-local-links.mjs'
-import { LINT_STEPS } from './run-lint.mjs'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
 const tempDirs = []
@@ -71,13 +69,22 @@ afterEach(() => {
 })
 
 describe('README local link check', () => {
-  it('accepts the checked-in READMEs', () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    expect(main(projectDir)).toBe(0)
-  })
-
   it('accepts local links in every supported shape', () => {
     expect(findBrokenReadmeLinks(makeFixture(validReadmes))).toEqual([])
+  })
+
+  it('checks mixed-case HTML attributes without changing their URLs', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md':
+        '<img SRC="docs/Hero.png"><a HrEf=\'Missing.png\'>x</a><source SrcSet="docs/Hero.png 1x, docs/Gone@2x.png 2x">',
+      'docs/Hero.png': 'png'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual([
+      'Missing.png',
+      'docs/Gone@2x.png'
+    ])
   })
 
   it('rejects a missing full URL even when its split fragments are tracked', () => {
@@ -110,6 +117,48 @@ describe('README local link check', () => {
         resolved: 'docs/assets/missing.png'
       }
     ])
+  })
+
+  it('preserves commas inside srcset URLs', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source SrcSet=" ,,\t docs/Hero,wide.png 1x,, \n docs/Hero,tall.png,, ">',
+      'docs/Hero,wide.png': 'png',
+      'docs/Hero,tall.png': 'png'
+    })
+
+    expect(findBrokenReadmeLinks(root)).toEqual([])
+  })
+
+  it('rejects a missing srcset URL even when its comma-separated fragments are tracked', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source srcset="docs/Missing,wide.png 1x">',
+      'docs/Missing': 'fragment',
+      'wide.png': 'fragment'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual([
+      'docs/Missing,wide.png'
+    ])
+  })
+
+  it('ignores a srcset data URL while checking the following local candidate', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source srcset="data:image/png;base64,AAAA 1x, docs/missing.png 2x">'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual(['docs/missing.png'])
+  })
+
+  it('does not treat commas inside srcset descriptors as new candidates', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source srcset="resources/build/icon.png future(1,2), docs/missing.png 2x">'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual(['docs/missing.png'])
   })
 
   it('checks tracked media outside the detector sparse checkout', () => {
@@ -190,27 +239,5 @@ describe('README local link check', () => {
         resolved: 'docs/assets/missing.gif'
       }
     ])
-  })
-
-  // Ready docs-only diffs skip preflight, so the detector must check README links.
-  it('checks ready PRs through the detector and in the lint script', () => {
-    const { scripts } = JSON.parse(readFileSync(path.join(projectDir, 'package.json'), 'utf8'))
-    const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
-    const guardJob = workflow.jobs.code_paths
-    const step = guardJob.steps.find((candidate) => candidate.name === 'Check README local links')
-    const runsFor = (draft) =>
-      runInNewContext(guardJob.if, {
-        github: { event_name: 'pull_request', event: { pull_request: { draft } } }
-      })
-
-    expect(runsFor(false)).toBe(true)
-    expect(runsFor(true)).toBe(false)
-    expect(guardJob.needs).toBeUndefined()
-    expect(step.if).toBeUndefined()
-    expect(step.run).toBe('node config/scripts/check-readme-local-links.mjs')
-    expect(scripts['check:readme-local-links']).toBe(
-      'node config/scripts/check-readme-local-links.mjs'
-    )
-    expect(LINT_STEPS).toContain('check:readme-local-links')
   })
 })

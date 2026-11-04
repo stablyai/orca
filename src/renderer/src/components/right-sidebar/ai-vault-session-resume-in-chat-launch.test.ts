@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 type BeginArgs = { beforeOpen?: (sessionId: string) => boolean | void }
 type Launch = {
@@ -41,7 +41,7 @@ vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
       : null
   }
 }))
-vi.mock('@/lib/structured-agent-session-host-admission', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-host-admission', () => ({
   admitStructuredLaunchOnHost: mocks.admitStructuredLaunchOnHost
 }))
 vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
@@ -268,7 +268,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
     [
       'agent_session_conflict',
       'conversationHeldElsewhere',
-      'Codex is already running this conversation in another terminal. Quit Codex there or close that terminal, then open this conversation from Session History.'
+      'Codex is running this conversation in another terminal. Quit it there or close that terminal, then try again.'
     ],
     [
       'agent_session_identity_required',

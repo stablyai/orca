@@ -1,15 +1,18 @@
-import { hasOtherAgentProcessOwner } from '../shared/agent-process-presence'
-import { isOwnerProviderGuestHook } from '../shared/agent-hook-owner-presence'
-import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
-import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import { hasOtherAgentProcessOwner } from '../shared/agent-status/process/agent-process-presence'
+import {
+  isOwnerProviderGuestHook,
+  readHookProcessVerdict
+} from '../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import { sameAgentStatusTerminalOwner } from '../shared/agent-status/identity/agent-status-terminal-owner'
+import { normalizeHookPayload } from '../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   clearPaneCacheState,
   createHookListenerState,
   type HookListenerState
 } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
-import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
+import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { cacheRelayLegacyAgentStatus } from '../shared/agent-status/transport/agent-status-legacy-relay-cache'
 import { MAX_CACHED_PANES } from './agent-hook-cached-pane-status'
 
 /** Forward every provider; only the client knows about desktop-only owner completion. */
@@ -56,7 +59,11 @@ export class RelayProviderHookNormalization {
         hasOtherAgentProcessOwner(owner.agentPresence, {
           agent: source,
           process: event.agentPresence?.process
-        })
+        }) &&
+        readHookProcessVerdict(canonical, owner, {
+          paneKey: event.paneKey,
+          process: event.agentPresence?.process
+        }) !== 'root'
       ) {
         return event
       }

@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { getExecutionHostLabel, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { fixture } from './profile-state-delayed-authority-fixture'
 import { resolvePersistedStablePaneOwner } from '../../ipc/pty/pane/stable-owner'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({

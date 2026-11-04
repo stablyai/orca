@@ -6,11 +6,11 @@
 1 src/renderer/src/components/activity/use-agent-pane-threads.ts
 3 src/renderer/src/components/cmd-j/palette-live-status.tsx
 2 src/renderer/src/components/dashboard/worktree-agent-rows-cache.ts
-1 src/renderer/src/components/sidebar/use-worktree-activity-status.ts
-1 src/renderer/src/components/sidebar/use-worktree-activity-statuses.ts
-4 src/renderer/src/components/sidebar/worktree-card-send-target-inputs.ts
-3 src/renderer/src/components/sidebar/worktree-list-lineage-store-state.ts
-3 src/renderer/src/components/sidebar/worktree-list-pinned-store-state.ts
+1 src/renderer/src/components/sidebar/workspace-card/activity/use-worktree-activity-status.ts
+1 src/renderer/src/components/sidebar/workspace-card/activity/use-worktree-activity-statuses.ts
+4 src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-send-target-inputs.ts
+3 src/renderer/src/components/sidebar/worktree-list/listing/worktree-list-lineage-store-state.ts
+3 src/renderer/src/components/sidebar/worktree-list/listing/worktree-list-pinned-store-state.ts
 4 src/renderer/src/components/sidebar/worktree-list/listing/use-agent-send-target.ts
 1 src/renderer/src/components/status-bar/workspace-space-decision-inputs.ts
 2 src/renderer/src/components/tab-bar/terminal-tab-activity-status.ts
@@ -18,7 +18,7 @@
 1 src/renderer/src/components/tab-group/useTabGroupWorkspaceModel.ts
 1 src/renderer/src/components/terminal-pane/pty-connection-test-deps.ts
 4 src/renderer/src/components/terminal-pane/terminal-recovery-ledger-test-store.ts
-3 src/renderer/src/components/worktree-jump-palette-status-inputs.ts
+3 src/renderer/src/components/worktree-jump/worktree-jump-palette-status-inputs.ts
 9 src/renderer/src/lib/agent-background-session-test-state.ts
 1 src/renderer/src/lib/agent-hibernation-coordinator.ts
 4 src/renderer/src/lib/floating-workspace-terminal-actions.ts

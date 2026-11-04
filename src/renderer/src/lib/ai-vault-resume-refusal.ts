@@ -1,4 +1,7 @@
-import { aiVaultAgentLabel, type AiVaultAgent } from '../../../shared/ai-vault-types'
+import {
+  aiVaultAgentLabel,
+  type AiVaultAgent
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { compactIpcErrorMessage } from './ipc-error'
 

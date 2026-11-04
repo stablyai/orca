@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from './pane-manager-types'
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 const disposePane = vi.hoisted(() =>
   vi.fn((pane: ManagedPaneInternal, panes: Map<number, ManagedPaneInternal>) => {
@@ -35,6 +35,7 @@ import {
   markTerminalPinnedViewport,
   type TerminalScrollIntentTarget
 } from './terminal-scroll-intent'
+
 import {
   readTerminalScrollIntentKeyRetention,
   releaseTerminalScrollIntentKey

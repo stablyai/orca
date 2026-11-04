@@ -35,9 +35,8 @@ let submitted: string[] = []
 const field: RefObject<TextInput | null> = { current: null }
 
 /**
- * A caller handing the binding a fresh closure each render, which is what the command dock's two
- * fields do: their submits read `handleSend`, a per-render function whose guard reads `client` and
- * `activeHandle`. This says the listener follows them.
+ * A caller handing the binding a fresh closure each render, whose guard reads `client` and
+ * `activeHandle`. This says the listener follows it.
  */
 let rebindField: ((node: TextInput | null) => void) | undefined
 

@@ -6,7 +6,7 @@ import {
   resetWorktreeSliceModuleMemory
 } from '../../worktrees-slice-test-harness'
 import { makeWorktree } from '../../worktrees-slice-test-fixtures'
-import { getDeleteStateForWorktreeHost } from '../../../../components/sidebar/worktree-delete-state-host-match'
+import { getDeleteStateForWorktreeHost } from '../../../../components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }

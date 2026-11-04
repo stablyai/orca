@@ -3,7 +3,7 @@ import { CircleCheck, TriangleAlert } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { getLocalizedConflictKindLabel } from './conflict-label'
 
 function conflictBadgeAriaLabel(unresolved: boolean, kindLabel: string | null): string {

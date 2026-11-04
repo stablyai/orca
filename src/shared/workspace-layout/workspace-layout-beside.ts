@@ -1,11 +1,14 @@
 // Loader separates layout from view selections, reported content facts and untouched carried fields; Serializer recombines them into compatible disk records.
 
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
-import type { ClosedTerminalTabTombstonesByTabId } from '../closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
 import type { TabGroup } from '../tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
-import type { PersistedOpenFile, WorkspaceSessionState } from '../workspace-session-state-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
+import type {
+  PersistedOpenFile,
+  WorkspaceSessionState
+} from '../workspace-session/workspace-session-state-types'
 
 type SessionFieldOwner = 'layout' | 'view' | 'fact' | 'carried' | 'legacy'
 
