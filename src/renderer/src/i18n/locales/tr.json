@@ -23198,6 +23198,6 @@
     "workspaceStartupFailed": "{{agent}} başlatılamadı. Bu kurulumdaki Argümanlar'ı kontrol edip tekrar deneyin.",
     "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
     "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
-    "composedChoicesNote": "{{agent}} çaba ve hız seçimleri model argümanına dahil edilir."
+    "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
   }
 }

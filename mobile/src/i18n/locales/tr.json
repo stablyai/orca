@@ -549,8 +549,8 @@
       "pastedText": "Yapıştırılan metin",
       "textAttachment": "Metin eki",
       "byteSize": "{{size}} bayt",
-      "saveUpdate": "Kaydetme, bir telefon güncellemesiyle kullanılabilecek.",
-      "fullCopySaveUpdate": "Bu ek için tamamını kopyalama ve kaydetme, bir telefon güncellemesiyle kullanılabilecek."
+      "saveUpdate": "Kaydetme özelliği bir telefon güncellemesiyle kullanılabilecek.",
+      "fullCopySaveUpdate": "Bu ek için Tümünü Kopyala ve Kaydet özellikleri bir telefon güncellemesiyle kullanılabilecek."
     }
   },
   "common": {
