@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from './tui-agent-startup'
-import { isExpectedAgentProcess, recognizeAgentProcess } from '../../agent-process-recognition'
+import {
+  isExpectedAgentProcess,
+  recognizeAgentProcess
+} from '../../agent-status/process/agent-process-recognition'
 import { pickTuiAgent } from '../catalog/tui-agent-selection'
 
 describe('Freebuff terminal launches', () => {

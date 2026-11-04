@@ -2,7 +2,10 @@ import React from 'react'
 import { toast } from 'sonner'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { NotesSendAgentTarget } from '@/lib/notes-send-agent-targets'
 import { makePaneKey } from '../../../../shared/stable-pane-id'

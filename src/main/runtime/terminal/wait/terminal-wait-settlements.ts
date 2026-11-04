@@ -5,7 +5,7 @@ import {
   buildPtyTerminalWaitExitError,
   buildPtyTerminalWaitResult
 } from '../../terminal-wait-results'
-import type { AgentStatus } from '../../../../shared/agent-detection'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { detectExplicitIdleStatusFromTitle } from '../../terminal-wait-detection'
 import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
 import {

@@ -2,7 +2,11 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import { createPane, createManager, type MockTransport } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -160,8 +164,15 @@ describe('a pane on an unconverted SSH row', () => {
     }
     await installTerminalTestGlobals()
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     connectPane = (paneId, deps) =>
-      connectPanePty(...mockPanePtyArgs(createPane(paneId), createManager(paneId), deps))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(paneId),
+          createManager(paneId),
+          bindPaneAgentTitleMocks(deps, agentTitleMocks)
+        )
+      )
   })
 
   afterEach(async () => {

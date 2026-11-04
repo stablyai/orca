@@ -1,4 +1,4 @@
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 
 type RetainedCodexHookService = {
   install: (runtimeHomePath: string) => AgentHookInstallStatus | Promise<AgentHookInstallStatus>

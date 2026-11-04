@@ -47,7 +47,7 @@ import type {
   RuntimeAgentLineageTestModule,
   RuntimeAgentLineageCatalogTestModule
 } from '../shared/runtime-agent-lineage-consumer.test-fixture'
-import { COMMAND_SPECS } from './specs'
+import { COMMAND_SPECS } from './specs/index'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
-import { normalizeAndAccept } from '../../agent-hook-listener-test-harness'
+import { normalizeAndAccept } from '../normalization/agent-hook-listener-test-harness'
 
 const SESSION_ID = 'sess_01a0caa30e777d41bad746283a45633d'
 const TURN_ID = 'turn_e495d1a559aa478efba1bd75509afc'

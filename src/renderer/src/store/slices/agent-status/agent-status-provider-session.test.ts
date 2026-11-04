@@ -1,4 +1,4 @@
-import { normalizeHookPayload } from '../../../../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../../../shared/agent-hook-listener/listener-state'
 import { applyProviderSessionOnlyUpdate } from '../../../hooks/ipc-events/agent-status-partial-updates'
 import { describe, expect, it } from 'vitest'

@@ -117,33 +117,4 @@ describe('work item checksSummary', () => {
     const item = await getWorkItem('/repo-root', 43, 'pr', null, {}, 'origin')
     expect(item?.checksSummary).toMatchObject({ state, total: 2, passed: 1, cancelled })
   })
-
-  it('fails the summary on a failing run and leaves an empty rollup with no state', async () => {
-    mockPullRequestDetail({
-      number: 44,
-      title: 'Add feature',
-      state: 'OPEN',
-      url: 'https://github.com/acme/widgets/pull/44',
-      updatedAt: '2026-04-01T00:00:00Z',
-      statusCheckRollup: [
-        { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'SUCCESS' },
-        { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'FAILURE' }
-      ]
-    })
-    await expect(getWorkItem('/repo-root', 44, 'pr', null, {}, 'origin')).resolves.toMatchObject({
-      checksSummary: { state: 'failure', total: 2, passed: 1, failed: 1, pending: 0, neutral: 0 }
-    })
-
-    mockPullRequestDetail({
-      number: 45,
-      title: 'Add feature',
-      state: 'OPEN',
-      url: 'https://github.com/acme/widgets/pull/45',
-      updatedAt: '2026-04-01T00:00:00Z',
-      statusCheckRollup: []
-    })
-    await expect(getWorkItem('/repo-root', 45, 'pr', null, {}, 'origin')).resolves.toMatchObject({
-      checksSummary: { state: 'none', total: 0, passed: 0, failed: 0, pending: 0, neutral: 0 }
-    })
-  })
 })

@@ -1,7 +1,7 @@
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess
-} from '../../../shared/agent-process-recognition'
+} from '../../../shared/agent-status/process/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'

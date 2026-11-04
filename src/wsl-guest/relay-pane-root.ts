@@ -1,5 +1,5 @@
-import { probeAgentProcessPresence } from '../shared/agent-process-presence-probe'
-import type { HookPaneProcessIo } from '../shared/hook-process-root-evidence'
+import { probeAgentProcessPresence } from '../shared/agent-status/process/agent-process-presence-probe'
+import type { HookPaneProcessIo } from '../shared/agent-hook-listener/presence/hook-process-root-evidence'
 import { readWslGuestRoot, wslGuestRootIdentity } from '../shared/wsl-guest-root-marker'
 
 const METHOD_NOT_FOUND = -32601

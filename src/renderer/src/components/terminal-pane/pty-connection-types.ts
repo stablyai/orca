@@ -1,3 +1,6 @@
+import type { isGeminiTerminalTitle } from '../../../../shared/agent-status/title/agent-title-core'
+import type { isClaudeAgent } from '../../../../shared/agent-status/title/agent-title-identity'
+import type { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import type { TerminalLaunchInputAttemptOwner } from './terminal-launch-input-attempt'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
@@ -58,6 +61,9 @@ export type PaneProcessExit = {
 }
 
 export type PtyConnectionDeps = {
+  detectAgentStatusFromTitle?: typeof detectAgentStatusFromTitle
+  isClaudeAgent?: typeof isClaudeAgent
+  isGeminiTerminalTitle?: typeof isGeminiTerminalTitle
   tabId: string
   worktreeId: string
   cwd?: string

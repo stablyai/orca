@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusState } from '../../shared/agent-status-types'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import type { AutomationRun } from '../../shared/automations-types'
 import { AGENT_START_GRACE_MS } from './automation-run-agent-evidence'
 import {

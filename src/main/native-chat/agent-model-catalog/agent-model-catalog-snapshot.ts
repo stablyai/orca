@@ -8,7 +8,10 @@ import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/r
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { agentModelCatalogResultFromEntry } from './agent-model-catalog-entry'
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import type {
   AgentModelCatalogReadParams,
   AgentModelCatalogServiceDeps
@@ -239,7 +242,7 @@ export function projectAgentModelCatalogSnapshot(
     !params.verifiedOnly &&
     (deps.store.isListing(bound.fingerprint) ||
       (resolving && deps.store.probeDue(bound.fingerprint))) &&
-    (independent || !listed)
+    (independent || !listed || usesModelSpecificAcpEfforts(params.agent))
       ? { listingInProgress: true as const }
       : {}),
     ...(deps.store.failure(bound.fingerprint)?.unavailable

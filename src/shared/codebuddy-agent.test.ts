@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
-import { normalizeAndAccept } from './agent-hook-listener-test-harness'
-import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import { normalizeAndAccept } from './agent-hook-listener/normalization/agent-hook-listener-test-harness'
+import { recognizeAgentProcessFromCommandLine } from './agent-status/process/agent-process-recognition'
 import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
 
 describe('CodeBuddy harness', () => {

@@ -2,18 +2,18 @@ import { describe, expect, it } from 'vitest'
 import {
   recognizeAgentProcessFromCommandLine,
   isExpectedAgentProcess
-} from './agent-process-recognition'
+} from './agent-status/process/agent-process-recognition'
+import { getAgentLabel } from './agent-status/title/agent-title-identity'
+import { isGeminiTerminalTitle } from './agent-status/title/agent-title-core'
 import {
-  getAgentLabel,
-  isGeminiTerminalTitle,
   normalizeTerminalTitle,
   detectAgentStatusFromTitle
-} from './agent-detection'
+} from './agent-status/title/agent-title-status'
 import { buildAgentStartupPlan } from './agent-launch/startup/tui-agent-startup'
 import { buildAgentResumeStartupPlan } from './agent-launch/startup/tui-agent-resume-startup'
 import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
-import { normalizeAndAccept } from './agent-hook-listener-test-harness'
+import { normalizeAndAccept } from './agent-hook-listener/normalization/agent-hook-listener-test-harness'
 
 describe('Qoder agent identity and lifecycle', () => {
   it('recognizes the installed versioned binary on native platforms and excludes headless runs', () => {

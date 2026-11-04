@@ -1443,7 +1443,18 @@
         "antigravityAccount": "Conta",
         "antigravitySignInNeeded": "Os chats exigem login no Antigravity, separado da sua conta agy do terminal."
       },
-      "permissionsDescriptionOwnAgents": "Novos chats seguem a permissão de cada agente em Configurações → Agentes."
+      "permissionsDescriptionOwnAgents": "Novos chats seguem a permissão de cada agente em Configurações → Agentes.",
+      "launch": {
+        "on": "A interface de chat está ativada",
+        "off": "A interface de chat está desativada",
+        "agents": "Modo de inicialização padrão por agente",
+        "agentsDescription": "Escolha se cada agente abre na interface de chat ou em sua CLI.",
+        "chatDescription": "Novos agentes serão iniciados no modo de chat por padrão.",
+        "cliDescription": "Novos agentes serão iniciados na CLI por padrão.",
+        "turnOn": "Ativar",
+        "turnOff": "Desativar",
+        "toggle": "Usar a interface de chat por padrão"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC ou U.S. — Option envia sequências Alt/Esc",
@@ -1714,6 +1725,28 @@
         "notPng": "Os ícones do repositório devem ser arquivos PNG.",
         "tooLarge": "A imagem do ícone do repositório deve ter no máximo 256 KB."
       }
+    },
+    "editorFormatOnSave": {
+      "title": "Formatar ao salvar",
+      "description": "Formata o texto antes de salvamentos manuais e automáticos. Configure um comando de formatação em Configurações > Projetos. Desativado por padrão.",
+      "keywords": "formatador formatar ao salvar prettier biome gofmt"
+    },
+    "editorInsertFinalNewline": {
+      "title": "Inserir nova linha final",
+      "description": "Adiciona uma quebra de linha ao salvar um arquivo de código não vazio que não termina com uma. Desativado por padrão.",
+      "keywordNewline": "nova linha",
+      "keywordEndOfFile": "fim do arquivo"
+    },
+    "repositoryFormatter": {
+      "title": "Comando do formatador",
+      "description": "Usa o formatador deste projeto para formatar ao salvar.",
+      "saveFailed": "Não foi possível salvar as configurações do formatador.",
+      "command": "Comando",
+      "commandHelp": "Executa no host do arquivo, na raiz do espaço de trabalho. Lê o buffer de stdin e deve imprimir somente o texto formatado em stdout. Use ${file} ou ${relativeFile} para o caminho. Os argumentos são passados diretamente, sem shell. Não use --write. Deixe vazio para desativar neste projeto.",
+      "include": "Globs de inclusão (um por linha)",
+      "includeHelp": "Corresponde aos caminhos relativos à raiz do espaço de trabalho. Sem um glob correspondente, não há formatação. * e ** ignoram nomes que começam com ponto; liste-os explicitamente, por exemplo .github/**/*.yml. Ative Formatar ao salvar em Geral > Editor para usar este comando.",
+      "saving": "Salvando…",
+      "save": "Salvar formatador"
     }
   },
   "auto": {
@@ -5172,6 +5205,14 @@
               "extension": "extensão",
               "chrome": "chrome",
               "password": "gerenciador de senhas"
+            },
+            "orchestrationPanel": {
+              "title": "Painel de orquestração",
+              "description": "Mostra com quais agentes cada agente está trabalhando, ao lado do chat ou terminal dele.",
+              "orchestration": "orquestração",
+              "agents": "agentes",
+              "workers": "agentes executores",
+              "manager": "gerente"
             }
           }
         },
@@ -5666,6 +5707,9 @@
           "browserExtensions": {
             "copy": "Adiciona Configurações › Navegador › Extensões para perfis de navegador locais.",
             "toggleLabel": "Ativar ou desativar extensões de navegador"
+          },
+          "orchestrationPanel": {
+            "toggleLabel": "Ativar ou desativar o painel de orquestração"
           }
         },
         "RuntimePairingUrlGenerator": {
@@ -7977,7 +8021,8 @@
                   "supportedAgents": "Agentes suportados para esta receita: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}} não pode executar esta receita de geração de texto. Escolha um dos agentes suportados abaixo.",
                   "resolveComments": "Inicia um agente a partir de comentários não resolvidos selecionados de PR ou MR.",
-                  "fixPushFailure": "Inicia um agente quando um hook de pre-push ou git push falha."
+                  "fixPushFailure": "Inicia um agente quando um hook de pre-push ou git push falha.",
+                  "commitMessageSharedModel": "Os detalhes da pull request, o nome da branch e o nome do chat também podem usar este modelo quando não escolhem outro; a opção “Igual ao padrão” mostra qual modelo usam."
                 }
               }
             }
@@ -9382,7 +9427,8 @@
           "pluginIconTheme": {
             "title": "Tema de ícones",
             "description": "Ícones de arquivos e pastas de um plugin ativado.",
-            "builtIn": "Integrado"
+            "builtIn": "Integrado",
+            "search": "Buscar temas de ícones…"
           }
         },
         "PluginInUseAction": {
@@ -9625,7 +9671,12 @@
         },
         "AppearanceThemeControl": {
           "matchTerminal": "Combinar com o Terminal",
-          "dynamic": "dinâmico"
+          "dynamic": "dinâmico",
+          "searchThemes": "Buscar temas…",
+          "noThemes": "Nenhum tema corresponde à sua busca."
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "Nenhum resultado."
         }
       },
       "right": {
@@ -20000,9 +20051,12 @@
         "unavailable": "Resposta selecionada indisponível",
         "cancelled": "Cancelado",
         "resolved": "Resolvido",
-        "resolver": "Respondido em {{device}}",
-        "cancelledBy": "Cancelado em {{device}}",
-        "emptyAnswer": "Resposta vazia"
+        "resolver": "Respondido em: {{device}}",
+        "cancelledBy": "Cancelado em: {{device}}",
+        "emptyAnswer": "Resposta vazia",
+        "thisComputer": "este computador",
+        "computer": "o computador",
+        "otherDevice": "outro dispositivo"
       },
       "notices": {
         "compaction": "Contexto compactado",
@@ -20704,7 +20758,11 @@
         "handedOffToAgent": "Entregue a um agente",
         "startedAgent": "Agente iniciado",
         "taskFromCoordinator": "Tarefa do coordenador",
-        "updateFromWorker": "Atualização do worker"
+        "updateFromWorker": "Atualização do worker",
+        "senderReplaced": "{{name}} não está mais em execução em seu terminal; outro agente está em execução nele agora. Abra esse terminal pela barra lateral se precisar dele.",
+        "senderAmbiguous": "O Orca não consegue identificar em qual terminal {{name}} está em execução. Abra-o pela barra lateral.",
+        "senderNotRunning": "{{name}} não está mais em execução. Inicie um novo agente pela barra lateral para continuar o trabalho.",
+        "unnamedSenderSubject": "Um agente"
       },
       "goal": {
         "placeholder": "Descreva seu objetivo e defina resultados mensuráveis para obter os melhores resultados",
@@ -20968,7 +21026,24 @@
         "modelApplyFailed": "Não foi possível aplicar o modelo {{value}}.",
         "effortApplyFailed": "Não foi possível aplicar o esforço {{value}}."
       },
-      "settings": "Configurações do chat"
+      "settings": "Configurações do chat",
+      "textAttachmentPreview": {
+        "copiedContents": "Conteúdo copiado",
+        "textAttachment": "Anexo de texto",
+        "byteSize": "{{size}} bytes",
+        "copyContents": "Copiar conteúdo",
+        "saveFile": "Salvar arquivo",
+        "copyTooLarge": "Este arquivo é grande demais para copiar. Salve-o em vez disso.",
+        "exportError": "Não foi possível exportar o anexo. Tente novamente.",
+        "unreadableReply": "Resposta do anexo ilegível. Tente novamente.",
+        "incompleteReply": "O anexo mudou ou sua resposta estava incompleta. Feche-o e tente novamente.",
+        "notText": "Não é possível visualizar este arquivo como texto. Salve-o para abri-lo em outro aplicativo.",
+        "openFailed": "Não foi possível abrir o anexo. Tente novamente.",
+        "hostUpdate": "Este host ainda não consegue abrir anexos de texto. Atualize o Orca nesse host e tente novamente.",
+        "hostUnavailable": "O host do anexo está indisponível. Reconecte-se e tente novamente.",
+        "connectionChanged": "A conexão mudou. Feche este anexo e abra-o novamente.",
+        "readFailed": "Não foi possível ler este anexo no host. Reconecte-se e tente novamente. O arquivo pode ter sido removido ou alterado."
+      }
     },
     "tab": {
       "bar": {
@@ -21530,6 +21605,11 @@
     },
     "wslHostMark": {
       "runsOn": "Executa no WSL: {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "Não foi possível formatar {{file}}. Salvando sem formatação: {{reason}}"
+      }
     }
   },
   "csv": {
@@ -21874,7 +21954,10 @@
         "reviewBody_many": "{{count}} outras sessões do Claude não foram movidas para {{next}}.",
         "body_one": "{{count}} sessão do Claude ainda está em execução em {{previous}}. Ao reiniciar, a conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
         "body_other": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
-        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar."
+        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
+        "reasonSharedSession": "Também aberta em outro painel",
+        "sharedOne": "1 sessão do Claude permanece em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
+        "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel."
       }
     },
     "managedData": {
@@ -23000,7 +23083,11 @@
     "use": "Usar",
     "select": "Selecionar agente",
     "promptPlaceholder": "Adicione um prompt (opcional): / para skills, @ para arquivos",
-    "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos"
+    "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos",
+    "workspaceStartupFailed": "Não foi possível iniciar {{agent}}. Verifique os argumentos desta configuração e tente novamente.",
+    "sameAsTextDefault": "Igual ao padrão · {{value0}}",
+    "chatChoicesNote": "As escolhas de modelo ou esforço de {{agent}} sem uma flag de CLI se aplicam aos chats.",
+    "composedChoicesNote": "As escolhas de esforço e velocidade de {{agent}} estão incluídas no argumento do modelo."
   },
   "wslMove": {
     "entry": {

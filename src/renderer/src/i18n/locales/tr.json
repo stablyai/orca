@@ -514,7 +514,18 @@
         "antigravityAccount": "Hesap",
         "antigravitySignInNeeded": "Sohbetler için agy terminal hesabınızdan ayrı bir Antigravity oturumu gerekir."
       },
-      "permissionsDescriptionOwnAgents": "Yeni sohbetlerde her ajanın Ayarlar → Ajanlar bölümündeki izni geçerlidir."
+      "permissionsDescriptionOwnAgents": "Yeni sohbetlerde her ajanın Ayarlar → Ajanlar bölümündeki izni geçerlidir.",
+      "launch": {
+        "on": "Chat UI açık",
+        "off": "Chat UI kapalı",
+        "agents": "Ajan başına varsayılan başlatma modu",
+        "agentsDescription": "Her ajanın Chat UI veya CLI içinde açılacağını seçin.",
+        "chatDescription": "Yeni ajanlar varsayılan olarak sohbet modunda başlatılır.",
+        "cliDescription": "Yeni ajanlar varsayılan olarak CLI olarak başlatılır.",
+        "turnOn": "Aç",
+        "turnOff": "Kapat",
+        "toggle": "Varsayılan olarak Chat UI kullan"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC veya U.S. — Option, Alt/Esc dizileri gönderir",
@@ -952,6 +963,28 @@
         "notPng": "Repo simgeleri PNG dosyaları olmalıdır.",
         "tooLarge": "Repo simgesi görseli 256 KB veya daha küçük olmalıdır."
       }
+    },
+    "editorFormatOnSave": {
+      "title": "Kaydederken biçimlendir",
+      "description": "Elle ve otomatik kaydetmeden önce metni biçimlendirin. Biçimlendirici komutunu Ayarlar > Projeler bölümünde yapılandırın. Varsayılan olarak kapalıdır.",
+      "keywords": "biçimlendirici kaydederken biçimlendir prettier biome gofmt"
+    },
+    "editorInsertFinalNewline": {
+      "title": "Son satır sonunu ekle",
+      "description": "Boş olmayan bir kod dosyası kaydedilirken sonunda satır sonu yoksa ekleyin. Varsayılan olarak kapalıdır.",
+      "keywordNewline": "yeni satır",
+      "keywordEndOfFile": "dosya sonu"
+    },
+    "repositoryFormatter": {
+      "title": "Biçimlendirici komutu",
+      "description": "Kaydederken biçimlendirmek için bu projenin biçimlendiricisini kullanın.",
+      "saveFailed": "Biçimlendirici ayarları kaydedilemedi.",
+      "command": "Komut",
+      "saving": "Kaydediliyor…",
+      "save": "Biçimlendiriciyi kaydet",
+      "commandHelp": "Dosyanın ana bilgisayarında, çalışma alanının kökünde çalışır. Tamponu stdin üzerinden okur ve stdout üzerine yalnızca biçimlendirilmiş metin yazmalıdır. Yol için ${file} veya ${relativeFile} kullanın. Argümanlar kabuk kullanılmadan doğrudan iletilir. --write kullanmayın. Bu projede devre dışı bırakmak için boş bırakın.",
+      "include": "Dahil edilecek glob'lar (her satıra bir tane)",
+      "includeHelp": "Çalışma alanı köküne göre göreli yollarla eşleşir. Eşleşen glob yoksa biçimlendirme yapılmaz. * ve ** noktayla başlayan adları atlar; bunları açıkça belirtin, ör. .github/**/*.yml. Bu komutu kullanmak için Genel > Düzenleyici bölümünde Kaydederken biçimlendir seçeneğini etkinleştirin."
     }
   },
   "menu": {
@@ -7919,6 +7952,9 @@
           "browserExtensions": {
             "copy": "Yerel tarayıcı profilleri için Ayarlar › Tarayıcı › Uzantılar bölümünü ekler.",
             "toggleLabel": "Tarayıcı uzantılarını aç/kapat"
+          },
+          "orchestrationPanel": {
+            "toggleLabel": "Orkestrasyon panelini aç veya kapat"
           }
         },
         "FloatingWorkspacePane": {
@@ -10119,6 +10155,14 @@
               "extension": "eklenti",
               "chrome": "chrome",
               "password": "parola yöneticisi"
+            },
+            "orchestrationPanel": {
+              "title": "Orkestrasyon paneli",
+              "description": "Her ajanın birlikte çalıştığı ajanları sohbetinin veya terminalinin yanında gösterir.",
+              "orchestration": "orkestrasyon",
+              "agents": "ajanlar",
+              "workers": "çalışanlar",
+              "manager": "yönetici"
             }
           }
         },
@@ -11245,7 +11289,8 @@
                   "supportedAgents": "Bu tarif için desteklenen ajanlar: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}} bu metin oluşturma tarifini çalıştıramaz. Aşağıdaki desteklenen ajanlardan birini seçin.",
                   "resolveComments": "Seçilen çözülmemiş PR veya MR yorumlarından bir ajan başlatın.",
-                  "fixPushFailure": "Bir pre-push hook'u veya git push başarısız olduğunda bir ajan başlatın."
+                  "fixPushFailure": "Bir pre-push hook'u veya git push başarısız olduğunda bir ajan başlatın.",
+                  "commitMessageSharedModel": "Pull request ayrıntıları, dal adı ve sohbet adı da kendi modellerini seçmediklerinde bu modeli kullanabilir; “Varsayılanla aynı” seçeneği hangi modeli kullandıklarını gösterir."
                 }
               }
             }
@@ -13261,7 +13306,8 @@
           "pluginIconTheme": {
             "title": "Simge teması",
             "description": "Etkin bir eklentiden gelen dosya ve klasör simgeleri.",
-            "builtIn": "Yerleşik"
+            "builtIn": "Yerleşik",
+            "search": "Simge temalarında ara…"
           }
         },
         "PluginAddMenu": {
@@ -13338,7 +13384,12 @@
         },
         "AppearanceThemeControl": {
           "matchTerminal": "Terminalle Eşleştir",
-          "dynamic": "dinamik"
+          "dynamic": "dinamik",
+          "searchThemes": "Temalarda ara…",
+          "noThemes": "Aramanızla eşleşen tema yok."
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "Eşleşme yok."
         }
       },
       "right": {
@@ -19271,7 +19322,10 @@
         "cancelled": "İptal edildi",
         "resolved": "Çözüldü",
         "resolver": "{{device}} üzerinde yanıtlandı",
-        "cancelledBy": "{{device}} üzerinde iptal edildi"
+        "cancelledBy": "{{device}} üzerinde iptal edildi",
+        "thisComputer": "bu bilgisayar",
+        "computer": "bilgisayar",
+        "otherDevice": "başka bir cihaz"
       },
       "notices": {
         "contextCleared": "Bağlam temizlendi",
@@ -19734,7 +19788,11 @@
         "handedOffToAgent": "Ajana devredildi",
         "startedAgent": "Ajan başlatıldı",
         "taskFromCoordinator": "Koordinatörden görev",
-        "updateFromWorker": "Çalışandan güncelleme"
+        "updateFromWorker": "Çalışandan güncelleme",
+        "senderReplaced": "{{name}} artık kendi terminalinde çalışmıyor; orada şimdi başka bir ajan çalışıyor. Gerekirse terminali kenar çubuğundan açın.",
+        "senderAmbiguous": "Orca, {{name}} adlı ajanın hangi terminalde çalıştığını belirleyemiyor. Terminali kenar çubuğundan açın.",
+        "senderNotRunning": "{{name}} artık çalışmıyor. İşine devam etmek için kenar çubuğundan yeni bir ajan başlatın.",
+        "unnamedSenderSubject": "Bir ajan"
       },
       "goal": {
         "placeholder": "Hedefinizi açıklayın; en iyi sonuçlar için ölçülebilir sonuçlar tanımlayın",
@@ -19997,7 +20055,24 @@
         "modelApplyFailed": "{{value}} modeli uygulanamadı.",
         "effortApplyFailed": "Çaba düzeyi {{value}} olarak ayarlanamadı."
       },
-      "settings": "Sohbet ayarları"
+      "settings": "Sohbet ayarları",
+      "textAttachmentPreview": {
+        "copiedContents": "İçerik kopyalandı",
+        "textAttachment": "Metin eki",
+        "byteSize": "{{size}} bayt",
+        "copyContents": "İçeriği kopyala",
+        "saveFile": "Dosyayı kaydet",
+        "copyTooLarge": "Bu dosya kopyalanamayacak kadar büyük. Bunun yerine kaydedin.",
+        "exportError": "Ek dışa aktarılamıyor. Tekrar deneyin.",
+        "unreadableReply": "Ek yanıtı okunamıyor. Tekrar deneyin.",
+        "incompleteReply": "Ek değişti veya yanıtı eksik. Kapatıp tekrar deneyin.",
+        "notText": "Bu dosya metin olarak önizlenemiyor. Başka bir uygulamada açmak için kaydedin.",
+        "openFailed": "Ek açılamıyor. Tekrar deneyin.",
+        "hostUpdate": "Bu ana bilgisayar henüz metin eklerini açamıyor. O ana bilgisayarda Orca'yı güncelleyin ve tekrar deneyin.",
+        "hostUnavailable": "Ekin ana bilgisayarı kullanılamıyor. Yeniden bağlanıp tekrar deneyin.",
+        "connectionChanged": "Bağlantı değişti. Bu eki kapatıp yeniden açın.",
+        "readFailed": "Bu ek ana bilgisayarında okunamıyor. Yeniden bağlanıp tekrar deneyin. Dosya silinmiş veya değiştirilmiş olabilir."
+      }
     },
     "tab": {
       "bar": {
@@ -20544,6 +20619,11 @@
     },
     "wslHostMark": {
       "runsOn": "WSL üzerinde çalışır: {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "{{file}} biçimlendirilemedi. Biçimlendirilmeden kaydediliyor: {{reason}}"
+      }
     }
   },
   "dashboardPopout": {
@@ -21494,7 +21574,10 @@
         "reviewBody_other": "Diğer {{count}} Claude oturumu {{next}} hesabına taşınmadı.",
         "reviewBody_one": "Diğer {{count}} Claude oturumu {{next}} hesabına taşınmadı.",
         "body_other": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yeniden başlatılmadan önce boşta kalmayı bekler.",
-        "body_one": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yeniden başlatılmadan önce boşta kalmayı bekler."
+        "body_one": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yeniden başlatılmadan önce boşta kalmayı bekler.",
+        "reasonSharedSession": "Başka bir bölmede de açık",
+        "sharedOne": "Aynı konuşma başka bir bölmede açık olduğu için 1 Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir.",
+        "sharedOther": "Aynı konuşma başka bir bölmede açık olduğu için {{count}} Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir."
       }
     },
     "managedData": {
@@ -23109,6 +23192,10 @@
     "use": "Kullan",
     "select": "Aracı seç",
     "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
-    "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @"
+    "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @",
+    "workspaceStartupFailed": "{{agent}} başlatılamadı. Bu kurulumdaki Argümanlar'ı kontrol edip tekrar deneyin.",
+    "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
+    "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
+    "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
   }
 }

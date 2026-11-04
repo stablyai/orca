@@ -283,7 +283,8 @@
       "stoppedManually": "手動で停止しました",
       "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
       "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
-      "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。"
+      "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
+      "modelFallback": "Claudeがモデルを切り替えました: {{from}} → {{to}}。"
     },
     "orcaStop": {
       "canContinue": "この会話で続行できます。",
@@ -330,7 +331,10 @@
       "emptyAnswer": "空の回答",
       "resolved": "解決済み",
       "resolver": "{{device}} で回答しました",
-      "unavailable": "選択した回答は利用できません"
+      "unavailable": "選択した回答は利用できません",
+      "thisPhone": "このスマートフォン",
+      "computer": "コンピューター",
+      "otherDevice": "別のデバイス"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "セッション開始後に利用できます。",
@@ -525,6 +529,24 @@
     "agentMessage": {
       "handedOffToAgent": "Agentに引き継ぎました",
       "startedAgent": "Agentを開始しました"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "添付ファイルの応答を読み取れません。もう一度お試しください。",
+      "incompleteReply": "添付ファイルが変更されたか、応答が不完全でした。閉じてもう一度お試しください。",
+      "notText": "このファイルはテキストとしてプレビューできません。保存して別のアプリで開いてください。",
+      "openFailed": "添付ファイルを開けませんでした。もう一度お試しください。",
+      "hostUpdate": "このホストはまだテキスト添付ファイルを開けません。ホストのOrcaを更新してから再試行してください。",
+      "copyTooLarge": "このファイルは大きすぎてコピーできません。代わりに保存してください。",
+      "connectionChanged": "接続が変更されました。添付ファイルをもう一度開いてください。",
+      "hostChanged": "添付ファイルのホストが変更されました。閉じて開き直してください。",
+      "readFailed": "添付ファイルを読み取れませんでした。再接続してもう一度お試しください。ファイルが削除または変更された可能性があります。",
+      "copyFrame": "この添付ファイルの全内容のコピーには、今後のスマートフォンのアップデートが必要です。",
+      "copyFailed": "添付ファイルをコピーできませんでした。もう一度お試しください。",
+      "pastedText": "貼り付けたテキスト",
+      "textAttachment": "テキスト添付ファイル",
+      "byteSize": "{{size}} バイト",
+      "saveUpdate": "保存はスマートフォンのアップデートで利用可能になります。",
+      "fullCopySaveUpdate": "この添付ファイルの全内容のコピーと保存は、スマートフォンのアップデートで利用可能になります。"
     }
   },
   "common": {
@@ -2039,7 +2061,8 @@
       "promptUnconfirmed": "Agent は起動しましたが、プロンプトの送信を確認できませんでした。"
     },
     "prActionsEngine": {
-      "mergeFailed": "PR のマージに失敗しました。"
+      "mergeFailed": "PR のマージに失敗しました。",
+      "refreshFailed": "プルリクエストを更新できませんでした。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent を起動しました。",

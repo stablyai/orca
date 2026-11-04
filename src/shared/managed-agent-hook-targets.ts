@@ -1,4 +1,7 @@
-import { AGENT_HOOK_TARGETS, type AgentHookTarget } from './agent-hook-types'
+import {
+  AGENT_HOOK_TARGETS,
+  type AgentHookTarget
+} from './agent-hook-listener/configuration/agent-hook-types'
 import {
   getTuiAgentDetectCommands,
   TUI_AGENT_CONFIG

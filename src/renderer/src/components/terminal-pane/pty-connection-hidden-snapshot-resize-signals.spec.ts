@@ -10,7 +10,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -76,6 +80,8 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
       } as unknown as Document
 
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -112,7 +118,11 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
       const deps = createDeps({
         isVisibleRef: { current: false }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
@@ -163,6 +173,8 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
 
     it('does not signal SIGWINCH after hidden-backlog snapshot replay when dimensions are unchanged', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -192,7 +204,11 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
       const deps = createDeps({
         isVisibleRef: { current: false }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       await flushAsyncTicks(6)
       transport.resize.mockClear()
       signalPty.mockClear()
@@ -213,6 +229,8 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
 
     it('writes a background-origin alternate-screen repaint that arrives after the reveal restore', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       vi.useFakeTimers({
         toFake: [
           'setTimeout',
@@ -276,7 +294,11 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
           }
         }
       }
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.('', { seq: 100, rawLength: 0, droppedOutput: true })
@@ -301,6 +323,8 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
 
     it('re-restores a skipped alt frame from the model when the fit lands back on the capture grid', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       vi.useFakeTimers({
         toFake: [
           'setTimeout',
@@ -347,7 +371,11 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
       const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
       const manager = createManager(1)
       const deps = createDeps({ isVisibleRef: { current: true } })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+      )
       await flushAsyncTicks(6)
       transport.resize.mockClear()
       pane.fitAddon.proposeDimensions.mockImplementation(() =>
@@ -373,6 +401,8 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
 
     it('restores a dropped daemon alt frame from the model when the fit lands back on the capture grid', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
         sessionId
@@ -420,7 +450,11 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+      )
       await flushAsyncTicks(40)
 
       expect(writtenText()).not.toContain('ALT-FRAME-BODY')
@@ -431,6 +465,8 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
 
     it('does not forward terminal resizes while the pane is hidden', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
@@ -438,7 +474,11 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
       const isVisibleRef = { current: false }
       const deps = createDeps({ isVisibleRef })
 
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
       const onResizeMock = pane.terminal.onResize as unknown as {
         mock: { calls: [[(event: { cols: number; rows: number }) => void] | []] }
       }

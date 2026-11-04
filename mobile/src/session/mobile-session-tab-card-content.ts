@@ -1,4 +1,4 @@
-import { stripLeadingAgentTitleDecoration } from '../../../src/shared/agent-title-decoration'
+import { stripLeadingAgentTitleDecoration } from '../../../src/shared/agent-status/title/agent-title-decoration'
 import { redactKagiSessionToken } from '../../../src/shared/browser-url'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'

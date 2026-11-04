@@ -3,7 +3,7 @@
 import { act, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { useAppStore } from '@/store'
 import { StarNagAgentValueMomentObserver } from './StarNagAgentValueMomentObserver'
 

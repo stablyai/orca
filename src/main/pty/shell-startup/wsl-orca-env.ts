@@ -1,7 +1,7 @@
 import {
   ORCA_SCRUB_SAFE_PANE_ENV,
   ORCA_SCRUB_SAFE_LAUNCH_ENV
-} from '../../../shared/agent-hook-scrub-safe-env'
+} from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import {
   ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV,
