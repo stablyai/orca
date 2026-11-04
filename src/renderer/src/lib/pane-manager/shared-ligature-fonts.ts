@@ -96,6 +96,7 @@ class SharedLigatureFont {
         }
       }
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the addon reads only element, options, rows, refresh and (de)registerCharacterJoiner, all provided.
     this.addon.activate(delegate as unknown as Terminal)
     void this.enableFontLigatures()
   }

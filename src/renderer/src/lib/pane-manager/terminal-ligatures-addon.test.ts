@@ -29,6 +29,7 @@ function createTerminalHarness(fontFamily = 'Fira Code') {
   let registeredJoiner: ((text: string) => [number, number][]) | null = null
   const refresh = vi.fn()
   const deregisterCharacterJoiner = vi.fn()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture provides every Terminal member the addon touches.
   const terminal = {
     element: { style: {} },
     options: { fontFamily },
