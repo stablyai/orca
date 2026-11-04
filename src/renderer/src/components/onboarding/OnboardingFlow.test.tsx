@@ -1,3 +1,7 @@
+// @vitest-environment happy-dom
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { toast } from 'sonner'
+import { useOnboardingFlow } from './use-onboarding-flow'
 import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -5,7 +9,25 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import { useAppStore } from '@/store'
+import type * as AppStoreModule from '@/store'
 import OnboardingFlow from './OnboardingFlow'
+import { i18n } from '@/i18n/i18n'
+import deCatalog from '@/i18n/locales/de.json'
+import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+
+// Static rendering reads the current test snapshot without mounting app services.
+vi.mock('@/store', async (importOriginal) => {
+  const actual = await importOriginal<typeof AppStoreModule>()
+  return {
+    ...actual,
+    useAppStore: Object.assign(
+      (selector: (state: ReturnType<typeof actual.useAppStore.getState>) => unknown) =>
+        selector(actual.useAppStore.getState()),
+      actual.useAppStore
+    )
+  }
+})
 
 vi.mock('@/components/terminal-pane/TerminalPane', () => ({
   default: () => {
@@ -31,9 +53,51 @@ describe('OnboardingFlow', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    cleanup()
+    vi.restoreAllMocks()
+    await i18n.changeLanguage('en')
     useAppStore.setState(useAppStore.getInitialState(), true)
     vi.unstubAllGlobals()
+  })
+
+  it('keeps onboarding open when the real settings action cannot acknowledge completion', async () => {
+    const saveSettings = vi.fn().mockRejectedValue(new Error('settings write failed'))
+    const saveProgress = vi.fn().mockResolvedValue(getDefaultOnboardingState())
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        settings: { set: saveSettings },
+        onboarding: { update: saveProgress },
+        starNag: { onboardingCompleted: vi.fn() }
+      }
+    })
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => 'notice')
+    const openModal = vi.fn()
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' },
+      refreshDetectedAgents: vi.fn().mockResolvedValue(['claude']),
+      refreshPreflightStatus: vi.fn().mockResolvedValue(undefined),
+      openModal
+    })
+    const onOnboardingChange = vi.fn()
+    const { result } = renderHook(() =>
+      useOnboardingFlow(
+        {
+          ...getDefaultOnboardingState(),
+          lastCompletedStep: 4
+        },
+        onOnboardingChange
+      )
+    )
+    await act(() => result.current.next())
+    expect(saveSettings).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ defaultTuiAgent: 'claude' })
+    )
+    expect(saveProgress).not.toHaveBeenCalled()
+    expect(onOnboardingChange).not.toHaveBeenCalled()
+    expect(openModal).not.toHaveBeenCalled()
+    expect(notify).toHaveBeenCalledExactlyOnceWith('Could not save progress')
   })
 
   it('does not render the removed agent setup or tour steps', () => {
@@ -51,6 +115,33 @@ describe('OnboardingFlow', () => {
     expect(html).not.toContain('Take the tour')
     expect(html).toContain('Add your first project')
     expect(html).not.toContain('Point Orca at some code')
+  })
+
+  it('offers Continue into the selected folder workspace, including translated onboarding', async () => {
+    const repo = {
+      id: 'home',
+      path: '/tmp/home',
+      displayName: 'Home',
+      kind: 'folder' as const,
+      addedAt: 1,
+      badgeColor: 'blue'
+    }
+    const id = getRepoMainWorktreeId(repo)
+    useAppStore.setState({
+      repos: [repo],
+      activeWorktreeId: id,
+      worktreesByRepo: { [repo.id]: [makeWorktree({ id, repoId: repo.id, path: repo.path })] }
+    })
+    const props = {
+      onboarding: { ...getDefaultOnboardingState(), lastCompletedStep: 4 },
+      onOnboardingChange: vi.fn()
+    }
+    expect(renderOnboardingFlow(props)).not.toContain('Add your first project')
+    expect(renderOnboardingFlow(props)).toContain('Continue')
+    i18n.addResourceBundle('de', 'translation', deCatalog, true, true)
+    await i18n.changeLanguage('de')
+    expect(renderOnboardingFlow(props)).toContain('Fortfahren')
+    expect(renderOnboardingFlow(props)).not.toContain('Add your first project')
   })
 
   it.each([

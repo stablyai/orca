@@ -1,4 +1,4 @@
-import type * as ProfileTelemetryConsentSeedModule from '../../orca-profiles/profile-telemetry-consent-seed'
+import type * as NewProfileStateModule from '../../orca-profiles/new-profile-state'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ProfileStoragePaths from '../../orca-profiles/profile-storage-paths'
 
@@ -11,7 +11,7 @@ const {
   destroySystemTrayMock,
   createLocalOrcaProfileMock,
   getOrcaProfileListStateMock,
-  seedNewOrcaProfileTelemetryConsentMock,
+  initializeNewOrcaProfileStateMock,
   setActiveOrcaProfileMock,
   transferOrcaProfileProjectMock,
   hasOrcaProfileStateDatabaseMock
@@ -24,7 +24,7 @@ const {
   destroySystemTrayMock: vi.fn(),
   createLocalOrcaProfileMock: vi.fn(),
   getOrcaProfileListStateMock: vi.fn(),
-  seedNewOrcaProfileTelemetryConsentMock: vi.fn(),
+  initializeNewOrcaProfileStateMock: vi.fn(),
   setActiveOrcaProfileMock: vi.fn(),
   transferOrcaProfileProjectMock: vi.fn(),
   hasOrcaProfileStateDatabaseMock: vi.fn()
@@ -54,13 +54,13 @@ vi.mock('../../startup/quit/app-relaunch', () => ({
 vi.mock('../../orca-profiles/profile-index-store', () => ({
   createLocalOrcaProfile: createLocalOrcaProfileMock,
   getOrcaProfileListState: getOrcaProfileListStateMock,
-  seedNewOrcaProfileTelemetryConsent: seedNewOrcaProfileTelemetryConsentMock,
+  initializeNewOrcaProfileState: initializeNewOrcaProfileStateMock,
   setActiveOrcaProfile: setActiveOrcaProfileMock
 }))
 
-vi.mock('../../orca-profiles/profile-telemetry-consent-seed', async (importOriginal) => ({
-  ...(await importOriginal<typeof ProfileTelemetryConsentSeedModule>()),
-  seedNewOrcaProfileTelemetryConsent: seedNewOrcaProfileTelemetryConsentMock
+vi.mock('../../orca-profiles/new-profile-state', async (importOriginal) => ({
+  ...(await importOriginal<typeof NewProfileStateModule>()),
+  initializeNewOrcaProfileState: initializeNewOrcaProfileStateMock
 }))
 
 function makeStoreMock(flushPendingOrThrowAsync = vi.fn()) {
@@ -108,7 +108,7 @@ describe('registerOrcaProfileHandlers', () => {
     destroySystemTrayMock.mockReset()
     createLocalOrcaProfileMock.mockReset()
     getOrcaProfileListStateMock.mockReset()
-    seedNewOrcaProfileTelemetryConsentMock.mockReset()
+    initializeNewOrcaProfileStateMock.mockReset()
     setActiveOrcaProfileMock.mockReset()
     transferOrcaProfileProjectMock.mockReset()
     hasOrcaProfileStateDatabaseMock.mockReset().mockReturnValue(false)
@@ -140,6 +140,7 @@ describe('registerOrcaProfileHandlers', () => {
       Promise.resolve(handlers.get('orcaProfiles:createLocal')?.(ipcEvent, { name: 'Work' }))
     ).resolves.toBe(createState)
     expect(createLocalOrcaProfileMock).toHaveBeenCalledWith({ name: 'Work' })
+    expect(initializeNewOrcaProfileStateMock).toHaveBeenCalledWith('local-work', undefined)
   })
 
   it('reports multiProfileUi when the env flag is set', async () => {

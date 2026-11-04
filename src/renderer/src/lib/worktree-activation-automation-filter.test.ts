@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorkspace, activateAndRevealWorktree } from './worktree-activation'
+import {
+  activateAndRevealWorkspace,
+  activateAndRevealWorktree,
+  activateAndRevealWorkspaceWithOutcome
+} from './worktree-activation'
+import { reportAgentWorkspaceActivation } from './worktree-activation-outcome'
+
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { error: toastError } }))
 import './workspace-switch-user-act'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -15,6 +23,7 @@ const initialAppStoreState = useAppStore.getState()
 
 afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
+  vi.clearAllMocks()
 })
 
 function makeAutomationWorktree(): Worktree {
@@ -84,6 +93,20 @@ function seedAutomationWorktreeState(
 }
 
 describe('activateAndRevealWorktree automation filters', () => {
+  it.each(['folder:removed', 'removed-worktree'])(
+    'returns an unreported refusal for missing %s and leaves existing selection alone',
+    (id) => {
+      useAppStore.setState({ folderWorkspaces: [], worktreesByRepo: {} })
+      const before = useAppStore.getState().activeWorktreeId
+      const outcome = activateAndRevealWorkspaceWithOutcome(id)
+      expect(outcome).toEqual({ refused: { reason: 'workspace-missing', failureNotified: false } })
+      expect(toastError).not.toHaveBeenCalled()
+      expect(reportAgentWorkspaceActivation(outcome, 'claude')).toBe(false)
+      expect(toastError).toHaveBeenCalledOnce()
+      expect(useAppStore.getState().activeWorktreeId).toBe(before)
+    }
+  )
+
   it('keeps workspace-list filters while the activity view is showing', () => {
     const worktree = makeAutomationWorktree()
     seedAutomationWorktreeState(worktree, {
@@ -140,6 +163,12 @@ describe('activateAndRevealWorktree automation filters', () => {
       getFreshFolderWorkspacePathStatus
     })
 
+    const outcome = activateAndRevealWorkspaceWithOutcome('folder:folder-1', {
+      showWorkspaceList: true
+    })
+    expect(outcome).toEqual({ refused: { reason: 'path-blocked', failureNotified: true } })
+    expect(reportAgentWorkspaceActivation(outcome, 'claude')).toBe(false)
+    expect(toastError).toHaveBeenCalledOnce()
     expect(activateAndRevealWorkspace('folder:folder-1', { showWorkspaceList: true })).toBe(false)
     expect(getFreshFolderWorkspacePathStatus).toHaveBeenCalled()
     expect(useAppStore.getState().sidebarBody).toBe('agents')

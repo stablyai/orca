@@ -23,7 +23,8 @@ import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { readSourceControlLaunchRecipeAgentId } from '../../../shared/source-control-launch-agent-selection'
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { reportAgentWorkspaceActivation } from '@/lib/worktree-activation-outcome'
+import { activateAndRevealWorktreeWithOutcome } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
 import {
@@ -243,31 +244,32 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
       launchSource: args.launchSource,
       beforeSurfaceOpen: () => {
         // Why: the launcher owns the initial surface, so revealing must not seed a sibling shell.
-        const revealed = activateAndRevealWorktree(targetWorktreeId, {
+        const revealed = activateAndRevealWorktreeWithOutcome(targetWorktreeId, {
           providesInitialSurface: true
         })
-        revealFailed = revealed === false
+        revealFailed = !reportAgentWorkspaceActivation(
+          revealed,
+          agent,
+          translate(
+            'auto.lib.fix.checks.agent.launch.03c1d61f83',
+            'Unable to open the workspace attached to these checks.'
+          )
+        )
         return !revealFailed
       }
     })
-    if (!result) {
+    if (!result && !revealFailed) {
       toast.error(
-        revealFailed
-          ? translate(
-              'auto.lib.fix.checks.agent.launch.03c1d61f83',
-              'Unable to open the workspace attached to these checks.'
-            )
-          : translate(
-              'auto.lib.fix.checks.agent.launch.fb6c294e85',
-              'Could not build the agent launch command.'
-            )
+        translate(
+          'auto.lib.fix.checks.agent.launch.fb6c294e85',
+          'Could not build the agent launch command.'
+        )
       )
-      return false
     }
-    if (result.surface.kind === 'local-terminal') {
+    if (result?.surface.kind === 'local-terminal') {
       focusTerminalTabSurface(result.surface.tabId)
     }
-    return true
+    return result !== null
   }
 
   if (!args.item || !args.openModalFallback) {

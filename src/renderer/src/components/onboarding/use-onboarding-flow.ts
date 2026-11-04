@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
+import { selectKnownWorktreeById } from '@/store/selectors'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
 import { track } from '@/lib/telemetry'
@@ -34,12 +35,17 @@ export function useOnboardingFlow(
 ) {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
   const pathSource = useAppStore((s) => s.pathSource)
   const pathFailureReason = useAppStore((s) => s.pathFailureReason)
   const openModal = useAppStore((s) => s.openModal)
+  const selectedWorkspaceId = useAppStore((s) =>
+    selectKnownWorktreeById(s, s.activeWorktreeId) ? s.activeWorktreeId : null
+  )
+  const hasSelectedWorkspace = selectedWorkspaceId !== null
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
@@ -264,7 +270,7 @@ export function useOnboardingFlow(
     yoloPermissionsChosen,
     theme,
     settings,
-    updateSettings,
+    updateSettings: updateSettingsOrThrow,
     onboardingChecklist: onboarding.checklist,
     onOnboardingChange,
     setError
@@ -279,6 +285,7 @@ export function useOnboardingFlow(
     trackTaskSourcesSnapshot,
     settings,
     persistCurrentStep,
+    selectedWorkspaceId,
     closeWith,
     openModal,
     getNextStepIndex,
@@ -288,7 +295,7 @@ export function useOnboardingFlow(
     selectedAgent,
     themeStepEntryThemeRef,
     setTheme,
-    updateSettings,
+    updateSettings: updateSettingsOrThrow,
     skipOptions
   })
 
@@ -306,6 +313,7 @@ export function useOnboardingFlow(
     theme,
     setTheme: setThemeInteractive,
     busyLabel,
+    hasSelectedWorkspace,
     detectedSet,
     isDetectingAgents,
     next,

@@ -136,7 +136,7 @@ export default function OnboardingFlow({
   const shouldShowFooterBusy = Boolean(busyLabel)
   const footerPrimaryLabel =
     busyLabel ??
-    (currentStep.id === 'notifications'
+    (currentStep.id === 'notifications' && !flow.hasSelectedWorkspace
       ? translate('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
       : translate('components.onboarding.flow.actions.continue', 'Continue'))
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)

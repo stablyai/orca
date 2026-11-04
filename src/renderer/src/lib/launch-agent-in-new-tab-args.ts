@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { AgentSessionLaunchRequest } from '@/lib/agent-session-launch-plan'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -11,6 +12,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   selectedExecutionHostId?: AgentSessionLaunchRequest['selectedExecutionHostId']
   agent: TuiAgent
   worktreeId: string
+  /** Workspace owner captured by the action, independent of selection after an await. */
+  workspaceExecutionHostId?: ExecutionHostId
   /** Captured at a new-chat action before the host can delay route selection. */
   focusIntent?: NativeChatComposerFocusIntent
   /** Tab group the user launched from; keeps split-group launches in that pane instead of the active group. */

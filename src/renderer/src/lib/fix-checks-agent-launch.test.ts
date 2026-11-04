@@ -61,7 +61,7 @@ const mocks = vi.hoisted(() => {
   }
   return {
     store,
-    activateAndRevealWorktree: vi.fn(),
+    activateAndRevealWorktreeWithOutcome: vi.fn(),
     findGithubPrWorkspaceAttachment: vi.fn(),
     focusTerminalTabSurface: vi.fn(),
     getConnectionId: vi.fn(),
@@ -133,7 +133,7 @@ vi.mock('@/lib/execution-host-facts', async () => {
 })
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: mocks.activateAndRevealWorktree
+  activateAndRevealWorktreeWithOutcome: mocks.activateAndRevealWorktreeWithOutcome
 }))
 
 vi.mock('../../../shared/source-control-ai', () => ({
@@ -141,6 +141,38 @@ vi.mock('../../../shared/source-control-ai', () => ({
 }))
 
 describe('startFixChecksAgent', () => {
+  it.each(['immediate', 'deferred'] as const)(
+    'reports a disappeared checks workspace once on %s activation',
+    async (timing) => {
+      mocks.activateAndRevealWorktreeWithOutcome.mockReturnValue({
+        refused: { reason: 'workspace-missing', failureNotified: false }
+      })
+      const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+      let reveal: (() => boolean | void) | undefined
+      if (timing === 'deferred') {
+        mocks.launchAgentInNewTab.mockImplementation((args) => {
+          reveal = args.beforeSurfaceOpen
+          return { surface: { kind: 'host-published' } }
+        })
+      }
+      await expect(
+        startFixChecksAgent({
+          repoId: 'repo-1',
+          worktreeId: 'wt-1',
+          basePrompt: 'Fix checks',
+          launchSource: 'task_page'
+        })
+      ).resolves.toBe(timing === 'deferred')
+      if (timing === 'deferred') {
+        expect(mocks.toastError).not.toHaveBeenCalled()
+        expect(reveal?.()).toBe(false)
+      }
+      expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+        'Unable to open the workspace attached to these checks.'
+      )
+    }
+  )
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.store.settings = { defaultTuiAgent: 'codex' }
@@ -168,12 +200,14 @@ describe('startFixChecksAgent', () => {
     ]
     mocks.store.ensureDetectedAgents.mockResolvedValue(['codex'])
     mocks.store.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
-    mocks.activateAndRevealWorktree.mockReturnValue(true)
+    mocks.activateAndRevealWorktreeWithOutcome.mockReturnValue({ opened: { primaryTabId: null } })
     mocks.findGithubPrWorkspaceAttachment.mockReturnValue(null)
     mocks.getConnectionId.mockReturnValue(null)
     mocks.launchAgentInNewTab.mockImplementation(
       (args: { beforeSurfaceOpen?: (surface: { kind: 'local-terminal' }) => boolean | void }) => {
-        args.beforeSurfaceOpen?.({ kind: 'local-terminal' })
+        if (args.beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {
+          return null
+        }
         return { surface: { kind: 'local-terminal', tabId: 'tab-1' } }
       }
     )
