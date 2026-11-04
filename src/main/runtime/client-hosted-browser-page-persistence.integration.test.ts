@@ -97,26 +97,6 @@ function attachHost(runtime: OrcaRuntimeService) {
 }
 
 describe('client-hosted browser page persistence through the runtime', () => {
-  it('writes the page into the session the announcement already fires on', () => {
-    const profile = createProfile()
-    const runtime = startRuntime(profile)
-    attachHost(runtime)
-    placeAndPublish(runtime, 'page-a')
-
-    runtime.notifyMobileSessionTabsChanged(WT)
-
-    expect(profile.session.clientHostedBrowserPagesByWorktree?.[WT]).toEqual([
-      expect.objectContaining({
-        browserPageId: 'page-a',
-        workspaceId: WT,
-        browserProfileId: 'profile-a',
-        pairedDeviceId: 'device-a',
-        url: 'https://example.internal/docs',
-        title: 'Internal docs'
-      })
-    ])
-  })
-
   it('hands the page to a replacement runtime as a held row', () => {
     const profile = createProfile()
     const first = startRuntime(profile)

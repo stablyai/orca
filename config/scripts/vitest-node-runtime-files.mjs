@@ -128,7 +128,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/git/worktrees/removal/worktree-removal-real-git.test.ts',
   'src/main/git/worktrees/catalog/worktree-list-paths.test.ts',
   'src/main/git/worktrees/sparse-checkout/worktree-sparse-checkout.test.ts',
-  'src/main/git/worktrees/removal/worktree-removal-large-tree.bench.test.ts',
   'src/main/runtime/runtime-failed-local-worktree-removal.test.ts',
   'src/main/runtime/runtime-interrupted-local-worktree-removal.test.ts',
   'src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts',

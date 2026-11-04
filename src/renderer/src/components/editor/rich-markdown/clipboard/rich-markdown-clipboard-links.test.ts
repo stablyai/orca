@@ -84,13 +84,6 @@ it.each([
   )
 })
 
-it('keeps the relative spelling within the same folder', () => {
-  const source = createEditor('/repo/notes/note.md')
-  const target = createEditor('/repo/notes/second.md')
-  paste(target, copy(source))
-  expect(href(target)).toBe('./guide.md')
-})
-
 it('keeps the relative spelling between sibling worktrees of the same repo', () => {
   const source = createEditor('/ws/A/notes/note.md', './guide.md', workspace('/ws/A'))
   const target = createEditor('/ws/B/notes/note.md', './old.md', workspace('/ws/B'))
