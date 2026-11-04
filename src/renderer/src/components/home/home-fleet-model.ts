@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 
 export type HomeFleet = {
@@ -40,4 +41,12 @@ export function buildHomeFleet(cards: readonly DashboardCard[]): HomeFleet {
 
 export function homeAgentTitle(card: DashboardCard): string {
   return card.conversationName || card.task || card.agentType
+}
+
+export function formatFleetSummary(counts: HomeFleet['counts']): string {
+  return translate(
+    'auto.components.home.HomePage.fleetSummary',
+    '{{working}} working · {{attention}} needs you · {{done}} done',
+    counts
+  )
 }
