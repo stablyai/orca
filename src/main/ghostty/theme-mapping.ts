@@ -4,7 +4,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type {
   TerminalColorOverrides,
   TerminalThemeSlot
-} from '../../shared/terminal-color-overrides'
+} from '../../shared/terminal-themes/terminal-color-overrides'
 import {
   inferTerminalThemeMode,
   makeCustomTerminalThemeSelection,
@@ -15,9 +15,9 @@ import {
   normalizeTerminalThemeName,
   TERMINAL_ANSI_COLOR_KEYS,
   type TerminalCustomTheme
-} from '../../shared/terminal-custom-themes'
-import { DEFAULT_TERMINAL_THEME_DARK } from '../../shared/terminal-theme-selection'
-import { TERMINAL_THEME_CATALOG } from '../../shared/terminal-themes'
+} from '../../shared/terminal-themes/terminal-custom-themes'
+import { DEFAULT_TERMINAL_THEME_DARK } from '../../shared/terminal-themes/terminal-theme-selection'
+import { TERMINAL_THEME_CATALOG } from '../../shared/terminal-themes/terminal-theme-catalog'
 import { mapGhosttyToOrca } from './mapper'
 import { resolveGhosttyThemeColors } from './theme-resolution'
 

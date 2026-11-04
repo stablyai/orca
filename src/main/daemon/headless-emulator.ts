@@ -2,16 +2,16 @@ import './xterm-env-polyfill'
 import { Terminal, type ITerminalOptions } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
+import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal/appearance/terminal-unicode-provider'
 import {
   readSavedCursorRegister,
   serializeWithAbsoluteCursor
-} from '../../shared/terminal-serialize-absolute-cursor'
-import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
+} from '../../shared/terminal/replay/terminal-serialize-absolute-cursor'
+import { advancePartialEscapeTail } from '../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 import { CONPTY_DA1_RESPONSE } from '../../shared/conpty-device-attributes'
 import { resizeLikeOwnPty } from './conpty-reflow-viewport'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../shared/terminal-scrollback-policy'
-import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../shared/terminal/replay/terminal-scrollback-policy'
+import type { TerminalViewAttributes } from '../../shared/terminal/protocol/queries/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
 import { readTerminalModes, trackModifyOtherKeys } from './headless-emulator-modes'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
@@ -24,9 +24,9 @@ import {
 } from './terminal-view-attribute-responder'
 import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
 import type { TerminalSnapshot, TerminalModes } from './types'
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
-import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'
-import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'
+import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
+import type { TerminalCursorContext } from '../../shared/terminal/input/terminal-composer-draft'
+import { readTerminalCursorLineContext } from '../../shared/terminal/input/terminal-cursor-line-context'
 import {
   readHeadlessTerminalRows,
   readHeadlessTerminalLines,

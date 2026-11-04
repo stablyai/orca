@@ -1,7 +1,7 @@
 import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { toHostSessionTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { AppState } from '@/store/types'
@@ -9,8 +9,8 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   classifyTitleActivity,
   isExplicitAgentStatusFresh,

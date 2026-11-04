@@ -13,7 +13,7 @@ import {
   deriveSharedKey,
   encrypt,
   generateKeyPair
-} from '../../shared/e2ee-crypto'
+} from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import type { RpcBinarySender } from './rpc/rpc-binary-sender'
 
 const { webContentsFromId, startBrowserScreencast } = vi.hoisted(() => ({

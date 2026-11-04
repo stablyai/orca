@@ -5,7 +5,7 @@ import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
+import { getGitCloneFailureMessage } from '../../shared/git/remotes/git-clone-failure-message'
 import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,

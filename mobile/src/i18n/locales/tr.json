@@ -110,13 +110,8 @@
       "tryAgain": "Tekrar Dene"
     },
     "terminalSettings": {
-      "autocomplete": "Otomatik tamamlama ve düzeltme",
-      "autocompleteOff": "Kapalı",
-      "autocompleteOn": "Açık",
       "defaultText": "Varsayılan (%100)",
       "keepPhoneSize": "Telefon boyutunda tut (varsayılan)",
-      "keyboardInputDescription": "Otomatik tamamlama, otomatik düzeltme ve yazım önerileri yalnızca arabelleğe alınan komut girişinde geçerlidir. Canlı girişten arabellekli girişe geçmek için klavyenin üzerindeki çift oklu düğmeyi kullanın; ardından Gönder düğmesine dokunmadan önce komutunuzu düzenleyin. Komutların, bayrakların veya yolların değiştirilmesini önlemek için varsayılan olarak kapalıdır.",
-      "keyboardInputHeading": "KLAVYE GİRİŞİ",
       "largeText": "Büyük (%125)",
       "largerText": "Daha büyük (%150)",
       "largestText": "En Büyük (%200)",
@@ -1689,15 +1684,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Klavyeyi gizle",
       "sendKey": "{{label}} gönder",
-      "modifierHint": "Sonraki tuşa uygulanır. Açık tutmak için iki kez dokunun.",
       "typeCharacter": "{{character}} yaz",
       "interrupt": "Terminali kesintiye uğrat",
       "keysModeLabel": "Tuş modu: yazılanlar doğrudan terminale gider. Mesaj moduna geç",
       "messageModeLabel": "Mesaj modu: yazın, ardından gönderin. Tuş moduna geç",
-      "keysMode": "Tuşlar",
-      "messageMode": "Mesaj",
       "moreKeys": "Diğer tuşlar ve işlemler",
-      "showKeyboard": "Klavyeyi göster"
+      "showKeyboard": "Klavyeyi göster",
+      "dismissKeyboardHint": "Ekran klavyesini gizler ve geçerli terminal oturumunu açık tutar.",
+      "switchToDesktopMode": "Masaüstü moduna geç",
+      "switchToPhoneMode": "Telefon moduna geç",
+      "pasteFromClipboard": "Panodan yapıştır",
+      "paste": "Yapıştır",
+      "addCustomShortcut": "Özel kısayol ekle"
     },
     "activeContent": {
       "createTab": "Sekme Oluştur",
@@ -1808,11 +1806,7 @@
     },
     "commandDock": {
       "liveInputHint": "Yazılan metin doğrudan etkin terminale gönderilir",
-      "liveInputLabel": "Canlı terminal girişi",
-      "sendCommand": "Komut gönder",
-      "messageAgentPlaceholder": "{{agent}} için mesaj",
-      "writeCommandPlaceholder": "Bir komut yazın ve gönderin",
-      "theAgent": "ajan"
+      "liveInputLabel": "Canlı terminal girişi"
     },
     "contentRow": {
       "dismissCreationWarning": "Çalışma alanı oluşturma uyarısını kapat"
@@ -2494,14 +2488,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "Düzen kaydedilemedi",
       "saveFailedMessage": "Bu düzen şimdilik uygulanır. Kaydetmeyi yeniden denemek için tekrar seçin."
-    },
-    "terminalArrowPad": {
-      "label": "Ok tuşları",
-      "hint": "Bir oka bir kez basmak için bir tarafa dokunun; tekrarlamak için basılı tutup sürükleyin",
-      "up": "Yukarı",
-      "down": "Aşağı",
-      "left": "Sol",
-      "right": "Sağ"
     },
     "terminalMoreKeys": {
       "sendKey": "{{label}} gönder",
@@ -3222,7 +3208,6 @@
       "pipelineJobs_one": "{{count}} iş",
       "pipelineJobs_other": "{{count}} iş",
       "rerunAll": "Tümünü yeniden çalıştır",
-      "rerunFailed": "Başarısızları yeniden çalıştır",
       "subIssueTitle": "Alt sorun başlığı",
       "subIssues": "Alt sorunlar"
     },
@@ -3453,7 +3438,6 @@
       "requestReview": "İnceleme iste",
       "requestReviewers": "İnceleme istenecek kişiler",
       "rerunAll": "Tümünü yeniden çalıştır",
-      "rerunFailed": "Başarısızları yeniden çalıştır",
       "reviewers": "İnceleyenler",
       "viewFile": "Görüntüle"
     },

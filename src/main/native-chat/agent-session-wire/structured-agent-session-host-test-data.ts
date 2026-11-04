@@ -51,7 +51,7 @@ export function hostTestAttachParams(
   overrides: Partial<AgentSessionAttachParams> = {}
 ): AgentSessionAttachParams {
   const params: AgentSessionAttachParams = {
-    envelope: {
+    envelope: overrides.envelope ?? {
       sessionId: HOST_TEST_SESSION,
       clientOperationId: hostTestOperationId(),
       expectedRuntimeFence,
@@ -174,6 +174,7 @@ export function hostTestRestingOptionsJournal(
 ) {
   return {
     threadGoal: () => null,
+    inputOrder: { hasInputs: () => false },
     visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) =>
       items.forEach((body, index) => visit(`item-${index}`, index + 1, body)),
     wroteBeforeOpen: () => wroteBeforeOpen,

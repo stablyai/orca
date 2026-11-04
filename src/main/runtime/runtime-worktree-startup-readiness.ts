@@ -1,5 +1,5 @@
 import type { TerminalReadinessCreation } from './launched-agent-composer-readiness'
-import { isShellProcess } from '../../shared/shell-process-detection'
+import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 import { isExpectedAgentProcess } from '../../shared/agent-status/process/agent-process-recognition'
 import {
   createDraftPasteReadyScanner,
@@ -8,7 +8,7 @@ import {
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup

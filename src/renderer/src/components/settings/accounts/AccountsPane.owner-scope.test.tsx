@@ -413,7 +413,7 @@ it.each(['add', 'manage'] as const)(
         fireEvent.click(trigger)
       } else {
         fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' })
-        fireEvent.click(await screen.findByRole('menuitem', { name: 'Manage Accounts…' }))
+        fireEvent.click(await screen.findByRole('menuitem', { name: /Add another account…/ }))
       }
     }
     const add = async () => {

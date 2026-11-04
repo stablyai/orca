@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ImageViewer from './ImageViewer'
-import ImageDiffViewer from './ImageDiffViewer'
+import ImageDiffViewer from './diff/large-files/ImageDiffViewer'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
 import { requestViewerZoom } from './viewer-zoom-request'
 

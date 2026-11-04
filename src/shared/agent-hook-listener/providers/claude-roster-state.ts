@@ -10,13 +10,10 @@ import {
 } from '../../agent-status/lifecycle/agent-lead-status-fold'
 import type { ClaudeSubagentRoster } from '../../claude-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
-import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
+import type { HookListenerState } from '../listener-state'
+import type { ClaudeLeadTurnState } from '../main-agent-turn-state'
 import { readString } from '../tool-input-preview'
 import { resolveClaudePaneStatus } from './claude-pane-hold-evidence'
-export {
-  resolveClaudePaneStatus,
-  type ClaudePaneStatusResolution
-} from './claude-pane-hold-evidence'
 
 /** Only attributable lead events may re-anchor ownership; unknown/child events void nothing. */
 const CLAUDE_SESSION_OWNER_EVENTS: ReadonlySet<string> = new Set([

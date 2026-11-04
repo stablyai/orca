@@ -21,7 +21,7 @@ import type {
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { buildRuntimeMobileAgentStatus } from '../../runtime-mobile-agent-status-builder'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredWorkerHandleAgentStatus } from '../../orchestration/structured-worker-group-addressing'
 import {

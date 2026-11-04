@@ -3,7 +3,7 @@ import type { RawData } from 'ws'
 import {
   DeviceCredentialInstalledSchema,
   DeviceResumeConfirmedSchema
-} from '../../../shared/mobile-relay-credential-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 
 const OpaqueIdSchema = z.string().min(1).max(128)
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)

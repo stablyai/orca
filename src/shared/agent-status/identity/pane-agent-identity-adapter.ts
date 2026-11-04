@@ -1,13 +1,16 @@
 import { collectAgentTitleEvidence } from '../title/agent-title-evidence'
-import { PANE_AGENT_EVIDENCE_SOURCES } from './pane-agent-evidence-sources'
+import {
+  PANE_AGENT_EVIDENCE_SOURCES,
+  type PaneAgentEvidenceSource
+} from './pane-agent-evidence-sources'
 import type {
   PaneAgentEvidence,
   PaneAgentIdentity,
   PaneAgentIdentityInput,
   PaneAgentRunKey
 } from './pane-agent-identity-resolver'
-import type { PaneAgentEvidenceSource } from './pane-agent-evidence-sources'
-import type { TerminalAgent } from '../../terminal-agent'
+
+import type { TerminalAgent } from './terminal-agent'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 /** All adapters delegate here so ranking, ambiguity and run eligibility cannot drift. */

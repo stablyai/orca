@@ -1,6 +1,6 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
-import { hasTerminalComposerPlaceholder } from '../../../../shared/terminal-composer-draft'
-import { readTerminalCursorLineContext } from '../../../../shared/terminal-cursor-line-context'
+import { hasTerminalComposerPlaceholder } from '../../../../shared/terminal/input/terminal-composer-draft'
+import { readTerminalCursorLineContext } from '../../../../shared/terminal/input/terminal-cursor-line-context'
 import {
   XTERM_COMPOSITION_SESSION_END_EVENT,
   XTERM_COMPOSITION_SESSION_START_EVENT

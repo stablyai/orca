@@ -6,13 +6,13 @@ import {
 } from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeAccountController } from '../../runtime-account-controller'
-import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-network-execution-host'
+import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserWindow } from 'electron'
 import type { BrowserSessionTabSelectionOptions } from '../../browser-tab-create-publication'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalRead

@@ -1,5 +1,5 @@
-import type { AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+import type { AiVaultSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-types'
+import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
 import {
   reconcileSessionSearchInService,
   searchSessionsInService,

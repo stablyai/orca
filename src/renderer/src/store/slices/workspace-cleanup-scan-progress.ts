@@ -2,8 +2,8 @@ import type { AppState } from '../types'
 import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanProgress
-} from '../../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { supersedeInFlightWorkspaceCleanupScans } from './workspace-cleanup-broad-scan-registry'
 import {
   applyWorkspaceCleanupDismissal,

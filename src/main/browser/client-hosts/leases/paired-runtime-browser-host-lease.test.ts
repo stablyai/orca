@@ -1,14 +1,13 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserClientHostedPageInventory,
-  BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult
-} from '../../../../shared/browser-client-host-protocol'
+
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
+  type BrowserClientHostedPageInventory,
+  type BrowserClientHostCommandEvent,
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES,
   browserClientHostedPageInventoryByteLength
-} from '../../../../shared/browser-client-host-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY

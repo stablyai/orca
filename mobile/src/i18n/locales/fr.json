@@ -112,13 +112,8 @@
       "tryAgain": "Réessayer"
     },
     "terminalSettings": {
-      "autocomplete": "Complétion et correction automatiques",
-      "autocompleteOff": "Désactivé",
-      "autocompleteOn": "Activé",
       "defaultText": "Par défaut (100 %)",
       "keepPhoneSize": "Conserver à la taille téléphone (par défaut)",
-      "keyboardInputDescription": "La complétion, la correction automatique et les suggestions orthographiques s'appliquent uniquement à la saisie de commandes en mémoire tampon. Utilisez le bouton à double chevron au-dessus du clavier pour quitter la saisie en direct, puis modifiez votre commande avant d'appuyer sur Envoyer. Ces fonctions sont désactivées par défaut pour éviter de modifier les commandes, les options ou les chemins.",
-      "keyboardInputHeading": "SAISIE AU CLAVIER",
       "largeText": "Grand (125 %)",
       "largerText": "Plus grand (150 %)",
       "largestText": "Le plus grand (200 %)",
@@ -1738,15 +1733,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Masquer le clavier",
       "sendKey": "Envoyer {{label}}",
-      "modifierHint": "S’applique à la touche suivante. Touchez deux fois pour la maintenir active.",
       "typeCharacter": "Saisir {{character}}",
       "interrupt": "Interrompre le terminal",
       "keysModeLabel": "Mode touches : la saisie va directement au terminal. Passer en mode message",
       "messageModeLabel": "Mode message : écrivez, puis envoyez. Passer en mode touches",
-      "keysMode": "Touches",
-      "messageMode": "Message",
       "moreKeys": "Plus de touches et d’actions",
-      "showKeyboard": "Afficher le clavier"
+      "showKeyboard": "Afficher le clavier",
+      "dismissKeyboardHint": "Masque le clavier virtuel et garde la session de terminal en cours ouverte.",
+      "switchToDesktopMode": "Passer en mode bureau",
+      "switchToPhoneMode": "Basculer en mode téléphone",
+      "pasteFromClipboard": "Coller depuis le presse-papiers",
+      "paste": "Coller",
+      "addCustomShortcut": "Ajouter un raccourci personnalisé"
     },
     "activeContent": {
       "createTab": "Créer un onglet",
@@ -1873,11 +1871,7 @@
     },
     "commandDock": {
       "liveInputHint": "Le texte saisi est envoyé directement au terminal actif.",
-      "liveInputLabel": "Saisie en direct dans le terminal",
-      "sendCommand": "Envoyer la commande",
-      "messageAgentPlaceholder": "Message à {{agent}}",
-      "writeCommandPlaceholder": "Écrivez une commande, puis envoyez-la",
-      "theAgent": "l'agent"
+      "liveInputLabel": "Saisie en direct dans le terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Ignorer l'avertissement de création de l'espace de travail"
@@ -2561,14 +2555,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "Impossible d’enregistrer la disposition",
       "saveFailedMessage": "Cette disposition s’applique pour le moment. Sélectionnez-la à nouveau pour réessayer de l’enregistrer."
-    },
-    "terminalArrowPad": {
-      "label": "Touches fléchées",
-      "hint": "Touchez un côté pour une pression ou maintenez et faites glisser pour répéter",
-      "up": "Haut",
-      "down": "Bas",
-      "left": "Gauche",
-      "right": "Droite"
     },
     "terminalMoreKeys": {
       "sendKey": "Envoyer {{label}}",
@@ -3311,7 +3297,6 @@
       "pipelineJobs_one": "{{count}} job",
       "pipelineJobs_other": "{{count}} jobs",
       "rerunAll": "Tout relancer",
-      "rerunFailed": "Relancer les vérifications échouées",
       "subIssueTitle": "Titre du sous-ticket",
       "subIssues": "Sous-tickets"
     },
@@ -3545,7 +3530,6 @@
       "requestReview": "Demander une revue",
       "requestReviewers": "Demander des reviewers",
       "rerunAll": "Tout relancer",
-      "rerunFailed": "Relancer celles en échec",
       "reviewers": "Reviewers",
       "viewFile": "Afficher"
     },

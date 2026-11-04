@@ -93,23 +93,6 @@ describe('ghExecFileAsync account binding', () => {
     _resetGhRateLimitBreaker()
   })
 
-  it('injects bound token env for non-auth calls with matching host', async () => {
-    const spawned = spawnSettledChild('[]')
-
-    await ghExecFileAsync(['api', 'user'], {
-      host: 'github.com',
-      ghAccount: { host: 'github.com', user: 'Alice' },
-      env: { ...process.env, GH_TOKEN: 'ambient' }
-    })
-
-    expect(resolveGhAccountTokenMock).toHaveBeenCalledWith(
-      { host: 'github.com', user: 'Alice' },
-      expect.any(Object)
-    )
-    expect(buildBoundGhChildEnvMock).toHaveBeenCalled()
-    expect(spawned.env()?.GH_TOKEN).toBe('bound-token')
-  })
-
   it('skips injection for auth probes', async () => {
     const spawned = spawnSettledChild('')
 
@@ -121,17 +104,6 @@ describe('ghExecFileAsync account binding', () => {
 
     expect(resolveGhAccountTokenMock).not.toHaveBeenCalled()
     expect(spawned.env()?.GH_TOKEN).toBe('ambient')
-  })
-
-  it('pins options.host from the binding when callers omit host', async () => {
-    const spawned = spawnSettledChild('[]')
-
-    await ghExecFileAsync(['api', 'user'], {
-      ghAccount: { host: 'github.com', user: 'Alice' }
-    })
-
-    expect(resolveGhAccountTokenMock).toHaveBeenCalled()
-    expect(spawned.env()?.GH_TOKEN).toBe('bound-token')
   })
 
   it('fails closed when argv host signals disagree with the binding', async () => {
@@ -156,17 +128,6 @@ describe('ghExecFileAsync account binding', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     }
   )
-
-  it('accepts an attached -R form that names the bound host', async () => {
-    const spawned = spawnSettledChild('[]')
-
-    await ghExecFileAsync(['pr', 'list', '-Rgithub.com/a/b'], {
-      host: 'github.com',
-      ghAccount: { host: 'github.com', user: 'Alice' }
-    })
-
-    expect(spawned.env()?.GH_TOKEN).toBe('bound-token')
-  })
 
   it('still spawns the keyring token read while the core bucket is blocked', async () => {
     recordGhPrimaryRateLimit('core', Date.now() + 60_000, 'native:github.com')

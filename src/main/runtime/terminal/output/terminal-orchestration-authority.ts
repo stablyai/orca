@@ -8,8 +8,8 @@ import {
   makePaneKey,
   parseLegacyNumericPaneKey,
   parsePaneKey
-} from '../../../../shared/stable-pane-id'
-import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+} from '../../../../shared/workspace-layout/stable-pane-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
 import { RecentPtyOutputBuffer } from '../../recent-pty-output-buffer'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'

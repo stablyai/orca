@@ -23,7 +23,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
-vi.mock('@/components/sidebar/use-worktree-agent-activation', () => ({
+vi.mock('@/components/sidebar/workspace-card/activity/use-worktree-agent-activation', () => ({
   activateWorktreeAgentPane: mocks.activatePane
 }))
 vi.mock('@/components/terminal-pane/stale-agent-row', async (original) => ({

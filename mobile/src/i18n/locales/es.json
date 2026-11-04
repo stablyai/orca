@@ -112,13 +112,8 @@
       "tryAgain": "Reintentar"
     },
     "terminalSettings": {
-      "autocomplete": "Autocompletado y autocorrección",
-      "autocompleteOff": "Desactivado",
-      "autocompleteOn": "Activado",
       "defaultText": "Predeterminado (100%)",
       "keepPhoneSize": "Mantener en tamaño de teléfono (predeterminado)",
-      "keyboardInputDescription": "El autocompletado, la autocorrección y las sugerencias ortográficas solo se aplican a los comandos que se editan antes de enviarlos. Usa el botón de doble flecha situado encima del teclado para salir del modo de entrada directa y edita el comando antes de tocar Enviar. Estas funciones están desactivadas por defecto para evitar que se modifiquen comandos, opciones o rutas.",
-      "keyboardInputHeading": "ENTRADA DE TECLADO",
       "largeText": "Grande (125%)",
       "largerText": "Más grande (150%)",
       "largestText": "Máximo (200%)",
@@ -1738,15 +1733,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Ocultar teclado",
       "sendKey": "Enviar {{label}}",
-      "modifierHint": "Se aplica a la siguiente tecla. Toca dos veces para mantenerla activa.",
       "typeCharacter": "Escribir {{character}}",
       "interrupt": "Interrumpir terminal",
       "keysModeLabel": "Modo teclas: lo que escribes va directamente al terminal. Cambiar al modo mensaje",
       "messageModeLabel": "Modo mensaje: escribe y luego envía. Cambiar al modo teclas",
-      "keysMode": "Teclas",
-      "messageMode": "Mensaje",
       "moreKeys": "Más teclas y acciones",
-      "showKeyboard": "Mostrar teclado"
+      "showKeyboard": "Mostrar teclado",
+      "dismissKeyboardHint": "Oculta el teclado en pantalla y mantiene abierta la sesión de terminal actual.",
+      "switchToDesktopMode": "Cambiar al modo de escritorio",
+      "switchToPhoneMode": "Cambiar al modo teléfono",
+      "pasteFromClipboard": "Pegar desde el portapapeles",
+      "paste": "Pegar",
+      "addCustomShortcut": "Agregar atajo personalizado"
     },
     "activeContent": {
       "createTab": "Crear pestaña",
@@ -1873,11 +1871,7 @@
     },
     "commandDock": {
       "liveInputHint": "El texto que escribes se envía directamente a la terminal activa.",
-      "liveInputLabel": "Entrada al terminal en tiempo real",
-      "sendCommand": "Enviar comando",
-      "messageAgentPlaceholder": "Mensaje para {{agent}}",
-      "writeCommandPlaceholder": "Escribe un comando y luego envíalo",
-      "theAgent": "el agente"
+      "liveInputLabel": "Entrada al terminal en tiempo real"
     },
     "contentRow": {
       "dismissCreationWarning": "Descartar la advertencia de creación del espacio de trabajo"
@@ -2561,14 +2555,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "No se pudo guardar el diseño",
       "saveFailedMessage": "Este diseño se aplica por ahora. Vuelve a seleccionarlo para intentar guardarlo de nuevo."
-    },
-    "terminalArrowPad": {
-      "label": "Teclas de dirección",
-      "hint": "Toca un lado para pulsar una flecha o mantén pulsado y arrastra para repetir",
-      "up": "Arriba",
-      "down": "Abajo",
-      "left": "Izquierda",
-      "right": "Derecha"
     },
     "terminalMoreKeys": {
       "sendKey": "Enviar {{label}}",
@@ -3311,7 +3297,6 @@
       "pipelineJobs_one": "{{count}} trabajo",
       "pipelineJobs_other": "{{count}} trabajos",
       "rerunAll": "Reejecutar todos",
-      "rerunFailed": "Reejecutar fallidos",
       "subIssueTitle": "Título del sub-issue",
       "subIssues": "Sub-issues"
     },
@@ -3545,7 +3530,6 @@
       "requestReview": "Solicitar revisión",
       "requestReviewers": "Solicitar revisores",
       "rerunAll": "Reejecutar todos",
-      "rerunFailed": "Reejecutar fallidos",
       "reviewers": "Revisores",
       "viewFile": "Ver"
     },

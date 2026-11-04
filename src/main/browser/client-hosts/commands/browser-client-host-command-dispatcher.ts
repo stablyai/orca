@@ -1,9 +1,11 @@
+import type {
+  BrowserClientHostCommandEvent,
+  BrowserClientHostLeaseAuthority
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
-  BrowserClientHostCommandResult as CommandResultSchema,
-  type BrowserClientHostCommandEvent,
-  type BrowserClientHostCommandResult,
-  type BrowserClientHostLeaseAuthority
-} from '../../../../shared/browser-client-host-protocol'
+  BrowserClientAutomationResult as CommandResultSchema,
+  type BrowserClientAutomationResult as BrowserClientHostCommandResult
+} from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
   assertBrowserClientHostCommandAuthority,
   snapshotBrowserClientHostLeaseAuthority

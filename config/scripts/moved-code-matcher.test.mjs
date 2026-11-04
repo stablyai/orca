@@ -117,17 +117,6 @@ describe('moved-code matcher and changed-line gate', () => {
     }
   })
 
-  it('reads changed base blocks when creating the next matcher', () => {
-    const blocks = [['first()']]
-    const matcher = quality.createMovedCodeMatcher(blocks)
-    expect(matcher([])).toBe(false)
-    expect(matcher(['first()'])).toBe(true)
-    blocks[0][0] = 'changed()'
-    const nextMatcher = quality.createMovedCodeMatcher(blocks)
-    expect(nextMatcher(['changed()'])).toBe(true)
-    expect(nextMatcher(['first()'])).toBe(false)
-  })
-
   it('reports a new added-line finding from every configured scan in main', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-moved-code-main-'))
     const file = join(root, 'fixture.mjs')

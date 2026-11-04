@@ -11,7 +11,7 @@ import {
   _resetPairedMobileDevicesCacheForTests,
   type PairedMobileDevice as PairedDevice
 } from '../../mobile/paired-mobile-devices'
-import type { MobilePairingConnectionMode } from '../../../../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 
 type PairedDevicesProps = {
   devices: readonly PairedDevice[]

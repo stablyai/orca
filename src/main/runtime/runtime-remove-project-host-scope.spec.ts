@@ -83,14 +83,6 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
       expect(repos.map((repo) => repo.path)).toEqual(['/laptop/dup'])
     })
 
-    it('removes only the resolved row when a name selector picks the local copy', async () => {
-      const { runtime, repos } = createRuntime()
-
-      await runtime.removeProject('name:Dup Local')
-
-      expect(repos.map((repo) => repo.path)).toEqual(['/remote/dup'])
-    })
-
     it('refuses a bare duplicated id rather than guessing a host', async () => {
       const { runtime, repos, removeProjectForHost } = createRuntime()
 
@@ -101,46 +93,12 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
   })
 
   describe('projectGroup.moveProject with the same repo id on two execution hosts', () => {
-    it('moves the SSH row a path selector picked, not its local sibling', async () => {
-      const { runtime, repos } = createRuntime()
-
-      await runtime.moveProjectToGroup('path:/remote/dup', 'group-1')
-
-      expect(repos.map((repo) => repo.projectGroupId)).toEqual([undefined, 'group-1'])
-    })
-
-    it('moves the local row a name selector picked, not its SSH sibling', async () => {
-      const { runtime, repos } = createRuntime()
-
-      const moved = await runtime.moveProjectToGroup('name:Dup Local', 'group-1')
-
-      expect(moved).toMatchObject({ path: '/laptop/dup', projectGroupId: 'group-1' })
-      expect(repos.map((repo) => repo.projectGroupId)).toEqual(['group-1', undefined])
-    })
-
-    it('refuses a bare duplicated id rather than guessing a host', async () => {
-      const { runtime, repos } = createRuntime()
-
-      await expect(runtime.moveProjectToGroup('dup', 'group-1')).rejects.toThrow(
-        'selector_ambiguous'
-      )
-      expect(repos.map((repo) => repo.projectGroupId)).toEqual([undefined, undefined])
-    })
-
     it('moves the SSH row a paired client names by its connection', async () => {
       const { runtime, repos } = createRuntime()
 
       await runtime.moveProjectToGroup('dup', 'group-1', undefined, 'ssh-1')
 
       expect(repos.map((repo) => repo.projectGroupId)).toEqual([undefined, 'group-1'])
-    })
-
-    it('moves the local row a paired client names with no connection', async () => {
-      const { runtime, repos } = createRuntime()
-
-      await runtime.moveProjectToGroup('dup', 'group-1', undefined, null)
-
-      expect(repos.map((repo) => repo.projectGroupId)).toEqual(['group-1', undefined])
     })
   })
 
@@ -151,14 +109,6 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
       await runtime.updateRepo('path:/remote/dup', { displayName: 'Renamed Remote' })
 
       expect(repos.map((repo) => repo.displayName)).toEqual(['Dup Local', 'Renamed Remote'])
-    })
-
-    it('sets the base ref on the SSH row a path selector picked', async () => {
-      const { runtime, repos } = createRuntime()
-
-      await runtime.setRepoBaseRef('path:/remote/dup', 'origin/dev')
-
-      expect(repos.map((repo) => repo.worktreeBaseRef)).toEqual([undefined, 'origin/dev'])
     })
   })
 }

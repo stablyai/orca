@@ -1679,7 +1679,6 @@
         "9c3ba11a05": "状态：",
         "934d87ab96": "正在加载检查详细信息...",
         "71c11aff84": "重新运行所有检查",
-        "e31651a224": "重新运行失败的检查",
         "1b56e28faa": "重新运行",
         "f4b1292569": "在这些检查中启动默认的 AI 智能体",
         "9a1004fc76": "刷新检查",
@@ -2176,7 +2175,6 @@
         "662bc2998d": "状态：",
         "d8e82b7f15": "正在加载检查详细信息...",
         "54cddd1858": "重新运行所有检查",
-        "68605516dd": "重新运行失败的检查",
         "522d9353e1": "重新运行",
         "0fa8b8faec": "在这些检查中启动默认的 AI 智能体",
         "5d0f42766d": "刷新检查",
@@ -4049,7 +4047,6 @@
             "5c938d39ac": "周",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "没有其他账户",
             "d450654fa2": "Claude 账户",
             "11e2354daf": "Claude 使用量运行时",
             "3dd7ddfae1": "打开 Claude 详情和账户切换器",
@@ -7322,9 +7319,6 @@
           "browserExtensions": {
             "copy": "为本地浏览器配置文件添加“设置 › 浏览器 › 扩展程序”。",
             "toggleLabel": "切换浏览器扩展程序"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "切换编排面板"
           }
         },
         "FloatingWorkspacePane": {
@@ -9478,14 +9472,6 @@
               "extension": "扩展程序",
               "chrome": "chrome",
               "password": "密码管理器"
-            },
-            "orchestrationPanel": {
-              "title": "编排面板",
-              "description": "在聊天或终端旁显示每个智能体与哪些智能体协作。",
-              "orchestration": "编排",
-              "agents": "智能体",
-              "workers": "工作智能体",
-              "manager": "管理器"
             }
           }
         },
@@ -14415,7 +14401,6 @@
           "ae3b00ca82": "设置 GitHub 任务",
           "ff92d15436": "Orca 会在智能体完成工作或需要帮助时通知你。",
           "b054332836": "设置通知",
-          "04ae28d8ca": "选择你想盯着看几个小时的主题。",
           "f396db9f20": "让这里有家的感觉",
           "322fc50a18": "Orca 支持所有 CLI 智能体。选择你最常用的一个，随时可切换。",
           "198b148b3c": "选择默认智能体",
@@ -18805,8 +18790,6 @@
         "toggleDetails": "切换回合详情"
       },
       "jumpToLatest": "跳到最新消息",
-      "newRowsAnnouncement": "你离开期间有新消息",
-      "newRowsMarker": "新消息",
       "find": {
         "label": "在聊天中查找",
         "noResults": "没有结果",
@@ -19071,7 +19054,6 @@
       "dismissDeliveryNotice": "关闭",
       "addSelectionToChat": "添加到聊天",
       "messageNotSent": "消息未发送",
-      "deliveryUnconfirmed": "无法确认送达 — 重试前请检查聊天",
       "messageSending": "正在发送…",
       "userMessage": {
         "showFull": "显示完整消息",
@@ -19134,7 +19116,6 @@
         "continue": "继续",
         "failed": "无法继续此聊天。请重试，或发送一条消息。",
         "explanation": "继续后，智能体会先检查其上一步是否已完成。",
-        "unconfirmed": "无法确认 {{agent}} 是否收到“继续”。在重试之前请检查聊天记录。",
         "usageLimitExplanation": "让智能体从中断处继续。请在上限重置后使用。"
       },
       "rewind": {
@@ -19707,7 +19688,32 @@
           "system": "匹配操作系统",
           "dark": "轻松护眼",
           "light": "明亮、清脆"
-        }
+        },
+        "looks": {
+          "activeNow": "当前",
+          "browsePlugins": "浏览插件",
+          "browseThemePlugins": "浏览主题插件",
+          "colorMode": "颜色模式",
+          "colorModeCaption": "浅色、深色或跟随系统。",
+          "darkLook": "深色外观",
+          "darkLooks": "深色外观",
+          "lightLook": "浅色外观",
+          "lightLooks": "浅色外观",
+          "moreThemes": "更多主题",
+          "next": "更多外观",
+          "orcaDark": "Orca 深色",
+          "orcaLight": "Orca 浅色",
+          "pluginsHint": "更多主题以插件形式提供。",
+          "previous": "上一组外观",
+          "showsWhenDark": "系统为深色时显示",
+          "showsWhenLight": "系统为浅色时显示",
+          "slotLabel": "要编辑的外观",
+          "sourceBuiltIn": "内置",
+          "sourceCommunity": "终端调色板",
+          "themes": "主题",
+          "themesCaption": "可选。使用应用主题和终端调色板进一步自定义。"
+        },
+        "subtitle": "选择浅色或深色，也可以再选一个主题。两者都可以随时在设置中更改。"
       },
       "integrations": {
         "capabilities": {

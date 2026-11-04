@@ -10,7 +10,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     disposition: 'rewrite-desktop',
     item: 42
   },
-  'src/renderer/src/components/editor/ipynb-kernel-store.ts': {
+  'src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-store.ts': {
     disposition: 'rewrite-desktop',
     item: 43
   },
@@ -71,8 +71,8 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx',
       'src/renderer/src/components/onboarding/onboarding-feature-setup.ts',
       'src/renderer/src/components/pet/PetOverlay.tsx',
-      'src/renderer/src/components/right-sidebar/ai-vault-view-options-persistence.ts',
-      'src/renderer/src/components/right-sidebar/pr-comment-presentation.ts',
+      'src/renderer/src/components/right-sidebar/ai-vault/scope/ai-vault-view-options-persistence.ts',
+      'src/renderer/src/components/right-sidebar/checks-panel/comments/pr-comment-presentation.ts',
       'src/renderer/src/components/settings/browser/use/BrowserUsePane.tsx',
       'src/renderer/src/components/settings/developer-permissions/local-network-connection-history.ts',
       'src/renderer/src/components/sidebar/linear-agent-skill-runtime.ts',
@@ -137,7 +137,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
     'test-fixture',
   'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
-  'src/main/codex/codex-state-db-test-fixture.ts': 'test-fixture',
+  'src/main/codex/history/index/codex-state-db-test-fixture.ts': 'test-fixture',
   'src/main/opencode-usage/opencode-usage-sqlite-fixture.ts': 'test-fixture'
 }
 

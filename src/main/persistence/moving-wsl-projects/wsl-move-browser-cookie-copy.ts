@@ -4,7 +4,7 @@
  * host starts on a fresh partition instead. Browser profiles are global, not per project, so each
  * profile's whole jar is copied, once per host partition, by the first move into that host.
  */
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   emptyWslMoveBrowserCookieCopyCounts,
   WSL_MOVE_BROWSER_COOKIE_COPY_MAX_PROFILES,

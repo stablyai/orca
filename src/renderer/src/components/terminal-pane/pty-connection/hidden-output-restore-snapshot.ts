@@ -9,7 +9,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_AFTER_BYTE_GAP,
   buildKittyKeyboardRestore
-} from '../../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   discardTerminalOutput,
   writeTerminalOutput

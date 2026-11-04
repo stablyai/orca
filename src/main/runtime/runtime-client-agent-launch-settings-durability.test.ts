@@ -27,7 +27,7 @@ import {
   withReopenedProfileStore
 } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
-import { createCodexAtRestSkillCatalog } from '../codex/codex-at-rest-skills-probe'
+import { createCodexAtRestSkillCatalog } from '../codex/structured/catalog/codex-at-rest-skills-probe'
 import type { CodexAppServerInvocation } from '../codex/app-server/codex-app-server-session'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { bindAtRestCommandContexts } from '../native-chat/agent-session-wire/at-rest-command-context'

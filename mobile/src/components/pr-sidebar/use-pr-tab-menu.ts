@@ -10,7 +10,7 @@ import { resolveGitHubPRMergeState } from '../../../../src/shared/github/pull-re
 import {
   MOBILE_GITHUB_MARK_PR_DRAFT_RUNTIME_CAPABILITY,
   MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY
-} from '../../../../src/shared/source-control-runtime-capabilities'
+} from '../../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 import { useRouteCapability } from '../../transport/use-workspace-client'
 import type { MobilePrTab } from './use-mobile-pr-tab'
 

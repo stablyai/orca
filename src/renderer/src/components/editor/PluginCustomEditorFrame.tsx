@@ -7,21 +7,21 @@ import {
 } from '@/store/plugin-custom-editors'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
-import { fillPluginPanelShell } from '../right-sidebar/plugin-panel-design-token-css'
+import { fillPluginPanelShell } from '../plugins/frames/plugin-panel-design-token-css'
 import {
   PluginFrameView,
   pluginFrameWindowOf,
   usablePluginFrameGuest,
   type PluginFrameElement
-} from '../right-sidebar/plugin-frame-element'
-import { usePluginFrameHost } from '../right-sidebar/use-plugin-frame-host'
-import { usePluginFrameEntry } from '../right-sidebar/use-plugin-frame-entry'
+} from '../plugins/frames/plugin-frame-element'
+import { usePluginFrameHost } from '../plugins/frames/use-plugin-frame-host'
+import { usePluginFrameEntry } from '../plugins/frames/use-plugin-frame-entry'
 import { editorShortcutMatches } from './editor-shortcuts'
 import {
   countCustomEditorMergingView,
   useCustomEditorOutsideMerge
 } from './use-custom-editor-outside-merge'
-import { registerEditorFrameFlush } from './editor-pending-flush'
+import { registerEditorFrameFlush } from './save/flush/editor-pending-flush'
 import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
 import { PluginEditorNeedsDesktopNotice } from './PluginEditorNeedsDesktopNotice'
 import {

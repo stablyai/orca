@@ -19,7 +19,7 @@ import {
 } from '../../../../shared/global-settings-test-fixture'
 import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 
-vi.mock('../../../codex/managed-wsl-home-shell-preflight', () => ({
+vi.mock('../../../codex/hooks/installation/managed-wsl-home-shell-preflight', () => ({
   prepareManagedWslCodexHomeBeforeShellLaunch: async ({
     hooksEnabled
   }: {

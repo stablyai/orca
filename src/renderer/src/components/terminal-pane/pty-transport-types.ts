@@ -1,5 +1,5 @@
-import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
-import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
+import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
+import type { AgentIdleEdgeMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import type {
   RestoreSpawnIntent,
   SpawnDeferralReason
@@ -17,10 +17,10 @@ import type {
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
-import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
+import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type {

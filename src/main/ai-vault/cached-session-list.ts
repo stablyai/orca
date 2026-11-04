@@ -20,8 +20,11 @@ import {
   isAiVaultScanCancelledError,
   type AiVaultListArgs,
   type AiVaultListResult
-} from '../../shared/ai-vault-types'
-import { aiVaultLocalScanKey, aiVaultLocalScanScopeKey } from '../../shared/ai-vault-local-scan-key'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import {
+  aiVaultLocalScanKey,
+  aiVaultLocalScanScopeKey
+} from '../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { managedOpenCodeAccountDataDirs } from '../opencode/opencode-managed-account-data-dirs'
 import { prepareOpenCodeWslReaders } from './scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
@@ -40,7 +43,7 @@ import {
   requestedAiVaultSessionDepth,
   truncateAiVaultListResult,
   type AiVaultSessionDepth
-} from '../../shared/ai-vault-session-depth'
+} from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 
 // Desktop and runtime RPC share this cache to avoid duplicate scans when mobile and desktop open together.
 const AI_VAULT_CACHE_TTL_MS = 60_000

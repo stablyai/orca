@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   addWslHostEnvironment,
   setWslHostPendingStop
-} from '../../../shared/runtime-environment-wsl-host-store'
-import { encodePairingOffer } from '../../../shared/pairing'
-import { getWslHostDeploymentStorePath } from '../../../shared/wsl-host-deployment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { getWslHostDeploymentStorePath } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import { wslDistroHolderDirectory } from '../discovery/wsl-distro-holder-record'
 import { releaseUnwantedWslHolders, wslHolderKeepPolicy } from './wsl-orphan-holder-release'
