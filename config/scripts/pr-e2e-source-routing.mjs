@@ -264,7 +264,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:lib\/(?:local-path-open-guard|external-editor-open-capability|worktree-runtime-owner)\.ts|components\/(?:sidebar\/(?:WorktreeOpenInMenu|WorktreeContextMenuView)\.tsx|right-sidebar\/(?:FileExplorer(?:Toolbar)?\.tsx|source-control\/listing\/entry-context-menu\.tsx)))$/.test(
+        /^src\/renderer\/src\/(?:lib\/(?:local-path-open-guard|external-editor-open-capability|worktree-runtime-owner)\.ts|components\/(?:sidebar\/workspace-actions\/(?:open\/WorktreeOpenInMenu|context-menu\/WorktreeContextMenuView)\.tsx|right-sidebar\/(?:FileExplorer(?:Toolbar)?\.tsx|source-control\/listing\/entry-context-menu\.tsx)))$/.test(
           file
         ))
   },
@@ -285,7 +285,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
-        /^src\/(?:main\/runtime\/(?:workspaces\/(?:workspace-sleep-|remote-workspace-terminal-sleep)|terminal\/stop\/worktree-terminal-sleep)|renderer\/src\/components\/sidebar\/(?:sleep-|workspace-sleep-))/.test(
+        /^src\/(?:main\/runtime\/(?:workspaces\/(?:workspace-sleep-|remote-workspace-terminal-sleep)|terminal\/stop\/worktree-terminal-sleep)|renderer\/src\/components\/sidebar\/workspace-actions\/sleep\/(?:sleep-|workspace-sleep-))/.test(
           file
         ))
   },
@@ -375,7 +375,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     ],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/(?:ssh|orcad|managed-server)\/|main\/ipc\/(?:ssh|runtime-environment|orcad-)|cli\/runtime\/(?:launch-)?serve|shared\/(?:remote-runtime|orcad-|protocol-version\.ts$|runtime-capability)|renderer\/src\/store\/repos\/(?:repo-removal|runtime-project-terminal-stop)|renderer\/src\/components\/sidebar\/(?:sleep-|SleepTwin|WorkspaceSleep|use-worktree-sleep|ssh-host-remove|host-rename-remove|HostRemove)|renderer\/src\/components\/terminal-pane\/(?:TerminalRemoteRuntimeReconnectBanner|use-managed-pairing-refused|TerminalPaneRuntimePortals))/.test(
+      /^src\/(?:main\/(?:ssh|orcad|managed-server)\/|main\/ipc\/(?:ssh|runtime-environment|orcad-)|cli\/runtime\/(?:launch-)?serve|shared\/(?:remote-runtime|orcad-|protocol-version\.ts$|runtime-capability)|renderer\/src\/store\/repos\/(?:repo-removal|runtime-project-terminal-stop)|renderer\/src\/components\/sidebar\/(?:workspace-actions\/sleep\/(?:sleep-|SleepTwin|WorkspaceSleep|use-worktree-sleep)|ssh-host-remove|host-rename-remove|HostRemove)|renderer\/src\/components\/terminal-pane\/(?:TerminalRemoteRuntimeReconnectBanner|use-managed-pairing-refused|TerminalPaneRuntimePortals))/.test(
         file
       )
   },

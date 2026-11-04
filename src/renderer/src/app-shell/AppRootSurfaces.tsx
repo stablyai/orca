@@ -61,9 +61,11 @@ const NodeDistMirrorDialog = lazy(
 const AiVaultSessionHistoryDialog = lazy(
   () => import('../components/right-sidebar/AiVaultSessionHistoryDialog')
 )
-const DeleteWorktreeDialog = lazy(() => import('../components/sidebar/DeleteWorktreeDialog'))
+const DeleteWorktreeDialog = lazy(
+  () => import('../components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog')
+)
 const PreservedBranchBatchReviewModal = lazy(
-  () => import('../components/sidebar/PreservedBranchBatchReviewModal')
+  () => import('../components/sidebar/workspace-actions/deletion/PreservedBranchBatchReviewModal')
 )
 const DictationController = lazy(() =>
   import('../components/dictation/DictationController').then((module) => ({

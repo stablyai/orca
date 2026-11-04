@@ -44,7 +44,7 @@ vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
 
-vi.mock('@/components/sidebar/StatusIndicator', () => ({
+vi.mock('@/components/sidebar/workspace-card/surface/StatusIndicator', () => ({
   default: () => <span data-status-indicator="true" />
 }))
 
