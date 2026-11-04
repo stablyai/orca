@@ -13,6 +13,11 @@ import {
   getWorktreeVirtualRowTransform,
   shouldUseHeaderTopSpacing
 } from '../viewport/virtual-rows'
+import {
+  getRepoSectionPreviewOffsetY,
+  shouldAnimateProjectHeaderDragRow
+} from '../../worktree-header-section-boundaries'
+import { PROJECT_HEADER_DRAG_TRANSITION_CLASS } from '../../worktree-list-header-row-position'
 import type { RenderRow } from '../listing/render-row'
 import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
@@ -59,6 +64,33 @@ export type WorktreeVirtualRowContext = {
   onWorkspaceStatusDragOver: (event: React.DragEvent, status: WorkspaceStatus) => void
   onWorkspaceStatusDragLeave: (event: React.DragEvent) => void
   onWorkspaceStatusDrop: (event: React.DragEvent, status: WorkspaceStatus) => void
+  repoSectionRepoIdByRowIndex?: readonly (string | undefined)[]
+}
+
+function projectHeaderDragMotion(
+  ctx: WorktreeVirtualRowContext,
+  rowIndex: number
+): { offsetY: number; animate: boolean } {
+  const sectionIds = ctx.repoSectionRepoIdByRowIndex
+  const state = ctx.header.headerDrag.repoDrag.state
+  if (!sectionIds || !state.previewOffsetsByRepoId) {
+    return { offsetY: 0, animate: false }
+  }
+  return {
+    offsetY: getRepoSectionPreviewOffsetY({
+      repoSectionRepoIdByRowIndex: sectionIds,
+      rowIndex,
+      previewOffsetsByRepoId: state.previewOffsetsByRepoId,
+      draggingRepoId: state.draggingRepoId,
+      draggedSectionOffsetY: state.pointerOffsetY
+    }),
+    animate: shouldAnimateProjectHeaderDragRow({
+      draggingRepoId: state.draggingRepoId,
+      settling: state.settling,
+      repoSectionRepoIdByRowIndex: sectionIds,
+      rowIndex
+    })
+  }
 }
 
 function renderHostHeaderVirtualRow(
@@ -115,6 +147,7 @@ function renderLineageGroupVirtualRow(
   const parentPreviewOffset = parentKey
     ? (ctx.worktreeDragState.previewOffsetsByWorktreeId.get(parentKey) ?? 0)
     : 0
+  const headerMotion = projectHeaderDragMotion(ctx, vItem.index)
   return (
     <div
       key={vItem.key}
@@ -129,10 +162,15 @@ function renderLineageGroupVirtualRow(
         parentKey !== null &&
           parentKey === ctx.worktreeDragState.draggingWorktreeId &&
           'pointer-events-none',
-        ctx.worktreeDragState.draggingWorktreeId !== null &&
-          'transition-transform duration-150 ease-out will-change-transform'
+        (ctx.worktreeDragState.draggingWorktreeId !== null || headerMotion.animate) &&
+          PROJECT_HEADER_DRAG_TRANSITION_CLASS
       )}
-      style={{ transform: getWorktreeVirtualRowTransform(vItem.start, parentPreviewOffset) }}
+      style={{
+        transform: getWorktreeVirtualRowTransform(
+          vItem.start,
+          parentPreviewOffset + headerMotion.offsetY
+        )
+      }}
     >
       <div className="overflow-visible">
         {parent
@@ -186,7 +224,8 @@ export function renderWorktreeVirtualRow(
       measureVirtualRowElement: ctx.measureVirtualRowElement,
       actionState: ctx.importedWorktreeCardActionState.get(row.repo.id),
       onShow: ctx.onShowImportedWorktrees,
-      onKeepHidden: ctx.onKeepImportedWorktreesHidden
+      onKeepHidden: ctx.onKeepImportedWorktreesHidden,
+      ...projectHeaderDragMotion(ctx, vItem.index)
     })
   }
 
@@ -197,7 +236,8 @@ export function renderWorktreeVirtualRow(
       measureVirtualRowElement: ctx.measureVirtualRowElement,
       actionState: ctx.newExternalWorktreeInboxActionState.get(row.repo.id),
       onReview: ctx.onOpenWorktreeVisibility,
-      onSuppress: ctx.onOpenSuppressExternalWorktreeInbox
+      onSuppress: ctx.onOpenSuppressExternalWorktreeInbox,
+      ...projectHeaderDragMotion(ctx, vItem.index)
     })
   }
 
@@ -205,7 +245,8 @@ export function renderWorktreeVirtualRow(
     return renderPendingCreationVirtualRow({
       row,
       vItem,
-      measureVirtualRowElement: ctx.measureVirtualRowElement
+      measureVirtualRowElement: ctx.measureVirtualRowElement,
+      ...projectHeaderDragMotion(ctx, vItem.index)
     })
   }
 
@@ -214,7 +255,8 @@ export function renderWorktreeVirtualRow(
       ctx: ctx.folderWorkspace,
       row,
       vItem,
-      measureVirtualRowElement: ctx.measureVirtualRowElement
+      measureVirtualRowElement: ctx.measureVirtualRowElement,
+      ...projectHeaderDragMotion(ctx, vItem.index)
     })
   }
 
@@ -224,6 +266,7 @@ export function renderWorktreeVirtualRow(
       : null
   const itemKey = getWorktreeHostIdentity(row.worktree)
   const itemPreviewOffset = ctx.worktreeDragState.previewOffsetsByWorktreeId.get(itemKey) ?? 0
+  const headerMotion = projectHeaderDragMotion(ctx, vItem.index)
 
   return (
     <div
@@ -239,10 +282,15 @@ export function renderWorktreeVirtualRow(
       className={cn(
         'absolute left-0 right-0 top-0',
         itemKey === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
-        ctx.worktreeDragState.draggingWorktreeId !== null &&
-          'transition-transform duration-150 ease-out will-change-transform'
+        (ctx.worktreeDragState.draggingWorktreeId !== null || headerMotion.animate) &&
+          PROJECT_HEADER_DRAG_TRANSITION_CLASS
       )}
-      style={{ transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset) }}
+      style={{
+        transform: getWorktreeVirtualRowTransform(
+          vItem.start,
+          itemPreviewOffset + headerMotion.offsetY
+        )
+      }}
       onDragOver={
         itemWorkspaceStatus
           ? (event) => ctx.onWorkspaceStatusDragOver(event, itemWorkspaceStatus)
