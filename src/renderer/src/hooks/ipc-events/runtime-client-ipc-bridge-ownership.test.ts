@@ -46,6 +46,7 @@ function createHarness() {
   const getIssue = vi.fn(() => issueRead.promise)
   const refreshStatus = vi.fn(async () => true)
   const fetchRuntimeEnvironmentRepos = vi.fn(async () => [])
+  const acknowledgeAttention = vi.fn(async () => ({ dismissed: 0 }))
   let nextId = 0
   vi.stubGlobal('window', {
     api: {
@@ -54,6 +55,7 @@ function createHarness() {
           subscribeRuntimeEnvironmentFromPreload(ipc, args, callbacks, () => `sub-${nextId++}`),
         call: vi.fn(async () => ({ id: 'r', ok: true, result: [] }))
       },
+      notifications: { acknowledgeAttention },
       browser: { sessionClientRouteImportSources: async () => ({}) },
       linear: { getIssue }
     }
@@ -112,6 +114,7 @@ function createHarness() {
     pending,
     ipc,
     activateNotifiedWorktree,
+    acknowledgeAttention,
     enqueue,
     emit: (
       index: number,
@@ -471,6 +474,23 @@ it("lists a profile created on the host once the host announces it, without touc
       ])
     )
     expect(useAppStore.getState().browserSessionProfilesByHostId.local).toEqual([])
+  } finally {
+    await h.finish()
+  }
+})
+
+it('forwards an accepted remote read to desktop with its originating transport', async () => {
+  const h = createHarness()
+  const acknowledgement = {
+    reads: [{ sessionId: 'session', observedCursor: { epoch: 'journal', sequence: 5 } }]
+  }
+  try {
+    h.start()
+    h.emit(0, false, { type: 'notificationAttentionAcknowledged', acknowledgement })
+    expect(h.acknowledgeAttention).toHaveBeenCalledExactlyOnceWith(
+      acknowledgement,
+      'runtime:host-a'
+    )
   } finally {
     await h.finish()
   }
