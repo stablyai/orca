@@ -25,6 +25,9 @@ export const styles = themedStyleSheet(() => ({
     borderRadius: radii.surface
   },
   compactHeading: { maxWidth: '45%', flexShrink: 0 },
+  compactMultipleSenderHeading: { maxWidth: '25%' },
+  compactSenderArrow: { flexShrink: 0 },
+  compactMoreSenders: { flexShrink: 0 },
   compactSenders: { flex: 1, minWidth: 0, flexWrap: 'nowrap', alignItems: 'center' },
   compactSender: { minWidth: 0, flexShrink: 1, minHeight: 44 },
   compactAvatar: { width: 24, height: 24, borderRadius: 12 },

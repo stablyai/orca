@@ -87,7 +87,15 @@ function CompactAgentMessageCard({
         <View pointerEvents="none">
           <SenderAvatar compact sender={agentMessagePrimarySender(from)} />
         </View>
-        <Text pointerEvents="none" numberOfLines={1} style={[styles.meta, styles.compactHeading]}>
+        <Text
+          pointerEvents="none"
+          numberOfLines={1}
+          style={[
+            styles.meta,
+            styles.compactHeading,
+            agentMessageSendersShown(from).shown.length > 1 && styles.compactMultipleSenderHeading
+          ]}
+        >
           {heading}
         </Text>
         <Senders compact from={from} />
@@ -307,11 +315,15 @@ function Senders({ from, compact = false }: { from: AgentMessageSource; compact?
             from={from}
             open={open}
             compact={compact}
+            shownCount={shown.length}
           />
         )
       })}
       {more > 0 ? (
-        <Text pointerEvents={compact ? 'none' : undefined} style={styles.meta}>
+        <Text
+          pointerEvents={compact ? 'none' : undefined}
+          style={[styles.meta, compact && styles.compactMoreSenders]}
+        >
           +{more}
         </Text>
       ) : null}
@@ -323,9 +335,11 @@ function SenderName({
   sender,
   from,
   open,
-  compact
+  compact,
+  shownCount
 }: {
   compact: boolean
+  shownCount: number
   sender: AgentMessageSource['senders'][number]
   from: AgentMessageSource
   open: React.ContextType<typeof MobileAgentMessageOpenContext>
@@ -344,14 +358,20 @@ function SenderName({
       pointerEvents={canOpen ? 'auto' : 'none'}
       style={({ pressed }) => [
         styles.sender,
-        compact && styles.compactSender,
+        compact && [styles.compactSender, { maxWidth: `${100 / shownCount}%` }],
         pressed && pressedStyle
       ]}
     >
       <Text numberOfLines={compact ? 1 : undefined} style={styles.name}>
         {name}
       </Text>
-      {canOpen ? <ArrowUpRight size={14} color={colors.textPrimary} /> : null}
+      {canOpen ? (
+        <ArrowUpRight
+          size={14}
+          color={colors.textPrimary}
+          style={compact ? styles.compactSenderArrow : undefined}
+        />
+      ) : null}
     </Pressable>
   )
 }
