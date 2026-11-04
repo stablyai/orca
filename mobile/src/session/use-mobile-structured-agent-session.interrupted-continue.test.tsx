@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
+import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
@@ -83,7 +83,7 @@ it('continues an Orca-stopped turn, shows a refusal, and drops it once another c
       enabled: true,
       connected: true,
       hostSupport: structuredAgentSessionHostSupport([
-        AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
+        AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
       ]),
       agent: 'codex',
       onSendError: vi.fn()

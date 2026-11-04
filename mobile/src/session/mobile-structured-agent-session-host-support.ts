@@ -30,7 +30,7 @@ import {
   AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-session/agent-session-permission-modes-capability'
 import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../src/shared/skill-install-capability'
-import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
+import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
 
 export type StructuredAgentSessionHostSupport = {
   commandsOnRequest?: boolean
@@ -65,7 +65,7 @@ export type StructuredAgentSessionHostSupport = {
   permissionOwn?: boolean
   itemDetail: boolean
   phoneAttachments: boolean
-  /** Older hosts lack Continue on an Orca-stopped turn; the phone sends an ordinary message there. */
+  /** Older hosts lack Continue on an Orca-stopped turn or refuse it from a phone; the phone sends an ordinary message there. */
   continueInterrupted?: boolean
 }
 
@@ -102,7 +102,7 @@ export function structuredAgentSessionHostSupport(
     itemDetail: capabilities.includes(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY),
     phoneAttachments: capabilities.includes(AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY),
     continueInterrupted: capabilities.includes(
-      AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
+      AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
     )
   }
 }
