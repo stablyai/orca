@@ -344,7 +344,8 @@ export function NativeChatComposerField({
               isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
               disabled={disabled}
-              dictationAutoSend
+              // Enter in a launch prompt starts an agent, which dictation must not do on its own.
+              dictationAutoSend={!launch}
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
               onKeyUp={editorKeyUp}
