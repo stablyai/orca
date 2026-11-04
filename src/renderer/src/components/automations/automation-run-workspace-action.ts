@@ -1,5 +1,4 @@
 import { openExistingStructuredSession } from '@/lib/open-existing-structured-session'
-import { structuredSessionWorkspaceMissingMessage } from '@/lib/activate-ai-vault-structured-session'
 import { ALL_TUI_AGENTS } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { isStructuredAgentSessionIdFor } from '../../../../shared/agent-session/structured-agent-session-create'
 import type { AutomationRun } from '../../../../shared/automations-types'
@@ -219,7 +218,7 @@ async function openRunChat(
               revealWorkspace(workspace)
             }
           } else if (result.kind === 'failed' && result.failure.reason === 'workspace-missing') {
-            toast.error(structuredSessionWorkspaceMissingMessage(result.failure))
+            toast.error(workspaceUnavailableMessage())
           } else if (outcome !== 'activated') {
             runChatUnavailable()
           }
