@@ -2,6 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { toast } from 'sonner'
 import { useOnboardingFlow } from './use-onboarding-flow'
+import { usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -99,6 +100,58 @@ describe('OnboardingFlow', () => {
     expect(openModal).not.toHaveBeenCalled()
     expect(notify).toHaveBeenCalledExactlyOnceWith('Could not save progress')
   })
+
+  it.each([
+    ['claude', 'claude'],
+    [null, 'blank']
+  ] as const)(
+    'saves the visible %s selection when completing without visiting the agent page',
+    async (selectedAgent, expectedAgent) => {
+      const savedProgress = getDefaultOnboardingState()
+      const saveProgress = vi.fn().mockResolvedValue(savedProgress)
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { onboarding: { update: saveProgress } }
+      })
+      vi.spyOn(useAppStore.getState(), 'recordFeatureInteraction').mockImplementation(() => {})
+      const updateSettings = vi.fn().mockResolvedValue(undefined)
+      const onOnboardingChange = vi.fn()
+      const { result } = renderHook(() =>
+        usePersistCurrentStep({
+          currentStepId: 'notifications',
+          agentSurface: 'terminal',
+          selectedAgent,
+          agentInteractedRef: { current: false },
+          yoloPermissions: true,
+          yoloPermissionsChosen: { current: false },
+          theme: 'dark',
+          settings: {
+            ...getDefaultSettings('/tmp'),
+            defaultTuiAgent: 'codex',
+            agentDefaultSurface: 'chat'
+          },
+          updateSettings,
+          onboardingChecklist: savedProgress.checklist,
+          onOnboardingChange,
+          setError: vi.fn()
+        })
+      )
+
+      await act(async () => {
+        expect(await result.current()).toEqual({ ok: true })
+      })
+      expect(updateSettings).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ defaultTuiAgent: expectedAgent, agentDefaultSurface: 'terminal' })
+      )
+      expect(saveProgress).toHaveBeenCalledWith(
+        expect.objectContaining({
+          lastCompletedStep: 5,
+          checklist: expect.objectContaining({ choseAgent: selectedAgent !== null })
+        })
+      )
+      expect(onOnboardingChange).toHaveBeenCalledWith(savedProgress)
+    }
+  )
 
   it('opens on the Chat or Terminal choice and resumes past both step-1 pages', () => {
     const fresh = renderOnboardingFlow({
