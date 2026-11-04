@@ -3,7 +3,7 @@ import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent
 } from '../../shared/browser-client-host-protocol'
-import { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
+import { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import {
   adoptRuntimeBrowserClientPagesFromInventory,
@@ -41,10 +41,7 @@ function orphanedPage(
   }
 }
 
-/**
- * Drives adoption exactly as the attach handler does, against the real lease registry and page
- * registry, with a client that completes every command it is handed.
- */
+/** Exercise attach adoption with real lease/page registries and a client that completes every command. */
 function attach(
   pageInventory: readonly BrowserClientHostedPageInventory[],
   options: {
@@ -136,8 +133,7 @@ describe('adoptRuntimeBrowserClientPagesFromInventory', () => {
     expect(rig.notifyWorkspace).toHaveBeenCalledWith(WORKSPACE_ID)
   })
 
-  // No row for the "hosted by another client" guard: the lease refuses such an entry at attach
-  // (browser_host_page_inventory_authority_mismatch), so it can never reach the planner.
+  // Lease admission already refuses foreign-client inventory; it cannot reach this planner.
   it.each([
     [
       'a guest whose outcome is unknown',
@@ -153,8 +149,7 @@ describe('adoptRuntimeBrowserClientPagesFromInventory', () => {
 
     await rig.adopt()
 
-    // The bug this pins: planning against the full inventory put every declined entry in the close
-    // bucket, so a live guest the client is still showing got a real closePage.
+    // Planning over the full inventory formerly closed declined but still-live client guests.
     expect(closedPageIds(rig.commands)).toEqual(['page-a'])
     expect(rig.leases.getPlacement('x')).toBeUndefined()
   })

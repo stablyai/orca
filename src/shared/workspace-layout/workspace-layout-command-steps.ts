@@ -1,5 +1,4 @@
-// Steps every command shares: lookups, placing a tab in the one tab order, and result shapes.
-
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { insertTabIdIntoOrder } from './tab-order'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import type {
@@ -17,6 +16,7 @@ import {
   type WorkspaceLayout,
   type WorkspaceLayoutModel
 } from './workspace-layout-model'
+import { workspaceRootGroupId } from './workspace-layout-minted-ids'
 import type { PaneOutcomeChanges } from './workspace-layout-pane-outcomes'
 import { withWorkspace } from './workspace-layout-removal'
 
@@ -39,7 +39,7 @@ export function applied(
   }
 }
 
-/** A workspace's first tab creates its entry; its worktree id is its key unless the runtime opened it first. */
+/** Create a missing workspace entry using its worktree ID unless runtime already supplied the key. */
 export function workspaceOrEmpty(model: WorkspaceLayoutModel, key: string): WorkspaceLayout {
   return model.workspaces[key] ?? { worktreeId: key, tabs: [], groups: [] }
 }
@@ -79,7 +79,6 @@ export function boundPtyIds(workspace: WorkspaceLayout, tab: LayoutTab): string[
     : []
 }
 
-/** The workspace with one pane's data replaced; a pane with no data keeps no record. */
 export function setLeaf(
   workspace: WorkspaceLayout,
   leafId: string,
@@ -92,7 +91,6 @@ export function setLeaf(
   return { ...workspace, leaves }
 }
 
-/** The terminal tab and pane a pane key names in this workspace. */
 export function locatePane(
   workspace: WorkspaceLayout,
   paneKey: string
@@ -113,12 +111,18 @@ export function locatePane(
 
 export type TabPlacement = { groupId?: string; afterTabId?: string; index?: number }
 
-/**
- * Puts a new tab in the one tab order: the named group, else the anchor's, else the first; a
- * workspace with no group gets one. Pinned tabs stay ahead of unpinned ones.
- */
+/** In owner builds, reuse the sender’s empty group or the window/Loader root ID; otherwise mint an ID. */
+function firstGroupId(key: string, placement: TabPlacement, context: LayoutContext): string {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return placement.groupId ?? workspaceRootGroupId(key)
+  }
+  return context.mintId()
+}
+
+/** Place in named group, anchor group or first group (create when absent); preserve pinned-before-unpinned order. */
 export function placeNewTab(
   workspace: WorkspaceLayout,
+  key: string,
   tab: LayoutTab,
   placement: TabPlacement,
   context: LayoutContext
@@ -133,7 +137,7 @@ export function placeNewTab(
     workspace.groups[0]
   const groups = [...workspace.groups]
   if (!group) {
-    group = { id: context.mintId(), tabOrder: [] }
+    group = { id: firstGroupId(key, placement, context), tabOrder: [] }
     groups.push(group)
   }
   let tabOrder: string[]

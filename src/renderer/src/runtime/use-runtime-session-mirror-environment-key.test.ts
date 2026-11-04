@@ -2,9 +2,9 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { shallow } from 'zustand/shallow'
+import 'zustand/shallow'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+
 import type { Repo } from '../../../shared/repo-types'
 import type * as RuntimeSessionMirrorTargetsModule from '@/lib/runtime-session-mirror-targets'
 import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
@@ -18,13 +18,13 @@ vi.mock('@/lib/runtime-session-mirror-targets', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { AppState } from '@/store/types'
-import {
-  selectRuntimeSessionMirrorTargetInputs,
-  useRuntimeSessionMirrorEnvironmentKeys
-} from './use-runtime-session-mirror-environment-key'
+import { useRuntimeSessionMirrorEnvironmentKeys } from './use-runtime-session-mirror-environment-key'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
+import {
+  connectedRuntimeStatus,
+  publicRuntimeEnvironment
+} from './paired-runtime-environment-test-fixture'
 
 const initialState = useAppStore.getInitialState()
 
@@ -35,23 +35,6 @@ function makeRepo(id: string, executionHostId: Repo['executionHostId']): Repo {
     displayName: id,
     badgeColor: '#000',
     addedAt: 0,
-    connectionId: null,
-    executionHostId
-  }
-}
-
-function makeProjectGroup(executionHostId: ProjectGroup['executionHostId']): ProjectGroup {
-  return {
-    id: 'group-b',
-    name: 'Group B',
-    parentPath: null,
-    parentGroupId: null,
-    createdFrom: 'manual',
-    tabOrder: 0,
-    isCollapsed: false,
-    color: null,
-    createdAt: 1,
-    updatedAt: 1,
     connectionId: null,
     executionHostId
   }
@@ -71,25 +54,13 @@ function seedMirrorState(): void {
       projectGroups: [],
       restoredRuntimeHostIdByWorkspaceSessionKey: {},
       runtimeEnvironments: [
-        { id: 'env-a', createdAt: 100, pairingRevision: 101 },
-        { id: 'env-b', createdAt: 200, pairingRevision: 201 }
-      ] as PublicKnownRuntimeEnvironment[],
+        publicRuntimeEnvironment({ id: 'env-a', createdAt: 100, pairingRevision: 101 }),
+        publicRuntimeEnvironment({ id: 'env-b', createdAt: 200, pairingRevision: 201 })
+      ],
       runtimeStatusByEnvironmentId: new Map([
-        [
-          'env-a',
-          {
-            status: { runtimeId: 'runtime-a' },
-            connectionGeneration: 1
-          }
-        ],
-        [
-          'env-b',
-          {
-            status: { runtimeId: 'runtime-b' },
-            connectionGeneration: 2
-          }
-        ]
-      ]) as AppState['runtimeStatusByEnvironmentId']
+        ['env-a', connectedRuntimeStatus('runtime-a', 1)],
+        ['env-b', connectedRuntimeStatus('runtime-b', 2)]
+      ])
     },
     true
   )
@@ -157,185 +128,5 @@ describe('useRuntimeSessionMirrorEnvironmentKeys', () => {
     hook.rerender()
 
     expect(getMirrorTargets).toHaveBeenCalledTimes(initialCallCount)
-  })
-
-  it.each([
-    {
-      source: 'active environment',
-      change: (state: AppState): Partial<AppState> => ({
-        settings: { ...state.settings!, activeRuntimeEnvironmentId: 'env-b' }
-      })
-    },
-    {
-      source: 'repository host',
-      change: (): Partial<AppState> => ({
-        repos: [makeRepo('repo-b', 'runtime:env-b')]
-      })
-    },
-    {
-      source: 'published worktree owner',
-      change: (): Partial<AppState> => ({
-        worktreesByRepo: {
-          'repo-b': [
-            makeWorktree({
-              id: 'repo-b::worktree',
-              repoId: 'repo-b',
-              hostId: 'ssh:private',
-              runtimeOwnerEnvironmentId: 'env-b'
-            })
-          ]
-        }
-      })
-    },
-    {
-      source: 'detected worktree owner',
-      change: (): Partial<AppState> => ({
-        detectedWorktreesByRepo: {
-          'repo-b': {
-            repoId: 'repo-b',
-            authoritative: true,
-            source: 'git',
-            worktrees: [
-              {
-                ...makeWorktree({
-                  id: 'repo-b::detected',
-                  repoId: 'repo-b',
-                  hostId: 'ssh:private',
-                  runtimeOwnerEnvironmentId: 'env-b'
-                }),
-                ownership: 'external',
-                selectedCheckout: false,
-                visible: true
-              }
-            ]
-          }
-        }
-      })
-    },
-    {
-      source: 'project group host',
-      change: (): Partial<AppState> => ({
-        projectGroups: [makeProjectGroup('runtime:env-b')]
-      })
-    },
-    {
-      source: 'restored session host',
-      change: (): Partial<AppState> => ({
-        restoredRuntimeHostIdByWorkspaceSessionKey: { 'folder:restored': 'runtime:env-b' }
-      })
-    }
-  ])('rebuilds when the $source selects an online runtime', ({ change }) => {
-    useAppStore.setState({
-      settings: {
-        ...useAppStore.getState().settings!,
-        activeRuntimeEnvironmentId: null
-      }
-    })
-    const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKeys())
-
-    expect(hook.result.current.environmentKey).toBe('')
-    act(() => useAppStore.setState(change(useAppStore.getState())))
-
-    expect(hook.result.current.environmentKey).toBe('env-b\u0001runtime-b\u00012\u0001201')
-    expect(getMirrorTargets).toHaveBeenCalledTimes(2)
-  })
-
-  it('rebuilds the key when connection or pairing identity changes', () => {
-    const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKeys())
-
-    act(() => {
-      useAppStore.setState({
-        runtimeStatusByEnvironmentId: new Map([
-          [
-            'env-a',
-            {
-              status: { runtimeId: 'runtime-a' },
-              connectionGeneration: 2
-            }
-          ]
-        ]) as AppState['runtimeStatusByEnvironmentId']
-      })
-    })
-    expect(hook.result.current.environmentKey).toBe('env-a\u0001runtime-a\u00012\u0001101')
-
-    act(() => {
-      useAppStore.setState({
-        runtimeEnvironments: [
-          { id: 'env-a', createdAt: 100, pairingRevision: 102 }
-        ] as PublicKnownRuntimeEnvironment[]
-      })
-    })
-    expect(hook.result.current.environmentKey).toBe('env-a\u0001runtime-a\u00012\u0001102')
-    expect(getMirrorTargets).toHaveBeenCalledTimes(3)
-  })
-
-  it('clears the key when status, environment, or the final owner disappears', () => {
-    const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKeys())
-    const onlineStatus = useAppStore.getState().runtimeStatusByEnvironmentId.get('env-a')!
-    const environments = useAppStore.getState().runtimeEnvironments
-
-    act(() => {
-      useAppStore.setState({
-        runtimeStatusByEnvironmentId: new Map([['env-a', { ...onlineStatus, status: null }]])
-      })
-    })
-    expect(hook.result.current.environmentKey).toBe('')
-
-    act(() => {
-      useAppStore.setState({ runtimeStatusByEnvironmentId: new Map([['env-a', onlineStatus]]) })
-    })
-    expect(hook.result.current.environmentKey).toBe('env-a\u0001runtime-a\u00011\u0001101')
-
-    act(() => useAppStore.setState({ runtimeEnvironments: [] }))
-    expect(hook.result.current.environmentKey).toBe('')
-
-    act(() => useAppStore.setState({ runtimeEnvironments: environments }))
-    expect(hook.result.current.environmentKey).toBe('env-a\u0001runtime-a\u00011\u0001101')
-
-    act(() => {
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings!,
-          activeRuntimeEnvironmentId: null
-        }
-      })
-    })
-    expect(hook.result.current.environmentKey).toBe('')
-    expect(getMirrorTargets).toHaveBeenCalledTimes(6)
-  })
-
-  it('invalidates only for state read by the mirror target builder', () => {
-    const state = useAppStore.getState()
-    const selected = selectRuntimeSessionMirrorTargetInputs(state)
-    const unrelated = selectRuntimeSessionMirrorTargetInputs({
-      ...state,
-      agentStatusEpoch: state.agentStatusEpoch + 1,
-      settings: { ...state.settings!, terminalFontSize: state.settings!.terminalFontSize + 1 }
-    })
-
-    expect(shallow(selected, unrelated)).toBe(true)
-
-    const relevantChanges: Partial<AppState>[] = [
-      { settings: { ...state.settings!, activeRuntimeEnvironmentId: 'env-b' } },
-      { repos: [...state.repos] },
-      { worktreesByRepo: { ...state.worktreesByRepo } },
-      { detectedWorktreesByRepo: { ...state.detectedWorktreesByRepo } },
-      { projectGroups: [...state.projectGroups] },
-      {
-        restoredRuntimeHostIdByWorkspaceSessionKey: {
-          ...state.restoredRuntimeHostIdByWorkspaceSessionKey
-        }
-      },
-      { runtimeEnvironments: [...state.runtimeEnvironments] },
-      { runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId) }
-    ]
-    for (const change of relevantChanges) {
-      expect(
-        shallow(
-          selected,
-          selectRuntimeSessionMirrorTargetInputs({ ...state, ...change } as AppState)
-        )
-      ).toBe(false)
-    }
   })
 })

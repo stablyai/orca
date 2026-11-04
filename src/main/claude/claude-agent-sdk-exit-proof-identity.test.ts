@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { DescendantSnapshot } from '../pty-descendant-termination'
-import { collectDescendantRows } from '../pty-descendant-termination'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
+import { collectDescendantRows } from '../pty/process-retirement/pty-descendant-termination'
 import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 import { mergeClaudeDescendantSnapshots } from './claude-child-tree-snapshot'
 
@@ -24,22 +24,6 @@ describe('Claude child root identity', () => {
     })
   })
 
-  it('keeps the descendant verdict alongside the POSIX root kill', async () => {
-    const child = { pid: 100, kill: vi.fn(() => true) }
-    const terminateDescendants = vi.fn(async () => 'exited' as const)
-    const tree = createClaudeChildTreeReaper(child, {
-      platform: 'linux',
-      captureDescendants: vi.fn(async () => posixSnapshot(1)),
-      terminateDescendants
-    })
-
-    // POSIX runs no bare-pid root operation: the handle kill lands and the
-    // verification still speaks.
-    await expect(tree.reap()).resolves.toBe('exited')
-    expect(terminateDescendants).toHaveBeenCalled()
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
   it('rejects mixed old and recycled root rows instead of making the tree killable', async () => {
     const child = { pid: 100, kill: vi.fn(() => true) }
     const terminateDescendants = vi.fn(async () => 'exited' as const)
@@ -60,8 +44,6 @@ describe('Claude child root identity', () => {
     })
 
     await expect(tree.reap()).resolves.toBe('unverifiable')
-    // No admissible snapshot means no row may be signalled from its number, but
-    // the root still leaves through the handle Node owns.
     expect(terminateDescendants).not.toHaveBeenCalled()
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })

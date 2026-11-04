@@ -1,5 +1,10 @@
+import { formatTerminalStartFailure } from '../../../../shared/terminal-start-failure'
+import {
+  RuntimeLineageError,
+  LINEAGE_PARENT_AMBIGUOUS
+} from '../../runtime-worktree-lineage-resolution'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchTarget } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
@@ -7,55 +12,56 @@ import {
 import {
   AgentLaunchPaneAlreadyLiveError,
   AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE
-} from '../../../../shared/agent-launch-pane-already-live'
+} from '../../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
 import {
   AgentLaunchSessionAlreadyExistsError,
   AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE
-} from '../../../../shared/agent-launch-session-already-exists'
+} from '../../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import { FolderWorkspaceCreateRefusedError } from '../../../project-groups/folder-workspace-create-refusal'
 import { WorktreeCreateSetupChoiceRefusedError } from '../../worktree-create-setup-choice-refusal'
+import { AgentLaunchSurfaceUnavailableError } from '../../../agent-launch/agent-launch-surface-refusal'
 
 /** Long enough for every code this path raises, with room for one a later guard adds. */
 const LAUNCH_FAILURE_CODE_MAX_LENGTH = 128
-/** A path as long as Linux's PATH_MAX, after its code. */
-const FOLDER_CREATE_REFUSAL_MAX_LENGTH = 4096 + LAUNCH_FAILURE_CODE_MAX_LENGTH
+/** Refusal text that may name a path as long as Linux's PATH_MAX, after its code. */
+const REFUSAL_TEXT_MAX_LENGTH = 4096 + LAUNCH_FAILURE_CODE_MAX_LENGTH
 
-/**
- * This path raises its refusals as the thrown code, the way the method's own guards do — and the
- * recorded code is what a replay answers with, so it is worth keeping.
- *
- * Bounded because a code is an identifier but `error.message` is free text: an errno sentence
- * carrying an absolute path arrives here as one, and it would be written into a ledger file that is
- * re-serialized whole on every subsequent operation. Bounded on the way IN only. A length check in
- * `isAgentSessionOperationRow` would reject rows this same build wrote, and one rejected row costs
- * the entire store.
- */
+/** Bound error text on ingestion because the ledger is serialized whole per operation.
+ * Do not impose the bound in row validation: rejecting a row this build wrote loses the entire store. */
 export function agentLaunchFailureCode(error: unknown): string {
   const code =
     error instanceof OrchestrationError ? error.code : error instanceof Error ? error.message : ''
   return code.length > 0 ? code.slice(0, LAUNCH_FAILURE_CODE_MAX_LENGTH) : 'agent_launch_failed'
 }
 
-/**
- * A refused folder create names its folder, and the user is shown that path, so a replay carries all
- * of it or none: a path cut short names a different folder. Any path a filesystem stat accepts
- * fits; past that, only the code before the path is kept.
- */
+/** A coded refusal's own words, kept beside its code so a replay says the same; bounded likewise. */
+export function agentLaunchFailureMessage(
+  error: unknown,
+  targetKind?: AgentLaunchTarget['kind']
+): string | undefined {
+  return (
+    formatTerminalStartFailure(error) ??
+    (error instanceof OrchestrationError ||
+    (error instanceof RuntimeLineageError &&
+      error.code === LINEAGE_PARENT_AMBIGUOUS &&
+      targetKind === 'create-worktree')
+      ? error.message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
+      : undefined)
+  )
+}
+
+/** Keep a refused folder's full path or only its code; truncating the path would name a different folder. */
 function folderCreateRefusalCode(error: FolderWorkspaceCreateRefusedError): string {
   const { message } = error
   const pathStart = message.indexOf(':')
-  return message.length <= FOLDER_CREATE_REFUSAL_MAX_LENGTH || pathStart === -1
+  return message.length <= REFUSAL_TEXT_MAX_LENGTH || pathStart === -1
     ? message
     : message.slice(0, pathStart)
 }
 
-/**
- * Only a typed refusal raised before anything was created proves the claimed launch had no effects.
- * A refused create proves it for any target, since the create is the launch's first effect. A live
- * reserved pane or an existing reserved session proves it only for an existing workspace; on a
- * create target the workspace already exists by the time the surface is refused.
- */
+/** Only typed pre-effect refusals prove no effects.
+ * Create refusal proves this for any target; reserved-pane/session conflicts prove it only for existing workspaces, since create targets already made theirs. */
 export function launchFailureWithoutEffectsCode(
   error: unknown,
   targetKind: AgentLaunchTarget['kind'],
@@ -67,8 +73,20 @@ export function launchFailureWithoutEffectsCode(
   if (error instanceof FolderWorkspaceCreateRefusedError) {
     return folderCreateRefusalCode(error)
   }
+  // Raised only before launch effects, including definitive existing-workspace refusals.
+  if (error instanceof AgentLaunchSurfaceUnavailableError) {
+    return agentLaunchFailureCode(error)
+  }
   if (error instanceof WorktreeCreateSetupChoiceRefusedError && targetKind === 'create-worktree') {
     return agentLaunchFailureCode(error)
+  }
+  // The unique producer refuses retained cwd lineage before any workspace or agent effects.
+  if (
+    error instanceof RuntimeLineageError &&
+    error.code === LINEAGE_PARENT_AMBIGUOUS &&
+    targetKind === 'create-worktree'
+  ) {
+    return LINEAGE_PARENT_AMBIGUOUS
   }
   if (error instanceof AgentLaunchPaneAlreadyLiveError && targetKind === 'existing') {
     return AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE

@@ -1,11 +1,10 @@
-// A message naming a chat attachment the host no longer stores is refused whole at admission,
-// with a reason the client's existing rejected-send row puts into words, on the direct path and
-// the queued one alike; a stored one is claimed, and a /clear carries the claim to its new chat.
+// Direct/queued admission rejects missing attachments atomically; stored claims survive clear migration.
 
+import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
@@ -78,6 +77,33 @@ describe('attachments at send admission', () => {
     expect(rig.dispatch).not.toHaveBeenCalled()
   })
 
+  it('names only the expired upload when a fresh one is sent beside it', async () => {
+    const fresh = await storeUpload('fresh.png')
+    const expiredUpload = '7c2d9e10-3f4a-4b5c-8d6e-2f1a0b9c8d02'
+    const expired = join(agentSessionAttachmentStoreRoot(rig.root), expiredUpload, 'old photo.png')
+    const result = await clientSend({
+      kind: 'message',
+      role: 'user',
+      blocks: [
+        { type: 'image-ref', path: fresh },
+        { type: 'image-ref', path: expired }
+      ]
+    })
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: {
+          reason: 'attachmentExpired',
+          expiredAttachments: [{ uploadId: expiredUpload, name: 'old photo.png' }]
+        }
+      }
+    })
+    expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(0)
+    expect(claimedSessions()).toEqual([])
+    expect(existsSync(fresh)).toBe(true)
+  })
+
   it('refuses a queued send naming an expired file, and queues nothing', async () => {
     await rig.workingSend()
     expect(await clientSend(textWith(storedPath('notes.txt')), 'queue-if-active')).toMatchObject(
@@ -127,7 +153,7 @@ describe('attachments at send admission', () => {
       userSend: true as const
     }
     expect(await rig.host.send(CALLER, params)).toMatchObject({ ok: true, replayed: false })
-    // The upload goes; the outbox's resend of the same operation still answers as sent.
+    // Lost replies must replay acceptance even after upload deletion.
     await rm(join(agentSessionAttachmentStoreRoot(rig.root), UPLOAD), { recursive: true })
     expect(await rig.host.send(CALLER, params)).toMatchObject({ ok: true, replayed: true })
   })

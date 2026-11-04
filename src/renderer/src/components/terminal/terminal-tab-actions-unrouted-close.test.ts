@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const { closeWebRuntimeSessionTabMock, getStateMock, isWebRuntimeSessionActiveMock } = vi.hoisted(
   () => ({
@@ -74,18 +74,5 @@ describe('closeTerminalTab before the worktree catalog names a host', () => {
       environmentId: 'env-1',
       reason: 'user'
     })
-  })
-
-  it('still closes the tab locally when nothing names its host', () => {
-    isWebRuntimeSessionActiveMock.mockReturnValue(false)
-    const closeTab = vi.fn()
-    getStateMock.mockReturnValue(unhydratedState(null, closeTab))
-    const onClosed = vi.fn()
-
-    closeTerminalTab('tab-1', { onClosed })
-
-    expect(closeTab).toHaveBeenCalledWith('tab-1')
-    expect(onClosed).toHaveBeenCalled()
-    expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
   })
 })

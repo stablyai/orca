@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type * as IpcUiModule from '../ipc/ui'
 
 const {
@@ -33,21 +33,23 @@ vi.mock('electron', () => ({
 
 vi.mock('../ipc/repos', () => ({ registerRepoHandlers: vi.fn() }))
 vi.mock('../ipc/worktrees', () => ({ registerWorktreeHandlers: vi.fn() }))
-vi.mock('../ipc/worktree-change-invalidators', () => ({ runWorktreeChangeInvalidators: vi.fn() }))
+vi.mock('../ipc/worktrees/listing/worktree-change-invalidators', () => ({
+  runWorktreeChangeInvalidators: vi.fn()
+}))
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
 vi.mock('../ipc/pty/register-handlers', () => ({ registerPtyHandlers: vi.fn() }))
 vi.mock('../memory/hydrate-local-pty-registry', () => ({
   hydrateLocalPtyRegistryAtBoot: vi.fn()
 }))
 vi.mock('../browser/browser-manager', () => ({ browserManager: { unregisterAll: vi.fn() } }))
-vi.mock('../macos-tcc-prompt-notice', () => ({
+vi.mock('../macos-permissions/macos-tcc-prompt-notice', () => ({
   acknowledgePendingTccPromptNotice: vi.fn(),
   consumePendingTccPromptNotice: vi.fn(),
   dismissTccPromptNotice: vi.fn(),
   releasePendingTccPromptNotice: vi.fn()
 }))
 
-vi.mock('../updater', () => ({
+vi.mock('../updater/updater-service', () => ({
   checkForUpdates: vi.fn(),
   checkForUpdatesFromMenu: vi.fn(),
   downloadUpdate: vi.fn(),
@@ -60,14 +62,13 @@ vi.mock('../updater', () => ({
   showLinuxPackage: showLinuxPackageMock
 }))
 
-// Why: the seam stays mocked so one test can prove the wiring, but it defaults to delegating to the
-// real predicate so the sender cases below exercise its actual branches.
+// Keep the seam mock for wiring proof but delegate to the real predicate for sender-authorization branches.
 vi.mock('../ipc/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof IpcUiModule>()),
   isTrustedUIRenderer: (sender: unknown) => isTrustedUIRendererMock(sender)
 }))
 
-import { registerUpdaterHandlers } from './attach-main-window-services'
+import { registerUpdaterHandlers } from './main-window-updater'
 
 const RECOVERY_CHANNELS = [
   'updater:getLinuxPackageInstallInstructions',
@@ -116,7 +117,7 @@ function expectBothChannelsRejected(sender: Partial<WebContents>): void {
 
 describe('updater linux package recovery IPC handlers', () => {
   beforeAll(async () => {
-    // An unmocked copy, so the trusted-id state it reads is the one these tests set.
+    // Read the real predicate using the same trusted-ID state these tests set.
     actualUi = await vi.importActual<typeof IpcUiModule>('../ipc/ui')
   })
 
@@ -164,7 +165,7 @@ describe('updater linux package recovery IPC handlers', () => {
     await expect(getHandler(RECOVERY_CHANNELS[1])(event)).resolves.toBeUndefined()
   })
 
-  // Each row is a distinct branch of the real isTrustedUIRenderer, not a relabelled mock return.
+  // Exercise distinct real authorization branches, not relabelled mock verdicts.
   it.each([
     ['a guest webview', webContents({ getType: () => 'webview' })],
     ['a utility renderer', webContents({ getType: () => 'offscreen' })],
@@ -185,7 +186,7 @@ describe('updater linux package recovery IPC handlers', () => {
     const event = senderEvent(webContents({}))
     void getHandler(RECOVERY_CHANNELS[0])(event)
 
-    // The main window was replaced between calls; the previously served sender is now stale.
+    // Replacement makes a previously served main renderer stale.
     actualUi.setTrustedUIRendererWebContentsId(TRUSTED_ID + 1)
 
     expect(() => getHandler(RECOVERY_CHANNELS[0])(event)).toThrow(UNAUTHORIZED)

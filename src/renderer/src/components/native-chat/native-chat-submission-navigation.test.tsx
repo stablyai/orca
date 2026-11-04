@@ -3,8 +3,8 @@ import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/re
 import { afterEach, expect, it, vi } from 'vitest'
 import { useRef } from 'react'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
 import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
@@ -16,7 +16,7 @@ import {
 } from './use-native-chat-reveal-latest'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
-import type { StructuredPromptItem } from './use-structured-agent-session'
+import type { StructuredPromptItem } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import {
   clearNativeChatDraftCacheForTests,
   writeNativeChatDraftCache
@@ -47,9 +47,6 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatSendClassified: vi.fn()
-}))
-vi.mock('@/lib/worker-terminal-takeover-report', () => ({
-  reportStructuredSessionUserInput: vi.fn()
 }))
 
 afterEach(() => {
@@ -82,6 +79,7 @@ function transport(
   setOption: () => Promise<boolean>
 ): NativeChatStructuredComposerTransport {
   return {
+    capturePresentation: () => () => true,
     send: vi.fn(() => true),
     dispatchCommand: (text) =>
       dispatchStructuredAgentSessionComposerCommand(text, {
@@ -241,6 +239,7 @@ it.each(['/model', '/effort'])(
 function localAnswerArgs() {
   return {
     agent: 'omp' as const,
+    draftScopeKey: 'terminal-test-scope',
     disabled: false,
     isDispatchingSessionOption: false,
     resolveTarget: () => ({ ptyId: 'pty-a', settings: null }),
@@ -394,21 +393,24 @@ it('reveals a structured prompt answer at the press, before the host accepts it'
     const transcript = useReviewTranscript()
     const submits = useStructuredNativeChatSubmitReveal(
       {
+        capturePresentation: () => () => true,
         respond: async () => host.promise,
         queuedMessages: {
           queueCapable: true,
+          clearCapable: true,
           editCapable: false,
           editor: undefined,
           cards: [],
           pause: null,
-          resuming: false,
           resume: async () => false,
+          clear: async () => true,
+          queuePending: null,
+          pending: () => null,
           steer: async () => {},
           remove: async () => {},
           edit: async () => {},
-          steerNewest: () => false,
-          queueResume: undefined,
-          queueHold: undefined
+          steerHead: () => false,
+          isWorking: false
         }
       },
       vi.fn()

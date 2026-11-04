@@ -5,7 +5,7 @@ import {
   type RemotePaneLayoutPusher
 } from './remote-pane-layout-push'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
-import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { appendPaneTerminalError, clearPaneTerminalError } from './terminal-error-accumulation'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
 import { updateTerminalRemoteRuntimeRecoveryUiState } from './terminal-remote-runtime-recovery-ui-state'
@@ -70,8 +70,7 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
       }
       closeRenameSession()
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [closeRenameSession]
+    [closeRenameSession, containerRef]
   )
 
   const handleStartRename = useCallback(
@@ -116,8 +115,7 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
       setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
       paneTransportsRef.current.get(paneId)?.notifyErrorSurfaceDismissed?.()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [])
+  }, [managerRef, paneTransportsRef, setTerminalError, setTerminalErrorsByPaneId])
   const onPtyRecoveryStateRef = useRef(
     (paneId: number, state: PtyTransportRecoveryState | null) => {
       setPtyRecoveryStatesByPaneId((previous) =>

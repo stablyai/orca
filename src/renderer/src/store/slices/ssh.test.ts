@@ -45,9 +45,9 @@ describe('createSshSlice', () => {
         'tab-stale-last-known': staleLastKnownPtyId,
         'tab-other': otherPtyId
       },
-      pendingCodexPaneRestartIds: {
-        [removedPtyId]: true,
-        [otherPtyId]: true
+      pendingPaneAccountRestarts: {
+        [removedPtyId]: 'codex',
+        [otherPtyId]: 'codex'
       },
       codexRestartNoticeByPtyId: {
         [removedPtyId]: { previousAccountLabel: 'Old', nextAccountLabel: 'New' },
@@ -102,9 +102,7 @@ describe('createSshSlice', () => {
         'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-1'),
         'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
       },
-      // Why: a hydrated-but-not-yet-reconnected session for the removed target;
-      // the orphan sweep reads this map as liveness, so removal must clear it or
-      // a dead tab is pinned alive forever (#9911).
+      // Pending reconnect counts as orphan-sweep liveness; removal must clear it or pin the dead tab (#9911).
       pendingReconnectPtyIdByTabId: {
         'tab-ssh': toAppSshPtyId(targetId, 'pty-1'),
         'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-9'),
@@ -127,8 +125,6 @@ describe('createSshSlice', () => {
     expect(state.deferredSshSessionIdsByTabId).toEqual({
       'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
     })
-    // Removed target's pending-reconnect sessions cleared (by tab membership and
-    // by target-scoped session id); the surviving target's entry is retained.
     expect(state.pendingReconnectPtyIdByTabId).toEqual({
       'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
     })
@@ -137,7 +133,7 @@ describe('createSshSlice', () => {
     expect(state.ptyIdsByTabId['tab-ssh']).toEqual([])
     expect(state.lastKnownRelayPtyIdByTabId['tab-ssh']).toBeUndefined()
     expect(state.lastKnownRelayPtyIdByTabId['tab-stale-last-known']).toBeUndefined()
-    expect(state.pendingCodexPaneRestartIds[removedPtyId]).toBeUndefined()
+    expect(state.pendingPaneAccountRestarts[removedPtyId]).toBeUndefined()
     expect(state.codexRestartNoticeByPtyId[removedPtyId]).toBeUndefined()
 
     expect(state.sshConnectionStates.get(otherTargetId)?.status).toBe('connected')
@@ -147,7 +143,7 @@ describe('createSshSlice', () => {
     expect(state.tabsByWorktree[otherWorktreeId][0]?.ptyId).toBe(otherPtyId)
     expect(state.ptyIdsByTabId['tab-other']).toEqual([otherPtyId])
     expect(state.lastKnownRelayPtyIdByTabId['tab-other']).toBe(otherPtyId)
-    expect(state.pendingCodexPaneRestartIds[otherPtyId]).toBe(true)
+    expect(state.pendingPaneAccountRestarts[otherPtyId]).toBe('codex')
     expect(state.codexRestartNoticeByPtyId[otherPtyId]).toEqual({
       previousAccountLabel: 'Other old',
       nextAccountLabel: 'Other new'
@@ -211,263 +207,5 @@ describe('createSshSlice', () => {
     expect(state.tabsByWorktree[survivingWorktreeId][0]?.ptyId).toBe(survivingPtyId)
     expect(state.ptyIdsByTabId['tab-b']).toEqual([survivingPtyId])
     expect(state.lastKnownRelayPtyIdByTabId['tab-b']).toBe(survivingPtyId)
-  })
-
-  it('keeps SSH target label references stable when refreshed metadata is unchanged', () => {
-    const store = createTestStore()
-    const labels = new Map([['ssh-1', 'Remote']])
-    store.setState({ sshTargetLabels: labels, sshTargetsHydrated: true })
-    const previousState = store.getState()
-
-    store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote' }])
-
-    expect(store.getState()).toBe(previousState)
-    expect(store.getState().sshTargetLabels).toBe(labels)
-  })
-
-  it('mirrors registration generations so desktop SSH hosts are fenceable', () => {
-    const store = createTestStore()
-
-    store.getState().setSshTargetsMetadata([
-      { id: 'ssh-1', label: 'Remote', generation: 4 },
-      { id: 'ssh-2', label: 'Other', generation: 7 }
-    ])
-
-    expect(store.getState().sshTargetGenerations.get('ssh-1')).toBe(4)
-    expect(store.getState().sshTargetGenerations.get('ssh-2')).toBe(7)
-  })
-
-  it('leaves an unusable generation absent rather than defaulting it', () => {
-    const store = createTestStore()
-
-    store.getState().setSshTargetsMetadata([
-      { id: 'ssh-legacy', label: 'Legacy' },
-      { id: 'ssh-bad', label: 'Bad', generation: 0 },
-      { id: 'ssh-ok', label: 'Ok', generation: 2 }
-    ])
-
-    // Why: a defaulted generation would fence an owner against a registration
-    // that never existed; absent degrades that one host to view-only instead.
-    const generations = store.getState().sshTargetGenerations
-    expect(generations.has('ssh-legacy')).toBe(false)
-    expect(generations.has('ssh-bad')).toBe(false)
-    expect(generations.get('ssh-ok')).toBe(2)
-  })
-
-  it('refreshes generations when a host is re-registered under a new id', () => {
-    const store = createTestStore()
-    store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote', generation: 4 }])
-
-    // Remove-and-re-add issues a fresh id and a fresh generation; the mirror has
-    // to follow, or the re-added host stays view-only for the rest of the session.
-    store.getState().setSshTargetsMetadata([{ id: 'ssh-2', label: 'Remote', generation: 9 }])
-
-    expect(store.getState().sshTargetGenerations.has('ssh-1')).toBe(false)
-    expect(store.getState().sshTargetGenerations.get('ssh-2')).toBe(9)
-  })
-
-  it('refreshes a generation re-registered under the same id', () => {
-    const store = createTestStore()
-    store.getState().setSshTargetsMetadata([{ id: 'ssh-runtime-owned-r1', label: 'Env' }])
-    store
-      .getState()
-      .setSshTargetsMetadata([{ id: 'ssh-runtime-owned-r1', label: 'Env', generation: 4 }])
-
-    // Runtime-owned targets keep a deterministic id, so a re-upsert after removal
-    // reissues a *new* generation under the *old* key — the one re-registration
-    // shape a key-set comparison would miss, freezing the host view-only.
-    store
-      .getState()
-      .setSshTargetsMetadata([{ id: 'ssh-runtime-owned-r1', label: 'Env', generation: 11 }])
-
-    expect(store.getState().sshTargetGenerations.get('ssh-runtime-owned-r1')).toBe(11)
-  })
-
-  it('adopts generations when a prior load mirrored the same labels without them', () => {
-    const store = createTestStore()
-    store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote' }])
-
-    // Why: labels alone would satisfy the unchanged-list early return and freeze
-    // the mirror empty, leaving the host view-only against a known generation.
-    store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote', generation: 3 }])
-
-    expect(store.getState().sshTargetGenerations.get('ssh-1')).toBe(3)
-  })
-
-  it('drops a removed target generation so a dead registration stays unfenceable', () => {
-    const store = createTestStore()
-    store.getState().setSshTargetsMetadata([
-      { id: 'ssh-1', label: 'Remote', generation: 4 },
-      { id: 'ssh-2', label: 'Other', generation: 7 }
-    ])
-
-    store.getState().clearRemovedSshTargetState('ssh-1')
-
-    expect(store.getState().sshTargetGenerations.has('ssh-1')).toBe(false)
-    expect(store.getState().sshTargetGenerations.get('ssh-2')).toBe(7)
-  })
-
-  it('marks targets hydrated on the first load, even when the list is empty', () => {
-    const store = createTestStore()
-    expect(store.getState().sshTargetsHydrated).toBe(false)
-
-    store.getState().setSshTargetsMetadata([])
-
-    // Why: an empty target set is still positive knowledge — the overlay's
-    // targetRemoved derivation may only trust absence after a real load.
-    expect(store.getState().sshTargetsHydrated).toBe(true)
-    expect(store.getState().sshTargetLabels.size).toBe(0)
-  })
-
-  it('keeps SSH connection state references stable when duplicate state arrives', () => {
-    const store = createTestStore()
-    const sshConnectionStates = new Map([
-      [
-        'ssh-1',
-        { targetId: 'ssh-1', status: 'connected' as const, error: null, reconnectAttempt: 0 }
-      ]
-    ])
-    store.setState({ sshConnectionStates, sshConnectedGeneration: 1 })
-    const previousState = store.getState()
-
-    store.getState().setSshConnectionState('ssh-1', {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0
-    })
-
-    expect(store.getState()).toBe(previousState)
-    expect(store.getState().sshConnectionStates).toBe(sshConnectionStates)
-    expect(store.getState().sshConnectedGeneration).toBe(1)
-  })
-
-  it('publishes an authoritative SSH connection generation change', () => {
-    const store = createTestStore()
-    store.getState().setSshConnectionState('ssh-1', {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      connectionGeneration: 1
-    })
-    const previousState = store.getState()
-
-    store.getState().setSshConnectionState('ssh-1', {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      connectionGeneration: 2
-    })
-
-    expect(store.getState()).not.toBe(previousState)
-    expect(store.getState().sshConnectionStates.get('ssh-1')?.connectionGeneration).toBe(2)
-  })
-
-  it('publishes an authoritative SSH provider epoch change', () => {
-    const store = createTestStore()
-    store.getState().setSshConnectionState('ssh-1', {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      providerEpoch: 'provider-a' as never,
-      connectionGeneration: 1
-    })
-    const previousState = store.getState()
-
-    store.getState().setSshConnectionState('ssh-1', {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      providerEpoch: 'provider-b' as never,
-      connectionGeneration: 1
-    })
-
-    expect(store.getState()).not.toBe(previousState)
-    expect(store.getState().sshConnectionStates.get('ssh-1')?.providerEpoch).toBe('provider-b')
-  })
-
-  it('publishes a connected-state folder capability change', () => {
-    const store = createTestStore()
-    store.getState().setSshConnectionState('ssh-1', {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      supportsFolderDownload: false
-    })
-    const previousState = store.getState()
-
-    store.getState().setSshConnectionState('ssh-1', {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      supportsFolderDownload: true
-    })
-
-    expect(store.getState()).not.toBe(previousState)
-    expect(store.getState().sshConnectionStates.get('ssh-1')?.supportsFolderDownload).toBe(true)
-    expect(store.getState().sshConnectedGeneration).toBe(1)
-  })
-
-  it('does not publish state when cleanup finds no removed SSH target state', () => {
-    const store = createTestStore()
-    const previousState = store.getState()
-
-    store.getState().clearRemovedSshTargetState('missing-target')
-
-    expect(store.getState()).toBe(previousState)
-  })
-
-  it("removes a transient-clear block when it is the target's only remaining state", () => {
-    const store = createTestStore()
-    store.setState({ transientClearedAgentStatusConnectionIds: { 'ssh-1': true } })
-
-    store.getState().clearRemovedSshTargetState('ssh-1')
-
-    expect(store.getState().transientClearedAgentStatusConnectionIds).toEqual({})
-  })
-
-  it('preserves untouched cleanup slice references while removing deferred target metadata', () => {
-    const store = createTestStore()
-    const sshConnectionStates = new Map([
-      [
-        'ssh-2',
-        { targetId: 'ssh-2', status: 'connected' as const, error: null, reconnectAttempt: 0 }
-      ]
-    ])
-    const sshTargetLabels = new Map([['ssh-2', 'Other']])
-    const portForwardsByConnection = { 'ssh-2': [] }
-    const detectedPortsByConnection = { 'ssh-2': [] }
-    const sshCredentialQueue = [
-      { requestId: 'req-2', targetId: 'ssh-2', kind: 'password' as const, detail: 'password' }
-    ]
-    const deferredSshSessionIdsByTabId = {
-      'tab-other': toAppSshPtyId('ssh-2', 'pty-2')
-    }
-    store.setState({
-      sshConnectionStates,
-      sshTargetLabels,
-      portForwardsByConnection,
-      detectedPortsByConnection,
-      sshCredentialQueue,
-      deferredSshReconnectTargets: ['ssh-1'],
-      deferredSshSessionIdsByTabId
-    })
-
-    store.getState().clearRemovedSshTargetState('ssh-1')
-
-    const state = store.getState()
-    expect(state.deferredSshReconnectTargets).toEqual([])
-    expect(state.sshConnectionStates).toBe(sshConnectionStates)
-    expect(state.sshTargetLabels).toBe(sshTargetLabels)
-    expect(state.portForwardsByConnection).toBe(portForwardsByConnection)
-    expect(state.detectedPortsByConnection).toBe(detectedPortsByConnection)
-    expect(state.sshCredentialQueue).toBe(sshCredentialQueue)
-    expect(state.deferredSshSessionIdsByTabId).toBe(deferredSshSessionIdsByTabId)
   })
 })

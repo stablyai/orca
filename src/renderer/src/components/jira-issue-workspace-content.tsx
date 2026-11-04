@@ -1,13 +1,14 @@
 import type { LucideIcon } from 'lucide-react'
 import { ArrowRight, LoaderCircle, RefreshCw, Save, Send } from 'lucide-react'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { JiraIssueMarkdown } from './jira-issue-markdown'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
-import type { JiraComment, JiraIssue } from '../../../shared/jira-types'
+import type { JiraComment, JiraIssue } from '../../../shared/jira/jira-types'
 
 export type JiraIssueWorkspaceAction = {
   label: string
@@ -17,6 +18,7 @@ export type JiraIssueWorkspaceAction = {
 
 export function JiraIssueWorkspaceContent({
   displayed,
+  imageTarget,
   titleDraft,
   setTitleDraft,
   labelsDraft,
@@ -32,6 +34,7 @@ export function JiraIssueWorkspaceContent({
   actionItems
 }: {
   displayed: JiraIssue
+  imageTarget: RuntimeClientTarget
   titleDraft: string
   setTitleDraft: (value: string) => void
   labelsDraft: string
@@ -119,9 +122,9 @@ export function JiraIssueWorkspaceContent({
             </span>
           </div>
           {displayed.description?.trim() ? (
-            <CommentMarkdown
+            <JiraIssueMarkdown
+              target={imageTarget}
               content={displayed.description}
-              variant="document"
               className="text-[14px] leading-relaxed"
             />
           ) : (
@@ -194,11 +197,10 @@ export function JiraIssueWorkspaceContent({
                     </span>
                   </div>
                   <div className="px-3 py-2">
-                    {/* Why: Jira comment screenshots need the same preview
-                                affordance without changing compact comment typography. */}
-                    <CommentMarkdown
+                    <JiraIssueMarkdown
+                      target={imageTarget}
                       content={comment.body}
-                      expandImages
+                      compact
                       className="text-[13px] leading-relaxed"
                     />
                   </div>

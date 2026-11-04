@@ -1,6 +1,4 @@
-// Why: the E2EE keypair enables application-layer encryption between mobile
-// and desktop over plain ws://. The public key is embedded in the QR pairing
-// offer so the mobile client can derive a shared secret via ECDH.
+// QR public keys let paired clients derive application-layer ECDH encryption over plain WebSockets.
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
@@ -28,9 +26,7 @@ export type E2EEKeypair = {
   publicKeyB64: string
 }
 
-// The listener decrypts with the secret key, so the advertised key must be the
-// one derived from it; a file whose stored public key disagrees would otherwise
-// put a key in every pairing offer that no listener holds. The file is left as is.
+// Advertise the key derived from the listener's secret, not a mismatched stored public key; leave the file intact.
 function keypairFromSecret(secretKey: Uint8Array, storedPublicKey: Uint8Array): E2EEKeypair {
   const { publicKey } = nacl.box.keyPair.fromSecretKey(secretKey)
   if (!Buffer.from(publicKey).equals(Buffer.from(storedPublicKey))) {
@@ -47,8 +43,7 @@ export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
   if (existsSync(filePath)) {
     try {
       hardenExistingSecureFile(filePath)
-      // Why: this startup path reads synchronously; valid keypair files are
-      // tiny, so oversized/corrupt files should be replaced without loading.
+      // Bound synchronous startup reads; valid keypair files are tiny.
       if (statSync(filePath).size > MAX_KEYPAIR_FILE_BYTES) {
         throw new Error('E2EE keypair file is too large')
       }
@@ -61,17 +56,14 @@ export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
         }
       }
     } catch (error) {
-      // A read this process is not permitted to make says nothing about the contents. Falling
-      // through would overwrite the only copy of the secret key — and the overwrite succeeds, so
-      // nothing downstream stops it. Every paired device derives its shared secret from this key,
-      // so regenerating silently un-pairs all of them and no old message stays decryptable.
+      // Permission failure proves no corruption; regenerating would overwrite the only secret, unpair all devices and lose old-message decryption.
       if (isUnreadableError(error)) {
         throw new Error(
           `Cannot read the E2EE keypair at ${filePath}: the read failed. Refusing to regenerate it, which would invalidate every paired device.`,
           { cause: error }
         )
       }
-      // Malformed file — regenerate below.
+      // Replace malformed files below.
     }
   }
 

@@ -18,18 +18,18 @@ vi.mock('electron', () => ({
       mocks.handlers.set(channel, handler)
   }
 }))
-vi.mock('../../hooks', () => ({
+vi.mock('../../workspace-hooks/hooks', () => ({
   hasHooksFile: mocks.hasHooks,
   loadHooks: mocks.loadHooks,
   getEffectiveHooks: mocks.effectiveHooks,
   hasUnrecognizedOrcaYamlKeys: () => false,
   parseOrcaYaml: () => ({ issueCommand: 'shared' })
 }))
-vi.mock('../../issue-command-file', () => ({
-  readIssueCommand: mocks.localRead,
-  writeIssueCommand: mocks.localWrite
+vi.mock('../../workspace-hooks/issue-command-file', () => ({
+  readIssueCommandUnlessWslStopped: mocks.localRead,
+  writeIssueCommandUnlessWslStopped: mocks.localWrite
 }))
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 vi.mock('node:fs/promises', () => ({
@@ -46,9 +46,8 @@ vi.mock('../../../shared/setup-script-imports', () => ({
     return []
   }
 }))
-vi.mock('../../effective-hook-config', () => ({
-  getEffectiveSetupRunPolicy: () => 'manual',
-  getDefaultTabCommandTrustContent: () => undefined
+vi.mock('../../workspace-hooks/effective-hook-config', () => ({
+  getEffectiveSetupRunPolicy: () => 'manual'
 }))
 import { RuntimeRepositoryHooksCommands } from '../../runtime/runtime-repository-hooks-commands'
 import { RuntimeRepositoryIssueCommand } from '../../runtime/runtime-repository-issue-command'
@@ -133,7 +132,7 @@ const localCalls = [
   mocks.effectiveHooks
 ]
 
-// Why: this process serves no SSH filesystem, so an SSH owner is neither read remotely nor locally.
+// This process must inspect SSH-owned repos neither remotely nor locally.
 function expectRoute(target: string | null): void {
   if (target) {
     for (const method of localCalls) {

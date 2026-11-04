@@ -1,11 +1,7 @@
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
-/**
- * Anonymized Cmd+J corpus used as the evaluation gate for the multi-keyword
- * matcher. Names, identifiers, and titles are synthetic; the shapes (automation
- * provenance, linked work items, ports, reviews, Unicode) mirror real workspaces.
- */
+/** Synthetic names/IDs/titles with realistic workspace shapes for the multi-keyword evaluation gate. */
 export const CMD_J_FIXTURE_REPOS: Repo[] = [
   {
     id: 'repo-orca',

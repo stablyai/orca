@@ -26,18 +26,7 @@ function sameSources(previous: readonly unknown[], next: readonly unknown[]): bo
   return true
 }
 
-/**
- * Wraps a per-worktree record selector in a store-identity-keyed cache.
- *
- * Zustand re-runs every mounted subscriber's selector on every store write, so
- * an unmemoized build allocates one record per visible card per write even when
- * nothing it reads changed. Gating on the source slice identities collapses that
- * to one build per worktree per generation; carrying the previous generation
- * forward keeps the reference stable when a rebuild produces equal contents, so
- * downstream `useShallow`/`useMemo` gates short-circuit on identity.
- *
- * The returned records are shared by every caller and must never be mutated.
- */
+/** Cache by source identity: Zustand runs each mounted selector on every write. Reuse equal records across generations so downstream memo gates hold. Returned records are shared; never mutate them. */
 export function createWorktreeRecordSelector<TState, TValue extends object>(options: {
   readSources: (state: TState) => readonly unknown[]
   build: (state: TState, worktreeId: string) => TValue

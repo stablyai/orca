@@ -1,6 +1,6 @@
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
 
-// Why: test-only escape hatch so subprocess tests avoid the full 15 s window; bogus values fall back to the default.
+// Tests override the interval to avoid the full 15-second wait.
 function resolveKeepaliveIntervalMs(): number {
   const raw = process.env.ORCA_KEEPALIVE_INTERVAL_MS ?? process.env.ORCA_HEARTBEAT_INTERVAL_MS
   if (!raw) {
@@ -18,7 +18,7 @@ export function startCheckKeepalive(deadlineMs: number | undefined): () => void 
   const interval = setInterval(() => {
     const payload = {
       _keepalive: true,
-      // Why: retain the old marker for scripts still filtering it while callers migrate to _keepalive.
+      // Preserve the old marker for scripts migrating to _keepalive.
       _heartbeat: true,
       elapsedMs: Date.now() - startedAt,
       deadlineMs: deadlineMs ?? null

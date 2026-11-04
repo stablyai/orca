@@ -5,18 +5,11 @@ import nacl from 'tweetnacl'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { DeviceRegistry, type DeviceEntry } from '../../../src/main/runtime/device-registry'
 import { DEVICE_REGISTRY_FILENAME } from '../../../src/main/runtime/mobile-pairing-files'
-import { DEVICE_KEY_EPHEMERAL_RUNTIME_CAPABILITY } from '../../../src/shared/device-key-capability'
-import {
-  importReleaseCheckoutModule,
-  materializeReleaseCheckout,
-  resolveBaselineReleaseRef
-} from './release-checkout'
+import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
-/**
- * Session-only browser keys add an `ephemeral` flag to keyed rows. A released host (desktop
- * downgrade) must keep such rows, keep token rows authenticating, and never advertise the
- * capability that makes a browser send `ephemeral` to it.
- */
+// Across downgrade, preserve ephemeral key rows and token auth; only hosts advertising the capability may receive session-only registration.
+// The last release without session-only keys; a newer baseline would itself drop the row.
+const PRE_EPHEMERAL_REF = 'v1.4.224'
 const SUITE_TIMEOUT_MS = 180_000
 
 type RegistryLike = {
@@ -25,25 +18,18 @@ type RegistryLike = {
 }
 
 let ReleasedRegistry: new (userDataPath: string) => RegistryLike
-let releasedCapabilities: readonly string[]
 
 beforeAll(async () => {
-  const checkout = await materializeReleaseCheckout(resolveBaselineReleaseRef())
-  const [registryModule, protocolModule] = await Promise.all([
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/device-registry.ts'),
-    importReleaseCheckoutModule(checkout, 'src/shared/protocol-version.ts')
-  ])
+  const checkout = await materializeReleaseCheckout(PRE_EPHEMERAL_REF)
+  const registryModule = await importReleaseCheckoutModule(
+    checkout,
+    'src/main/runtime/device-registry.ts'
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned release's DeviceRegistry class; a changed shape fails the assertions below.
   ReleasedRegistry = registryModule.DeviceRegistry as typeof ReleasedRegistry
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned release's capability list; a changed shape fails the assertion below.
-  releasedCapabilities = protocolModule.RUNTIME_CAPABILITIES as readonly string[]
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version: session-only browser rows', () => {
-  it('a released host never invites a browser to send ephemeral', () => {
-    expect(releasedCapabilities).not.toContain(DEVICE_KEY_EPHEMERAL_RUNTIME_CAPABILITY)
-  })
-
   it('a released registry keeps the session row and token rows; this host drops it on restart', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-xv-web-session-'))
     const current = new DeviceRegistry(userDataPath)

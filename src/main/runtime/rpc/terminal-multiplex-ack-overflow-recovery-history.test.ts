@@ -14,8 +14,7 @@ import {
 
 type DataListener = (data: string, meta?: { seq?: number; rawLength?: number }) => void
 
-// Snapshot frames bypass the ACK window, so a history-carrying recovery on every ACK of a
-// sustained flood outgrew what the client could take in and the host backlog never settled.
+// Snapshots bypass ACK windows; repeated history recovery during floods outgrew client intake and prevented backlog drain.
 describe('ACK-overflow recovery history under a sustained flood', () => {
   it('stays screen-only while the link is saturated and sends history once it drains', async () => {
     let seq = 0

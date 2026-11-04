@@ -1,4 +1,4 @@
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -6,6 +6,11 @@ import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { AutomationsChangedPayload } from '../../shared/runtime-client-events'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from '../runtime/agent-transcript-pane-test-harness'
+import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
 import { AutomationService } from './service'
 import type {
   AutomationRunCompletionObservation,
@@ -97,8 +102,7 @@ describe('authority-owned automation run completion', () => {
     const store = await createStore()
     const automation = createAutomation(store)
     const service = new AutomationService(store, {
-      // Why: a dispatcher without a completion promise is exactly the case that
-      // used to strand a run at 'dispatched' for the process lifetime.
+      allowRemoteHostScheduling: true,
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       terminalObserver: createObserver(async () => ({ status: 'completed', error: null }))
     })
@@ -115,6 +119,7 @@ describe('authority-owned automation run completion', () => {
     const store = await createStore()
     const automation = createAutomation(store)
     const service = new AutomationService(store, {
+      allowRemoteHostScheduling: true,
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       terminalObserver: createObserver(
         async () => ({ status: 'completed' }),
@@ -127,20 +132,21 @@ describe('authority-owned automation run completion', () => {
     service.stop()
   })
 
-  /**
-   * The throws on this path carry transport tokens, not sentences. Every other
-   * refusal in run history is one fixed sentence, so leaking `terminal_handle_stale`
-   * into the row a user reads breaks the only convention that surface has.
-   */
   it('reports a failed observation in the same fixed sentence every other refusal uses', async () => {
     const store = await createStore()
     const automation = createAutomation(store)
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'shell',
+      foregroundProcess: 'bash',
+      data: ''
+    })
+    runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
+    const observer = createRuntimeAutomationRunTerminalObserver(runtime)
     const service = new AutomationService(store, {
+      allowRemoteHostScheduling: true,
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
-      terminalObserver: createObserver(async () => {
-        throw new Error('terminal_handle_stale')
-      })
+      terminalObserver: { ...observer, resolveRunTerminal: () => handle }
     })
 
     const run = await service.runNow(automation.id)
@@ -151,8 +157,7 @@ describe('authority-owned automation run completion', () => {
     expect(readRun(store, automation.id, run.id).error).toBe(
       'Orca stopped watching this run before it reported completion.'
     )
-    // The token is still recoverable where it is actually useful.
-    expect(logged.mock.calls.flat().map(String).join(' ')).toContain('terminal_handle_stale')
+    expect(logged.mock.calls.flat().map(String).join(' ')).toContain('terminal_exited')
     logged.mockRestore()
     service.stop()
   })
@@ -186,7 +191,6 @@ describe('authority-owned automation run completion', () => {
     })
     vi.useFakeTimers()
     service.start()
-    // Stranding needs a surface that reported ready and still cannot find the pane.
     service.setRendererReady()
     await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
 
@@ -239,6 +243,7 @@ describe('authority-owned automation run completion', () => {
     const automation = createAutomation(store)
     let resolveObservation: ((value: AutomationRunCompletionObservation) => void) | null = null
     const service = new AutomationService(store, {
+      allowRemoteHostScheduling: true,
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       terminalObserver: createObserver(
         () =>
@@ -251,7 +256,6 @@ describe('authority-owned automation run completion', () => {
     const run = await service.runNow(automation.id)
     await vi.waitFor(() => expect(resolveObservation).not.toBeNull())
 
-    // The renderer's own dispatch observer reports first.
     await service.markDispatchResult({
       runId: run.id,
       status: 'completed',
@@ -278,6 +282,7 @@ describe('authority-owned automation run completion', () => {
     const automation = createAutomation(store)
     const aborted: boolean[] = []
     const service = new AutomationService(store, {
+      allowRemoteHostScheduling: true,
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       terminalObserver: createObserver(
         (signal) =>
@@ -297,13 +302,12 @@ describe('authority-owned automation run completion', () => {
   })
 
   it('keeps a run dispatched against an authority with no completion watching', async () => {
-    // Why: the New client | Old runtime matrix row — the old authority publishes
-    // no event and reconciles nothing, so the client must not crash or invent a
-    // terminal status; TTL/focus revalidation stays the only refresh path.
+    // Older authorities without completion watching leave the run dispatched.
     const store = await createStore()
     const automation = createAutomation(store)
     const publish = vi.fn()
     const service = new AutomationService(store, {
+      allowRemoteHostScheduling: true,
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       onAutomationsChanged: publish
     })
@@ -332,6 +336,7 @@ describe('automationsChanged publication', () => {
     const automation = createAutomation(store)
     const seen: { payload: AutomationsChangedPayload; status: string | undefined }[] = []
     const service = new AutomationService(store, {
+      allowRemoteHostScheduling: true,
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       onAutomationsChanged: (payload) => {
         seen.push({
@@ -353,32 +358,7 @@ describe('automationsChanged publication', () => {
     })
     expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run', 'run', 'run', 'usage'])
     expect(seen.at(-1)?.status).toBe('completed')
-    // Every run/usage write names its own host, so one automation's run cannot
-    // invalidate the rest of the authority.
     expect(seen.every((entry) => entry.payload.selector?.kind === 'self')).toBe(true)
-    service.stop()
-  })
-
-  // Definition-change publication from the shared runtime methods is covered by
-  // src/main/runtime/automation-change-publication.test.ts against the real store.
-
-  it('changes nothing for a consumer that ignores the unknown event type', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    // An old client's event switch has no automationsChanged branch at all.
-    const oldClientState = { repoRefreshes: 0 }
-    const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
-      onAutomationsChanged: (payload) => {
-        if ((payload as { type?: string }).type === 'reposChanged') {
-          oldClientState.repoRefreshes += 1
-        }
-      }
-    })
-
-    const run = await service.runNow(automation.id)
-    expect(oldClientState.repoRefreshes).toBe(0)
-    expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
     service.stop()
   })
 })

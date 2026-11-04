@@ -31,10 +31,8 @@ describe('editor-path-move-inflight', () => {
       runtimeEnvironmentId: null,
       sourcePaths: ['/repo/src']
     })
-    // The exact root, and a file that appeared under it mid-move, are both echoes.
     expect(isActiveMoveSourcePath('wt-1', null, '/repo/src')).toBe(true)
     expect(isActiveMoveSourcePath('wt-1', null, '/repo/src/late.ts')).toBe(true)
-    // A sibling outside the root is a genuine external delete.
     expect(isActiveMoveSourcePath('wt-1', null, '/repo/srcabc.ts')).toBe(false)
     expect(isActiveMoveSourcePath('wt-1', null, '/repo/other.ts')).toBe(false)
   })

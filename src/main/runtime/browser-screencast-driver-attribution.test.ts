@@ -1,10 +1,5 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-/**
- * `browser.screencast` is the one stream a phone, a paired desktop client, the web client and the
- * CLI all open against the same host page. Stamping every subscriber as the mobile driver put the
- * host renderer's "Mobile is driving this browser" overlay — and its input lock — over a pane that
- * no phone had ever touched.
- */
+/** Shared screencast subscriptions must not give desktop/web/CLI viewers a phone's input lock. */
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -94,8 +89,7 @@ describe('browser screencast driver attribution', () => {
 
     desktop.stop()
     await desktop.done
-    // Presence check: the same counter does move for the desktop stream, so the 0 above is a real
-    // survival and not a counter that never counts.
+    // Prove the counter can move; zero alone could be a vacuous assertion.
     expect(desktop.stops()).toBeGreaterThan(0)
   })
 })

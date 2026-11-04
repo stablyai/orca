@@ -42,8 +42,15 @@ describe('forgetHostUpdateFailures', () => {
   })
 
   it('writes nothing when nothing was recorded', async () => {
-    await forgetHostUpdateFailures('host-1')
     const fileSystem = createExpoGenerationFileSystem()
     expect(await fileSystem.readText(`${fileSystem.rootUri}/update-failures.json`)).toBeNull()
+    const write = vi.spyOn(fileSystem, 'writeText')
+    try {
+      await forgetHostUpdateFailures('host-1')
+      expect(write).not.toHaveBeenCalled()
+      expect(await fileSystem.readText(`${fileSystem.rootUri}/update-failures.json`)).toBeNull()
+    } finally {
+      write.mockRestore()
+    }
   })
 })

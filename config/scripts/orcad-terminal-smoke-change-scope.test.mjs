@@ -1,6 +1,4 @@
-import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
 import {
   classifyOrcadTerminalSmokeChanges,
   collectOrcadTerminalSmokeInputs
@@ -48,7 +46,7 @@ describe('the actual terminal smoke dependency graph', () => {
     ...Object.values(ORCAD_CHILD_ENTRY_POINTS),
     'src/main/runtime/orca-runtime.ts',
     'src/main/windows/windows-process-table.ts',
-    'src/main/worker-thread-entry-path.ts',
+    'src/main/worker-threads/worker-thread-entry-path.ts',
     'src/cli/index.ts',
     'config/scripts/runtime-serve-terminal-smoke.mjs',
     'config/scripts/build-orcad-node.mjs',
@@ -86,24 +84,4 @@ describe('the actual terminal smoke dependency graph', () => {
       ).shouldRun
     ).toBe(true)
   })
-})
-
-it('only skips the unchanged smoke after a successful diff and dependency analysis', () => {
-  const workflow = parse(
-    readFileSync(new URL('../../.github/workflows/pr.yml', import.meta.url), 'utf8')
-  )
-  const step = workflow.jobs.preflight.steps.find(
-    (candidate) => candidate.name === 'Boot orcad and round-trip a terminal'
-  )
-  expect(step.env).toEqual({
-    BASE_SHA: '${{ github.event.pull_request.base.sha }}',
-    ORCA_BACKGROUND_LAUNCH: '1'
-  })
-  // See the localization gate: HEAD^1 removes the merge-base computation, so a shallow checkout
-  // is enough and the payload head SHA is unused.
-  expect(step.run).toContain('node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA"')
-  expect(step.run).toContain('git diff --name-only --no-renames -z "$DIFF_BASE" HEAD')
-  expect(step.run).not.toContain('--diff-filter')
-  expect(step.run).toContain('&& [ "$scope" = false ]; then')
-  expect(step.run).toMatch(/else\s+pnpm run smoke:orcad-terminal\s+fi/)
 })

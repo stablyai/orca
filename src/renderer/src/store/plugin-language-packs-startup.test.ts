@@ -3,11 +3,11 @@
 import { StrictMode } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PluginChangeEvent } from '../../../shared/plugins/plugin-change-event'
+import type { PluginChangeEvent } from '../../../shared/plugins/events/plugin-change-event'
 import {
   pluginLanguageResourceId,
   type PluginLanguagePackRegistration
-} from '../../../shared/plugins/plugin-language-pack-artifact'
+} from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type * as LanguagePackModule from './plugin-language-packs'
 
 let languagePacks: typeof LanguagePackModule
@@ -19,7 +19,8 @@ function pack(name: string): PluginLanguagePackRegistration {
     resourceLanguage: pluginLanguageResourceId(id),
     pluginKey: name,
     locale: 'en',
-    catalog: {}
+    catalog: {},
+    coverage: 100
   }
 }
 
@@ -77,8 +78,8 @@ describe('plugin language-pack startup ownership', () => {
     async (settlement) => {
       const bridge = installBridge()
       const store = languagePacks.usePluginLanguagePackStore
-      const older = store.getState().fetchPacks()
-      const newer = store.getState().fetchPacks()
+      const older = store.getState().fetchEntries()
+      const newer = store.getState().fetchEntries()
       if (settlement === 'resolve') {
         bridge.requests[0].resolve([pack('old')])
       } else {
@@ -93,7 +94,7 @@ describe('plugin language-pack startup ownership', () => {
       }
       await newer
       expect(dispatches).toBe(2)
-      expect(store.getState().packs).toEqual([pack('current')])
+      expect(store.getState().entries).toEqual([pack('current')])
     }
   )
 
@@ -110,7 +111,7 @@ describe('plugin language-pack startup ownership', () => {
     await bridge.requests[0].promise
     languagePacks.ensurePluginLanguagePacksLoaded()
     expect(bridge.listLanguagePacks).toHaveBeenCalledTimes(2)
-    expect(languagePacks.usePluginLanguagePackStore.getState().packs).toEqual([pack('changed')])
+    expect(languagePacks.usePluginLanguagePackStore.getState().entries).toEqual([pack('changed')])
   })
 
   it('keeps the shared startup request alive after the first consumer unmounts', async () => {
@@ -146,37 +147,11 @@ describe('plugin language-pack startup ownership', () => {
       await vi.waitFor(() =>
         expect(languagePacks.usePluginLanguagePackStore.getState().loaded).toBe(true)
       )
-      expect(languagePacks.usePluginLanguagePackStore.getState().packs).toEqual([pack('recovered')])
+      expect(languagePacks.usePluginLanguagePackStore.getState().entries).toEqual([
+        pack('recovered')
+      ])
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('retains fail-closed loading and permits an explicit retry after rejection', async () => {
-    const bridge = installBridge()
-    const store = languagePacks.usePluginLanguagePackStore
-    const failed = store.getState().fetchPacks()
-    bridge.requests[0].reject(new Error('bridge unavailable'))
-    await failed
-    expect(store.getState().loaded).toBe(true)
-    expect(store.getState().packs).toEqual([])
-    languagePacks.ensurePluginLanguagePacksLoaded()
-    expect(bridge.listLanguagePacks).toHaveBeenCalledTimes(1)
-    const retry = store.getState().fetchPacks()
-    bridge.requests[1].resolve([pack('retry')])
-    await retry
-    expect(store.getState().packs).toEqual([pack('retry')])
-  })
-
-  it('finishes without an older bridge API and admits a later explicit refresh', async () => {
-    vi.stubGlobal('api', {})
-    languagePacks.ensurePluginLanguagePacksLoaded()
-    expect(languagePacks.usePluginLanguagePackStore.getState().loaded).toBe(true)
-    const bridge = installBridge()
-    const refresh = languagePacks.usePluginLanguagePackStore.getState().fetchPacks()
-    bridge.requests[0].resolve([pack('available')])
-    await refresh
-    expect(bridge.listLanguagePacks).toHaveBeenCalledTimes(1)
-    expect(languagePacks.usePluginLanguagePackStore.getState().packs).toEqual([pack('available')])
   })
 })

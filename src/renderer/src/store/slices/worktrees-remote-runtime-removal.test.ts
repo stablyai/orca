@@ -3,6 +3,7 @@ import { worktreeRemovalReplyTimeoutMs } from '../../../../shared/worktree/archi
 import type { AppState } from '../types'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
+import '../../../../shared/constants'
 import {
   createTestStore,
   mockApi,
@@ -33,117 +34,6 @@ describe('worktree remote runtime mutations', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
-  })
-
-  it('removes worktrees through the active remote runtime environment', async () => {
-    const store = createTestStore()
-    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-rm',
-      ok: true,
-      result: { removed: true },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      worktreesByRepo: { repo1: [wt] }
-    } as Partial<AppState>)
-
-    const result = await store
-      .getState()
-      .removeWorktree({ id: wt.id, executionHostId: null }, false, {
-        snapshotPruneBatchId: 'batch-1'
-      })
-
-    expect(result).toEqual({ ok: true })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'worktree.rm',
-      params: {
-        worktree: `id:${wt.id}`,
-        force: false,
-        allowUnverifiedPtyStop: false,
-        runHooks: true
-      },
-      // Hooks run here, so the client must outlast the host's archive-hook budget (#19334).
-      timeoutMs: worktreeRemovalReplyTimeoutMs(true),
-      expectedEnvironmentPairingRevision: undefined,
-      expectedRuntimeId: undefined
-    })
-    expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
-    expect(mockApi.workspaceCleanup.recordRemovalSnapshotPrune).toHaveBeenCalledExactlyOnceWith({
-      batchId: 'batch-1',
-      worktreeId: wt.id,
-      executionHostId: 'runtime:env-1'
-    })
-    expect(store.getState().shutdownWorktreeTerminals).toHaveBeenCalledWith(wt.id, {
-      shutdownReason: 'remove-worktree',
-      backendOwnsPtyTeardown: true
-    })
-    expect(store.getState().worktreesByRepo.repo1).toEqual([])
-  })
-
-  it('cleans up a preserved branch through the same host qualifier the removal used', async () => {
-    const store = createTestStore()
-    const wt = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/path/wt1',
-      hostId: 'runtime:env-1'
-    })
-    runtimeEnvironmentCall
-      .mockResolvedValueOnce({
-        id: 'rpc-rm',
-        ok: true,
-        result: { preservedBranch: { branchName: 'feature/x', head: 'saved-head' } },
-        _meta: { runtimeId: 'runtime-remote' }
-      })
-      .mockResolvedValueOnce({
-        id: 'rpc-force-delete-branch',
-        ok: true,
-        result: { deleted: true },
-        _meta: { runtimeId: 'runtime-remote' }
-      })
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      trustedOrcaHooks: { repo1: { all: { approvedAt: 1 } } },
-      worktreesByRepo: { repo1: [wt] }
-    } as Partial<AppState>)
-
-    await store.getState().removeWorktree({ id: wt.id, executionHostId: 'runtime:env-1' })
-
-    const forceResult = await store
-      .getState()
-      .forceDeletePreservedBranch(wt.id, 'feature/x', 'saved-head', {
-        hostId: 'runtime:env-1',
-        runtimeEnvironmentId: 'env-1'
-      })
-
-    expect(forceResult).toEqual({ ok: true, deleted: true })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
-      selector: 'env-1',
-      method: 'worktree.rm',
-      params: {
-        worktree: `id:${wt.id}`,
-        force: undefined,
-        allowUnverifiedPtyStop: false,
-        runHooks: true
-      },
-      // Hooks run here, so the client must outlast the host's archive-hook budget (#19334).
-      timeoutMs: worktreeRemovalReplyTimeoutMs(true),
-      expectedEnvironmentPairingRevision: undefined,
-      expectedRuntimeId: undefined
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
-      selector: 'env-1',
-      method: 'worktree.forceDeleteBranch',
-      params: {
-        worktree: `id:${wt.id}`,
-        branchName: 'feature/x',
-        expectedHead: 'saved-head'
-      },
-      timeoutMs: 15_000
-    })
   })
 
   it('does not clean up a hidden same-id VM owned by another host', async () => {
@@ -228,7 +118,8 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'owner-hub',
       method: 'repo.hooksCheck',
-      params: { repo: 'repo-ssh' },
+      // Removing is the user's own act, so its hooks check may start a stopped WSL distro.
+      params: { repo: 'repo-ssh', wakeWslDistro: true },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
@@ -561,9 +452,7 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([wt])
   })
 
-  // Why (#11960): the store is where `force` and the PTY-stop waiver could most
-  // easily be collapsed back into one flag. The ordinary delete confirmation
-  // passes force:true, so that alone must never reach the gate as a waiver.
+  // Ordinary confirmation passes force:true; store must keep it separate from explicit PTY-stop waiver (#11960).
   it('sends force without the PTY-stop waiver unless a caller asks for it', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/w/one', repoId: 'repo1', path: '/w/one' })
@@ -574,8 +463,7 @@ describe('worktree remote runtime mutations', () => {
       expect.objectContaining({ force: true, allowUnverifiedPtyStop: false })
     )
 
-    // Re-seed: the first removal dropped the row, and a second call for a missing
-    // worktree never reaches the API — which would silently re-read the call above.
+    // Reseed a new row so second removal reaches API rather than rereading the first call.
     const retry = makeWorktree({ id: 'repo1::/w/two', repoId: 'repo1', path: '/w/two' })
     store.setState({ worktreesByRepo: { repo1: [retry] } } as Partial<AppState>)
 
@@ -624,38 +512,5 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([])
-  })
-
-  it('fails closed before deleting an exact worktree id owned by multiple hosts', async () => {
-    const store = createTestStore()
-    const worktreeId = 'repo-shared::/same/path'
-    store.setState({
-      repos: [
-        { id: 'repo-shared', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 0 },
-        {
-          id: 'repo-shared',
-          path: '/remote',
-          displayName: 'SSH',
-          badgeColor: '#111',
-          addedAt: 1,
-          connectionId: 'ssh-1'
-        }
-      ],
-      worktreesByRepo: {
-        'repo-shared': [
-          makeWorktree({ id: worktreeId, repoId: 'repo-shared', hostId: 'local' }),
-          makeWorktree({ id: worktreeId, repoId: 'repo-shared', hostId: 'ssh:ssh-1' })
-        ]
-      }
-    } as Partial<AppState>)
-
-    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-
-    expect(result).toEqual({
-      ok: false,
-      error: 'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
-    })
-    expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 })

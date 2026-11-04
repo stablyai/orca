@@ -45,7 +45,7 @@ const ENV_KEYS = [
   'ORCA_AGENT_HOOK_TOKEN'
 ] as const
 
-// Event shapes as OpenCode 2.0.14 delivers them to both server and TUI plugins.
+// OpenCode 2.0.14 event shapes, shared by server and TUI plugins.
 function turn(sessionID: string, text: string): { start: BusEvent[]; finish: BusEvent[] } {
   const assistantMessageID = `msg_${sessionID}_a`
   return {
@@ -83,7 +83,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
   let savedEnv: Record<string, string | undefined>
   let savedArgv: string[]
   let posts: Post[]
-  // Every post in arrival order, including the start boundary each fresh TUI lands.
+  /** Includes the sessionless start boundary from each fresh TUI. */
   let allPosts: Post[]
   let failPosts: boolean
   let postDelayMs: number
@@ -123,7 +123,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
         return new Response('{}', { status: 500 })
       }
       allPosts.push(body)
-      // Why apart: a fresh TUI's start boundary names no session; per-session cases assert what follows it.
+      // Per-session assertions exclude the sessionless fresh-TUI boundary.
       if (
         body.payload?.hook_event_name !== 'SessionStart' ||
         body.payload.sessionID !== undefined
@@ -178,7 +178,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
   })
 
   async function loadPlugin(dir = tempDir): Promise<PluginModule> {
-    // Why: a unique basename per load defeats the ESM module cache, like a separate process.
+    // Bypass ESM caching to simulate a separate process.
     const pluginPath = join(dir, `orca-opencode-status-${Math.random().toString(36).slice(2)}.mjs`)
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the generated module's default export is exercised below and fails the test if absent.
@@ -294,7 +294,6 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     expect(reported.at(-1)?.payload?.root_turn_error_name).toBeUndefined()
   })
 
-  // Captured s2 shape: pane A's long turn overlapped by pane B's short one on one server.
   it('gives each overlapping pane only its own session and its own Idle', async () => {
     const a = turn(SES_A, 'A long SLEEP=12')
     const b = turn(SES_B, 'B short SLEEP=3')
@@ -311,7 +310,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
 
     expect(paneA.every((post) => post.paneKey === PANE_A)).toBe(true)
     expect(paneB.every((post) => post.paneKey === PANE_B)).toBe(true)
-    // Keeps the host's OpenCode 1 session binder off these posts.
+    // Prevent the host’s OpenCode 1 session binder from consuming these posts.
     expect([...paneA, ...paneB].every((post) => post.opencodeMajor === 2)).toBe(true)
     expect(new Set(paneA.map((post) => post.payload?.sessionID))).toEqual(new Set([SES_A]))
     expect(new Set(paneB.map((post) => post.payload?.sessionID))).toEqual(new Set([SES_B]))
@@ -326,7 +325,6 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     }
   })
 
-  // Captured s5 shape: the TUI's route reached the new session after execution had started.
   it('hydrates a session whose route switch lands after execution started', async () => {
     const b = turn(SES_B, 'B tui SLEEP=4')
     const paneB = await runPane(PANE_B, SES_B, async (tui) => {
@@ -372,7 +370,6 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     expect(posts).toEqual([])
   })
 
-  // Why: a turn the TUI did not see end must not hold the pane Working (e.g. across a reconnect).
   it('settles an owned turn once the session data says it ended without an end event', async () => {
     process.env.ORCA_PANE_KEY = PANE_A
     const tui = fakeTui()
@@ -387,7 +384,6 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     await cleanup?.()
   })
 
-  // Why: a turn that fails fast arrives as one burst; each level must post once, not flicker.
   it('does not settle a turn early while its events are still queued', async () => {
     process.env.ORCA_PANE_KEY = PANE_A
     const tui = fakeTui()
@@ -518,7 +514,6 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       }
     )
 
-    // Why: #23700 left this for TUI panes; a reload that misses the end must still reach Done.
     it('shows Done for a turn that ended while the plugin was reloading', async () => {
       const tui = fakeTui()
       const firstGeneration = await start(tui)
@@ -567,7 +562,6 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       await secondGeneration?.()
     })
 
-    // Why: with posts slower than events, the old adapter's decisions trailed the data and flickered.
     it('posts each level once and in order while posts are slow', async () => {
       postDelayMs = 120
       const tui = fakeTui()
@@ -587,7 +581,6 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       })
       await tick(300)
       await cleanup?.()
-      // The reply text lands after Busy and before Idle, so Done shows it.
       expect(summary(posts)).toEqual([
         `SessionStart:${SES_A}`,
         `MessagePart:${SES_A}`,
@@ -599,8 +592,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       expect(summary(allPosts)[0]).toBe('SessionStart:undefined')
     })
 
-    // Why: Orca may still show this pane a status another process left, e.g. an older shared-service
-    // plugin that posted another pane's turn here before an upgrade.
+    // Fresh panes may retain status left by another process before an upgrade.
     it('lands one start boundary in a freshly started TUI, and none on a reload after Done', async () => {
       const tui = fakeTui()
       const firstGeneration = await start(tui)
@@ -650,7 +642,6 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       expect(summary(allPosts)).toEqual([`SessionBusy:${SES_A}`])
     })
 
-    // Why: without plugin memory a reload cannot be told from a start, so it must not reset a Done.
     it('lands no start boundary where OpenCode keeps no plugin memory', async () => {
       const tui = fakeTui()
       Reflect.deleteProperty(tui.ctx, 'storage')
@@ -724,7 +715,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       ])
     })
 
-    // Why: Orca reads every MessagePart as Working, so reply text must not bury an open request.
+    // MessagePart implies Working, so it must not bury an open request.
     it('keeps Needs input while the root streams text beside a waiting background child', async () => {
       const tui = fakeTui()
       const cleanup = await start(tui)
@@ -744,7 +735,6 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       tui.navigate(SES_A)
       await pump(tui, [...turn(SES_A, 'A').start, permission(SES_A)])
       await waitFor(() => expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`))
-      // The user browses away; the reply lands while this TUI is disconnected.
       tui.navigate(SES_B)
       await pump(tui, [{ type: 'server.connected', data: {} }])
       await waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionBusy:${SES_A}`))
@@ -770,7 +760,6 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       await cleanup?.()
     })
 
-    // Why: an Orca restart moves the hook endpoint while the pane's level stays the same.
     it('re-posts the current level once the hook endpoint moves', async () => {
       const tui = fakeTui()
       const cleanup = await start(tui)
@@ -860,7 +849,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       await cleanup?.()
     })
 
-    // Why: an older SSH relay installs this file but not the TUI copy; nothing else would report.
+    // Older SSH relays install the server file without a TUI copy.
     it('keeps reporting from a serve process whose installer wrote no TUI copy', async () => {
       process.argv = [...savedArgv, 'serve', '--service']
       const server = serverContext()

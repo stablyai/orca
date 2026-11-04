@@ -1,13 +1,10 @@
-// Host wiring for mid-turn queueing: builds the serialized drain from the
-// host's mutation context and exposes the draft actions (Send, Delete, Resume, Edit), so the host
-// class stays a description of its surface.
-
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import type {
   StructuredAgentSessionCaller,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { StructuredAgentSessionQueuedMessageDrain } from './structured-agent-session-queued-messages'
 import {
   deleteQueuedStructuredAgentMessage,
@@ -20,10 +17,10 @@ import {
   republish,
   updateQueuedStructuredAgentMessage
 } from './structured-agent-session-queued-edit'
+import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
+import { queuedMailUnavailable } from './structured-agent-session-queued-mail'
 
-/** `sessions` are the live conversations (their `touch` is the idle sweep's activity renewal,
- *  which the drain's schedule rides); everything else comes from the host's mutation context,
- *  read lazily because the host's fields are still initializing when this is built. */
+/** Read host context lazily during field initialization; session touch renews idle activity. */
 export function wireStructuredAgentSessionQueuedMessages(
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession> & {
     touch: (sessionId: string) => void
@@ -36,15 +33,42 @@ export function wireStructuredAgentSessionQueuedMessages(
     serialize: (sessionId, task) => context().serialize(sessionId, task),
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(context().deps.store, sessionId),
+    currentWork: (sessionId) =>
+      hostStructuredAgentSessionCurrentWork({ store: context().deps.store, sessions }, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
-    // Read lazily, like the rest of this wiring: the host's deps are not assigned yet.
+    submissionReceipt: (sessionId) => context().deps.store.submissionReceipt(sessionId),
+    owed: (sessionId, from) => context().deps.queuedAgentMessageOwed?.(sessionId, from) ?? 'owed',
     logger: deferredStructuredAgentSessionLogger(() => context().deps.logger)
   })
+  /** Sessions with a republish waiting in their lane: more wakes before it runs add nothing. */
+  const republishing = new Set<string>()
+  /** Publish the queue again and look for work: what it can hand over may have changed with no write. */
+  const refresh = (sessionId: string) => {
+    if (sessions.get(sessionId)?.journal && !republishing.has(sessionId)) {
+      republishing.add(sessionId)
+      void context()
+        .serialize(sessionId, async () => {
+          // Off before publishing: a wake during it queues one more, so none is lost.
+          republishing.delete(sessionId)
+          const journal = sessions.get(sessionId)?.journal
+          if (journal) {
+            republish(context(), sessionId, journal)
+          }
+        })
+        .catch(() => republishing.delete(sessionId))
+    }
+    drain.schedule(sessionId)
+  }
   return {
     drain,
-    /** A conversation (re)opened: its edit leases wake the queue when a deadline passes. */
+    refresh,
     onOpened: (sessionId: string) => {
       const journal = sessions.get(sessionId)?.journal
+      if (journal) {
+        // Installed before anything reads the next card, so every reader applies the one mail rule.
+        journal.queuedMessages.mailUnavailable = (card) =>
+          queuedMailUnavailable(context().deps, sessionId)(card)
+      }
       journal?.queuedMessages.editLeases.onDeadline(() => {
         void context()
           .serialize(sessionId, async () => {
@@ -70,10 +94,11 @@ export function wireStructuredAgentSessionQueuedMessages(
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof holdQueuedStructuredAgentMessageEdit>[2]
     ) => holdQueuedStructuredAgentMessageEdit(context(), caller, params),
-    /** Every journal publish: turn, submission, prompt, command and Stop
-     *  settlements are all commits, and each re-derives the drain's gates. */
-    onJournalActivity: (sessionId: string) => {
-      sessions.touch(sessionId)
+    /** Generation ends wake drain without renewing idle activity. */
+    onJournalActivity: (sessionId: string, activity = true) => {
+      if (activity) {
+        sessions.touch(sessionId)
+      }
       drain.schedule(sessionId)
     },
     queuedMessageSend: (
@@ -84,6 +109,10 @@ export function wireStructuredAgentSessionQueuedMessages(
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof deleteQueuedStructuredAgentMessage>[2]
     ) => deleteQueuedStructuredAgentMessage(context(), caller, params),
+    queuedMessageMove: (
+      caller: StructuredAgentSessionCaller,
+      params: Parameters<typeof moveQueuedStructuredAgentMessage>[2]
+    ) => moveQueuedStructuredAgentMessage(context(), caller, params),
     queuedMessagesResume: (
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof resumeStructuredAgentQueue>[2]

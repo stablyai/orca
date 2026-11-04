@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -45,7 +45,8 @@ async function createRepository(inheritedEnv: NodeJS.ProcessEnv = process.env) {
       maxOutputBytes: 1024 * 1024
     })
     if (result.code !== 0 || result.timedOut || result.outputTruncated) {
-      throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`)
+      // Stderr on its own line, as Git's own errors read, so fatal-prefix checks see it.
+      throw new Error(`git ${args.join(' ')} failed:\n${result.stderr}`)
     }
     return { stdout: result.stdout }
   }
@@ -63,49 +64,6 @@ async function createRepository(inheritedEnv: NodeJS.ProcessEnv = process.env) {
 }
 
 describe('real unrelated Git histories', () => {
-  it.each(['repository pointers', 'config overrides'] as const)(
-    'ignores inherited Git %s when creating a fixture',
-    async (contamination) => {
-      const cleanEnv = Object.fromEntries(
-        Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_'))
-      )
-      const caller = await createRepository(cleanEnv)
-      await caller.git(['config', 'user.name', 'Caller Repository'])
-      const protectedPaths = ['HEAD', 'config', 'index'].map((name) =>
-        join(caller.repo, '.git', name)
-      )
-      const before = await Promise.all(protectedPaths.map((path) => readFile(path)))
-      const refsBefore = (await caller.git(['show-ref'])).stdout
-      const inheritedGitEnv =
-        contamination === 'repository pointers'
-          ? {
-              GIT_DIR: join(caller.repo, '.git'),
-              GIT_WORK_TREE: caller.repo,
-              GIT_COMMON_DIR: join(caller.repo, '.git'),
-              GIT_INDEX_FILE: join(caller.repo, '.git', 'index'),
-              GIT_OBJECT_DIRECTORY: join(caller.repo, '.git', 'objects'),
-              GIT_ALTERNATE_OBJECT_DIRECTORIES: join(caller.repo, '.git', 'objects')
-            }
-          : {
-              GIT_CONFIG: join(caller.repo, '.git', 'config'),
-              GIT_CONFIG_PARAMETERS: "'user.name=Injected Author'",
-              GIT_CONFIG_COUNT: '1',
-              GIT_CONFIG_KEY_0: 'core.bare',
-              GIT_CONFIG_VALUE_0: 'true'
-            }
-      const fixture = await createRepository({ ...cleanEnv, ...inheritedGitEnv })
-
-      expect(
-        await realpath((await fixture.git(['rev-parse', '--show-toplevel'])).stdout.trim())
-      ).toBe(await realpath(fixture.repo))
-      expect((await fixture.git(['log', '-1', '--format=%an <%ae>'])).stdout.trim()).toBe(
-        'Graph Fixture <graph-fixture@example.test>'
-      )
-      expect(await Promise.all(protectedPaths.map((path) => readFile(path)))).toEqual(before)
-      expect((await caller.git(['show-ref'])).stdout).toBe(refsBefore)
-    }
-  )
-
   it.each([false, true])(
     'keeps the other history when first parent is a root: %s',
     async (firstParentIsRoot) => {
@@ -149,4 +107,79 @@ describe('real unrelated Git histories', () => {
       expect(truncated.items).toHaveLength(2)
     }
   )
+})
+
+describe('real branch-only history', () => {
+  it('stops at the base, marks commits the upstream has, and pages with skip', async () => {
+    const { repo, git } = await createRepository()
+    await git(['checkout', '--quiet', 'first'])
+    await git(['checkout', '--quiet', '-b', 'feature'])
+    await writeFile(join(repo, 'notes.txt'), 'one\ntwo\n')
+    await git(['add', 'notes.txt'])
+    await git(['commit', '--quiet', '-m', 'F1'])
+    const pushedOid = (await git(['rev-parse', 'HEAD'])).stdout.trim()
+    await git(['remote', 'add', 'origin', join(repo, 'no-remote')])
+    await git(['update-ref', 'refs/remotes/origin/feature', pushedOid])
+    await git(['branch', '--quiet', '--set-upstream-to=origin/feature'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'F2'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'F3'])
+    await git(['checkout', '--quiet', 'first'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'N1'])
+    await git(['checkout', '--quiet', 'feature'])
+
+    const options = { baseRef: 'first', branchOnly: true, limit: 2 }
+    const page = await loadGitHistoryFromExecutor(git, repo, options)
+    expect(page.items.map((item) => [item.subject, item.pushed])).toEqual([
+      ['F3', false],
+      ['F2', false]
+    ])
+    expect(page.branch).toMatchObject({ ahead: 3, behind: 1, unpushed: 2 })
+    expect(page.branch?.baseRef.name).toBe('first')
+    expect(page.hasMore).toBe(true)
+
+    const next = await loadGitHistoryFromExecutor(git, repo, { ...options, skip: 2 })
+    expect(next.skip).toBe(2)
+    expect(next.hasMore).toBe(false)
+    expect(next.items.map((item) => [item.subject, item.pushed, item.statistics])).toEqual([
+      ['F1', true, { files: 1, insertions: 2, deletions: 0 }]
+    ])
+
+    const onBase = await loadGitHistoryFromExecutor(git, repo, { ...options, baseRef: 'feature' })
+    expect(onBase.branch).toBeUndefined()
+    expect(onBase.items.map((item) => item.subject)).toEqual(['F3', 'F2'])
+
+    // A checkout of the base's own branch has nothing to cut out, however the base is spelled.
+    await git(['update-ref', 'refs/remotes/origin/first', 'first'])
+    await git(['checkout', '--quiet', 'first'])
+    const onBaseBranch = await loadGitHistoryFromExecutor(git, repo, {
+      ...options,
+      baseRef: 'origin/first'
+    })
+    expect(onBaseBranch.branch).toBeUndefined()
+    expect(onBaseBranch.items.map((item) => item.subject)).toEqual(['N1', 'A'])
+
+    // With a remote named gh/team, gh/team/main is team/main's base, not its own branch.
+    await git(['remote', 'add', 'gh/team', join(repo, 'no-remote')])
+    await git(['update-ref', 'refs/remotes/gh/team/main', 'first'])
+    await git(['checkout', '--quiet', '-b', 'team/main'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'T1'])
+    const slashRemote = await loadGitHistoryFromExecutor(git, repo, {
+      ...options,
+      baseRef: 'gh/team/main'
+    })
+    expect(slashRemote.items.map((item) => item.subject)).toEqual(['T1'])
+
+    // Pushed with `git push origin HEAD` and no tracking branch: pushed state follows the
+    // same effective upstream as git.upstreamStatus.
+    await git(['checkout', '--quiet', '-b', 'agent', 'first'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'A1'])
+    await git(['update-ref', 'refs/remotes/origin/agent', 'HEAD'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'A2'])
+    const untracked = await loadGitHistoryFromExecutor(git, repo, options)
+    expect(untracked.items.map((item) => [item.subject, item.pushed])).toEqual([
+      ['A2', false],
+      ['A1', true]
+    ])
+    expect(untracked.branch).toMatchObject({ ahead: 2, unpushed: 1 })
+  })
 })

@@ -1,9 +1,11 @@
 name: Pi extension provider verification
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'src/shared/commit-message-agent-specs-primary.ts'
       - 'tests/tools/pi-provider-runtime-smoke.mjs'
+      - 'src/main/pi/rpc-history-*.ts'
       - '.github/workflows/pi-provider-runtime.yml'
 permissions:
   contents: read
@@ -12,6 +14,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   runtime:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     strategy:
       fail-fast: false
       matrix:
@@ -27,5 +30,5 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
       - name: Install pinned Pi runtime
         run: npm install --prefix .cache/pi-provider --ignore-scripts --no-audit --no-fund @earendil-works/pi-coding-agent@0.84.2
-      - name: Verify extension model generation before and after
+      - name: Verify extension model generation and session entry ids
         run: node tests/tools/pi-provider-runtime-smoke.mjs .cache/pi-provider/node_modules/@earendil-works/pi-coding-agent/dist/cli.js

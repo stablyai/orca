@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { AppState } from '../types'
+import type { RuntimeStatusSlice } from './runtime-status-types'
 
 const activeRuntimeDisconnectedToasts = new Map<string, symbol>()
 const RUNTIME_DISCONNECTED_TOAST_DURATION_MS = 4_000
@@ -11,7 +11,10 @@ function getRuntimeDisconnectedToastId(environmentId: string): string {
 
 export function showRuntimeDisconnectedToast(
   environmentId: string,
-  getState: () => AppState
+  getState: () => Pick<
+    RuntimeStatusSlice,
+    'runtimeEnvironments' | 'refreshRuntimeEnvironmentStatus'
+  >
 ): void {
   const environment = getState().runtimeEnvironments.find((entry) => entry.id === environmentId)
   const toastId = getRuntimeDisconnectedToastId(environmentId)

@@ -62,6 +62,16 @@ function verdict(r: ParsedDaemonPid | null, p: DaemonHostImageProc) {
 }
 
 describe('inspectDaemonHostImage', () => {
+  it('leaves a daemon on the extracted copy alone after the window that started it unmounts', () => {
+    const node = '/home/me/.cache/orca/appimage/aaa/bbb/resources/node-runtime/bin/node'
+    const copyDaemon = record({
+      entryPath: '/apps/Orca.AppImage/resources/app.asar.unpacked/out/main/daemon-entry.js'
+    })
+    expect(verdict(copyDaemon, proc({ exe: node, existing: [`/proc/${PID}/root${node}`] }))).toBe(
+      'not-ephemeral'
+    )
+  })
+
   it('is intact while the daemon mount is still in its mount table', () => {
     expect(
       verdict(record(), proc({ exe: `${OLD_MOUNT}/orca-ide`, mountinfo: fuseLine(OLD_MOUNT) }))

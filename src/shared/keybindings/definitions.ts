@@ -1,17 +1,20 @@
-import { ALL_TUI_AGENTS, TUI_AGENT_DISPLAY_NAMES } from '../tui-agent-display-names'
+import {
+  ALL_TUI_AGENTS,
+  TUI_AGENT_DISPLAY_NAMES
+} from '../agent-launch/catalog/tui-agent-display-names'
 import type {
   AgentTabActionId,
   KeybindingActionId,
   KeybindingDefinition,
   PluginKeybindingActionId
 } from './types'
-import type { TuiAgent } from '../tui-agent'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import { KEYBINDING_DEFINITION_CORE_1 } from './definitions-core-1'
 import { KEYBINDING_DEFINITION_CORE_2 } from './definitions-core-2'
 import { KEYBINDING_DEFINITION_CORE_3 } from './definitions-core-3'
 import { KEYBINDING_DEFINITION_CORE_4 } from './definitions-core-4'
 
-export { TAB_MOVE_TO_SPLIT_COMMANDS } from './definitions-core-2'
+export { TAB_MOVE_TO_SPLIT_COMMANDS } from './tab-move-to-split-definitions'
 
 export function agentTabActionId(agent: TuiAgent): AgentTabActionId {
   return `tab.newAgent.${agent}`
@@ -60,7 +63,7 @@ const DEFINITION_IDS = new Set<KeybindingActionId>(
   KEYBINDING_DEFINITIONS.map((definition) => definition.id)
 )
 
-// Why: these ids are single remappable rows whose chord is a representative — the digit canonicalizes to 1 but the binding fires for any 1-9.
+// Each digit-index action is one remappable row: canonicalize to 1, but match any digit 1–9.
 export const DIGIT_INDEX_ACTION_IDS: readonly KeybindingActionId[] = [
   'tab.selectByIndex',
   'workspace.selectByIndex'

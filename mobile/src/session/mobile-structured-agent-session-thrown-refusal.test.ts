@@ -6,9 +6,10 @@ import {
   callAgentSession,
   requestStructuredAgentSessionMutation
 } from './mobile-structured-agent-session-rpc'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import type { RpcResponse } from '../transport/types'
 
-// As `mapRuntimeError` sends a thrown refusal (pinned in `src/main/runtime/rpc/errors.test.ts`):
-// its message is the bare code, and its reason rides in data.
+// Model mapRuntimeError: bare-code message with refusal reason in data.
 const THROWN_JOURNAL_REFUSAL = {
   code: 'runtime_error',
   message: 'agent_session_journal_unreadable',
@@ -21,15 +22,17 @@ const THROWN_JOURNAL_REFUSAL = {
 }
 
 function refusingClient(): RpcClient {
-  const sendRequest = async () => ({ id: 'req-1', ok: false, error: THROWN_JOURNAL_REFUSAL })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the paths under test reach only `sendRequest`.
-  return { sendRequest } as unknown as RpcClient
+  const sendRequest = async (): Promise<RpcResponse> => ({
+    id: 'req-1',
+    ok: false,
+    error: THROWN_JOURNAL_REFUSAL
+  })
+  return stubRpcClient({ sendRequest })
 }
 
 describe('a refusal the host threw', () => {
   it("reads a chat's history failure in the refusal's words, from a stream or a request", async () => {
     const words = 'Unable to load this chat.'
-    // The stream's error frame, as the RPC client hands it over.
     expect(
       agentSessionReadFailureText({
         type: 'error',
@@ -44,7 +47,6 @@ describe('a refusal the host threw', () => {
     expect(agentSessionReadFailureText({ type: 'error', message: 'Connection interrupted' })).toBe(
       'Connection interrupted'
     )
-    // The refusal itself rides beside the words, so the view can tell a failure no retry gets past.
     expect(
       agentSessionReadFailureRefusal({
         type: 'error',
@@ -77,9 +79,8 @@ describe('a refusal the host threw', () => {
 })
 
 describe('a write refused on a journal a newer Orca wrote', () => {
-  // As the host answers it (pinned in `journal-open-failure.test.ts`).
   const newerOrcaClient = (): RpcClient => {
-    const sendRequest = async () => ({
+    const sendRequest = async (): Promise<RpcResponse> => ({
       id: 'req-1',
       ok: true,
       result: {
@@ -91,8 +92,7 @@ describe('a write refused on a journal a newer Orca wrote', () => {
         }
       }
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the paths under test reach only `sendRequest`.
-    return { sendRequest } as unknown as RpcClient
+    return stubRpcClient({ sendRequest })
   }
 
   it.each([
@@ -121,6 +121,49 @@ describe('a write refused on a journal a newer Orca wrote', () => {
       status: 'refused',
       code: 'agent_session_journal_unreadable',
       message
+    })
+  })
+})
+
+describe("a queued card's refused Send", () => {
+  const refusing = (refusal: { code: string; details: { reason: string } }): RpcClient =>
+    stubRpcClient({
+      sendRequest: async (): Promise<RpcResponse> => ({
+        id: 'req-1',
+        ok: true,
+        result: { ok: false, refusal }
+      })
+    })
+  const send = (refusal: { code: string; details: { reason: string } }) =>
+    requestStructuredAgentSessionMutation({
+      client: refusing(refusal),
+      method: 'agentSession.queuedMessageSend',
+      fingerprintMethod: 'agentSession.queuedMessageSend',
+      sessionId: 'session-1',
+      expectedRuntimeFence: 3,
+      fields: { messageId: 'card-1' },
+      clientOperationId: `1900000000000-${'e'.repeat(32)}`
+    })
+
+  it("says its message wasn't sent only when Orca couldn't confirm its mail", async () => {
+    expect(
+      await send({
+        code: 'execution_owner_reconciling',
+        details: { reason: 'mailOwnerUnconfirmed' }
+      })
+    ).toEqual({
+      status: 'refused',
+      code: 'execution_owner_reconciling',
+      message:
+        "Orca couldn't confirm this message is still meant for this chat. Your message was not sent. Try again."
+    })
+    // Any other refused Send of a queued card keeps its existing words.
+    expect(
+      await send({ code: 'agent_session_checkpoint_stale', details: { reason: 'fenceStale' } })
+    ).toEqual({
+      status: 'refused',
+      code: 'agent_session_checkpoint_stale',
+      message: "The command didn't run."
     })
   })
 })

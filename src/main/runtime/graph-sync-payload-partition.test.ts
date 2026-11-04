@@ -1,8 +1,4 @@
-/**
- * The renderer withholds unchanged mobile-session snapshots from the graph
- * payload. Main must treat those worktrees as live rather than pruning them as
- * removed, and must ask for a republish of any it no longer holds.
- */
+/** Unchanged snapshots withheld from IPC remain live; request republish when main no longer holds them. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsResult,
@@ -136,7 +132,6 @@ describe('graph-sync mobile payload partition', () => {
     expect(storedB).toBeDefined()
     events.length = 0
 
-    // A publishes a change; B is withheld as unchanged rather than omitted.
     sync([makeSnapshot(WT_A, 3)], [WT_B])
     vi.advanceTimersByTime(300)
 
@@ -164,8 +159,6 @@ describe('graph-sync mobile payload partition', () => {
     sync([makeSnapshot(WT_A, 1), makeSnapshot(WT_B, 2)])
     vi.advanceTimersByTime(300)
 
-    // Main drops B on its own (worktree metadata removal) while the renderer
-    // still believes B is delivered.
     internals.mobileSessionTabsByWorktree.delete(WT_B)
 
     const result = sync([], [WT_A, WT_B])
@@ -173,8 +166,7 @@ describe('graph-sync mobile payload partition', () => {
     expect(result.mobileSessionResyncWorktrees).toEqual([WT_B])
     expect(internals.mobileSessionTabsByWorktree.has(WT_A)).toBe(true)
 
-    // The renderer republishes B at the SAME (epoch, version) it last sent. The
-    // accept gate must no longer treat that as an already-accepted no-op.
+    // Republish uses the same revision; forgetting the row must also clear its accepted-revision gate.
     const resend = sync([makeSnapshot(WT_B, 2)], [WT_A])
     vi.advanceTimersByTime(300)
     expect(resend.mobileSessionResyncWorktrees).toBeUndefined()
@@ -255,7 +247,6 @@ describe('graph-sync mobile payload partition', () => {
     vi.advanceTimersByTime(300)
     events.length = 0
 
-    // No unchangedMobileSessionWorktrees field at all: omission still prunes.
     sync([makeSnapshot(WT_A, 3)])
     vi.advanceTimersByTime(300)
 

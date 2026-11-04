@@ -8,7 +8,6 @@ import { startRendererLagProbe } from '../paired-runtime-retention-metrics'
 import { closeStreamingTerminals } from './streaming-terminal-cleanup'
 import { waitForActivePanePtyId } from './terminal'
 
-/** Multi-worktree load: several agent-like streaming terminals per worktree. */
 export const BULK_OPEN_WORKTREE_COUNT = 3
 export const BULK_OPEN_TABS_PER_WORKTREE = 4
 /** Soft freeze signal — leaves CI room for one-off renderer scheduling stalls. */
@@ -127,7 +126,6 @@ export async function seedBulkOpenRemoteSessions(
       }
     }
 
-    // Ensure fixtures started and are streaming on the host.
     await expect
       .poll(
         async () => {
@@ -163,10 +161,7 @@ export async function seedBulkOpenRemoteSessions(
   }
 }
 
-/**
- * Repro R1 core: leave remotes streaming hidden, then burst-open sessions
- * (reopening remote sessions after agents have been writing in the background).
- */
+// Leave remote sessions streaming while hidden, then burst-open them to expose backlog freezes.
 export async function runBulkOpenFreezeOracle(
   page: Page,
   sessions: BulkOpenSession[],
@@ -179,7 +174,7 @@ export async function runBulkOpenFreezeOracle(
   const notes: string[] = []
   const worktreeIds = [...new Set(sessions.map((s) => s.worktreeId))]
 
-  // Leave terminal view so panes can park / go inactive while flooding.
+  // Leave terminal view so inactive panes can park while flooding.
   await page.evaluate(() => window.__store?.getState().setActiveView('tasks'))
   await page.evaluate(
     () =>
@@ -187,7 +182,7 @@ export async function runBulkOpenFreezeOracle(
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
       })
   )
-  // Accumulate remote flood for several seconds (agent backlog).
+  // Accumulate agent backlog before reopening.
   await page.waitForTimeout(4_000)
 
   const hiddenProbe = await startRendererLagProbe(page)
@@ -196,7 +191,6 @@ export async function runBulkOpenFreezeOracle(
   await hiddenProbe.dispose()
   notes.push(`hidden streaming lag max=${hiddenFloodMaxLagMs.toFixed(0)}ms`)
 
-  // Burst open remote sessions (worktree + tab activate).
   const openProbe = await startRendererLagProbe(page)
   const openStarted = Date.now()
   for (const worktreeId of worktreeIds) {
@@ -213,20 +207,18 @@ export async function runBulkOpenFreezeOracle(
       )
     }
   }
-  // One more full pass clicking visible tabs if present.
   for (const session of sessions) {
     const locator = page.locator(`[data-testid="sortable-tab"][data-tab-id="${session.tabId}"]`)
     if (await locator.isVisible().catch(() => false)) {
       await locator.click({ timeout: 2_000 }).catch(() => undefined)
     }
   }
-  // Let the storm settle enough to measure residual lag.
+  // Measure residual lag after the burst settles.
   await page.waitForTimeout(3_000)
   const bulkOpenMaxLagMs = await openProbe.evaluate((probe) => probe.stop())
   await openProbe.dispose()
   notes.push(`bulk open wall=${Date.now() - openStarted}ms lagMax=${bulkOpenMaxLagMs.toFixed(0)}ms`)
 
-  // Confirm last session is live after the storm (host PTYs survived).
   const last = sessions.at(-1)
   if (!last) {
     throw new Error('bulk-open freeze oracle requires at least one session')

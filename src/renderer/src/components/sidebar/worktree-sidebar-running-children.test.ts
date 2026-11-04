@@ -1,14 +1,14 @@
-// The worktree sidebar and the chat's strip list running children only, by one rule, whichever
-// source they read them from, an older host's own task roster included.
+// Require sidebar and chat-strip running-child parity, including legacy host rosters.
 
 import { describe, expect, it } from 'vitest'
 import {
   agentChildWorkIsRunning,
   structuredRunningChildWork
-} from '../../../../shared/agent-child-work-listing'
-import { buildLegacyTaskRowModels } from '../../../../shared/agent-child-row-model'
-import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
-import type { AgentStatusEntry, AgentSubagentSnapshot } from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/child-work/agent-child-work-listing'
+import { buildLegacyTaskRowModels } from '../../../../shared/agent-status/presentation/agent-child-row-model'
+import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentSubagentSnapshot } from '../../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { buildBackgroundTaskGroupsFromViews } from '../../../../shared/background-task-roster'
 import { buildBackgroundTaskGroups } from '@/components/native-chat/background-task-roster'
@@ -88,9 +88,7 @@ describe('the worktree sidebar lists running children only', () => {
     expect(row?.childRow?.displayState).toBe('monitoring')
   })
 
-  // A terminal agent's hook roster holds live children only: its finished child left the roster on
-  // its own stop, so the sidebar has none to list. Every child it does hold runs, and all of them
-  // show, a teammate between turns and a child gone quiet included.
+  // Legacy terminal hook rosters remove finished children; every retained child remains listed even between turns.
   it("lists every child a terminal agent's hook roster holds", () => {
     const subagents: AgentSubagentSnapshot[] = [
       { id: 'working', state: 'working', startedAt: NOW, description: 'Working child' },

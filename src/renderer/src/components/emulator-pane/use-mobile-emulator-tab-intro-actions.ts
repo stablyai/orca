@@ -41,8 +41,7 @@ export function useMobileEmulatorTabIntroActions(): {
     void (async () => {
       try {
         await updateSettings({ mobileEmulatorEnabled: false })
-        // Why: updateSettings catches write failures; only close tabs once the
-        // persisted setting is reflected in state.
+        // updateSettings catches write failures; close tabs only after state reflects the persisted setting.
         if (!isMobileEmulatorHidden()) {
           toast.error(
             translate(

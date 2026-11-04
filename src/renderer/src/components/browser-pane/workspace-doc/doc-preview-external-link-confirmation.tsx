@@ -1,9 +1,7 @@
-import { useEffect } from 'react'
-import { toast } from 'sonner'
-import {
-  useConfirmationDialog,
-  type ConfirmationDialogContextValue
-} from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { DocPreviewGrantOwner } from '../../../../../preload/api/doc-preview-api'
+import { captureHttpLinkIntent, openOwnedHttpLink } from '@/lib/http-link-routing'
+import { resolveMarkdownPreviewHttpOpenOptions } from '@/components/editor/markdown-preview-links'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 
@@ -15,31 +13,42 @@ function displayHost(url: string): string {
   }
 }
 
-async function openConfirmedExternalLink(url: string): Promise<void> {
-  try {
-    const opened = await useAppStore.getState().openBrowserProfileTabInActiveWorkspace(url, null)
-    if (opened) {
-      return
-    }
-  } catch {
-    // The same reader-facing result covers refusal and rejection.
-  }
-  toast.error(
-    translate(
-      'auto.hooks.ipc.events.browserStateIpcBridge.docPreviewLinkFailed',
-      'Could not open this link in Orca Browser.'
-    )
-  )
+type DocPreviewLinkSource = {
+  grantId: string
+  owner: DocPreviewGrantOwner
+  worktreeId: string
+  browserWorkspaceId: string
 }
 
 export function subscribeDocPreviewExternalLinkConfirmation(
-  confirm: ConfirmationDialogContextValue
+  confirm: ConfirmationDialogContextValue,
+  source: DocPreviewLinkSource
 ): () => void {
   if (typeof window.api.docPreview?.onExternalLink !== 'function') {
     return () => {}
   }
   let active = true
-  const unsubscribe = window.api.docPreview.onExternalLink(({ url }) => {
+  const unsubscribe = window.api.docPreview.onExternalLink(({ url, grantId, modifiers }) => {
+    if (grantId !== source.grantId) {
+      return
+    }
+    const state = useAppStore.getState()
+    const wrapper = state.unifiedTabsByWorktree[source.worktreeId]?.find(
+      (tab) => tab.contentType === 'browser' && tab.entityId === source.browserWorkspaceId
+    )
+    const options = {
+      ...resolveMarkdownPreviewHttpOpenOptions(
+        modifiers ?? { metaKey: false, ctrlKey: false, shiftKey: false },
+        navigator.userAgent.includes('Mac'),
+        source.worktreeId,
+        source.owner.kind === 'ssh'
+          ? source.owner
+          : { kind: 'runtime', runtimeEnvironmentId: source.owner.environmentId }
+      ),
+      allowRemoteInApp: true,
+      allowClientBrowserFallback: true,
+      linkContext: { linkIntent: captureHttpLinkIntent(source.worktreeId, wrapper?.id) }
+    }
     void confirm({
       title: translate(
         'auto.components.browserPane.workspaceDoc.externalLinkTitle',
@@ -58,7 +67,7 @@ export function subscribeDocPreviewExternalLinkConfirmation(
       )
     }).then((confirmed) => {
       if (active && confirmed) {
-        void openConfirmedExternalLink(url)
+        openOwnedHttpLink(url, options)
       }
     })
   })
@@ -66,10 +75,4 @@ export function subscribeDocPreviewExternalLinkConfirmation(
     active = false
     unsubscribe()
   }
-}
-
-export function DocPreviewExternalLinkConfirmation(): null {
-  const confirm = useConfirmationDialog()
-  useEffect(() => subscribeDocPreviewExternalLinkConfirmation(confirm), [confirm])
-  return null
 }

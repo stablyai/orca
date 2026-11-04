@@ -168,8 +168,6 @@ describe('native chat transcript turn lifecycle', () => {
   })
 
   it('does not complete a Claude assistant row that omits stop_reason but carries a tool_use block', () => {
-    // A pre-tool row can hold prose AND a tool_use block; without stop_reason the
-    // turn is still mid-flight, so it must not settle the spinner before the tool.
     for (const stopReason of [null, undefined] as const) {
       expect(
         decodeClaudeTurnLifecycle(
@@ -236,6 +234,42 @@ describe('native chat transcript turn lifecycle', () => {
           message: {
             role: 'user',
             content: [{ type: 'text', text: '<system-reminder>continue</system-reminder>' }]
+          }
+        }),
+        'fallback'
+      )
+    ).toBeNull()
+  })
+
+  it.each([
+    '<bash-input> git status</bash-input>',
+    [{ type: 'text', text: '<bash-input>ls</bash-input>' }]
+  ])('does not treat a `!` shell command as a new working generation', (content) => {
+    expect(
+      decodeClaudeTurnLifecycle(
+        JSON.stringify({
+          type: 'user',
+          uuid: 'bash-1',
+          timestamp: '2026-07-16T23:46:12.000Z',
+          message: { role: 'user', content }
+        }),
+        'fallback'
+      )
+    ).toBeNull()
+  })
+
+  it('does not treat a prompt absorbed mid-turn as a new generation', () => {
+    expect(
+      decodeClaudeTurnLifecycle(
+        JSON.stringify({
+          type: 'attachment',
+          uuid: 'queued-1',
+          timestamp: '2026-07-16T23:46:13.000Z',
+          attachment: {
+            type: 'queued_command',
+            prompt: 'also check the config',
+            commandMode: 'prompt',
+            origin: { kind: 'human' }
           }
         }),
         'fallback'

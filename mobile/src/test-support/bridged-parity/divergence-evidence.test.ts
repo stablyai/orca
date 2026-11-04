@@ -1,59 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
-import type { Recording, RecordingScenario } from '../rpc-recording/recording-scenario'
-import type { BridgeRpcClientDiagnostic } from '../../mobile-web-shell/bridge/bridge-rpc-client'
 import {
-  divergingFields,
-  paramsMismatchEvidence,
-  refusalReleasedStream,
-  refusedFrames,
-  scriptsAbsentResultReply,
-  withoutRpcMeta,
-  withReplyMeta
-} from './divergence-evidence'
-
-const scenario = (steps: RecordingScenario['steps']): RecordingScenario => ({
-  id: 's',
-  operation: 'o',
-  family: 'f',
-  sites: [],
-  schedules: [],
-  steps
-})
-
-const recording = (
-  observation: Partial<Recording['checkpoints'][number]['observation']>
-): Recording => ({
-  scenario: 's',
-  checkpoints: [
-    {
-      id: 'only',
-      observation: {
-        sender: [],
-        payloads: [],
-        settlements: {},
-        state: null,
-        effects: [],
-        ...observation
-      }
-    }
-  ]
-})
+  createBridgePortPair,
+  disposeBridgePortPair,
+  type BridgePortPair
+} from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
+import type { RpcClient } from '../../transport/rpc-client'
+import { ScriptedRpcTransport } from '../rpc-recording/scripted-rpc-transport'
+import { agentHistoryHostStatusRead } from '../../agent-history/mobile-agent-history-operations'
+import { withReplyMeta } from './divergence-evidence'
 
 describe('reading the refused frames back', () => {
   const id = 'aaaaaaaaaaaaaaaaaaaaaa'
-
-  it('keeps only what the page would drop', () => {
-    const dropped = JSON.stringify({ v: 1, type: 'reply', id, payload: { id: 'f', ok: true } })
-    const kept = JSON.stringify({ v: 1, type: 'end', id, reason: 'closed' })
-    expect(refusedFrames([dropped, kept])).toEqual([dropped])
-  })
-
   it('changes no verdict on a reply, now that the field is not what the page reads for', () => {
-    // The class this counterfactual was built to measure is closed: the page's reader is
-    // `isRpcResponse`, which asks for no `_meta` on either arm. The lane stays because it is what
-    // tells a future narrowing apart from a payload that genuinely moved, and a run where it
-    // changes a verdict is that narrowing coming back.
     const reply = JSON.stringify({
       v: 1,
       type: 'reply',
@@ -63,162 +22,113 @@ describe('reading the refused frames back', () => {
     expect(readBridgeHostMessage(reply).ok).toBe(true)
     expect(readBridgeHostMessage(withReplyMeta(reply)).ok).toBe(true)
   })
-
   it('leaves a payload the page refuses for its own shape refused', () => {
     const absent = JSON.stringify({ v: 1, type: 'reply', id, payload: { id: 'f', ok: true } })
     expect(readBridgeHostMessage(withReplyMeta(absent)).ok).toBe(false)
   })
-
-  it('leaves anything that is not a reply alone', () => {
-    const end = JSON.stringify({ v: 1, type: 'end', id, reason: 'closed' })
-    expect(withReplyMeta(end)).toBe(end)
-  })
-
-  it('adds the field a reply payload is missing', () => {
-    const reply = JSON.stringify({ v: 1, type: 'reply', id, payload: { id: 'f', ok: true } })
-    expect(JSON.parse(withReplyMeta(reply)).payload._meta).toEqual({
-      runtimeId: 'counterfactual-runtime'
-    })
-  })
-
-  it('leaves an event payload alone, which carries a `payload` of its own', () => {
-    const event = JSON.stringify({ v: 1, type: 'event', id, seq: 0, payload: { chunk: 'a' } })
-    expect(withReplyMeta(event)).toBe(event)
-  })
-})
-
-describe('undoing the counterfactual', () => {
-  it('removes every `_meta`, however deep, and nothing else', () => {
-    expect(
-      withoutRpcMeta([{ value: { ok: true, _meta: { runtimeId: 'r' }, result: [1] } }])
-    ).toEqual([{ value: { ok: true, result: [1] } }])
-  })
 })
 
 describe('the fields that diverged', () => {
-  it('reports every one, not the first', () => {
-    const expected = recording({ sender: [{ ordinal: 1 }], effects: [{ name: 'a' }] })
-    const actual = recording({ sender: [{ ordinal: 2 }], effects: [{ name: 'b' }] })
-    expect(divergingFields(expected, actual)).toEqual(['sender[0].ordinal', 'effects[0].name'])
-  })
-
-  it('names the checkpoint list when the two runs did not reach the same ones', () => {
-    const expected = recording({})
-    const actual: Recording = { scenario: 's', checkpoints: [] }
-    expect(divergingFields(expected, actual)).toEqual(['checkpoints'])
-  })
-
-  it('is empty when the two agree', () => {
-    expect(divergingFields(recording({}), recording({}))).toEqual([])
-  })
-})
-
-describe('reading the scenario', () => {
-  it('sees a reply that is `ok` with no `result` key', () => {
-    expect(
-      scriptsAbsentResultReply(scenario([{ complete: 'a#1', params: null, reply: { ok: true } }]))
-    ).toBe(true)
-    expect(
-      scriptsAbsentResultReply(
-        scenario([{ complete: 'a#1', params: null, reply: { ok: true, result: null } }])
-      )
-    ).toBe(false)
-  })
-})
-
-describe('reading what the page did about a frame it refused', () => {
-  const refused: BridgeRpcClientDiagnostic = { kind: 'refused', refusal: 'unrecognised-message' }
-  const failed: BridgeRpcClientDiagnostic = { kind: 'stream-failed', error: new Error('gone') }
-  const ended: BridgeRpcClientDiagnostic = { kind: 'stream-ended', reason: 'closed' }
-
-  it('sees a refusal the page answered by letting a stream go', () => {
-    expect(refusalReleasedStream([ended, refused, failed, ended])).toBe(true)
-  })
-
-  it('sees nothing in a release the shell asked for, which reports the same kind', () => {
-    expect(refusalReleasedStream([failed, ended])).toBe(false)
-    expect(refusalReleasedStream([refused, ended, failed])).toBe(false)
-    expect(refusalReleasedStream([refused])).toBe(false)
-  })
-})
-
-describe('reading the throw the scripted transport raised', () => {
-  const scripted = scenario([
-    { complete: 'linear.listIssues#1', params: { filter: 'assigned', workspaceId: undefined } }
-  ])
-  const mismatch = new Error('Request params mismatch: linear.listIssues#1')
-  const posted = (params: unknown): string[] => [
-    JSON.stringify({ v: 1, type: 'ready' }),
-    JSON.stringify({
-      v: 1,
-      type: 'request',
-      id: 'aaaaaaaaaaaaaaaaaaaaaa',
-      method: 'linear.listIssues',
-      params
-    })
-  ]
-
-  it('names the key the bridge dropped and the one the scenario valued `undefined`', () => {
-    expect(paramsMismatchEvidence(mismatch, scripted, posted({ filter: 'assigned' }))).toEqual({
-      step: 'linear.listIssues#1',
-      undefinedValuedKeys: ['.workspaceId'],
-      differingKeys: ['.workspaceId']
-    })
-  })
-
-  it('names a key that arrived and was never scripted, which is what a wire bug looks like', () => {
-    expect(
-      paramsMismatchEvidence(mismatch, scripted, posted({ filter: 'assigned', seeded: 1 }))
-    ).toEqual({
-      step: 'linear.listIssues#1',
-      undefinedValuedKeys: ['.workspaceId'],
-      differingKeys: ['.seeded', '.workspaceId']
-    })
-  })
-
-  it('reads a key nested under one the scenario scripts', () => {
-    const nested = scenario([
-      { complete: 'gitlab.updateMR#1', params: { iid: 7, updates: { body: undefined } } }
-    ])
-    expect(
-      paramsMismatchEvidence(new Error('Request params mismatch: gitlab.updateMR#1'), nested, [
-        JSON.stringify({
-          v: 1,
-          type: 'request',
-          id: 'aaaaaaaaaaaaaaaaaaaaaa',
-          method: 'gitlab.updateMR',
-          params: { iid: 7, updates: {} }
-        })
+  it('attributes a real malformed exchange without excusing valid wire changes beside it', async () => {
+    const native = new ScriptedRpcTransport()
+    const pairs: BridgePortPair<RpcClient>[] = []
+    const bridges = [undefined, withReplyMeta].map(
+      (rewriteToPage) =>
+        new ScriptedRpcTransport(
+          () => 0,
+          undefined,
+          (rpc, observation) => {
+            const pair = createBridgePortPair({
+              rpc,
+              observation: observation.openBridge(),
+              rewriteToPage
+            })
+            pairs.push(pair)
+            observation.onDispose(() => disposeBridgePortPair(pair))
+            for (let turn = 0; turn < 4; turn += 1) {
+              pair.drainNow()
+            }
+            return pair.client
+          }
+        )
+    )
+    const cleanup = async () => {
+      const errors: unknown[] = []
+      for (const transport of [native, ...bridges]) {
+        try {
+          await transport.dispose()
+        } catch (error) {
+          errors.push(error)
+        }
+        try {
+          transport.causality.assertTransparentCalls()
+        } catch (error) {
+          errors.push(error)
+        }
+        transport.causality.close()
+      }
+      if (errors.length === 1) {
+        throw errors[0]
+      }
+      if (errors.length) {
+        throw new AggregateError(errors, 'Malformed exchange cleanup failed')
+      }
+    }
+    try {
+      const normal = native.client.sendRequest('status.get', {})
+      const worktrees = native.client.sendRequest('worktree.ps', { limit: 10000 })
+      const pending = bridges.map((bridge) => [
+        bridge.client.sendRequest('status.get', {}).catch((error: unknown) => error),
+        bridge.client.sendRequest('worktree.ps', { limit: 10000 }).catch((error: unknown) => error)
       ])
-    ).toEqual({
-      step: 'gitlab.updateMR#1',
-      undefinedValuedKeys: ['.updates.body'],
-      differingKeys: ['.updates.body']
-    })
-  })
-
-  it("is nothing for a throw that is not the transport refusing a request's params", () => {
-    expect(
-      paramsMismatchEvidence(
-        new Error('Missing subscription payload: a#1'),
-        scripted,
-        posted({ filter: 'assigned' })
+      await Promise.all(pairs.map((pair) => pair.flush()))
+      const worktreeParams = { limit: 10000, supportsWorktreeVisibilitySourceDefaults: true }
+      native.complete('status.get#1', {}, { ok: true })
+      native.complete('worktree.ps#1', worktreeParams, { ok: true })
+      for (const bridge of bridges) {
+        bridge.complete('status.get#1.native-1', {}, { ok: true })
+        bridge.complete('worktree.ps#1.native-1', worktreeParams, { ok: true })
+      }
+      await worktrees
+      const reply = await normal
+      expect(() => agentHistoryHostStatusRead.interpret(reply)).toThrow(
+        'The host sent a reply this app could not read (status.get)'
       )
-    ).toBeNull()
-    expect(paramsMismatchEvidence('not an error at all', scripted, posted({}))).toBeNull()
-  })
-
-  it('is nothing when the scenario scripts no step by the name the throw printed', () => {
-    expect(
-      paramsMismatchEvidence(
-        new Error('Request params mismatch: linear.listIssues#2'),
-        scripted,
-        posted({ filter: 'assigned' })
-      )
-    ).toBeNull()
-  })
-
-  it('is nothing when no frame for that step ever left the page', () => {
-    expect(paramsMismatchEvidence(mismatch, scripted, [])).toBeNull()
+      for (const [index, bridge] of bridges.entries()) {
+        await pairs[index]!.flush()
+        const [statusError, worktreeError] = await Promise.all(pending[index]!)
+        expect(statusError).toBeInstanceOf(Error)
+        expect(worktreeError).toBeInstanceOf(Error)
+        expect(statusError).toMatchObject({
+          message: 'the reply could not be read (unrecognised-message)'
+        })
+        expect(worktreeError).toMatchObject({
+          message: 'the reply could not be read (unrecognised-message)'
+        })
+        const posted = pairs[index]!.readToShell().filter((frame) => frame.type === 'request')
+        expect(posted.map((frame) => frame.method)).toEqual(['status.get', 'worktree.ps'])
+        expect(posted.map((frame) => frame.params)).toEqual([{}, { limit: 10000 }])
+        const emitted = bridge.payloads.map((row) => JSON.parse(row.json))
+        expect(emitted).toEqual([
+          { id: 'frame-1', deviceToken: 'recording-device', method: 'status.get', params: {} },
+          {
+            id: 'frame-2',
+            deviceToken: 'recording-device',
+            method: 'worktree.ps',
+            params: worktreeParams
+          }
+        ])
+        const rawReplies = pairs[index]!.toPage.filter((json) => JSON.parse(json).type === 'reply')
+        expect(rawReplies).toHaveLength(2)
+        expect(rawReplies.every((json) => !readBridgeHostMessage(json).ok)).toBe(true)
+        expect(bridge.requests.map((row) => row.bridge!.posts[0]!.children[0]!.frame!.id)).toEqual([
+          'frame-1',
+          'frame-2'
+        ])
+        expect(bridge.pendingRequests()).toBe(0)
+      }
+    } finally {
+      await cleanup()
+    }
   })
 })

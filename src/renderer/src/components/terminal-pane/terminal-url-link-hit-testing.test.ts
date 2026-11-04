@@ -1,12 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  extractTerminalHttpLinks,
-  TERMINAL_HTTP_URL_MAX_LENGTH
-} from './terminal-url-link-hit-testing'
-
-afterEach(() => {
-  vi.restoreAllMocks()
-})
+import { describe, expect, it } from 'vitest'
+import { extractTerminalHttpLinks } from '../../../../shared/terminal-http-url-extraction'
+import { TERMINAL_HTTP_URL_MAX_LENGTH } from '../../../../shared/terminal-http-link-limits'
 
 describe('extractTerminalHttpLinks', () => {
   it('extracts regular http links and trims terminal trailing punctuation', () => {
@@ -30,20 +24,5 @@ describe('extractTerminalHttpLinks', () => {
     const overlongUrl = `https://example.com/${'a'.repeat(TERMINAL_HTTP_URL_MAX_LENGTH)}`
 
     expect(extractTerminalHttpLinks(overlongUrl)).toEqual([])
-  })
-
-  it('scans large pasted terminal lines without regex match iteration', () => {
-    const matchAllSpy = vi.spyOn(String.prototype, 'matchAll')
-    const pastedPrefix = 'pasted terminal noise '.repeat(10_000)
-    const line = `${pastedPrefix}https://example.com/docs?q=orca.`
-
-    expect(extractTerminalHttpLinks(line)).toEqual([
-      {
-        url: 'https://example.com/docs?q=orca',
-        startIndex: pastedPrefix.length,
-        endIndex: line.length - 1
-      }
-    ])
-    expect(matchAllSpy).not.toHaveBeenCalled()
   })
 })

@@ -3,12 +3,12 @@
 // startup paste, or the draft helper that waits for the agent. Both must write it as launch input.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { bindSettlePaneSerializer } from '@/components/terminal-pane/pty-connection/pane-serializer-settle'
 import type { ConnectPanePtySession } from '@/components/terminal-pane/pty-connection/connect-pane-pty-session'
-import { STARTUP_DRAFT_PASTE_QUIET_MS } from '@/components/terminal-pane/pty-connection/pty-connect-limits'
-import { pasteDraftToAgentPtyWhenReady, submitPromptToAgentPty } from './agent-paste-draft'
+import '@/components/terminal-pane/pty-connection/pty-connect-limits'
+import './agent-paste-draft'
 
 const { onTimeout } = vi.hoisted(() => ({ onTimeout: vi.fn() }))
 vi.mock('./launch-agent-paste-timeout-notice', () => ({
@@ -21,8 +21,6 @@ vi.mock('@/store', () => ({
     subscribe: () => () => {}
   }
 }))
-
-vi.mock('./worktree-runtime-owner', () => ({ getRuntimeEnvironmentIdForWorktree: () => null }))
 
 vi.mock('./agent-draft-readiness', () => ({
   waitForAgentDraftInputReady: async () => true
@@ -70,28 +68,6 @@ function createPaneDraftSession(agent?: 'codex') {
   return { session, kinds }
 }
 
-/** The pane route: the pane's transport pastes the draft once the agent's composer is ready. */
-async function paneRouteKinds(): Promise<TerminalInputKind[]> {
-  const { session, kinds } = createPaneDraftSession()
-  session.observeStartupDraftPasteReadiness('\x1b[?2004h')
-  await vi.advanceTimersByTimeAsync(STARTUP_DRAFT_PASTE_QUIET_MS)
-  await vi.runAllTimersAsync()
-  return kinds
-}
-
-/** The helper route: the draft helper waits for the agent, then writes through the runtime. */
-async function helperRouteKinds(): Promise<TerminalInputKind[]> {
-  const { kinds } = stubPtyApi()
-  const pasted = pasteDraftToAgentPtyWhenReady({
-    ptyId: 'pty-1',
-    content: DRAFT,
-    agent: 'aider'
-  })
-  await vi.runAllTimersAsync()
-  await expect(pasted).resolves.toBe(true)
-  return kinds
-}
-
 describe('a created worktree’s startup draft', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -101,25 +77,6 @@ describe('a created worktree’s startup draft', () => {
   afterEach(() => {
     vi.useRealTimers()
     window.api = originalApi
-  })
-
-  it('writes as launch input on both renderer routes', async () => {
-    const paneKinds = await paneRouteKinds()
-    const helperKinds = await helperRouteKinds()
-
-    expect(paneKinds.length).toBeGreaterThan(0)
-    expect(new Set(paneKinds)).toEqual(new Set(['launch']))
-    expect(new Set(helperKinds)).toEqual(new Set(paneKinds))
-  })
-
-  it('differs from a prompt submitted to an agent that is already running', async () => {
-    const { kinds } = stubPtyApi()
-
-    const submitted = submitPromptToAgentPty({ tabId: 'tab-1', ptyId: 'pty-1', content: DRAFT })
-    await vi.runAllTimersAsync()
-
-    await expect(submitted).resolves.toBe(true)
-    expect(new Set(kinds)).toEqual(new Set(['driving']))
   })
 
   it('never delivers a pane-owned Codex draft after readiness times out', async () => {

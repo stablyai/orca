@@ -54,7 +54,7 @@ describe('Run binding by Orca session id', () => {
     }
   }
 
-  // A binary without the Orca session id column: its bindRun and unbindOtherRunsForPane statements.
+  // Model a pre-column binary rebinding through handle and pane alone.
   function olderBinaryRebind(runId: string, handle: string, paneKey: string) {
     db.db
       .prepare(
@@ -93,11 +93,10 @@ describe('Run binding by Orca session id', () => {
     })
     expect(db.getCurrentRunForCoordinator(chat(CHAT_X_ID))?.id).toBe(run.id)
     expect(db.getRunMailboxOwnerIdsForHandle(CHAT_X)).toEqual([run.id])
-    // Mail to the session's address reaches the Run mailbox, as mail to a coordinator handle does.
     expect(directMail(run.id, CHAT_X).to_handle).toBe(`run:${run.id}`)
   })
 
-  it("never unbinds another session's Run, and unbinds only the same session's other Runs", () => {
+  it("never unbinds another session's Run, and run-use unbinds only the same session's other Runs", () => {
     db = new OrchestrationDb(':memory:')
     const ptyRun = db.createRun({
       objective: 'pty',
@@ -113,11 +112,17 @@ describe('Run binding by Orca session id', () => {
       body: '',
       runId: xFirst.id
     })
-    // Mail addressed to the session that the cache did not reroute on insert, as a pre-cache row.
+    // Model pre-cache mail by restoring its original direct address.
     db.db.prepare('UPDATE messages SET to_handle = ? WHERE id = ?').run(CHAT_X, pending.id)
     const generation = db.getRunRaw(xFirst.id)?.consumer_generation ?? 0
 
     const xSecond = createChatRun(CHAT_X_ID, 'x second')
+    db.bindRun({
+      runId: xSecond.id,
+      coordinatorHandle: null,
+      coordinatorPaneKey: null,
+      coordinatorOrcaSessionId: CHAT_X_ID
+    })
 
     expect(db.getCurrentRunForCoordinator(chat(CHAT_X_ID))?.id).toBe(xSecond.id)
     expect(db.getCurrentRunForCoordinator(chat(CHAT_Y_ID))?.id).toBe(yRun.id)
@@ -128,7 +133,6 @@ describe('Run binding by Orca session id', () => {
       coordinator_orca_session_id: null,
       consumer_generation: generation + 1
     })
-    // Pending coordinator mail follows the Run, as it does when a pane is unbound.
     expect(db.getMessageById(pending.id)?.to_handle).toBe(`run:${xFirst.id}`)
   })
 
@@ -155,7 +159,6 @@ describe('Run binding by Orca session id', () => {
     olderBinaryRebind(run.id, 'term_taker', PTY_PANE)
     olderBinaryUnbind(run.id)
 
-    // Handle and pane are gone and the id is still there: the shape of a live chat binding.
     expect(db.getRunRaw(run.id)).toMatchObject({
       coordinator_handle: null,
       coordinator_pane_key: null,
@@ -228,7 +231,7 @@ describe('Run binding by Orca session id', () => {
       coordinatorHandle: worker.terminalHandle,
       coordinatorPaneKey: worker.paneKey
     })
-    // As an older binary writes the row: no Orca session id, and no generation for one.
+    // An older writer left an id without a generation; it must not count as current.
     db.db
       .prepare('UPDATE runs SET coordinator_orca_session_id_generation = NULL WHERE id = ?')
       .run(run.id)
@@ -245,7 +248,6 @@ describe('Run binding by Orca session id', () => {
       coordinator_orca_session_id: WORKER_SESSION,
       consumer_generation: before
     })
-    // Written at the current generation, so the filled id counts on its own.
     expect(db.getCurrentRunForCoordinator(chat(WORKER_SESSION))?.id).toBe(run.id)
   })
 
@@ -259,7 +261,7 @@ describe('Run binding by Orca session id', () => {
       coordinatorPaneKey: first.paneKey,
       coordinatorOrcaSessionId: first.orcaSessionId
     })
-    // A worker's mailbox address is its handle; nothing writes mail to its session address.
+    // Workers receive mail at handles; their session addresses must not steal it.
     const addresses = [first.terminalHandle, second.terminalHandle]
     const stray = addresses.map((address) => strayMail(run.id, address))
 
@@ -278,7 +280,7 @@ describe('Run binding by Orca session id', () => {
     }
   })
 
-  it("reroutes a worker's mailbox address when its next Run unbinds the last", () => {
+  it("reroutes a worker's mailbox address when run-use of its next Run unbinds the last", () => {
     db = new OrchestrationDb(':memory:')
     const worker = structuredWorker()
     const bind = {
@@ -289,7 +291,8 @@ describe('Run binding by Orca session id', () => {
     const last = db.createRun({ objective: 'last', ...bind })
     const stray = [strayMail(last.id, worker.terminalHandle)]
 
-    db.createRun({ objective: 'next', ...bind })
+    const next = db.createRun({ objective: 'next', ...bind })
+    db.bindRun({ runId: next.id, ...bind })
 
     for (const id of stray) {
       expect(db.getMessageById(id)?.to_handle).toBe(`run:${last.id}`)

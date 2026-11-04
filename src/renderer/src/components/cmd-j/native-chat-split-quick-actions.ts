@@ -34,12 +34,12 @@ export function getNativeChatSplitQuickActions(): CmdJQuickAction[] {
       title: translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right'),
       description: translate(
         'auto.components.cmd.j.quick.actions.splitChatRightDescription',
-        'Open the active chat in a split pane to the right.'
+        'Open a new chat in a split pane to the right.'
       ),
       icon: PanelRightClose,
       verbKeywords: [
         translate('auto.components.cmd.j.quick.actions.verbs.splitChatRight', 'split chat right'),
-        translate('auto.components.cmd.j.quick.actions.verbs.moveChatRight', 'move chat right'),
+        translate('auto.components.cmd.j.quick.actions.verbs.newChatRight', 'new chat right'),
         translate('auto.components.cmd.j.quick.actions.verbs.chatPaneRight', 'chat pane right')
       ]
     }),
@@ -48,12 +48,12 @@ export function getNativeChatSplitQuickActions(): CmdJQuickAction[] {
       title: translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down'),
       description: translate(
         'auto.components.cmd.j.quick.actions.splitChatDownDescription',
-        'Open the active chat in a split pane below.'
+        'Open a new chat in a split pane below.'
       ),
       icon: PanelBottomClose,
       verbKeywords: [
         translate('auto.components.cmd.j.quick.actions.verbs.splitChatDown', 'split chat down'),
-        translate('auto.components.cmd.j.quick.actions.verbs.moveChatDown', 'move chat down'),
+        translate('auto.components.cmd.j.quick.actions.verbs.newChatBelow', 'new chat below'),
         translate('auto.components.cmd.j.quick.actions.verbs.chatPaneBelow', 'chat pane below')
       ]
     })

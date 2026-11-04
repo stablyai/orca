@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { NativeChatTurnLifecycle } from '../../../../shared/native-chat-types'
+import type { NativeChatTurnLifecycle } from '../../../../shared/native-chat/native-chat-types'
 
 type TranscriptLifecycleState = {
   lifecycle?: NativeChatTurnLifecycle
@@ -18,8 +18,7 @@ export function useNativeChatTranscriptLifecycle(): readonly [
   TranscriptLifecycleControl
 ] {
   const [state, setState] = useState<TranscriptLifecycleState>({})
-  // Why: pagination may resolve after a live completion; its older boundary
-  // can update history only when no live lifecycle write won the race.
+  // Pagination may carry older completion boundaries; apply them only if no live lifecycle write intervened.
   const revisionRef = useRef(0)
 
   const replace = useCallback((lifecycle: NativeChatTurnLifecycle | undefined): void => {

@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 
-// Why: fresh-spawn/reattach now settle across multiple microtasks, so tests must drain several ticks before asserting on IPC mocks. See docs/mobile-prefer-renderer-scrollback.md.
+// Drain fresh-spawn/reattach microtask chains before IPC assertions (docs/mobile-prefer-renderer-scrollback.md).
 export async function flushAsyncTicks(count = 6): Promise<void> {
   for (let i = 0; i < count; i++) {
     await Promise.resolve()
@@ -37,7 +37,7 @@ export async function drainPendingTimeouts(
   }
 }
 
-export function writeHeadlessTerminal(term: Terminal, data: string): Promise<void> {
+export function writeHeadlessTerminal(term: Terminal, data: string | Uint8Array): Promise<void> {
   return new Promise((resolve) => term.write(data, resolve))
 }
 

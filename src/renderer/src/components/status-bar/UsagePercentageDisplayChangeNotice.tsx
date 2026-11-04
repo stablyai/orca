@@ -2,13 +2,12 @@ import type { ComponentProps, ReactNode } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { shouldShowUsagePercentageDisplayChangeNotice } from '../../../../shared/usage-percentage-display-change-notice'
-import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from '../settings/appearance-usage-percentage-search'
+import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from '../settings/appearance/appearance-usage-percentage-search'
 import { StatusBarUsageChangeNoticeCard } from './StatusBarUsageChangeNoticeCard'
 
 function openUsagePercentageSettings(): void {
   const store = useAppStore.getState()
-  // Why: openSettingsPage wipes any leftover search; do not re-apply a search
-  // filter — deep-link to the stable row id and let Appearance expand Window.
+  // Clear search and deep-link to the stable Appearance row so Window expands without stale filtering.
   store.openSettingsPage()
   store.openSettingsTarget({
     pane: 'appearance',

@@ -1,12 +1,4 @@
-/**
- * Warnings from the computer-use provider, routed to somewhere a human sees.
- *
- * Why not `console.warn`: the provider runs inside the forked sidecar, which
- * `sidecar-client.ts` starts with piped stdio that nothing ever reads. Anything
- * written there is discarded — including the only signal that a machine has
- * fallen back to `-ExecutionPolicy Bypass`, a state that persists for the
- * session. The sidecar has an IPC channel already, so the warning takes it.
- */
+/** Forward warnings over IPC because the sidecar's piped stdout/stderr are unread. */
 export type ComputerSidecarDiagnostic = {
   kind: 'computer-sidecar-diagnostic'
   message: string
@@ -32,7 +24,6 @@ export function reportComputerDiagnostic(message: string): void {
   logComputerDiagnostic(message)
 }
 
-/** The main-process end: how a sidecar's forwarded diagnostic is printed. */
 export function logComputerDiagnostic(message: string): void {
   console.warn(`[computer-use] ${message}`)
 }

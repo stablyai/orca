@@ -1,22 +1,36 @@
 import { useRef } from 'react'
 
-/** Radix restores focus to the trigger on close, which is right for a dismissal and wrong after a
- *  pick. `notePick` marks the choices that close the surface, so only those reach `focusComposer`. */
+/** After a pick, focus the composer unless an outside click already moved focus elsewhere. */
 export function useNativeChatPickerFocusReturn(focusComposer: (() => void) | undefined): {
+  triggerRef: React.RefObject<HTMLButtonElement | null>
   notePick: () => void
+  onInteractOutside: (event: Event) => void
   onCloseAutoFocus: (event: Event) => void
 } {
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const picked = useRef(false)
+  const interactedOutside = useRef(false)
   return {
+    triggerRef,
     notePick: () => {
       picked.current = true
     },
-    onCloseAutoFocus: (event: Event) => {
-      if (!picked.current) {
-        return
+    onInteractOutside: (event: Event) => {
+      // Radix also reports trigger presses, which only close the surface.
+      if (!(event.target instanceof Node && triggerRef.current?.contains(event.target))) {
+        interactedOutside.current = true
       }
+    },
+    onCloseAutoFocus: (event: Event) => {
+      const used = picked.current
+      // Read after the click that closed it has settled its own focus.
+      const focusedElsewhere =
+        interactedOutside.current &&
+        document.activeElement !== null &&
+        document.activeElement !== document.body
       picked.current = false
-      if (!focusComposer) {
+      interactedOutside.current = false
+      if (!used || !focusComposer || focusedElsewhere) {
         return
       }
       event.preventDefault()

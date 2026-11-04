@@ -75,8 +75,7 @@ export class GitAdmissionScheduler {
         this.abort(waiter)
         return
       }
-      // Adding a blocked waiter cannot make an older waiter runnable. Avoid a
-      // queue scan for every arrival while the fixed-size budget is saturated.
+      // A blocked arrival cannot unblock older waiters; skip queue scans while the fixed budget is saturated.
       if (this.slotKindFor(waiter)) {
         this.drain(admissionClass)
       }

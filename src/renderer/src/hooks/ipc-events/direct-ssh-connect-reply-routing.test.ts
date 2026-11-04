@@ -67,6 +67,7 @@ async function createHarness(
         listRemovedTargetLabels: async () => ({}),
         getState,
         listPortForwards: async () => [],
+        listUnrestoredPortForwards: () => Promise.resolve([]),
         listDetectedPorts: async () => [],
         onCredentialRequest: () => () => {},
         onCredentialResolved: () => () => {},
@@ -79,8 +80,6 @@ async function createHarness(
       }
     }
   })
-  const store = useAppStore.getState()
-  const clearBindings = vi.spyOn(store, 'clearDirectSshTargetPtyBindings').mockReturnValue(1)
   const unsubs: (() => void)[] = []
   const stop = registerDirectSshStateIpcBridge(unsubs)
   cleanups.push(() => {
@@ -92,7 +91,6 @@ async function createHarness(
   await settle()
   return {
     getState,
-    clearBindings,
     emit: (state: SshConnectionState) => {
       if (!stateListener) {
         throw new Error('SSH state listener was not registered')
@@ -120,71 +118,15 @@ afterEach(async () => {
 })
 
 describe('direct SSH connected-state routing', () => {
-  it.each(['reply-first', 'push-first'] as const)(
-    'clears the target bindings once per connected push when ordering is %s',
-    async (ordering) => {
-      const harness = await createHarness()
-      const state = connectedState()
-      if (ordering === 'reply-first') {
-        harness.applyConnectReply(state)
-      }
-      harness.emit(state)
-      if (ordering === 'push-first') {
-        harness.applyConnectReply(state)
-      }
-
-      expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
-      await settle()
-
-      harness.clearBindings.mockClear()
-      harness.emit({ ...state })
-      expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
-    }
-  )
-
-  it('leaves bindings alone on initial hydration and clears on the next push', async () => {
-    const state = connectedState()
-    const harness = await createHarness([state])
-
-    expect(harness.clearBindings).not.toHaveBeenCalled()
-
-    harness.emit({ ...state })
-    expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
-
-    const next = connectedState(state.targetId, 2)
-    harness.applyConnectReply(next)
-    harness.clearBindings.mockClear()
-    harness.emit(next)
-    expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(next.targetId)
-  })
-
-  it.each(['disconnected', 'error'] as const)(
-    'clears bindings on %s and again on the next connected push',
-    async (status) => {
-      const state = connectedState()
-      const harness = await createHarness([state])
-      harness.emit({ ...state, status })
-
-      expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
-      harness.applyConnectReply(state)
-      harness.emit(state)
-      expect(harness.clearBindings).toHaveBeenCalledTimes(2)
-    }
-  )
-
   it.each(['providerEpoch', 'connectionGeneration'] as const)(
-    'reconciles a partial %s on initial hydration without clearing',
+    'reconciles a partial %s on initial hydration',
     async (missingField) => {
       const state = connectedState()
       const partial: SshConnectionState = { ...state }
       delete partial[missingField]
-      const harness = await createHarness([partial], [state])
+      await createHarness([partial], [state])
 
       expect(useAppStore.getState().sshConnectionStates.get(state.targetId)).toEqual(state)
-      expect(harness.clearBindings).not.toHaveBeenCalled()
-
-      harness.emit(state)
-      expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
     }
   )
 
@@ -204,31 +146,14 @@ describe('direct SSH connected-state routing', () => {
       const partial: SshConnectionState = { ...state }
       delete partial[missingField]
       harness.emit(partial)
+      expect(useAppStore.getState().sshConnectionStates.get(state.targetId)).toEqual(partial)
 
-      expect(harness.clearBindings).not.toHaveBeenCalled()
       resolveState(state)
       await settle()
 
-      expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
       expect(useAppStore.getState().sshConnectionStates.get(state.targetId)).toMatchObject(
         authority(state)
       )
     }
   )
-
-  it('keeps disconnect cleanup separate for each target', async () => {
-    const harness = await createHarness()
-    const first = connectedState('target-a')
-    const second = connectedState('target-b')
-    for (const state of [first, second]) {
-      harness.applyConnectReply(state)
-      harness.emit(state)
-    }
-    await settle()
-    expect(harness.clearBindings.mock.calls).toEqual([[first.targetId], [second.targetId]])
-
-    harness.clearBindings.mockClear()
-    harness.emit({ ...first, status: 'disconnected' })
-    expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(first.targetId)
-  })
 })

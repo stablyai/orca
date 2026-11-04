@@ -13,7 +13,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
 
   constructor(
     adapters: readonly DaemonPtyAdapter[],
-    onAdapterExit: (id: string) => void,
+    onAdapterExit: (id: string, adapter: DaemonPtyAdapter) => void,
     onAdapterIdentityChanged?: (adapter: DaemonPtyAdapter) => void
   ) {
     this.adapters = [...adapters]
@@ -25,7 +25,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
           }
         }),
         adapter.onExit((payload) => {
-          onAdapterExit(payload.id)
+          onAdapterExit(payload.id, adapter)
           for (const listener of this.exitListeners) {
             listener(payload)
           }
@@ -74,8 +74,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
     )
   }
 
-  // Why: main subscribes on the routed provider, so without this the dead-endpoint
-  // fan-out never reaches the renderer and only the written pane recovers (STA-2373).
+  // Main subscribes through the router; forward recovery for passive sibling panes too.
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
     return combineUnsubscribes(this.adapters.map((adapter) => adapter.onWriteUnavailable(callback)))
   }

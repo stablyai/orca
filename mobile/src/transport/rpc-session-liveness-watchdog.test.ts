@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   LIVENESS_IDLE_MS,
   LIVENESS_PROBE_TIMEOUT_MS,
-  RpcSessionLivenessWatchdog
+  RpcSessionLivenessWatchdog,
+  type RpcSessionIdentity
 } from './rpc-session-liveness-watchdog'
 
 describe('RpcSessionLivenessWatchdog', () => {
@@ -10,7 +11,7 @@ describe('RpcSessionLivenessWatchdog', () => {
   afterEach(() => vi.useRealTimers())
 
   function fixture() {
-    const sendProbe = vi.fn(() => true)
+    const sendProbe = vi.fn((_identity: RpcSessionIdentity, _id: string) => true)
     const terminate = vi.fn()
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'direct',
@@ -46,6 +47,38 @@ describe('RpcSessionLivenessWatchdog', () => {
     expect(terminate).toHaveBeenCalledWith(identity)
   })
 
+  it('coalesces recent network hints without losing or postponing a decisive probe', async () => {
+    const identity = {}
+    const sendProbe = vi.fn((_identity: RpcSessionIdentity, _id: string) => true)
+    const terminate = vi.fn()
+    const watchdog = new RpcSessionLivenessWatchdog({
+      transport: 'direct',
+      sendProbe,
+      terminate,
+      voluntaryProbeMinIntervalMs: 10_000
+    })
+    watchdog.start(identity)
+    watchdog.probeNow(identity)
+    watchdog.noteProbeReply(identity, sendProbe.mock.calls.at(-1)![1])
+    await vi.advanceTimersByTimeAsync(1_000)
+    watchdog.probeNow(identity, 4_000)
+    expect(sendProbe).toHaveBeenCalledTimes(2)
+    watchdog.noteProbeReply(identity, sendProbe.mock.calls.at(-1)![1])
+
+    for (let index = 0; index < 3; index++) {
+      await vi.advanceTimersByTimeAsync(1_000)
+      watchdog.probeNow(identity, 4_000)
+      watchdog.noteProbeReply(identity, sendProbe.mock.calls.at(-1)![1])
+      expect(sendProbe).toHaveBeenCalledTimes(2)
+    }
+    await vi.advanceTimersByTimeAsync(999)
+    expect(sendProbe).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(sendProbe).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(terminate).toHaveBeenCalledExactlyOnceWith(identity)
+  })
+
   it('reports causal evidence before terminating a stale session', async () => {
     const onTimeout = vi.fn()
     const terminate = vi.fn()
@@ -77,12 +110,20 @@ describe('RpcSessionLivenessWatchdog', () => {
     )
   })
 
-  it('authenticated activity resets suspicion', async () => {
-    const { identity, terminate, watchdog } = fixture()
+  it('only the current probe reply resets suspicion', async () => {
+    const { identity, sendProbe, terminate, watchdog } = fixture()
     watchdog.probeNow(identity)
+    const firstProbe = sendProbe.mock.calls.at(-1)![1]
     await vi.advanceTimersByTimeAsync(LIVENESS_PROBE_TIMEOUT_MS)
+    const currentProbe = sendProbe.mock.calls.at(-1)![1]
+    expect(currentProbe).not.toBe(firstProbe)
     watchdog.noteAuthenticatedInbound(identity)
-    await vi.advanceTimersByTimeAsync(LIVENESS_IDLE_MS + LIVENESS_PROBE_TIMEOUT_MS * 2)
+    watchdog.noteProbeReply(identity, firstProbe)
+    watchdog.noteProbeReply({}, currentProbe)
+    await vi.advanceTimersByTimeAsync(LIVENESS_PROBE_TIMEOUT_MS)
+    expect(sendProbe).toHaveBeenCalledTimes(3)
+    watchdog.noteProbeReply(identity, sendProbe.mock.calls.at(-1)![1])
+    await vi.advanceTimersByTimeAsync(LIVENESS_PROBE_TIMEOUT_MS)
     expect(terminate).not.toHaveBeenCalled()
   })
 
@@ -110,45 +151,70 @@ describe('RpcSessionLivenessWatchdog', () => {
     expect(setTimer).toHaveBeenCalledTimes(2)
   })
 
+  it('does not reuse a probe id after the same identity starts a new generation', async () => {
+    const { identity, sendProbe, terminate, watchdog } = fixture()
+    watchdog.probeNow(identity, 4_000)
+    const oldProbe = sendProbe.mock.calls.at(-1)![1]
+    watchdog.start(identity)
+    watchdog.probeNow(identity, 4_000)
+    expect(sendProbe.mock.calls.at(-1)![1]).not.toBe(oldProbe)
+    watchdog.noteProbeReply(identity, oldProbe)
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(terminate).toHaveBeenCalledExactlyOnceWith(identity)
+  })
+
   it('does not charge a scheduler-stalled probe window', () => {
     let now = 0
-    let callback: (() => void) | null = null
+    let callback: (() => void) | undefined
     const terminate = vi.fn()
+    const sendProbe = vi.fn(() => true)
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'relay',
       idleProbeMs: null,
       probeTimeoutMs: 4_000,
       missedProbeLimit: 2,
-      sendProbe: () => true,
+      sendProbe,
       terminate,
       now: () => now,
       setTimer: (next) => {
         callback = next
-        return 1 as unknown as ReturnType<typeof setTimeout>
+        return setTimeout(() => {}, 0)
       },
       clearTimer: () => {}
     })
     const identity = {}
     watchdog.start(identity)
     watchdog.probeNow(identity)
+    expect(sendProbe).toHaveBeenCalledOnce()
+    if (!callback) {
+      throw new Error('Expected a scheduled probe deadline')
+    }
     now = 8_000
-    callback?.()
+    callback()
+    expect(sendProbe).toHaveBeenCalledTimes(2)
     now += 4_000
-    callback?.()
+    callback()
+    expect(sendProbe).toHaveBeenCalledTimes(3)
     expect(terminate).not.toHaveBeenCalled()
+    now += 4_000
+    callback()
+    expect(terminate).toHaveBeenCalledOnce()
+    expect(terminate).toHaveBeenCalledWith(identity)
   })
 
   it('invalidates late callbacks after identity replacement', () => {
     const callbacks: (() => void)[] = []
     const terminate = vi.fn()
+    const sendProbe = vi.fn(() => true)
+    let now = 0
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'direct',
-      sendProbe: () => true,
+      sendProbe,
       terminate,
-      now: () => 0,
+      now: () => now,
       setTimer: (callback) => {
         callbacks.push(callback)
-        return callbacks.length as unknown as ReturnType<typeof setTimeout>
+        return setTimeout(() => {}, 0)
       },
       clearTimer: () => {}
     })
@@ -156,8 +222,14 @@ describe('RpcSessionLivenessWatchdog', () => {
     const replacement = {}
     watchdog.start(first)
     watchdog.probeNow(first)
+    expect(callbacks).toHaveLength(2)
+    const staleCallbacks = [...callbacks]
     watchdog.start(replacement)
-    callbacks.forEach((callback) => callback())
+    expect(callbacks).toHaveLength(3)
+    now = 20_000
+    staleCallbacks.forEach((callback) => callback())
+    expect(sendProbe).toHaveBeenCalledOnce()
+    expect(callbacks).toHaveLength(3)
     expect(terminate).not.toHaveBeenCalled()
   })
 
@@ -172,5 +244,26 @@ describe('RpcSessionLivenessWatchdog', () => {
     watchdog.start(identity)
     watchdog.probeNow(identity)
     expect(terminate).toHaveBeenCalledWith(identity)
+  })
+
+  it('ends the session on the first miss of a decisive probe', async () => {
+    const { identity, sendProbe, terminate, watchdog } = fixture()
+    watchdog.probeNow(identity, 3_000)
+
+    await vi.advanceTimersByTimeAsync(2_999)
+    expect(terminate).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(terminate).toHaveBeenCalledOnce()
+    expect(sendProbe).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a decisive probe alive when it is answered', async () => {
+    const { identity, sendProbe, terminate, watchdog } = fixture()
+    watchdog.probeNow(identity, 3_000)
+    await vi.advanceTimersByTimeAsync(1_000)
+    watchdog.noteProbeReply(identity, sendProbe.mock.calls.at(-1)![1])
+
+    await vi.advanceTimersByTimeAsync(LIVENESS_IDLE_MS - 1)
+    expect(terminate).not.toHaveBeenCalled()
   })
 })

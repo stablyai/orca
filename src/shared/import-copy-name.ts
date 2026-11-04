@@ -1,7 +1,4 @@
-/**
- * First free sibling name for an import: "name.ext", "name copy.ext", "name copy 2.ext", ...
- * A dotfile keeps its whole name as the stem.
- */
+/** Choose the first free sibling: name.ext, name copy.ext, name copy 2.ext. Dotfiles retain their whole stem. */
 export async function deconflictCopyName(
   originalName: string,
   isTaken: (name: string) => Promise<boolean>

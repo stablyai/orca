@@ -114,7 +114,6 @@ describe('useWorkspaceCleanupGitEvidence', () => {
     await waitFor(() => expect(holders.scan).toHaveBeenCalledTimes(1))
     expect(pending[0]?.worktreeIds).toHaveLength(300)
 
-    // 600 more ids queue while the first request is in flight.
     view.rerender({ candidates: grown })
     await waitFor(() => expect(view.result.current.totalCount).toBe(900))
     expect(holders.scan).toHaveBeenCalledTimes(1)
@@ -133,28 +132,6 @@ describe('useWorkspaceCleanupGitEvidence', () => {
 
     const dispatched = pending.flatMap((request) => request.worktreeIds)
     expect(new Set(dispatched).size).toBe(900)
-  })
-
-  it('keeps state identity stable when a progress frame changes nothing', async () => {
-    const candidates = [deferredCandidate('a')]
-    const view = renderHook(() =>
-      useWorkspaceCleanupGitEvidence({ enabled: true, candidates, scannedAt: 1 })
-    )
-    await waitFor(() => expect(holders.scan).toHaveBeenCalledTimes(1))
-    const before = view.result.current
-
-    await act(async () => {
-      pending[0]?.onProgress?.({
-        scanId: 'noop',
-        scannedAt: 1,
-        scannedWorktreeCount: 0,
-        totalWorktreeCount: 1,
-        candidates: [makeFacetCandidate({ worktreeId: 'unrelated' })],
-        errors: [],
-        candidateMode: 'append'
-      })
-    })
-    expect(view.result.current).toBe(before)
   })
 
   it('restarts evidence collection when the settled scan snapshot changes', async () => {

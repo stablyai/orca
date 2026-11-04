@@ -1,6 +1,4 @@
-// Why: every guard in relay-bench-invocation.mjs is the only thing standing between an operator
-// typo (or a director that hands back a hostile URL) and live traffic from the operator's host.
-// These are the cases that previously slipped through a bare Number() cast or a URL constructor.
+// Pin numeric and destination guards against operator typos/hostile director URLs that would create unintended live traffic.
 import { describe, expect, it, vi } from 'vitest'
 import {
   classifyPublicHttpsOrigin,

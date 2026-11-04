@@ -1,4 +1,4 @@
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isTerminalDropWindowsPathLike } from '../../../../shared/image-path-paste'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isWindowsUserAgent } from './pane-helpers'
 
@@ -33,11 +33,4 @@ export function resolveTerminalDropTargetShell({
     return 'posix'
   }
   return isWindowsUserAgent(userAgent) ? 'windows' : 'posix'
-}
-
-export function isTerminalDropWindowsPathLike(path: string): boolean {
-  if (isWslUncPath(path)) {
-    return false
-  }
-  return isWindowsAbsolutePathLike(path) || path.includes('\\')
 }

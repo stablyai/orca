@@ -7,7 +7,7 @@ import {
 } from './auth-filesystem-operation'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
 
-const BACKEND_TIMEOUT_MS = 10_000
+export const CODEX_BACKEND_TIMEOUT_MS = 10_000
 
 export type CodexBackendRequest = (url: string, init: RequestInit) => Promise<Response>
 
@@ -27,14 +27,6 @@ const backendAuthReadByPath = new Map<
   SharedAuthFilesystemOperation<BackendAuthReadResult>
 >()
 
-export function createCodexBackendRequestSignal(
-  callerSignal?: AbortSignal,
-  timeoutMs = BACKEND_TIMEOUT_MS
-): AbortSignal {
-  const timeoutSignal = AbortSignal.timeout(timeoutMs)
-  return callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal
-}
-
 function getBackendAuthRead(
   authPath: string
 ): SharedAuthFilesystemOperation<BackendAuthReadResult> {
@@ -42,7 +34,7 @@ function getBackendAuthRead(
   if (existing) {
     return existing
   }
-  // Why: dedupe UNC reads because Node cannot cancel an in-flight read.
+  // Share UNC reads because Node cannot cancel issued filesystem I/O.
   const read = createAuthFilesystemOperation(authPath, () =>
     readFile(authPath, 'utf8').then(
       (content) => ({ content }),

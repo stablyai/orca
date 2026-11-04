@@ -1,12 +1,4 @@
-/**
- * The scheduler's side of the cache counters: it knows which fence a call was
- * made under, and this knows what that means to the release gate.
- *
- * Keeping the translation here is what lets the scheduler stay a description of
- * when to fetch rather than of how each fetch is counted. The rule it enforces
- * on the scheduler's behalf: a legacy call is one request for its authority and
- * belongs to no stable key, on every counter that has a keyed form.
- */
+/** Translate scheduler work into counters: legacy requests/dedupe/discards belong to an authority, never one stable host key. */
 
 import { hostStableKey } from '../../../../shared/automation-owner-key'
 import type { StableAutomationCatalogRef } from '../../../../shared/automation-owner-ref'
@@ -60,16 +52,14 @@ export function createAutomationHostRequestInstrumentation(
         transport
       })
     },
-    // Keyed exactly as the request it joined, or per-key invariants over the two
-    // could not be written: a legacy host would read 0 requests against N hits.
+    // Key hits exactly like their joined request; legacy entries must not show per-key hits against zero requests.
     dedupeHit: (ref, querySupport) => {
       diagnostics.recordDedupeHit({
         authorityKey: automationAuthorityCatalogKey(ref.authority),
         stableKey: querySupport === 'legacy-unscoped' ? null : hostStableKey(ref)
       })
     },
-    // Recorded before the fence decides: the payload crossed the wire either
-    // way, and the size/duration budgets are about what was spent, not kept.
+    // Record wire cost before fencing; rejected payloads still consumed size and time.
     response: (fence, stableKey, startedAt, rows, payload) => {
       diagnostics.recordResponse({
         authorityKey: fence.authorityKey,

@@ -5,12 +5,15 @@ import { monaco } from '@/lib/monaco-setup'
 import {
   disposeUnattachedDiffViewerMonacoModels,
   disposeUnattachedMonacoModelPaths,
-  getDiffViewerMonacoModelPaths
+  getDiffViewerMonacoModelPaths,
+  recallDiffViewerModelPaths,
+  rememberDiffViewerModelPaths
 } from './diff-monaco-model-disposal'
 
 type DiffViewerLargeDiffLifecycleInput = {
   limited: boolean
   modelKey: string
+  modelOwnerKey?: string
   originalModelKey?: string
   modifiedModelKey?: string
   diffEditorRef: RefObject<editor.IStandaloneDiffEditor | null>
@@ -20,6 +23,7 @@ type DiffViewerLargeDiffLifecycleInput = {
 export function useDiffViewerLargeDiffLifecycle({
   limited,
   modelKey,
+  modelOwnerKey,
   originalModelKey,
   modifiedModelKey,
   diffEditorRef,
@@ -35,19 +39,26 @@ export function useDiffViewerLargeDiffLifecycle({
     () =>
       getDiffViewerMonacoModelPaths({
         modelKey,
+        modelOwnerKey,
         originalModelKey,
         modifiedModelKey,
         generationSuffix: largeDiffModelGenerationSuffix
       }),
-    [modelKey, originalModelKey, modifiedModelKey, largeDiffModelGenerationSuffix]
+    [modelKey, modelOwnerKey, originalModelKey, modifiedModelKey, largeDiffModelGenerationSuffix]
   )
   const currentDiffModelPathsRef = useRef(currentDiffModelPaths)
   currentDiffModelPathsRef.current = currentDiffModelPaths
-  const previousDiffModelPathsRef = useRef(currentDiffModelPaths)
+  const previousDiffModelPathsRef = useRef<typeof currentDiffModelPaths | null>(null)
 
   useEffect(() => {
-    const previousModelPaths = previousDiffModelPathsRef.current
+    const previousModelPaths =
+      previousDiffModelPathsRef.current ??
+      (modelOwnerKey ? recallDiffViewerModelPaths(modelOwnerKey, modelKey) : undefined) ??
+      currentDiffModelPaths
     previousDiffModelPathsRef.current = currentDiffModelPaths
+    if (modelOwnerKey) {
+      rememberDiffViewerModelPaths(modelOwnerKey, modelKey, currentDiffModelPaths)
+    }
     const supersededModelPaths = [
       previousModelPaths.originalModelPath !== currentDiffModelPaths.originalModelPath
         ? previousModelPaths.originalModelPath
@@ -72,25 +83,22 @@ export function useDiffViewerLargeDiffLifecycle({
       }
       const activeModels = diffEditor.getModel()
       if (activeModels?.original !== originalModel || activeModels.modified !== modifiedModel) {
-        // Why: @monaco-editor/react swaps the two child models separately, but
-        // Monaco's diff widget must release its old pair before either is disposed.
+        // Release the diff widget’s old model pair before the React wrapper disposes either child separately.
         diffEditor.setModel({ original: originalModel, modified: modifiedModel })
       }
     }
     disposeUnattachedMonacoModelPaths(monaco, supersededModelPaths)
-  }, [currentDiffModelPaths, diffEditorRef])
+  }, [currentDiffModelPaths, diffEditorRef, modelKey, modelOwnerKey])
 
   useEffect(() => {
     if (!limited) {
       return
     }
     const modelPathsToDispose = currentDiffModelPathsRef.current
-    // Why: rotate below-limit Monaco paths after a safety fallback so stale
-    // large models cannot be reused when the same diff shrinks back down.
+    // Rotate paths after fallback so a shrinking diff cannot reuse its old oversized model.
     setLargeDiffModelGeneration((generation) => generation + 1)
     onEnterFallback()
-    // Why: ordinary tab switches keep models for fast return; the safety
-    // fallback must instead release huge detached models after unmount cleanup.
+    // Fallback must release huge retained models after unmount cleanup, unlike ordinary tab switching.
     const disposeTimer = window.setTimeout(() => {
       disposeUnattachedDiffViewerMonacoModels(monaco, modelPathsToDispose)
     }, 0)

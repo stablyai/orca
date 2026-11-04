@@ -1,23 +1,6 @@
-/**
- * Counts store writes that hand out a NEW reference for a field whose value did
- * not change — the write-side half of Zustand rerender churn.
- *
- * Why a runtime probe and not a lint rule: the read side is statically decidable
- * (app-store-performance flags selectors that allocate), but whether a `set()`
- * reallocated for nothing depends on the payload, so only an executed write can
- * answer it. A field that churns re-renders every component selecting it, with
- * no data change to show for it.
- *
- * Cost when disarmed: one boolean field load per write, matching
- * react-commit-cascade-write-probe. Comparison work only happens while armed.
- * Nothing in the app arms it, so store/index.ts installs it only in dev and
- * store-exposing builds; a shipped build never runs the wrapper at all.
- *
- * The wrapper never resolves a functional updater itself: zustand keeps sole
- * ownership of when and with what argument an updater runs, so the probe cannot
- * double-invoke it or hand it a stale state.
- */
+/** Measure runtime writes that replace equal-valued references; lint cannot infer payload equality. Dev/exposed stores only, one flag check while disarmed; armed comparisons never resolve functional updaters, which remain Zustand-owned. */
 import type { StateCreator } from 'zustand'
+import type { StoreSetArgs } from './react-commit-cascade-write-probe'
 
 export const storeIdentityChurnProbe = { armed: false, captureSites: false }
 
@@ -91,9 +74,7 @@ export function armStoreIdentityChurnProbe(options?: { captureSites?: boolean })
   storeIdentityChurnProbe.armed = true
 }
 
-// Why the first non-probe, non-zustand frame: the caller that built the partial is
-// the code to fix; the frames above it are the shared write plumbing. Every store
-// write middleware is named *-probe.ts, so a sibling wrapper's frame is skipped too.
+// Skip Zustand and all *-probe middleware frames to report the caller that allocated the partial.
 const SOURCE_FRAME = /:\d+:\d+\)?$/
 const PROBE_FRAME = /-probe\.[cm]?[jt]s\b/
 
@@ -136,12 +117,7 @@ function recordSite(field: string): void {
   sites.set(site, (sites.get(site) ?? 0) + 1)
 }
 
-/**
- * `fields` is the write's own keys when they are knowable: `set(partial)` merges,
- * so no field outside the partial can have changed. A functional updater or a
- * replace write falls back to every field; the extra cost there is one Object.is
- * per untouched field, since the deep compare only runs on replaced references.
- */
+/** Direct merge writes compare only supplied keys; updater/replacement writes compare all fields, deep-checking only replaced references. */
 function recordWrite(
   previous: Record<string, unknown>,
   next: Record<string, unknown>,
@@ -168,39 +144,46 @@ function recordWrite(
   }
 }
 
-/**
- * Wraps the state creator rather than patching setState, for the same reason as
- * react-commit-cascade-write-probe: slices capture the `set` closure built before
- * `api` exists, and slice-internal writes are the ones that churn.
- */
+/** Wrap creator to reach slice-captured set closures; patching api.setState alone misses them (react-commit-cascade-write-probe). */
 export function withStoreIdentityChurnProbe<TState>(
   createState: StateCreator<TState, [], []>
 ): StateCreator<TState, [], []> {
   return (set, get, api) => {
-    const wrapped = ((partial: unknown, replace?: unknown): void => {
-      if (!storeIdentityChurnProbe.armed) {
-        ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(partial, replace)
-        return
+    const probe = (write: typeof set): typeof set => {
+      const forward = (args: StoreSetArgs<TState>): void => {
+        if (args[1] === true) {
+          write(...args)
+        } else {
+          write(...args)
+        }
       }
-      const previous = get() as Record<string, unknown>
-      // Why the write is passed through untouched: zustand owns when and how an
-      // updater runs. The probe only compares the states on either side of it.
-      ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(partial, replace)
-      try {
-        const next = get() as Record<string, unknown>
-        if (next === previous) {
+      return (...args: StoreSetArgs<TState>): void => {
+        if (!storeIdentityChurnProbe.armed) {
+          forward(args)
           return
         }
-        const fields =
-          replace !== true && partial !== null && typeof partial === 'object'
-            ? Object.keys(partial)
-            : Object.keys(next)
-        recordWrite(previous, next, fields)
-      } catch {
-        // A diagnostic on the app's universal write path must never break writes.
+        const previous = get()
+        // Why the write is passed through untouched: zustand owns when and how an
+        // updater runs. The probe only compares the states on either side of it.
+        forward(args)
+        try {
+          const next = get()
+          if (next === previous || !isPlainRecord(previous) || !isPlainRecord(next)) {
+            return
+          }
+          const [partial, replace] = args
+          const fields =
+            replace !== true && partial !== null && typeof partial === 'object'
+              ? Object.keys(partial)
+              : Object.keys(next)
+          recordWrite(previous, next, fields)
+        } catch {
+          // A diagnostic on the app's universal write path must never break writes.
+        }
       }
-    }) as typeof set
-    api.setState = wrapped as typeof api.setState
-    return createState(wrapped, get, api)
+    }
+    // Why separately: an outer middleware may hand slices a different `set` than api.setState.
+    api.setState = probe(api.setState)
+    return createState(probe(set), get, api)
   }
 }

@@ -1,5 +1,6 @@
 import type React from 'react'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
+import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 
 export type RichMarkdownEditorProps = {
   fileId: string
@@ -9,6 +10,8 @@ export type RichMarkdownEditorProps = {
   worktreeId: string
   externalSshTargetId?: string
   runtimeEnvironmentId?: string | null
+  /** The tab's captured owner; with the fields above it names the copy whose notes show. */
+  operationProvenance?: EditorFileOperationProvenance
   scrollCacheKey: string
   onContentChange: (content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
@@ -21,8 +24,6 @@ export type RichMarkdownEditorProps = {
   markdownAnnotationFilePath?: string
   markdownSourceLineOffset?: number
   markdownReviewContent?: string
-  // Why: front-matter is stripped from the rich editor's content but we still
-  // want it visible to the user. It renders between the toolbar and the editor
-  // surface so the formatting toolbar stays at the top of the pane.
+  // Show stripped front matter below the toolbar without giving it to the rich editor.
   headerSlot?: React.ReactNode
 }

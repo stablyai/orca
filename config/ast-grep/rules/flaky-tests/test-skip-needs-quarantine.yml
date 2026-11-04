@@ -1,0 +1,62 @@
+# Ratcheted by config/scripts/check-flaky-test-pattern-ratchet.mjs; info severity keeps
+# `pnpm lint:ast-grep` quiet about the grandfathered baseline.
+# Conditional skips (`skipIf`, Playwright's `test.skip(condition, reason)`) are platform or
+# environment guards, not quarantines, so only unconditional forms are checked.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: test-skip-needs-quarantine
+language: typescript
+severity: info
+message: 'A skipped, focused, or fixme test needs `// quarantine: #<issue> <reason>` directly above it, so it has an owner and a way back.'
+files:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/tests/e2e/**'
+rule:
+  any:
+    - pattern: $T.skip($$$ARGS)
+    - pattern: $T.only($$$ARGS)
+    - pattern: $T.fixme($$$ARGS)
+  has:
+    field: arguments
+    any:
+      - not: { has: { nthChild: 1 } }
+      - has: { nthChild: 1, any: [{ kind: string }, { kind: template_string }] }
+  not:
+    inside:
+      kind: expression_statement
+      follows:
+        stopBy: { not: { kind: comment } }
+        kind: comment
+        regex: '^//\s*quarantine: #\d+\s+\S'
+constraints:
+  T:
+    regex: '^(it|test|describe|suite|test\.describe(\.(serial|parallel))?)$'
+---
+id: test-skip-needs-quarantine-tsx
+language: tsx
+severity: info
+message: 'A skipped, focused, or fixme test needs `// quarantine: #<issue> <reason>` directly above it, so it has an owner and a way back.'
+files:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/tests/e2e/**'
+rule:
+  any:
+    - pattern: $T.skip($$$ARGS)
+    - pattern: $T.only($$$ARGS)
+    - pattern: $T.fixme($$$ARGS)
+  has:
+    field: arguments
+    any:
+      - not: { has: { nthChild: 1 } }
+      - has: { nthChild: 1, any: [{ kind: string }, { kind: template_string }] }
+  not:
+    inside:
+      kind: expression_statement
+      follows:
+        stopBy: { not: { kind: comment } }
+        kind: comment
+        regex: '^//\s*quarantine: #\d+\s+\S'
+constraints:
+  T:
+    regex: '^(it|test|describe|suite|test\.describe(\.(serial|parallel))?)$'

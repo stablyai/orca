@@ -35,15 +35,12 @@ describe('isProviderConfigured', () => {
   })
 
   it('hides an unconfigured (unavailable) provider', () => {
-    // The bug: Gemini OAuth off / OpenCode Go cookie unset returns a non-null
-    // `unavailable` object, which previously slipped past the `!== null` gate
-    // and rendered a "--" bar for a provider the user never configured.
+    // Unavailable snapshots are non-null even when the provider was never configured.
     expect(isProviderConfigured(provider('unavailable'))).toBe(false)
   })
 
   it('hides a first-load fetching provider until it has proven usage data', () => {
-    // The initial fetch marks every provider as `fetching`; without prior data
-    // that state is not proof the user configured Gemini or OpenCode Go.
+    // A first fetch without prior data cannot prove configuration.
     expect(isProviderConfigured(provider('fetching'))).toBe(false)
   })
 
@@ -133,11 +130,9 @@ describe('hasUsageProviderSettings', () => {
     expect(
       hasUsageProviderSettings(usageSettings({ opencodeSessionCookie: ' session=abc ' }))
     ).toBe(true)
-    // Why: the checked item + PATH detection is durable on its own — the
-    // snapshot comes from the `agy` CLI probe and needs no Gemini OAuth.
+    // Antigravity’s checked item and PATH detection prove setup without Gemini OAuth.
     expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(true)
-    // Why: an OPENCODE_API_KEY or a key OpenCode saved on /connect is invisible
-    // to the renderer, so main's presence flag is the only durable signal.
+    // Only main can report OpenCode keys held in environment or CLI storage.
     expect(hasUsageProviderSettings(usageSettings({ opencodeGoApiKeyConfigured: true }))).toBe(true)
     expect(
       hasUsageProviderSettingsForProvider(
@@ -188,8 +183,7 @@ describe('hasUsageProviderSettingsForProvider', () => {
         usageSettings({ antigravityUsageConfigured: true })
       )
     ).toBe(true)
-    // Why no Gemini OAuth term: the snapshot comes from the `agy` CLI probe, so
-    // the OAuth opt-in says nothing about Antigravity.
+    // Antigravity reads agy usage independently of Gemini OAuth.
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
@@ -212,9 +206,7 @@ describe('hasUsageProviderSettingsForProvider', () => {
   })
 
   it('treats minimaxApiKeyConfigured as a parallel durable signal for MiniMax', () => {
-    // Why: CN endpoint users can configure MiniMax with an API key only. The
-    // visibility check must accept either credential so the status bar stays
-    // visible while the snapshot is still pending.
+    // MiniMax API-key-only setup must remain visible while its usage snapshot is pending.
     expect(
       hasUsageProviderSettingsForProvider(
         'minimax',
@@ -372,8 +364,7 @@ describe('getVisibleUsageProvider', () => {
   })
 
   it('hides Antigravity when its status item is unchecked', () => {
-    // Why: without the checked item there is no durable signal, so an unavailable
-    // snapshot (e.g. a signed-out agy) must not pin a bar the user never asked for.
+    // An unavailable Antigravity snapshot cannot replace the checked-item setup signal.
     expect(getVisibleUsageProvider('antigravity', null, usageSettings())).toBe(null)
     expect(
       getVisibleUsageProvider(
@@ -387,8 +378,7 @@ describe('getVisibleUsageProvider', () => {
 
 describe('isUsageEmptyState', () => {
   it('keeps the Cursor bar visible on a local session before the first snapshot', () => {
-    // Why: the credential lives on disk, not in settings, so main's flag is the
-    // only durable signal that the bar has an account behind it.
+    // Main’s on-disk credential flag keeps Cursor visible before its first snapshot.
     const pending = getVisibleUsageProvider(
       'cursor',
       null,
@@ -399,12 +389,8 @@ describe('isUsageEmptyState', () => {
   })
 
   it('hides the Cursor bar when no local session exists, even on an unavailable snapshot', () => {
-    // Why: 'unavailable' is how a signed-out host reports Cursor; without the
-    // durable flag there is no account to show a bar for.
     const unavailable = provider('unavailable', { provider: 'cursor' })
     expect(getVisibleUsageProvider('cursor', unavailable, usageSettings())).toBeNull()
-    // With a session on disk the row stays, so "no allowance" is explained
-    // rather than silently vanishing.
     expect(
       getVisibleUsageProvider('cursor', unavailable, usageSettings({ cursorAuthConfigured: true }))
     ).toBe(unavailable)
@@ -532,8 +518,6 @@ describe('isUsageEmptyState', () => {
   })
 
   it('still shows the setup CTA when no agent is detected, even with the Antigravity item checked', () => {
-    // Why: `antigravityUsageConfigured` is checked item + PATH detection, so a
-    // profile with nothing installed never counts Antigravity as set up.
     expect(
       isUsageEmptyState(
         {

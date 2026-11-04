@@ -1,0 +1,760 @@
+// @vitest-environment happy-dom
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { asyncQuestionSourceScope } from '../../../../shared/native-chat/input/native-chat-ask'
+import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { projectStructuredItemToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
+import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
+import { nativeChatPromptDismissals } from './native-chat-prompt-dismissals'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
+
+let container: HTMLDivElement
+let root: ReturnType<typeof createRoot>
+beforeEach(() => {
+  nativeChatPromptDismissals.clearForTests()
+  vi.useFakeTimers()
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
+  vi.useRealTimers()
+})
+
+const asked: NativeChatMessage = {
+  id: 'ask',
+  role: 'assistant',
+  blocks: [
+    { type: 'text', text: 'Which color?\n- Red\n- Blue' },
+    {
+      type: 'tool-call',
+      name: 'request_user_input_async',
+      input: { questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }] }
+    }
+  ],
+  timestamp: null,
+  source: 'transcript'
+}
+
+const askedItem: AgentJournalRenderItem = {
+  itemId: asked.id,
+  sequence: 1,
+  revision: 0,
+  observedAt: 1,
+  body: { kind: 'message', role: 'assistant', blocks: asked.blocks }
+}
+const answerItem = {
+  ...askedItem,
+  itemId: agentJournalSubmissionKey('answer'),
+  sequence: 2,
+  body: {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: '> Which color?\n\nBlue' }]
+  }
+} satisfies AgentJournalRenderItem
+const pendingAnswer: AgentJournalSubmission = {
+  clientMessageId: 'answer',
+  fence: 1,
+  payloadFingerprint: 'answer',
+  dispatchState: 'pending',
+  providerItemId: null,
+  reason: null,
+  submittedAt: 2,
+  resolvedAt: null,
+  handoverRecorded: true
+}
+
+describe('NativeChatStructuredAsyncQuestion', () => {
+  it('keeps the selected answer mounted through echo, recording, handover and retry until delivery', () => {
+    let settle = (_outcome: 'recorded' | 'returned' | 'unconfirmed') => {}
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
+      request?.onCreated?.('answer')
+      settle = (outcome) => request?.onSettled?.(outcome)
+      return true
+    })
+    const render = (messages: NativeChatMessage[]) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab:structured"
+            sourceKey="host/session/epoch"
+            sourceScope="journal/session/epoch"
+            session={{ messages, readPhase: 'ready' }}
+            send={send}
+          />
+        )
+      )
+    const echo = {
+      clientMessageId: 'answer',
+      queuedAt: 2,
+      body: answerItem.body
+    }
+    render(projectStructuredAgentSessionMessages([askedItem], [], []))
+    const input = container.querySelector<HTMLInputElement>('input[data-native-chat-answer-field]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        input,
+        'Green'
+      )
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      ;[...container.querySelectorAll('button[aria-pressed]')]
+        .find((node) => node.textContent?.includes('Blue'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    act(() => vi.runAllTimers())
+    const selected = container.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')!
+    const sameCard = (disabled: boolean) => {
+      expect(container.querySelector('button[aria-pressed="true"]')).toBe(selected)
+      expect(container.querySelector('input[data-native-chat-answer-field]')).toBe(input)
+      expect(input.value).toBe('Green')
+      expect(selected.disabled).toBe(disabled)
+    }
+    // These are the separately published states visible in the recording and dispatch fixture.
+    render(projectStructuredAgentSessionMessages([askedItem], [echo], []))
+    sameCard(true)
+    act(() => settle('recorded'))
+    render(projectStructuredAgentSessionMessages([askedItem], [echo], [pendingAnswer]))
+    sameCard(true)
+    for (const submission of [pendingAnswer, { ...pendingAnswer, handedOverAt: 3 }]) {
+      render(projectStructuredAgentSessionMessages([askedItem, answerItem], [echo], [submission]))
+      sameCard(true)
+    }
+    render(
+      projectStructuredAgentSessionMessages(
+        [askedItem, answerItem],
+        [],
+        [{ ...pendingAnswer, handedOverAt: 3, dispatchState: 'unknown' }]
+      )
+    )
+    sameCard(false)
+    render(
+      projectStructuredAgentSessionMessages(
+        [askedItem, answerItem],
+        [],
+        [{ ...pendingAnswer, dispatchState: 'rejected', resolvedAt: 4, reason: 'Not sent.' }]
+      )
+    )
+    sameCard(false)
+    act(() =>
+      [...container.querySelectorAll('button')]
+        .find((node) => node.textContent === 'Submit')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    expect(send).toHaveBeenCalledTimes(2)
+    act(() => settle('returned'))
+    sameCard(false)
+    render(
+      projectStructuredAgentSessionMessages(
+        [askedItem, answerItem],
+        [],
+        [
+          {
+            ...pendingAnswer,
+            dispatchState: 'accepted',
+            providerItemId: 'provider-answer',
+            resolvedAt: 5
+          }
+        ]
+      )
+    )
+    expect(container.querySelector('input[data-native-chat-answer-field]')).toBeNull()
+  })
+
+  it.each([false, true])(
+    'cancels a scheduled step when another send becomes pending (multiple: %s)',
+    (multiple) => {
+      const send = vi.fn(() => true)
+      const question = multiple
+        ? {
+            ...askedItem,
+            body: {
+              kind: 'message' as const,
+              role: 'assistant' as const,
+              blocks: [
+                {
+                  type: 'tool-call' as const,
+                  name: 'request_user_input_async',
+                  input: {
+                    questions: [
+                      { title: 'Which color?', options: ['Red', 'Blue'] },
+                      { title: 'Another question?', options: ['Yes', 'No'] }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        : askedItem
+      const render = (pending: boolean) =>
+        act(() =>
+          root.render(
+            <NativeChatStructuredAsyncQuestion
+              paneKey="timer-card"
+              sourceKey="host/session/epoch"
+              sourceScope="journal/session/epoch"
+              session={{
+                readPhase: 'ready',
+                messages: projectStructuredAgentSessionMessages(
+                  pending ? [question, answerItem] : [question],
+                  [],
+                  pending ? [pendingAnswer] : []
+                )
+              }}
+              send={send}
+            />
+          )
+        )
+      render(false)
+      act(() =>
+        [...container.querySelectorAll('button[aria-pressed]')]
+          .find((button) => button.textContent?.includes('Blue'))!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      )
+      render(true)
+      expect(
+        container.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.disabled
+      ).toBe(true)
+      act(() => vi.runAllTimers())
+      expect(send).not.toHaveBeenCalled()
+      expect(container.textContent).toContain('Which color?')
+      expect(container.textContent).not.toContain('Another question?')
+      render(false)
+      act(() =>
+        [...container.querySelectorAll('button')]
+          .find((button) => button.textContent === (multiple ? 'Next' : 'Submit'))!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      )
+      if (multiple) {
+        expect(container.textContent).toContain('Another question?')
+      } else {
+        expect(send).toHaveBeenCalledTimes(1)
+      }
+    }
+  )
+
+  it('keeps a queued answer hidden through handoff, releasing only uncertainty or delivery', () => {
+    const render = (submissions: AgentJournalSubmission[], queuedCards: { text: string }[] = []) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab:structured"
+            sourceKey="host/session/epoch"
+            sourceScope="journal/session/epoch"
+            session={{
+              messages: projectStructuredAgentSessionMessages(
+                submissions.length ? [askedItem, answerItem] : [askedItem],
+                [],
+                submissions
+              ),
+              readPhase: 'ready'
+            }}
+            send={() => true}
+            queuedCards={queuedCards}
+          />
+        )
+      )
+    render([], [{ text: '> Which color?\n\nBlue' }])
+    expect(container.textContent).toBe('')
+    const handoff = { ...pendingAnswer, queuedMessageId: 'queue-answer', handedOverAt: 3 }
+    render([handoff])
+    expect(container.textContent).toBe('')
+    render([{ ...handoff, dispatchState: 'unknown' }])
+    expect(container.textContent).toContain('Which color?')
+    render([handoff])
+    expect(container.textContent).toBe('')
+    render([{ ...handoff, dispatchState: 'accepted', resolvedAt: 4 }])
+    expect(container.textContent).toBe('')
+  })
+
+  it.each([true, false])(
+    'keeps an async answer through agent mail (send accepted: %s)',
+    (accepted) => {
+      const send = vi.fn(() => accepted)
+      const render = (messages: NativeChatMessage[]): void =>
+        act(() =>
+          root.render(
+            <NativeChatStructuredAsyncQuestion
+              paneKey="tab-1:structured"
+              sourceScope="journal/session/epoch"
+              sourceKey="journal/host/session/epoch"
+              session={{ messages, readPhase: 'ready' }}
+              send={send}
+            />
+          )
+        )
+      render([asked])
+      const input = container.querySelector<HTMLInputElement>(
+        'input[data-native-chat-answer-field]'
+      )!
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+        setter.call(input, 'Green')
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      const blue = [...container.querySelectorAll('button[aria-pressed]')].find((node) =>
+        node.textContent?.includes('Blue')
+      )
+      act(() => blue?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+      const notice = projectStructuredItemToNativeChat({
+        itemId: 'orca:submission:mail',
+        sequence: 2,
+        revision: 0,
+        observedAt: 2,
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'You have 1 orchestration message.' }],
+          from: {
+            kind: 'agent',
+            senders: [
+              {
+                party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+                name: 'Coder'
+              }
+            ],
+            orchestration: {
+              message: 'mail-notice',
+              mailbox: 'term_b',
+              dispatchId: null,
+              messages: [{ messageId: 'mail-1', runId: 'run-1', from: 'term_a' }]
+            }
+          }
+        }
+      })!
+      expect(notice.from?.kind).toBe('agent')
+      render([asked, notice])
+      expect(container.textContent).toContain('Which color?')
+      expect(
+        [...container.querySelectorAll('button[aria-pressed]')].map((node) => node.textContent)
+      ).toEqual(
+        expect.arrayContaining([expect.stringContaining('Red'), expect.stringContaining('Blue')])
+      )
+      expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toContain('Blue')
+      expect(
+        container.querySelector<HTMLInputElement>('input[data-native-chat-answer-field]')?.value
+      ).toBe('Green')
+      act(() => vi.runAllTimers())
+
+      expect(send).toHaveBeenCalledWith(
+        '> Which color?\n\nBlue',
+        [],
+        expect.objectContaining({ callerKeepsText: true })
+      )
+      expect(container.textContent).toContain('Which color?')
+      render([
+        asked,
+        notice,
+        {
+          id: 'human-answer',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Blue' }],
+          timestamp: 3,
+          source: 'transcript'
+        }
+      ])
+      expect(container.textContent).not.toContain('Which color?')
+    }
+  )
+
+  it.each([undefined, 'reused-call'])(
+    'shows an identical replacement in one ready-to-ready update (call ID: %s)',
+    (callId) => {
+      const send = vi.fn(() => true)
+      const first = {
+        ...asked,
+        blocks: asked.blocks.map((block) =>
+          block.type === 'tool-call' ? { ...block, callId } : block
+        )
+      }
+      const render = (messages: NativeChatMessage[]) =>
+        act(() =>
+          root.render(
+            <NativeChatStructuredAsyncQuestion
+              paneKey="tab-1:structured"
+              sourceScope="journal/session/epoch"
+              sourceKey="journal/host/session/epoch"
+              session={{ messages, readPhase: 'ready' }}
+              send={send}
+            />
+          )
+        )
+      render([first])
+      act(() =>
+        container
+          .querySelector('button[aria-label="Cancel"]')
+          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      )
+      expect(container.textContent).not.toContain('Which color?')
+      expect(send).not.toHaveBeenCalled()
+      // Same canonical row stays dismissed through renamed/removed IDs and block reshaping.
+      for (const readbackId of ['resumed-call', undefined]) {
+        render([
+          {
+            ...first,
+            blocks: [
+              { type: 'text', text: 'More context' },
+              ...first.blocks.map((block) =>
+                block.type === 'tool-call' ? { ...block, callId: readbackId } : block
+              )
+            ]
+          }
+        ])
+        expect(container.textContent).not.toContain('Which color?')
+      }
+
+      const answer: NativeChatMessage = {
+        id: 'delivered-answer',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'Blue' }],
+        timestamp: null,
+        source: 'transcript'
+      }
+      render([first, answer, { ...first, id: 'ask-again' }])
+      expect(container.textContent).toContain('Which color?')
+      const blue = [...container.querySelectorAll('button[aria-pressed]')].find((node) =>
+        node.textContent?.includes('Blue')
+      )
+      act(() => blue?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+      act(() => vi.runAllTimers())
+      expect(send).toHaveBeenCalledWith(
+        '> Which color?\n\nBlue',
+        [],
+        expect.objectContaining({ callerKeepsText: true })
+      )
+      expect(container.textContent).toContain('Which color?')
+
+      render([
+        first,
+        answer,
+        { ...first, id: 'ask-again' },
+        { ...answer, id: 'second-answer' },
+        { ...first, id: 'third-ask' }
+      ])
+      expect(container.textContent).toContain('Which color?')
+    }
+  )
+  it('keeps cancelled contributors hidden across edits, new siblings, paging and blocking', () => {
+    const send = vi.fn(() => true)
+    const render = (
+      messages: NativeChatMessage[],
+      blocked = false,
+      sourceKey = 'journal/host/session/epoch'
+    ) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab-1:structured"
+            sourceScope={sourceKey}
+            sourceKey={sourceKey}
+            session={{ messages, readPhase: 'ready' }}
+            blocked={blocked}
+            send={send}
+          />
+        )
+      )
+    const cancel = () =>
+      act(() =>
+        container
+          .querySelector('button[aria-label="Cancel"]')
+          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      )
+    render([asked])
+    cancel()
+    const edited = {
+      ...asked,
+      blocks: [
+        {
+          type: 'tool-call' as const,
+          name: 'request_user_input_async',
+          input: { questions: [{ title: 'Edited Q1?' }] }
+        }
+      ]
+    }
+    const sibling = {
+      type: 'tool-call' as const,
+      name: 'request_user_input_async',
+      input: { questions: [{ title: 'Q2?' }] }
+    }
+    render([{ ...edited, blocks: [...edited.blocks, sibling] }])
+    expect(container.textContent).toContain('Q2?')
+    expect(container.textContent).not.toContain('Edited Q1?')
+    cancel()
+    render([])
+    render([asked], true)
+    render([{ ...edited, blocks: [...edited.blocks, sibling] }])
+    expect(container.textContent).toBe('')
+    render([asked, { ...asked, id: 'new-equal-text-row' }])
+    expect(container.textContent).toContain('Which color?')
+    cancel()
+    expect(send).not.toHaveBeenCalled()
+    render([asked], false, 'journal/host/session/reset')
+    expect(container.textContent).toContain('Which color?')
+  })
+
+  it('resets pending selections when a definition changes without cancelling it', () => {
+    const send = vi.fn(() => true)
+    const render = (title: string, option: string) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab-1:structured"
+            sourceScope="journal/session/epoch"
+            sourceKey="journal/host/session/epoch"
+            session={{
+              readPhase: 'ready',
+              messages: [
+                {
+                  ...asked,
+                  blocks: [
+                    {
+                      type: 'tool-call',
+                      name: 'request_user_input_async',
+                      input: { questions: [{ title, options: [option, 'Blue'] }] }
+                    }
+                  ]
+                }
+              ]
+            }}
+            send={send}
+          />
+        )
+      )
+    render('Q1?', 'Red')
+    const red = [...container.querySelectorAll('button[aria-pressed]')].find((node) =>
+      node.textContent?.includes('Red')
+    )!
+    act(() => red.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(red.getAttribute('aria-pressed')).toBe('true')
+    render('Revised Q1?', 'Green')
+    expect(container.textContent).toContain('Revised Q1?')
+    expect([...container.querySelectorAll('button[aria-pressed="true"]')]).toHaveLength(0)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('isolates addressed hide subscriptions and reuses the scan at N/10N panes', () => {
+    for (const count of [8, 80]) {
+      let scans = 0
+      const messages = [
+        {
+          ...asked,
+          get blocks() {
+            scans += 1
+            return asked.blocks
+          }
+        }
+      ]
+      const renders = Array<number>(count).fill(0)
+      const actions: (() => void)[] = []
+      function Probe({ index }: { index: number }): null {
+        renders[index] = (renders[index] ?? 0) + 1
+        const projection = useNativeChatAsyncQuestions({
+          paneKey: `pane-${count}-${index}`,
+          sourceKey: `host-${index % 2}/session-${Math.floor(index / 2)}/epoch`,
+          sourceScope: asyncQuestionSourceScope({
+            kind: 'journal',
+            agent: 'codex',
+            sessionId: `session-${Math.floor(index / 2)}`,
+            epoch: 'epoch'
+          }),
+          viewKey: 'pty',
+          messages,
+          settled: true
+        })
+        actions[index] = projection.dismiss
+        return null
+      }
+      act(() =>
+        root.render(
+          <>
+            {Array.from({ length: count }, (_, index) => (
+              <Probe key={index} index={index} />
+            ))}
+          </>
+        )
+      )
+      const initialScans = scans
+      expect(initialScans).toBeGreaterThanOrEqual(count)
+      expect(initialScans).toBeLessThanOrEqual(2 * count)
+      renders.fill(0)
+      act(() => actions[0]!())
+      expect(renders).toEqual([1, ...Array<number>(count - 1).fill(0)])
+      expect(scans).toBe(initialScans)
+      renders.fill(0)
+      act(() => actions[1]!())
+      expect(renders).toEqual([0, 1, ...Array<number>(count - 2).fill(0)])
+      expect(scans).toBe(initialScans)
+      renders.fill(0)
+      act(() => actions[0]!())
+      expect(renders.every((value) => value === 0)).toBe(true)
+      act(() => root.render(null))
+    }
+  })
+
+  it('preserves later same-ID Cancel through eviction without depending on answer settlement', () => {
+    let settle = () => {}
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
+      settle = () => request?.onSettled?.('unconfirmed')
+      return 'queued'
+    })
+    const render = () =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab-1:structured"
+            sourceKey="journal/host/session/epoch"
+            sourceScope="journal/session/epoch"
+            session={{ messages: [asked], readPhase: 'ready' }}
+            send={send}
+          />
+        )
+      )
+    render()
+    act(() =>
+      [...container.querySelectorAll('button[aria-pressed]')]
+        .find((node) => node.textContent?.includes('Blue'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    act(() => vi.runAllTimers())
+    expect(container.textContent).toContain('Which color?')
+    act(() => {
+      for (let index = 0; index < 128; index += 1) {
+        nativeChatPromptDismissals.hideAsync(`other-${index}`, ['other'])
+      }
+    })
+    act(() =>
+      container
+        .querySelector('button[aria-label="Cancel"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    act(settle)
+    render()
+    expect(container.textContent).not.toContain('Which color?')
+    expect(send).toHaveBeenCalledWith(
+      '> Which color?\n\nBlue',
+      [],
+      expect.objectContaining({ callerKeepsText: true })
+    )
+  })
+
+  it.each([false, true, 'queued'] as const)(
+    'does not make %s admission a retained hide',
+    (admission) => {
+      const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => admission)
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab-1:structured"
+            sourceKey="host"
+            sourceScope="journal/session/epoch"
+            session={{ messages: [asked], readPhase: 'ready' }}
+            send={send}
+          />
+        )
+      )
+      act(() =>
+        [...container.querySelectorAll('button[aria-pressed]')]
+          .find((node) => node.textContent?.includes('Blue'))!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      )
+      act(() => vi.runAllTimers())
+      expect(container.textContent).toContain('Which color?')
+    }
+  )
+  it.each([
+    [{ action: 'queue', offersChoice: true }, true],
+    [{ action: 'queue', offersChoice: false }, undefined],
+    [{ action: 'steer', offersChoice: true }, undefined]
+  ] as const)('steers the answer into the running turn (follow-up: %j)', (followUp, alternate) => {
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => true)
+    act(() =>
+      root.render(
+        <NativeChatStructuredAsyncQuestion
+          paneKey="tab-1:structured"
+          sourceKey="host"
+          sourceScope="journal/session/epoch"
+          session={{ messages: [asked], readPhase: 'ready' }}
+          send={send}
+          sendFollowUp={followUp}
+        />
+      )
+    )
+    act(() =>
+      [...container.querySelectorAll('button[aria-pressed]')]
+        .find((node) => node.textContent?.includes('Blue'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    act(() => vi.runAllTimers())
+    expect(send.mock.calls[0]?.[2]?.alternate).toBe(alternate)
+  })
+
+  it('holds the question while a queued card answers it, across remounts, until that card is gone', () => {
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => 'queued')
+    const render = (queuedCards: { text: string }[]) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab-1:structured"
+            sourceKey="host"
+            sourceScope="journal/session/epoch"
+            session={{ messages: [asked], readPhase: 'ready' }}
+            send={send}
+            queuedCards={queuedCards}
+          />
+        )
+      )
+    render([{ text: 'earlier follow-up' }])
+    act(() =>
+      [...container.querySelectorAll('button[aria-pressed]')]
+        .find((node) => node.textContent?.includes('Blue'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    act(() => vi.runAllTimers())
+    const queued = [{ text: 'earlier follow-up' }, { text: '> Which color?\n\nBlue' }]
+    render(queued)
+    expect(container.textContent).not.toContain('Which color?')
+    act(() => root.unmount())
+    root = createRoot(container)
+    render(queued)
+    expect(container.textContent).not.toContain('Which color?')
+    render([{ text: 'earlier follow-up' }])
+    expect(container.textContent).toContain('Which color?')
+  })
+
+  it('resets pending choices when host ownership changes with the same portable definition', () => {
+    const send = vi.fn(() => true)
+    const render = (host: string) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="same-pane"
+            sourceKey={host}
+            sourceScope="same-portable-source"
+            session={{ messages: [asked], readPhase: 'ready' }}
+            send={send}
+          />
+        )
+      )
+    render('host-A')
+    act(() =>
+      [...container.querySelectorAll('button[aria-pressed]')]
+        .find((node) => node.textContent?.includes('Blue'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    expect(container.querySelectorAll('button[aria-pressed="true"]')).toHaveLength(1)
+    render('host-B')
+    expect(container.querySelectorAll('button[aria-pressed="true"]')).toHaveLength(0)
+    act(() => vi.runAllTimers())
+    expect(send).not.toHaveBeenCalled()
+  })
+})

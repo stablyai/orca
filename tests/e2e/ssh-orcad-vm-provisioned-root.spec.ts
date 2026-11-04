@@ -14,7 +14,7 @@ import {
 } from './helpers/docker-ssh-host-target'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { ORCAD_TEMPLATE, skipUnlessManagedDockerHost } from './helpers/orcad-managed-workspace'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 /** A recipe VM's SSH root, served by a managed orcad the first connect deploys. */
 skipUnlessManagedDockerHost()

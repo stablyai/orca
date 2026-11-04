@@ -7,6 +7,7 @@ import type {
 } from '../../shared/worktree/lineage-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import type { RuntimeStore } from './runtime-store-contract'
+import { worktreeRowTarget } from '../persistence/host-qualified-worktree-meta'
 
 type LineageParent =
   | {
@@ -37,7 +38,7 @@ export type WorktreeLineageRecordingResolution =
 
 export function recordCreatedWorktreeLineage(
   store: RuntimeStore | null,
-  worktree: Pick<Worktree, 'id' | 'instanceId'>,
+  worktree: Pick<Worktree, 'id' | 'instanceId' | 'hostId'>,
   resolution: WorktreeLineageRecordingResolution
 ): {
   lineage: WorktreeLineage | null
@@ -54,29 +55,43 @@ export function recordCreatedWorktreeLineage(
   const childInstanceId = worktree.instanceId
   const parentInstanceId = resolution.parent.instanceId
   const createdAt = Date.now()
+  const target = store ? worktreeRowTarget(store, worktree) : undefined
   if (
     resolution.parent.type === 'worktree' &&
     childInstanceId &&
     parentInstanceId &&
+    target &&
     store?.setWorktreeLineage
   ) {
-    lineage = store.setWorktreeLineage(worktree.id, {
-      worktreeId: worktree.id,
-      worktreeInstanceId: childInstanceId,
-      parentWorktreeId: resolution.parent.worktree.id,
-      parentWorktreeInstanceId: parentInstanceId,
-      origin: resolution.origin,
-      capture: resolution.capture,
-      ...(resolution.orchestrationRunId
-        ? { orchestrationRunId: resolution.orchestrationRunId }
-        : {}),
-      ...(resolution.taskId ? { taskId: resolution.taskId } : {}),
-      ...(resolution.coordinatorHandle ? { coordinatorHandle: resolution.coordinatorHandle } : {}),
-      ...(resolution.createdByTerminalHandle
-        ? { createdByTerminalHandle: resolution.createdByTerminalHandle }
-        : {}),
-      createdAt
-    })
+    lineage =
+      store.setWorktreeLineage(target, {
+        worktreeId: worktree.id,
+        worktreeInstanceId: childInstanceId,
+        parentWorktreeId: resolution.parent.worktree.id,
+        parentWorktreeInstanceId: parentInstanceId,
+        origin: resolution.origin,
+        capture: resolution.capture,
+        ...(resolution.orchestrationRunId
+          ? { orchestrationRunId: resolution.orchestrationRunId }
+          : {}),
+        ...(resolution.taskId ? { taskId: resolution.taskId } : {}),
+        ...(resolution.coordinatorHandle
+          ? { coordinatorHandle: resolution.coordinatorHandle }
+          : {}),
+        ...(resolution.createdByTerminalHandle
+          ? { createdByTerminalHandle: resolution.createdByTerminalHandle }
+          : {}),
+        createdAt
+      }) ?? null
+    if (!lineage) {
+      // The id's lineage belongs to a same-id twin on another host; its workspace row too.
+      warnings.push({
+        code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        message:
+          'Worktree created, but its lineage is held by a workspace at the same path on another host.'
+      })
+      return { lineage, workspaceLineage, warnings }
+    }
   } else if (resolution.parent.type === 'worktree') {
     warnings.push({
       code: 'LINEAGE_PARENT_CONTEXT_MISSING',

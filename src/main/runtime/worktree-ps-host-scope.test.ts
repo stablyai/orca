@@ -1,3 +1,4 @@
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMocks = vi.hoisted(() => {
@@ -13,15 +14,19 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listWorktreesStrictMock
+  }
+})
+
 vi.mock('electron', () => electronMocks)
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
-vi.mock('../git/worktree', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict: listWorktreesStrictMock
-}))
 
 import { OrcaRuntimeService } from './orca-runtime'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const LOCAL_REPO_ID = 'repo-local'
 const LOCAL_REPO_PATH = '/Users/me/dev/app'
@@ -68,7 +73,7 @@ function makeStore() {
     ],
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] as object), ...meta }
       return metaById[id]
     },

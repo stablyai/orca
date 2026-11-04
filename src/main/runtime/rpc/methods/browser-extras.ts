@@ -1,6 +1,9 @@
 import { defineMethod } from '../core'
 import { assertRpcClipboardTextWriteWithinLimit } from '../rpc-clipboard-text-validation'
-import { BrowserTarget } from '../../../../shared/rpc-contract/rpc-param-primitives'
+import {
+  BrowserTarget,
+  ExpectUrlBrowserTarget
+} from '../../../../shared/rpc-contract/rpc-param-primitives'
 import {
   ClipboardWrite,
   CookieDelete,
@@ -20,7 +23,7 @@ import {
   StorageKey,
   StorageKeyValue,
   Viewport
-} from './browser-schemas'
+} from '../../../../shared/rpc-contract/browser-params'
 import { MouseClick } from '../../../../shared/rpc-contract/browser-extras-params'
 
 export const BROWSER_EXTRA_METHODS = [
@@ -156,7 +159,7 @@ export const BROWSER_EXTRA_METHODS = [
   defineMethod({
     name: 'browser.dialogDismiss',
     permission: 'workspace',
-    params: BrowserTarget,
+    params: ExpectUrlBrowserTarget,
     handler: async (params, { runtime }) => runtime.browserDialogDismiss(params)
   }),
   defineMethod({
@@ -174,7 +177,7 @@ export const BROWSER_EXTRA_METHODS = [
   defineMethod({
     name: 'browser.storage.local.clear',
     permission: 'workspace',
-    params: BrowserTarget,
+    params: ExpectUrlBrowserTarget,
     handler: async (params, { runtime }) => runtime.browserStorageLocalClear(params)
   }),
   defineMethod({
@@ -192,7 +195,7 @@ export const BROWSER_EXTRA_METHODS = [
   defineMethod({
     name: 'browser.storage.session.clear',
     permission: 'workspace',
-    params: BrowserTarget,
+    params: ExpectUrlBrowserTarget,
     handler: async (params, { runtime }) => runtime.browserStorageSessionClear(params)
   })
 ]

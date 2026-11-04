@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { classifyClaudeOAuthUsageError } from './claude-usage-error-classification'
-import { OAuthUsageError } from './claude-oauth-usage-error'
+import { ClaudeUsageRequestError, OAuthUsageError } from './claude-oauth-usage-error'
 
 describe('classifyClaudeOAuthUsageError', () => {
   it('treats OAuth unauthorized as stale-token repair/fallback', () => {
@@ -37,10 +37,35 @@ describe('classifyClaudeOAuthUsageError', () => {
   })
 
   it('allows CLI fallback for network-shaped failures', () => {
-    expect(classifyClaudeOAuthUsageError(new Error('fetch failed: ENOTFOUND'))).toMatchObject({
+    expect(
+      classifyClaudeOAuthUsageError(
+        new ClaudeUsageRequestError(new Error('fetch failed: ENOTFOUND'))
+      )
+    ).toMatchObject({
       failureKind: 'network',
       shouldAttemptCliFallback: true,
       shouldAttemptDelegatedRefresh: false
     })
+  })
+
+  it("classifies Electron's proxy failure as network and a malformed body as parse", () => {
+    expect(
+      classifyClaudeOAuthUsageError(
+        new ClaudeUsageRequestError(new Error('net::ERR_PROXY_CONNECTION_FAILED'))
+      ).failureKind
+    ).toBe('network')
+    expect(
+      classifyClaudeOAuthUsageError(
+        new ClaudeUsageRequestError(new SyntaxError('Unexpected token'))
+      ).failureKind
+    ).toBe('parse')
+  })
+
+  it('leaves an error from mapping a response unclassified', () => {
+    expect(
+      classifyClaudeOAuthUsageError(
+        new TypeError("Cannot read properties of null (reading 'five_hour')")
+      ).failureKind
+    ).toBe('unknown')
   })
 })

@@ -1,5 +1,6 @@
-import type { GitLabPipelineJob } from './gitlab-types'
+import type { GitLabPipeline, GitLabPipelineJob } from './gitlab-types'
 import type { PRCheckDetail } from './github/check-types'
+import type { CheckStatus } from './github/pull-request-types'
 
 export function mapGitLabPipelineJobStatusToCheckStatus(status: string): PRCheckDetail['status'] {
   const s = status.toLowerCase()
@@ -35,8 +36,7 @@ export function mapGitLabPipelineJobStatusToConclusion(
   if (s === 'skipped') {
     return 'skipped'
   }
-  // Why: manual GitLab jobs are intentionally waiting for a human trigger; calling them pending
-  // would make the Checks tab look stuck forever, and action_required flags green MRs as failing.
+  // Manual jobs wait for a person; pending looks stuck, while action_required falsely marks green MRs as failing.
   if (s === 'manual') {
     return 'neutral'
   }
@@ -55,6 +55,32 @@ export function mapGitLabPipelineJobStatusToConclusion(
     return 'pending'
   }
   return null
+}
+
+const PIPELINE_CONCLUSION: Record<CheckStatus, PRCheckDetail['conclusion']> = {
+  success: 'success',
+  failure: 'failure',
+  pending: 'pending',
+  neutral: 'neutral'
+}
+
+/** The parent pipeline as a provider link, never a job row: its outcome follows pipeline-level policy. */
+export function gitLabPipelineToPRCheck(
+  pipeline: GitLabPipeline,
+  pipelineLabel = 'Pipeline'
+): PRCheckDetail {
+  // The host settles the verdict with the MR status rule; a reply without one claims no outcome.
+  const verdict = pipeline.checkStatus ?? 'neutral'
+  return {
+    name: `${pipelineLabel} #${pipeline.id}`,
+    // Settled pipelines read as completed so shared classifiers agree with the pipeline verdict.
+    status:
+      verdict === 'pending'
+        ? mapGitLabPipelineJobStatusToCheckStatus(pipeline.status)
+        : 'completed',
+    conclusion: PIPELINE_CONCLUSION[verdict],
+    url: pipeline.webUrl ?? null
+  }
 }
 
 export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheckDetail[] {

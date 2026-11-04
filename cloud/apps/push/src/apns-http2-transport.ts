@@ -11,8 +11,7 @@ export type ApnsRequest = {
 export type { ApnsResponse }
 export type ApnsTransport = (request: ApnsRequest) => Promise<ApnsResponse>
 
-// APNs requires HTTP/2 and rewards a long-lived session per host, so sessions
-// are cached and only dropped when the socket itself goes away.
+// Cache APNs HTTP/2 sessions per host until socket loss; long-lived connections avoid reconnect overhead.
 export function createApnsHttp2Transport(): ApnsTransport & { close(): void } {
   const sessions = new Map<string, ClientHttp2Session>()
 

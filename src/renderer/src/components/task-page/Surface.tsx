@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
 import { TaskPageFrame } from './Frame'
 import { TaskPageGitHubIssueDialog } from './github/IssueDialog'
 import { TaskPageLinearProjectDialog } from './linear/ProjectDialog'

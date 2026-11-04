@@ -4,8 +4,8 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { mobileWebAppModuleClosure } from './build-mobile-web-app-bundle.mjs'
-import { readRouteSnapshot } from './mobile-web-app-route-snapshot.mjs'
-import { PAGE_ROUTE_MODULES } from './mobile-web-app-page-route-modules.mjs'
+import { readRouteSnapshot } from './mobile-web-app/mobile-web-app-route-snapshot.mjs'
+import { PAGE_ROUTE_MODULES } from './mobile-web-app/mobile-web-app-page-route-modules.mjs'
 import { spawnProcess } from '@orca/process-host'
 
 const require = createRequire(import.meta.url)
@@ -14,6 +14,7 @@ const mobileWebCheckArgs = [
   '--config',
   'config/vitest.config.ts',
   'config/scripts/mobile-web-app-',
+  'config/scripts/mobile-web-app/',
   'config/scripts/build-mobile-web-app-bundle.test.mjs'
 ]
 

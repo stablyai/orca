@@ -50,7 +50,6 @@ describe('previous hang detection', () => {
     expect(existsSync(markerPath)).toBe(false)
     expect(reportPreviousHangDetection(dir)).toBeNull()
     expect(existsSync(`${markerPath}.previous`)).toBe(true)
-    // A new startup stall cannot replace the preserved previous run.
     writeHangDetectionMarker(markerPath, { ...marker, parentPid: 789 })
     const records: unknown[] = []
     const flush = vi.fn()

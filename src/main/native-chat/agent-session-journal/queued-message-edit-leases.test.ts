@@ -4,21 +4,15 @@ import type { QueuedMessageRow } from './queued-message-table'
 
 function card(messageId = 'card'): QueuedMessageRow {
   return {
-    sessionId: 'folder-session',
     messageId,
     position: 1,
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
     fingerprint: 'base',
-    createdAt: 1,
-    hostInstance: 'host-a',
     state: 'waiting',
     holdReason: null,
     returnedReason: null,
     returnedRejection: null,
-    settledAt: null,
-    settledByOp: null,
     consumedAs: null,
-    carriedFrom: null,
     queuedAt: null
   }
 }
@@ -65,6 +59,17 @@ describe('queued edit leases', () => {
     rows[0]!.state = 'dispatched'
     expect(leases.acquire(desktop, base)).toEqual({ status: 'gone' })
     expect(leases.heldIds().size).toBe(0)
+  })
+
+  it('reuses an edit key only after its previous target becomes invalid', () => {
+    rows.push(card('second'))
+    expect(leases.acquire(desktop, base)).toMatchObject({ status: 'held' })
+    expect(leases.acquire(desktop, { ...base, messageId: 'second' })).toEqual({ status: 'changed' })
+    rows[0]!.fingerprint = 'newer'
+    expect(leases.acquire(desktop, { ...base, messageId: 'second' })).toMatchObject({
+      status: 'held'
+    })
+    expect([...leases.heldIds()]).toEqual(['second'])
   })
 
   it('expires on its own and wakes the queue with no other activity', () => {

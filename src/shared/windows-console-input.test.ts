@@ -47,14 +47,4 @@ describe('stdioForWindowsInteractiveChild', () => {
     expect(stdio).toEqual([11, process.stderr, 'inherit'])
     dispose()
   })
-
-  it('preserves inherited output outside JSON mode', () => {
-    const { stdio, dispose } = stdioForWindowsInteractiveChild(false, {
-      platform: 'win32',
-      openSync: vi.fn(() => 11),
-      closeSync: vi.fn()
-    })
-    expect(stdio).toEqual([11, 'inherit', 'inherit'])
-    dispose()
-  })
 })

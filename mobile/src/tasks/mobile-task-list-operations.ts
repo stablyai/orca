@@ -9,17 +9,9 @@ import {
   taskRepoPreferenceWrittenSchema
 } from './task-list-reply-schema'
 
-// What the Tasks list reads to fill itself for a provider, plus the one write that connects a
-// Linear account. The per-repo item searches themselves are the Smart picker's operations in
-// mobile-task-source-search-operations.ts: the list asks the same methods with the same
-// acceptance, so it sends the same operations rather than a second copy.
+// Reuse Smart-picker search operations; list reads need the same methods and acceptance policy.
 
-/**
- * Linear account status for provider hydration, the second of two policies on this method. The
- * Tasks screen cannot list Linear issues without knowing the workspace and surfaces the host's
- * message; the runtime hydration hook's probe in mobile-task-runtime-operations.ts treats an
- * unanswered probe as "not connected" and degrades. One reader serves both.
- */
+// Hydration requires Linear workspace identity; the runtime’s advisory probe may instead skip refusal.
 export const linearAccountStatusRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'linear.account-status',
@@ -30,11 +22,7 @@ export const linearAccountStatusRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The team list for a hydrated Linear workspace, the second of two policies on this method.
- * Hydration cannot reconcile the saved team selection without it and surfaces the host's message;
- * the composer's picker in mobile-task-item-detail-operations.ts empties instead. One reader.
- */
+// Hydration requires team selection data; the composer’s same-method picker may degrade to empty.
 export const linearWorkspaceTeamListRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'linear.workspace-team-list',
@@ -45,7 +33,6 @@ export const linearWorkspaceTeamListRead = bindDeferredRpcOperation(
   })
 )
 
-/** The GitHub total for the current filter, asked per repo and summed. */
 export const githubWorkItemCountRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.work-item-count',
@@ -56,7 +43,6 @@ export const githubWorkItemCountRead = bindDeferredRpcOperation(
   })
 )
 
-/** The GitLab to-do inbox, which is its own list view rather than a work-item query. */
 export const gitlabTodoListRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'gitlab.todo-list',
@@ -67,10 +53,7 @@ export const gitlabTodoListRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * Connecting a Linear account with a pasted API key. A refusal is shown in the connect sheet, and
- * an accepted reply can still carry a soft `{ ok: false, error }` the sheet raises itself.
- */
+// Accepted Linear connection replies may still fail in-band.
 export const linearAccountConnect = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'linear.connect-account',
@@ -81,10 +64,7 @@ export const linearAccountConnect = bindDeferredRpcOperation(
   })
 )
 
-/**
- * A repository's issue-source preference. The screen re-reads the repo list afterwards rather than
- * patching its cached copy, so the reply body is not read — only its refusal is.
- */
+// Reload the repo list after preference writes; only acceptance is consumed, not the payload.
 export const taskRepoPreferenceWrite = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'repo.update-issue-source',

@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => {
   const focus: { value: string | null } = { value: null }
   return {
     focus,
-    quiesce: vi.fn<(target: EditorPathMutationTarget) => Promise<void>>(),
+    quiesce: vi.fn<(target: EditorPathMutationTarget) => Promise<() => void>>(),
     notify: vi.fn<(target: EditorPathMutationTarget) => void>(),
     discard: vi.fn(),
     bulkDiscard: vi.fn()
@@ -46,11 +46,12 @@ for (const bulk of [false, true]) {
     async ({ owner, focus }) => {
       mocks.focus.value = focus
       let release: () => void = () => {}
-      const pendingSave = new Promise<void>((resolve) => {
-        release = resolve
+      const releaseHold = (): void => {}
+      const pendingSave = new Promise<() => void>((resolve) => {
+        release = () => resolve(releaseHold)
       })
       mocks.quiesce.mockImplementation((target) =>
-        target.runtimeEnvironmentId === owner ? pendingSave : Promise.resolve()
+        target.runtimeEnvironmentId === owner ? pendingSave : Promise.resolve(releaseHold)
       )
       const activeRepoTarget: RuntimeClientTarget | null = runtimeTargetForOwnerEnvironment(owner)
       const { result } = renderHook(() =>

@@ -25,7 +25,6 @@ describe('tabRowPtyIdAfterLeafBinding', () => {
         'pty-2'
       )
     ).toBe('pty-1')
-    // The sibling's first bind, before its leaf is in the map, must not steal the row either.
     expect(
       tabRowPtyIdAfterLeafBinding({ ptyId: 'pty-1' }, { [LEAF_A]: 'pty-1' }, LEAF_B, 'pty-2')
     ).toBe('pty-1')

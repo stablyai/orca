@@ -1,19 +1,6 @@
 import type { PendingOutputRecord } from './types'
 
-// On-disk framing for the incremental terminal history log (output.log).
-//
-// Layout: header, then batch frames appended every checkpoint tick.
-//   header  = magic 'OCKL' (4 bytes) + u8 formatVersion + u32le generation
-//   frame   = u8 kind + u32le payloadLength + payload
-//     kind 0x01 batch  — payload u32le seq (one per appended take batch)
-//     kind 0x02 output — payload utf8 bytes
-//     kind 0x03 resize — payload u16le cols + u16le rows
-//     kind 0x04 clear  — empty payload
-//
-// Why framing instead of raw bytes: a crash can tear the final append. Length
-// prefixes make the torn tail detectable so restore truncates at the last
-// complete frame instead of replaying half an escape sequence ("reading a
-// corrupt checkpoint is worse than reading a slightly stale one").
+// Length-prefixed frames let recovery stop at a torn append while retaining complete records.
 
 const LOG_MAGIC = 'OCKL'
 const LOG_FORMAT_VERSION = 1
@@ -32,8 +19,7 @@ export type TerminalHistoryLogBatch = {
 export type TerminalHistoryLogContents = {
   generation: number
   batches: TerminalHistoryLogBatch[]
-  /** True when the file ended mid-frame (torn final append). The complete
-   *  prefix is still safe to replay. */
+  /** A torn final frame leaves the complete prefix safe to replay. */
   truncatedTail: boolean
 }
 
@@ -45,8 +31,7 @@ export function encodeLogHeader(generation: number): Buffer {
   return header
 }
 
-/** Validates magic + format version and returns the generation, or null when
- *  the buffer is not a readable log header. */
+/** Return the generation, or null for an incomplete or unsupported header. */
 export function decodeLogHeader(buffer: Buffer): number | null {
   if (buffer.length < LOG_HEADER_BYTES) {
     return null
@@ -100,11 +85,7 @@ export function encodeLogBatch(seq: number, records: PendingOutputRecord[]): Buf
   return batch
 }
 
-/** Returns null for missing magic / unknown format version — callers fall
- *  back to checkpoint-only restore. Seq-gap detection is also done here: a
- *  non-contiguous batch sequence means an appended batch was lost (e.g. main
- *  crashed between take and append), so the byte stream has a hole and
- *  replaying it would corrupt the restored terminal. */
+/** Reject malformed logs and sequence gaps; replaying across missing bytes would corrupt recovery. */
 export function decodeTerminalHistoryLog(buffer: Buffer): TerminalHistoryLogContents | null {
   const generation = decodeLogHeader(buffer)
   if (generation === null) {
@@ -141,8 +122,7 @@ export function decodeTerminalHistoryLog(buffer: Buffer): TerminalHistoryLogCont
       current = { seq, records: [] }
       batches.push(current)
     } else if (!current) {
-      // A record frame before any batch frame means the writer and format
-      // disagree — treat the whole log as unreadable.
+      // Records without a preceding batch cannot be attributed safely.
       return null
     } else if (kind === FRAME_OUTPUT) {
       current.records.push({

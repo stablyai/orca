@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
-import { PANE } from './server.test-fixtures'
+import { GOOD_PANE, PANE } from './server.test-fixtures'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
@@ -48,6 +48,16 @@ describe('OMP retirement acknowledgement', () => {
       server.retirePaneAuthority(PANE, ID)
     }
     server.ingestRemote(hook, null)
+    const expectedPane = operation === 'close' ? GOOD_PANE : PANE
+    if (operation === 'close') {
+      expect(server.getStatusSnapshot()).toEqual([])
+      expect(listener).not.toHaveBeenCalled()
+      server.ingestRemote({ ...hook, paneKey: GOOD_PANE }, null)
+    }
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ paneKey: expectedPane, state: 'working' })
+    ])
+    expect(listener).toHaveBeenCalledOnce()
     for (const [event] of listener.mock.calls) {
       expect(event).not.toHaveProperty('authorityRestartId')
     }

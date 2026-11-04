@@ -1,5 +1,5 @@
 import { lstatSync } from 'node:fs'
-import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../../filesystem/durable-file-write'
 
 export function profileStateAuthorityMarkerPath(databaseFile: string): string {
   return `${databaseFile}.authority`

@@ -3,9 +3,7 @@ import {
   AGENT_SESSION_FAILURE_COPY as COPY,
   type AgentSessionFailureCopyId,
   type AgentSessionFailureCopyValues
-} from '../../../../shared/agent-session-failure-copy'
-
-// Desktop words for why no chat can start under an account, before and after a send.
+} from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 
 type AvailabilityCopyId = Extract<
   AgentSessionFailureCopyId,
@@ -13,12 +11,15 @@ type AvailabilityCopyId = Extract<
   | 'claudeManagedNotSignedIn'
   | 'codexSystemNotSignedIn'
   | 'codexManagedNotSignedIn'
+  | 'antigravityNotSignedIn'
   | 'agentCommandNotSignedIn'
   | 'interactiveAgentNotSignedIn'
   | 'agentNotSignedIn'
   | 'thenSendAgain'
   | 'cliMissing'
-  | 'codexCliTooOld'
+  | 'cliMissingInWslDistro'
+  | 'cliTooOld'
+  | 'modelUnavailable'
 >
 
 export const AVAILABILITY_PIECES: Record<
@@ -69,8 +70,26 @@ export const AVAILABILITY_PIECES: Record<
       COPY.codexManagedNotSignedIn,
       values
     ),
+  antigravityNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.antigravityNotSignedIn',
+      COPY.antigravityNotSignedIn,
+      values
+    ),
+  modelUnavailable: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelUnavailable',
+      COPY.modelUnavailable,
+      values
+    ),
   cliMissing: (values) =>
     translate('components.native-chat.failureWords.cliMissing', COPY.cliMissing, values),
-  codexCliTooOld: (values) =>
-    translate('components.native-chat.failureWords.codexCliTooOld', COPY.codexCliTooOld, values)
+  cliMissingInWslDistro: (values) =>
+    translate(
+      'components.native-chat.failureWords.cliMissingInWslDistro',
+      COPY.cliMissingInWslDistro,
+      values
+    ),
+  cliTooOld: (values) =>
+    translate('components.native-chat.failureWords.cliTooOld', COPY.cliTooOld, values)
 }

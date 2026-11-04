@@ -14,7 +14,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { ActivityThreadOptionsMenu } from './activity-thread-controls'
-import type { ActivityGroupBy, ThreadReadFilter } from './activity-thread-types'
+import type {
+  ActivityGroupBy,
+  ThreadReadFilter
+} from '../../../../shared/agents-view-thread-filters'
 
 export function ActivityThreadListToolbar({
   activityFilterInputRef,
@@ -111,7 +114,7 @@ export function ActivityThreadListToolbar({
                 size="sm"
                 className="h-7 w-[116px] shrink-0 px-2 text-[11px]"
                 aria-label={translate(
-                  'auto.components.activity.ActivityPrototypePage.770d458144',
+                  'auto.components.activity.ActivityPrototypePage.groupAgentActivityBy',
                   'Group agent activity by'
                 )}
               >

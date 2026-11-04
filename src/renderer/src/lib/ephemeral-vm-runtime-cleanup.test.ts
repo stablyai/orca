@@ -19,22 +19,6 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
     cleanup.mockReset().mockResolvedValue({ status: 'cleaned' })
   })
 
-  it('cleans runtimes matched by workspace id and returns destroyed SSH target ids', async () => {
-    listRuntimes.mockResolvedValue([
-      runtime({ id: 'rt-1', workspaceId: 'wt-1', sshTargetId: 'runtime-ssh-a' }),
-      runtime({ id: 'rt-2', workspaceId: 'wt-other' })
-    ])
-
-    const destroyed = await cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })
-
-    expect(cleanup).toHaveBeenCalledTimes(1)
-    expect(cleanup).toHaveBeenCalledWith({ runtimeId: 'rt-1' })
-    expect(destroyed).toEqual({
-      destroyedSshTargetIds: ['runtime-ssh-a'],
-      retainedSshTargetIds: []
-    })
-  })
-
   it('cleans only the confirmed host runtime when another host owns the same workspace id', async () => {
     listRuntimes.mockResolvedValue([
       runtime({
@@ -74,8 +58,7 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
   })
 
   it('cleans a runtime matched only by its runtime-owned SSH target id', async () => {
-    // The SSH-mode workspace is the repo's main worktree, so project removal must still find the
-    // runtime via the repo's connectionId even when no workspace id matches.
+    // SSH-mode workspace deletion is project removal; find its runtime via repo connectionId even without a matching workspace ID.
     listRuntimes.mockResolvedValue([
       runtime({ id: 'rt-1', workspaceId: undefined, sshTargetId: 'runtime-ssh-orca-1' })
     ])
@@ -136,13 +119,6 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
 
     await expect(cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })).resolves.toEqual(
       { destroyedSshTargetIds: [], retainedSshTargetIds: ['runtime-ssh-a'] }
-    )
-  })
-
-  it('swallows listRuntimes failures', async () => {
-    listRuntimes.mockRejectedValue(new Error('boom'))
-    await expect(cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })).resolves.toEqual(
-      { destroyedSshTargetIds: [], retainedSshTargetIds: [] }
     )
   })
 

@@ -19,7 +19,7 @@ const mocks = vi.hoisted((): Mocks => ({
   wslRunsAnotherAccount: true,
   router: true
 }))
-vi.mock('../../pty-host-bindings', () => ({
+vi.mock('../pty-host-bindings', () => ({
   getPtyIpc: () => ({
     handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler)
   })
@@ -63,7 +63,6 @@ it('answers true only for a pane whose daemon lacks the claude function', async 
   expect(await ask({}, { id: 'old-1', target: HOST })).toBe(true)
   expect(await ask({}, { id: 'v43-1', target: HOST })).toBe(true)
   expect(await ask({}, { id: 'v42-1', target: HOST })).toBe(false)
-  // A pane on this build's daemon, or an SSH pane, which no local daemon owns.
   expect(await ask({}, { id: 'new-1', target: HOST })).toBe(false)
   expect(await ask({}, { id: 'ssh:conn-1:pty-1', target: HOST })).toBe(false)
   expect(await ask({}, { id: 42, target: HOST })).toBe(false)
@@ -74,12 +73,10 @@ it("judges a pane by its own runtime's selection, and hides it when that is unkn
   const ask = mocks.handlers.get('pty:openedBeforeClaudeAccounts')!
   mocks.runsAnotherAccount = false
   expect(await ask({}, { id: 'old-1', target: HOST })).toBe(false)
-  // A WSL pane asks its distro's router, not the host selection.
   const ubuntu = { runtime: 'wsl', wslDistro: 'Ubuntu' }
   expect(await ask({}, { id: 'old-1', target: ubuntu })).toBe(true)
   mocks.wslRunsAnotherAccount = false
   expect(await ask({}, { id: 'old-1', target: ubuntu })).toBe(false)
-  // No account selected for the pane's runtime, no router, or no runtime at all: hidden.
   mocks.runsAnotherAccount = null
   expect(await ask({}, { id: 'old-1', target: HOST })).toBe(false)
   expect(await ask({}, { id: 'old-1', target: { runtime: 'wsl', wslDistro: 'Debian' } })).toBe(

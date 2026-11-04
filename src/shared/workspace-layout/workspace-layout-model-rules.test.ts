@@ -76,6 +76,14 @@ describe('checkWorkspaceLayoutModelRules: the model itself, not what it saves to
     )
   })
 
+  it('flags a pane holding both a sleep record and a resume record', () => {
+    const broken = withGitWorkspace((workspace) => {
+      const leafData = workspace.leaves![leaf(3)]!
+      leafData.sleeping = { ...leafData.resume!, origin: 'worktree-sleep' }
+    })
+    expect(rules(broken)).toEqual(['leaf_sleeping_and_resume'])
+  })
+
   it('flags one leaf id in two tabs, since pane data is keyed by leaf alone', () => {
     const broken = withGitWorkspace((workspace) => {
       const unbound = workspace.tabs.find((tab) => tab.id === 'tab-unbound')!

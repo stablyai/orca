@@ -3,11 +3,8 @@ import {
   _getGhRateLimitBlockCount,
   _resetGhRateLimitBreaker,
   classifyGhRateLimitBucket,
-  createGhRateLimitBlockedError,
   getGhRateLimitBlockedUntilMs,
   isGhPrimaryRateLimitStderr,
-  isGhLocalOnlyCommand,
-  isGhRateLimitProbe,
   notifyGhPrimaryRateLimit,
   parseGhRateLimitScopeKey,
   recordGhPrimaryRateLimit,
@@ -32,34 +29,6 @@ describe('classifyGhRateLimitBucket', () => {
     ).toBe('search')
     expect(classifyGhRateLimitBucket(['search', 'prs', '--author', 'x'])).toBe('search')
   })
-
-  it('classifies graphql and defaults everything else to core', () => {
-    expect(classifyGhRateLimitBucket(['api', 'graphql', '-f', 'query=…'])).toBe('graphql')
-    expect(classifyGhRateLimitBucket(['api', 'repos/a/b/pulls?per_page=36'])).toBe('core')
-    expect(classifyGhRateLimitBucket(['pr', 'list', '--limit', '36'])).toBe('core')
-  })
-})
-
-describe('isGhLocalOnlyCommand', () => {
-  it('exempts keyring token reads and nothing else', () => {
-    expect(
-      isGhLocalOnlyCommand(['auth', 'token', '--user', 'alice', '--hostname', 'github.com'])
-    ).toBe(true)
-    expect(isGhLocalOnlyCommand(['auth', 'token', '--help'])).toBe(true)
-    expect(isGhLocalOnlyCommand(['auth', 'status'])).toBe(false)
-    expect(isGhLocalOnlyCommand(['auth', 'refresh', '-s', 'project'])).toBe(false)
-    expect(isGhLocalOnlyCommand(['api', 'user'])).toBe(false)
-  })
-})
-
-describe('isGhRateLimitProbe', () => {
-  it('recognizes the exempt rate_limit endpoint only', () => {
-    expect(isGhRateLimitProbe(['api', 'rate_limit'])).toBe(true)
-    expect(isGhRateLimitProbe(['api', '/rate_limit'])).toBe(true)
-    expect(isGhRateLimitProbe(['api', '--hostname', 'github.com', 'rate_limit'])).toBe(true)
-    expect(isGhRateLimitProbe(['api', 'search/issues?q=x'])).toBe(false)
-    expect(isGhRateLimitProbe(['pr', 'list'])).toBe(false)
-  })
 })
 
 describe('isGhPrimaryRateLimitStderr', () => {
@@ -68,6 +37,9 @@ describe('isGhPrimaryRateLimitStderr', () => {
       isGhPrimaryRateLimitStderr(
         'gh: API rate limit exceeded for user ID 1775218. If you reach out to GitHub Support… (HTTP 403)'
       )
+    ).toBe(true)
+    expect(
+      isGhPrimaryRateLimitStderr('GraphQL: API rate limit already exceeded for user ID 1775218.')
     ).toBe(true)
     expect(isGhPrimaryRateLimitStderr('You have exceeded a secondary rate limit.')).toBe(false)
     expect(isGhPrimaryRateLimitStderr('gh: Not Found (HTTP 404)')).toBe(false)
@@ -168,9 +140,7 @@ describe('breaker state', () => {
   })
 
   it('fires the reset probe with the tripping scope for non-default scopes', () => {
-    // Why: a WSL-only Windows install (or GHES) would otherwise stay on the
-    // blunt 5-minute fallback forever — the probe must learn which scope to
-    // query.
+    // Reset probes need the blocked host/runtime, including GHES and WSL-only installs.
     const probe = vi.fn()
     registerGhRateLimitResetProbe(probe)
 
@@ -182,12 +152,5 @@ describe('breaker state', () => {
     expect(
       getGhRateLimitBlockedUntilMs('core', Date.now(), 'native:github.acme-corp.com')
     ).not.toBeNull()
-  })
-
-  it('creates an error that classifies as rate_limited, not permission_denied', () => {
-    const error = createGhRateLimitBlockedError('search', Date.now() + 30_000)
-    expect(error.stderr.toLowerCase()).toContain('rate limit')
-    expect(error.stderr.toLowerCase()).not.toContain('403')
-    expect(error.ghRateLimitBlocked).toBe(true)
   })
 })

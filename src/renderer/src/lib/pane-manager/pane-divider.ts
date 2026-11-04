@@ -2,11 +2,6 @@ import type { PaneStyleOptions, ManagedPaneInternal } from './pane-manager-types
 import { attachDividerDrag, disposeDividerDrag, type DividerCallbacks } from './pane-divider-drag'
 export { createDividerFlexFrameScheduler } from './pane-divider-drag'
 
-// ---------------------------------------------------------------------------
-// Divider creation & drag-to-resize
-// ---------------------------------------------------------------------------
-
-/** Total hit area size = visible thickness + invisible padding on each side */
 export function getDividerHitSize(styleOptions: PaneStyleOptions): number {
   const thickness = styleOptions.dividerThicknessPx ?? 4
   const HIT_PADDING = 3
@@ -21,9 +16,7 @@ export function createDivider(
   const divider = document.createElement('div')
   divider.className = `pane-divider ${isVertical ? 'is-vertical' : 'is-horizontal'}`
 
-  // Ghostty-style: the element itself is a wide transparent hit area for easy
-  // grabbing. The visible line is drawn by a CSS ::after pseudo-element
-  // (see main.css), so `background` on the element stays transparent.
+  // Use a wide transparent hit target; CSS ::after paints only the visible divider line.
   const hitSize = getDividerHitSize(styleOptions)
   if (isVertical) {
     divider.style.width = `${hitSize}px`
@@ -63,10 +56,8 @@ export function applyDividerStyles(root: HTMLElement, styleOptions: PaneStyleOpt
     } else {
       el.style.height = `${hitSize}px`
     }
-    // Store the visual thickness for the CSS ::after pseudo-element
     el.style.setProperty('--divider-thickness', `${thickness}px`)
-    // Extension amount lets ::after reach the center of perpendicular
-    // dividers so intersecting splits visually connect.
+    // Extend ::after to perpendicular divider centers so split intersections connect.
     el.style.setProperty('--divider-extension', `${hitSize / 2}px`)
   }
 }

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isRelayDatabaseTransientError, PostgresDatabase } from './database.js'
 import {
   isFencedRelayDatabaseRejection,
@@ -44,6 +44,8 @@ function databaseOver(timesOut: (sql: string) => boolean) {
 }
 
 describe('a lost PostgreSQL reply', () => {
+  afterEach(() => vi.restoreAllMocks())
+
   it('ends a bounded locked statement with nothing else sent on its connection', async () => {
     const { database, clients } = databaseOver((sql) => sql.includes('FOR UPDATE'))
     const failure = await database

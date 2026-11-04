@@ -29,7 +29,7 @@ afterEach(async () => {
 })
 
 describe('verifyPackagedOrcadTemplate', () => {
-  it('accepts the exact six-target packaged template', async () => {
+  it('accepts the complete packaged template', async () => {
     const fixture = await createFixture()
 
     expect(() => verifyPackagedOrcadTemplate(fixture.root)).not.toThrow()
@@ -56,6 +56,25 @@ describe('verifyPackagedOrcadTemplate', () => {
     expect(() => verifyPackagedOrcadTemplate(fixture.root)).toThrow(
       /linux-x64-glibc217 .*(checksum mismatch|runtime reference)/
     )
+  })
+
+  it('rejects a page asset changed after manifest generation', async () => {
+    const fixture = await createFixture()
+    await writeFile(join(fixture.templateDir, 'out/mobile-web/index.html'), 'mutated')
+
+    expect(() => verifyPackagedOrcadTemplate(fixture.root)).toThrow(
+      'out/mobile-web/index.html checksum mismatch'
+    )
+  })
+
+  it('rejects a template whose inventory omits an asset the page lists', async () => {
+    const fixture = await createFixture()
+    const manifestPath = join(fixture.templateDir, ORCAD_TEMPLATE_MANIFEST_FILENAME)
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    delete manifest.commonSha256['out/mobile-web/index.html']
+    await writeFile(manifestPath, JSON.stringify(manifest))
+
+    expect(() => verifyPackagedOrcadTemplate(fixture.root)).toThrow('common manifest inventory')
   })
 
   it('rejects target-native bytes changed after manifest generation', async () => {
@@ -156,8 +175,7 @@ describe('verifyPackagedOrcadTemplate', () => {
     )
   })
 
-  // Design D2 reverses the old "unused, excluded" contract: SSH relays and managed orcad deploys
-  // materialize their slot from process.resourcesPath/orcad-template, so every desktop OS ships it.
+  // Desktop must carry deployment template on every OS: SSH/managed deploys materialize target slot from resourcesPath (D2).
   it('ships the deployment template as a resource on every desktop OS, never its runtimes', async () => {
     for (const platform of ['win', 'mac', 'linux']) {
       expect(builderConfig[platform].extraResources).toContainEqual({

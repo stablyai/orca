@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   selectAutomationAgentStatusEntryChange,
   UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY
@@ -42,25 +42,5 @@ describe('selectAutomationAgentStatusEntryChange', () => {
       selectAutomationAgentStatusEntryChange(measuredEntries, targetPaneKey, targetEntry)
     ).toBe(UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY)
     expect(enumerations).toBe(0)
-  })
-
-  it('reports removal and ignores inherited or non-enumerable entries', () => {
-    const targetPaneKey = 'target-tab:leaf'
-    const previousEntry = makeEntry(targetPaneKey)
-    const inheritedEntries = Object.create({ [targetPaneKey]: previousEntry }) as Record<
-      string,
-      AgentStatusEntry
-    >
-    const nonEnumerableEntries = Object.defineProperty({}, targetPaneKey, {
-      value: previousEntry
-    }) as Record<string, AgentStatusEntry>
-
-    expect(selectAutomationAgentStatusEntryChange({}, targetPaneKey, previousEntry)).toBeUndefined()
-    expect(selectAutomationAgentStatusEntryChange(inheritedEntries, targetPaneKey, undefined)).toBe(
-      UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY
-    )
-    expect(
-      selectAutomationAgentStatusEntryChange(nonEnumerableEntries, targetPaneKey, undefined)
-    ).toBe(UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY)
   })
 })

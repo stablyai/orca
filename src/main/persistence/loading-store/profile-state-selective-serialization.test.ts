@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { ProtectedSecretPersistence } from '../../protected-secret-persistence'
+import { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 import { serializeSelectiveProfileStateDomains } from './profile-state-authority-writes'
 import { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 
@@ -280,7 +280,6 @@ describe('selective profile domain serialization', () => {
       '[]'
     )
 
-    // A missing section is a deletion in both paths: omitted from a full save, null when selected.
     Reflect.deleteProperty(state, 'migrationUnsupportedPtyEntries')
     expect(
       serialization

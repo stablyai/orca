@@ -1,6 +1,9 @@
-// A structured chat on a paired server keeps pasted images in that server's attachment store, not
-// in its temp directory: a temp path has no owner and nothing ever removes it.
+// Structured chats own pasted images in their host attachment store; temp paths cannot distinguish sent from abandoned pastes.
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -18,7 +21,7 @@ vi.mock('electron', () => ({
   ipcMain: { removeHandler: vi.fn(), handle: mocks.handle },
   nativeImage: { createFromBuffer: vi.fn() }
 }))
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
 vi.mock('../../shared/runtime-environment-store', () => ({
@@ -80,44 +83,29 @@ beforeEach(() => {
   })
 })
 
-describe('clipboard:saveImageAsTempFile for a structured chat on a paired server', () => {
-  it("stores the image in the chat's attachment store, pinned to the pairing and server", async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the image save path never reads the store.
-    registerClipboardHandlers({} as never)
+describe('clipboard:saveImageAsTempFile for a local structured chat', () => {
+  it("stores the image in this machine's attachment store, where a send can claim it", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-local-paste-store-'))
+    try {
+      const store = new AgentSessionAttachmentStore(root, { hasSession: () => false })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the image save path never reads the store.
+      registerClipboardHandlers({} as never, { localChatAttachmentStore: async () => store })
 
-    await expect(
-      saveHandler()(event, {
-        runtimeEnvironmentId: 'remote-host-1',
-        agentSessionAttachment: {
-          sessionId: 'session-1',
-          expectedEnvironmentPairingRevision: 7,
-          expectedEnvironmentRuntimeId: 'runtime-a'
-        }
+      const saved = await saveHandler()(event, {
+        forNativeChatDraft: true,
+        forStructuredChat: true
       })
-    ).resolves.toBe('/srv/agent-session-attachments/s/upload-1/p.png')
 
-    const methods = mocks.callRuntimeEnvironment.mock.calls.map((call) => call[2])
-    expect(methods).toEqual([
-      'agentSessionAttachment.uploadStart',
-      'agentSessionAttachment.uploadAppend',
-      'agentSessionAttachment.uploadCommit'
-    ])
-    expect(mocks.callRuntimeEnvironment.mock.calls[0][3]).toMatchObject({
-      sessionId: 'session-1',
-      name: expect.stringMatching(/^orca-paste-.+\.png$/),
-      byteLength: 3
-    })
-    for (const call of mocks.callRuntimeEnvironment.mock.calls) {
-      expect(call[5]).toBe(7)
-      expect(call[7]).toMatchObject({ expectedEnvironmentRuntimeId: 'runtime-a' })
+      expect(saved).toEqual(
+        expect.stringMatching(
+          /[\\/][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[\\/]orca-paste-.+\.png$/
+        )
+      )
+      expect(String(saved).startsWith(root)).toBe(true)
+      expect(await readFile(String(saved), 'utf8')).toBe('png')
+      expect(mocks.callRuntimeEnvironment).not.toHaveBeenCalled()
+    } finally {
+      await rm(root, { recursive: true, force: true })
     }
-  })
-
-  it('keeps the server temp directory for a paste that names no chat', async () => {
-    mocks.callRuntimeEnvironment.mockResolvedValue({ ok: true, result: { uploadId: 'u' } })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the image save path never reads the store.
-    registerClipboardHandlers({} as never)
-    await saveHandler()(event, { runtimeEnvironmentId: 'remote-host-1' }).catch(() => {})
-    expect(mocks.callRuntimeEnvironment.mock.calls[0][2]).toBe('clipboard.startImageUpload')
   })
 })

@@ -1,29 +1,6 @@
 import type { KeybindingDefinition } from './types'
 import { platformBindings } from './definitions-support'
-
-export const TAB_MOVE_TO_SPLIT_COMMANDS = [
-  { id: 'tab.moveToSplitRight', direction: 'right' },
-  { id: 'tab.moveToSplitLeft', direction: 'left' },
-  { id: 'tab.moveToSplitDown', direction: 'down' },
-  { id: 'tab.moveToSplitUp', direction: 'up' }
-] as const satisfies readonly {
-  id: KeybindingDefinition['id']
-  direction: 'right' | 'left' | 'down' | 'up'
-}[]
-
-/** Leaves all directions unassigned to avoid claiming four new global chords by default. */
-function buildTabMoveToSplitKeybindingDefinitions(): KeybindingDefinition[] {
-  return TAB_MOVE_TO_SPLIT_COMMANDS.map(({ id, direction }) => ({
-    id,
-    title: `Move tab to split ${direction}`,
-    group: 'Tabs',
-    scope: 'tabs',
-    // Why: these run in global capture, so Settings must warn when an earlier global action owns the chord.
-    conflictGroup: 'global',
-    searchKeywords: ['shortcut', 'tab', 'split', 'move', direction],
-    defaultBindings: platformBindings([])
-  }))
-}
+import { buildTabMoveToSplitKeybindingDefinitions } from './tab-move-to-split-definitions'
 
 export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
   {
@@ -117,6 +94,19 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'browser', 'new'],
     defaultBindings: platformBindings(['Mod+Shift+B'])
+  },
+  {
+    id: 'tab.newBrowserSplitRight',
+    title: 'New browser tab in right split',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'browser', 'new', 'split', 'right', 'side', 'pane'],
+    // Why: macOS only — Ctrl+Alt+letter is AltGr text input on Windows/Linux.
+    defaultBindings: {
+      darwin: ['Mod+Alt+B'],
+      linux: [],
+      win32: []
+    }
   },
   {
     id: 'tab.newSimulator',
@@ -251,7 +241,7 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     title: 'Select Tab 1–9',
     group: 'Tab Navigation',
     scope: 'tabs',
-    // Why: no shared conflictGroup with workspace.selectByIndex so swapping their modifiers isn't a false conflict; safe because resolveWindowShortcutAction checks the workspace range first.
+    // Separate workspace/tab digit conflict groups allow modifier swaps; resolveWindowShortcutAction checks workspace ranges first.
     searchKeywords: ['shortcut', 'tab', 'select', 'switch', 'number', 'digit', '1-9', 'index'],
     // Why: representative chord for the 1-9 range (see workspace.selectByIndex); each platform avoids the workspace-jump chord (Mod+1-9).
     defaultBindings: {
@@ -301,5 +291,14 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
       linux: ['Alt+ArrowRight'],
       win32: ['Alt+ArrowRight']
     }
+  },
+  {
+    id: 'browser.showHistory',
+    title: 'Show Browser History',
+    group: 'Browser',
+    scope: 'browser',
+    searchKeywords: ['shortcut', 'browser', 'history', 'visited', 'clear'],
+    // Why Chrome's split: Ctrl+Y is redo (and readline yank) in pages on Linux/Windows.
+    defaultBindings: { darwin: ['Mod+Y'], linux: ['Mod+H'], win32: ['Mod+H'] }
   }
 ]

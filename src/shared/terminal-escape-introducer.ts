@@ -1,7 +1,4 @@
-// The byte after ESC decides which VT500 sequence just opened. Two scanners need that
-// decision -- the partial-tail state machine (`terminal-partial-escape-tail.ts`) and the
-// preview normalizer's per-sequence parser (`terminal-ansi-normalization.ts`) -- and they
-// must agree on the DCS/SOS/PM/APC set, so the table lives here rather than in each.
+// Share VT500 dispatch between tail tracking and preview normalization so their DCS/SOS/PM/APC classifications agree.
 
 export type TerminalEscapeIntroducer =
   | 'csi' // [

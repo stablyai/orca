@@ -62,9 +62,7 @@ function stopClock(): void {
 
 export function subscribePromptCacheCountdownClock(listener: Listener): () => void {
   listeners.add(listener)
-  // Why: the clock only runs while a countdown is visible. Refresh immediately
-  // on subscribe so a card mounted after a long idle period does not render a
-  // stale module-load timestamp for one second.
+  // Refresh on subscribe so a visible countdown never starts from a stale idle timestamp.
   currentNow = Date.now()
   listener()
   startClock()

@@ -28,16 +28,17 @@ async function openSourceControl(page: Page, expectedWorktreeId: string): Promis
     .poll(
       async () =>
         page.evaluate((expectedWorktreeId) => {
-          const state = window.__store?.getState()
-          if (!state) {
+          const store = window.__store
+          if (!store) {
             return false
           }
+          const state = store.getState()
           if (state.activeWorktreeId !== expectedWorktreeId) {
             state.setActiveWorktree(expectedWorktreeId)
           }
           state.setRightSidebarOpen(true)
           state.setRightSidebarTab('source-control')
-          const current = window.__store.getState()
+          const current = store.getState()
           const activeWorktree = Object.values(current.worktreesByRepo)
             .flat()
             .some((entry) => entry.id === expectedWorktreeId)
@@ -93,8 +94,7 @@ function getCreatePRComposer(page: Page): Locator {
 }
 
 function getCreatePRComposerSubmitButton(page: Page): Locator {
-  // Why: the header and composer currently share the same accessible name.
-  // Anchor to the field container so this submits the editable composer.
+  // Scope to the editable composer’s field container because its header shares the accessible name.
   return getCreatePRComposer(page).getByRole('button', { name: 'Create PR' })
 }
 
@@ -115,8 +115,7 @@ async function seedCreatePREligibleBranch(
     if (!worktree) {
       throw new Error('seeded e2e-secondary worktree not found')
     }
-    // Why: the worker-scoped test repo can accumulate extra non-main
-    // worktrees; use the seeded secondary worktree as the stable PR target.
+    // Use the seeded secondary worktree because other workers can grow this repo’s checkout list.
     state.setActiveWorktree(worktree.id)
     const repo = state.repos.find((entry) => entry.id === worktree.repoId)
     if (!repo) {
@@ -138,6 +137,7 @@ async function seedCreatePREligibleBranch(
       canCreate: true,
       blockedReason: null,
       nextAction: null,
+      reviewLookupOutcome: 'not_found' as const,
       defaultBaseRef: 'origin/main',
       head: branch
     }
@@ -163,7 +163,7 @@ async function seedCreatePREligibleBranch(
       getHostedReviewCreationEligibility: async () => eligibility,
       fetchHostedReviewForBranch: async () => null,
       setUpstreamStatus: () => undefined,
-      fetchUpstreamStatus: async () => undefined,
+      fetchUpstreamStatus: async () => null,
       fetchPRForBranch: async (repoPath: string, targetBranch: string) => {
         store.setState((next) => ({
           prCache: {

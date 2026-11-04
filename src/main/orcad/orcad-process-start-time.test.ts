@@ -20,6 +20,8 @@ vi.mock('../daemon/daemon-process-start-time', async (importOriginal) => ({
 import {
   compareOrcadProcessIdentity,
   readOrcadProcessIncarnation,
+  readOrcadProcessName,
+  readOrcadProcessOwnerUid,
   readOrcadProcessStartedAtMs
 } from './orcad-process-start-time'
 
@@ -97,6 +99,33 @@ describe('orcad process identity', () => {
       )
     ).toBe('unproven')
   })
+
+  it.each([
+    ['another non-root uid', 1001, 'differs'],
+    ['root', 0, 'unproven'],
+    ['the overflow uid an unmapped root shows as', 65534, 'unproven'],
+    ['the same uid', 1000, 'unproven'],
+    ['an unreadable owner', null, 'unproven']
+  ] as const)('reads that mismatch with the PID owned by %s as %s', (_owner, ownerUid, verdict) => {
+    const readers = {
+      startedAtMs: () => 158_000,
+      ownerUid: () => ownerUid,
+      platform: 'linux' as const
+    }
+    expect(compareOrcadProcessIdentity(42, { startedAtMs: 1_000, identity: '1000' }, readers)).toBe(
+      verdict
+    )
+  })
+
+  it('never proves reuse by owner when the recorded identity is not a uid', () => {
+    expect(
+      compareOrcadProcessIdentity(
+        42,
+        { startedAtMs: 1_000, identity: 'alice' },
+        { startedAtMs: () => 158_000, ownerUid: () => 1001, platform: 'linux' }
+      )
+    ).toBe('unproven')
+  })
 })
 
 describe.runIf(platform === 'linux')('orcad process incarnation on a real /proc', () => {
@@ -123,7 +152,6 @@ describe.runIf(platform === 'linux')('orcad process incarnation on a real /proc'
         bootId
       })
       expect(compareOrcadProcessIdentity(pid, { startedAtMs: null, ...other })).toBe('matches')
-      // This test process started well before the child, so its ticks name another process.
       expect(compareOrcadProcessIdentity(pid, { startedAtMs: null, ...own })).toBe('differs')
     } finally {
       child.kill('SIGKILL')
@@ -133,5 +161,12 @@ describe.runIf(platform === 'linux')('orcad process incarnation on a real /proc'
 
   it('answers null for a PID that does not exist', () => {
     expect(readOrcadProcessIncarnation(2 ** 30)).toBeNull()
+    expect(readOrcadProcessOwnerUid(2 ** 30)).toBeNull()
+    expect(readOrcadProcessName(2 ** 30)).toBeNull()
+  })
+
+  it('reads its own owner uid and command name', () => {
+    expect(readOrcadProcessOwnerUid(process.pid)).toBe(process.getuid?.())
+    expect(readOrcadProcessName(process.pid)).toMatch(/^[\x20-\x7e]+$/)
   })
 })

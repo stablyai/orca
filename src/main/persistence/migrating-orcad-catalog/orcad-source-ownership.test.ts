@@ -47,7 +47,6 @@ const group: ProjectGroup = {
   updatedAt: 0
 }
 
-/** A Windows relay host: drive-letter paths whose case differs between rows. */
 function windowsCatalog() {
   return {
     repos: [
@@ -57,7 +56,7 @@ function windowsCatalog() {
     ],
     projectGroups: [group],
     folderWorkspaces: [
-      // No connection of its own: the repo inside it, matched case-insensitively, places it.
+      // Repo containment infers the folder's host with case-insensitive Windows paths.
       folder({ id: 'fw-inferred', folderPath: 'c:/users/ann/WORK' }),
       folder({ id: 'fw-explicit', folderPath: 'C:\\elsewhere', connectionId: TARGET }),
       folder({ id: 'fw-local', folderPath: 'C:\\Users\\Ann\\local' }),

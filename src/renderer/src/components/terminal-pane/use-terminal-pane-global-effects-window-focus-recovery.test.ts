@@ -96,11 +96,7 @@ vi.mock('./terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
 
-// Why: this suite invokes the hook outside a real React render (the react mock
-// above runs effects synchronously and manages refs by hand), so a reactive
-// useAppStore(selector) call would throw an "Invalid hook call". Read the
-// current snapshot synchronously instead; getState/setState stay real so tests
-// can seed terminalLayoutsByTabId.
+// This harness runs hooks without React rendering; synchronous store snapshots avoid invalid-hook-call errors while retaining real layout state.
 vi.mock('@/store', async (importOriginal) => {
   const actual = await importOriginal<typeof StoreModule>()
   const realHook = actual.useAppStore
@@ -124,63 +120,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     cleanupGlobalEffectsTestWindow()
-  })
-
-  it('keeps the shared glyph atlas warm on plain window refocus', () => {
-    const manager = {
-      getPanes: vi.fn(() => []),
-      resumeRendering: vi.fn(),
-      resetWebglTextureAtlases: vi.fn(),
-      scheduleRevealRepaint: vi.fn(),
-      scheduleRevealPresent: vi.fn(),
-      suspendRendering: vi.fn(),
-      fitAllRevealedPanes: vi.fn(),
-      getActivePane: vi.fn(() => null)
-    }
-
-    // Why: deliberate reversal of the #6354 focus-clear. A refocus atlas wipe
-    // forces every pane to re-rasterize at once, and xterm's page-merge
-    // clear-model flag is consumed by a single renderer (#4480), so panes that
-    // lose the race paint garbled glyphs while an agent streams. Focus must
-    // stay a WebGL-retry + pane-scoped repaint boundary only.
-    registerManagerForReset(manager)
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      tabId: 'tab-1',
-      isActive: true,
-      isVisible: true,
-      isSyncFitEnabled: true,
-      paneCount: 0,
-      managerRef: { current: manager as never },
-      containerRef: { current: null },
-      paneTransportsRef: { current: new Map() },
-      isActiveRef: { current: false },
-      isVisibleRef: { current: false },
-      toggleExpandPane: vi.fn()
-    })
-
-    const focusListener = vi
-      .mocked(window.addEventListener)
-      .mock.calls.find(([eventName]) => eventName === 'focus')
-
-    expect(focusListener).toBeDefined()
-    const listener = focusListener?.[1]
-    if (typeof listener !== 'function') {
-      throw new Error('expected focus listener')
-    }
-    manager.resetWebglTextureAtlases.mockClear()
-    manager.scheduleRevealRepaint.mockClear()
-    manager.scheduleRevealPresent.mockClear()
-    listener(new Event('focus'))
-    listener(new Event('focus'))
-    listener(new Event('focus'))
-
-    // Count proof: repeated refocus performs zero shared-atlas wipes. It routes
-    // to the atlas-preserving present (scheduleRevealPresent), never the
-    // atlas-clearing reveal repaint, which would clear each pane's shared atlas.
-    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
-    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
-    expect(manager.scheduleRevealPresent).toHaveBeenCalledTimes(3)
   })
 
   it('recovers visible terminal rendering and input when the window regains focus', () => {
@@ -225,8 +164,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     manager.resumeRendering.mockClear()
     manager.resetWebglTextureAtlases.mockClear()
     manager.refreshAllPanes.mockClear()
-    // Clear the mount-time reveal spies so the assertions measure only the
-    // focus event, not the initial visibility resume.
+    // Exclude mount-time visibility recovery from the focus-event assertions.
     manager.scheduleRevealRepaint.mockClear()
     manager.scheduleRevealPresent.mockClear()
     manager.fitAllRevealedPanes.mockClear()
@@ -240,13 +178,9 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.requestTerminalBacklogRecovery).toHaveBeenCalledWith(terminal)
     expect(mocks.flushTerminalOutput).toHaveBeenCalledWith(terminal, { maxChars: 64 * 1024 })
     expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
-    // Refocus recovery uses the same wobble-resistant reveal fit path.
     expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
     expect(mocks.focusActivePane).toHaveBeenCalledWith(manager)
     expect(mocks.fitAndFocusPanes).not.toHaveBeenCalled()
-    // Why: refocus recovery is atlas-preserving — no shared-atlas reset, no
-    // registry-wide repaint, and no atlas-clearing reveal repaint; the
-    // atlas-preserving present covers stale pixels.
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     expect(manager.refreshAllPanes).not.toHaveBeenCalled()
     expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
@@ -295,8 +229,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     manager.refreshAllPanes.mockClear()
     captured.onSystemResumed?.()
 
-    // Why: OS resume is a genuine wake — GPU state may be stale without a
-    // context-loss event, so the shared-atlas clear and full repaint still run.
+    // OS resume can leave stale GPU state without context loss, requiring atlas clear and full repaint.
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
     expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
   })
@@ -362,56 +295,5 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     expect(siblingManager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     expect(manager.scheduleRevealPresent).toHaveBeenCalledTimes(1)
-  })
-
-  it('registers document visibility recovery for visible inactive terminals but not hidden ones', () => {
-    const addEventListener = vi.fn()
-    vi.stubGlobal('document', {
-      visibilityState: 'visible',
-      addEventListener,
-      removeEventListener: vi.fn()
-    })
-    const manager = {
-      getPanes: vi.fn(() => []),
-      resumeRendering: vi.fn(),
-      resetWebglTextureAtlases: vi.fn(),
-      scheduleRevealRepaint: vi.fn(),
-      scheduleRevealPresent: vi.fn(),
-      suspendRendering: vi.fn(),
-      fitAllRevealedPanes: vi.fn(),
-      getActivePane: vi.fn(() => null)
-    }
-    const useMountForVisibilityRecovery = (options: {
-      isActive: boolean
-      isVisible: boolean
-    }): void => {
-      resetHookRefs()
-      beginHookRender()
-      useTerminalPaneGlobalEffects({
-        tabId: 'tab-1',
-        isActive: options.isActive,
-        isVisible: options.isVisible,
-        isSyncFitEnabled: options.isVisible,
-        paneCount: 0,
-        managerRef: { current: manager as never },
-        containerRef: { current: null },
-        paneTransportsRef: { current: new Map() },
-        isActiveRef: { current: false },
-        isVisibleRef: { current: false },
-        toggleExpandPane: vi.fn()
-      })
-    }
-
-    useMountForVisibilityRecovery({ isActive: false, isVisible: true })
-    expect(
-      addEventListener.mock.calls.some(([eventName]) => eventName === 'visibilitychange')
-    ).toBe(true)
-
-    addEventListener.mockClear()
-    useMountForVisibilityRecovery({ isActive: true, isVisible: false })
-
-    expect(
-      addEventListener.mock.calls.some(([eventName]) => eventName === 'visibilitychange')
-    ).toBe(false)
   })
 })

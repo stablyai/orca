@@ -47,9 +47,7 @@ function buildPreviewDecorations(state: EditorState, storage: DocLinkStorage): D
       }
       const from = pos + match.index
       const to = from + match[0].length
-      // Why: only decorate the match the cursor is currently editing. Other
-      // `[[target]]` matches are auto-converted to atom nodes on the next
-      // transaction, so decorating them here just causes a one-frame flicker.
+      // Decorate only the match under the cursor; others soon become atoms and would briefly flicker.
       if (cursor <= from || cursor > to) {
         continue
       }
@@ -202,18 +200,12 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
       }
     },
 
-    // Why: a ProseMirror plugin (not an input rule) so that [[target]] typed in
-    // any order — brackets first then target, paste, etc. — converts to a doc
-    // link node. Input rules only fire on sequential append at the cursor.
+    // A plugin converts links typed or pasted in any order; input rules cover only sequential appends.
     addProseMirrorPlugins() {
       const nodeType = this.type
       const storage = this.storage
       return [
-        // Why: when the cursor is adjacent to a doc link atom and the user presses
-        // an arrow key toward it, dissolve the atom back to editable [[target]] text.
-        // Without this, atom nodes are un-enterable — the cursor jumps over them.
-        // Uses handleKeyDown (not addKeyboardShortcuts) so we can check modifier
-        // keys and let Shift+Arrow extend the selection normally.
+        // Dissolve adjacent atoms on plain arrows so they can be edited; inspect modifiers to preserve Shift+Arrow selection.
         new Plugin({
           key: docLinkDissolveKey,
           props: {
@@ -274,9 +266,7 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
                 const from = pos + match.index
                 const to = from + match[0].length
 
-                // Why: skip when the cursor is anywhere from just inside [[
-                // through the closing ]]. The inline preview decoration gives
-                // real-time resolution feedback while the user is still editing.
+                // Keep cursor-owned link text editable; preview decorations provide resolution feedback until the cursor leaves.
                 if (cursor > from && cursor <= to) {
                   continue
                 }
@@ -291,9 +281,7 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
           }
         }),
 
-        // Why: while the cursor is inside [[target]], the text hasn't converted
-        // to an atom node yet. This decoration gives real-time blue/grey feedback
-        // so the user knows whether the target resolves before moving the cursor out.
+        // Show resolution feedback for link text under the cursor before it converts to an atom.
         new Plugin({
           key: docLinkInlinePreviewKey,
           state: {

@@ -7,7 +7,10 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { findIndexedProjectGroupOwner } from '@/lib/worktree-runtime-owner-index'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import {
+  getRuntimeTargetHostId,
+  ipcOrRuntimeTargetForHostId
+} from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 type ProjectGroupHostParts = Pick<ProjectGroup, 'connectionId' | 'executionHostId'>
@@ -19,8 +22,7 @@ type ProjectGroupOwnerRoutingState = {
   settings: RoutingSettings
 }
 
-// Why: persisted rows predate host stamping and may carry padded/unparseable ids; normalize so
-// routing and catalog identity agree on the same owner host.
+// Normalize legacy padded/invalid host stamps so routing and catalog identity agree.
 export function getProjectGroupHostId(group: ProjectGroupHostParts): ExecutionHostId {
   return getRepoExecutionHostId(group)
 }
@@ -62,10 +64,7 @@ export function resolveProjectGroupOwnerHostId(
   return getProjectGroupHostId(owner)
 }
 
-/**
- * Transport to the group's owner, so a mutation never follows the focused host; `null` when no
- * row names the group. Direct-SSH groups live in this app's catalog and ride its IPC.
- */
+/** Route group mutations to owner; null without a row. Direct SSH groups use this app’s catalog/IPC. */
 export function runtimeTargetForProjectGroupOwner(
   state: Pick<ProjectGroupOwnerRoutingState, 'projectGroups'>,
   groupId: string,
@@ -73,4 +72,21 @@ export function runtimeTargetForProjectGroupOwner(
 ): RuntimeClientTarget | null {
   const owner = findIndexedProjectGroupOwner(state.projectGroups, groupId, hostId)
   return owner ? ipcOrRuntimeTargetForHostId(hostId ?? getProjectGroupHostId(owner)) : null
+}
+
+/** Refuse known groups absent from the target catalog; host would silently clear unknown membership. */
+export function isProjectGroupJoinableFromCatalog(
+  projectGroups: readonly ProjectGroupOwnerRecord[],
+  groupId: string,
+  catalog: RuntimeClientTarget
+): boolean {
+  const catalogHostId = getRuntimeTargetHostId(catalog)
+  const copies = projectGroups.filter((group) => group.id === groupId)
+  return (
+    copies.length === 0 ||
+    copies.some((group) => {
+      const groupCatalog = ipcOrRuntimeTargetForHostId(getProjectGroupHostId(group))
+      return groupCatalog !== null && getRuntimeTargetHostId(groupCatalog) === catalogHostId
+    })
+  )
 }

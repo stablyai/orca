@@ -40,22 +40,13 @@ function managedAccounts() {
 }
 
 describe('structured OpenCode account binding', () => {
-  it('records only that the chat has no managed profile', () => {
-    const accounts = managedAccounts()
-    accounts.select(null)
-    expect(resolveStructuredOpenCodeAccountHome({ managedAccounts: accounts })).toEqual({
-      kind: 'opencode',
-      locator: { kind: 'unmanaged' }
-    })
-  })
-
   it('uses the pinned managed profile after selection changes and refuses removal', () => {
     const accounts = managedAccounts()
     const binding = resolveStructuredOpenCodeAccountHome({ managedAccounts: accounts })
     accounts.select(second)
     const environment = environmentForStructuredOpenCodeAccountHome(binding, {
       managedAccounts: accounts,
-      baseEnvironment: { PATH: '/bin' }
+      baseEnvironment: { PATH: '/bin', XDG_DATA_HOME: '/settings/data', OPENCODE_DB: 'work.db' }
     })
     expect(environment.XDG_DATA_HOME).toBe(`/profiles/${first}/data`)
     expect(environment.OPENCODE_DB).toBe('opencode.db')

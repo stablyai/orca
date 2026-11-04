@@ -24,11 +24,7 @@ export function mobileWebBundleFiller(byteLength: number, seed: number): Buffer 
 
 export type SyntheticAsset = { path: string; bytes: Buffer; contentType: string }
 
-/**
- * A bundle the real builder cannot produce today: its largest asset spans three chunks, where every
- * asset the Phase A bootstrap emits is under one. Multi-chunk paging has to be exercised rather than
- * assumed, and CI unit jobs never build out/mobile-web, so the fixture is synthetic on purpose.
- */
+/** Use synthetic multi-chunk assets because the current builder emits smaller files and CI unit jobs do not build the bundle. */
 function syntheticAssets(seed: number): SyntheticAsset[] {
   const script = mobileWebBundleFiller(MOBILE_WEB_BUNDLE_CHUNK_BYTES * 2 + 1024, seed)
   const stylesheet = mobileWebBundleFiller(MOBILE_WEB_BUNDLE_CHUNK_BYTES, seed + 1)
@@ -92,17 +88,14 @@ export function writeSyntheticMobileWebBundle(
   return { root, buildId, assets }
 }
 
-/** A dispatcher carrying only these methods. Nothing here reaches the runtime service: the bundle is
- *  read off the install, so the dispatcher's one call into it is the envelope's runtime id. */
+/** Only the envelope reads runtimeId; bundle methods read directly from this install. */
 export function mobileWebBundleDispatcher(): RpcDispatcher {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: neither mobileWeb.bundle method takes a runtime argument, so getRuntimeId (read once, to stamp the envelope) is the only member this dispatcher can reach.
   const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
   return new RpcDispatcher({ runtime, methods: MOBILE_WEB_BUNDLE_METHODS })
 }
 
-/** The install root the resolver probes. Installed through the port, not an electron mock: the
- *  resolver is reachable from the runtime's import graph and so must never import electron. The
- *  shared setup reinstalls a default environment before every test, so nothing here needs undoing. */
+/** Install the app-path port, avoiding Electron in the runtime import graph; shared setup resets it before every test. */
 export function installMobileWebBundleAppPath(appPath: string): void {
   installFakeAppEnvironment({ getAppPath: () => appPath, getPath: () => appPath })
 }

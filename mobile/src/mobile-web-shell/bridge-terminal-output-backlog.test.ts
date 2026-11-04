@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge/bridge-caps'
+import { readBridgeHostMessage, type BridgeHostMessage } from './bridge/bridge-envelope'
 import {
   BRIDGE_ACK_INTERVAL_BYTES,
   BRIDGE_ACK_INTERVAL_FRAMES
@@ -10,28 +11,13 @@ import { TERMINAL_STREAM_MAX_PENDING_BYTES } from './bridge-terminal-output-back
 import { mobileTerminalSnapshotByteBudget } from '../session/terminal-snapshot-byte-budget.web'
 import type { TerminalBacklogTimers } from './bridge-terminal-output-backlog'
 
-/**
- * A terminal stream against a page that reads slower than the host writes, which is every terminal.
- *
- * The byte window ends a stream when the page falls 4 MiB behind. For a terminal that is not a page
- * that went wrong: C7's design measured the host producing 70.3 MiB/s of JSON while real xterm in a
- * browser applies 2.2 MiB/s, so an ordinary 5 MB `cat` crosses the window in 62 ms and the pane
- * dies before it has painted anything.
- *
- * The timelines below are rebuilt from that design's measured parameters rather than replayed from
- * its capture files, which this lane does not carry: the host's batcher flushes at 64 KiB or 5 ms
- * and `iterateTerminalOutputFrameChunks` splits at 48 KiB, so the frame sizes are the ones those
- * two rules produce, and the JSON expansion is measured here on the bytes rather than assumed —
- * plain output escapes little, and `grep --color` is SGR sequences whose ESC bytes cost six each.
- */
+// Rebuild measured terminal timing: host JSON at 70.3 MiB/s, xterm at 2.2 MiB/s, batcher 64 KiB/5 ms and chunker 48 KiB; a 5 MB cat exhausts the ordinary window before paint.
+// Measure JSON expansion for ASCII and SGR output; simulate the timeline because the original design capture files are not in this lane.
 
-/** The chunker's split, which is what bounds one output payload before any of this runs. */
 const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
 
-/** What the page applies per second, measured by the design against real xterm with WebGL. */
 const PAGE_DRAIN_BYTES_PER_SECOND = 2.2 * 1024 * 1024
 
-/** A 5 MB transcript, which is the `cat` the design ran. */
 const TRANSCRIPT_BYTES = 5 * 1024 * 1024
 
 function plainChunk(index: number): string {
@@ -56,7 +42,6 @@ function transcript(chunkOf: (index: number) => string): string[] {
   return chunks
 }
 
-/** A clock a case drives, so the twenty-second silence bound costs a test nothing to reach. */
 function manualTimers(): TerminalBacklogTimers & { fire: () => void; armed: () => boolean } {
   let handler: (() => void) | null = null
   return {
@@ -77,23 +62,13 @@ function manualTimers(): TerminalBacklogTimers & { fire: () => void; armed: () =
 }
 
 type Replay = {
-  /** Every chunk the page's listener was handed, in the order it was handed them. */
   delivered: string[]
-  /** The largest event frame the shell posted, which must never be over the cap. */
   largestFrameBytes: number
-  /** Frames the page had to read, against the chunks the host produced. */
   frames: number
   ended: boolean
 }
 
-/**
- * One transcript through the real ledger, against a page that acks on the real intervals.
- *
- * Time is simulated rather than waited on: the page is credited with drain time between emits at
- * the rate measured above, and acks whenever it has read a full interval's worth. That is the same
- * order a device runs in — the shell emits, the page reads, the page acks — and it is what decides
- * whether the window was ever the thing that ended the stream.
- */
+// Simulate emit → limited page drain → interval acknowledgement at measured rates; this ordering determines whether backpressure kills the stream.
 function replay(chunks: readonly string[], options: { method?: string } = {}): Replay {
   const client = createFakeRpcClient()
   const timers = manualTimers()
@@ -114,16 +89,42 @@ function replay(chunks: readonly string[], options: { method?: string } = {}): R
   let unreadBytes = 0
   let drainCreditBytes = 0
 
-  /** One frame off the page's queue, or false when it has caught up. This is the drain. */
+  const events: { frame: BridgeHostMessage; bytes: number }[] = []
+  let postedCursor = 0
+  let largestFrameBytes = 0
+  let ended = false
+
+  const readPosted = (): void => {
+    for (const json of bridge.posted.slice(postedCursor)) {
+      const read = readBridgeHostMessage(json)
+      if (!read.ok) {
+        throw new Error(`the page would refuse this frame: ${read.refusal}`)
+      }
+      postedCursor += 1
+      const frame = read.message
+      const bytes = JSON.stringify(frame).length
+      largestFrameBytes = Math.max(largestFrameBytes, bytes)
+      if (frame.type === 'event' && frame.id === ID) {
+        events.push({ frame, bytes })
+      }
+      if (frame.type === 'end' && frame.id === ID) {
+        ended = true
+      }
+    }
+  }
+
   const readOne = (): boolean => {
-    const events = bridge.frames().filter((frame) => frame.type === 'event' && frame.id === ID)
-    const frame = events[readFrames]
-    if (frame === undefined || frame.type !== 'event') {
+    readPosted()
+    const event = events[readFrames]
+    if (event === undefined) {
+      return false
+    }
+    const { frame, bytes } = event
+    if (frame.type !== 'event') {
       return false
     }
     readFrames += 1
     lastReadSeq = frame.seq
-    // A binary event carries no `payload` at all, so the arm is narrowed rather than reached into.
     const payload = 'payload' in frame ? frame.payload : null
     let applied = 0
     if (payload !== null && typeof payload === 'object' && 'chunk' in payload) {
@@ -135,7 +136,7 @@ function replay(chunks: readonly string[], options: { method?: string } = {}): R
     }
     drainCreditBytes -= applied
     unreadFrames += 1
-    unreadBytes += JSON.stringify(frame).length
+    unreadBytes += bytes
     if (unreadFrames >= BRIDGE_ACK_INTERVAL_FRAMES || unreadBytes >= BRIDGE_ACK_INTERVAL_BYTES) {
       unreadFrames = 0
       unreadBytes = 0
@@ -146,25 +147,18 @@ function replay(chunks: readonly string[], options: { method?: string } = {}): R
 
   for (const chunk of chunks) {
     stream.emit({ type: 'data', streamId: 1, chunk })
-    // The host's batcher flushes at 64 KiB or 5 ms, so one chunk is about 5 ms of wall clock and
-    // the page has that long to apply what it can.
+    // Allow about 5 ms of drain per batcher chunk, matching its 64 KiB/5 ms flush.
     drainCreditBytes += (PAGE_DRAIN_BYTES_PER_SECOND * 5) / 1000
-    while (drainCreditBytes > 0 && readOne()) {
-      // The page reads until its time is spent, which is what makes it 31x slower than the host.
-    }
+    while (drainCreditBytes > 0 && readOne()) {}
   }
-  // Then it catches up with no producer in front of it. No ack beyond the ones `readOne` already
-  // sends: acking every frame here was the page behaving better than a page can, and it hid a
-  // backlog left armed after its queue emptied.
-  while (readOne()) {
-    // The page reads; the interval acks inside `readOne` are the only ones it sends.
-  }
-  const events = bridge.frames().filter((frame) => frame.type === 'event' && frame.id === ID)
+  // Catch up using only normal interval acknowledgements; acking every frame would hide a stale timer after the queue empties.
+  while (readOne()) {}
+  readPosted()
   return {
     delivered,
-    largestFrameBytes: Math.max(0, ...bridge.frames().map((frame) => JSON.stringify(frame).length)),
+    largestFrameBytes,
     frames: events.length,
-    ended: bridge.frames().some((frame) => frame.type === 'end' && frame.id === ID)
+    ended
   }
 }
 
@@ -173,8 +167,7 @@ describe.each([
   ['grep --color over the same file', transcript(colouredChunk)]
 ])('%s, against a page draining at 2.2 MiB/s', (_label, chunks) => {
   it('is what the byte window kills, which is the defect', () => {
-    // The control, on a stream the hold rule is not keyed to: same timeline, same page, same
-    // window. Without this an assertion that the terminal survives says nothing about why.
+    // Use the same timeline on a nonterminal control stream to prove survival comes from the hold rule.
     const other = replay(chunks, { method: 'session.tabs.subscribe' })
     expect(other.ended).toBe(true)
     expect(other.delivered.length).toBeLessThan(chunks.length)
@@ -203,7 +196,6 @@ describe('the two ends a held terminal stream has', () => {
     const bridge = held()
     const client = bridge.client
     const stream = client.streams[0]
-    // Enough to close the window, so the stream starts holding and arms the clock.
     for (let index = 0; index < 200; index += 1) {
       stream.emit({ type: 'data', streamId: 1, chunk: 'x'.repeat(64 * 1024) })
     }
@@ -232,12 +224,15 @@ describe('the two ends a held terminal stream has', () => {
     const reports = bridge.diagnostics.filter((entry) => entry.kind === 'terminal-backlog')
     expect(reports).toHaveLength(1)
     expect(reports[0]).toMatchObject({ ended: 'pending-ceiling' })
-    expect(reports[0]).toHaveProperty('peakPendingBytes')
+    const report = reports[0]
+    if (report?.kind !== 'terminal-backlog') {
+      throw new Error('backlog report missing')
+    }
+    expect(report.peakPendingBytes).toBeGreaterThan(TERMINAL_STREAM_MAX_PENDING_BYTES)
   })
 
   it('still ends on one event over the frame cap, which is C0.3 and is not slowness', () => {
-    // The rule that does not move: an event the page's own reader would refuse leaves a hole its
-    // reader cannot see, and holding it would only postpone the same verdict.
+    // Holding cannot rescue an event the page refuses for size; the frame cap still ends it visibly.
     const bridge = held()
     bridge.client.streams[0].emit({
       type: 'data',
@@ -251,14 +246,7 @@ describe('the two ends a held terminal stream has', () => {
 })
 
 describe('a held terminal stream that has caught up', () => {
-  /**
-   * The invariant the first round broke: armed must mean waiting on the page.
-   *
-   * An ack re-armed the clock and the drain that followed emptied the queue without clearing it, so
-   * a terminal that had delivered every byte and gone quiet — which is what a terminal does between
-   * commands — died on `overflow` twenty seconds later. The suite could not see it because its
-   * replay acked every frame in the catch-up loop, which no page does.
-   */
+  // After the final delivery, clear the silence timer; an idle terminal owes no further ack and must not die twenty seconds later.
   it('does not die on the silence bound once its queue is empty', () => {
     const timers = manualTimers()
     const bridge = harness({ ready: true, terminalTimers: timers })
@@ -268,13 +256,11 @@ describe('a held terminal stream that has caught up', () => {
     const stream = bridge.client.streams[0]
     const chunk = 'x'.repeat(1024)
     const emitted = 300
-    // Past the frame window, so output is held and the clock is armed.
     for (let index = 0; index < emitted; index += 1) {
       stream.emit({ type: 'data', streamId: 1, chunk })
     }
     expect(timers.armed()).toBe(true)
 
-    /** Every byte the page has been handed, which is how it knows it has caught up. */
     const deliveredBytes = (): number =>
       bridge
         .frames()
@@ -289,9 +275,7 @@ describe('a held terminal stream that has caught up', () => {
             : total
         }, 0)
 
-    // Acks stop at the one that completes delivery. A page sends no ack after that: it acks on
-    // reading frames, and there are no more frames to read. Acking once more is what hid this —
-    // that extra ack finds an empty queue and clears the clock by accident.
+    // Stop acknowledgements after the final delivered frame; an extra ack would accidentally clear the stale timer this case must expose.
     const total = emitted * chunk.length
     for (let pass = 0; pass < 2_000 && deliveredBytes() < total; pass += 1) {
       const events = bridge.frames().filter((frame) => frame.type === 'event' && frame.id === ID)
@@ -303,7 +287,6 @@ describe('a held terminal stream that has caught up', () => {
     }
     expect(deliveredBytes()).toBe(total)
 
-    // An idle terminal: nothing pending, nothing owed, and no clock that could end it.
     expect(timers.armed()).toBe(false)
     timers.fire()
     expect(bridge.frames().some((frame) => frame.type === 'end')).toBe(false)
@@ -324,16 +307,10 @@ describe('the cases the rulings name', () => {
     return Object.assign(bridge, { timers })
   }
 
-  /**
-   * Enough frames to close the window on its frame count rather than its byte count.
-   *
-   * The two limits are the same state to this module and one of them is 4 MiB of string work per
-   * case. `BRIDGE_MAX_UNACKED_FRAMES` is 256, so this closes it with a few hundred kilobytes.
-   */
+  // Close the frame-count window cheaply; 256 small frames exercise the same held state without allocating a 4 MiB byte-window fixture.
   const SMALL_CHUNK = 'x'.repeat(1024)
   const OVER_FRAME_WINDOW = 300
 
-  /** The page reading and acking until the shell has nothing left to hand it. */
   function drain(bridge: ReturnType<typeof harness>, id: string): void {
     for (let pass = 0; pass < 2_000; pass += 1) {
       const events = bridge.frames().filter((frame) => frame.type === 'event' && frame.id === id)
@@ -355,7 +332,6 @@ describe('the cases the rulings name', () => {
       bridge.client.streams[0].emit({ type: 'data', streamId: 1, chunk: SMALL_CHUNK })
     }
     bridge.client.streams[1].emit({ type: 'data', streamId: 2, chunk: 'quiet' })
-    // The second stream is nowhere near its own window, so its one frame went out at once.
     const other = bridge.frames().filter((frame) => frame.type === 'event' && frame.id === OTHER)
     expect(other).toHaveLength(1)
     expect(bridge.frames().some((frame) => frame.type === 'end' && frame.id === OTHER)).toBe(false)
@@ -368,7 +344,6 @@ describe('the cases the rulings name', () => {
     }
     bridge.host.receive(clientFrame({ type: 'cancel', id: ID, target: 'subscription' }))
     const after = bridge.frames().length
-    // Whatever the desktop keeps sending, and whatever the page acks, is now nobody's.
     bridge.client.streams[0].emit({ type: 'data', streamId: 1, chunk: SMALL_CHUNK })
     bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: 1 }))
     expect(bridge.frames()).toHaveLength(after)
@@ -390,8 +365,7 @@ describe('the cases the rulings name', () => {
   })
 
   it('breaks a merge run on a payload that is not output, and keeps the order', () => {
-    // A resize or a metadata frame is state the reader applies in place; concatenating across one
-    // would deliver bytes it should have applied after. The run stops at it and resumes behind it.
+    // Merge only consecutive output; resize/metadata must retain their position between byte runs.
     const bridge = subscribed([ID])
     for (let index = 0; index < OVER_FRAME_WINDOW; index += 1) {
       bridge.client.streams[0].emit({ type: 'data', streamId: 1, chunk: SMALL_CHUNK })
@@ -399,34 +373,36 @@ describe('the cases the rulings name', () => {
     bridge.client.streams[0].emit({ type: 'resized', streamId: 1, cols: 80, rows: 24 })
     bridge.client.streams[0].emit({ type: 'data', streamId: 1, chunk: 'after-the-resize' })
     drain(bridge, ID)
-    const kinds = bridge
+    const payloads = bridge
       .frames()
-      .filter((frame) => frame.type === 'event' && frame.id === ID)
-      .map((frame) =>
-        frame.type === 'event' &&
-        'payload' in frame &&
-        frame.payload !== null &&
-        typeof frame.payload === 'object' &&
-        'type' in frame.payload
-          ? frame.payload.type
-          : null
-      )
-    const resizeAt = kinds.indexOf('resized')
+      .flatMap((frame) => (frame.type === 'event' && 'payload' in frame ? [frame.payload] : []))
+    const resizeAt = payloads.findIndex(
+      (payload) =>
+        typeof payload === 'object' &&
+        payload !== null &&
+        'type' in payload &&
+        payload.type === 'resized'
+    )
     expect(resizeAt).toBeGreaterThan(0)
-    // The resize is its own frame, and the chunk behind it is behind it.
-    expect(kinds.slice(resizeAt + 1)).toContain('data')
+    expect(payloads[resizeAt]).toEqual({ type: 'resized', streamId: 1, cols: 80, rows: 24 })
+    const before = payloads
+      .slice(0, resizeAt)
+      .map((payload) => {
+        if (typeof payload !== 'object' || payload === null || !('chunk' in payload)) {
+          throw new Error('missing pre-resize output')
+        }
+        return payload.chunk
+      })
+      .join('')
+    expect(before).toBe(SMALL_CHUNK.repeat(OVER_FRAME_WINDOW))
+    expect(payloads.slice(resizeAt + 1)).toEqual([
+      { type: 'data', streamId: 1, chunk: 'after-the-resize' }
+    ])
     expect(bridge.frames().some((frame) => frame.type === 'end')).toBe(false)
   })
 })
 
-/**
- * The boundary the desktop's snapshot budget is sized against, checked on the side that enforces it.
- *
- * The page asks the host for a snapshot no larger than this, and the host trims against it by
- * building the payload it will publish. Here is the other half of that contract: a payload that
- * serializes to exactly the budget crosses, and one byte more does not. Without this the budget is
- * a number two files agree on and nothing tests.
- */
+// Test the enforced half of the desktop snapshot budget: a serialized payload at budget crosses, and one over frame cap is refused.
 describe('a snapshot payload at the budget the page asks for', () => {
   function scrollbackPayload(payloadBytes: number): unknown {
     const skeleton = JSON.stringify({ type: 'scrollback', streamId: 1, serialized: '' }).length
@@ -449,29 +425,13 @@ describe('a snapshot payload at the budget the page asks for', () => {
     const events = bridge.frames().filter((frame) => frame.type === 'event' && frame.id === ID)
     expect(events).toHaveLength(1)
     expect(bridge.frames().some((frame) => frame.type === 'end')).toBe(false)
-    expect(bridge.posted[bridge.posted.length - 1].length).toBeLessThanOrEqual(
-      BRIDGE_MAX_MESSAGE_BYTES
-    )
-  })
-
-  /**
-   * The budget is a bound, and a bound with slack in it is doing its job.
-   *
-   * It is computed at the widest every envelope field can be written — a full-length id and `seq`
-   * at the largest integer it can hold — so a real first frame, whose `seq` is 1, has room to
-   * spare. Asserted as a direction rather than as a number: what must never happen is the budget
-   * leaving too little, and the amount it leaves over is the seq counter's width.
-   */
-  it('leaves the frame inside the cap with room, rather than exactly at it', () => {
-    const bridge = post(mobileTerminalSnapshotByteBudget() ?? 0)
-    const frame = bridge.posted[bridge.posted.length - 1]
-    expect(frame.length).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
-    expect(BRIDGE_MAX_MESSAGE_BYTES - frame.length).toBeLessThan(64)
+    const bytes = new TextEncoder().encode(bridge.posted.at(-1)).byteLength
+    expect(bytes).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
+    expect(BRIDGE_MAX_MESSAGE_BYTES - bytes).toBeLessThan(64)
   })
 
   it('ends the stream on a payload the cap cannot hold, which is why the host trims', () => {
-    // C0.3 stands: an event the page's own reader would refuse leaves a hole its reader cannot
-    // see. The budget exists so this arm is never reached by a snapshot the host chose to send.
+    // A host-budgeted snapshot must never reach this refusal; the page cannot detect a silently omitted event (C0.3).
     const bridge = post(BRIDGE_MAX_MESSAGE_BYTES)
     expect(bridge.frames().filter((frame) => frame.type === 'end')).toEqual([
       { v: 1, type: 'end', id: ID, reason: 'overflow' }

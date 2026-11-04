@@ -11,7 +11,11 @@ import {
   createManager
 } from './pty-connection-test-pane-fixtures'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
@@ -85,7 +89,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
-// Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
+// Pass useCallback through because this suite invokes notification hooks without rendering React.
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return {
@@ -118,7 +122,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-// Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
+// Stub eager-buffer lookup to exercise live adoption without the IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
@@ -150,13 +154,14 @@ describe('connectPanePty', () => {
 
   it('dispatches agent-task-complete on working→idle and raises tab/worktree unread', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
       './use-notification-dispatch'
     )
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
 
-    // Why: invoke useNotificationDispatch's body directly (useCallback is pure memo); relies on the file-level vi.mock('react') useCallback pass-through.
+    // Invoke notification dispatch directly through the mocked useCallback; no React mount is needed.
     const realDispatchNotification = useNotificationDispatch('wt-1')
     const dispatchNotification = vi.fn((event) => realDispatchNotification(event))
     const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -165,7 +170,7 @@ describe('connectPanePty', () => {
       prompt: 'Fix notification payloads',
       updatedAt: Date.now(),
       stateStartedAt: Date.now(),
-      // Why: snapshot agent must match the live completion title ('* Claude done') to be reused; a mismatch is dropped as stale — see use-notification-dispatch.test.ts.
+      // Snapshot identity must match the live completion title or notification dispatch treats it as stale.
       agentType: 'claude',
       paneKey,
       terminalTitle: '* Claude done',
@@ -185,7 +190,11 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps({ dispatchNotification })
 
-    connectPanePty(pane as never, manager as never, deps as never)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+    )
 
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
@@ -197,8 +206,7 @@ describe('connectPanePty', () => {
     vi.useFakeTimers()
     idleHandler('* Claude done')
 
-    expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
-    expect(mockStoreState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockStoreState.markAgentAttentionUnread).not.toHaveBeenCalled()
     expect(dispatchNotification).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
@@ -210,9 +218,12 @@ describe('connectPanePty', () => {
       ptyId: 'tab-pty',
       paneKey
     })
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith('wt-1')
-    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1', 'agent-completion')
-    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey, 'agent-completion')
+    expect(mockStoreState.markAgentAttentionUnread).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      subjectKey: paneKey,
+      groupId: 'tab-1',
+      reason: 'agent-completion'
+    })
     expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'agent-task-complete',
@@ -233,6 +244,7 @@ describe('connectPanePty', () => {
 
   it('ignores title-only idle while fresh hook status is still working', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -250,7 +262,11 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps()
 
-    connectPanePty(pane as never, manager as never, deps as never)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+    )
 
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
@@ -269,8 +285,12 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('allows an explicit idle title from a different agent than fresh hook status', async () => {
+  it.each([
+    { title: '* Claude cross-agent done', completion: false },
+    { title: '✳ Claude Code', completion: true }
+  ])('requires replacement identity over a fresh hook: $title', async ({ title, completion }) => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     vi.useFakeTimers()
@@ -289,7 +309,11 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps()
 
-    connectPanePty(pane as never, manager as never, deps as never)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+    )
 
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
@@ -298,12 +322,22 @@ describe('connectPanePty', () => {
       throw new Error('Expected onAgentBecameIdle to be registered')
     }
 
-    idleHandler('* Claude cross-agent done')
+    idleHandler(title)
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+
+    if (!completion) {
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      expect(deps.setCacheTimerStartedAt).not.toHaveBeenCalledWith(paneKey, expect.any(Number))
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        RESET_TERMINAL_CURSOR_STYLE,
+        expect.any(Function)
+      )
+      return
+    }
 
     expect(deps.dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
-      terminalTitle: '* Claude cross-agent done',
+      terminalTitle: title,
       ptyId: 'tab-pty',
       paneKey
     })
@@ -315,6 +349,7 @@ describe('connectPanePty', () => {
 
   it('ignores an explicit idle title while fresh hook identity is unknown', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -332,7 +367,11 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps()
 
-    connectPanePty(pane as never, manager as never, deps as never)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+    )
 
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
@@ -353,6 +392,7 @@ describe('connectPanePty', () => {
 
   it('ignores a Pi idle title while compatible OMP hook status is active', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -370,7 +410,11 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps()
 
-    connectPanePty(pane as never, manager as never, deps as never)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+    )
 
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)

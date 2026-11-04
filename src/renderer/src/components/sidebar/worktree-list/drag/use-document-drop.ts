@@ -6,8 +6,7 @@ import { getPointerDropStatusTarget } from './status-target'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import { NO_WORKTREE_SIDEBAR_DROP_TARGET } from './row-state'
 
-// Why: a drop that lands outside the sidebar still belongs to the in-flight session, so the
-// capture-phase document listeners commit or abandon it before anything else sees the event.
+// Capture outside-sidebar drops before other handlers can consume the in-flight session.
 export function useWorktreeDocumentDrop(args: {
   ctx: WorktreeDropCommitContext
   worktreeDragSessionRef: React.MutableRefObject<WorktreeSidebarDragSession | null>
@@ -49,7 +48,7 @@ export function useWorktreeDocumentDrop(args: {
           ? ctx.computeWorktreeStatusDrop({
               pointerY: event.clientY,
               status: target.status,
-              draggedIds: session.reorderDraggedIds
+              draggedKeys: session.reorderDraggedKeys
             })
           : null
         if (target.status && statusDrop) {
@@ -73,7 +72,7 @@ export function useWorktreeDocumentDrop(args: {
       ctx.onReorderWorktrees({
         groups: ctx.worktreeDragGroups,
         sourceGroupKey: session.sourceGroupKey,
-        draggedIds: session.reorderDraggedIds,
+        draggedKeys: session.reorderDraggedKeys,
         dropIndex: getFullDropIndexForWorktreeDragUnit({
           groups: ctx.worktreeDragUnitGroups,
           sourceGroupKey: session.sourceGroupKey,

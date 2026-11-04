@@ -1,4 +1,4 @@
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import {
   codexApprovalItem,
@@ -151,7 +151,6 @@ export class CodexJournalPrompts {
         event.threadId
       )}:${encodeURIComponent(event.promptKey)}`,
       items,
-      // A child's approval arrives on the child's own thread, so it names the asker.
       this.deps.attributionFor(event.threadId, turnId)
     )
   }

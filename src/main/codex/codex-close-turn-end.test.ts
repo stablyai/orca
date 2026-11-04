@@ -1,9 +1,6 @@
-// Closing a Codex child settles its open turn in the adapter as interrupted, with no verdict: the
-// close names no cause. Whether the end was a person's is the journal's Stop event to say.
-
 import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
@@ -13,10 +10,8 @@ import {
   closeCodexPublishedSession,
   handleCodexSessionExit
 } from './codex-structured-session-close'
-import { CodexAcquisitionRegistry, type CodexSession } from './codex-structured-session-state'
-import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
+import type { CodexSession } from './codex-structured-session-state'
 
-/** A live Codex child whose primary thread is inside `turn-1`, and what its ended batch wrote. */
 function sessionWithRunningTurn() {
   const turnBodies: AgentJournalItemBody[] = []
   const sink: StructuredAgentSessionEventSink = {
@@ -72,7 +67,7 @@ function sessionWithRunningTurn() {
 }
 
 describe('a Codex close settles the open turn with no verdict of its own', () => {
-  // Whose end it was is the journal's Stop event to say (`turnEndAfterStop`), never the close's.
+  // The journal's Stop event determines intent; close alone supplies no outcome.
   it('ends it interrupted at the exit, with no outcome', async () => {
     const { sessions, turnBodies } = sessionWithRunningTurn()
     const onEvent = vi.fn()
@@ -90,7 +85,6 @@ describe('a Codex close settles the open turn with no verdict of its own', () =>
 
   it('settles a crash it saw before the close once, as that exit', async () => {
     const { sessions, session, turnBodies } = sessionWithRunningTurn()
-    // The child died on its own first; the close then finds it already ended.
     handleCodexSessionExit({
       sessions,
       sessionId: 'session-1',
@@ -99,22 +93,6 @@ describe('a Codex close settles the open turn with no verdict of its own', () =>
     })
 
     await closeCodexPublishedSession(sessions, 'session-1')
-
-    expect(turnBodies).toEqual([
-      expect.objectContaining({ turnId: 'turn-1', state: 'interrupted' })
-    ])
-    expect(turnBodies[0]).not.toHaveProperty('outcome')
-  })
-
-  it("settles the same through the adapter's close", async () => {
-    const { sessions, turnBodies } = sessionWithRunningTurn()
-    const teardown = new CodexStructuredSessionTeardown({
-      sessions,
-      acquisitions: new CodexAcquisitionRegistry(),
-      forgetNotificationRetries: () => {}
-    })
-
-    await expect(teardown.close('session-1')).resolves.toBe(true)
 
     expect(turnBodies).toEqual([
       expect.objectContaining({ turnId: 'turn-1', state: 'interrupted' })

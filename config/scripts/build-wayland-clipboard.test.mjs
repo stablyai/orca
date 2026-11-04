@@ -12,6 +12,8 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { parse } from 'yaml'
+import { runProcessSync } from '@orca/process-host'
 import { buildWaylandClipboard } from './build-wayland-clipboard.mjs'
 import glibcVerification from './verify-linux-glibc-floor.cjs'
 
@@ -145,6 +147,52 @@ describe('Wayland clipboard build', () => {
     expect(() =>
       buildWaylandClipboard({ root, arch: 'x64', run: () => ({ error: new Error('ENOENT') }) })
     ).toThrow('Unable to run Docker')
+  })
+})
+
+describe('Wayland clipboard CI cache recovery', () => {
+  it.skipIf(process.platform === 'win32').each([
+    ['healthy cache', true, 0, 0, 1],
+    ['invalid cache', true, 1, 0, 2],
+    ['failed replacement build', true, 1, 1, 2],
+    ['failed uncached build', false, 1, 1, 1]
+  ])('%s preserves build validation and failures', (_label, hit, initial, rebuild, calls) => {
+    const action = parse(
+      readFileSync('.github/actions/prepare-wayland-clipboard/action.yml', 'utf8')
+    )
+    const build = action.runs.steps.find(
+      (step) => step.name === 'Build or validate Wayland clipboard helper'
+    )
+    mkdirSync(join(root, 'native', 'wayland-clipboard', '.build'), { recursive: true })
+    writeFileSync(join(root, 'native', 'wayland-clipboard', '.build', 'restored-cache'), '')
+    const script = `
+      node() {
+        echo attempt >> calls
+        if [ -e native/wayland-clipboard/.build/restored-cache ]; then
+          return "$INITIAL_STATUS"
+        fi
+        return "$REBUILD_STATUS"
+      }
+      export -f node
+      ${build.run}
+    `
+    const result = runProcessSync({
+      program: 'bash',
+      args: ['-e', '-c', script],
+      cwd: root,
+      env: {
+        ...process.env,
+        GITHUB_ACTION_PATH: join(process.cwd(), '.github/actions/prepare-wayland-clipboard'),
+        CACHE_HIT: String(hit),
+        INITIAL_STATUS: String(initial),
+        REBUILD_STATUS: String(rebuild)
+      }
+    })
+    expect(result.code).toBe(initial === 0 ? 0 : hit ? rebuild : initial)
+    expect(readFileSync(join(root, 'calls'), 'utf8').trim().split('\n')).toHaveLength(calls)
+    expect(existsSync(join(root, 'native', 'wayland-clipboard', '.build', 'restored-cache'))).toBe(
+      calls === 1
+    )
   })
 })
 

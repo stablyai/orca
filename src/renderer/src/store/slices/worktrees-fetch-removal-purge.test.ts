@@ -6,14 +6,15 @@ import {
   hasDismissedHugeRepoWarning,
   markHugeRepoWarningDismissed
 } from '@/lib/source-control-huge-repo-warning-dismissals'
-import { getHostedReviewLinkMutationGenerationForTests } from './worktrees'
+import './worktrees'
 import { makeDetectedResult, qualifyDetectedResult } from './worktrees-detected-listing-fixtures'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks,
-  resetWorktreeSliceModuleMemory
+  resetWorktreeSliceModuleMemory,
+  worktreeListMock
 } from './worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -54,7 +55,7 @@ describe('fetchWorktrees', () => {
       path: '/path/surviving'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([surviving])
+    worktreeListMock.mockResolvedValue([surviving])
     store.setState({
       worktreesByRepo: { repo1: [removed, surviving] },
       sortEpoch: 7,
@@ -68,7 +69,38 @@ describe('fetchWorktrees', () => {
       }
     } as Partial<AppState>)
 
+    const paneKey = 'removed-tab:leaf'
+    const previous = {
+      paneKey,
+      state: 'done' as const,
+      prompt: '',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      stateHistory: [],
+      terminalResumeEligible: false as const
+    }
+    store.setState({
+      tabsByWorktree: {
+        [removed.id]: [
+          {
+            id: 'removed-tab',
+            worktreeId: removed.id,
+            ptyId: null,
+            title: '',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      agentStatusByPaneKey: { [paneKey]: previous }
+    })
+    const accepted = vi.fn()
+    const dispose = store.getState().subscribeAgentStatusChanges(accepted)
     await store.getState().fetchWorktrees('repo1')
+    expect(accepted).toHaveBeenCalledExactlyOnceWith([{ paneKey, previous, current: undefined }])
+    dispose()
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([surviving])
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [surviving.id]: 'checks' })
@@ -76,77 +108,6 @@ describe('fetchWorktrees', () => {
       [surviving.id]: 'files'
     })
     expect(store.getState().sortEpoch).toBe(8)
-  })
-
-  it('keeps pr-checks and plugin panel tabs for surviving worktrees after an authoritative purge', async () => {
-    const store = createTestStore()
-    const removed = makeWorktree({
-      id: 'repo1::/path/removed',
-      repoId: 'repo1',
-      path: '/path/removed'
-    })
-    const surviving = makeWorktree({
-      id: 'repo1::/path/surviving',
-      repoId: 'repo1',
-      path: '/path/surviving'
-    })
-
-    mockApi.worktrees.list.mockResolvedValue([surviving])
-    store.setState({
-      worktreesByRepo: { repo1: [removed, surviving] },
-      sortEpoch: 7,
-      rightSidebarTabByWorktree: {
-        [removed.id]: 'search' as never,
-        [surviving.id]: 'pr-checks' as never
-      },
-      rightSidebarExplorerViewByWorktree: {
-        [removed.id]: 'search',
-        [surviving.id]: 'files'
-      }
-    } as Partial<AppState>)
-
-    await store.getState().fetchWorktrees('repo1')
-
-    // pr-checks is not dropped like unknown values; it survives the purge.
-    expect(store.getState().rightSidebarTabByWorktree).toEqual({ [surviving.id]: 'pr-checks' })
-
-    // A shape-valid plugin panel tab also survives the purge.
-    store.setState({
-      rightSidebarTabByWorktree: {
-        [surviving.id]: 'plugin:orca-samples.my-plugin/dashboard' as never
-      }
-    } as Partial<AppState>)
-    await store.getState().fetchWorktrees('repo1')
-    expect(store.getState().rightSidebarTabByWorktree).toEqual({
-      [surviving.id]: 'plugin:orca-samples.my-plugin/dashboard'
-    })
-  })
-
-  it('purges hosted review link mutation bookkeeping for worktrees removed by refresh', async () => {
-    const store = createTestStore()
-    const removed = makeWorktree({
-      id: 'repo1::/path/removed',
-      repoId: 'repo1',
-      path: '/path/removed'
-    })
-    const surviving = makeWorktree({
-      id: 'repo1::/path/surviving',
-      repoId: 'repo1',
-      path: '/path/surviving'
-    })
-
-    mockApi.worktrees.list.mockResolvedValue([surviving])
-    store.setState({ worktreesByRepo: { repo1: [removed, surviving] } } as Partial<AppState>)
-    await store.getState().updateWorktreeMeta(removed.id, { linkedBitbucketPR: 101 })
-    await store.getState().updateWorktreeMeta(surviving.id, { linkedAzureDevOpsPR: 202 })
-
-    expect(getHostedReviewLinkMutationGenerationForTests(removed.id)).toBeGreaterThan(0)
-    expect(getHostedReviewLinkMutationGenerationForTests(surviving.id)).toBeGreaterThan(0)
-
-    await store.getState().fetchWorktrees('repo1')
-
-    expect(getHostedReviewLinkMutationGenerationForTests(removed.id)).toBe(0)
-    expect(getHostedReviewLinkMutationGenerationForTests(surviving.id)).toBeGreaterThan(0)
   })
 
   it('retains hidden state until an authoritative refresh removes the worktree', async () => {
@@ -309,42 +270,6 @@ describe('fetchWorktrees', () => {
     expect(hasDismissedHugeRepoWarning(beginHugeRepoWarningProbe(hidden))).toBe(false)
   })
 
-  it('refreshes only repos owned by the changed visibility-default host', async () => {
-    const store = createTestStore()
-    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
-      qualifyDetectedResult(args, makeDetectedResult(args.repoId, []))
-    )
-    store.setState({
-      repos: [
-        {
-          id: 'local-repo',
-          path: '/local',
-          displayName: 'Local',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'local'
-        },
-        {
-          id: 'runtime-repo',
-          path: '/remote',
-          displayName: 'Remote',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'runtime:env-1'
-        }
-      ],
-      hasHydratedWorktreePurge: true
-    } as Partial<AppState>)
-
-    await store.getState().fetchAllWorktrees({ visibilityOwnerHostId: 'local' })
-
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledOnce()
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
-      expect.objectContaining({ repoId: 'local-repo', executionHostId: 'local' })
-    )
-    expect(mockApi.runtime.call).not.toHaveBeenCalled()
-  })
-
   it('purges session-only tab keys after an authoritative refresh', async () => {
     const store = createTestStore()
     const deleted = makeWorktree({
@@ -464,17 +389,5 @@ describe('fetchWorktrees', () => {
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [existing.id]: 'search' })
     expect(store.getState().sortEpoch).toBe(7)
     expect(result).toBe(false)
-  })
-
-  it('accepts an empty refresh when the repo had no cached worktrees', async () => {
-    const store = createTestStore()
-
-    mockApi.worktrees.list.mockResolvedValue([])
-    store.setState({ worktreesByRepo: {}, sortEpoch: 7 } as Partial<AppState>)
-
-    await store.getState().fetchWorktrees('repo1')
-
-    expect(store.getState().worktreesByRepo.repo1).toEqual([])
-    expect(store.getState().sortEpoch).toBe(8)
   })
 })

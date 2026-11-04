@@ -1,11 +1,12 @@
-import { isClaudeAgent } from '@/lib/agent-status'
+import { isClaudeAgent as isClaudeAgentDefault } from '../../../../shared/agent-status/title/agent-title-identity'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalEphemeralActions(
   set: TerminalStoreSet,
-  get: TerminalStoreGet
+  get: TerminalStoreGet,
+  isClaudeAgent = isClaudeAgentDefault
 ): Pick<
   TerminalSlice,
   | 'markDefaultTerminalTabsApplied'
@@ -148,8 +149,7 @@ export function createTerminalEphemeralActions(
       recordTerminalInputActivity({
         paneKey,
         timestamp,
-        // Why: the first stamp for a pane must land synchronously; automation take-over
-        // detection subscribes and compares undefined→value across a launch.
+        // Publish first pane input synchronously so automation takeover observes undefined→timestamp across launch.
         forceWrite: get().lastTerminalInputAtByPaneKey[paneKey] === undefined,
         commit: {
           insert: (key, at) =>

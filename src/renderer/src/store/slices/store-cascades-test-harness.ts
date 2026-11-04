@@ -3,7 +3,6 @@ import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/run
 
 export type StoreCascadesMockApi = {
   worktrees: {
-    list: Mock
     create: Mock
     remove: Mock
     forceDeletePreservedBranch: Mock
@@ -21,7 +20,6 @@ export type StoreCascadesMockApi = {
 export function createStoreCascadesMockApi(): StoreCascadesMockApi {
   const mockApi: StoreCascadesMockApi = {
     worktrees: {
-      list: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({}),
       remove: vi.fn().mockResolvedValue(undefined),
       forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),

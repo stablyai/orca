@@ -1,14 +1,14 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   JournalItemAppendOptions,
@@ -20,11 +20,14 @@ import {
 } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const BODY: AgentJournalItemBody = {
   kind: 'message',
@@ -52,10 +55,7 @@ type Recorded = {
   activity?: AgentSessionTurnActivity | null
 }
 
-/** The journal's OWN append options, captured beside the call log rather than on
- *  it: a double that omits the third parameter makes every assertion about what
- *  the sink forwards pass against `undefined`, which is how this went unnoticed
- *  before. Kept separate so the call-order assertions stay about call order. */
+/** Capture actual append options separately so call-order tests cannot hide missing forwarded fields. */
 const journalAppendOptions: Partial<JournalItemAppendOptions>[] = []
 
 function target(
@@ -90,15 +90,13 @@ function target(
       return { epoch: 'e', sequence: 0 }
     }),
     appendLifecycleBatch: vi.fn(async (input: JournalLifecycleBatchInput) => {
-      // A batch carries no producer linkage by design, so the fence is all
-      // there is to record — see the batch row builder.
+      // Lifecycle batches carry linkage per mutation, not on their row.
       journalAppendOptions.push({ fence: input.fence })
       log.push({ call: 'appendLifecycleBatch', fence, settlementId: input.settlementId })
       return { epoch: 'e', sequence: 0 }
     }),
     latestItemMatching: vi.fn(() => null),
     readInOrder: vi.fn(async <T>(read: () => T) => read()),
-    // The journal resolves at the write's place in its queue; this double has no queue to wait on.
     appendResolvedItem: vi.fn(
       async (
         resolve: () => { identity: AgentJournalItemIdentity; body: AgentJournalItemBody } | null,
@@ -145,7 +143,6 @@ describe('deferred structured agent-session event sink', () => {
     deferred.bind(target(1, log))
 
     deferred.sink.appendItem(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    // The re-attach that raised the fence.
     deferred.bind(target(2, log))
     deferred.sink.appendItem(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await deferred.drained()
@@ -278,35 +275,25 @@ describe('deferred structured agent-session event sink', () => {
     expect(log).toEqual([{ call: 'appendItem', fence: 2, ordinal: 1 }])
   })
 
-  it('exposes operation watermarks and resumes below the low watermark', async () => {
+  it('pauses reading at the operation watermark but still admits received output', async () => {
     const log: Recorded[] = []
     const changes: boolean[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const deferred = createDeferredStructuredAgentSessionEventSink({
       ...testEventSinkLogging(),
-      watermarks: {
-        maxQueuedBytes: 1_000_000,
-        lowQueuedBytes: 0,
-        maxQueuedOperations: 2,
-        lowQueuedOperations: 0
-      },
+      watermarks: { lowQueuedBytes: 0, pauseQueuedOperations: 2, lowQueuedOperations: 0 },
       readingControl,
       onBackpressureChange: (paused) => changes.push(paused)
     })
 
-    expect(
-      deferred.sink.tryAppendItem?.(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({ accepted: true })
-    expect(
-      deferred.sink.tryAppendItem?.(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({ accepted: true })
-    expect(
-      deferred.sink.tryAppendItem?.(identity(2), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({
-      accepted: false,
-      reason: 'backpressure'
-    })
-    expect(deferred.state()).toMatchObject({ backpressured: true, queuedOperations: 2 })
+    for (const ordinal of [0, 1, 2]) {
+      expect(
+        deferred.sink.tryAppendItem?.(identity(ordinal), BODY, {
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+      ).toEqual({ accepted: true })
+    }
+    expect(deferred.state()).toMatchObject({ backpressured: true, queuedOperations: 3 })
 
     deferred.bind(target(5, log))
     await deferred.drained()
@@ -314,59 +301,16 @@ describe('deferred structured agent-session event sink', () => {
     expect(changes).toEqual([true, false])
     expect(readingControl.pauseReading).toHaveBeenCalledOnce()
     expect(readingControl.resumeReading).toHaveBeenCalledOnce()
-    expect(log).toHaveLength(2)
+    expect(log.map((entry) => entry.ordinal)).toEqual([0, 1, 2])
   })
 
-  it('admits a resolved append and publication as one bounded operation', async () => {
-    const log: Recorded[] = []
-    const deferred = createDeferredStructuredAgentSessionEventSink({
-      ...testEventSinkLogging(),
-      watermarks: {
-        pauseQueuedOperations: 1,
-        maxQueuedOperations: 2,
-        lowQueuedOperations: 0,
-        maxQueuedBytes: 1_000_000
-      }
-    })
-
-    expect(
-      deferred.sink.tryAppendItem?.(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({ accepted: true })
-    expect(
-      deferred.sink.tryAppendResolvedItemAndPublish?.(identity(1), BODY, () => identity(1), {
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
-      })
-    ).toEqual({ accepted: true })
-    expect(
-      deferred.sink.tryAppendItem?.(identity(2), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({
-      accepted: false,
-      reason: 'backpressure'
-    })
-
-    deferred.bind(target(5, log))
-    await deferred.drained()
-    expect(log).toEqual([
-      { call: 'appendItem', fence: 5, ordinal: 0 },
-      { call: 'appendItem', fence: 5, ordinal: 1 },
-      { call: 'publish', fence: 5 }
-    ])
-  })
-
-  it('pauses provider reading at the soft byte watermark before rejecting writes', async () => {
+  it('pauses provider reading at the byte watermark', async () => {
     const log: Recorded[] = []
     const changes: boolean[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const deferred = createDeferredStructuredAgentSessionEventSink({
       ...testEventSinkLogging(),
-      watermarks: {
-        pauseQueuedBytes: 1,
-        maxQueuedBytes: 1_000_000,
-        lowQueuedBytes: 0,
-        pauseQueuedOperations: 1_000,
-        maxQueuedOperations: 1_000,
-        lowQueuedOperations: 0
-      },
+      watermarks: { pauseQueuedBytes: 1, lowQueuedBytes: 0, lowQueuedOperations: 0 },
       readingControl,
       onBackpressureChange: (paused) => changes.push(paused)
     })
@@ -385,55 +329,13 @@ describe('deferred structured agent-session event sink', () => {
     expect(log).toEqual([{ call: 'appendItem', fence: 8, ordinal: 0 }])
   })
 
-  it('backpressures lifecycle publication at the hard operation watermark', async () => {
-    const log: Recorded[] = []
-    const errors: unknown[] = []
-    const deferred = createDeferredStructuredAgentSessionEventSink({
-      ...testEventSinkLogging(),
-      onFailed: (error) => errors.push(error),
-      watermarks: {
-        pauseQueuedBytes: 1,
-        maxQueuedBytes: 1,
-        lowQueuedBytes: 0,
-        pauseQueuedOperations: 1,
-        maxQueuedOperations: 0,
-        lowQueuedOperations: 0,
-        maxLifecycleQueuedOperations: 1
-      }
-    })
-
-    deferred.sink.appendLifecycleBatch?.(
-      'settlement-1',
-      [{ kind: 'item', identity: identity(0), body: BODY, turnScope: AGENT_JOURNAL_THREAD_SCOPE }],
-      { lifecycle: true }
-    )
-    expect(deferred.sink.tryPublish?.({ lifecycle: true })).toEqual({
-      accepted: false,
-      reason: 'backpressure'
-    })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 1, backpressured: true })
-    expect(errors).toHaveLength(0)
-
-    deferred.bind(target(8, log))
-    await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
-
-    expect(log).toEqual([{ call: 'appendLifecycleBatch', fence: 8, settlementId: 'settlement-1' }])
-  })
-
   it('ignores stale reading-control cleanup after a newer provider stream binds', async () => {
     const log: Recorded[] = []
     const firstControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const secondControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const deferred = createDeferredStructuredAgentSessionEventSink({
       ...testEventSinkLogging(),
-      watermarks: {
-        pauseQueuedBytes: 1,
-        maxQueuedBytes: 1_000_000,
-        lowQueuedBytes: 0,
-        pauseQueuedOperations: 1_000,
-        maxQueuedOperations: 1_000,
-        lowQueuedOperations: 0
-      }
+      watermarks: { pauseQueuedBytes: 1, lowQueuedBytes: 0, lowQueuedOperations: 0 }
     })
     const releaseFirst = deferred.sink.bindReadingControl?.(firstControl)
 
@@ -456,7 +358,6 @@ describe('deferred structured agent-session event sink', () => {
   })
 
   it('applies the first lifecycle batch for a settlement once, in the journal', async () => {
-    // The journal applies a settlement id once; the sink hands both over in order.
     const root = await mkdtemp(join(tmpdir(), 'orca-event-sink-settlement-'))
     const journal = await openAgentSessionJournal({
       identity: JOURNAL_IDENTITY,
@@ -484,11 +385,11 @@ describe('deferred structured agent-session event sink', () => {
       agentJournalItemKey(identity(0))
     ])
     await journal.close()
+    await closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   })
 
   it('keeps a rewritten streamed row in its place ahead of what was issued after it', async () => {
-    // A Codex reply checkpointed, then another row, then the reply's next checkpoint.
     const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const window: (() => void)[] = []
@@ -532,7 +433,6 @@ describe('deferred structured agent-session event sink', () => {
         : []
     })
     const [reply, aside] = written
-    // The reply's row is created before the aside and rewritten after it; never moved behind it.
     expect(reply?.startsWith('reply')).toBe(true)
     expect(written).toEqual([reply, aside, reply])
   })
@@ -577,15 +477,14 @@ describe('producer linkage reaches the journal through every append path', () =>
       await deferred.drained()
 
       expect(journalAppendOptions).toEqual([
-        { fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
+        { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
       ])
       deferred.close()
     }
   })
 
   it('forwards it on the resolved-append and lifecycle-transition paths', async () => {
-    // The resolved paths lost it once before; a transition is how a Codex
-    // child's goal row is written, so dropping it there files the goal as root.
+    // Goal rows use resolved transitions; lost linkage would misattribute them to root.
     for (const append of [
       'tryAppendResolvedItem',
       'tryAppendResolvedItemAndPublish',
@@ -601,16 +500,14 @@ describe('producer linkage reaches the journal through every append path', () =>
       await deferred.drained()
 
       expect(journalAppendOptions).toEqual([
-        { fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
+        { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
       ])
       deferred.close()
     }
   })
 
   it('does NOT forward it on the lifecycle-batch path, which is one row for N mutations', async () => {
-    // A batch row carries one producer for every mutation in it, so forwarding
-    // would stamp whoever opened the batch onto all of them. Both callers are
-    // single-producer today; a mixed batch would have to stamp per mutation.
+    // Mixed-agent batches need per-mutation linkage; row-level stamping would misattribute their contents.
     const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind(target(5, log))
@@ -622,7 +519,6 @@ describe('producer linkage reaches the journal through every append path', () =>
 
     await deferred.drained()
 
-    // The fence and nothing else: no linkage key reaches the batch row.
     expect(journalAppendOptions).toEqual([{ fence: 5 }])
     deferred.close()
   })
@@ -634,10 +530,11 @@ describe('producer linkage reaches the journal through every append path', () =>
     deferred.sink.appendItem(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await deferred.drained()
 
-    // A control, not a pin. Absence is the claim, so the keys must be missing
-    // rather than present-and-undefined: a reader holding this options object
-    // would read `agentId: undefined` as a key that exists.
-    expect(journalAppendOptions).toEqual([{ fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE }])
+    // Presence matters: root writes must omit linkage keys, not set them undefined.
+    // Provider observations still stamp their bound execution fence.
+    expect(journalAppendOptions).toEqual([
+      { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    ])
     deferred.close()
   })
 })

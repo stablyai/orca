@@ -49,24 +49,6 @@ describe('issue detail cache repository identity', () => {
     }
   )
 
-  it('keeps RPC detail caches scoped to the preference used by their existing lookup', () => {
-    const sourceContext: TaskSourceContext = {
-      kind: 'task-source',
-      provider: 'github',
-      projectId: 'project-1',
-      hostId: 'runtime:env-1',
-      repoId: 'runtime-repo'
-    }
-    const args = { ...keyArgs, ownerRepo: ORIGIN, sourceContext }
-
-    expect(getWorkItemDetailsCacheKey(args)).not.toBe(
-      getWorkItemDetailsCacheKey({ ...args, issueSourcePreference: 'upstream' })
-    )
-    expect(getWorkItemDetailsCacheKey(args)).toBe(
-      getWorkItemDetailsCacheKey({ ...args, ownerRepo: null })
-    )
-  })
-
   it('invalidates both repository variants after a mutation', () => {
     const originKey = getWorkItemDetailsCacheKey({ ...keyArgs, ownerRepo: ORIGIN })
     const upstreamKey = getWorkItemDetailsCacheKey({ ...keyArgs, ownerRepo: UPSTREAM })

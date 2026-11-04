@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { nativeChatTurnFold } from '../../shared/native-chat-turn-fold'
-import { nativeChatTurnMembership } from '../../shared/native-chat-turn-membership'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
-import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'
-import { selectStructuredAgentTurnBars } from '../../shared/structured-agent-session-turn-timing'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { nativeChatTurnFold } from '../../shared/native-chat/transcript/native-chat-turn-fold'
+import { nativeChatTurnMembership } from '../../shared/native-chat/transcript/native-chat-turn-membership'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
+import { projectStructuredItemToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
+import { selectStructuredAgentTurnBars } from '../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { JournalDerivedTurnScope } from '../native-chat/agent-session-journal/journal-derived-turn-scope'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
@@ -30,8 +30,7 @@ function historicalTurn(index: number): Record<string, unknown> {
   }
 }
 
-/** What the journal hands a reader after a restore: rows in append order. With `statesScope`, each
- *  row carries the turn scope the journal gives a row the translator writes without one. */
+/** Model hosts that include derived turn scopes and older hosts that omit them. */
 function restoredJournal(turnCount: number, statesScope: boolean): AgentJournalRenderItem[] {
   const items: AgentJournalRenderItem[] = []
   const derived = new JournalDerivedTurnScope()
@@ -98,7 +97,8 @@ describe('grouping a Codex thread restored from full history', () => {
           draws: true,
           outlivesTurn: false,
           reportsFailure: false,
-          explainsTurn: false
+          explainsTurn: false,
+          sendsBack: false
         })),
         settledTurnKeys: new Set(bars.settledTurns.keys()),
         expandedTurnKeys: new Set()

@@ -4,7 +4,8 @@ import type {
 } from '../../../../shared/terminal-tab-types'
 import { isTerminalLeafId, type TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
-import { normalizeTerminalLayoutPtyOwnership } from './terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/terminal-layout-pty-ownership'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 
 const EMPTY_TERMINAL_LAYOUT: TerminalLayoutSnapshot = {
   root: null,
@@ -77,16 +78,6 @@ function hasLeafPtyBinding(
   leafId: string
 ): boolean {
   return ptyIdsByLeafId ? Object.hasOwn(ptyIdsByLeafId, leafId) : false
-}
-
-export function resolveRootlessTerminalLayoutLeafId(
-  snapshot: Pick<TerminalLayoutSnapshot, 'activeLeafId' | 'ptyIdsByLeafId'>
-): string | null {
-  if (snapshot.activeLeafId && isTerminalLeafId(snapshot.activeLeafId)) {
-    return snapshot.activeLeafId
-  }
-  const boundLeafIds = Object.keys(snapshot.ptyIdsByLeafId ?? {}).filter(isTerminalLeafId)
-  return boundLeafIds.length === 1 ? boundLeafIds[0] : null
 }
 
 export function resolveTerminalLayoutActiveLeafId(opts: {
@@ -178,8 +169,7 @@ function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null 
   }
   const rewrite: LeafIdRewrite = { nextLeafIdByInputLeafId, duplicatedInputLeafIds }
   const root = changed ? cloneLayoutWithLeafRewrite(snapshot.root, rewrite) : snapshot.root
-  // Why: split panes can be restored after a leaf was closed elsewhere; stale
-  // selection ids must not strand focus on a missing pane.
+  // Closed/restored splits can leave stale selection IDs; fall back instead of stranding focus.
   const remappedActiveLeafId = getRemappedLeafId(activeLeafId, rewrite) ?? firstLeafId(root)
   const remappedExpandedLeafId = getRemappedLeafId(expandedLeafId, rewrite)
   const remappedChatLeafId = getRemappedLeafId(snapshot.chatLeafId, rewrite)
@@ -266,9 +256,7 @@ function collectReplayCreatedPaneLeafIds(
   node: Extract<TerminalPaneLayoutNode, { type: 'split' }>,
   leafIdsInReplayCreationOrder: string[]
 ): void {
-  // Why: replayTerminalLayout() creates one new pane per split and assigns it
-  // to the split's second subtree before recursing, so the new pane maps to
-  // the leftmost leaf reachable within that second subtree.
+  // Replay creates a split’s second-subtree pane before recursion, so map it to that subtree’s leftmost leaf.
   leafIdsInReplayCreationOrder.push(getLeftmostLeafId(node.second))
 
   if (node.first.type === 'split') {

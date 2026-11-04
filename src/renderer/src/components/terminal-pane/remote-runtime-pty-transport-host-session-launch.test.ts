@@ -1,4 +1,17 @@
+import { ExplicitEnsure } from '../../../../shared/rpc-contract/agent-session-params'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -113,6 +126,63 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
     return payload
   }
+
+  it('round-trips a strict saved ensure and its actual refused shell result', async () => {
+    const providerSession = { key: 'session_id' as const, id: 'C' }
+    const decision = { agent: 'codex' as const, providerSession, verdict: 'chat-home' as const }
+    runtimeCall.mockImplementation(async (args: { method?: string; params?: unknown }) => {
+      if (args.method === 'status.get') {
+        return {
+          ok: true,
+          result: {
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities: [
+              'agent-session.host-authority.v1',
+              'agent-session.saved-resume-origin.v1'
+            ]
+          }
+        }
+      }
+      expect(args.method).toBe('terminal.ensureAgentSession')
+      expect(ExplicitEnsure.parse(args.params)).toMatchObject({
+        resumeOrigin: 'saved',
+        providerSession
+      })
+      return {
+        ok: true,
+        result: {
+          disposition: 'created',
+          terminal: {
+            handle: 'term-remote',
+            worktreeId: 'repo1::/remote/wt',
+            title: null,
+            savedResumeDecision: decision,
+            agentResumeRefused: 'chat-home',
+            agentResumeUnavailable: true
+          }
+        }
+      }
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      launchAgent: 'codex',
+      resumeOrigin: 'saved',
+      resumeProviderSession: providerSession,
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+    const result = await transport.connect({ url: '', callbacks: {} })
+    expect(result).toMatchObject({
+      id: 'remote:env-1@@term-remote',
+      savedResumeDecision: decision,
+      agentResumeRefused: 'chat-home',
+      agentResumeUnavailable: true
+    })
+    expect(result).not.toHaveProperty('launchAgent')
+    transport.disconnect()
+  })
 
   it('creates and subscribes to a terminal on the active remote runtime', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -361,9 +431,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    // Why: the beforeEach host advertises host-authority.v1 but not the Kimi gate, and it answers
-    // the widened ensureAgentSession enum with invalid_argument — not a fallback code. Only the
-    // per-agent probe keeps the pane alive.
+    // Baseline host authority lacks Kimi enum support; only the per-agent probe avoids fatal invalid_argument.
     expect(runtimeCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'terminal.ensureAgentSession' })
     )

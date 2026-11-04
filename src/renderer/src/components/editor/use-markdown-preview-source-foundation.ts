@@ -1,3 +1,4 @@
+import { useDiffCommentView } from '../diff-comments/use-diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolution'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -16,6 +17,7 @@ import {
 } from './markdown-preview-source-routing'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function useMarkdownPreviewSourceFoundation({
   content,
@@ -47,7 +49,6 @@ export function useMarkdownPreviewSourceFoundation({
   const matchesRef = useRef<Range[]>([])
   const searchInstanceRef = useRef<MarkdownPreviewSearchInstance>({})
   const lastAppliedInitialAnchorRef = useRef<string | null>(null)
-  const pendingEditorRevealFrameIdsRef = useRef<number[]>([])
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
@@ -59,13 +60,12 @@ export function useMarkdownPreviewSourceFoundation({
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const frontmatterVisibleByFile = useAppStore((s) => s.markdownFrontmatterVisible)
-  const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const keybindings = useAppStore((s) => s.keybindings)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const sourceOpenFile = useAppStore((s) =>
     findMarkdownPreviewSourceOpenFile(s.openFiles, {
       sourceFileId,
@@ -84,7 +84,12 @@ export function useMarkdownPreviewSourceFoundation({
     resolvedSourceWorktreeId,
     filePath
   )
-  const allDiffComments = sourceWorktree?.diffComments
+  // Notes and their owner come from the copy this preview's content does: its source tab's own
+  // provenance and host. The row lookup above only supplies the id and path every copy shares.
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(
+    sourceWorktree?.id,
+    sourceOpenFile ?? { runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId }
+  )
   const sourceRoutingWorktreeId = sourceWorktree?.id ?? resolvedSourceWorktreeId
   const runtimeOwnerId = resolvedSourceRuntimeEnvironmentId?.trim()
   const sourceConnectionIdSelector = useMemo(
@@ -174,7 +179,6 @@ export function useMarkdownPreviewSourceFoundation({
     matchesRef,
     searchInstanceRef,
     lastAppliedInitialAnchorRef,
-    pendingEditorRevealFrameIdsRef,
     isSearchOpen,
     setIsSearchOpen,
     query,
@@ -191,13 +195,14 @@ export function useMarkdownPreviewSourceFoundation({
     openMarkdownPreview,
     setMarkdownViewMode,
     frontmatterVisibleByFile,
-    setPendingEditorReveal,
     addDiffComment,
     deleteDiffComment,
     updateDiffComment,
     clearDeliveredDiffComments,
     keybindings,
     worktreesByRepo,
+    commentOwner,
+    notesKnown: allDiffComments !== undefined,
     sourceWorktree,
     sourceRoutingWorktreeId,
     sourceConnectionId,

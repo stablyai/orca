@@ -232,10 +232,7 @@ describe('createPtySizeReassertion', () => {
   })
 
   it('suppresses a stale forward when xterm was refit while the read was in flight', async () => {
-    // Regression: a reveal-time fit (or snapshot-restore xterm resize) changes
-    // the grid after the target was captured, with no second request() to
-    // guard it. The resolved callback must not resize the PTY back to the
-    // pre-reveal grid.
+    // Refits can change xterm mid-read without another request; never forward the captured pre-reveal grid over that newer layout.
     let dims = { cols: 80, rows: 24 }
     let resolveRead: (value: { cols: number; rows: number }) => void = () => {}
     const getAppliedSize = vi
@@ -303,9 +300,7 @@ describe('createPtySizeReassertion', () => {
   })
 
   it('keeps a single read in flight and converges when the grid oscillates across resolves', async () => {
-    // Why: a flapping layout (competing fitters) must not amplify into more
-    // than one concurrent readback, and the re-run chain must stop as soon as
-    // the grid holds still for one read.
+    // Layout flapping may queue rereads but must keep one in flight and stop once a read observes a stable grid.
     const grids = [
       { cols: 80, rows: 24 },
       { cols: 145, rows: 78 },
@@ -335,8 +330,7 @@ describe('createPtySizeReassertion', () => {
     reassertion.request({ fit: false })
     await flushAsyncTicks(20)
 
-    // One re-run per moved-grid flight, then convergence: applied 100x40
-    // matches the settled grid, so nothing is forwarded.
+    // Each moved-grid read triggers one rerun; matching applied size ends the chain without forwarding.
     expect(getAppliedSize).toHaveBeenCalledTimes(4)
     expect(forwardResize).not.toHaveBeenCalled()
   })

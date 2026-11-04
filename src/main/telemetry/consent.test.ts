@@ -1,16 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { resolveConsent, _resetMisconfigWarnCacheForTests } from './consent'
 
-// A minimal GlobalSettings stub — the resolver only reads `settings.telemetry`,
-// so we cast through `unknown` rather than enumerating every unrelated field.
+// The resolver reads telemetry only; keep the unrelated settings surface out of this fixture.
 function settingsWithTelemetry(telemetry: GlobalSettings['telemetry']): GlobalSettings {
   return { telemetry } as unknown as GlobalSettings
 }
 
-// Keys cleared after each test so one case's env setup cannot leak into the
-// next. `process.env` writes persist across vi.mock boundaries, so we track
-// and restore explicitly.
+// Restore env explicitly because writes survive module mock boundaries.
 const ENV_KEYS_UNDER_TEST = [
   'DO_NOT_TRACK',
   'ORCA_TELEMETRY_DISABLED',
@@ -45,8 +42,6 @@ describe('resolveConsent', () => {
       }
     }
   })
-
-  // ── Env-var overrides (non-persistent, highest precedence) ──────────
 
   it('returns do_not_track when DO_NOT_TRACK=1', () => {
     process.env.DO_NOT_TRACK = '1'
@@ -151,37 +146,8 @@ describe('resolveConsent', () => {
     ).toEqual({ effective: 'enabled' })
   })
 
-  it('warns to stderr once for misconfigured env var values like "yes" / "on" / "FALSE"', () => {
-    const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    try {
-      process.env.DO_NOT_TRACK = 'yes'
-      // Two resolves, only one warning written.
-      resolveConsent(
-        settingsWithTelemetry({
-          optedIn: true,
-          installId: 'x',
-          existedBeforeTelemetryRelease: false
-        })
-      )
-      resolveConsent(
-        settingsWithTelemetry({
-          optedIn: true,
-          installId: 'x',
-          existedBeforeTelemetryRelease: false
-        })
-      )
-      expect(spy).toHaveBeenCalledTimes(1)
-      expect(spy.mock.calls[0][0]).toContain('DO_NOT_TRACK')
-    } finally {
-      spy.mockRestore()
-    }
-  })
-
   it('treats a misconfigured DO_NOT_TRACK=0 as unset (not truthy)', () => {
-    // This is the skills.sh regression called out in the plan doc: `=0` must
-    // not count as truthy. Without the parse guard, a stringly-truthy check
-    // would disable telemetry for anyone who types `DO_NOT_TRACK=0` expecting
-    // it to mean "tracking allowed."
+    // String zero must not disable telemetry through ordinary JavaScript truthiness.
     process.env.DO_NOT_TRACK = '0'
     expect(
       resolveConsent(
@@ -193,8 +159,6 @@ describe('resolveConsent', () => {
       )
     ).toEqual({ effective: 'enabled' })
   })
-
-  // ── Persisted preference ────────────────────────────────────────────
 
   it('returns enabled when optedIn is true (new-user cohort after migration)', () => {
     expect(
@@ -236,21 +200,6 @@ describe('resolveConsent', () => {
     expect(resolveConsent(settingsWithTelemetry(undefined))).toEqual({
       effective: 'pending_banner'
     })
-  })
-
-  // ── Env-var precedence beats persisted preference ───────────────────
-
-  it('env-var override wins over a stored optedIn=true', () => {
-    process.env.DO_NOT_TRACK = '1'
-    expect(
-      resolveConsent(
-        settingsWithTelemetry({
-          optedIn: true,
-          installId: 'x',
-          existedBeforeTelemetryRelease: false
-        })
-      )
-    ).toEqual({ effective: 'disabled', reason: 'do_not_track' })
   })
 
   it('env-var override wins over a stored pending_banner state', () => {

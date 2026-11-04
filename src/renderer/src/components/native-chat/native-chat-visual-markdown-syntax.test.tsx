@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react'
 import type { ExtraProps } from 'react-markdown'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import CommentMarkdown, {
   type CommentMarkdownExtension
 } from '@/components/sidebar/CommentMarkdown'
@@ -9,6 +9,22 @@ import {
   NATIVE_CHAT_VISUAL_PLACEHOLDER_PROPERTIES,
   remarkNativeChatVisuals
 } from './native-chat-visual-markdown-syntax'
+
+const boundaryMocks = vi.hoisted(() => ({
+  mermaid: vi.fn(() => {
+    throw new Error('These fixtures must not render Mermaid diagrams')
+  })
+}))
+
+vi.mock('@/components/sidebar/CommentMermaidBlock', () => ({ default: boundaryMocks.mermaid }))
+
+afterEach(() => {
+  try {
+    expect(boundaryMocks.mermaid).not.toHaveBeenCalled()
+  } finally {
+    boundaryMocks.mermaid.mockClear()
+  }
+})
 
 const NONCE = 'nonce-123'
 

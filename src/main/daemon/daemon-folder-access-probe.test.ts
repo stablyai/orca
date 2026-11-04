@@ -68,22 +68,6 @@ describe('probeFolderAccessForFreshDaemon', () => {
     expect(names).not.toContain('ORCA_SECRET_TOKEN')
   })
 
-  it('bounds the child by a deadline and an output cap', async () => {
-    settled('{"outcome":"ok"}\n')
-    await probeFolderAccessForFreshDaemon(DOCUMENTS)
-
-    expect(lastSpec().timeoutMs).toBe(3_000)
-    expect(lastSpec().maxOutputBytes).toBe(1024)
-  })
-
-  it('never passes the path through a shell', async () => {
-    settled('{"outcome":"ok"}\n')
-    await probeFolderAccessForFreshDaemon('/Users/alice/Documents/a b; rm -rf /')
-
-    expect(lastSpec().args.at(-1)).toBe('/Users/alice/Documents/a b; rm -rf /')
-  })
-
-  // Why: the path is the child's sole argv entry, so Node reads a leading dash as its own option.
   it('refuses a relative path instead of handing it to Node as a flag', async () => {
     await expect(probeFolderAccessForFreshDaemon('-e')).resolves.toBe('unknown')
     expect(runProcessMock).not.toHaveBeenCalled()

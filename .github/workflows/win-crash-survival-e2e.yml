@@ -1,13 +1,6 @@
 name: Windows Crash-Survival E2E
 
-# Why: proves the detached daemon-host relocation makes terminal sessions SURVIVE
-# a CRASH of Orca's main process (GitHub #7742), the companion guarantee to the
-# update-survival harness. Builds an (unsigned) installer FROM THIS BRANCH,
-# silent-installs it, opens a terminal, force-kills ONLY the app main (no
-# tree-kill), and asserts the daemon + shell stay alive, a relaunch adopts the
-# same daemon and shell, and post-crash input causes no pwsh FailFast. Targeted
-# manual runs keep it as a durable regression proof. A CI runner is the only
-# safe place to install — see the relocation post-mortem.
+# #7742: build/install unsigned branch artifact on disposable CI, crash only main and require same daemon/shell survival, adoption and input without FailFast. Companion update proof tests installer survival; see relocation post-mortem.
 
 on:
   workflow_dispatch:
@@ -55,6 +48,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml

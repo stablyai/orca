@@ -436,7 +436,6 @@ describe('CodexUsageStore', () => {
     const summary = await store.getSummary('orca', '30d')
 
     expect(summary.hasUnpricedModels).toBe(true)
-    // The unpriced row's ten million tokens are absent from the total it sits beside.
     expect(summary.estimatedCostUsd).toBeCloseTo(0.0033, 6)
   })
 

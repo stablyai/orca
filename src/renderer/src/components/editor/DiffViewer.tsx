@@ -1,16 +1,17 @@
+import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace-copy-owner'
+import { useDiffCommentView } from '../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
-import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import { monacoTypographyOptions } from '@/lib/editor-typography'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { useContextualCopySetup } from './useContextualCopySetup'
-import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
-import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
@@ -29,20 +30,27 @@ import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchange
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
+import {
+  PLUGIN_SYNTAX_EDITOR_OPTIONS,
+  applyModelLanguage
+} from '@/lib/monaco-languages/plugin-syntax-editor-options'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 
 export default function DiffViewer({
   modelKey,
+  modelOwnerKey,
   originalModelKey,
   modifiedModelKey,
   originalContent,
   modifiedContent,
-  language,
+  language: coreLanguage,
   filePath,
   relativePath,
   sideBySide,
   editable,
   worktreeId,
+  noteSource = NO_RESOURCE_EVIDENCE,
   onAddLineComment,
   commentableLineNumbers,
   addLineCommentLabel,
@@ -52,25 +60,26 @@ export default function DiffViewer({
   largeDiffRenderLimit,
   largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
-  const isDark = useDocumentDarkTheme()
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
+  const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
+  const diffCollapseUnchangedRegions = useAppStore((s) => s.settings?.diffCollapseUnchangedRegions)
+  const monacoTheme = useMonacoTheme()
+  const diffTypography = useEditorTypography('diff')
+  // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(
+    worktreeId,
+    noteSource
+  )
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const language = usePluginSyntaxLanguage(filePath, coreLanguage)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
-  // Why: subscribe to the raw array so selector identity only changes when this worktree's comments change; filtering happens below.
-  const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    selectWorktreeDiffComments(s, worktreeId)
-  )
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
     [allDiffComments, relativePath]
   )
-  const terminalFontSize = settings?.terminalFontSize ?? 13,
-    diffEditorFontSize = computeDiffEditorFontSize(terminalFontSize, editorFontZoomLevel)
-  const diffWordWrap = settings?.diffWordWrap
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()
@@ -82,6 +91,10 @@ export default function DiffViewer({
     diffWordWrapRef.current = diffWordWrap
   }, [diffWordWrap])
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
+  useEffect(() => {
+    const models = diffEditorRef.current?.getModel()
+    applyModelLanguage([models?.original, models?.modified], language)
+  }, [modifiedEditor, language])
 
   const renderLimit = useMemo(
     () => largeDiffRenderLimit ?? getLargeDiffRenderLimit({ originalContent, modifiedContent }),
@@ -89,7 +102,7 @@ export default function DiffViewer({
   )
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
-  // Why: only forward the pending scroll id when this viewer owns the comment, else unrelated viewers race to ack it.
+  // Forward only owned notes so viewers cannot race to acknowledge another surface’s request.
   const pendingScrollForThisViewer = useMemo(() => {
     if (!worktreeId || !scrollToDiffCommentId) {
       return null
@@ -97,6 +110,11 @@ export default function DiffViewer({
     return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
   }, [scrollToDiffCommentId, diffComments, worktreeId])
 
+  // A draft keeps its captured owner across a same-tab rename but saves under the file's current path.
+  const relativePathRef = useRef(relativePath)
+  useLayoutEffect(() => {
+    relativePathRef.current = relativePath
+  }, [relativePath])
   const handleCreateComment = useCallback(
     async ({
       lineNumber,
@@ -117,15 +135,17 @@ export default function DiffViewer({
       if (!worktreeId) {
         return false
       }
-      const result = await addDiffComment({
-        worktreeId,
-        filePath: relativePath,
-        source: 'diff',
-        startLine,
-        lineNumber,
-        body,
-        side: 'modified'
-      })
+      const result = await (commentOwner
+        ? addDiffComment(commentOwner, {
+            worktreeId,
+            filePath: relativePathRef.current,
+            source: 'diff',
+            startLine,
+            lineNumber,
+            body,
+            side: 'modified'
+          })
+        : null)
       if (!result) {
         toast.error(
           translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
@@ -133,11 +153,13 @@ export default function DiffViewer({
       }
       return Boolean(result)
     },
-    [addDiffComment, onAddLineComment, relativePath, worktreeId]
+    [commentOwner, addDiffComment, onAddLineComment, worktreeId]
   )
 
-  // Why: gate the decorator on a comment target; updateDiffComment is only wired for local diffs (worktreeId present).
+  // Only local diffs can edit notes; gate the decorator on a valid comment target.
   useDiffCommentDecorator({
+    captureCreateComment: !onAddLineComment,
+    commentOwner,
     editor: hasLineCommentAction ? modifiedEditor : null,
     monacoModelIdentity: modifiedModelKey ?? modelKey,
     filePath: relativePath,
@@ -149,13 +171,17 @@ export default function DiffViewer({
     onCreateComment: handleCreateComment,
     draftPlaceholder: addLineCommentPlaceholder,
     draftSubmitLabel: addLineCommentLabel,
-    canOpenDraft: !renderLimit.limited,
+    // Notes of an unknown copy can't be added to; hosted review comments have no local copy.
+    canOpenDraft: !renderLimit.limited && (commentOwner !== null || Boolean(onAddLineComment)),
     onDeleteComment: (id) => {
       if (worktreeId) {
-        void deleteDiffComment(worktreeId, id)
+        void (commentOwner && deleteDiffComment(commentOwner, id))
       }
     },
-    onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
+    onUpdateComment: worktreeId
+      ? (id, body) =>
+          commentOwner ? updateDiffComment(commentOwner, id, body) : Promise.resolve(false)
+      : undefined,
     pendingScrollCommentId: pendingScrollForThisViewer,
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })
@@ -168,13 +194,13 @@ export default function DiffViewer({
   })
 
   const handleEnterLargeDiffFallback = useCallback(() => {
-    // Why: on fallback transition, drop stale Monaco refs so decorators/save handlers don't talk to disposed UI.
+    // Fallback disposes Monaco; clear refs before decorators or save handlers can use them.
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = null
     cancelAnimationFrame(wordWrapMountFrameRef.current)
     wordWrapOptionsSubRef.current?.dispose()
     wordWrapOptionsSubRef.current = null
-    // Why: capture before nulling so we unregister the exact instance (identity guard no-ops a stale dispose).
+    // Capture the exact instance before clearing; unregister ignores stale identities.
     const fallenBackEditor = diffEditorRef.current
     diffEditorRef.current = null
     if (fallenBackEditor) {
@@ -183,7 +209,6 @@ export default function DiffViewer({
     setModifiedEditor(null)
   }, [unregisterDiffEditor])
 
-  // Keep refs to latest callbacks so the mounted editor always calls current versions
   const onSaveRef = useRef(onSave)
   onSaveRef.current = onSave
   const onContentChangeRef = useRef(onContentChange)
@@ -196,6 +221,7 @@ export default function DiffViewer({
   const currentDiffModelPaths = useDiffViewerLargeDiffLifecycle({
     limited: renderLimit.limited,
     modelKey,
+    modelOwnerKey,
     originalModelKey,
     modifiedModelKey,
     diffEditorRef,
@@ -206,7 +232,7 @@ export default function DiffViewer({
     (diffEditor, monaco) => {
       diffEditorRef.current = diffEditor
       registerDiffEditor(diffEditor)
-      // Why: Monaco applies the inline-layout wrap override after mount, once width is known.
+      // Monaco applies its inline wrap override after mount when width is known.
       wordWrapMountFrameRef.current = requestAnimationFrame(() => {
         if (diffEditorRef.current !== diffEditor) {
           return
@@ -241,12 +267,12 @@ export default function DiffViewer({
       setupCopy(modifiedEditor, monaco, filePath, propsRef)
       setModifiedEditor(modifiedEditor)
 
-      // Why: restore full diff view state (not just scrollTop) so cursor/selection stay consistent across both panes.
+      // Restore cursor and selection across both panes alongside scroll.
       const savedViewState = diffViewStateCache.get(modelKey)
       if (savedViewState) {
         requestAnimationFrame(() => diffEditor.restoreViewState(savedViewState))
       }
-      // Auto-scroll to first diff lives in a separate effect below so it sequences after the decorator's view zones land.
+      // Auto-scroll runs separately after decorator view zones mount.
 
       if (editable) {
         const cleanupSaveShortcut = installEditorSaveShortcut(
@@ -258,12 +284,11 @@ export default function DiffViewer({
         const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(originalEditor)
         const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modifiedEditor)
 
-        // Track changes
         const modelContentSub = modifiedEditor.onDidChangeModelContent(() => {
           onContentChangeRef.current?.(modifiedEditor.getValue())
         })
         modifiedEditor.onDidDispose(() => {
-          // Why: this diff instance owns both panes' shortcut bridges + the model sub, so dispose them with it.
+          // Shortcut bridges and model subscriptions belong to this diff instance.
           cleanupSaveShortcut()
           cleanupOriginalFindShortcut()
           cleanupModifiedFindShortcut()
@@ -278,7 +303,7 @@ export default function DiffViewer({
     [editable, setupCopy, modelKey, filePath, sideBySide, registerDiffEditor, unregisterDiffEditor]
   )
 
-  // Why: snapshot view state on deactivation (layoutEffect cleanup fires before unmount), not on scroll.
+  // Snapshot on layout cleanup before unmount, avoiding scroll-time writes.
   useLayoutEffect(() => {
     return () => {
       const de = diffEditorRef.current
@@ -312,6 +337,37 @@ export default function DiffViewer({
     }
   }, [diffWordWrap, sideBySide])
 
+  // Why: @monaco-editor/react calls updateOptions whenever this object's identity changes.
+  const editorOptions = useMemo<editor.IDiffEditorConstructionOptions>(
+    () => ({
+      dropIntoEditor: { enabled: false },
+      readOnly: !editable,
+      originalEditable: false,
+      renderSideBySide: sideBySide,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
+      ...monacoTypographyOptions(diffTypography),
+      lineNumbers: 'on',
+      ...buildDiffEditorWordWrapOptions(diffWordWrap),
+      ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
+      ...buildDiffEditorHideUnchangedOptions(diffCollapseUnchangedRegions),
+      automaticLayout: true,
+      renderOverviewRuler: true,
+      scrollbar: diffEditorScrollbarOptions,
+      padding: { top: 0 },
+      find: monacoFindOptions
+    }),
+    [
+      editable,
+      sideBySide,
+      diffTypography,
+      diffWordWrap,
+      diffShowWhitespace,
+      diffCollapseUnchangedRegions
+    ]
+  )
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex-1 min-h-0 relative">
@@ -329,35 +385,19 @@ export default function DiffViewer({
         ) : (
           <DiffEditor
             height="100%"
+            // Why: the overview ruler column is unpainted; it shows this surface, not the app's.
+            className="code-editor-backdrop"
             language={language}
             original={originalContent}
             modified={modifiedContent}
-            theme={isDark ? 'vs-dark' : 'vs'}
+            theme={monacoTheme}
             onMount={handleMount}
-            // Why: key models by tab identity and preserve the modified undo stack across Changes-mode HEAD rotations.
+            // Tab-owned models preserve modified undo across Changes-mode HEAD rotations.
             originalModelPath={currentDiffModelPaths.originalModelPath}
             modifiedModelPath={currentDiffModelPaths.modifiedModelPath}
             keepCurrentOriginalModel
             keepCurrentModifiedModel
-            options={{
-              dropIntoEditor: { enabled: false },
-              readOnly: !editable,
-              originalEditable: false,
-              renderSideBySide: sideBySide,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              fontSize: diffEditorFontSize,
-              fontFamily: resolveEditorFontFamily(settings),
-              lineNumbers: 'on',
-              ...buildDiffEditorWordWrapOptions(settings?.diffWordWrap),
-              ...buildDiffEditorWhitespaceOptions(settings?.diffShowWhitespace),
-              ...buildDiffEditorHideUnchangedOptions(settings?.diffCollapseUnchangedRegions),
-              automaticLayout: true,
-              renderOverviewRuler: true,
-              scrollbar: diffEditorScrollbarOptions,
-              padding: { top: 0 },
-              find: monacoFindOptions
-            }}
+            options={editorOptions}
           />
         )}
       </div>

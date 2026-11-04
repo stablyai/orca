@@ -7,13 +7,16 @@ import type {
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { getRuntimeTargetHostId } from '../../../../runtime/runtime-client-target'
+import { getRuntimeTargetHostId, type HostRoute } from '../../../../runtime/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { replaceWorktreeInRepoLists } from '../listing/worktree-owner-settings'
-import { repoHostId, withRepoHostOwnership } from '../listing/worktree-host-ownership'
+import {
+  withRepoHostOwnership,
+  worktreeHostMatchOptions,
+  worktreeMatchesHost
+} from '../listing/worktree-host-ownership'
 import { mergeLineageForHost, mergeWorkspaceLineageForHost } from './worktree-lineage-host-merge'
 import { beginWorktreeLineageRefresh } from './worktree-lineage-readiness'
 import type {
@@ -104,13 +107,15 @@ export function projectWorktreeLineageToWorkspaceLineage(
 }
 
 export async function setWorktreeLineageForRuntime(
-  target: RuntimeClientTarget,
+  route: HostRoute,
   worktreeId: string,
   args: { parentWorktreeId?: string; noParent?: boolean }
 ): Promise<WorktreeLineageUpdateResult> {
+  const { target } = route
   if (target.kind === 'local') {
     return {
       target,
+      hostId: route.at,
       lineage: await window.api.worktrees.updateLineage({ worktreeId, ...args })
     }
   }
@@ -128,20 +133,28 @@ export async function setWorktreeLineageForRuntime(
   )
   return {
     target,
+    hostId: getRuntimeTargetHostId(target),
     lineage: result.worktree.lineage ?? null,
     updatedRemoteWorktree: result.worktree
   }
 }
 
+/** Projects a local write onto this host's rows only; a same-id twin on a server keeps its own. */
 export function projectLocalWorktreeLineageUpdate(
-  worktreesByRepo: Record<string, Worktree[]>,
+  state: Pick<AppState, 'repos' | 'worktreesByRepo'>,
+  hostId: ExecutionHostId,
   worktreeId: string,
   lineage: WorktreeLineage | null
 ): Record<string, Worktree[]> {
+  const { worktreesByRepo } = state
   let nextByRepo = worktreesByRepo
   for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
+    const options = worktreeHostMatchOptions(state, repoId, hostId)
     let repoChanged = false
     const projected = worktrees.map((worktree) => {
+      if (!worktreeMatchesHost(worktree, hostId, options)) {
+        return worktree
+      }
       const current = worktree as WorktreeWithLineage
       const hadChild = current.childWorktreeIds?.includes(worktreeId) ?? false
       const isParent =
@@ -190,16 +203,15 @@ export function applyWorktreeLineageUpdate(
     } else {
       delete next[worktreeId]
     }
+    // Why the result's host: focus can name the twin of a row another host just answered for.
     const worktreesByRepo =
       result.target.kind === 'local'
-        ? projectLocalWorktreeLineageUpdate(s.worktreesByRepo, worktreeId, result.lineage)
+        ? projectLocalWorktreeLineageUpdate(s, result.hostId, worktreeId, result.lineage)
         : result.updatedRemoteWorktree
           ? replaceWorktreeInRepoLists(
-              s.worktreesByRepo,
-              withRepoHostOwnership(
-                result.updatedRemoteWorktree,
-                repoHostId(s, getRepoIdFromWorktreeId(result.updatedRemoteWorktree.id))
-              )
+              s,
+              withRepoHostOwnership(result.updatedRemoteWorktree, result.hostId),
+              result.hostId
             )
           : s.worktreesByRepo
     return {

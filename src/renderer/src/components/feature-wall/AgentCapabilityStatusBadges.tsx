@@ -6,7 +6,6 @@ import {
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
 
-// Why: pills sit top-right so they line up across cards regardless of description length.
 export function AgentCapabilityStatusPill(props: {
   status: AgentCapabilityInstallStatus
 }): React.JSX.Element | null {

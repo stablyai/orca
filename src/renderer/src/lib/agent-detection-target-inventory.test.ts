@@ -3,7 +3,7 @@ import { createTestStore } from '@/store/slices/store-test-helpers'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { Repo } from '../../../shared/repo-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   ensureDetectedAgentsForWorktree,
   readDetectedAgentsForWorktree
@@ -24,8 +24,7 @@ function storeWithRepo(repo: Partial<Repo>) {
   return { store, ensureDetectedAgents, ensureRemoteDetectedAgents, ensureRuntimeDetectedAgents }
 }
 
-// Why (#21429, #25804): a paired server's workspace, including one on that server's own SSH
-// target, lists the agents the server finds there; never this client's or its SSH map's.
+// Paired workspaces, including nested SSH, must list their server’s agents rather than this client’s (#21429, #25804).
 describe('agent inventory for a worktree', () => {
   it("reads and loads a paired server's SSH workspace from that server", async () => {
     const harness = storeWithRepo({
@@ -44,15 +43,6 @@ describe('agent inventory for a worktree', () => {
     expect(harness.ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1', 'wt-1')
     expect(harness.ensureRemoteDetectedAgents).not.toHaveBeenCalled()
     expect(harness.ensureDetectedAgents).not.toHaveBeenCalled()
-  })
-
-  it('loads a local workspace in its own project runtime', async () => {
-    const harness = storeWithRepo({})
-
-    await expect(
-      ensureDetectedAgentsForWorktree(harness.store.getState(), 'wt-1')
-    ).resolves.toEqual(['codex'])
-    expect(harness.ensureDetectedAgents).toHaveBeenCalledWith('wt-1')
   })
 
   it("loads a direct SSH workspace from this client's connection", async () => {

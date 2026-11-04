@@ -1,10 +1,10 @@
-import { getWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
-import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
+import { getWorktreeWatcherRemoval } from '../workspaces/removal/worktree-watcher-removal'
+import { acquireWatcherRemovalGate } from '../workspaces/removal/watcher-removal-gate'
 import {
   createWatcherRemovalDeadline,
   drainBeforeWatcherRemoval,
   type WatcherRemovalDeadline
-} from '../ipc/watcher-removal-drain'
+} from '../workspaces/removal/watcher-removal-drain'
 
 type FileExplorerWatcherCommands = {
   closeFileExplorerWatchersForPath(worktreePath: string, connectionId?: string): Promise<void>
@@ -21,14 +21,9 @@ export function createRuntimeFileWatcherRemoval(fileCommands: FileExplorerWatche
     connectionId?: string,
     deadline: WatcherRemovalDeadline = createWatcherRemovalDeadline()
   ): Promise<void> => {
+    // Desktop watchers own local roots; SSH paths have no local watcher to close.
     const results = await Promise.allSettled([
-      connectionId
-        ? drainBeforeWatcherRemoval(
-            getWorktreeWatcherRemoval().closeRemote(connectionId, worktreePath),
-            deadline,
-            `remote watcher close for ${worktreePath}`
-          )
-        : getWorktreeWatcherRemoval().closeLocal(worktreePath, deadline),
+      connectionId ? undefined : getWorktreeWatcherRemoval().closeLocal(worktreePath, deadline),
       drainBeforeWatcherRemoval(
         fileCommands.closeFileExplorerWatchersForPath(worktreePath, connectionId),
         deadline,
@@ -39,24 +34,20 @@ export function createRuntimeFileWatcherRemoval(fileCommands: FileExplorerWatche
       (result): result is PromiseRejectedResult => result.status === 'rejected'
     )
     if (failure) {
-      // Why: restoration must wait until every bounded teardown settles.
+      // Wait for all bounded teardowns before restoring watchers.
       throw failure.reason
     }
   }
 
   const restore = async (worktreePath: string, connectionId?: string): Promise<void> => {
     await Promise.all([
-      connectionId
-        ? getWorktreeWatcherRemoval().restoreRemote(connectionId, worktreePath)
-        : getWorktreeWatcherRemoval().restoreLocal(worktreePath),
+      connectionId ? undefined : getWorktreeWatcherRemoval().restoreLocal(worktreePath),
       fileCommands.restoreFileExplorerWatchersAfterFailedRemoval(worktreePath, connectionId)
     ])
   }
 
   const forget = (worktreePath: string, connectionId?: string): void => {
-    if (connectionId) {
-      getWorktreeWatcherRemoval().forgetRemote(connectionId, worktreePath)
-    } else {
+    if (!connectionId) {
       getWorktreeWatcherRemoval().forgetLocal(worktreePath)
     }
     fileCommands.forgetFileExplorerWatchersAfterRemoval(worktreePath, connectionId)

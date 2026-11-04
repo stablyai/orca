@@ -9,8 +9,7 @@ export function showClientCreationActionError(error: unknown): void {
   toast.error(error instanceof Error ? error.message : String(error))
 }
 
-// Why: action paths must surface the policy's reason; the visibility gate alone
-// leaves shortcut-driven creation failing silently.
+// Surface policy reasons in action paths or shortcut-driven creation fails silently despite visibility gates.
 export function ensureClientCreationActionAllowed(
   worktreeId: string | null,
   action: ClientCreationAction

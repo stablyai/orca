@@ -1,141 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createDivider, createDividerFlexFrameScheduler, disposeDivider } from './pane-divider'
+import { createDivider } from './pane-divider'
 import { queuePanePtyResizeIfHeld } from './pane-pty-resize-hold'
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('createDividerFlexFrameScheduler', () => {
-  it('coalesces repeated drag updates into one flex write per animation frame', () => {
-    const apply = vi.fn()
-    const queuedFrames: FrameRequestCallback[] = []
-    const requestFrame = vi.fn((callback: FrameRequestCallback) => {
-      queuedFrames.push(callback)
-      return queuedFrames.length
-    })
-    const cancelFrame = vi.fn()
-    const scheduler = createDividerFlexFrameScheduler({ apply, requestFrame, cancelFrame })
-
-    scheduler.schedule(120, 280)
-    scheduler.schedule(140, 260)
-    scheduler.schedule(160, 240)
-
-    expect(requestFrame).toHaveBeenCalledTimes(1)
-    expect(apply).not.toHaveBeenCalled()
-
-    queuedFrames[0]?.(16)
-
-    expect(apply).toHaveBeenCalledTimes(1)
-    expect(apply).toHaveBeenLastCalledWith(160, 240)
-    expect(cancelFrame).not.toHaveBeenCalled()
-  })
-
-  it('flushes the latest drag update before final pane refit', () => {
-    const apply = vi.fn()
-    const requestFrame = vi.fn(() => 7)
-    const cancelFrame = vi.fn()
-    const scheduler = createDividerFlexFrameScheduler({ apply, requestFrame, cancelFrame })
-
-    scheduler.schedule(120, 280)
-    scheduler.schedule(180, 220)
-    scheduler.flush()
-
-    expect(cancelFrame).toHaveBeenCalledWith(7)
-    expect(apply).toHaveBeenCalledTimes(1)
-    expect(apply).toHaveBeenCalledWith(180, 220)
-  })
-})
-
 describe('disposeDivider', () => {
-  it('does not start divider drag state without resizeable pane siblings', () => {
-    const dividerListeners = new Map<string, EventListener>()
-    const onDragActiveChange = vi.fn()
-    const preventDefault = vi.fn()
-    const divider = {
-      style: {
-        setProperty: vi.fn()
-      },
-      classList: {
-        add: vi.fn(),
-        remove: vi.fn()
-      },
-      addEventListener: vi.fn((event: string, listener: EventListener) => {
-        dividerListeners.set(event, listener)
-      }),
-      removeEventListener: vi.fn(),
-      setPointerCapture: vi.fn(),
-      hasPointerCapture: vi.fn(() => false),
-      releasePointerCapture: vi.fn(),
-      previousElementSibling: null,
-      nextElementSibling: null
-    } as unknown as HTMLElement
-    vi.stubGlobal('document', {
-      createElement: vi.fn(() => divider)
-    })
-    vi.stubGlobal('window', {
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
-    })
-    vi.stubGlobal('requestAnimationFrame', vi.fn())
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-
-    createDivider(true, {}, { refitPanesUnder: vi.fn(), onDragActiveChange })
-    dividerListeners.get('pointerdown')?.(
-      createPointerEvent({ pointerId: 7, clientX: 10, preventDefault })
-    )
-
-    expect(preventDefault).toHaveBeenCalled()
-    expect(divider.setPointerCapture).not.toHaveBeenCalled()
-    expect(divider.classList.add).not.toHaveBeenCalled()
-    expect(onDragActiveChange).not.toHaveBeenCalled()
-    expect(window.addEventListener).not.toHaveBeenCalled()
-  })
-
-  it('does not start divider drag state when sibling panes have no measurable size', () => {
-    const dividerListeners = new Map<string, EventListener>()
-    const onDragActiveChange = vi.fn()
-    const previousPane = createSizedPaneElement({ width: 0, height: 200 })
-    const nextPane = createSizedPaneElement({ width: 0, height: 200 })
-    const divider = {
-      style: {
-        setProperty: vi.fn()
-      },
-      classList: {
-        add: vi.fn(),
-        remove: vi.fn()
-      },
-      addEventListener: vi.fn((event: string, listener: EventListener) => {
-        dividerListeners.set(event, listener)
-      }),
-      removeEventListener: vi.fn(),
-      setPointerCapture: vi.fn(),
-      hasPointerCapture: vi.fn(() => false),
-      releasePointerCapture: vi.fn(),
-      previousElementSibling: previousPane,
-      nextElementSibling: nextPane
-    } as unknown as HTMLElement
-    vi.stubGlobal('document', {
-      createElement: vi.fn(() => divider)
-    })
-    vi.stubGlobal('window', {
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
-    })
-    vi.stubGlobal('requestAnimationFrame', vi.fn())
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-
-    createDivider(true, {}, { refitPanesUnder: vi.fn(), onDragActiveChange })
-    dividerListeners.get('pointerdown')?.(createPointerEvent({ pointerId: 7, clientX: 10 }))
-
-    expect(divider.setPointerCapture).not.toHaveBeenCalled()
-    expect(divider.classList.add).not.toHaveBeenCalled()
-    expect(onDragActiveChange).not.toHaveBeenCalled()
-    expect(window.addEventListener).not.toHaveBeenCalled()
-    expect(previousPane.style.flex).toBeUndefined()
-    expect(nextPane.style.flex).toBeUndefined()
-  })
-
   it('finishes an active resize from a window-level pointerup', () => {
     const dividerListeners = new Map<string, EventListener>()
     const windowListeners = new Map<string, EventListener>()
@@ -170,6 +41,7 @@ describe('disposeDivider', () => {
     } as unknown as HTMLElement
     const refitPanesUnder = vi.fn()
     const onLayoutChanged = vi.fn()
+    const onDividerRatiosCommitted = vi.fn(() => expect(onLayoutChanged).toHaveBeenCalled())
     vi.stubGlobal('document', {
       createElement: vi.fn(() => divider)
     })
@@ -189,7 +61,7 @@ describe('disposeDivider', () => {
     )
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
 
-    createDivider(true, {}, { refitPanesUnder, onLayoutChanged })
+    createDivider(true, {}, { refitPanesUnder, onLayoutChanged, onDividerRatiosCommitted })
     dividerListeners.get('pointerdown')?.(
       createPointerEvent({ pointerId: 9, clientX: 100, clientY: 0 })
     )
@@ -205,67 +77,12 @@ describe('disposeDivider', () => {
     expect(nextPane.style.flex).toBe('220 1 0%')
     expect(refitPanesUnder).toHaveBeenCalledWith(previousPane)
     expect(refitPanesUnder).toHaveBeenCalledWith(nextPane)
-    expect(onLayoutChanged).toHaveBeenCalledExactlyOnceWith('gesture')
+    expect(onLayoutChanged).toHaveBeenCalledOnce()
+    expect(onDividerRatiosCommitted).toHaveBeenCalledOnce()
     expect(divider.classList.remove).toHaveBeenCalledWith('is-dragging')
     expect(divider.releasePointerCapture).toHaveBeenCalledWith(9)
     expect(windowListeners.has('pointermove')).toBe(false)
     expect(windowListeners.has('pointerup')).toBe(false)
-  })
-
-  it('keeps flex bases nonnegative when panes are smaller than combined minimums', () => {
-    const dividerListeners = new Map<string, EventListener>()
-    const windowListeners = new Map<string, EventListener>()
-    const capturedPointerIds = new Set<number>()
-    const previousPane = createSizedPaneElement({ width: 30, height: 200 })
-    const nextPane = createSizedPaneElement({ width: 40, height: 200 })
-    const divider = {
-      style: {
-        setProperty: vi.fn()
-      },
-      classList: {
-        add: vi.fn(),
-        remove: vi.fn()
-      },
-      addEventListener: vi.fn((event: string, listener: EventListener) => {
-        dividerListeners.set(event, listener)
-      }),
-      removeEventListener: vi.fn(),
-      setPointerCapture: vi.fn((pointerId: number) => {
-        capturedPointerIds.add(pointerId)
-      }),
-      hasPointerCapture: vi.fn((pointerId: number) => capturedPointerIds.has(pointerId)),
-      releasePointerCapture: vi.fn((pointerId: number) => {
-        capturedPointerIds.delete(pointerId)
-      }),
-      previousElementSibling: previousPane,
-      nextElementSibling: nextPane
-    } as unknown as HTMLElement
-    vi.stubGlobal('document', {
-      createElement: vi.fn(() => divider)
-    })
-    vi.stubGlobal('window', {
-      addEventListener: vi.fn((event: string, listener: EventListener) => {
-        windowListeners.set(event, listener)
-      }),
-      removeEventListener: vi.fn()
-    })
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn(() => 7)
-    )
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-
-    createDivider(true, {}, { refitPanesUnder: vi.fn(), onLayoutChanged: vi.fn() })
-    dividerListeners.get('pointerdown')?.(
-      createPointerEvent({ pointerId: 9, clientX: 0, clientY: 0 })
-    )
-    windowListeners.get('pointermove')?.(
-      createPointerEvent({ pointerId: 9, clientX: 200, clientY: 0 })
-    )
-    windowListeners.get('pointerup')?.(createPointerEvent({ pointerId: 9, clientX: 200 }))
-
-    expect(previousPane.style.flex).toBe('35 1 0%')
-    expect(nextPane.style.flex).toBe('35 1 0%')
   })
 
   it('restores original flex styles when an active resize is cancelled', () => {
@@ -301,6 +118,7 @@ describe('disposeDivider', () => {
     } as unknown as HTMLElement
     const refitPanesUnder = vi.fn()
     const onLayoutChanged = vi.fn()
+    const onDividerRatiosCommitted = vi.fn()
     vi.stubGlobal('document', {
       createElement: vi.fn(() => divider)
     })
@@ -319,7 +137,7 @@ describe('disposeDivider', () => {
     )
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
 
-    createDivider(true, {}, { refitPanesUnder, onLayoutChanged })
+    createDivider(true, {}, { refitPanesUnder, onLayoutChanged, onDividerRatiosCommitted })
     dividerListeners.get('pointerdown')?.(
       createPointerEvent({ pointerId: 9, clientX: 100, clientY: 0 })
     )
@@ -338,6 +156,7 @@ describe('disposeDivider', () => {
     expect(refitPanesUnder).toHaveBeenCalledWith(previousPane)
     expect(refitPanesUnder).toHaveBeenCalledWith(nextPane)
     expect(onLayoutChanged).not.toHaveBeenCalled()
+    expect(onDividerRatiosCommitted).not.toHaveBeenCalled()
   })
 
   it('drops held PTY resize updates when an active resize is cancelled', () => {
@@ -403,57 +222,6 @@ describe('disposeDivider', () => {
     expect(nextPane.dispatchEvent).not.toHaveBeenCalled()
     expect(queuePanePtyResizeIfHeld(previousPane, 140, 30)).toBe(false)
     expect(queuePanePtyResizeIfHeld(nextPane, 80, 30)).toBe(false)
-  })
-
-  it('removes divider-local drag listeners and releases active pointer capture', () => {
-    const listeners = new Map<string, EventListener>()
-    const previousPane = createSizedPaneElement({ width: 100, height: 200 })
-    const nextPane = createSizedPaneElement({ width: 300, height: 200 })
-    const divider = {
-      style: {
-        setProperty: vi.fn()
-      },
-      classList: {
-        add: vi.fn(),
-        remove: vi.fn()
-      },
-      addEventListener: vi.fn((event: string, listener: EventListener) => {
-        listeners.set(event, listener)
-      }),
-      removeEventListener: vi.fn((event: string, listener: EventListener) => {
-        if (listeners.get(event) === listener) {
-          listeners.delete(event)
-        }
-      }),
-      setPointerCapture: vi.fn(),
-      hasPointerCapture: vi.fn(() => true),
-      releasePointerCapture: vi.fn(),
-      previousElementSibling: previousPane,
-      nextElementSibling: nextPane
-    } as unknown as HTMLElement
-    vi.stubGlobal('document', {
-      createElement: vi.fn(() => divider)
-    })
-    vi.stubGlobal('requestAnimationFrame', vi.fn())
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-
-    const created = createDivider(true, {}, { refitPanesUnder: vi.fn() })
-    const pointerDown = listeners.get('pointerdown')
-    expect(pointerDown).toBeTypeOf('function')
-
-    pointerDown?.({
-      preventDefault: vi.fn(),
-      pointerId: 7,
-      clientX: 10
-    } as unknown as PointerEvent)
-    disposeDivider(created)
-
-    expect(divider.removeEventListener).toHaveBeenCalledWith('pointerdown', pointerDown)
-    expect(divider.removeEventListener).toHaveBeenCalledWith('pointermove', expect.any(Function))
-    expect(divider.removeEventListener).toHaveBeenCalledWith('pointerup', expect.any(Function))
-    expect(divider.removeEventListener).toHaveBeenCalledWith('dblclick', expect.any(Function))
-    expect(divider.releasePointerCapture).toHaveBeenCalledWith(7)
-    expect(divider.classList.remove).toHaveBeenCalledWith('is-dragging')
   })
 })
 

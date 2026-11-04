@@ -201,7 +201,6 @@ describe('binary stream framing', () => {
     const data = readAll(frames).events.map((event) =>
       event.event === 'data' ? event.payload.data : ''
     )
-    // No chunk may split a surrogate pair.
     expect(data.every((chunk) => !/[\uD800-\uDBFF]$/.test(chunk))).toBe(true)
     expect(data.join('')).toBe('\u{1F680}'.repeat(10_000))
   })

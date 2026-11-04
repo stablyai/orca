@@ -1,21 +1,17 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
   routes: { pathname: string; params?: Record<string, string> }[]
-  panels: { hostId: string; worktreeId: string; name?: string }[]
-  previews: unknown[]
-  /** `mount:<pathname>` / `unmount:<pathname>`, which is the only thing that tells a remount from
-   *  a prop update — and a remount is what drops the old session's bridge and its grants. */
+  refusals: string[]
   lifecycle: string[]
   params: Record<string, string | string[] | undefined>
 }
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
   routes: [],
-  panels: [],
-  previews: [],
+  refusals: [],
   lifecycle: [],
   params: {}
 }))
@@ -29,18 +25,17 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
+vi.mock('../transport/host-client-hooks', () => ({
+  useHostClient: () => ({ client: null, state: 'disconnected' })
+}))
+vi.mock('../transport/workspace-server', () => ({
+  useWorkspaceServer: () => ({ routeHost: undefined, server: null })
+}))
 vi.mock('expo-router', () => ({ useLocalSearchParams: () => dependencies.params }))
 
-vi.mock('../files/MobileFileExplorerPanel', () => ({
-  MobileFileExplorerPanel: (props: { hostId: string; worktreeId: string; name?: string }) => {
-    dependencies.panels.push(props)
-    return null
-  }
-}))
-
-vi.mock('../files/MobileFilePreviewScreen', () => ({
-  MobileFilePreviewScreen: (props: unknown) => {
-    dependencies.previews.push(props)
+vi.mock('./PageRouteUnavailableScreen', () => ({
+  PageRouteUnavailableScreen: (props: { hostId: string }) => {
+    dependencies.refusals.push(props.hostId)
     return null
   }
 }))
@@ -53,8 +48,7 @@ vi.mock('./MobileWebShellScreen', async () => {
       route: { pathname: string; params?: Record<string, string> }
     }) => {
       dependencies.routes.push(props.route)
-      // Empty deps on purpose: keyed on the pathname this would re-fire on a prop update and read
-      // exactly like a remount, which is the one thing it exists to tell apart.
+      // Keep deps empty: pathname-driven effects would also run on prop updates and falsely look like remounts.
       const mountedAs = React.useRef(props.route.pathname)
       React.useEffect(() => {
         const pathname = mountedAs.current
@@ -86,18 +80,12 @@ async function renderPreview(): Promise<void> {
 
 beforeEach(() => {
   dependencies.routes.length = 0
-  dependencies.panels.length = 0
-  dependencies.previews.length = 0
+  dependencies.refusals.length = 0
   dependencies.lifecycle.length = 0
   dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', name: 'my worktree' }
-  vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
 })
 
-afterEach(() => {
-  vi.unstubAllEnvs()
-})
-
-describe('the native file explorer route that hands off to the shell', () => {
+describe('the file explorer route that hands off to the shell', () => {
   it('opens the shell on this screen, with the name as the search half', async () => {
     await renderExplorer()
     expect(dependencies.routes).toEqual([
@@ -105,14 +93,7 @@ describe('the native file explorer route that hands off to the shell', () => {
     ])
   })
 
-  /**
-   * A repeated query key, which expo-router answers with an array.
-   *
-   * A bare read puts that array straight into a template, where `String(['a','b'])` is `a,b` and
-   * `encodeURIComponent` makes it `a%2Cb` — one segment, so the bridge's segment rule accepts it
-   * and the shell opens a page for a host that does not exist. `firstParam` is what the other
-   * switches read through, and it takes the first value the way the native screen below does.
-   */
+  // Expo returns repeated query keys as arrays; firstParam avoids encoding a,b as one valid but nonexistent host segment.
   it('takes the first value of a repeated param, not the joined array', async () => {
     dependencies.params = {
       hostId: ['host-a', 'host-b'],
@@ -128,12 +109,13 @@ describe('the native file explorer route that hands off to the shell', () => {
     expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test(pathname)).toBe(true)
   })
 
-  it('stays native for a dot-segment id the bridge would refuse', async () => {
+  it('refuses a dot-segment id the bridge would refuse', async () => {
     for (const hostId of ['.', '..']) {
       dependencies.params = { hostId, worktreeId: 'wt-1' }
       dependencies.routes.length = 0
       await renderExplorer()
       expect(dependencies.routes, hostId).toEqual([])
+      expect(dependencies.refusals.at(-1), hostId).toBe(hostId)
     }
   })
 
@@ -150,19 +132,7 @@ describe('the native file explorer route that hands off to the shell', () => {
     }
   })
 
-  it('renders the native panel in a build without the shell, which is every store build', async () => {
-    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', undefined)
-    await renderExplorer()
-    expect(dependencies.routes).toEqual([])
-  })
-
-  /**
-   * A route change is a new session, and the old one's bridge must not outlive it.
-   *
-   * The host captures the grants its session was opened with, so a screen reused across a route
-   * change keeps authorising frames under the grants of the route the page has left. Only a
-   * remount drops it, and only a key guarantees one.
-   */
+  // Remount on route change to dispose the bridge that captured the previous route’s grants.
   it('remounts the shell when the route changes rather than updating it', async () => {
     let renderer: ReturnType<typeof create> | null = null
     await act(async () => {
@@ -180,8 +150,7 @@ describe('the native file explorer route that hands off to the shell', () => {
   })
 
   it('remounts when only a param changes, which the page has no other way to learn', async () => {
-    // The page reads its route once, out of `init`. Same pathname, different label: without the
-    // params in the key the shell stays mounted and the page never hears about it.
+    // Labels affect initial route state too; include params in remount identity so the page receives the new value.
     let renderer: ReturnType<typeof create> | null = null
     await act(async () => {
       renderer = create(createElement(MobileFileExplorerScreen))
@@ -198,7 +167,7 @@ describe('the native file explorer route that hands off to the shell', () => {
   })
 })
 
-describe('the native file preview route that hands off to the shell', () => {
+describe('the file preview route that hands off to the shell', () => {
   beforeEach(() => {
     dependencies.params = {
       hostId: 'host-1',

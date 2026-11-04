@@ -4,6 +4,9 @@ import * as React from 'react'
 import * as PopoverPrimitive from 'radix-ui/popover'
 
 import { cn } from '@/lib/utils'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
+import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
@@ -21,10 +24,7 @@ function PopoverAnchor(props: React.ComponentProps<typeof PopoverPrimitive.Ancho
   return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />
 }
 
-/**
- * Nearest scrollable element between the wheel target and the popover content,
- * inclusive of both. Returns null when nothing in that chain can scroll.
- */
+/** Find the nearest scrollable element from the wheel target through popover content, inclusive. */
 function resolvePopoverScroller(
   target: EventTarget | null,
   content: HTMLElement
@@ -52,8 +52,7 @@ function handlePopoverWheel(event: WheelEvent, content: HTMLDivElement): void {
     return
   }
 
-  // Why two markers: `popover-scroll-content` also imposes a 15rem max-height and its
-  // own overflow, while `popover-wheel-scroll` opts into the shim alone.
+  // Keep shim opt-in separate from popover-scroll-content, which also imposes overflow and max-height.
   if (
     !content.classList.contains('popover-scroll-content') &&
     !content.classList.contains('popover-wheel-scroll')
@@ -66,12 +65,7 @@ function handlePopoverWheel(event: WheelEvent, content: HTMLDivElement): void {
     return
   }
 
-  const delta =
-    event.deltaMode === WheelEvent.DOM_DELTA_LINE
-      ? event.deltaY * 16
-      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-        ? event.deltaY * el.clientHeight
-        : event.deltaY
+  const delta = getWheelScrollDeltaY(event, el.clientHeight)
   const maxScrollTop = el.scrollHeight - el.clientHeight
   const nextScrollTop = Math.max(0, Math.min(maxScrollTop, el.scrollTop + delta))
 
@@ -160,36 +154,36 @@ function PopoverContent({
     [forwardedRef, portalContainer]
   )
 
+  const { ref: focusScopeRef, scope } = useOverlayFocusScope(setContentRef)
+
   return (
     <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
-      <PopoverPrimitive.Content
-        data-slot="popover-content"
-        align={align}
-        sideOffset={sideOffset}
-        // Why: matches the dropdown-menu recipe — translucent surface, solid
-        // 14% border, dual shadow, and 2xl backdrop blur. bg-popover equals
-        // the canvas in dark mode (#171717 vs #0a0a0a) and border-border/50
-        // is too faint to read, so the popover blended into the background.
-        className={cn(
-          'z-[60] overflow-hidden rounded-md border border-black/14 bg-[rgba(255,255,255,0.82)] text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl outline-none dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-          wheelScroll && 'popover-wheel-scroll',
-          className
-        )}
-        ref={setContentRef}
-        // Why: Electron's -webkit-app-region: drag on the titlebar captures
-        // clicks at the OS level regardless of z-index. Without no-drag,
-        // popovers that visually overlap the titlebar are unclickable.
-        style={
-          {
-            ...style,
-            WebkitAppRegion: 'no-drag'
-          } as React.CSSProperties
-        }
-        onWheel={handleConsumerWheel}
-        onWheelCapture={handleConsumerWheelCapture}
-        {...props}
-        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
-      />
+      <OverlayFocusScope value={scope}>
+        <PopoverPrimitive.Content
+          data-slot="popover-content"
+          align={align}
+          sideOffset={sideOffset}
+          // Match dropdown surface/border/shadow tokens so popovers remain distinct from the dark canvas.
+          className={cn(
+            'z-[60] overflow-hidden rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl outline-none dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+            wheelScroll && 'popover-wheel-scroll',
+            className
+          )}
+          ref={focusScopeRef}
+          // Disable native dragging: titlebar drag regions intercept overlapping popover clicks regardless of z-index.
+          style={
+            {
+              ...style,
+              WebkitAppRegion: 'no-drag'
+            } as React.CSSProperties
+          }
+          onWheel={handleConsumerWheel}
+          onWheelCapture={handleConsumerWheelCapture}
+          {...props}
+          onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
+          onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+        />
+      </OverlayFocusScope>
     </PopoverPrimitive.Portal>
   )
 }

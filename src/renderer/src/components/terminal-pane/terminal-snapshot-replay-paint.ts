@@ -6,15 +6,9 @@ import {
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { splitAtAlternateScreenEntry } from '../../../../shared/terminal-alternate-screen-split'
 
-/**
- * Shared guards and write choreography for painting a main-model snapshot into
- * a (possibly fresh) xterm. One source for the reattach/hidden-restore paint
- * paths so their dimension guards and alt-screen branches cannot drift.
- */
+/** Shared snapshot paint ordering keeps reattach/hidden restore dimension and buffer-switch rules aligned. */
 
-/** True only for finite positive numeric cols/rows — Infinity/NaN/undefined
- *  from a malformed snapshot must degrade to "no resize", never reach
- *  terminal.resize(). */
+/** Reject nonfinite/nonpositive dimensions before malformed snapshots reach terminal.resize. */
 export function hasPositiveTerminalDimensions(cols: unknown, rows: unknown): boolean {
   return (
     typeof cols === 'number' &&
@@ -36,13 +30,7 @@ export function resolvePositiveTerminalDimensions(
     : null
 }
 
-/**
- * The column count the post-replay fit will land on. Why not terminal.cols: a
- * pane that has not been fitted yet still reads xterm's 80-column default, so
- * comparing against it would drop frames whose width actually matches the
- * container. Returns undefined when the pane cannot be measured, so replay can
- * retain the frame at its capture grid until a final fit exists.
- */
+/** Compare with proposed fit, not xterm’s unfitted 80-column default; unknown measurement retains the captured frame grid. */
 export function readProposedTerminalCols(pane: ManagedPane): number | undefined {
   return readProposedPaneFitDimensions(pane)?.cols
 }
@@ -69,13 +57,7 @@ export function buildSnapshotReplayPreamble(
   return `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue(args)}`
 }
 
-/**
- * Writes for a remote image, which folds its normal buffer in ahead of its alt
- * entry. An image with history replaces the pane's normal buffer and history,
- * even over a live alt screen: a TUI can exit, the shell print and another TUI
- * start inside the gap. A screen-only image over alt repaints only its alt
- * payload, since it has no history to replace the pane's pre-TUI scrollback with.
- */
+/** Folded images with history replace normal history even across live-alt gaps; screen-only images repaint alt without erasing pre-TUI scrollback. */
 export function buildFoldedImageReplayWrites(
   data: string,
   paneOnAlternateScreen: boolean,
@@ -97,17 +79,7 @@ export function buildFoldedImageReplayWrites(
   }
 }
 
-/**
- * Ordered replay writes for a main-model snapshot, including the alt-screen
- * choreography: main strips the `?1049h` marker when splitting scrollbackAnsi
- * from an alt frame, so the restorer owns the transition — rebuild the normal
- * buffer while on it, then paint the alt frame clean. Callers write these
- * before their post-replay reset/escape-tail sequences.
- *
- * `skipAltFrame` drops only the frame paint, never the buffer choreography or
- * scrollback or mode rehydration: the alt buffer is still entered and cleared
- * so the caller's SIGWINCH lands on a clean screen the application repaints.
- */
+/** Rebuild normal history then paint clean alt: main strips split payloads’ alt entry. Write before mode/escape-tail restoration; skipAltFrame still preserves buffer transitions, clear, scrollback and modes for SIGWINCH repaint. */
 export function buildMainModelSnapshotReplayWrites(
   snapshot: {
     data: string
@@ -120,18 +92,13 @@ export function buildMainModelSnapshotReplayWrites(
   options: { skipAltFrame?: boolean; paneOnAlternateScreen: boolean }
 ): string[] {
   const { paneOnAlternateScreen } = options
-  // The alt payload always follows a hop through the normal buffer in the split
-  // branch, so its own switch is judged from there, not from where we started.
+  // The split branch paints alt only after rebuilding normal, so judge its switch from normal.
   const altPrologue = (fromAlternateScreen: boolean): string =>
     buildSnapshotReplayPrologue({
       targetAlternateScreen: true,
       paneOnAlternateScreen: fromAlternateScreen
     })
-  // Why the switch can be needed here: the gap can eat the TUI's own exit
-  // sequence, leaving the renderer on alt while the model moved to normal —
-  // the restored history would paint into the alt buffer, looking right while
-  // scrollback stays empty (STA-4042). An image carrying its normal buffer
-  // enters alt itself, so it needs the same start.
+  // Missed exit can leave renderer on alt while model is normal; switch before replay so history is not trapped there. Folded normal-buffer images own their later alt entry.
   const normalPreamble = buildSnapshotReplayPreamble({
     targetAlternateScreen: false,
     paneOnAlternateScreen
@@ -139,20 +106,16 @@ export function buildMainModelSnapshotReplayWrites(
   if (!snapshot.alternateScreen || snapshot.carriesNormalBuffer) {
     return [normalPreamble, snapshot.data]
   }
-  // Older snapshot producers do not expose the mode/frame boundary. Keep their
-  // composed data rather than dropping terminal modes together with the frame.
+  // Older producers lack a mode/frame boundary; retain composed data so skipping frame cannot discard modes.
   const altFrame =
     options.skipAltFrame && snapshot.frameRestoreAnsi !== undefined
       ? [snapshot.frameRestoreAnsi]
       : [snapshot.data]
   if (snapshot.scrollbackAnsi !== undefined) {
-    // Why a prologue per payload: main serializes the buffers separately and
-    // each is diffed against the baseline. scrollbackAnsi used to replay before
-    // any reset at all, so the history inherited the stale state (STA-4042).
+    // Reset each separately serialized buffer before its baseline-diffed payload can inherit gap state (STA-4042).
     return [normalPreamble, snapshot.scrollbackAnsi, altPrologue(false), ...altFrame]
   }
-  // Why the prologue clears: `?1049h` does not clear the alt buffer, so the
-  // pre-hide frame would bleed through the snapshot's blank cells.
+  // ?1049h does not clear alt; erase stale cells before painting snapshot blanks.
   return [
     buildSnapshotReplayPreamble({ targetAlternateScreen: true, paneOnAlternateScreen }),
     ...altFrame

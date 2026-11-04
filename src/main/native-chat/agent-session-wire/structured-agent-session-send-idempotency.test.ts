@@ -2,16 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
+import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const journals = createTrackedJournalOpener()
@@ -75,15 +75,13 @@ describe('structured send idempotency', () => {
       input
     )
 
-    // The recorded outcome comes back verbatim: no dispatch, no new row, and the
-    // doubt is neither cleared nor sharpened into a rejection.
+    // Replay uncertainty without dispatch or reclassifying the recorded outcome.
     expect(dispatch).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'unknown', reason } }
     })
     expect(journal.snapshot()).toEqual(before)
-    // And the refusal does not resurrect a recovered submission as still working.
     expect(hasUnansweredStructuredAgentSessionDispatch(journal.submissions(), 2)).toBe(false)
   })
 
@@ -128,8 +126,6 @@ describe('structured send idempotency', () => {
     await performSend(context, input)
     const replay = await performSend(context, input)
 
-    // Acceptance records the one submission; the reused id answers with it and writes nothing.
-    // Handing it over is the delivery loop's, never a second accept's.
     expect(replay).toMatchObject({
       ok: true,
       value: {

@@ -10,8 +10,7 @@ export type PastePayloadCorpusCase = {
 
 const GRAVE_ACCENT = String.fromCharCode(0x60)
 
-// Why: paste safety tests should exercise the same risky payload shapes
-// without snapshotting or logging clipboard-like content.
+// Share risky payload shapes without snapshotting or logging clipboard-like content.
 export const PASTE_PAYLOAD_CORPUS: PastePayloadCorpusCase[] = [
   {
     name: 'simple text',

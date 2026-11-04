@@ -28,10 +28,24 @@ async function dispatchObservedIbusHangulSequence(
       textarea.value = value
       input('input', inputType, data)
     }
-    const keydown = (key: string, code: string, keyCode: number, isComposing = false): void => {
-      const event = new KeyboardEvent('keydown', { bubbles: true, code, isComposing, key })
+    const keydown = (key: string, code: string, keyCode: number, isComposing = false): boolean => {
+      const event = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        code,
+        isComposing,
+        key
+      })
       Object.defineProperty(event, 'keyCode', { value: keyCode })
       textarea.dispatchEvent(event)
+      return !event.defaultPrevented
+    }
+    // Why: a synthetic keydown has no default action, so supply the text insertion Chromium makes
+    // for a printable key nobody cancelled; the recording lacks it only because xterm cancelled it.
+    const typeCharacter = (character: string): void => {
+      if (keydown(character, `Key${character.toUpperCase()}`, character.charCodeAt(0))) {
+        replaceAndInput(`${textarea.value}${character}`, 'insertText', character)
+      }
     }
     const update = (prefix: string, text: string): void => {
       composition('compositionupdate', text)
@@ -59,8 +73,7 @@ async function dispatchObservedIbusHangulSequence(
       let prefix = begin('한')
       commit(prefix, '한')
       for (const character of 'abc') {
-        keydown(character, `Key${character.toUpperCase()}`, character.charCodeAt(0))
-        replaceAndInput(`${textarea.value}${character}`, 'insertText', character)
+        typeCharacter(character)
       }
       prefix = begin('글')
       commit(prefix, '글')
@@ -68,13 +81,15 @@ async function dispatchObservedIbusHangulSequence(
       return
     }
 
-    const prefix = begin('테')
+    begin('테')
     composition('compositionend', '테')
-    keydown('a', 'KeyA', 65)
+    typeCharacter('a')
     keydown('Process', 'KeyR', 229, true)
-    textarea.setSelectionRange(prefix.length + 1, prefix.length + 1)
+    // The next session opens at the caret, which follows whatever `a` inserted.
+    const nextPrefix = textarea.value
+    textarea.setSelectionRange(nextPrefix.length, nextPrefix.length)
     composition('compositionstart')
-    update(`${prefix}테`, '스')
+    update(nextPrefix, '스')
     composition('compositionend', '스')
     keydown('Enter', 'Enter', 13)
   }, variant)

@@ -1,13 +1,4 @@
-/**
- * Which host cache entry a local automation write must invalidate.
- *
- * The authority publishes its own `automationsChanged` event, but that is an IPC
- * round trip the user spends looking at the list they just changed — and it is
- * droppable, because the host a create lands on may have no cache entry yet. The
- * write already knows the host it addressed, so it feeds the same invalidation
- * in directly. A row whose owner was never captured names no host, and the whole
- * authority is invalidated rather than a guessed selector.
- */
+/** Invalidate immediately from the completed write’s known host instead of waiting for a droppable change event. Uncaptured rows invalidate their authority without guessing a selector. */
 
 import { toStableCatalogRef } from '../../../../shared/automation-owner-key'
 import type {
@@ -29,11 +20,7 @@ export function stableAutomationAuthorityRef(
     : { kind: 'runtime', environmentId: authority.environmentId }
 }
 
-/**
- * The host a listed row belongs to. Null when the row carried no owner metadata
- * at all: an authority that never qualified its rows cannot be asked which of
- * its hosts changed.
- */
+/** Return null without captured metadata; an unqualified row cannot identify which authority host changed. */
 export function automationRowCatalogRef(
   captured: AutomationCapturedOwner,
   authority: AutomationAuthorityRef
@@ -44,7 +31,7 @@ export function automationRowCatalogRef(
   if (!captured.selector) {
     return null
   }
-  const stable = stableAutomationAuthorityRef(authority)
+  const stable = stableAutomationAuthorityRef(captured.authority ?? authority)
   // Rebuilt per variant rather than spread: the stable ref drops the generation and the
   // orphan issue, and a widened `kind` would not discriminate.
   switch (captured.selector.kind) {
@@ -60,12 +47,7 @@ export function automationRowCatalogRef(
   }
 }
 
-/**
- * The invalidation a completed write owes, ready to feed to the host controller.
- * The reason is the caller's: a run rewrites history and the next-run projection
- * without touching the definition, and a subscriber that filters on it must not
- * be told otherwise.
- */
+/** Preserve the write reason: run changes history/next-run projection without changing its definition, and subscribers may filter on that distinction. */
 export function automationWriteChangeEvent(
   ref: StableAutomationCatalogRef | null,
   authority: AutomationAuthorityRef,

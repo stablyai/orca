@@ -59,8 +59,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
-  const terminalBackground =
-    settings?.terminalColorOverrides?.background ?? effectiveAppearance?.theme?.background
+  const terminalBackground = effectiveAppearance?.theme?.background
   const titleUsesLightSurface = isTerminalBackgroundLight(terminalBackground, {
     appSurface: effectiveAppearance?.mode,
     backgroundOpacity: settings?.terminalBackgroundOpacity
@@ -88,8 +87,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const activePane = managerRef.current?.getActivePane()
   const managedPanes = managerRef.current?.getPanes() ?? []
   const showSshReconnectOverlay = isActive && isVisible && sshReconnectOwnsTerminalErrors
-  // Why: SSH reconnect owns its failures even while this tab is hidden; clear only those lines so
-  // unrelated pane errors survive and no stale connect failure flashes after recovery.
+  // SSH reconnect owns its errors even while hidden; clear only those lines after recovery.
   useEffect(() => {
     if (!sshReconnectOwnsTerminalErrors) {
       return
@@ -100,8 +98,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     setTerminalErrorsByPaneId((current) =>
       mapPaneTerminalErrors(current, stripSshReconnectOwnedErrorLines)
     )
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [sshReconnectOwnsTerminalErrors])
+  }, [sshReconnectOwnsTerminalErrors, setTerminalError, setTerminalErrorsByPaneId])
   const visibleTerminalError = terminalErrorForPane(
     terminalError,
     terminalErrorsByPaneId,
@@ -168,9 +165,8 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
       }) ?? resolveTitleAgentForLeaf(leafId)
     )
   }
-  const activePaneCanContinueInNewSession = canContinueAgentSessionInNewSession(
-    resolveAgentForLeaf(activePane?.leafId ?? null)
-  )
+  const activeAgentId = resolveAgentForLeaf(activePane?.leafId ?? null)
+  const activePaneCanContinueInNewSession = canContinueAgentSessionInNewSession(activeAgentId)
   const contextMenuCanContinueInNewSession = canContinueAgentSessionInNewSession(
     resolveAgentForLeaf(contextMenuLeafId)
   )
@@ -224,6 +220,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     chatPaneLaunchAgent,
     chatPaneOwnsTabWideLaunchDraft,
     activePaneIsChatLeaf,
+    activeAgentId,
     resolveAgentForLeaf,
     activePaneCanContinueInNewSession,
     contextMenuCanContinueInNewSession,

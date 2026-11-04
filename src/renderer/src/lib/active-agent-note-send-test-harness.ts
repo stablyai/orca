@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 
 export const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -26,7 +26,6 @@ export type NoteSendAppState = {
   settings: Record<string, unknown>
 }
 
-/** Renderer state for one worktree with a single focused terminal pane on `LEAF_ID`. */
 export function createNoteSendAppState(): NoteSendAppState {
   return {
     activeWorktreeId: 'wt-1',

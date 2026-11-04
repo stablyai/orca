@@ -1,12 +1,5 @@
 #!/usr/bin/env node
-// Builds the orca-notification-status helper binary.
-//
-// The helper reads UNUserNotificationCenter settings for the app it ships
-// inside (see native/notification-status-macos/main.swift). The target
-// CFBundleIdentifier is embedded as a __TEXT,__info_plist section so every
-// later `codesign --force` pass (electron-builder's signing, the dev runner's
-// ad-hoc deep sign) derives the correct code identifier automatically —
-// macOS keys notification records to that identifier.
+// Embed target CFBundleIdentifier in __TEXT,__info_plist so later release/ad-hoc codesign preserves the identifier macOS uses for notification records (native/notification-status-macos/main.swift).
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

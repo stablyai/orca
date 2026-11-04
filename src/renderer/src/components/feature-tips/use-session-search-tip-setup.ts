@@ -6,8 +6,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   isSessionSearchIndexReady,
   sessionSearchStatusMessage
-} from '@/components/settings/session-history-status-copy'
-import { useSessionSearchStatus } from '@/components/settings/use-session-search-status'
+} from '@/components/settings/session-history/session-history-status-copy'
+import { useSessionSearchStatus } from '@/components/settings/session-history/use-session-search-status'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 
@@ -20,11 +20,7 @@ export type SessionSearchTipSetup = {
   enable: () => Promise<void>
 }
 
-/**
- * The tip's view of local session search, read from the setting and the index itself so a
- * build started from Settings shows the same progress. The feature-tips modal stays mounted
- * after it closes, so a build the user left mid-index is still watched and toasts once ready.
- */
+/** Watch the live index even after dismissal so builds started elsewhere stay in sync and dismissed builds can toast when ready. */
 export function useSessionSearchTipSetup({
   dialogOpen
 }: {

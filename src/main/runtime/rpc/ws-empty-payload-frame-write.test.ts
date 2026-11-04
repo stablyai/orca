@@ -2,13 +2,7 @@ import type { Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocket, WebSocketServer } from 'ws'
 
-/**
- * Guards config/patches/ws@8.22.0.patch. Under Electron on arm64 kernels with
- * 39-bit virtual addresses, `socket.write()` of a zero-length buffer fails with
- * EFAULT and destroys the socket, so every empty ping, auto-pong or empty frame
- * closed the remote runtime connection with 1006. These sockets fail the same
- * way, so the cases fail if the patch is dropped or a ws bump loses it.
- */
+/** Guard config/patches/ws@8.22.0.patch: empty writes can EFAULT under Electron on arm64 39-bit VA kernels, closing ping/pong connections with 1006. */
 
 type Peer = { ws: WebSocket; writeLengths: number[] }
 

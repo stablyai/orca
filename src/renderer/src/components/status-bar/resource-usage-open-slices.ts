@@ -1,5 +1,6 @@
 import type { AppState } from '../../store'
 import { getAllWorktreesFromState } from '../../store/selectors'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
@@ -72,7 +73,7 @@ export function getResourceUsageFolderWorkspaces(
   state: Pick<AppState, 'folderWorkspaces'>,
   open: boolean
 ): AppState['folderWorkspaces'] {
-  return open ? state.folderWorkspaces : EMPTY_FOLDER_WORKSPACES
+  return open ? selectFolderWorkspaces(state) : EMPTY_FOLDER_WORKSPACES
 }
 
 export function getResourceUsageProjectGroups(

@@ -1,14 +1,6 @@
 import type { GenerationFileSystem } from './generation-store-file-system'
 
-/**
- * The generation store's disk, in memory: the port it is written against, plus the faults a cache
- * really takes.
- *
- * Shared rather than copied because more than one suite drives the real store against it, and two
- * in-memory trees answering the same port differently is how a passing suite stops being evidence
- * about the adapter. The write ordering, the interruption windows and the move semantics are the
- * adapter's own; each is commented where it differs from the obvious thing.
- */
+// Share the adapter’s move/failure semantics across store suites so their in-memory disks cannot disagree.
 export const FAKE_GENERATION_ROOT = 'file:///cache/mobile-web'
 
 type FakeNode = { kind: 'directory' } | { kind: 'file'; bytes: Uint8Array }
@@ -19,8 +11,6 @@ export type FakeGenerationFileSystem = GenerationFileSystem & {
   seed(path: string, node: FakeNode): void
   failWritesAt(path: string | null): void
   failReadsAt(path: string | null): void
-  failDeletesAt(path: string | null): void
-  failFileMovesTo(path: string | null): void
   loseContentsOnMove(): void
   text(path: string): string | null
   bytes(path: string): Uint8Array | null
@@ -32,8 +22,6 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
   const writes: string[] = []
   let failAt: string | null = null
   let failReadAt: string | null = null
-  let failDeleteAt: string | null = null
-  let failMoveTo: string | null = null
   let moveKeepsContents = true
   const uri = (path: string): string => `${ROOT}/${path}`
   const parentOf = (target: string): string => target.slice(0, target.lastIndexOf('/'))
@@ -69,12 +57,6 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
     },
     failReadsAt: (path) => {
       failReadAt = path
-    },
-    failDeletesAt: (path) => {
-      failDeleteAt = path
-    },
-    failFileMovesTo: (path) => {
-      failMoveTo = path
     },
     loseContentsOnMove: () => {
       moveKeepsContents = false
@@ -119,30 +101,29 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
     async fileExists(target) {
       return nodes.get(target)?.kind === 'file'
     },
-    async delete(target) {
-      if (failDeleteAt !== null && target === uri(failDeleteAt)) {
-        throw new Error('simulated undeletable file')
+    async fileSize(target) {
+      const node = nodes.get(target)
+      return node?.kind === 'file' ? node.bytes.byteLength : null
+    },
+    async copyFile(fromUri, toUri) {
+      if (failReadAt !== null && fromUri === uri(failReadAt)) {
+        throw new Error('simulated unreadable file')
       }
+      const node = nodes.get(fromUri)
+      if (node?.kind !== 'file') {
+        throw new Error(`fake filesystem has no file at ${fromUri}`)
+      }
+      if (nodes.has(toUri)) {
+        throw new Error(`fake filesystem refuses to copy onto ${toUri}`)
+      }
+      write(toUri, node.bytes)
+    },
+    async delete(target) {
       for (const key of Array.from(nodes.keys())) {
         if (key === target || key.startsWith(`${target}/`)) {
           nodes.delete(key)
         }
       }
-    },
-    async moveFile(fromUri, toUri) {
-      // The adapter's own ordering, and the worst case of it: expo refuses a destination that
-      // exists, so the destination goes first and the failure is injected after it. A fake that
-      // threw before that delete would never exercise the window the adapter really leaves.
-      const node = nodes.get(fromUri)
-      if (node?.kind !== 'file') {
-        throw new Error(`fake filesystem has no file at ${fromUri}`)
-      }
-      nodes.delete(toUri)
-      if (failMoveTo !== null && toUri === uri(failMoveTo)) {
-        throw new Error('simulated interrupted rename')
-      }
-      nodes.delete(fromUri)
-      nodes.set(toUri, node)
     },
     async moveDirectory(fromUri, toUri) {
       if (nodes.has(toUri)) {

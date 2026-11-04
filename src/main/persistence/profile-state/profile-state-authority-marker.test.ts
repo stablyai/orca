@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as durableFileWrite from '../../durable-file-write'
+import * as durableFileWrite from '../../filesystem/durable-file-write'
 import { bootstrapProfileStateAuthority } from './profile-state-authority-bootstrap'
 import {
   hasProfileStateAuthorityMarker,
@@ -23,7 +23,7 @@ vi.mock('../../telemetry/client', () => ({ track: () => {} }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))

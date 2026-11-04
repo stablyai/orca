@@ -1,7 +1,6 @@
 import { ownRetainedString } from '../../shared/own-retained-string'
 
-// Flat-string rows: one splice per written run, which V8 flattens with a memcpy. The caches let a
-// row the cursor only revisits, or rewrites with identical text, skip its newline snapshot.
+// Splice strings once per run; unchanged/revisited rows reuse cached newline snapshots.
 export type RetainedTerminalRow = {
   text: string
   /** Right-trimmed snapshot; null after a content change. */
@@ -169,8 +168,7 @@ export function retainedRowSnapshot(row: RetainedTerminalRow): string {
   return row.snapshot
 }
 
-// Why cumulative: a chain of erases that each keep half the row never crosses a per-erase
-// threshold, yet nested slices still pin the original row.
+// Repeated half-row erases can keep the original backing string; measure cumulative shrink, not each erase alone.
 function ownShrunkText(row: RetainedTerminalRow): void {
   if (row.backing > 2 * row.text.length) {
     row.text = ownRetainedString(row.text)

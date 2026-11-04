@@ -47,7 +47,7 @@ describe('structured worker Orca session id backfill', () => {
     db = new OrchestrationDb(':memory:')
     const handle = mintStructuredWorkerHandle()
     const pane = mintStructuredWorkerPaneKey(SESSION_B)
-    // The worker's own row carries no incarnation; its terminal resource row does.
+    // Only the terminal resource records this worker incarnation.
     const handleOnly = dispatch({ handle, paneKey: pane })
     db.createWorkerTerminalResourceStatement({
       dispatchId: handleOnly,
@@ -76,7 +76,7 @@ describe('structured worker Orca session id backfill', () => {
       paneKey: 'tab_x:44444444-4444-4444-8444-444444444444',
       incarnation: 'structured:not a session id'
     })
-    // A terminal in a structured session's tab: the pane key names a session, the process does not.
+    // A session pane key cannot prove its current terminal process belongs to that session.
     const terminalInSessionTab = dispatch({
       handle: 'term_tui',
       paneKey: mintStructuredWorkerPaneKey(SESSION_C),
@@ -96,7 +96,7 @@ describe('structured worker Orca session id backfill', () => {
       processIncarnation: structuredWorkerProcessIncarnation(SESSION_B),
       ownership: 'owned'
     })
-    // Rows a writer without the column left; a current writer records the incarnation's Orca session id.
+    // Model an older writer leaving ids unset; current writers stamp incarnation identity.
     db.db.exec(
       'UPDATE dispatch_contexts SET assignee_orca_session_id = NULL, creator_orca_session_id = NULL'
     )
@@ -144,9 +144,8 @@ describe('structured worker Orca session id backfill', () => {
          coordinator_orca_session_id_generation = consumer_generation - ?
        WHERE id = ?`
     )
-    // An older binary rebound this Run to the worker over session C's id, which it cannot see.
+    // An older binary can rebind over a session id it cannot see.
     setOrcaSessionId.run(SESSION_C, 1, stale)
-    // A writer recorded this one at the current generation.
     setOrcaSessionId.run(SESSION_C, 0, recorded)
 
     backfillStructuredWorkerOrcaSessionIds(db.db)

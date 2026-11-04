@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { __resetShellStartupEnvCache } from '../main/pty/shell-startup-env'
+import { __resetShellStartupEnvCache } from '../main/pty/shell-startup/shell-startup-env'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 
 describe('plugin overlay env source resolution', () => {
@@ -105,9 +105,7 @@ describe('plugin overlay env source resolution', () => {
     ).toBe('/remote/original-prime')
   })
 
-  // Why: the session env is the only place a fish user's XDG_CONFIG_HOME shows up
-  // (config.fish exports it, so no GUI-launched process inherits it). Dropping it
-  // here would scan ~/.config and disagree with the same lookup on the main side.
+  // Fish exports XDG_CONFIG_HOME inside the session; use it so remote lookup agrees with main’s shell-aware lookup.
   it.skipIf(process.platform === 'win32')(
     'reads fish config under the session XDG_CONFIG_HOME',
     () => {

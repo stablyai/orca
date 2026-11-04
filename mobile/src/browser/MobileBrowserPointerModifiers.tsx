@@ -1,5 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export type BrowserPointerModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
 
@@ -21,6 +24,8 @@ export function MobileBrowserPointerModifiers({
   selectedModifiers,
   onToggle
 }: Props): React.JSX.Element {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <View style={styles.modifierRow}>
       {BROWSER_POINTER_MODIFIERS.map((modifier) => {
@@ -38,7 +43,13 @@ export function MobileBrowserPointerModifiers({
             onPress={() => onToggle(modifier.id)}
             accessibilityRole="button"
             accessibilityState={{ selected, disabled }}
-            accessibilityLabel={`${modifier.label} click modifier`}
+            accessibilityLabel={t(
+              'browser.pointerModifiers.clickModifier',
+              '{{key}} click modifier',
+              {
+                key: modifier.label
+              }
+            )}
           >
             <Text
               style={[
@@ -56,7 +67,7 @@ export function MobileBrowserPointerModifiers({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   modifierRow: {
     flexDirection: 'row',
     gap: spacing.xs,
@@ -68,7 +79,7 @@ const styles = StyleSheet.create({
     minWidth: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.sm
   },
@@ -92,4 +103,4 @@ const styles = StyleSheet.create({
   disabledText: {
     color: colors.textMuted
   }
-})
+}))

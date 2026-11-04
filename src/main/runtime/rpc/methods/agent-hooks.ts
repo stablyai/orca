@@ -1,4 +1,4 @@
-import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-status-hooks-setting'
+import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { prepareManagedWslCodexHomeBeforeShellLaunch } from '../../../codex/managed-wsl-home-shell-preflight'
 import { defineMethod } from '../core'
 import { PrepareCodexForWslPaneParams } from '../../../../shared/rpc-contract/agent-hooks-params'
@@ -18,7 +18,10 @@ export const AGENT_HOOK_METHODS = [
           ORCA_CODEX_HOME: params.orcaCodexHome,
           WSL_DISTRO_NAME: params.wslDistro
         },
-        hooksEnabled: isAgentStatusHooksEnabledForAgent(runtime.getClientSettings(), 'codex')
+        hooksEnabled: isAgentStatusHooksEnabledForAgent(
+          runtime.requireStore().getSettings(),
+          'codex'
+        )
       })
     }
   })

@@ -2,7 +2,9 @@ import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
-  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION
@@ -10,7 +12,7 @@ import {
 import {
   AGENT_SESSION_RPC_ERROR_CODES,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -120,7 +122,7 @@ describe('agent session RPC methods', () => {
       expect(replies[0]).toMatchObject({ ok: true })
       expect(runtime[testCase.runtimeMethod]).toHaveBeenCalledWith(
         { ...testCase.params, presentation: 'background' },
-        { clientId: `paired-${clientKind}`, clientKind }
+        { clientId: `paired-${clientKind}`, clientKind, terminalImageViewerSupported: false }
       )
     }
   })
@@ -228,16 +230,17 @@ describe('agent session RPC methods', () => {
       'id:worktree-1',
       undefined,
       false,
-      expect.any(Function)
+      expect.any(Function),
+      { wslUserAct: true }
     )
     expect(createTerminal).toHaveBeenCalledWith('id:worktree-1', {
+      wslUserAct: true,
       command: 'codex resume provider-session-1',
       startupCommandDelivery: undefined,
       env: undefined,
       launchAgent: 'codex',
       title: undefined,
       focus: false,
-      rendererBacked: false,
       activate: false,
       presentation: undefined,
       tabId: undefined,
@@ -306,7 +309,11 @@ describe('agent session RPC methods', () => {
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         viewMode: 'chat'
       },
-      { clientId: 'authenticated-device', clientKind: 'runtime' }
+      {
+        clientId: 'authenticated-device',
+        clientKind: 'runtime',
+        terminalImageViewerSupported: false
+      }
     )
   })
 

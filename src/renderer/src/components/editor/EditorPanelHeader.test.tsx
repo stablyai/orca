@@ -13,8 +13,11 @@ vi.mock('@/store', () => ({
     })
 }))
 
-vi.mock('@/store/worktree-diff-comments-selector', () => ({
-  selectWorktreeDiffCommentsOrEmpty: () => []
+vi.mock('@/store/diff-comment-owner', () => ({
+  sourceParts: () => [],
+  createDiffCommentViewSelector: () => () => ({ owner: null, comments: [] }),
+  createOwnedDiffCommentsSelector: () => () => undefined,
+  diffCommentOwnerKey: () => ''
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -38,8 +41,13 @@ vi.mock('./EditorPanelHeaderPath', () => ({
   EditorPanelHeaderPath: () => null
 }))
 
-vi.mock('./EditorPanelMarkdownActionsMenu', () => ({
-  EditorPanelMarkdownActionsMenu: () => null
+vi.mock('./EditorPanelActionsMenu', () => ({
+  EditorPanelActionsMenu: ({ fileLocationActions }: { fileLocationActions?: React.ReactNode }) =>
+    fileLocationActions ?? null
+}))
+
+vi.mock('./EditorFileLocationMenuItems', () => ({
+  EditorFileLocationMenuItems: () => <span data-file-location-actions />
 }))
 
 vi.mock('@/components/artifacts/ArtifactPublishButton', () => ({
@@ -102,6 +110,30 @@ function renderHeader(overrides: Partial<ComponentProps<typeof EditorPanelHeader
 }
 
 describe('EditorPanelHeader', () => {
+  it.each(['edit', 'markdown-preview'] as const)('offers file actions for %s tabs', (mode) => {
+    expect(renderHeader({ activeFile: { ...activeFile, mode } })).toContain(
+      'data-file-location-actions'
+    )
+  })
+
+  it.each(['diff', 'conflict-review', 'check-details'] as const)(
+    'does not offer on-disk file actions for %s documents',
+    (mode) => {
+      expect(renderHeader({ activeFile: { ...activeFile, mode } })).not.toContain(
+        'data-file-location-actions'
+      )
+    }
+  )
+
+  it('offers file actions for a diff with an openable working file', () => {
+    expect(renderHeader({ isSingleDiff: true, openFileState: { canOpen: true } })).toContain(
+      'data-file-location-actions'
+    )
+    expect(renderHeader({ isSingleDiff: true, openFileState: { canOpen: false } })).not.toContain(
+      'data-file-location-actions'
+    )
+  })
+
   it('shares one tooltip provider across the diff header controls', () => {
     const html = renderHeader()
 

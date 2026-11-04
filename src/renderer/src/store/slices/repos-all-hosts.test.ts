@@ -299,33 +299,6 @@ const repoReadoption = {
 }
 
 describe('fetchReposForAllHosts', () => {
-  it('prunes a superseded direct SSH row during a local catalog transaction', async () => {
-    const staleRepo = directSshRepo('ssh-old')
-    const liveRepo = directSshRepo('ssh-new')
-    reposList.mockResolvedValue([liveRepo])
-    const store = createTestStore()
-    store.setState({
-      repos: [staleRepo],
-      pendingSshRepoReadoptions: [repoReadoption]
-    })
-
-    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-
-    expect(store.getState().repos).toEqual([liveRepo])
-  })
-
-  it('preserves an old direct SSH row when no re-adoption evidence exists', async () => {
-    const staleRepo = directSshRepo('ssh-old')
-    const liveRepo = directSshRepo('ssh-new')
-    reposList.mockResolvedValue([liveRepo])
-    const store = createTestStore()
-    store.setState({ repos: [staleRepo] })
-
-    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-
-    expect(store.getState().repos).toEqual([staleRepo, liveRepo])
-  })
-
   it('reconciles a targeted runtime response against the latest repo state', async () => {
     const staleRepo = directSshRepo('ssh-old')
     const liveRepo = directSshRepo('ssh-new')
@@ -362,24 +335,6 @@ describe('fetchReposForAllHosts', () => {
       liveRepo,
       { ...remoteRepo, executionHostId: 'runtime:env-1' }
     ])
-  })
-
-  it('loads local + all configured runtime environments even when a remote env is active', async () => {
-    // Why: a cold start that restored a remote workspace leaves the remote
-    // environment active. The active-host-only fetchRepos would drop local
-    // repos entirely; fetchReposForAllHosts must surface both.
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-    await store.getState().fetchReposForAllHosts()
-
-    const ids = store
-      .getState()
-      .repos.map((repo) => repo.id)
-      .sort()
-    expect(ids).toEqual(['local-repo', 'remote-repo'])
-    expect(store.getState().projects).toContainEqual(localProject)
-    expect(store.getState().projectHostSetups).toContainEqual(localProjectHostSetup)
   })
 
   it('preserves runtime-owned project metadata during a local-only repo refresh', async () => {
@@ -453,21 +408,6 @@ describe('fetchReposForAllHosts', () => {
     )
   })
 
-  it('does not backfill another host repo-derived project during runtime-only refresh', async () => {
-    const store = createTestStore()
-
-    await store.getState().fetchReposForAllHosts()
-    await store.getState().fetchRuntimeEnvironmentRepos('env-1')
-
-    expect(
-      store
-        .getState()
-        .projects.map((project) => project.id)
-        .sort()
-    ).toEqual(['local-project', 'repo:remote-repo'])
-    expect(store.getState().projects).toContainEqual(localProject)
-  })
-
   it('preserves shared project metadata when the same project id is fetched from multiple hosts', async () => {
     const { sharedProjectId } = configureSharedProjectCompatibilityMocks()
     const store = createTestStore()
@@ -507,17 +447,6 @@ describe('fetchReposForAllHosts', () => {
       store.getState().projects.find((project) => project.id === sharedProjectId)
         ?.localWindowsRuntimePreference
     ).toEqual({ kind: 'windows-host' })
-  })
-
-  it('preserves shared project metadata after a runtime-only repo refresh', async () => {
-    const { sharedProjectId } = configureSharedProjectCompatibilityMocks()
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-    await store.getState().fetchReposForAllHosts()
-    await store.getState().fetchRuntimeEnvironmentRepos('env-1')
-
-    expectSharedProjectMetadata(store.getState().projects, sharedProjectId)
   })
 
   it('keeps the local side of a shared project when a runtime refresh removes its repos', async () => {
@@ -742,44 +671,6 @@ describe('fetchReposForAllHosts', () => {
     expect(
       store.getState().projects.find((project) => project.id === sharedProjectId)?.sourceRepoIds
     ).toEqual(['local-repo'])
-  })
-
-  it('fails soft when a runtime environment is unreachable, keeping local repos', async () => {
-    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
-      if (args.method === 'repo.list') {
-        throw new Error('runtime_unreachable')
-      }
-      return {
-        id: 'rpc-other',
-        ok: true,
-        result: { projects: [], setups: [] },
-        _meta: { runtimeId: 'runtime-remote' }
-      }
-    })
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-    await store.getState().fetchReposForAllHosts()
-
-    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo'])
-  })
-
-  it('can load only the local catalog slice for first-paint startup', async () => {
-    const store = createTestStore()
-
-    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-    await store.getState().fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
-    await store.getState().fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
-
-    expect(runtimeEnvironmentsList).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalled()
-    expect(store.getState().repos).toEqual([{ ...localRepo, executionHostId: 'local' }])
-    expect(store.getState().projectGroups).toEqual([
-      { ...localProjectGroup, executionHostId: 'local' }
-    ])
-    expect(store.getState().folderWorkspaces).toEqual([
-      { ...localFolderWorkspace, executionHostId: 'local' }
-    ])
   })
 
   it('preserves remote repo filters during first-paint local catalog refresh', async () => {

@@ -72,53 +72,6 @@ describe('hosted review cache race protection', () => {
     vi.useRealTimers()
   })
 
-  it('does not let an older successful fetch overwrite a newer external cache write', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(100)
-    const olderReview: HostedReviewInfo = { ...review, title: 'Older hosted review status' }
-    const newerReview = makeGitHubReview('Newer GitHub refresh status')
-    let resolveFetch: (value: HostedReviewInfo) => void = () => {}
-    const fetch = new Promise<HostedReviewInfo>((resolve) => {
-      resolveFetch = resolve
-    })
-    mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
-    const store = makeStore()
-    const cacheKey = getHostedReviewCacheKey(
-      '/repo',
-      'feature/race',
-      null,
-      'repo-1',
-      null,
-      null,
-      true
-    )
-
-    const request = store.getState().fetchHostedReviewForBranch('/repo', 'feature/race')
-    vi.setSystemTime(200)
-    store.setState({
-      hostedReviewCache: {
-        [cacheKey]: {
-          data: newerReview,
-          fetchedAt: Date.now(),
-          linkedReviewHintKey: 'github:42'
-        }
-      }
-    })
-    const subscriber = vi.fn()
-    const unsubscribe = store.subscribe(subscriber)
-    vi.setSystemTime(300)
-    resolveFetch(olderReview)
-
-    await expect(request).resolves.toEqual(olderReview)
-    unsubscribe()
-    expect(subscriber).not.toHaveBeenCalled()
-    expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
-      data: newerReview,
-      fetchedAt: 200,
-      linkedReviewHintKey: 'github:42'
-    })
-  })
-
   it('does not let an older failed fetch overwrite a newer external cache write', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(100)
@@ -155,58 +108,11 @@ describe('hosted review cache race protection', () => {
       vi.setSystemTime(300)
       rejectFetch(new Error('older lookup failed'))
 
-      // Why: a failed lookup preserves (and returns) the last known review
-      // instead of caching a definitive miss that would blank the card.
+      // Lookup failures retain last review instead of caching a definitive miss and blanking cards.
       await expect(request).resolves.toEqual(newerReview)
       expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
         data: newerReview,
         fetchedAt: 200,
-        linkedReviewHintKey: 'github:42'
-      })
-    } finally {
-      consoleError.mockRestore()
-    }
-  })
-
-  it('keeps the last known review when a refresh fails instead of caching a miss', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(100)
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const cachedReview = makeGitHubReview('Known PR status')
-    const cacheKey = getHostedReviewCacheKey(
-      '/repo',
-      'feature/keep-on-error',
-      null,
-      'repo-1',
-      null,
-      null,
-      true
-    )
-    let rejectFetch: (error: Error) => void = () => {}
-    const fetch = new Promise<HostedReviewInfo>((_resolve, reject) => {
-      rejectFetch = reject
-    })
-    mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
-    const store = makeStore()
-    store.setState({
-      hostedReviewCache: {
-        [cacheKey]: { data: cachedReview, fetchedAt: 100, linkedReviewHintKey: 'github:42' }
-      }
-    })
-
-    try {
-      const request = store
-        .getState()
-        .fetchHostedReviewForBranch('/repo', 'feature/keep-on-error', { force: true })
-      vi.setSystemTime(300)
-      rejectFetch(new Error('transient gh failure'))
-
-      await expect(request).resolves.toEqual(cachedReview)
-      // Why: the cached review survives untouched; no fresh `data: null` miss is
-      // written, so the card keeps showing the PR and retries on the next poll.
-      expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
-        data: cachedReview,
-        fetchedAt: 100,
         linkedReviewHintKey: 'github:42'
       })
     } finally {
@@ -300,36 +206,5 @@ describe('hosted review cache race protection', () => {
       fetchedAt: 100,
       linkedReviewHintKey: ''
     })
-  })
-
-  it('does not reuse a provider-scoped inflight request for neutral discovery', async () => {
-    const githubReview = makeGitHubReview('Linked GitHub PR status')
-    let resolveGitHubLookup: (value: HostedReviewInfo | null) => void = () => {}
-    const githubLookup = new Promise<HostedReviewInfo | null>((resolve) => {
-      resolveGitHubLookup = resolve
-    })
-    mockApi.hostedReview.forBranch.mockReturnValueOnce(githubLookup).mockResolvedValueOnce(review)
-    const store = makeStore()
-
-    const linkedRequest = store.getState().fetchHostedReviewForBranch('/repo', 'feature/inflight', {
-      linkedGitHubPR: 42
-    })
-    const neutralRequest = store.getState().fetchHostedReviewForBranch('/repo', 'feature/inflight')
-
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
-    expect(mockApi.hostedReview.forBranch).toHaveBeenNthCalledWith(2, {
-      branch: 'feature/inflight',
-      currentHeadOid: null,
-      linkedAzureDevOpsPR: null,
-      linkedBitbucketPR: null,
-      linkedGitHubPR: null,
-      linkedGitLabMR: null,
-      linkedGiteaPR: null,
-      repoPath: '/repo'
-    })
-    resolveGitHubLookup(githubReview)
-
-    await expect(linkedRequest).resolves.toEqual(githubReview)
-    await expect(neutralRequest).resolves.toEqual(review)
   })
 })

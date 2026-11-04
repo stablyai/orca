@@ -30,8 +30,7 @@ function isCursorProbePixel(red: number, green: number, blue: number, alpha: num
   }
 
   const isRawProbeColor = Math.abs(red - 35) <= 2 && green >= 253 && Math.abs(blue - 69) <= 2
-  // Why: WebGL can composite the forced cursor color over the terminal
-  // background before Playwright captures pixels, especially on macOS.
+  // Allow WebGL-composited cursor/background blending in captured pixels, especially on macOS.
   const isCompositedProbeColor =
     Math.abs(red - 121) <= 3 && green >= 249 && Math.abs(blue - 100) <= 3
   return isRawProbeColor || isCompositedProbeColor

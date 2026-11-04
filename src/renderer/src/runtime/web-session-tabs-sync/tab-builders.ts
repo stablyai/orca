@@ -11,6 +11,7 @@ import type { ReadyEditorSurface, MirroredEditorTab } from './state'
 import type { WebSessionExistingTabIndex } from '../web-session-existing-tab-index'
 import { isReadyEditorTab } from './terminal-surfaces'
 import { createMirroredEditorFileResolver } from './mirrored-editor-file-identity'
+import { buildOwnedEditorFileId } from '../../store/slices/editor/file-ids/editor-file-ids'
 
 export function buildTerminalUnifiedTab(
   tab: TerminalTab,
@@ -100,6 +101,71 @@ export function buildEditorUnifiedTab(
   }
 }
 
+// Older peers can echo one file under IDs minted by several environments.
+function mintedEnvironmentSegment(tab: ReadyEditorSurface, worktreeId: string): string | null {
+  if (
+    tab.type !== 'markdown' ||
+    typeof tab.sourceFileId !== 'string' ||
+    !tab.sourceFileId ||
+    tab.sourceFileId === tab.sourceFilePath
+  ) {
+    return null
+  }
+  if (tab.id === tab.filePath) {
+    return ''
+  }
+  const prefix = `editor:${encodeURIComponent(worktreeId)}:`
+  const suffix = `:${encodeURIComponent(tab.filePath)}`
+  if (
+    !tab.id.startsWith(prefix) ||
+    !tab.id.endsWith(suffix) ||
+    tab.id.length <= prefix.length + suffix.length
+  ) {
+    return null
+  }
+  const segment = tab.id.slice(prefix.length, tab.id.length - suffix.length)
+  let runtimeKey: string
+  try {
+    runtimeKey = decodeURIComponent(segment)
+  } catch {
+    return null
+  }
+  return buildOwnedEditorFileId(tab.filePath, worktreeId, runtimeKey) === tab.id ? segment : null
+}
+
+function dedupeReadyEditorTabsBySource(
+  tabs: readonly ReadyEditorSurface[],
+  worktreeId: string,
+  preferredHostTabId: string | null
+): ReadyEditorSurface[] {
+  const bucketOf = (tab: ReadyEditorSurface): string =>
+    JSON.stringify([
+      worktreeId,
+      tab.type === 'markdown' ? tab.mode : 'edit',
+      tab.filePath,
+      tab.type === 'markdown' ? tab.sourceFileId : null
+    ])
+  const rank = (tab: ReadyEditorSurface): number =>
+    tab.id === preferredHostTabId ? 2 : tab.isActive ? 1 : 0
+  const winnerByBucket = new Map<string, { segment: string; rank: number }>()
+  for (const tab of tabs) {
+    const segment = mintedEnvironmentSegment(tab, worktreeId)
+    if (segment === null) {
+      continue
+    }
+    const bucket = bucketOf(tab)
+    const current = winnerByBucket.get(bucket)
+    const tabRank = rank(tab)
+    if (!current || tabRank > current.rank) {
+      winnerByBucket.set(bucket, { segment, rank: tabRank })
+    }
+  }
+  return tabs.filter((tab) => {
+    const segment = mintedEnvironmentSegment(tab, worktreeId)
+    return segment === null || segment === winnerByBucket.get(bucketOf(tab))?.segment
+  })
+}
+
 export function buildMirroredEditorTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
@@ -109,7 +175,8 @@ export function buildMirroredEditorTabs(
   fallbackGroupId: string,
   sortOffset: number,
   now: number,
-  hasLocalDraft: (fileId: string) => boolean
+  hasLocalDraft: (fileId: string) => boolean,
+  preferredHostTabId: string | null = null
 ): MirroredEditorTab[] {
   const readyTabs = snapshot.tabs.filter(isReadyEditorTab)
   if (readyTabs.length === 0) {
@@ -120,16 +187,17 @@ export function buildMirroredEditorTabs(
   for (const tab of readyTabs) {
     resolveFile(tab, existingTabIndex.getEditorUnifiedTabByHostId(tab.id))
   }
-  return readyTabs.map((tab, index) => {
+  const distinctTabs = dedupeReadyEditorTabsBySource(
+    readyTabs,
+    snapshot.worktree,
+    preferredHostTabId
+  )
+  return distinctTabs.map((tab, index) => {
     const identity = resolveFile(tab, existingTabIndex.getEditorUnifiedTabByHostId(tab.id))
     const { fileId, existingFile, sourceFileId } = identity
     const existingUnifiedTab = existingTabIndex.getEditorUnifiedTab(fileId, tab.id)
     const groupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
-    // Why: the host publishes only its own store's flag and never learns of client edits, so
-    // taking it verbatim would clear a client-dirty tab and the tab strip would then close it
-    // with no unsaved-changes prompt while the draft still exists (#21392). A local draft is
-    // the evidence the flag is the client's own; a dirty flag with no draft came from an
-    // earlier snapshot and must keep following the host, e.g. after a host-side save.
+    // Drafts prove client dirty ownership: host clean echoes must not bypass close prompts (#21392). Without a draft, dirty came from host and follows host saves.
     const keepsClientDirty = existingFile?.isDirty === true && hasLocalDraft(fileId)
     const file: OpenFile =
       identity.preservesOwner && existingFile

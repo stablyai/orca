@@ -13,19 +13,29 @@ export type MobileRelayHost = {
   label: string
   health: ExecutionHostHealth
   relay: MobileRelayHostRelay
+  /** This desktop's own WSL host, confirmed stopped: a phone never starts it, only the desktop. */
+  stoppedOnDesktop?: true
+  /** This desktop's own WSL host, not connected there and not known stopped; older phones show "Connecting". */
+  unavailableOnDesktop?: true
 }
 
 export type MobileRelayHostsListResult = { hosts: MobileRelayHost[] }
 
+// Strict: phones send the snapshot fields only to desktops advertising MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY.
 export const MobileRelayHostWorktreesParamsSchema = z
-  .object({ hostId: z.string().min(1).max(1024) })
+  .object({
+    hostId: z.string().min(1).max(1024),
+    afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
+    acceptRowDelta: z.literal(true).optional()
+  })
   .strict()
 
 /** One of a server's own `worktree.ps` rows (RuntimeWorktreePsSummary), carrying the server's host id. */
-export type MobileRelayServerWorktreeRow = Record<string, unknown> & { hostId: `runtime:${string}` }
+export type MobileRelayServerWorktreeRow = Record<string, unknown> & {
+  hostId: `runtime:${string}`
+  /** The desktop calls this row another client's; the phone applies the shared filter value. */
+  desktopOtherClient?: true
+}
 
-/**
- * The server's own `worktree.ps` rows as the desktop last fetched them, refreshed when the server
- * answers; rows are never rewritten beyond their host id.
- */
+/** The server's own `worktree.ps` rows as the desktop last fetched them, refreshed when the server answers. */
 export type MobileRelayHostWorktreesResult = { worktrees: MobileRelayServerWorktreeRow[] | null }

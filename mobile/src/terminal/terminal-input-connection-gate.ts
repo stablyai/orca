@@ -7,7 +7,7 @@ type MobileTerminalInputGateOptions = {
 }
 
 type MobileTerminalInputGate = {
-  // Why: composing is local — it must survive an outage so typed text is held, not discarded (#6713).
+  // Composing is local; preserve typed text through connection outages.
   readonly canCompose: boolean
   readonly canSend: boolean
 }

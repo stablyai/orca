@@ -11,8 +11,7 @@ const timingBaseline = {
 const context = {
   config: { root: process.cwd() },
   cache: {
-    getFileTestResults: () => undefined,
-    getFileStats: () => undefined
+    getTestSpecificationResult: () => undefined
   }
 }
 const specification = (file, name, groupOrder = 0, isolate = true) => ({

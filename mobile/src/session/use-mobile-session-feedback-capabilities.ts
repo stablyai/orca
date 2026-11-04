@@ -1,8 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Animated } from 'react-native'
+import { Animated, Easing, Platform } from 'react-native'
+import { translate } from '../i18n/mobile-i18n'
 import { reconcileMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
 import type { MobileSessionTerminalRuntimeModel } from './use-mobile-session-terminal-runtime'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
+
+// A strong ease-out both ways; the presentation turns this fade into a short rise.
+const TOAST_EASING = Easing.bezier(0.23, 1, 0.32, 1)
 
 export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTerminalRuntimeModel) {
   const {
@@ -25,24 +29,26 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     connStateRef,
     activeSessionTabTypeRef,
     delayedActionTimersRef,
-    activeSessionTab
+    activeSessionTab,
+    onLiveInputSendFailureRef
   } = scope
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
-  // Why: hosts without aiVault.v1 reject listSessions, so hide the header entry instead of a dead-end "update this host" panel.
+  // Hide history entry when the host cannot serve it rather than opening a dead end.
   const [agentSessionHistorySupported, setAgentSessionHistorySupported] = useState<boolean | null>(
     null
   )
   const [quickCommandsSupported, setQuickCommandsSupported] = useState<boolean | null>(null)
-  // Structured-session features are negotiated with the same host capability probe as
-  // the other session surfaces; consumers never maintain a second status cache.
+  const [quickCommandAgentPromptMaxLength, setQuickCommandAgentPromptMaxLength] = useState<
+    number | null
+  >(null)
+  // Reuse the shared capability probe so session features cannot diverge across status caches.
   const [agentSessionHostSupport, setAgentSessionHostSupport] =
     useState<StructuredAgentSessionHostSupport | null>(null)
-  // Why: stable callbacks (handleFileTap) read the live value via this ref, since
-  // the capability probe resolves after the callbacks are created.
+  // Stable handlers read live capabilities after the asynchronous probe resolves.
   const browserScreencastSupportedRef = useRef(browserScreencastSupported)
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   browserScreencastSupportedRef.current = browserScreencastSupported
-  // Why: terminal gesture/input callbacks are stable/imperative, so keep their refs current before commit, not in a later effect.
+  // Imperative input callbacks need current refs before commit, not a later passive effect.
   clientRef.current = client
   connStateRef.current = connState
   activeSessionTabTypeRef.current = activeSessionTab?.type ?? null
@@ -53,7 +59,7 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     createWarningState,
     initialCreateWarning
   )
-  // Why: Expo can reuse this screen for a new route; reconcile before paint so a dismissed old warning doesn't flash.
+  // Reconcile reused-route warning state before paint so dismissed old feedback cannot flash.
   if (reconciledCreateWarningState !== createWarningState) {
     // react-doctor-disable-next-line react-doctor/no-prop-callback-in-render
     setCreateWarningState(reconciledCreateWarningState)
@@ -102,8 +108,9 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
       setToastMessage(message)
       Animated.timing(toastOpacityRef.current, {
         toValue: 1,
-        duration: 150,
-        useNativeDriver: true
+        duration: 200,
+        easing: TOAST_EASING,
+        useNativeDriver: Platform.OS !== 'web'
       }).start(({ finished }) => {
         if (!finished || toastSeqRef.current !== seq) {
           return
@@ -112,8 +119,9 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
           toastHideTimerRef.current = null
           Animated.timing(toastOpacityRef.current, {
             toValue: 0,
-            duration: 200,
-            useNativeDriver: true
+            duration: 150,
+            easing: TOAST_EASING,
+            useNativeDriver: Platform.OS !== 'web'
           }).start((result) => {
             if (result.finished && toastSeqRef.current === seq) {
               setToastMessage(null)
@@ -124,6 +132,25 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     },
     [clearToastHideTimer]
   )
+  useEffect(() => {
+    onLiveInputSendFailureRef.current = (failure) => {
+      showToast(
+        failure === 'input-too-large'
+          ? translate(
+              'session.useSessionTerminalSendActions.inputTooLarge',
+              'Input too large (max 256 KiB)'
+            )
+          : translate(
+              'session.useSessionTerminalSendActions.liveInputInterrupted',
+              'Live input interrupted. Field cleared; check the terminal before continuing.'
+            ),
+        3000
+      )
+    }
+    return () => {
+      onLiveInputSendFailureRef.current = () => {}
+    }
+  }, [onLiveInputSendFailureRef, showToast])
   return {
     browserScreencastSupported,
     setBrowserScreencastSupported,
@@ -131,6 +158,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     setAgentSessionHistorySupported,
     quickCommandsSupported,
     setQuickCommandsSupported,
+    quickCommandAgentPromptMaxLength,
+    setQuickCommandAgentPromptMaxLength,
     agentSessionHostSupport,
     setAgentSessionHostSupport,
     browserScreencastSupportedRef,

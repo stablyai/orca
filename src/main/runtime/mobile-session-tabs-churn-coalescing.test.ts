@@ -1,25 +1,47 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { OrcaRuntimeService } from './orca-runtime'
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
 
-vi.mock('../hooks', () => ({
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
+
+vi.mock('../workspace-hooks/hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' })
 }))
-vi.mock('../worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
+vi.mock('../workspace-hooks/worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
 
 vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
 
-vi.mock('../ipc/registered-worktree-roots-cache', () => ({
+vi.mock('../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn(),
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
@@ -116,20 +138,17 @@ describe('session.tabs title/status churn coalescing', () => {
       emits.push(snapshot.snapshotVersion)
     })
 
-    // A spinner-in-title agent flips the title ~20 times within a second.
+    // Simulate a title spinner emitting 20 updates per second.
     const FLIPS = 20
     for (let i = 0; i < FLIPS; i++) {
       priv.touchMobileSessionSnapshotsForPty('pty-1')
       vi.advanceTimersByTime(10)
     }
-    // Nothing has fired yet — all flips landed inside the trailing window.
     expect(emits).toHaveLength(0)
 
     vi.advanceTimersByTime(50)
 
-    // Pre-fix this fanned out one emit per flip; now it is a single emit.
     expect(emits).toHaveLength(1)
-    // The emitted version is the freshest (monotonic, never a stale one).
     const stored = priv.mobileSessionTabsByWorktree.get('worktree-a')
     expect(emits[0]).toBe(stored?.snapshotVersion)
     expect(emits[0]).toBe(1 + FLIPS)
@@ -147,13 +166,10 @@ describe('session.tabs title/status churn coalescing', () => {
       emits.push(snapshot.snapshotVersion)
     })
 
-    // Title churn schedules a coalesced notify...
     priv.touchMobileSessionSnapshotsForPty('pty-1')
-    // ...then a structural change (e.g. tab activated) demands a prompt emit.
     priv.notifyMobileSessionTabsChanged('worktree-a')
     expect(emits).toHaveLength(1)
 
-    // The immediate emit cancelled the pending coalesced notify — no duplicate trailing emit.
     vi.advanceTimersByTime(50)
     expect(emits).toHaveLength(1)
 
@@ -173,7 +189,6 @@ describe('session.tabs title/status churn coalescing', () => {
     priv.touchMobileSessionSnapshotsForPty('pty-1')
     expect(emits).toHaveLength(0)
 
-    // Closing the subscription flushes the pending window so the final state reaches the listener.
     unsubscribe()
     expect(emits).toHaveLength(1)
   })

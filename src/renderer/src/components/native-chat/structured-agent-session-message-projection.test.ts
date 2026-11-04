@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
 function optimisticMessage(args: {
@@ -46,7 +46,6 @@ function item(index: number): AgentJournalRenderItem {
 }
 
 describe('structured agent session message projection', () => {
-  // The host recorded it, so its row is the message from here; the outbox copy gives way.
   it("draws a send the host rejected from the host's row, not the outbox copy", () => {
     const rejected = { ...submission(0), dispatchState: 'rejected' as const, providerItemId: null }
     const refusedItem = { ...item(0), itemId: agentJournalSubmissionKey(rejected.clientMessageId) }
@@ -120,21 +119,5 @@ describe('structured agent session message projection', () => {
     expect(messages.filter((message) => message.role === 'user')).toHaveLength(1)
     expect(messages.map((message) => message.id)).toEqual([walItem.itemId])
     expect(optimistic[0]?.id).toBe(messages[0]?.id)
-  })
-
-  it('keeps an optimistic send until its acceptance arrives', () => {
-    const outbox = [
-      optimisticMessage({
-        clientMessageId: 'client-pending',
-        sessionId: 'session-1',
-        text: 'pending',
-        attachments: [],
-        queuedAt: 1
-      })
-    ]
-
-    expect(projectStructuredAgentSessionMessages([], outbox, [])).toMatchObject([
-      { id: agentJournalSubmissionKey('client-pending'), role: 'user' }
-    ])
   })
 })

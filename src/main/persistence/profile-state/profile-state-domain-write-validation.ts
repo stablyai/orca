@@ -9,7 +9,7 @@ import type {
 export type PreparedProfileStateMutation = ProfileStateDomainMutation & {
   domainVersion: number
   payloadHash: string | null
-  // Keep the checked history value only for this write so normalization does not parse it again.
+  // Retain the checked history only for this write to avoid reparsing during normalization.
   automationRunsValue?: unknown
   automationRuns?: AutomationRunsWritePreparation
 }

@@ -1,12 +1,17 @@
 import {
   createNativeChatFileHref,
   routeNativeChatHref
-} from '../../../../shared/native-chat-href-routing'
+} from '../../../../shared/native-chat/native-chat-href-routing'
 import {
   formatFileLinkLocation,
   parseFileLinkLocation
 } from '../../../../shared/file-link-location'
-import { extractTerminalFileLinks, type ParsedTerminalFileLink } from '@/lib/terminal-links'
+import {
+  extractTerminalFileLinkReadings,
+  extractTerminalFileLinks,
+  type ParsedTerminalFileLink
+} from '../../../../shared/terminal-links'
+import { ROOTED_PATH_START_PATTERN } from '../../../../shared/terminal-file-link-detection-ranges'
 import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
 
 type MarkdownNode = {
@@ -16,27 +21,27 @@ type MarkdownNode = {
   children?: MarkdownNode[]
 }
 
-const ROOTED_PATH_PREFIX_PATTERN = /^(?:~[\\/]|\.{1,2}[\\/]|[\\/]|[A-Za-z]:[\\/])/
-
 /** Whether a detected path names a file on the chat's host; the terminal's own check. */
 export type FileLinkExists = (link: ParsedTerminalFileLink) => boolean
 
-// Why: a link is underlined only when it names a path; a bare `name.md` resolves nowhere
-// reliable, so underlining it promises a click that cannot open anything.
-function isLinkifiableFile(link: ParsedTerminalFileLink, isProse: boolean): boolean {
-  const hasRootedPrefix = ROOTED_PATH_PREFIX_PATTERN.test(link.pathText)
+function looksLikeFilePath(link: ParsedTerminalFileLink, isProse: boolean): boolean {
+  const hasRootedPrefix = ROOTED_PATH_START_PATTERN.test(link.pathText)
   const hasLineSuffix = link.line !== null || link.column !== null
   const hasAlphabeticExtension = /\.[\p{L}][\p{L}\p{N}\p{M}_+-]*$/u.test(link.pathText)
   const hasPathExtension = /\.[\p{L}\p{N}][\p{L}\p{N}\p{M}_+-]*$/u.test(link.pathText)
+  return hasRootedPrefix || hasLineSuffix || (isProse ? hasPathExtension : hasAlphabeticExtension)
+}
+
+// Require separators in prose; exact bare inline-code tokens are checked separately.
+function isLinkifiableFile(link: ParsedTerminalFileLink, isProse: boolean): boolean {
   return (
     /[\\/]/.test(link.pathText) &&
-    (hasRootedPrefix || hasLineSuffix || (isProse ? hasPathExtension : hasAlphabeticExtension)) &&
+    looksLikeFilePath(link, isProse) &&
     routeNativeChatHref(link.displayText).kind === 'file'
   )
 }
 
-// Why: path-shaped candidates are underlined only once the host confirms them; overlapping
-// candidates (a rooted spaced span vs. its tokens) resolve to the longest that exists.
+// Underline only host-confirmed paths; choose the longest existing candidate when spaced spans overlap tokens.
 function selectExistingLinks(
   candidates: ParsedTerminalFileLink[],
   exists: FileLinkExists
@@ -96,7 +101,7 @@ function hasPartialPathBoundary(value: string, link: ParsedTerminalFileLink): bo
   )
 }
 
-// Why: wrap the parsed location, not the display text; a `file://` URI must not reach the literal href.
+// Wrap parsed locations rather than raw file-URI display text so navigation receives the literal path.
 function createFileLinkNode(link: ParsedTerminalFileLink, child: MarkdownNode): MarkdownNode {
   return {
     type: 'link',
@@ -105,58 +110,12 @@ function createFileLinkNode(link: ParsedTerminalFileLink, child: MarkdownNode): 
   }
 }
 
-function isTrailingPunctuation(token: string, endIndex: number): boolean {
-  return isSafeTrailingBoundary(token, endIndex) && /^\p{P}+$/u.test(token.slice(endIndex))
-}
-
-/** `endsSentence`: a token may end in sentence punctuation, which stays outside the link. */
-function linkableTokens(
-  link: ParsedTerminalFileLink,
-  endsSentence: boolean
-): ParsedTerminalFileLink[] {
-  const tokenLinks: ParsedTerminalFileLink[] = []
-  for (const match of link.displayText.matchAll(/\S+/g)) {
-    const token = match[0]
-    const exactLink = extractTerminalFileLinks(token).find(
-      (candidate) =>
-        candidate.startIndex === 0 &&
-        (candidate.endIndex === token.length ||
-          (endsSentence && isTrailingPunctuation(token, candidate.endIndex)))
-    )
-    if (exactLink && isLinkifiableFile(exactLink, true)) {
-      const startIndex = link.startIndex + (match.index ?? 0)
-      tokenLinks.push({ ...exactLink, startIndex, endIndex: startIndex + exactLink.endIndex })
-    }
-  }
-  return tokenLinks
-}
-
-// Why: the terminal extractor spans "src/a.ts and src/b.ts" as one spaced path.
-// An unrooted span holding a bare word or several linkable tokens is prose
-// joining paths, so link the tokens on their own; a spaced folder name keeps
-// every token path-shaped and stays one link. A rooted span also offers its
-// tokens: a real spaced path still wins as the longest that exists.
-function splitProseJoinedLinks(link: ParsedTerminalFileLink): ParsedTerminalFileLink[] {
-  if (!/\s/.test(link.displayText)) {
-    return [link]
-  }
-  if (ROOTED_PATH_PREFIX_PATTERN.test(link.pathText)) {
-    return [link, ...linkableTokens(link, true)]
-  }
-  // Why: main never split sentence punctuation off an unrooted span's tokens; doing so would add links.
-  const tokenLinks = linkableTokens(link, false)
-  const hasBareWord = Array.from(link.displayText.matchAll(/\S+/g)).some(
-    (match) => !/[\\/.]/.test(match[0])
-  )
-  return hasBareWord || tokenLinks.length > 1 ? tokenLinks : [link]
-}
-
 function splitTextSegment(value: string, exists: FileLinkExists): MarkdownNode[] {
+  const { links: textLinks, guesses } = extractTerminalFileLinkReadings(value)
   const links = selectExistingLinks(
-    extractTerminalFileLinks(value)
+    [...textLinks, ...guesses]
       .filter((link) => !hasPartialPathBoundary(value, link))
-      .filter((link) => isLinkifiableFile(link, true))
-      .flatMap(splitProseJoinedLinks),
+      .filter((link) => isLinkifiableFile(link, true)),
     exists
   )
   if (links.length === 0) {
@@ -212,7 +171,7 @@ function exactFileLink(value: string, exists: FileLinkExists): ParsedTerminalFil
     return null
   }
   const looksLikePath =
-    ROOTED_PATH_PREFIX_PATTERN.test(parsed.pathText) ||
+    ROOTED_PATH_START_PATTERN.test(parsed.pathText) ||
     /[\\/]/.test(parsed.pathText) ||
     /\.[\p{L}][\p{L}\p{N}\p{M}_+-]*$/u.test(parsed.pathText)
   if (!looksLikePath) {
@@ -256,7 +215,15 @@ function inlineCodeFileLink(node: MarkdownNode, exists: FileLinkExists): Markdow
   if (!value) {
     return null
   }
-  const link = exactFileLink(value, exists)
+  // Dotted bare words still need separators, keeping versions/model names plain.
+  const bare = extractTerminalFileLinks(value).find(
+    (candidate) =>
+      candidate.startIndex === 0 &&
+      candidate.endIndex === value.length &&
+      !/[\\/]/.test(candidate.pathText) &&
+      (!candidate.pathText.includes('.') || looksLikeFilePath(candidate, false))
+  )
+  const link = bare ? (exists(bare) ? bare : null) : exactFileLink(value, exists)
   return link ? createFileLinkNode(link, node) : null
 }
 
@@ -264,7 +231,7 @@ function transformFileLinks(node: MarkdownNode, exists: FileLinkExists): void {
   if (node.type === 'link') {
     const route = routeNativeChatHref(node.url)
     if (route.kind === 'file') {
-      // Why: the wrapped href carries literal location text, so URL syntax is resolved here, once.
+      // Resolve URL syntax once before wrapping literal location text.
       node.url = createNativeChatFileHref(formatFileLinkLocation(route))
     }
     return

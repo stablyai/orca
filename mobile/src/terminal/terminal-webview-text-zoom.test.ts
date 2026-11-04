@@ -9,13 +9,7 @@ function normalizeStatusDotChunks(chunks: string[]) {
   return chunks.map((chunk) => normalizeStatusDotPresentation(scope, chunk)).join('')
 }
 
-/**
- * The font the document picks for this navigator.
- *
- * `startTextScaling` is what assigns it, and it also reads the two scroll elements, so the markup
- * they live in is planted first. The navigator is stubbed rather than injected into an evaluation:
- * the module reads the real one, which is the whole point of the case.
- */
+// Plant required scroll markup and stub the real navigator before running text-scaling startup.
 function resolveTerminalFontFamily(navigatorValue: {
   userAgent: string
   platform: string
@@ -76,8 +70,7 @@ describe('TerminalWebView text zoom', () => {
     const fontFamily = resolveTerminalFontFamily(IOS_IPHONE_NAVIGATOR)
     expect(fontFamily.startsWith('ui-monospace, "Menlo"')).toBe(true)
     expect(fontFamily.startsWith('"SF Mono"')).toBe(false)
-    // The chain must always terminate in the generic so it can never fall back to
-    // a script/proportional system face — the actual iOS bug being fixed.
+    // End in monospace so iOS cannot fall back to a proportional/script face.
     expect(fontFamily.endsWith(', monospace')).toBe(true)
   })
 
@@ -92,14 +85,12 @@ describe('TerminalWebView text zoom', () => {
     expect(fontFamily.endsWith(', monospace')).toBe(true)
   })
 
-  it('keeps the SF Mono lead outside iOS WebViews and shares the identical fallback tail', () => {
+  it('keeps the SF Mono lead outside iOS WebViews and adds the bundled symbols only there', () => {
     const androidFontFamily = resolveTerminalFontFamily(ANDROID_NAVIGATOR)
     expect(androidFontFamily.startsWith('"SF Mono", "Menlo"')).toBe(true)
-    expect(androidFontFamily.endsWith(', monospace')).toBe(true)
-    // Only the lead family may differ across platforms; the rest of the chain is
-    // shared so the two platforms cannot silently drift apart.
     const iosFontFamily = resolveTerminalFontFamily(IOS_IPHONE_NAVIGATOR)
+    expect(iosFontFamily.endsWith(', monospace')).toBe(true)
     const tailFrom = (family: string) => family.slice(family.indexOf('"Menlo"'))
-    expect(tailFrom(androidFontFamily)).toBe(tailFrom(iosFontFamily))
+    expect(tailFrom(androidFontFamily)).toBe(`${tailFrom(iosFontFamily)}, "Orca Terminal Symbols"`)
   })
 })

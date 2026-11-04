@@ -1,11 +1,15 @@
 import { defineMethod } from '../core'
+import { FILE_REPLACE_WITH_UPLOAD_METHOD } from '../../../../shared/file-bytes-write'
 import {
   FileCommitUpload,
+  FileReplaceWithUpload,
   FileCopy,
   FileDelete,
   FileMutationOpen,
   FileRename,
   FileWrite,
+  FileFormatText,
+  FileWriteIfUnchanged,
   FileWriteBase64,
   FileWriteBase64Chunk
 } from '../../../../shared/rpc-contract/files-mutation-params'
@@ -35,6 +39,18 @@ function sshMutationArguments(
 
 export const FILE_MUTATION_METHODS = [
   defineMethod({
+    name: 'files.formatText',
+    permission: 'workspace',
+    params: FileFormatText,
+    handler: async (params, { runtime }) =>
+      runtime.formatFileExplorerText(
+        params.worktree,
+        params.relativePath,
+        params.content,
+        ...sshMutationArguments(params)
+      )
+  }),
+  defineMethod({
     name: 'files.write',
     permission: 'workspace',
     params: FileWrite,
@@ -44,6 +60,21 @@ export const FILE_MUTATION_METHODS = [
         params.relativePath,
         params.content,
         ...sshMutationArguments(params)
+      )
+  }),
+  defineMethod({
+    name: 'files.writeIfUnchanged',
+    permission: 'workspace',
+    params: FileWriteIfUnchanged,
+    handler: async (params, { runtime }) =>
+      runtime.writeFileExplorerFile(
+        params.worktree,
+        params.relativePath,
+        params.content,
+        params.expectedSshConnectionGeneration,
+        params.expectedSshTargetId,
+        params.expectedExecutionHostId,
+        params.diskPrecondition
       )
   }),
   defineMethod({
@@ -113,6 +144,19 @@ export const FILE_MUTATION_METHODS = [
         params.worktree,
         params.tempRelativePath,
         params.finalRelativePath,
+        ...sshMutationArguments(params)
+      )
+  }),
+  defineMethod({
+    name: FILE_REPLACE_WITH_UPLOAD_METHOD,
+    permission: 'workspace',
+    params: FileReplaceWithUpload,
+    handler: async (params, { runtime }) =>
+      runtime.replaceFileExplorerFileWithUpload(
+        params.worktree,
+        params.tempRelativePath,
+        params.finalRelativePath,
+        params.bytesPrecondition,
         ...sshMutationArguments(params)
       )
   }),

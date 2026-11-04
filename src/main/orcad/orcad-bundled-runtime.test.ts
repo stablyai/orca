@@ -40,10 +40,10 @@ class RuntimeChild extends EventEmitter {
 
 let child: RuntimeChild
 const signalNames = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
-let oldListeners: Map<NodeJS.Signals, ReturnType<typeof process.rawListeners>>
+let oldListeners: Map<NodeJS.Signals, NodeJS.SignalsListener[]>
 
 beforeEach(() => {
-  oldListeners = new Map(signalNames.map((signal) => [signal, process.rawListeners(signal)]))
+  oldListeners = new Map(signalNames.map((signal) => [signal, process.listeners(signal)]))
   child = new RuntimeChild()
   fixture.exists.mockReturnValue(true)
   fixture.read.mockImplementation((path) =>
@@ -61,7 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const signal of signalNames) {
-    for (const listener of process.rawListeners(signal)) {
+    for (const listener of process.listeners(signal)) {
       if (!oldListeners.get(signal)?.includes(listener)) {
         process.off(signal, listener)
       }
@@ -165,7 +165,7 @@ describe('bundled Orca runtime handoff', () => {
       })
       for (const signal of signalNames) {
         const listener = process
-          .rawListeners(signal)
+          .listeners(signal)
           .find((candidate) => !oldListeners.get(signal)?.includes(candidate))
         if (signal === 'SIGHUP' && platform === 'win32') {
           expect(listener).toBeUndefined()
@@ -193,7 +193,7 @@ describe('bundled Orca runtime handoff', () => {
     expect(process.exit).toHaveBeenCalledWith(23)
     expect(process.kill).not.toHaveBeenCalled()
     for (const signal of signalNames) {
-      expect(process.rawListeners(signal)).toEqual(oldListeners.get(signal))
+      expect(process.listeners(signal)).toEqual(oldListeners.get(signal))
     }
   })
 
@@ -222,7 +222,7 @@ describe('bundled Orca runtime handoff', () => {
     expect(() => child.emit('error', new Error('ENOENT'))).toThrow('test process exit')
     expect(process.exit).toHaveBeenCalledWith(78)
     for (const signal of signalNames) {
-      expect(process.rawListeners(signal)).toEqual(oldListeners.get(signal))
+      expect(process.listeners(signal)).toEqual(oldListeners.get(signal))
     }
   })
 
@@ -244,20 +244,20 @@ describe('bundled Orca runtime handoff', () => {
 })
 
 describe('server runtime admission', () => {
-  it.each(['14.21.3', '16.20.2'])('refuses host Node %s before loading profile state', (node) => {
-    fixture.exists.mockReturnValue(false)
-    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node })
-    expect(() => assertOrcadServerRuntime()).toThrow('requires Node.js 18')
-  })
-
-  it.each(['18.20.8', '20.19.0', '22.14.0', '23.0.0', '24.0.0', '26.0.0'])(
-    'accepts unpackaged host Node %s',
+  it.each(['14.21.3', '16.20.2', '18.20.8', '20.19.0', '22.14.0', '23.0.0'])(
+    'refuses host Node %s before loading profile state',
     (node) => {
       fixture.exists.mockReturnValue(false)
       vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node })
-      expect(() => assertOrcadServerRuntime()).not.toThrow()
+      expect(() => assertOrcadServerRuntime()).toThrow('requires Node.js 24')
     }
   )
+
+  it.each(['24.0.0', '26.0.0'])('accepts unpackaged host Node %s', (node) => {
+    fixture.exists.mockReturnValue(false)
+    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node })
+    expect(() => assertOrcadServerRuntime()).not.toThrow()
+  })
 
   it('refuses host Node 24 for a packaged slot that owns a bundled runtime', () => {
     vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node: '24.0.0' })

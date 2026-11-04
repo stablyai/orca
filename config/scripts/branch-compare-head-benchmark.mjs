@@ -1,19 +1,7 @@
 #!/usr/bin/env node
-// Benchmark: the head-of-chain reads in getBranchCompare (src/main/git/status.ts).
-//
-// Four spawns ran strictly in series before any compare work started: branch
-// --show-current, the base-ref probe, rev-parse HEAD, and rev-parse <base>. compareRef is
-// display-only metadata and HEAD's oid does not depend on the base ref, so the first three
-// can overlap. The probe oid also replaces the fourth spawn when it proves refs/heads/*;
-// remote-tracking refs require a raw rev-parse because they may store annotated tags.
-//
-// This spawns the real git binary against this repo, so it measures actual process-launch
-// cost rather than a model of it. Over SSH these are host-local spawns inside the relay,
-// so the saving applies to remote spawn time, not to network round trips.
-//
-// Both arms are compared for identical resolved values before timing.
-//
-// Run with:  node config/scripts/branch-compare-head-benchmark.mjs
+// Measure real Git head reads: overlap independent branch/base/HEAD probes and reuse only local-branch probe OIDs.
+// Remote refs may hold annotated tags and still need raw rev-parse; remote savings are host spawn time, not network RTT.
+// Check both arms resolve identically before timing. Run: node config/scripts/branch-compare-head-benchmark.mjs
 import { execFile } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
@@ -160,8 +148,7 @@ console.log(
   `${pad('base ref', 30)} ${pad('serial', 11)} ${pad('concurrent', 11)} ${pad('speedup', 9)}`
 )
 
-// A short remote label is the common case (Orca's base picker emits `origin/main`); the
-// already-qualified ref skips the probe entirely, so only the concurrency half applies.
+// Short origin/main probes can reuse OIDs; qualified refs skip probe so only concurrency saves time.
 const upstream = await git(['rev-parse', '--abbrev-ref', 'HEAD@{upstream}']).catch(() => null)
 const baseRefs = ['origin/main', 'refs/remotes/origin/main', 'main']
 if (upstream && !baseRefs.includes(upstream)) {

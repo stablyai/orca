@@ -6,10 +6,6 @@ import {
 } from './tab-insertion'
 import type { TabDragItemData } from './useTabDragSplit'
 
-// ---------------------------------------------------------------------------
-// Helpers for building minimal dnd-kit-shaped event stubs
-// ---------------------------------------------------------------------------
-
 function makeDragData(overrides: Partial<TabDragItemData> = {}): TabDragItemData {
   return {
     kind: 'tab',
@@ -27,7 +23,6 @@ function isTabDragData(value: unknown): value is TabDragItemData {
   return Boolean(value) && typeof value === 'object' && (value as TabDragItemData).kind === 'tab'
 }
 
-/** Build a minimal event stub satisfying the fields `resolveTabInsertion` reads. */
 function makeDragEvent({
   activeData,
   overData,
@@ -48,10 +43,6 @@ function makeDragEvent({
     delta: { x: 0, y: 0 }
   } as unknown as Parameters<typeof resolveTabInsertion>[0]
 }
-
-// ---------------------------------------------------------------------------
-// resolveTabInsertion
-// ---------------------------------------------------------------------------
 
 describe('resolveTabInsertion', () => {
   it('returns null when there is no "over" element', () => {
@@ -96,7 +87,6 @@ describe('resolveTabInsertion', () => {
       visibleTabId: 'tab-over',
       groupId: 'group-2'
     })
-    // Over rect: left=100, width=100 → left edge ends at 130
     const event = makeDragEvent({
       activeData: makeDragData({ unifiedTabId: 'tab-active' }),
       overData,
@@ -116,7 +106,6 @@ describe('resolveTabInsertion', () => {
       visibleTabId: 'tab-over',
       groupId: 'group-2'
     })
-    // Over rect: left=100, width=100 → right edge starts at 170
     const event = makeDragEvent({
       activeData: makeDragData({ unifiedTabId: 'tab-active' }),
       overData,
@@ -166,10 +155,6 @@ describe('resolveTabInsertion', () => {
     })
   })
 })
-
-// ---------------------------------------------------------------------------
-// resolveTabIndicatorEdges
-// ---------------------------------------------------------------------------
 
 describe('resolveTabIndicatorEdges', () => {
   it('marks one edge for a left-edge insertion slot', () => {

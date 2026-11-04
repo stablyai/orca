@@ -1,5 +1,5 @@
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
+import { TERMINAL_MULTIPLEX_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal-multiplex-method'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import {
   TerminalStreamOpcode,
@@ -38,21 +38,17 @@ type Connection = {
   abort: AbortController
 }
 
-/**
- * An in-process remote-runtime socket between the real renderer multiplexer and the real host
- * RPC dispatcher, with the faults a silent outage causes: buffered or lost frames in either
- * direction, a dead connection whose buffered input reaches the host late, and a host runtime
- * that restarts with the PTY surviving.
- */
+// Fault the real renderer-multiplexer/host-dispatcher link with buffered/lost/late frames and runtime restart while PTYs survive.
 export function createModelLink(writeInput: (text: string) => Promise<unknown>) {
   let host = newHost()
   let live: Connection | null = null
   const zombies: Connection[] = []
   let counter = 0
-  const initialMode: ModelLinkMode = 'pass'
+  // Why a call: a typed const still narrows to 'pass', which would type both fields as 'pass'.
+  const initialMode = (): ModelLinkMode => 'pass'
   const link = {
-    toHost: initialMode,
-    toClient: initialMode,
+    toHost: initialMode(),
+    toClient: initialMode(),
     /** Drops individual acks on an otherwise healthy connection. */
     ackLoss: 0,
     unreachable: false,
@@ -154,7 +150,7 @@ export function createModelLink(writeInput: (text: string) => Promise<unknown>) 
     void new RpcDispatcher({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements every runtime method the terminal multiplex calls and records any it lacks.
       runtime: host.runtime as OrcaRuntimeService,
-      methods: TERMINAL_METHODS
+      methods: TERMINAL_MULTIPLEX_METHODS
     })
       .dispatchStreaming(
         {

@@ -1,6 +1,6 @@
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import { listWorktreeGraph } from '../git/worktree'
+import { listWorktreeGraph } from '../git/worktrees/catalog/worktree-scan-cache'
 
 export type NestedRepoImportTargetResolver = {
   resolveLocal: (repoPath: string) => Promise<string>
@@ -18,8 +18,7 @@ function findImportTarget(
     return null
   }
 
-  // Why: a linked worktree may only collapse to its owner when Git proves the
-  // selected path belongs to that same non-bare worktree graph.
+  // Collapse a linked worktree only with Git proof it shares this non-bare owner graph.
   const mainWorktree = worktrees.find((worktree) => worktree.isMainWorktree && !worktree.isBare)
   return mainWorktree
     ? { targetPath: mainWorktree.path, graphPaths: worktrees.map((worktree) => worktree.path) }

@@ -1,20 +1,8 @@
 import { createTerminalEscapeScanner } from './terminal-escape-scanner'
 
-/**
- * OpenCode's submit readiness: the `<agent> · <model>` row along the bottom of its input box is
- * painted only once its agent list has loaded from its server, and until then it drops an Enter.
- *
- * Read off the stream by structure, never by names or colours: the row's separator `·` (U+00B7)
- * sits on the line directly above the box's bottom-left corner `╹` (U+2579), both placed by
- * absolute cursor addressing inside OpenCode's alternate screen. The footer path below the box and
- * the session tab strip above it can hold `·` too; neither is on that line. OpenCode 2 paints the
- * corner first and the row in a later frame; OpenCode 1 paints the row just before the corner in
- * the same synchronized frame, so a separator waits for its corner until that frame ends.
- *
- * Ready once the row exists and the box's cursor is shown while bracketed paste is held (the
- * earlier box rule), so neither version is delivered to sooner than before. Leaving the alternate
- * screen or turning bracketed paste off withdraws what it established.
- */
+/** OpenCode drops Enter until its agent/model row loads. Detect · above bottom-left ╹ via alternate-screen cursor coordinates,
+ * never names/colors: footer/tab separators are unrelated. OpenCode 2 paints corner before row; v1 paints row before corner within one synchronized frame.
+ * Require row plus shown box cursor while bracketed paste is enabled. Leaving alternate screen/disabling paste revokes readiness. */
 
 const AGENT_ROW_SEPARATOR = '\u00b7'
 const BOX_BOTTOM_LEFT = '\u2579'

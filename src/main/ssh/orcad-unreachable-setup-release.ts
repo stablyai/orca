@@ -1,28 +1,22 @@
-/**
- * Recovers a host an earlier build stranded: a conversion fenced it and registered its managed
- * server, but the host's sshd refuses the forward that server is reached by, so nothing was ever
- * staged there. The source still holds every row, so the server is unregistered and the fence
- * released through the undeployed-fence path, and the relay serves the host again. An orcad the
- * setup did activate is stopped first, so a later conversion starts fresh rather than deferring.
- */
+/** Release conversion setups stranded before staging by refused SSH forwarding. Stop any activated slot, unregister, then use undeployed-fence release; source rows remain intact for retry. */
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
 import { findOrcadMigrationSourceCutoverForTarget } from './orcad-migration-cutover-journal'
 import { releaseUndeployedMigrationFence } from './orcad-migration-source-fence'
-import { closeOrcadManagedTunnel } from './orcad-managed-tunnel'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
-import { withOrcadActivationLock } from './orcad-activation-lock'
-import { withDeactivatedVersionCommitted } from './orcad-activation-record'
+import { closeOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
+import { withOrcadActivationLock } from '../managed-server/activation/orcad-activation-lock'
+import { withDeactivatedVersionCommitted } from '../managed-server/activation/orcad-activation-record'
 import {
   readOrcadActivationRecord,
   writeOrcadActivationRecord
-} from './orcad-activation-record-store'
-import { managedOrcadSlot } from './orcad-managed-runtime-context'
-import { resolveOrcadRemoteContext } from './orcad-remote-context'
-import { orcadStopFreedTheHost } from './orcad-remote-process-control'
+} from '../managed-server/activation/orcad-activation-record-store'
+import { managedOrcadSlot } from '../managed-server/lifecycle/orcad-managed-runtime-context'
+import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
+import { orcadStopFreedTheHost } from '../managed-server/install/orcad-remote-process-control'
 import { orcadSlotDir, stopOrcadSlot } from './orcad-recovery-slot'
 import { sshOrcadHostTransport } from './orcad-ssh-host-transport'
-import { getSshConnectionManager, getSshTargetRegistryStore } from './ssh-target-registry'
+import { getSshConnectionManager, getSshTargetRegistryStore } from './targets/ssh-target-registry'
 import { errorMessage } from '../../shared/error-message'
 
 export async function releaseUnreachableOrcadSetup(args: {
@@ -32,7 +26,7 @@ export async function releaseUnreachableOrcadSetup(args: {
   signal?: AbortSignal
 }): Promise<void> {
   const cutover = findOrcadMigrationSourceCutoverForTarget(args.userDataPath, args.targetId)
-  // Why only this phase: a staged or committed destination holds state only it can account for.
+  // Staged/committed destinations require their own evidence before release.
   if (cutover?.phase !== 'source-fenced') {
     return
   }
@@ -43,7 +37,7 @@ export async function releaseUnreachableOrcadSetup(args: {
   })
   const isRegistered = (id: string): boolean =>
     listEnvironments(args.userDataPath).some((entry) => entry.id === id)
-  // Unregister first: a crash after it leaves an undeployed fence, which the same path releases.
+  // Unregister first so an interrupted release leaves a recoverable undeployed fence.
   if (isRegistered(environmentId)) {
     removeManagedOrcadEnvironment(args.userDataPath, environmentId)
   }
@@ -56,7 +50,7 @@ export async function releaseUnreachableOrcadSetup(args: {
   })
 }
 
-/** Clears `active` only once the slot is proven exited; its daemon and terminals outlive it. */
+/** Clear active only after proven slot exit; daemon terminals may outlive it. */
 async function stopStrandedOrcad(targetId: string, signal?: AbortSignal): Promise<void> {
   const target = getSshTargetRegistryStore()?.getTarget(targetId)
   const connectionManager = getSshConnectionManager()
@@ -71,7 +65,7 @@ async function stopStrandedOrcad(targetId: string, signal?: AbortSignal): Promis
   if (!context.activationRecord.active) {
     return
   }
-  // The port only matters for a launch, which this never does.
+  // Port is irrelevant because this recovery never launches a slot.
   const slot = managedOrcadSlot(context, 0, signal)
   await withOrcadActivationLock(
     slot,

@@ -29,7 +29,7 @@ describe('OrcaRuntimeService', () => {
         tabs: { type: string; terminal?: string | null }[]
       }
     }
-    // Two unclaimed live PTYs on the worktree; the worktree-only fallback binds either to a leafless tab that references it.
+    // Unclaimed PTYs can bind through the worktree-only fallback.
     internals.recordPtyWorktree('pty-shared', TEST_WORKTREE_ID, { connected: true })
     internals.recordPtyWorktree('pty-other', TEST_WORKTREE_ID, { connected: true })
 
@@ -43,7 +43,7 @@ describe('OrcaRuntimeService', () => {
       isActive: leafId === 'leaf-new'
     })
 
-    // Two records (stale headless leaf + live leaf) both resolve to the SAME live PTY — the renderer-graph origin the leaf fix can't reach.
+    // A stale headless leaf and live renderer leaf can resolve to the same PTY.
     internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
       worktree: TEST_WORKTREE_ID,
       publicationEpoch: 'renderer:test:1',
@@ -58,7 +58,6 @@ describe('OrcaRuntimeService', () => {
     expect(dedupedTerminals).toHaveLength(1)
     expect(dedupedTerminals[0].terminal).toBeTruthy()
 
-    // Split siblings own DISTINCT PTYs, so they must never be collapsed.
     internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
       worktree: TEST_WORKTREE_ID,
       publicationEpoch: 'renderer:test:2',
@@ -424,26 +423,23 @@ describe('OrcaRuntimeService', () => {
       leaves: Map<string, unknown>
       leavesByPtyId: Map<string, { preview?: string; lastOutputAt?: number | null }[]>
     }
-    const originalLeaves = runtimePrivate.leaves
-    runtimePrivate.leaves = new Proxy(originalLeaves, {
-      get(target, prop) {
-        if (
-          prop === 'values' ||
-          prop === 'entries' ||
-          prop === 'keys' ||
-          prop === Symbol.iterator
-        ) {
-          return () => {
-            throw new Error('onPtyData should use the PTY leaf index')
-          }
-        }
-        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
-        const value = Reflect.get(target, prop, target)
-        return typeof value === 'function' ? value.bind(target) : value
-      }
-    })
+    const rejectTraversal = () => {
+      throw new Error('onPtyData should use the PTY leaf index')
+    }
+    const traversalSpies = [
+      vi.spyOn(runtimePrivate.leaves, 'values').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, 'entries').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, 'keys').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, Symbol.iterator).mockImplementation(rejectTraversal)
+    ]
 
-    runtime.onPtyData(`pty-${targetIndex}`, 'hello indexed\n', 123)
+    try {
+      runtime.onPtyData(`pty-${targetIndex}`, 'hello indexed\n', 123)
+    } finally {
+      for (const spy of traversalSpies) {
+        spy.mockRestore()
+      }
+    }
 
     const [targetLeaf] = runtimePrivate.leavesByPtyId.get(`pty-${targetIndex}`) ?? []
     expect(targetLeaf).toMatchObject({

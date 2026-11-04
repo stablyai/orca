@@ -1,12 +1,5 @@
-/**
- * STA-4150: a page a paired client renders is invisible in the HOST's own app unless main pushes
- * a row for it. This drives the whole seam through two real Electron apps — client creates the
- * page, the host's rendered tab strip grows a row for it, and closing that row from the host
- * tears the page down on the client.
- *
- * Uses the headed-host topology deliberately: under `orca serve` there is no window to push to,
- * so a headless host proves nothing about this feature.
- */
+// STA-4150: use two desktop apps to prove a client-rendered page adds a host tab-strip row and host close tears it down.
+// Windowless serve has no host strip and cannot cover this seam.
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'

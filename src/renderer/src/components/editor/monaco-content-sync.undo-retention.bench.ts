@@ -38,8 +38,11 @@ async function measureUndoRetention(mode: MonacoContentSyncMode): Promise<{
   await forceGcAndSettle()
   const beforeArrayBuffers = process.memoryUsage().arrayBuffers
   const model = monaco.editor.createModel('', 'plaintext')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: content sync calls only the editor methods stubbed here.
   const editorInstance = {
     getModel: () => model,
+    saveViewState: () => null,
+    restoreViewState: () => {},
     pushUndoStop: () => {
       model.pushStackElement()
       return true
@@ -71,6 +74,7 @@ test('50 MiB read-only live-tail undo retention', async ({ bench }) => {
     expect(undoable.arrayBufferDelta).toBeGreaterThanOrEqual(BATCH_COUNT * BATCH_BYTES)
     expect(readOnlyLiveTail.canUndo).toBe(false)
     expect(readOnlyLiveTail.undoBytes).toBe(0)
-    expect(readOnlyLiveTail.arrayBufferDelta).toBe(0)
+    // Why a bound, not 0: the process-wide counter also moves with unrelated buffers freed meanwhile.
+    expect(Math.abs(readOnlyLiveTail.arrayBufferDelta)).toBeLessThan(MEBIBYTE)
   }).run({ iterations: 1, time: 1, warmupIterations: 0, warmupTime: 0 })
 })

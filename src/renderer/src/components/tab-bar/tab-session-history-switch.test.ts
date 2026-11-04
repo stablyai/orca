@@ -1,12 +1,28 @@
+import { makeTabSessionHistoryRow as row } from './tab-session-history-test-fixture'
+import { applyProviderSessionOnlyUpdate } from '@/hooks/ipc-events/agent-status-partial-updates'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { makeRepo, makeTerminalTab, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import {
+  makeRepo,
+  makeTerminalTab,
+  makeWorktree
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { makeAgentStatusEntry } from '@/runtime/sync-runtime-graph-test-harness'
 import { collectAiVaultTitleRequests } from '@/lib/ai-vault-tab-title-requests'
+import { resolveCliChatResumeSource } from './cli-chat-resume-source'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { AiVaultListArgs, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import {
   claimAiVaultForcedRescan,
   resetAiVaultForcedRescanThrottleForTest
@@ -20,6 +36,7 @@ import {
   findTabSessionHistoryRow,
   lookupTabSessionHistoryRow,
   resolveTabSessionHistorySubject,
+  resolveNativeChatCliForkIdentity,
   resolveTabSessionSwitch,
   type TabSessionHistorySubject
 } from './tab-session-history-switch'
@@ -35,7 +52,18 @@ const mocks = vi.hoisted(() => {
 // Staged host answers: its capabilities arrive over IPC at boot, and the platform from preload.
 vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  readLocalRuntimeCapabilitiesOrUnknown: () => [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+  readLocalRuntimeCapabilitiesOrUnknown: () => [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+  ]
+}))
+vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readHostStructuredAgents: () =>
+    ['claude', 'codex', 'grok', 'omp', 'opencode', 'pi'].map((agent) => ({
+      agent,
+      capabilities: {}
+    }))
 }))
 vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => mocks.platform }))
 
@@ -48,32 +76,6 @@ vi.mock('../right-sidebar/ai-vault-session-resume-in-chat-workspace', () => ({
 }))
 
 const WORKTREE_ID = 'repo-1::/repo/wt'
-
-function row(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
-  return {
-    id: 'row-1',
-    executionHostId: 'local',
-    agent: 'claude',
-    sessionId: 'claude-session-1',
-    title: 'Fix the build',
-    cwd: '/repo/wt',
-    branch: 'main',
-    model: null,
-    filePath: '/home/.claude/projects/repo/claude-session-1.jsonl',
-    codexHome: null,
-    createdAt: null,
-    updatedAt: null,
-    modifiedAt: '2026-10-08T00:00:00.000Z',
-    messageCount: 2,
-    totalTokens: 10,
-    previewMessages: [{ role: 'user', text: 'Fix the build', timestamp: null }],
-    queuedMessageCount: 0,
-    subagentTranscriptCount: 0,
-    resumeCommand: 'claude --resume claude-session-1',
-    subagent: null,
-    ...overrides
-  }
-}
 
 const SIBLING_ID = 'repo-1::/repo/sibling'
 
@@ -100,10 +102,8 @@ function makeState(
   return useAppStore.getState()
 }
 
-// What the Session History panel sends for this workspace: every path of its project, at the
-// panel's default depth, on the workspace's own host.
 const PANEL_REQUEST = {
-  scopePaths: ['/repo/wt', '/repo/sibling', '/repos/repo-1'],
+  scopePaths: ['/repo/wt'],
   executionHostScope: 'local',
   sessionLimit: 250
 } as const
@@ -172,6 +172,114 @@ const exitedAgentRecords: Record<string, Partial<AppState>> = {
 }
 
 describe('resolveTabSessionHistorySubject', () => {
+  it('retains the chosen pane in the direct CLI create identity without a History row', () => {
+    expect(
+      resolveCliChatResumeSource(makeState(liveClaudeEntry), {
+        tab: { id: 'term-1', worktreeId: WORKTREE_ID }
+      })
+    ).toMatchObject({
+      tabId: 'term-1',
+      workspaceId: WORKTREE_ID,
+      paneKey: 'term-1:leaf-1',
+      agent: 'claude',
+      providerSessionId: 'claude-session-1',
+      executionHostId: 'local'
+    })
+  })
+  it.each([
+    [true, 'git'],
+    [false, 'git'],
+    [true, 'folder'],
+    [false, 'folder']
+  ] as const)(
+    'offers remote CLI continuation only with history support %s in %s workspaces',
+    (supported, kind) => {
+      const state = makeState(liveClaudeEntry, { executionHostId: 'runtime:server-1' })
+      const workspaceId = kind === 'folder' ? folderWorkspaceKey('folder-1') : WORKTREE_ID
+      if (kind === 'folder') {
+        state.folderWorkspaces = [
+          makeFolderWorkspace({
+            id: 'folder-1',
+            folderPath: '/repo/wt',
+            executionHostId: 'runtime:server-1'
+          })
+        ]
+        state.activeWorktreeId = workspaceId
+        state.activeWorkspaceExecutionHostId = 'runtime:server-1'
+        state.tabsByWorktree = { [workspaceId]: [makeTerminalTab('term-1', workspaceId, 'claude')] }
+        state.agentStatusByPaneKey = {
+          'term-1:leaf-1': { ...liveClaudeEntry['term-1:leaf-1'], worktreeId: workspaceId }
+        }
+      }
+
+      state.runtimeStatusByEnvironmentId = new Map([
+        [
+          'server-1',
+          {
+            checkedAt: 1,
+            status: {
+              runtimeId: 'server-runtime',
+              rendererGraphEpoch: 0,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 1,
+              liveLeafCount: 1,
+              capabilities: [
+                STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+                STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+                STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+                ...(supported ? [STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY] : [])
+              ]
+            }
+          }
+        ]
+      ])
+      const source = resolveCliChatResumeSource(state, {
+        tab: { id: 'term-1', worktreeId: workspaceId }
+      })
+      if (supported) {
+        expect(source).toMatchObject({
+          executionHostId: 'runtime:server-1',
+          providerSessionId: 'claude-session-1',
+          paneKey: 'term-1:leaf-1'
+        })
+        expect(source?.hostUpdateRequired).toBeUndefined()
+      } else {
+        // A verified host without resume-history keeps the action, disabled, asking for an update.
+        expect(source).toMatchObject({ hostUpdateRequired: true })
+      }
+    }
+  )
+
+  it.each(['runtime:server-1', 'ssh:dev-box'] as const)(
+    'does not offer unsupported or unprobed host %s',
+    (executionHostId) => {
+      const state = makeState(liveClaudeEntry, { executionHostId })
+      expect(
+        resolveCliChatResumeSource(state, { tab: { id: 'term-1', worktreeId: WORKTREE_ID } })
+      ).toBeNull()
+    }
+  )
+
+  it.each(['local', 'runtime:server-1', 'ssh:dev-box', null] as const)(
+    'keeps lightweight native eligibility and the public request on workspace host %s',
+    (executionHostId) => {
+      const state = makeState({}, executionHostId ? { executionHostId } : {})
+      if (!executionHostId) {
+        state.repos = []
+      }
+      const args = {
+        tab: { id: 'chat-tab', worktreeId: WORKTREE_ID },
+        nativeChat: { sessionId: 'chat-1', agent: 'claude' as const }
+      }
+      const expected = executionHostId === 'ssh:dev-box' ? null : executionHostId
+      const identity = resolveNativeChatCliForkIdentity(state, args)
+      const full = resolveTabSessionHistorySubject(state, args)
+      expect(identity?.executionHostScope ?? null).toBe(expected)
+      expect(full?.request.executionHostScope ?? null).toBe(expected)
+    }
+  )
+
   it('finds a native chat tab by the chat it shows', () => {
     expect(
       resolveTabSessionHistorySubject(makeState(), {
@@ -181,24 +289,15 @@ describe('resolveTabSessionHistorySubject', () => {
     ).toEqual({ ...chatSubject })
   })
 
-  it('finds a chat of any agent whose CLI can open a copy', () => {
-    expect(
-      resolveTabSessionHistorySubject(makeState(), {
-        tab: { id: 'unified-1', worktreeId: WORKTREE_ID },
-        nativeChat: { sessionId: 'orca-chat-1', agent: 'grok' }
-      })
-    ).toEqual({ ...chatSubject })
-  })
-
-  it.each(['opencode', 'omp'] as const)(
-    'skips a %s chat, whose CLI cannot open a copy',
+  it.each(['grok', 'opencode', 'omp'] as const)(
+    'finds a %s chat, whose conversation can be copied to its CLI',
     (agent) => {
       expect(
         resolveTabSessionHistorySubject(makeState(), {
           tab: { id: 'unified-1', worktreeId: WORKTREE_ID },
           nativeChat: { sessionId: 'orca-chat-1', agent }
         })
-      ).toBeNull()
+      ).toEqual({ ...chatSubject })
     }
   )
 
@@ -276,6 +375,42 @@ describe('resolveTabSessionHistorySubject', () => {
     ).toEqual(cliSubject)
   })
 
+  it.each(['grok', 'omp', 'opencode', 'opencode2', 'pi'] as const)(
+    'finds a %s terminal tab, whose conversation a chat can take over',
+    (agentType) => {
+      const state = makeState({
+        'term-1:leaf-1': makeAgentStatusEntry({
+          agentType,
+          paneKey: 'term-1:leaf-1',
+          tabId: 'term-1',
+          worktreeId: WORKTREE_ID,
+          providerSession: { key: 'session_id', id: `${agentType}-session-1` }
+        })
+      })
+      expect(
+        resolveTabSessionHistorySubject(state, { tab: { id: 'term-1', worktreeId: WORKTREE_ID } })
+      ).toEqual({ ...cliSubject, agent: agentType, providerSessionId: `${agentType}-session-1` })
+    }
+  )
+
+  it.each(['gemini'] as const)(
+    'skips a %s terminal tab, whose conversation no chat can take over',
+    (agentType) => {
+      const state = makeState({
+        'term-1:leaf-1': makeAgentStatusEntry({
+          agentType,
+          paneKey: 'term-1:leaf-1',
+          tabId: 'term-1',
+          worktreeId: WORKTREE_ID,
+          providerSession: { key: 'session_id', id: `${agentType}-session-1` }
+        })
+      })
+      expect(
+        resolveTabSessionHistorySubject(state, { tab: { id: 'term-1', worktreeId: WORKTREE_ID } })
+      ).toBeNull()
+    }
+  )
+
   it('looks nothing up over SSH, where neither move is ever offered', () => {
     const state = makeState(liveClaudeEntry, { connectionId: 'dev-box' })
     expect(
@@ -291,7 +426,7 @@ describe('resolveTabSessionHistorySubject', () => {
     ).toBeNull()
   })
 
-  it('looks a chat up on a remote Orca server, which owns its chats, but never a CLI there', () => {
+  it('looks up both Chat and CLI conversations on their remote Orca server', () => {
     const state = makeState(liveClaudeEntry, {
       executionHostId: 'runtime:server-1'
     })
@@ -308,7 +443,7 @@ describe('resolveTabSessionHistorySubject', () => {
       resolveTabSessionHistorySubject(state, {
         tab: { id: 'term-1', worktreeId: WORKTREE_ID }
       })
-    ).toBeNull()
+    ).toMatchObject({ kind: 'cli', request: { executionHostScope: 'runtime:server-1' } })
   })
 
   it('skips a plain shell tab', () => {
@@ -322,16 +457,16 @@ describe('resolveTabSessionHistorySubject', () => {
 
 describe('one pane of a terminal tab', () => {
   const claudePane = 'term-1:leaf-1'
-  const grokPane = 'term-1:leaf-2'
+  const geminiPane = 'term-1:leaf-2'
   const splitTab = (activeLeafId: string): AppState => {
     makeState({
       [claudePane]: liveClaudeEntry['term-1:leaf-1'],
-      [grokPane]: makeAgentStatusEntry({
-        agentType: 'grok',
-        paneKey: grokPane,
+      [geminiPane]: makeAgentStatusEntry({
+        agentType: 'gemini',
+        paneKey: geminiPane,
         tabId: 'term-1',
         worktreeId: WORKTREE_ID,
-        providerSession: { key: 'session_id', id: 'grok-session-1' }
+        providerSession: { key: 'session_id', id: 'gemini-session-1' }
       })
     })
     useAppStore.setState({
@@ -349,13 +484,35 @@ describe('one pane of a terminal tab', () => {
 
   it("never stands in a sibling pane's conversation for a pane with no move", () => {
     const state = splitTab('leaf-2')
-    // The tab as a whole maps to the Claude pane; the Grok pane on its own has nothing.
+    // The tab as a whole maps to the Claude pane; the Gemini pane on its own has nothing.
     expect(
       resolveTabSessionHistorySubject(state, { tab: { id: 'term-1', worktreeId: WORKTREE_ID } })
     ).toEqual(cliSubject)
-    expect(paneSubject(state, grokPane)).toBeNull()
-    expect(paneGate(state, grokPane)).toBe(false)
+    expect(paneSubject(state, geminiPane)).toBeNull()
+    expect(paneGate(state, geminiPane)).toBe(false)
   })
+
+  it.each(['grok', 'omp', 'opencode', 'opencode2', 'pi'] as const)(
+    "finds a %s pane's own conversation",
+    (agentType) => {
+      const paneKey = 'term-1:leaf-1'
+      const state = makeState({
+        [paneKey]: makeAgentStatusEntry({
+          agentType,
+          paneKey,
+          tabId: 'term-1',
+          worktreeId: WORKTREE_ID,
+          providerSession: { key: 'session_id', id: `${agentType}-session-1` }
+        })
+      })
+      expect(paneSubject(state, paneKey)).toEqual({
+        ...cliSubject,
+        agent: agentType,
+        providerSessionId: `${agentType}-session-1`
+      })
+      expect(paneGate(state, paneKey)).toBe(true)
+    }
+  )
 
   it("finds the pane's own conversation", () => {
     const state = splitTab('leaf-1')
@@ -397,6 +554,82 @@ describe('one pane of a terminal tab', () => {
       false
     )
   })
+  it('identifies a provider-only Continue source without a live turn or selecting its sibling', () => {
+    makeState()
+    const [L1, L2] = [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222'
+    ]
+    const pane = `term-1:${L1}`
+    const layout = (ptyIdsByLeafId: Record<string, string>) =>
+      useAppStore.setState({
+        terminalLayoutsByTabId: {
+          'term-1': { root: null, activeLeafId: L1, expandedLeafId: null, ptyIdsByLeafId }
+        }
+      })
+    layout({ [L1]: 'pty-1', [L2]: 'pty-2' })
+    applyProviderSessionOnlyUpdate({
+      store: useAppStore.getState(),
+      batch: undefined,
+      paneKey: pane,
+      routing: { tabId: 'term-1', worktreeId: WORKTREE_ID },
+      data: {
+        paneKey: pane,
+        connectionId: null,
+        receivedAt: 1,
+        stateStartedAt: 1,
+        state: 'done',
+        prompt: '',
+        agentType: 'codex',
+        providerSession: { key: 'session_id', id: 'thread-c' },
+        providerSessionOnly: true
+      }
+    })
+    const state = useAppStore.getState()
+    expect(state.agentStatusByPaneKey).toEqual({})
+    expect(
+      resolveCliChatResumeSource(state, {
+        tab: { id: 'term-1', worktreeId: WORKTREE_ID },
+        paneKey: pane
+      })
+    ).toMatchObject({ agent: 'codex', providerSessionId: 'thread-c' })
+    expect(paneGate(state, `term-1:${L2}`)).toBe(false)
+    useAppStore
+      .getState()
+      .setAgentStatus(
+        pane,
+        { state: 'done', prompt: 'first', agentType: 'codex' },
+        undefined,
+        undefined,
+        { tabId: 'term-1', worktreeId: WORKTREE_ID },
+        { providerSession: { key: 'session_id', id: 'thread-c' } }
+      )
+    useAppStore
+      .getState()
+      .setAgentStatus(pane, { state: 'working', prompt: 'second', agentType: 'codex' })
+    expect(
+      resolveCliChatResumeSource(useAppStore.getState(), {
+        tab: { id: 'term-1', worktreeId: WORKTREE_ID },
+        paneKey: pane
+      })
+    ).toBeNull()
+    expect(paneGate(useAppStore.getState(), pane)).toBe(false)
+    useAppStore
+      .getState()
+      .recordAgentProviderSession(
+        pane,
+        'codex',
+        { key: 'session_id', id: 'thread-next' },
+        undefined,
+        { tabId: 'term-1', worktreeId: WORKTREE_ID }
+      )
+    expect(
+      resolveCliChatResumeSource(useAppStore.getState(), {
+        tab: { id: 'term-1', worktreeId: WORKTREE_ID },
+        paneKey: pane
+      })
+    ).toMatchObject({ providerSessionId: 'thread-next' })
+  })
 })
 
 describe('findTabSessionHistoryRow', () => {
@@ -419,6 +652,21 @@ describe('findTabSessionHistoryRow', () => {
     })
     expect(findTabSessionHistoryRow([ownedRow], cliSubject)?.id).toBe('owned-row')
     expect(findTabSessionHistoryRow([row({ agent: 'codex' })], cliSubject)).toBeNull()
+    // An OpenCode 2.x pane reports `opencode`; Session History lists its conversation as `opencode2`.
+    const openCodeSubject = {
+      ...cliSubject,
+      agent: 'opencode' as const,
+      providerSessionId: 'ses_1'
+    }
+    expect(
+      findTabSessionHistoryRow(
+        [row({ id: 'oc2-row', agent: 'opencode2', sessionId: 'ses_1' })],
+        openCodeSubject
+      )?.id
+    ).toBe('oc2-row')
+    expect(
+      findTabSessionHistoryRow([row({ agent: 'grok', sessionId: 'ses_1' })], openCodeSubject)
+    ).toBeNull()
     expect(
       findTabSessionHistoryRow(
         [
@@ -437,14 +685,14 @@ describe('resolveTabSessionSwitch', () => {
     structuredSession: { sessionId: 'orca-chat-1', workspaceId: WORKTREE_ID }
   })
 
-  it('offers Resume in New CLI on a chat tab whose row can fork', () => {
+  it('offers Switch to Terminal on a chat tab whose row can fork', () => {
     expect(resolveTabSessionSwitch(makeState(), chatRow, chatSubject)).toEqual({
       action: 'resume-in-new-cli',
       worktreeId: WORKTREE_ID
     })
   })
 
-  it('hides Resume in New CLI for an empty or unresumable chat', () => {
+  it('hides Switch to Terminal for an empty or unresumable chat', () => {
     expect(
       resolveTabSessionSwitch(
         makeState(),
@@ -456,7 +704,7 @@ describe('resolveTabSessionSwitch', () => {
     expect(resolveTabSessionSwitch(makeState(), chatRow, chatSubject)).toBeNull()
   })
 
-  it('offers Resume in New Native Chat where the row is eligible, in the workspace it names', () => {
+  it('offers Switch to Chat where the row is eligible, in the workspace it names', () => {
     mocks.resumeInChat.mockReturnValue({
       available: true,
       workspaceId: WORKTREE_ID

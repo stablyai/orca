@@ -11,13 +11,8 @@ import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provena
 import { getWorkspaceAttachments } from './workspace-attachments'
 import { normalizeWorkspaceAttachment } from './workspace-attachment-normalization'
 
-/**
- * A folder workspace has no git repo, so its synthetic `Worktree` borrows the `repoId` slot to
- * name the PROJECT GROUP it belongs to. The value is never null, so a caller testing `repoId` for
- * absence to detect "no repo" will be wrong for every folder workspace.
- *
- * Minting and recognising it live together here so the two cannot drift.
- */
+/** Folder Worktrees borrow repoId for their project group; it is never null, so absence cannot detect a non-Git workspace.
+ * Keep prefix creation/recognition together to avoid drift. */
 const FOLDER_WORKSPACE_REPO_ID_PREFIX = 'folder-workspace:'
 
 export function folderWorkspaceRepoId(projectGroupId: string): string {
@@ -33,7 +28,7 @@ export function projectGroupIdFromRepoId(repoId: string | null | undefined): str
   return projectGroupId === '' ? null : projectGroupId
 }
 
-function getFolderWorkspaceWorktreeHostId(
+export function getFolderWorkspaceWorktreeHostId(
   workspace: Pick<FolderWorkspace, 'executionHostId' | 'connectionId'>
 ): ExecutionHostId {
   return workspace.executionHostId ?? getConnectionExecutionHostId(workspace.connectionId)
@@ -46,6 +41,43 @@ export function getFolderWorkspaceHostIdentity(
     getFolderWorkspaceWorktreeHostId(workspace),
     folderWorkspaceKey(workspace.id)
   )
+}
+
+const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
+
+const qualifiedFolderWorktreeCache = new WeakMap<
+  FolderWorkspace,
+  {
+    hostId: ExecutionHostId
+    connectionId: string | null
+    worktree: Worktree
+  }
+>()
+/** Stable synthetic row per folder workspace object, so selectors keep referential equality. */
+export function getFolderWorkspaceWorktree(
+  folderWorkspace: FolderWorkspace,
+  resolved?: { hostId: ExecutionHostId; connectionId: string | null }
+): Worktree {
+  if (resolved) {
+    const cached = qualifiedFolderWorktreeCache.get(folderWorkspace)
+    if (cached?.hostId === resolved.hostId && cached.connectionId === resolved.connectionId) {
+      return cached.worktree
+    }
+    const worktree = folderWorkspaceToWorktree({
+      ...folderWorkspace,
+      executionHostId: resolved.hostId,
+      connectionId: resolved.connectionId
+    })
+    qualifiedFolderWorktreeCache.set(folderWorkspace, { ...resolved, worktree })
+    return worktree
+  }
+  const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
+  if (cached) {
+    return cached
+  }
+  const worktree = folderWorkspaceToWorktree(folderWorkspace)
+  folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
+  return worktree
 }
 
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
@@ -96,6 +128,12 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     sortOrder: folderWorkspace.sortOrder,
     manualOrder: folderWorkspace.manualOrder,
     lastActivityAt: folderWorkspace.lastActivityAt,
+    ...(folderWorkspace.smartTier !== undefined
+      ? { smartTier: folderWorkspace.smartTier, smartAt: folderWorkspace.smartAt }
+      : {}),
+    ...(folderWorkspace.lastTerminalUseAt !== undefined
+      ? { lastTerminalUseAt: folderWorkspace.lastTerminalUseAt }
+      : {}),
     createdAt: folderWorkspace.createdAt,
     createdWithAgent: folderWorkspace.createdWithAgent,
     pendingFirstAgentMessageRename: folderWorkspace.pendingFirstAgentMessageRename,

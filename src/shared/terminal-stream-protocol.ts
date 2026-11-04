@@ -22,11 +22,9 @@ export enum TerminalStreamOpcode {
   Unsubscribe = 10,
   SnapshotRequest = 11,
   Metadata = 12,
-  // Why 13: Metadata=12 shipped to mobile clients in v1.4.120; Ack (branch-only
-  // remote-multiplex flow control) renumbers to stay wire-compatible.
+  // Metadata=12 shipped in mobile v1.4.120; keep Ack on 13 for wire compatibility.
   Ack = 13,
-  // Why 14: Ack already occupies 13 on current clients; older runtimes ignore
-  // this opcode and still receive the compatibility Resize frame behind it.
+  // Older runtimes ignore ClaimViewport and still receive the following compatibility Resize.
   ClaimViewport = 14,
   OutputSpan = 15,
   // Negotiated per stream; older hosts reject unknown opcodes, so clients send only after capability confirmation.
@@ -34,7 +32,9 @@ export enum TerminalStreamOpcode {
   // Negotiated per stream because older clients reject unknown opcodes.
   WriteUnavailable = 17,
   // Host->client; `seq` is the cumulative input sequence the host applied (see encodeTerminalInputAck). Sent only after `inputAck` negotiation.
-  InputAck = 18
+  InputAck = 18,
+  // Host->client, empty payload; at most once per pause, when the host first discards output for a paused stream. Sent only after `outputPauseDropNotice` negotiation.
+  PausedOutputDropped = 19
 }
 
 export type TerminalInputAckKind = 'applied' | 'delivery-unknown' | 'resend'
@@ -165,6 +165,7 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.OutputSpan ||
     value === TerminalStreamOpcode.SetOutputPaused ||
     value === TerminalStreamOpcode.WriteUnavailable ||
-    value === TerminalStreamOpcode.InputAck
+    value === TerminalStreamOpcode.InputAck ||
+    value === TerminalStreamOpcode.PausedOutputDropped
   )
 }

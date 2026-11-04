@@ -7,8 +7,7 @@ function delay(ms) {
 async function pollRendererDiagnostics(read) {
   const readPromise = Promise.resolve().then(read)
   readPromise.catch(() => undefined)
-  // Why: the Wayland GPU stall can freeze renderer protocol calls, so
-  // diagnostics need a short deadline too.
+  // Wayland GPU stalls can wedge renderer protocol calls; bound diagnostics too.
   const result = await Promise.race([
     readPromise.then((value) => ({ timedOut: false, value })),
     delay(pollTimeoutMs).then(() => ({ timedOut: true, value: null }))

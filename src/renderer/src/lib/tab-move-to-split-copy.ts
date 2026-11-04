@@ -1,10 +1,5 @@
-import { TAB_MOVE_TO_SPLIT_COMMANDS, type KeybindingActionId } from '../../../shared/keybindings'
 import type { TabSplitDirection } from '../store/slices/tabs'
 import { translate } from '@/i18n/i18n'
-
-const DIRECTION_BY_ACTION: ReadonlyMap<KeybindingActionId, TabSplitDirection> = new Map(
-  TAB_MOVE_TO_SPLIT_COMMANDS.map(({ id, direction }) => [id, direction] as const)
-)
 
 export function translateTabMoveToSplitLabel(): string {
   return translate(
@@ -26,14 +21,8 @@ export function translateTabMoveToSplitDirection(direction: TabSplitDirection): 
   }
 }
 
-export function translateShortcutDefinitionTitle(
-  actionId: KeybindingActionId,
-  fallback: string
-): string {
-  const direction = DIRECTION_BY_ACTION.get(actionId)
-  if (!direction) {
-    return fallback
-  }
+// Why: composed from the menu's translated copy so shortcut titles are localized wherever the menu is.
+export function translateTabMoveToSplitTitle(direction: TabSplitDirection): string {
   return translate('auto.lib.tabMoveToSplitCopy.shortcutTitle', '{{label}}: {{direction}}', {
     label: translateTabMoveToSplitLabel(),
     direction: translateTabMoveToSplitDirection(direction)

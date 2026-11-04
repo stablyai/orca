@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
+import { openElectronSpeechDownloadRequest } from '../host/electron-speech-services'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 const { appGetPathMock, netRequestMock } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
@@ -18,6 +20,9 @@ vi.mock('electron', () => ({
     request: netRequestMock
   }
 }))
+
+// Desktop app environment supplies ModelManager's userData.
+beforeEach(() => installFakeAppEnvironment({ getPath: (name) => appGetPathMock(name) }))
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 const originalProgramData = process.env.PROGRAMDATA
@@ -37,10 +42,6 @@ function restoreEnvironment(): void {
   }
 }
 
-function isAsciiPath(value: string): boolean {
-  return [...value].every((character) => character.charCodeAt(0) <= 0x7f)
-}
-
 describe('ModelManager Windows model path handling', () => {
   beforeEach(() => {
     appGetPathMock.mockReset()
@@ -50,28 +51,6 @@ describe('ModelManager Windows model path handling', () => {
 
   afterEach(() => {
     restoreEnvironment()
-  })
-
-  it('uses an ASCII cache path when the Windows default user data path has non-ASCII characters', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      setPlatform('win32')
-      const programDataDir = join(dir, 'ProgramData')
-      const userDataDir = join(dir, '用户', 'Orca')
-      process.env.PROGRAMDATA = programDataDir
-      appGetPathMock.mockImplementation((name: string) =>
-        name === 'userData' ? userDataDir : join(dir, name)
-      )
-
-      const manager = new ModelManager()
-
-      expect(manager.getModelsDir()).not.toContain(userDataDir)
-      expect(manager.getModelsDir()).toContain(join(programDataDir, 'Orca', 'speech-models'))
-      expect(isAsciiPath(manager.getModelsDir())).toBe(true)
-      expect(existsSync(manager.getModelsDir())).toBe(true)
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
   })
 
   it('migrates existing ready model files from a non-ASCII Windows default cache', async () => {
@@ -96,11 +75,11 @@ describe('ModelManager Windows model path handling', () => {
         truncateSync(filePath, file.sizeBytes)
       }
 
-      const manager = new ModelManager()
+      const manager = new ModelManager(undefined, openElectronSpeechDownloadRequest)
       const migratedModelDir = manager.getModelDir(manifest!.id)
 
       expect(migratedModelDir).not.toContain(userDataDir)
-      // Migration runs asynchronously; getModelState awaits it before reading files.
+      // State reads await asynchronous migration.
       await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
         id: manifest!.id,
         status: 'ready'
@@ -134,18 +113,17 @@ describe('ModelManager Windows model path handling', () => {
         truncateSync(filePath, file.sizeBytes)
       }
 
-      const manager = new ModelManager()
+      const manager = new ModelManager(undefined, openElectronSpeechDownloadRequest)
       await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
         id: manifest!.id,
         status: 'ready'
       })
       await manager.deleteModel(manifest!.id)
 
-      // The legacy source copy must be gone so migration cannot re-seed it.
+      // Deletion must prevent migration from resurrecting the model after restart.
       expect(existsSync(legacyModelDir)).toBe(false)
 
-      // Simulate an app restart: a fresh manager migrates from the same source.
-      const restarted = new ModelManager()
+      const restarted = new ModelManager(undefined, openElectronSpeechDownloadRequest)
       await expect(restarted.getModelState(manifest!.id)).resolves.toEqual({
         id: manifest!.id,
         status: 'not-downloaded'

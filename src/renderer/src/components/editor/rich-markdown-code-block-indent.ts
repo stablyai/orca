@@ -1,47 +1,63 @@
 import type { Editor } from '@tiptap/react'
 
-export const RICH_MARKDOWN_CODE_BLOCK_INDENT = '  '
+const RICH_MARKDOWN_CODE_BLOCK_INDENT = '  '
 
 const LEADING_INDENT = /^(\t| {1,2})/
 
-function findCodeBlockAtCursor(editor: Editor): { text: string; start: number } | null {
-  const { $from } = editor.state.selection
-  for (let depth = $from.depth; depth > 0; depth--) {
-    const node = $from.node(depth)
-    if (node.type.name === 'codeBlock') {
-      return { text: node.textContent, start: $from.start(depth) }
-    }
-  }
-  return null
-}
-
-/**
- * Shift+Tab inside a code block: strip one indent step from every line the
- * selection touches, mirroring Tab's insert.
- */
-export function outdentRichMarkdownCodeBlock(editor: Editor): boolean {
-  const codeBlock = findCodeBlockAtCursor(editor)
-  if (!codeBlock) {
-    return false
-  }
-
-  const { from, to } = editor.state.selection
+function changeCodeBlockIndent(editor: Editor, direction: 'indent' | 'outdent'): boolean {
+  const { from, to, empty } = editor.state.selection
   const tr = editor.state.tr
-  let lineStart = codeBlock.start
-
-  for (const line of codeBlock.text.split('\n')) {
-    const lineEnd = lineStart + line.length
-    const isTouched = lineEnd >= from && lineStart <= to
-    const indent = isTouched ? LEADING_INDENT.exec(line) : null
-    if (indent) {
-      tr.delete(tr.mapping.map(lineStart), tr.mapping.map(lineStart + indent[0].length))
+  editor.state.doc.nodesBetween(from, to, (node, position) => {
+    if (node.type.name !== 'codeBlock') {
+      return true
     }
-    lineStart = lineEnd + 1
-  }
-
+    let lineStart = position + 1
+    for (const line of node.textContent.split('\n')) {
+      const lineEnd = lineStart + line.length
+      const isTouched = lineEnd >= from && (empty ? lineStart <= to : lineStart < to)
+      if (isTouched) {
+        const start = tr.mapping.map(lineStart)
+        if (direction === 'indent') {
+          tr.insertText(RICH_MARKDOWN_CODE_BLOCK_INDENT, start)
+        } else {
+          const indent = LEADING_INDENT.exec(line)
+          if (indent) {
+            tr.delete(start, tr.mapping.map(lineStart + indent[0].length))
+          }
+        }
+      }
+      lineStart = lineEnd + 1
+    }
+    return false
+  })
   if (!tr.docChanged) {
     return false
   }
   editor.view.dispatch(tr)
   return true
+}
+
+export function indentRichMarkdownCodeBlock(editor: Editor): boolean {
+  if (editor.state.selection.empty) {
+    return editor.commands.insertContent(RICH_MARKDOWN_CODE_BLOCK_INDENT)
+  }
+  return changeCodeBlockIndent(editor, 'indent')
+}
+
+function selectionStartsInCodeBlock(editor: Editor): boolean {
+  const { $from } = editor.state.selection
+  for (let depth = $from.depth; depth > 0; depth--) {
+    if ($from.node(depth).type.name === 'codeBlock') {
+      return true
+    }
+  }
+  return false
+}
+
+export function outdentRichMarkdownCodeBlock(editor: Editor): boolean {
+  // Selections that start outside code (e.g. list items wrapping a code block) belong to list outdent.
+  if (!selectionStartsInCodeBlock(editor) && !editor.isActive('codeBlock')) {
+    return false
+  }
+  return changeCodeBlockIndent(editor, 'outdent')
 }

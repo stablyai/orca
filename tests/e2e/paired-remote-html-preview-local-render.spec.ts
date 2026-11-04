@@ -47,7 +47,6 @@ type PreparedPairedClient = {
   worktreePath: string
 }
 
-/** Pairs a fresh desktop client to the host and waits until it holds the host's worktree. */
 async function preparePairedClient(
   offer: RuntimeDesktopPairingOffer,
   testInfo: TestInfo,
@@ -97,7 +96,6 @@ async function findWorktreeId(page: Page, repoPath: string): Promise<string | nu
   )
 }
 
-/** Selects the fixture in the explorer and hands back its "Open Preview to the Side" control. */
 async function revealPreviewAction(page: Page, fixtureName: string): Promise<Locator> {
   await openFileExplorer(page)
   const fixtureRow = page.locator('[data-file-explorer-row]').filter({ hasText: fixtureName })
@@ -108,7 +106,6 @@ async function revealPreviewAction(page: Page, fixtureName: string): Promise<Loc
   return openPreviewToSide
 }
 
-/** Brings a browser workspace to the front the way clicking its tab does. */
 async function focusBrowserWorkspace(
   page: Page,
   worktreeId: string,
@@ -124,12 +121,8 @@ async function focusBrowserWorkspace(
   )
 }
 
-/**
- * Since STA-5557 a paired HTML preview is a browser page located by a workspace document, rendered
- * on the client from the workspace's disk over the `orca-preview://` scheme. The oracle therefore
- * splits: the client gains exactly one browser workspace — the document one, blank-URL'd and named
- * by the document — while the host's own page registry gains nothing at all.
- */
+// STA-5557: render workspace-document previews client-side over orca-preview://.
+// Require exactly one named, blank-URL document workspace on the client and no page or grant in host inventory.
 test('renders a paired HTML doc as a document browser tab while the host gains no browser page', async ({
   orcaPage,
   testRepoPath
@@ -142,17 +135,13 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       `<p><a id="external" href="${EXTERNAL_LINK_URL}" target="_blank" ` +
       `style="display:inline-block;padding:24px;font-size:24px">external link</a></p>` +
       `<div id="link-clicks">0</div>` +
-      // Why the document counts its own presses: without it, a link that routes nothing cannot say
-      // whether the press missed the anchor or the fences refused what the press reported.
+      // Count document presses to distinguish missed anchors from routing refusal.
       `<script>document.getElementById('external').addEventListener('click',()=>{` +
       `const out=document.getElementById('link-clicks');` +
       `out.textContent=String(Number(out.textContent)+1)},true)</script>` +
       `<div id="webrtc-probe">pending</div>` +
-      // Why the document probes itself rather than the harness evaluating in it: `executeJavaScript`
-      // enters the guest from outside, so only an inline script measures what the document can do.
-      // Why candidates and not the constructor: this Chromium lets any document construct a peer
-      // connection, and an attacker-owned STUN URL leaks its bytes during gathering with no
-      // signaling at all. Zero candidates is the fence; a throw was never going to be one.
+      // Probe inside the inline document script; harness executeJavaScript bypasses its permissions.
+      // Require zero ICE candidates: constructor success is allowed, but STUN gathering can leak without signaling.
       `<script>(async()=>{const out=document.getElementById('webrtc-probe');try{` +
       `const pc=new RTCPeerConnection();const found=[];` +
       `pc.onicecandidate=(event)=>{if(event.candidate&&event.candidate.candidate){found.push(1)}};` +
@@ -163,14 +152,9 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       `catch(error){out.textContent='threw:'+error.name}})()</script>` +
       `<div id="post-input-egress">idle</div>` +
       `<div id="scripted-egress">idle</div>` +
-      // Why the document tries to leave by itself: a preview may read its whole grant over
-      // `connect-src 'self'`, so an unattended navigation to an attacker is how those bytes would
-      // get out. It runs on every load here; the baseline browser counts below are the oracle.
-      // Why the second attempt rides a real press: a gate that only asks "was there input
-      // recently" cannot tell that navigation from the click's own effect, so it would route these
-      // bytes out. The document reports having tried, which is the presence half of that oracle.
-      // Why the listener is registered first: setting `location.href` mid-parse stops the parser,
-      // so anything written after this script may never exist.
+      // Attempt unattended navigation after grant reads; stable browser counts must prove no exfiltration route.
+      // Also attempt navigation during unrelated real input so a recent-input heuristic cannot authorize it.
+      // Install listeners before location.href can stop parsing the remaining document.
       `<script>document.addEventListener('pointerdown',()=>{` +
       `const out=document.getElementById('post-input-egress');` +
       `if(out.textContent==='attempted'){return}out.textContent='attempted';` +
@@ -230,8 +214,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       )
       .toBe(1)
 
-    // Presence precondition for the absence assertions below: the document really rendered, so a
-    // host page that failed to appear cannot be an artifact of the preview never happening at all.
+    // Require a rendered document before interpreting absent host records.
     await expect
       .poll(() => readDocPreviewRenderedText(page, 'h1'), {
         timeout: 60_000,
@@ -240,8 +223,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       .toBe(FIXTURE_HEADING)
     const firstGuestUrl = await readDocPreviewGuestUrl(page)
     expect(firstGuestUrl).toMatch(/^orca-preview:\/\//)
-    // Why a live check: the fence is a main-process call on the guest, and nothing in the served
-    // document or its headers would show whether it took. Gathering nothing is the proof.
+    // Check live ICE gathering because the main-process guest fence is absent from document headers.
     await expect
       .poll(() => readDocPreviewRenderedText(page, '#webrtc-probe'), {
         timeout: 30_000,
@@ -249,8 +231,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       })
       .toBe('candidates=0')
 
-    // Presence precondition for the unattended-egress half of the oracle: without it, counts that
-    // held at baseline could just as well mean the document never ran its attempt.
+    // Require the document’s attempted egress before treating unchanged counts as containment.
     await expect
       .poll(() => readDocPreviewRenderedText(page, '#scripted-egress'), {
         timeout: 30_000,
@@ -260,8 +241,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
 
     const afterPreview = await readPairedHtmlPreviewInventory(page, inventoryArgs)
     const previewRow = requireSingleDocWorkspace(afterPreview)
-    // The client gains exactly one workspace, and it is the document one: located by the file,
-    // blank where a URL would be, and named by what the document calls itself.
+    // Require the document’s file identity/title and blank URL in exactly one client workspace.
     expect(afterPreview.clientBrowserWorkspaceCount).toBe(baseline.clientBrowserWorkspaceCount + 1)
     expect({
       pageUrl: previewRow.pageUrl,
@@ -274,25 +254,18 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       workspaceDocFilePath: docFilePath,
       workspaceUrl: BLANK_PAGE_URL
     })
-    // The preview species that lived in the editor is gone; a restore or an action resurrecting
-    // one would put an `html-preview::` row back here.
+    // Reject legacy html-preview:: editor rows resurrected by restore/actions.
     expect(afterPreview.htmlPreviewEditorFileIds).toEqual([])
     expect(previewRow.groupId).not.toBe(sourceGroupId)
-    // The document has already run its unattended `window.open` and `location.href` by now, since
-    // the heading it painted comes after them: the host holding still is that egress reaching
-    // nothing, and the preview itself never being published is the grant never riding the wire.
+    // The heading follows both unattended attempts; unchanged host state proves neither opened a page or published the grant.
     expect(afterPreview.hostBrowserPages).toEqual(baseline.hostBrowserPages)
     expect(afterPreview.hostSessionBrowserTabs).toEqual(baseline.hostSessionBrowserTabs)
 
-    // The chip stands in for the address bar the document page has none of, and keeps naming the
-    // file whatever the document calls itself. Since STA-5681 the chip is the way into the
-    // editable address bar, so it answers to that name now.
+    // STA-5681: the document chip opens the editable address bar while retaining file identity.
     const pathChip = page.getByRole('button', { name: 'Edit address', exact: true })
     await expect(pathChip).toBeVisible({ timeout: 30_000 })
     await expect(pathChip).toContainText(FIXTURE_NAME)
-    // Below 24rem of chip width the identity row hides whole instead of clipping into slivers;
-    // when it shows, the badge must sit inside the chip's own layout box. Which arm runs depends
-    // on how much width this platform's toolbar leaves the chip — both are the contract.
+    // Hide the identity row whole below 24rem content width; otherwise keep its badge inside the chip.
     const hostBadge = pathChip.locator('[data-slot="badge"]')
     const pathChipBox = await pathChip.boundingBox()
     expect(pathChipBox).not.toBeNull()
@@ -303,8 +276,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
         (pathChipBox?.x ?? 0) + (pathChipBox?.width ?? 0) + 0.5
       )
     } else {
-      // A chip too narrow for the identity row hides it whole; a wide one must show it. 26rem of
-      // border-box width clears the 24rem content-box container threshold plus padding.
+      // 26rem border-box width clears the 24rem content threshold plus padding.
       expect(pathChipBox?.width ?? 0).toBeLessThan(416)
     }
 
@@ -312,8 +284,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     await expect(page.locator(`[data-tab-group-body-id="${previewRow.groupId}"]`)).toBeVisible()
     await expect(page.locator(`[data-tab-id="${sourceEditor.tabId}"]`)).toBeVisible()
 
-    // Creating the preview must not move focus: the user stays in the source editor and the
-    // preview merely occupies its own split, which is where an explicit click sends them.
+    // Preview opens unfocused beside the source editor; only explicit selection moves focus.
     await expect
       .poll(
         () =>
@@ -362,8 +333,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       )
       .toBe('terminal')
 
-    // Why the workspace id and not the unified tab id: a browser row's tab element is keyed by the
-    // workspace, which is the row the tab strip renders and the X closes.
+    // Browser strip rows/X use workspace ids, not unified tab ids.
     const previewTab = page.locator(`[data-tab-id="${previewRow.workspaceId}"]`)
     await previewTab.click()
     await expect
@@ -384,8 +354,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       .toBe(true)
     expect(await readDocPreviewRenderedText(page, 'h1')).toBe(FIXTURE_HEADING)
 
-    // The presence half of the host oracle, through the very oracle the absence half was read
-    // from: an ordinary URL tab this same client opens does reach the host's page registry.
+    // Positive control: this same host registry must contain an ordinary client URL page.
     await page.evaluate(async (url) => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
@@ -409,9 +378,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       )
       .toBe(1)
     const withMarker = await readPairedHtmlPreviewInventory(page, inventoryArgs)
-    // The same presence precondition for the snapshot half: this host does project a browser tab
-    // the client published into `session.tabs.list`, so the preview's absence from it is a
-    // decision and not the snapshot's blindness.
+    // Positive control: this host snapshot must project an ordinary published browser tab.
     expect(
       withMarker.hostSessionBrowserTabs.filter((tab) => tab.url.startsWith(marker.origin))
     ).toHaveLength(1)
@@ -427,10 +394,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     ).toEqual([])
     expect(withMarker.docWorkspaces).toHaveLength(1)
 
-    // Why the URL tab goes away again before the rest of the journey: it is hosted on this desktop,
-    // so it holds an offscreen window of its own, and the front-most window is what the trusted
-    // click policy below is read from. Its close is also the converse oracle — a browser tab that
-    // did reach the host leaves it again, while the preview was never there to leave.
+    // Close the URL tab’s offscreen window before trusted-click checks, which read the frontmost contents; require its host removal too.
     await page.evaluate((origin) => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
@@ -450,7 +414,6 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       .toBe(baseline.hostBrowserPages.length)
 
     await previewTab.hover()
-    // The row's only button is its X, which is the product close for a browser tab.
     await previewTab.locator('button').click()
     await expect
       .poll(
@@ -477,17 +440,13 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       })
     await expect(previewTab).toHaveCount(0)
     await expect(page.locator(`[data-tab-id="${terminalTabId}"]`)).toBeVisible()
-    // Why: the last activation was the preview, so the editor has to be selected again before its
-    // pane mounts — the point is that closing the preview left a working editor behind.
+    // Reselect the editor so it mounts and proves preview close left it usable.
     await page.locator(`[data-tab-id="${sourceEditor.tabId}"]`).click()
     await expect(
       page.locator(`[data-tab-group-body-id="${sourceGroupId}"] .monaco-editor`)
     ).toBeVisible({ timeout: 30_000 })
 
-    // Why this runs last: it is the one step that is supposed to create a browser tab, so it
-    // cannot share a run phase with the no-new-browser oracle above. Only a real mouse press
-    // produces the trusted event the guest's preload will report; nothing the document dispatches
-    // does.
+    // Run trusted mouse routing last because it intentionally creates a tab, outside the earlier no-new-browser oracle.
     const reopenPreview = await revealPreviewAction(page, FIXTURE_NAME)
     await reopenPreview.click()
     await expect
@@ -497,8 +456,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
         { timeout: 60_000, message: 'the preview never came back after being closed' }
       )
       .toBe(1)
-    // Why the explicit focus: the preview opens beside the editor without taking focus, so its pane
-    // has no layout yet — and a press needs a rect, not just a rendered document.
+    // Select the preview to establish a pane rect before clicking its guest.
     const reopenedRow = requireSingleDocWorkspace(
       await readPairedHtmlPreviewInventory(page, inventoryArgs)
     )
@@ -510,41 +468,30 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
         message: 'the reopened preview never rendered before the external link click'
       })
       .toBe(FIXTURE_HEADING)
-    // One guest, laid out: a preview the close left behind, or a pane that never came to the
-    // front, would answer the press with a rect nothing can be clicked at.
+    // Require one laid-out guest so stale/hidden panes cannot supply unusable rectangles.
     const guestRects = await readDocPreviewGuestRects(page)
     expect(guestRects).toHaveLength(1)
     expect(guestRects[0]?.width).toBeGreaterThan(0)
     expect(guestRects[0]?.hiddenAncestor).toBe(false)
-    // Why poll rather than read once: the helper only answers once the guest's own hit test lands
-    // on the link, so the press cannot chase a rect that layout is still settling.
+    // Poll until the guest’s own hit test confirms the link, avoiding stale layout coordinates.
     await expect
       .poll(() => readDocPreviewElementCenter(page, '#external'), {
         timeout: 30_000,
         message: 'the external link never settled at a clickable point in the preview guest'
       })
       .not.toBeNull()
-    // Why record the routing call: the click crosses into a guest process, so a bare "no tab
-    // appeared" cannot say whether the press was swallowed before the handler or the tab was
-    // refused after it. The recorded calls make the failure name itself.
+    // Record routing calls to distinguish swallowed guest clicks from refused tab creation.
     await armPairedHtmlPreviewLinkRouting(page)
-    // Why the window has to come to the front: main routes a reported click only from the contents
-    // the reader is looking at, and this client is launched hidden and behind everything.
+    // Trusted routing checks the reader’s front contents; preserve the fixture’s guarded activation policy.
     expect(await focusPairedClientWindow(client)).toMatchObject({
       isFocused: true,
       isVisible: true
     })
-    // Why before the heading press: that press is what the document rides, so a baseline taken
-    // after it would absorb any tab the document opened on the back of it.
+    // Take the baseline before the heading press so it cannot absorb an input-driven escape.
     const linkBaseline = await readPairedHtmlPreviewInventory(page, inventoryArgs)
-    // Why the heading click first: focus has to be on the guest itself, not merely on the window
-    // that hosts it, before the press on the link is one main will answer.
-    // Why press until the document answers rather than once: until a freshly attached guest
-    // registers its own hit-test region, the browser resolves a press over it to the embedder,
-    // where it lands on the `webview` element and never enters the document. Observed on Linux
-    // under software compositing; a later press routes normally with nothing else changed.
-    // Presence precondition for the baseline below: the document really did try to leave on the
-    // back of a genuine press, rather than never running its attempt at all.
+    // Focus the guest via its heading before the real link click.
+    // Retry until guest hit testing registers; software compositing can initially deliver presses to the embedder webview.
+    // Require the document’s real-input escape attempt before checking containment.
     await expect
       .poll(
         async () => {
@@ -645,8 +592,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
         )
         .toMatchObject({
           openedTab: true,
-          // Why assert the preview survived: the link leaves the preview for a browser tab; it must
-          // not navigate or close the document the user is reading.
+          // Opening an external link must leave the preview document intact.
           docWorkspaces: 1,
           routedCalls: [{ url: EXTERNAL_LINK_URL, opened: true }]
         })
@@ -755,11 +701,7 @@ test('asks before a paired preview reads a sibling directory', async ({
   }
 })
 
-/**
- * A document tab is a browser tab, so it comes back the way one does. What it may not do is come
- * back holding yesterday's grant: the URL it is served over is minted fresh by the client that
- * restores it, which is why the restored guest's URL must differ from the one that was quit.
- */
+// Restore the same document tab with a newly minted client grant; yesterday’s served URL must never return.
 test('restores the document tab, on a fresh grant, after the client quits and relaunches', async ({
   orcaPage,
   testRepoPath
@@ -836,8 +778,7 @@ test('restores the document tab, on a fresh grant, after the client quits and re
       title: RESTORE_FIXTURE_TITLE,
       workspaceDocFilePath: docFilePath
     })
-    // A restore has to bring back the tab the reader had, not a fresh one that happens to show the
-    // same document — the row is the same row it was created as.
+    // Require the original row id, not a replacement displaying the same document.
     expect(restored.workspaceId).toBe(quitRow.workspaceId)
 
     await focusBrowserWorkspace(relaunched, prepared.worktreeId, restored.workspaceId)
@@ -849,8 +790,7 @@ test('restores the document tab, on a fresh grant, after the client quits and re
       .toBe(RESTORE_FIXTURE_HEADING)
     const guestUrlAfterRestore = await readDocPreviewGuestUrl(relaunched)
     expect(guestUrlAfterRestore).toMatch(/^orca-preview:\/\//)
-    // The grant is minted by the client that mounts the page, so a restore that carried the old
-    // URL back in — from disk or from the host — would show the same one here.
+    // Require a new grant URL so neither disk nor host can restore the expired one.
     expect(guestUrlAfterRestore).not.toBe(guestUrlBeforeQuit)
     const afterRestore = await readPairedHtmlPreviewInventory(relaunched, relaunchedArgs)
     expect(afterRestore.htmlPreviewEditorFileIds).toEqual([])

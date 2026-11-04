@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
 import {
   NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX,
@@ -9,16 +8,16 @@ import {
   nativeChatVisualThemeMessage,
   readNativeChatVisualFrameMessage,
   readNativeChatVisualPong
-} from '../../../../shared/native-chat-visual-shell'
+} from '../../../../shared/native-chat/native-chat-visual-shell'
 import type { NativeChatVisualDocument } from './native-chat-visual-read-client'
-import { createNativeChatVisualHeightGovernor } from '../../../../shared/native-chat-visual-height-governor'
+import { createNativeChatVisualHeightGovernor } from '../../../../shared/native-chat/native-chat-visual-height-governor'
+import type { ReaderGesture } from './native-chat-autoscroll'
 import { useNativeChatVisualTheme } from './use-native-chat-visual-theme'
 import { useWebviewDragPassthroughActive } from '../browser-pane/host-guest/use-webview-drag-passthrough-active'
 
 /** Height reserved before a visual reports its own, so the reply below does not jump far. */
 export const NATIVE_CHAT_VISUAL_RESERVED_HEIGHT = 160
-// Chromium keeps a click's activation for about five seconds; one open per window means one click
-// in the visual opens at most one page.
+// Allow one link per Chromium activation window so one click cannot open multiple pages.
 const LINK_COOLDOWN_MS = 5_000
 
 function newChannel(): string {
@@ -27,26 +26,21 @@ function newChannel(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-/**
- * One agent-written visual in an opaque-origin frame that may run scripts and nothing else. Inline
- * it fits its height to the page; in a panel it fills the panel. A theme change restyles the page in
- * place, so interaction state survives it. On desktop the main process refuses the frame's
- * navigation; a later load that nothing answers (the frame gone blank or showing another page)
- * retires it, as a tripwire rather than a boundary.
- */
+/** Use an opaque script-only frame and restyle in place; unanswered later loads retire it as a tripwire, not a security boundary. */
 export function NativeChatVisualFrame({
   document: visual,
   title,
-  layout,
   themeScope,
-  onRetired
+  onRetired,
+  onReaderGesture
 }: {
   document: NativeChatVisualDocument
   title: string
-  layout: 'inline' | 'panel'
   /** An element already mounted where the frame sits, so the first paint wears that scope's theme. */
   themeScope: RefObject<Element | null>
   onRetired: () => void
+  /** Uncancelled input; the transcript owner checks whether the conversation moved. */
+  onReaderGesture?: (gesture: ReaderGesture) => void
 }): React.JSX.Element {
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const theme = useNativeChatVisualTheme(themeScope)
@@ -54,9 +48,11 @@ export function NativeChatVisualFrame({
   const dragPassthrough = useWebviewDragPassthroughActive()
   // The latest theme for the next document build and the load-time post, without rebuilding on it.
   const themeRef = useRef(theme)
+  const onReaderGestureRef = useRef(onReaderGesture)
   useLayoutEffect(() => {
     themeRef.current = theme
-  }, [theme])
+    onReaderGestureRef.current = onReaderGesture
+  }, [onReaderGesture, theme])
   const [height, setHeight] = useState(NATIVE_CHAT_VISUAL_RESERVED_HEIGHT)
   const loadsRef = useRef(0)
   // The latest later load still awaiting an answer, and the timer that retires the frame.
@@ -111,17 +107,21 @@ export function NativeChatVisualFrame({
         return
       }
       if (message.kind === 'size') {
-        if (layout === 'inline') {
-          latestReported = message.height
-          if (!deferred) {
-            applyHeight()
-          }
+        latestReported = message.height
+        if (!deferred) {
+          applyHeight()
         }
         return
       }
-      // A link opens only from a real gesture in this very frame: it must hold focus and the user
-      // must have just acted. This stops opens on load, not a page that waits for the next click,
-      // and it cannot prove the click was on the link the page names.
+      if (message.kind === 'reader-scroll') {
+        onReaderGestureRef.current?.(
+          message.input === 'wheel'
+            ? { kind: 'wheel', deltaY: message.deltaY, zoom: false }
+            : { kind: 'touch-drag' }
+        )
+        return
+      }
+      // Require recent input in this focused frame; this blocks load-time opens but cannot prove the gesture named this link.
       const now = performance.now()
       if (
         window.document.activeElement !== frame ||
@@ -140,7 +140,7 @@ export function NativeChatVisualFrame({
         clearTimeout(deferred)
       }
     }
-  }, [built.channel, layout])
+  }, [built.channel])
 
   // A frame rebuilt for a new revision, or unmounted, owes no answer.
   useEffect(
@@ -163,10 +163,7 @@ export function NativeChatVisualFrame({
   }, [built.channel, theme])
 
   return (
-    <div
-      className={cn('w-full', layout === 'panel' && 'flex min-h-0 flex-1')}
-      style={layout === 'inline' ? { height } : undefined}
-    >
+    <div className="w-full" style={{ height }}>
       <iframe
         key={built.channel}
         ref={frameRef}

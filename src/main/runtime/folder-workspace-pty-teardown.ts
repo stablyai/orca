@@ -1,17 +1,14 @@
-import { killAllProcessesForWorktree } from './worktree-teardown'
+import { killAllProcessesForWorktree, type WorktreeTeardownRuntime } from './worktree-teardown'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
-import type { OrcaRuntimeService } from './orca-runtime'
+import { teardownStops } from './owned-session-teardown-policy'
 
 export type FolderWorkspacePtyTeardownDeps = {
-  runtime: OrcaRuntimeService
+  runtime: WorktreeTeardownRuntime
   getLocalProvider: () => IPtyProvider | null
   onPtyStopped: ((ptyId: string) => void) | null
 }
 
-/**
- * Best-effort PTY sweep for a folder workspace being removed. Never throws:
- * a stuck or unreachable host must not block forgetting the workspace.
- */
+/** Removal must proceed even when PTY teardown is stuck or its host is unreachable. */
 export async function teardownFolderWorkspacePtys(
   deps: FolderWorkspacePtyTeardownDeps,
   worktreeId: string,
@@ -27,9 +24,8 @@ export async function teardownFolderWorkspacePtys(
     ...(connectionId ? { resolvedConnectionId: connectionId } : {}),
     localProvider: ptyProvider,
     onPtyStopped: deps.onPtyStopped ?? undefined,
-    // A structured session is on no PTY surface, so the sweeps above leave it attached to a
-    // workspace this removal is about to forget. Closed best-effort, exactly like those PTYs.
-    closeStructuredSessions: true,
+    // PTY sweeps miss structured chats; close them too before forgetting the workspace.
+    closeStructuredSessions: teardownStops('folder-removal', 'structured-chat'),
     ...(connectionId ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
   }).catch((error) => {
     console.warn(`[worktree-teardown] failed for ${worktreeId}:`, error)

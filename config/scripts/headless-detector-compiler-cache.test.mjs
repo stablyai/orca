@@ -74,6 +74,7 @@ it('activates the compiler and workspace-policy parser and preserves import grap
     'node-server-change-scope',
     'node-server-test-paths',
     'node-server-qualification',
+    'node-server-native-compat-scope',
     'orcad-entry-build',
     'workspace-source-exports'
   ]) {
@@ -83,6 +84,10 @@ it('activates the compiler and workspace-policy parser and preserves import grap
       join(root, 'config', 'scripts', `${name}.mjs`)
     )
   }
+  cpSync(
+    new URL('../dark-build-switches.cjs', import.meta.url),
+    join(root, 'config', 'dark-build-switches.cjs')
+  )
   mkdirSync(join(root, 'src', 'shared'), { recursive: true })
   cpSync(
     new URL('../../src/shared/orcad-artifacts.ts', import.meta.url),
@@ -165,12 +170,14 @@ it.each(['modified', 'missing', 'extra', 'symlink', 'malformed'])(
 
 it('leaves existing dependencies alone and falls back on an absent archive', async () => {
   const { root, identity } = fixture()
-  rmSync(identity.path, { recursive: true })
-  expect((await activateCompilerCache({ root, identity })).available).toBe(false)
   mkdirSync(join(root, 'node_modules'))
   writeFileSync(join(root, 'node_modules', 'retained'), 'retained')
   expect((await activateCompilerCache({ root, identity })).available).toBe(false)
   expect(readFileSync(join(root, 'node_modules', 'retained'), 'utf8')).toBe('retained')
+  rmSync(join(root, 'node_modules'), { recursive: true })
+  rmSync(identity.path, { recursive: true })
+  expect((await activateCompilerCache({ root, identity })).available).toBe(false)
+  expect(existsSync(join(root, 'node_modules'))).toBe(false)
 })
 
 it('uses exact optional restores, seeds only main and retains full dependency fallback', () => {
@@ -195,9 +202,7 @@ it('uses exact optional restores, seeds only main and retains full dependency fa
   ).toBe(
     "steps.scope.outputs.graph_required == 'true' && steps.compiler.outputs.available != 'true'"
   )
-  for (const event of ['push', 'pull_request']) {
-    expect(workflow.on[event].paths).toContain('.github/actions/prepare-headless-compiler/**')
-  }
+  expect(workflow.on.pull_request.paths).toContain('.github/actions/prepare-headless-compiler/**')
   const warmer = parse(readFileSync('.github/workflows/ci-cache-warmup.yml', 'utf8'))
   const warmSteps = warmer.jobs.warm.steps
   expect(

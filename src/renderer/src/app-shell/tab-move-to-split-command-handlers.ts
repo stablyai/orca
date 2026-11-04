@@ -1,6 +1,6 @@
 import {
   moveTabToNewPaneColumn,
-  resolveActiveTabPaneColumnMoveTarget
+  resolveActiveTabPaneColumnMove
 } from '../components/tab-bar/tab-move-to-pane-column'
 import { useAppStore } from '../store'
 import { TAB_MOVE_TO_SPLIT_COMMANDS, type KeybindingActionId } from '../../../shared/keybindings'
@@ -18,8 +18,8 @@ export function createTabMoveToSplitHandlers(
           if (!available) {
             return false
           }
-          const target = resolveActiveTabPaneColumnMoveTarget(useAppStore.getState())
-          if (!target || !moveTabToNewPaneColumn({ target, direction })) {
+          const move = resolveActiveTabPaneColumnMove(useAppStore.getState())
+          if (!move || !moveTabToNewPaneColumn({ ...move, direction })) {
             return false
           }
           return claim(id, () => {})

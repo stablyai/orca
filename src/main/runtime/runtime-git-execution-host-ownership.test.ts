@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as GitRemoteModule from '../git/remote'
-import type * as GitStatusModule from '../git/status'
-import type { ResolvedRuntimeGitWorktree } from './orca-runtime-git'
+
+import type { ResolvedRuntimeGitWorktree } from './runtime-git-command-target'
 import { RuntimeGitCommands } from './orca-runtime-git'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 
@@ -12,9 +12,13 @@ const mocks = vi.hoisted(() => ({
   stageFile: vi.fn()
 }))
 
-vi.mock('../git/status', async () => ({
-  ...(await vi.importActual<typeof GitStatusModule>('../git/status')),
-  getStatus: mocks.getStatus,
+vi.mock('../git/source-control/status-read', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getStatus: mocks.getStatus
+}))
+
+vi.mock('../git/source-control/staging', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   stageFile: mocks.stageFile
 }))
 

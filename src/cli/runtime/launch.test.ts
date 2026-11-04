@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import {
   getServeUpdateHandoffPath,
@@ -24,6 +25,7 @@ vi.mock('child_process', () => ({
 }))
 
 import { launchOrcaApp, serveOrcaApp } from './launch'
+import { getExecutableAppArgs, stripElectronRunAsNode } from './orca-app-executable'
 
 class FakeChildProcess extends EventEmitter {
   stdout = new EventEmitter()
@@ -72,6 +74,7 @@ const INVALID_SSH_RECIPE_JSON = SSH_RECIPE_JSON.replace('/workspace/repo', 'rela
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 const PROFILE = resolve('/profiles/serve')
 const PIN_PROFILE = `--user-data-dir=${PROFILE}`
+const HOST_SERVE_OZONE_SWITCHES = headlessServeOzonePlatformSwitches(process.platform)
 
 function restoreEnv(key: string, value: string | undefined): void {
   if (value === undefined) {
@@ -108,7 +111,7 @@ describe('serveOrcaApp', () => {
     spawnMock.mockReset()
     spawnSyncMock.mockReset()
     process.env.ORCA_APP_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
-    // These cover Electron serve itself; the orcad default is in launch-serve-runtime.test.ts.
+    // Test Electron here; launch-serve-runtime.test.ts covers orcad selection.
     process.env.ORCA_SERVE_RUNTIME = 'electron'
     process.env.ORCA_USER_DATA_PATH = PROFILE
   })
@@ -439,7 +442,7 @@ describe('serveOrcaApp', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       '/Applications/Orca.app/Contents/MacOS/Orca',
-      [PIN_PROFILE, '--serve', '--serve-json'],
+      [PIN_PROFILE, '--serve', '--serve-json', ...HOST_SERVE_OZONE_SWITCHES],
       expect.objectContaining({
         cwd: resolve(__dirname, '../../..')
       })
@@ -479,7 +482,8 @@ describe('serveOrcaApp', () => {
         '6768',
         '--serve-pairing-address',
         '100.64.1.20',
-        '--serve-mobile-pairing'
+        '--serve-mobile-pairing',
+        ...HOST_SERVE_OZONE_SWITCHES
       ],
       expect.objectContaining({
         cwd: resolve(__dirname, '../../..')
@@ -513,12 +517,23 @@ describe('serveOrcaApp', () => {
         '--serve',
         '--serve-json',
         '--serve-port',
-        '6768'
+        '6768',
+        ...HOST_SERVE_OZONE_SWITCHES
       ],
       expect.objectContaining({
         cwd: resolve(__dirname, '../../..')
       })
     )
+  })
+
+  it("re-applies a direct launch's --no-sandbox to the Electron it starts, not to terminals", () => {
+    process.env.ORCA_ELECTRON_NO_SANDBOX = '1'
+    try {
+      expect(getExecutableAppArgs('/opt/Orca/orca-ide')).toEqual(['--no-sandbox'])
+      expect(stripElectronRunAsNode(process.env)).not.toHaveProperty('ORCA_ELECTRON_NO_SANDBOX')
+    } finally {
+      delete process.env.ORCA_ELECTRON_NO_SANDBOX
+    }
   })
 
   it.each([
@@ -564,7 +579,7 @@ describe('serveOrcaApp', () => {
         )
         expect(spawnMock).toHaveBeenCalledWith(
           executable,
-          [...expectedPrefix, PIN_PROFILE, '--serve', '--serve-json'],
+          [...expectedPrefix, PIN_PROFILE, '--serve', '--serve-json', '--ozone-platform=x11'],
           // Foreground serve must share POSIX job-control signals with its CLI supervisor.
           expect.objectContaining({ detached: false })
         )
@@ -606,7 +621,8 @@ describe('serveOrcaApp', () => {
         'wss://sandbox.example.com',
         '--serve-recipe-json',
         '--serve-project-root',
-        '/workspace/repo'
+        '/workspace/repo',
+        ...HOST_SERVE_OZONE_SWITCHES
       ],
       expect.objectContaining({
         cwd: resolve(__dirname, '../../..'),

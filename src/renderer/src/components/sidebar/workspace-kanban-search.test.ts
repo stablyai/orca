@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '@/lib/worktree-palette-query-bounds'
+import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '../../../../shared/palette-match/worktree-palette-query-bounds'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
@@ -88,8 +88,6 @@ describe('matchWorkspaceBoardWorktrees', () => {
   })
 
   it('treats regex metacharacters as literal text', () => {
-    // Why: matching is indexOf, never RegExp. This pins that, so swapping in a
-    // regex later fails here instead of silently changing what users can search.
     const worktrees = [
       worktree({ id: 'literal', displayName: 'feat.*fix' }),
       worktree({ id: 'would-match-as-regex', displayName: 'featANYfix' })
@@ -116,8 +114,6 @@ describe('matchWorkspaceBoardWorktrees', () => {
     expect(match(worktrees, 'x'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES + 1))).toBeNull()
   })
 
-  // STA-4343 closed: the documents map is keyed by host identity, so two workspaces sharing
-  // `repoId::path` across hosts each keep their own searchable document.
   it('separates two same-id host rows', () => {
     const local = worktree({ id: 'shared', branch: 'refs/heads/local-only' })
     const remote = worktree({
@@ -126,7 +122,6 @@ describe('matchWorkspaceBoardWorktrees', () => {
       branch: 'refs/heads/remote-only'
     })
 
-    // Each row matches on its OWN branch, and neither match leaks to the other host.
     expect(match([local, remote], 'local-only')).toEqual(identities(local))
     expect(match([local, remote], 'remote-only')).toEqual(identities(remote))
     expect(match([local], 'local-only')).toEqual(identities(local))

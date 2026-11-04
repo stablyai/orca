@@ -3,10 +3,8 @@ import type { Tab } from '../../../../shared/tab-types'
 /**
  * Stable view of the unified tab map for the activity pipeline.
  *
- * Why: the store rewrites the focused tab object (lastFocusedAt) on every focus, which would
- * rebuild every activity thread even though nothing the pipeline reads changed. Keep only the
- * tab kinds the pipeline consults and reuse prior tab objects when their relevant fields match,
- * so downstream identity-keyed caches keep hitting.
+ * Terminal tabs reuse prior objects across focus-only writes. Native chats keep current
+ * originals because the shared host-name projection uses those objects as keys.
  */
 export type ActivityTabProjection = Record<string, Tab[]>
 
@@ -46,7 +44,11 @@ export function projectActivityTabs(
     let reusable = prior !== undefined && prior.length === relevant.length
     const projected = relevant.map((tab, index) => {
       const priorTab = prior?.[index]
-      if (priorTab && activityTabFieldsEqual(priorTab, tab)) {
+      if (
+        priorTab &&
+        (priorTab === tab ||
+          (tab.contentType === 'terminal' && activityTabFieldsEqual(priorTab, tab)))
+      ) {
         return priorTab
       }
       reusable = false

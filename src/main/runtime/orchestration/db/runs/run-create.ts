@@ -4,8 +4,6 @@ import type { OrchestrationDb } from '../orchestration-db'
 import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
 import { mailboxAddressOf } from '../../orchestration-caller-identity'
 
-// ── Runs ──
-
 export function createRun(
   this: OrchestrationDb,
   params: {
@@ -24,7 +22,6 @@ export function createRun(
   const id = generateId('run')
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    this.unbindOtherRunsForCoordinator(coordinator)
     this.db
       .prepare(
         `INSERT INTO runs (

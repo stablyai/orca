@@ -1,4 +1,5 @@
 import type { ComposerModel } from './composer-model'
+import type { ComposerInitialTargetModel } from './initial-target-model'
 
 type ComposerInitialTargetStateInput = Pick<
   ComposerModel,
@@ -8,6 +9,7 @@ type ComposerInitialTargetStateInput = Pick<
   | 'initialProjectGroupId'
   | 'initialRepoId'
   | 'initialTaskSourceContext'
+  | 'initialWorkspaceTarget'
   | 'initialWorkspaceStatus'
   | 'newWorkspaceDraft'
   | 'persistDraft'
@@ -34,6 +36,7 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     initialProjectGroupId,
     initialRepoId,
     initialTaskSourceContext,
+    initialWorkspaceTarget,
     initialWorkspaceStatus,
     newWorkspaceDraft,
     persistDraft,
@@ -63,6 +66,7 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     draftProjectId,
     draftHostId,
     draftProjectHostSetupId,
+    initialWorkspaceTarget,
     initialTaskSourceContext
   })
 
@@ -84,6 +88,7 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     projectId: initialRunSeed.projectId,
     hostId: initialRunSeed.hostId,
     projectHostSetupId: initialRunSeed.projectHostSetupId,
+    projectHostSetupHostId: initialWorkspaceTarget ? initialRunSeed.hostId : null,
     focusedHostScope: workspaceHostScope,
     actionableHostIds
   })
@@ -91,7 +96,17 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
   const resolvedInitialRepoId =
     resolvedInitialWorkspaceTarget.status === 'ready'
       ? resolvedInitialWorkspaceTarget.target.repoId
-      : ''
+      : initialWorkspaceTarget
+        ? (draftRepoId ?? initialRepoId ?? '')
+        : ''
+
+  const [pendingInitialWorkspaceTarget, setPendingInitialWorkspaceTarget] = useState<
+    ComposerInitialTargetModel['initialRunSeed'] | null
+  >(
+    initialWorkspaceTarget && resolvedInitialWorkspaceTarget.status === 'unavailable'
+      ? initialRunSeed
+      : null
+  )
 
   const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)
 
@@ -102,6 +117,13 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
       ? resolvedInitialWorkspaceTarget.target.projectHostSetupId
       : null
   )
+
+  const [selectedProjectHostSetupOverrideHostId, setSelectedProjectHostSetupOverrideHostId] =
+    useState(
+      resolvedInitialWorkspaceTarget.status === 'ready'
+        ? resolvedInitialWorkspaceTarget.target.hostId
+        : null
+    )
 
   const initialFolderProjectGroupId = initialProjectGroupId ?? draftProjectGroupId
 
@@ -163,6 +185,8 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     draftHostId,
     draftProjectHostSetupId,
     initialRunSeed,
+    pendingInitialWorkspaceTarget,
+    setPendingInitialWorkspaceTarget,
     resolvedInitialWorkspaceStatus,
     resolvedInitialWorkspaceTarget,
     resolvedInitialRepoId,
@@ -170,6 +194,8 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     setInternalRepoId,
     selectedProjectHostSetupOverrideId,
     setSelectedProjectHostSetupOverrideId,
+    selectedProjectHostSetupOverrideHostId,
+    setSelectedProjectHostSetupOverrideHostId,
     initialFolderProjectGroupId,
     initialFolderProjectGroup,
     selectedProjectGroupId,

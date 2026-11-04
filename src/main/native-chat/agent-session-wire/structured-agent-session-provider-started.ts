@@ -1,34 +1,32 @@
-// The host's half of a provider child proving its start.
-//
-// A publish-first acquire hands the host a child that has answered nothing yet, so the record
-// keeps only the saved options the reservation carried, and the delivery loop hands it nothing.
-// This is where the host learns the start landed: the child turns `ready`, its startup attempt
-// ends, and the loop wakes to hand over what was queued meanwhile. Only once that handover is done
-// is what the child reports persisted, in a step of its own, so bookkeeping never sits between a
-// ready child and the user's first message; a failed write is reported, never thrown. Every report
-// is persisted only if no pick or later report came after its read (`option-revisions`).
-//
-// These run under the session's own serialized steps, which its close and sends wait on, so they
-// ask the provider nothing: the event carries what the child proved.
-
-import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
-import type {
-  StructuredAgentSessionOptionsReportedEvent,
-  StructuredAgentSessionOptionsSkippedEvent,
-  StructuredAgentSessionStartedEvent
-} from './structured-agent-session-adapter'
+import type { StructuredAgentSessionOptionsReportedEvent } from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
-import { nativeSessionOptionsFromReport } from './structured-agent-session-option-restoration'
 import {
   markProviderChildStarted,
   sameProviderChild
 } from './structured-agent-session-provider-child'
-import type { StructuredAgentSessionOptionRevisions } from './structured-agent-session-option-revisions'
-import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
+import {
+  saveStructuredAgentSessionListing,
+  saveStructuredAgentSessionStartReadbackListing
+} from './structured-agent-session-start-listing'
 import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
+import {
+  noteStructuredAgentSessionRuntimeOptions,
+  noteStructuredAgentSessionReportedOptions
+} from './structured-agent-session-ran-options'
+import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
+import { settleUnheldStructuredAgentSessionTurns } from './structured-agent-session-unheld-turns'
+import { AgentSessionStartFailure } from './structured-agent-session-start-failure'
+import {
+  applyRewindAtStart,
+  readRewindAtStart,
+  recordStartedHandle,
+  refusedStart,
+  type OpenedProvider
+} from './structured-agent-session-start-provider-answer'
+import type { StructuredRewindRecoveryEvidence } from './structured-rewind-recovery'
 
 export type StructuredAgentSessionProviderStartedContext = {
   deps: StructuredAgentSessionHostDeps
@@ -37,201 +35,199 @@ export type StructuredAgentSessionProviderStartedContext = {
   now: () => number
   publishStatus?: (sessionId: string) => void
   runtimeState: {
-    startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'ready'>
-    optionRevisions: Pick<
-      StructuredAgentSessionOptionRevisions,
-      'admitReport' | 'advance' | 'isNewest'
+    startupAttempts: Pick<
+      StructuredAgentSessionStartupAttempts,
+      'ready' | 'onClock' | 'readiness' | 'own' | 'disown' | 'failed' | 'released' | 'rootExit'
     >
+    acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   }
-  /** The barrier lifts: what was accepted while the child started is handed over now. Settles once
-   *  the loop has handed over all it can. */
+  /** Commits the child's buffered lifecycle events. */
+  flushLifecycle?: (sessionId: string) => Promise<unknown>
+  /** Release startup’s delivery barrier and drain all currently handable sends. */
   wakeDelivery: (sessionId: string) => Promise<void>
 }
 
-type ReportedOptions = Omit<StructuredAgentSessionOptionsReportedEvent, 'type'>
+/** A failure is the adapter's verdict on required provider work or on this child ending before it
+ *  was ready, or Orca refusing what the open answered; `stale` retires only this owner. */
+export type StructuredAgentSessionProviderStartedOutcome =
+  | 'ready'
+  | 'stale'
+  | AgentSessionStartFailure
 
 export async function settleStructuredAgentSessionProviderStarted(
   context: StructuredAgentSessionProviderStartedContext,
-  event: StructuredAgentSessionStartedEvent
-): Promise<void> {
-  // On arrival, before any wait: reports are admitted in the order the child made them.
-  const admitted = admitReportedOptions(context, event)
-  // Serialized behind the attach that published this child, so the lease it proved is committed.
-  const started = await context.serialize(event.sessionId, async () => {
-    const session = context.sessions.get(event.sessionId)
-    const child = { generation: event.acquisitionGeneration, fence: event.fence }
-    // A stale child's proof starts nothing: the barrier stays on the child the host holds.
-    if (!session || !markProviderChildStarted(session, child)) {
-      return null
-    }
-    context.runtimeState.startupAttempts.ready(event.sessionId, child)
-    const delivered = context.wakeDelivery(event.sessionId)
-    noteStructuredAgentSessionProviderStarted(context.deps, event.sessionId)
-    if (event.catalogListing) {
-      context.deps.modelCatalog?.recordLiveListing(event.sessionId, event.catalogListing)
-    }
-    context.publishStatus?.(event.sessionId)
-    return { delivered }
-  })
-  if (!started) {
-    return
+  event: OpenedProvider,
+  signal?: AbortSignal
+): Promise<StructuredAgentSessionProviderStartedOutcome> {
+  // Read provider state outside serialization so sends can still be accepted.
+  const rewind = await readRewindAtStart(context, event, signal)
+  // Required provider work's own verdict outranks this child's later death.
+  if (rewind instanceof AgentSessionStartFailure) {
+    return rewind
   }
-  // Not awaited: the adapter's next event may be what the handover itself waits on.
-  void started.delivered.then(() => persistReportedOptions(context, event, admitted))
+  const child = { generation: event.acquisitionGeneration, fence: event.fence }
+  // Only the adapter's word on this exact acquisition says it died; absence alone says nothing.
+  const ended = () =>
+    context.deps.adapter.startupEnding?.(event.sessionId, event.acquisitionGeneration)
+  const local: LocalSettlement = { started: false, fenced: false }
+  // A death the adapter reports ends the start without waiting on its bookkeeping below, but
+  // never once Orca's own handle or rewind write began: only that write's answer says whether
+  // the start may run again, and the contract guard bounds the wait for it.
+  const died = context.runtimeState.startupAttempts.rootExit(event.sessionId, child).then(() => {
+    const ending = local.started ? undefined : ended()
+    if (!ending) {
+      return new Promise<never>(() => {})
+    }
+    local.fenced = true
+    return ending
+  })
+  return Promise.race([died, settleReady(context, event, rewind, ended, local, signal)])
 }
 
-/** A proven start shows the agent's program exists and may mean a sign-in was fixed, so the
- *  catalog's held reason is re-checked by the next read's probe sooner; the probe decides. */
+/** `fenced`: the death decided the start, so its local writes never begin. */
+type LocalSettlement = { started: boolean; fenced: boolean }
+
+function settleReady(
+  context: StructuredAgentSessionProviderStartedContext,
+  event: OpenedProvider,
+  rewind: StructuredRewindRecoveryEvidence,
+  ended: () => AgentSessionStartFailure | undefined,
+  local: LocalSettlement,
+  signal?: AbortSignal
+): Promise<StructuredAgentSessionProviderStartedOutcome> {
+  const child = { generation: event.acquisitionGeneration, fence: event.fence }
+  // Restored history is committed and the child's own events drained before its turns are judged.
+  return Promise.resolve(context.flushLifecycle?.(event.sessionId)).then(() =>
+    // Follow attach publication so its proven lease has committed.
+    context.serialize(event.sessionId, async () => {
+      signal?.throwIfAborted()
+      const session = context.sessions.get(event.sessionId)
+      const ending = ended()
+      const current = session?.child && sameProviderChild(session.child, child) ? session : null
+      if (!current?.child) {
+        return ending ?? 'stale'
+      }
+      // Stale or expired startup cannot lift the current child’s barrier.
+      if (
+        current.child.phase !== 'starting' ||
+        !context.runtimeState.startupAttempts.onClock(event.sessionId, child)
+      ) {
+        return 'stale'
+      }
+      if (ending || local.fenced) {
+        return ending ?? 'stale'
+      }
+      local.started = true
+      if (
+        !(await recordStartedHandle(context, event)) ||
+        !(await applyRewindAtStart(context, event.sessionId, current, rewind))
+      ) {
+        return refusedStart()
+      }
+      signal?.throwIfAborted()
+      // The writes succeeded; a death meanwhile is still this start's outcome.
+      const endedWhileWriting = ended()
+      if (endedWhileWriting) {
+        return endedWhileWriting
+      }
+      if (
+        !context.runtimeState.startupAttempts.onClock(event.sessionId, child) ||
+        !markProviderChildStarted(current, child)
+      ) {
+        return 'stale'
+      }
+      await settleUnheldStructuredAgentSessionTurns(
+        current.journal,
+        event.sessionId,
+        child.fence,
+        event.acquisitionGeneration,
+        context.deps.adapter.liveTurnId?.(event.sessionId)
+      ).catch((error: unknown) =>
+        context.deps.logger.warn('settling turns the agent is not running failed', {
+          scope: 'unheld-turns',
+          sessionId: event.sessionId,
+          error
+        })
+      )
+      const sourceChild = current.child
+      context.runtimeState.startupAttempts.ready(event.sessionId, child)
+      noteStructuredAgentSessionRuntimeOptions(current.child, event.reportedOptions, true)
+      context.publishStatus?.(event.sessionId)
+      await noteStructuredAgentSessionReportedOptions(
+        context,
+        event.sessionId,
+        child.fence,
+        event.reportedOptions
+      )
+      void context.wakeDelivery(event.sessionId)
+      noteStructuredAgentSessionProviderStarted(
+        context.deps,
+        event.sessionId,
+        () =>
+          context.sessions.get(event.sessionId)?.child === sourceChild &&
+          sourceChild?.catalogSource?.() !== false
+      )
+      if (event.catalogListing) {
+        saveStructuredAgentSessionListing(
+          context,
+          event.sessionId,
+          event.catalogListing,
+          () =>
+            context.sessions.get(event.sessionId)?.child === sourceChild &&
+            sourceChild?.catalogSource?.() !== false
+        )
+      }
+      context.publishStatus?.(event.sessionId)
+      return 'ready' as const
+    })
+  )
+}
+
+/** Prompt catalog recheck after startup may prove installation or restored sign-in; the probe decides. */
 export function noteStructuredAgentSessionProviderStarted(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'modelCatalog'>,
-  sessionId: string
+  sessionId: string,
+  source?: () => boolean
 ): void {
   const record = deps.store.getRecord(sessionId)
   if (record) {
-    deps.modelCatalog?.providerStarted(record)
+    deps.modelCatalog?.providerStarted(record, source)
   }
 }
 
-/** What a ready child reports later, such as a read that came after its start: persisted as the
- *  start's report is, never ahead of a send. */
-export function settleStructuredAgentSessionOptionsReported(
+export async function settleStructuredAgentSessionOptionsReported(
   context: StructuredAgentSessionProviderStartedContext,
   event: StructuredAgentSessionOptionsReportedEvent
 ): Promise<void> {
-  const admitted = admitReportedOptions(context, event)
-  if (event.catalogListing) {
-    void saveStartReadbackListing(context, event, event.catalogListing)
+  const child = context.sessions.get(event.sessionId)?.child
+  if (
+    !child ||
+    !sameProviderChild(child, { generation: event.acquisitionGeneration, fence: event.fence })
+  ) {
+    return
   }
-  return persistReportedOptions(context, event, admitted)
-}
-
-/** A start's late readback (Claude's settings) says once what the config resolved. Serialized
- *  behind the attach that published the child, which may still be indexing it. */
-function saveStartReadbackListing(
-  context: StructuredAgentSessionProviderStartedContext,
-  event: ReportedOptions,
-  listing: AgentModelCatalogLiveListing
-): Promise<void> {
-  return context
-    .serialize(event.sessionId, async () => {
-      const child = context.sessions.get(event.sessionId)?.child
-      const reporter = { generation: event.acquisitionGeneration, fence: event.fence }
-      if (child && sameProviderChild(child, reporter)) {
-        context.deps.modelCatalog?.recordLiveListing(event.sessionId, listing)
-      }
+  noteStructuredAgentSessionRuntimeOptions(child, event.reportedOptions)
+  if (child.phase === 'starting') {
+    const readiness = context.runtimeState.startupAttempts.readiness(event.sessionId, {
+      generation: event.acquisitionGeneration,
+      fence: event.fence
     })
-    .catch((error: unknown) => {
-      context.deps.logger.warn('saving what a started provider resolved failed', {
-        scope: 'provider-started-catalog',
-        sessionId: event.sessionId,
-        error
-      })
-    })
-}
-
-function admitReportedOptions(
-  context: StructuredAgentSessionProviderStartedContext,
-  event: ReportedOptions
-): number | null {
-  return context.runtimeState.optionRevisions.admitReport(event.sessionId, event.optionRevision)
-}
-
-/** Non-fatal, and only for the child that reported, while its report is still the newest word: a
- *  pick or a later report since it was admitted is newer than what it read. */
-function persistReportedOptions(
-  context: StructuredAgentSessionProviderStartedContext,
-  event: ReportedOptions,
-  admitted: number | null
-): Promise<void> {
-  if (admitted === null) {
-    return Promise.resolve()
-  }
-  return context
-    .serialize(event.sessionId, async () => {
-      const child = context.sessions.get(event.sessionId)?.child
-      const record = context.deps.store.getRecord(event.sessionId)
-      if (
-        !child ||
-        !sameProviderChild(child, {
-          generation: event.acquisitionGeneration,
-          fence: event.fence
-        }) ||
-        !record ||
-        record.lease.runtimeFence !== event.fence ||
-        !agentSessionLeaseAdmitsWriter(record.lease) ||
-        !context.runtimeState.optionRevisions.isNewest(
-          event.sessionId,
-          event.optionRevision,
-          admitted
-        )
-      ) {
-        return
-      }
-      try {
-        await context.deps.store.replaceSessionOptions({
-          sessionId: event.sessionId,
-          fence: event.fence,
-          options: nativeSessionOptionsFromReport({
-            reported: event.reportedOptions,
-            restoreSkipped: event.restoreSkippedOptions,
-            ...(event.retiredOptions ? { retired: event.retiredOptions } : {}),
-            ...(record.options ? { priorOptions: record.options } : {})
-          }),
-          now: context.now()
-        })
-      } finally {
-        context.publishStatus?.(event.sessionId)
-      }
-    })
-    .catch((error: unknown) => {
-      context.deps.logger.warn('recording what a started provider reported failed', {
-        scope: 'provider-started-options',
-        sessionId: event.sessionId,
-        error
-      })
-    })
-}
-
-/** A running child showed saved options it cannot run: the record drops them, as a start that
- *  skipped them would, so the next start runs the provider's own. Reported, never thrown. */
-export function settleStructuredAgentSessionOptionsSkipped(
-  context: StructuredAgentSessionProviderStartedContext,
-  event: StructuredAgentSessionOptionsSkippedEvent
-): Promise<void> {
-  // A report read before the child showed this is out of date: it would write the value back.
-  context.runtimeState.optionRevisions.advance(event.sessionId)
-  return context.serialize(event.sessionId, async () => {
-    const { store } = context.deps
-    const record = store.getRecord(event.sessionId)
-    if (
-      !record?.options ||
-      record.lease.runtimeFence !== event.fence ||
-      !agentSessionLeaseAdmitsWriter(record.lease)
-    ) {
+    if (!readiness || (await readiness.wait()) !== 'ready') {
       return
     }
-    const options = { ...record.options }
-    for (const [key, value] of Object.entries(event.options)) {
-      // A pick made since the child launched is the user's, whatever the child showed.
-      if (options[key] === value) {
-        delete options[key]
-      }
-    }
-    try {
-      await store.replaceSessionOptions({
-        sessionId: event.sessionId,
-        fence: event.fence,
-        options,
-        now: context.now()
-      })
-    } catch (error) {
-      context.deps.logger.warn('dropping a saved option the provider cannot run failed', {
-        scope: 'provider-options-skipped',
-        sessionId: event.sessionId,
-        error
-      })
-    } finally {
-      context.publishStatus?.(event.sessionId)
-    }
-  })
+  }
+  if (context.sessions.get(event.sessionId)?.child !== child) {
+    return
+  }
+  context.publishStatus?.(event.sessionId)
+  await noteStructuredAgentSessionReportedOptions(
+    context,
+    event.sessionId,
+    event.fence,
+    event.reportedOptions
+  )
+  if (event.catalogListing) {
+    void saveStructuredAgentSessionStartReadbackListing(context, event, event.catalogListing)
+  }
+  return undefined
 }

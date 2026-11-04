@@ -6,14 +6,7 @@ export type GitLabJobTraceCheckDetailsStrings = {
   emptyTrace: string
 }
 
-/**
- * Whether GitLab can have a trace for this job yet.
- *
- * Jobs that never started (`created`/`pending` -> queued) and jobs waiting on a human
- * (`manual` -> neutral) or bypassed (`skipped`) have no trace, so skip the round trip.
- * Other jobs may still lack a log (canceled before start, erased); main maps that 404
- * to an empty trace rather than an error.
- */
+/** Skip never-started queued, manual/neutral and skipped jobs; canceled/erased logs may still 404, which main maps to empty trace. */
 export function gitLabJobCanHaveTrace(check: PRCheckDetail): boolean {
   if (check.status === 'queued') {
     return false
@@ -21,24 +14,17 @@ export function gitLabJobCanHaveTrace(check: PRCheckDetail): boolean {
   return check.conclusion !== 'neutral' && check.conclusion !== 'skipped'
 }
 
-/**
- * Adapt a GitLab job trace to the provider-neutral check-details shape the Checks
- * panel and the full-details tab already render. GitLab exposes one flat trace per
- * job rather than GitHub's step/annotation breakdown, so it lands in a single job's
- * `logTail`.
- */
+/** Adapt GitLab’s flat trace into one job logTail in the existing provider-neutral check-details shape. */
 export function gitLabJobTraceToCheckRunDetails(
   check: PRCheckDetail,
   trace: string,
   strings: GitLabJobTraceCheckDetailsStrings
 ): PRCheckRunDetails {
-  // Re-slice defensively: an older remote runtime returns the raw trace because it
-  // does not understand the `logExcerpt` request flag.
+  // Older runtimes ignore logExcerpt and return raw traces; bound them again defensively.
   const logTail = gitLabJobTraceToLogExcerpt(trace)
   return {
     name: check.name,
-    // Why: copying the row's own state keeps the panel's status/conclusion cache
-    // invalidation from evicting this entry on every poll tick.
+    // Retain row state so status/conclusion cache invalidation does not evict this entry every poll.
     status: check.status,
     conclusion: check.conclusion,
     url: check.url,
@@ -46,8 +32,7 @@ export function gitLabJobTraceToCheckRunDetails(
     startedAt: null,
     completedAt: null,
     title: null,
-    // Why: a job with no log still needs a distinct explanation, otherwise it falls
-    // back to the generic "no inline details" text this feature exists to remove.
+    // Explain missing logs instead of falling back to generic no-inline-details copy.
     summary: logTail ? null : strings.emptyTrace,
     text: null,
     annotations: [],

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './worktree-list/grouping/build-rows'
-import { PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
+import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
 import { repo, worktree, repoMap, makeDetectedWorktree } from './worktree-list-groups-test-fixtures'
 import type { Repo } from '../../../../shared/repo-types'
 

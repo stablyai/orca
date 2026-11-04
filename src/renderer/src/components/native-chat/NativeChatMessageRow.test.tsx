@@ -1,12 +1,35 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
-import { TooltipProvider } from '@/components/ui/tooltip'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
 
 const confirm = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
@@ -25,20 +48,18 @@ function renderMessage(
   rewind?: NativeChatRewindSurface
 ) {
   return render(
-    <TooltipProvider>
-      <MessageRow
-        message={{
-          id: 'message',
-          role,
-          timestamp,
-          source: 'transcript',
-          blocks: [{ type: 'text', text: 'Message text' }]
-        }}
-        expandSignal={false}
-        onScrollMessageToTop={vi.fn()}
-        rewind={rewind}
-      />
-    </TooltipProvider>
+    <MessageRow
+      message={{
+        id: 'message',
+        role,
+        timestamp,
+        source: 'transcript',
+        blocks: [{ type: 'text', text: 'Message text' }]
+      }}
+      expandSignal={false}
+      onScrollMessageToTop={vi.fn()}
+      rewind={rewind}
+    />
   )
 }
 
@@ -100,24 +121,22 @@ describe('MessageRow control visibility', () => {
     Object.assign(window, { api: { ui: { writeClipboardText } } })
 
     render(
-      <TooltipProvider>
-        <MessageRow
-          message={{
-            id: 'message',
-            role: 'assistant',
-            timestamp: 0,
-            source: 'transcript',
-            blocks: [
-              {
-                type: 'text',
-                text: 'Here it is.\n\n::orca-visual{file="usage.html" title="Usage"}\n\nDone.'
-              }
-            ]
-          }}
-          expandSignal={false}
-          onScrollMessageToTop={vi.fn()}
-        />
-      </TooltipProvider>
+      <MessageRow
+        message={{
+          id: 'message',
+          role: 'assistant',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [
+            {
+              type: 'text',
+              text: 'Here it is.\n\n::orca-visual{file="usage.html" title="Usage"}\n\nDone.'
+            }
+          ]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+      />
     )
     fireEvent.click(screen.getByRole('button', { name: 'Copy message' }))
 
@@ -164,21 +183,19 @@ describe('MessageRow control visibility', () => {
 
   it('holds the agent controls back until the turn stops working', () => {
     const row = (activeTurnIsWorking: boolean) => (
-      <TooltipProvider>
-        <MessageRow
-          message={{
-            id: 'message',
-            role: 'assistant',
-            timestamp: 0,
-            source: 'transcript',
-            blocks: [{ type: 'text', text: 'Message text' }]
-          }}
-          expandSignal={false}
-          activeTurnIsWorking={activeTurnIsWorking}
-          trailingRun
-          onScrollMessageToTop={vi.fn()}
-        />
-      </TooltipProvider>
+      <MessageRow
+        message={{
+          id: 'message',
+          role: 'assistant',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'Message text' }]
+        }}
+        expandSignal={false}
+        activeTurnIsWorking={activeTurnIsWorking}
+        trailingRun
+        onScrollMessageToTop={vi.fn()}
+      />
     )
     const { rerender } = render(row(true))
     expect(screen.getByText('Message text')).toBeInTheDocument()
@@ -237,6 +254,71 @@ describe('MessageRow send mode', () => {
 })
 
 describe('what a user message says about its delivery', () => {
+  function RecordedMessage({ submission }: { submission: AgentJournalSubmission }) {
+    const notices = useStructuredAgentSessionDeliveryNotices({
+      pending: [],
+      submissions: [submission],
+      journalItems: [],
+      agentName: 'Codex',
+      startFailures: []
+    })
+    const id = agentJournalSubmissionKey(submission.clientMessageId)
+    return (
+      <MessageRow
+        message={{
+          id,
+          role: 'user',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'Ignore failures outside this branch.' }]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+        deliveryNotice={notices.get(id)}
+      />
+    )
+  }
+
+  it.each(['accepted', 'rejected', 'unknown'] as const)(
+    'keeps a recorded steer Sending through handoff until it becomes %s',
+    (dispatchState) => {
+      const held: AgentJournalSubmission = {
+        clientMessageId: 'steer',
+        fence: 1,
+        payloadFingerprint: 'steer',
+        dispatchState: 'pending',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: null,
+        handoverRecorded: true
+      }
+      const { rerender } = render(<RecordedMessage submission={held} />)
+      expect(screen.getByText('Sending…')).toBeInTheDocument()
+      expect(screen.queryByRole('time')).toBeNull()
+
+      const handedOver = { ...held, handedOverAt: 2 }
+      rerender(<RecordedMessage submission={handedOver} />)
+      expect(screen.getByText('Sending…')).toBeInTheDocument()
+
+      rerender(
+        <RecordedMessage
+          submission={{
+            ...handedOver,
+            dispatchState,
+            resolvedAt: 3,
+            reason: dispatchState === 'rejected' ? 'Codex refused the message.' : null
+          }}
+        />
+      )
+      expect(screen.queryByText('Sending…')).toBeNull()
+      expect(screen.getByRole('time')).toBeInTheDocument()
+      if (dispatchState === 'rejected') {
+        expect(screen.getByText('Codex refused the message.')).toBeInTheDocument()
+      }
+    }
+  )
+
   function renderUser(deliveryNotice?: NativeChatDeliveryNotice) {
     return render(
       <MessageRow
@@ -266,8 +348,7 @@ describe('what a user message says about its delivery', () => {
     expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull()
   })
 
-  // Muted, in the time's place, and shown without hover: a message nothing confirmed yet never
-  // looks like one that went through. Copy keeps its hover reveal, and the row its height.
+  // Delivery status replaces the timestamp without changing row height or copy-button reveal.
   it('says quietly that it is still sending in place of its time, with no Retry', () => {
     renderUser({ sending: true })
 

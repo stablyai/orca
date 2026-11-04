@@ -3,22 +3,39 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import {
-  parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
-} from './session-scanner-parse-cache'
-import { getSessionParseCacheEntry } from './session-parse-cache-store'
+  createSessionParseStats,
+  parseAgentSessionFileCached
+} from './parse-cache/session-scanner-parse-cache'
+import {
+  resetSessionParseCacheForTests,
+  getSessionParseCacheEntry
+} from './parse-cache/session-parse-cache-store'
+
+import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
+import {
+  codexFixture,
+  codexWorkerFixtureLines
+} from './scanners/codex/session-scanner-codex-fixtures'
 import { scanAiVaultSessions } from './session-scanner'
-import { isolatedScanRoots } from './session-scanner-test-fixtures'
-import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './session-transcript-record-budget'
+import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
+import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './transcripts/session-transcript-record-budget'
+import {
+  flushSessionParseCachePersist,
+  initSessionParseCachePersistence,
+  resetSessionParseCachePersistenceForTests
+} from './parse-cache/session-parse-cache-persistence'
+import { kiroTranscriptPathForMetadata } from '../../shared/ai-vault-session-log-resource'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 const SESSION_FILE = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl'
+const OMP_STEM = '2026-05-01T10-00-00-000Z_0199a000-0000-7000-8000-000000000002'
 // One record past the budget, terminated separately so tests control the newline.
 const OVERSIZED = Buffer.alloc(MAX_SESSION_TRANSCRIPT_RECORD_BYTES + 1, 'x')
 
 let tempRoots: string[] = []
 
 afterEach(async () => {
+  resetSessionParseCachePersistenceForTests()
   resetSessionParseCacheForTests()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
@@ -57,9 +74,6 @@ function resumeOf(path: string) {
   return getSessionParseCacheEntry(path)?.resume
 }
 
-// Why: the resume cursor counts bytes, so a record dropped mid-file has to leave
-// it on the byte after that record's newline. Off by one and every later
-// incremental scan folds a half-line into the session.
 it('keeps a byte-exact resume cursor across a skipped record', async () => {
   const root = await tempRoot('orca-record-budget-')
   const path = join(root, SESSION_FILE)
@@ -72,8 +86,7 @@ it('keeps a byte-exact resume cursor across a skipped record', async () => {
   expect(await parse(path)).toEqual(['first'])
   expect(resumeOf(path)?.byteOffset).toBe(Buffer.byteLength(first))
 
-  // An append that ends mid-oversized-record: the good record before it lands,
-  // the cursor stays at the unterminated record's start because it may still grow.
+  // Keep the cursor at the growing oversized record while retaining earlier complete records.
   await appendFile(path, second)
   await appendFile(path, OVERSIZED)
   expect(await parse(path)).toEqual(['first', 'second'])
@@ -82,20 +95,17 @@ it('keeps a byte-exact resume cursor across a skipped record', async () => {
     { byteOffset: Buffer.byteLength(first + second), approximateBytes: OVERSIZED.length }
   ])
 
-  // Terminate the oversized record and append a good one after it. Resuming
-  // mid-line or one byte off would corrupt or duplicate a record here.
+  // A misaligned resume cursor would corrupt or duplicate the first record after this skipped span.
   await appendFile(path, `\n${third}`)
   expect(await parse(path)).toEqual(['first', 'second', 'third'])
   const size = (await stat(path)).size
   expect(resumeOf(path)?.byteOffset).toBe(size)
   expect(size).toBe(Buffer.byteLength(first + second + third) + OVERSIZED.length + 1)
-  // Same start offset as the unterminated pass, so the merge replaces rather
-  // than double-reports the record.
+  // Match the earlier offset so the skip diagnostic replaces rather than duplicates the partial observation.
   expect(resumeOf(path)?.skippedRecords).toEqual([
     { byteOffset: Buffer.byteLength(first + second), approximateBytes: OVERSIZED.length }
   ])
 
-  // One more append proves the cursor is still aligned after all of that.
   await appendFile(path, record('fourth'))
   expect(await parse(path)).toEqual(['first', 'second', 'third', 'fourth'])
   expect(resumeOf(path)?.byteOffset).toBe((await stat(path)).size)
@@ -115,33 +125,180 @@ it('folds a cold read around a mid-file oversized record', async () => {
   expect(resumeOf(path)?.byteOffset).toBe((await stat(path)).size)
 })
 
-// Why: before this, the throw aborted the fold and the session vanished from
-// the history list and from search entirely.
-it('still lists a session with an oversized record and reports the loss', async () => {
+it('lists a recovered session without an issue on fresh and cached scans', async () => {
   const root = await tempRoot('orca-record-budget-scan-')
   const roots = isolatedScanRoots(root)
-  const dir = join(roots.claudeProjectsDir, 'project')
-  const path = join(dir, SESSION_FILE)
-  resetSessionParseCacheForTests()
+  const fixture = codexFixture()
+  const dir = roots.codexSessionsDir
+  const path = join(dir, fixture.fileName)
 
   await mkdir(dir, { recursive: true })
-  await writeFile(path, record('kept before'))
+  await writeFile(path, `${fixture.seedLines.join('\n')}\n`)
+  await appendFile(path, '{"type":"compacted","payload":{"message":"')
   await appendFile(path, OVERSIZED)
-  await appendFile(path, `\n${record('kept after')}`)
+  await appendFile(path, `"}}\n${fixture.appendLines.join('\n')}\n`)
 
-  const result = await scanAiVaultSessions(roots)
-  const session = result.sessions.find((entry) => entry.filePath === path)
-  expect(session?.previewMessages.map((message) => message.text)).toEqual([
-    'kept before',
-    'kept after'
+  for (let scan = 0; scan < 2; scan++) {
+    const result = await scanAiVaultSessions(roots)
+    const session = result.sessions.find((entry) => entry.filePath === path)
+    expect(session?.previewMessages.map((message) => message.text)).toEqual([
+      'codex seed question',
+      'codex seed answer',
+      'codex follow-up',
+      'codex incremental answer'
+    ])
+    expect(result.issues).toEqual([])
+  }
+})
+
+it.each(['claude', 'kiro'] as const)(
+  'retains %s unreadable errors across restart and clears them on recovery or replacement',
+  async (agent) => {
+    const root = await tempRoot('orca-record-budget-unreadable-')
+    const dir = join(root, agent)
+    const roots = {
+      ...isolatedScanRoots(root),
+      ...(agent === 'claude' ? { claudeProjectsDir: dir } : { kiroSessionsDir: dir })
+    }
+    const cacheFile = join(root, 'session-parse-cache.json')
+    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: 'test' })
+    const path = join(
+      dir,
+      agent === 'claude' ? SESSION_FILE : SESSION_FILE.replace('.jsonl', '.json')
+    )
+    const transcript = agent === 'kiro' ? kiroTranscriptPathForMetadata(path) : path
+    const emptyPath = join(
+      dir,
+      `bbbbbbbb-cccc-4ddd-8eee-ffffffffffff.${agent === 'kiro' ? 'json' : 'jsonl'}`
+    )
+    const conversationalRecord = (text: string) =>
+      agent === 'claude'
+        ? record(text)
+        : `${JSON.stringify({
+            version: 'v1',
+            kind: 'Prompt',
+            data: { content: [{ kind: 'text', data: text }] }
+          })}\n`
+    const restart = async () => {
+      await flushSessionParseCachePersist()
+      resetSessionParseCacheForTests()
+      resetSessionParseCachePersistenceForTests()
+      initSessionParseCachePersistence({ filePath: cacheFile, appVersion: 'test' })
+    }
+
+    await mkdir(dir, { recursive: true })
+    if (agent === 'kiro') {
+      await writeFile(path, '{}')
+    }
+    await writeFile(transcript, conversationalRecord(OVERSIZED.toString()))
+    await writeFile(emptyPath, agent === 'kiro' ? '{}' : '')
+
+    const result = await scanAiVaultSessions(roots)
+    expect(result.sessions.find((entry) => entry.filePath === path)?.messageCount).toBe(0)
+    expect(result.sessions.find((entry) => entry.filePath === emptyPath)?.messageCount).toBe(0)
+    expect(result.issues).toEqual([
+      {
+        executionHostId: 'local',
+        agent,
+        path,
+        ...aiVaultScanIssueText('transcriptTooLarge', {
+          params: { label: agent === 'claude' ? 'Claude' : 'Kiro' }
+        })
+      }
+    ])
+    const unchanged = await candidate(path)
+    unchanged.agent = agent
+    unchanged.file.sidecar = getSessionParseCacheEntry(path)?.sidecar
+    await restart()
+    const stats = createSessionParseStats()
+    await parseAgentSessionFileCached(unchanged, process.platform, stats)
+    expect(stats).toMatchObject({ reused: 1, fullParses: 0, incremental: 0, bytesRead: 0 })
+    expect((await scanAiVaultSessions(roots)).issues).toEqual(result.issues)
+
+    await appendFile(transcript, conversationalRecord('recovered question'))
+    const recovered = await scanAiVaultSessions(roots)
+    expect(
+      recovered.sessions
+        .find((entry) => entry.filePath === path)
+        ?.previewMessages.map((message) => message.text)
+    ).toEqual(['recovered question'])
+    expect(recovered.issues).toEqual([])
+    await restart()
+    expect((await scanAiVaultSessions(roots)).issues).toEqual([])
+
+    await writeFile(transcript, conversationalRecord(OVERSIZED.toString()))
+    expect((await scanAiVaultSessions(roots)).issues).toEqual(result.issues)
+    await writeFile(transcript, '')
+    expect((await scanAiVaultSessions(roots)).issues).toEqual([])
+    await restart()
+    expect((await scanAiVaultSessions(roots)).issues).toEqual([])
+  }
+)
+
+it('names the writer, not the discovery root, of a skipped-only OMP transcript under Pi', async () => {
+  const root = await tempRoot('orca-record-budget-omp-')
+  const roots = isolatedScanRoots(root)
+  const path = join(roots.piSessionsDir, '-repo-app', `${OMP_STEM}.jsonl`)
+
+  // Pi 0.84 / OMP 18.12 shapes (session-scanner-pi-omp-shared-root.test.ts): the title slot and runtime stamp mark OMP.
+  await writeJsonlFile(path, [
+    {
+      type: 'title',
+      v: 1,
+      title: 'OMP named chat',
+      source: 'user',
+      updatedAt: '2026-05-01T10:00:02.000Z'
+    },
+    {
+      type: 'session',
+      version: 3,
+      id: '0199a000-0000-7000-8000-000000000002',
+      timestamp: '2026-05-01T10:00:00.000Z',
+      cwd: '/repo/app'
+    },
+    {
+      type: 'model_change',
+      id: 'b1',
+      parentId: null,
+      timestamp: '2026-05-01T10:00:00.100Z',
+      model: 'anthropic/claude-sonnet-4-5',
+      runtime: { version: '18.12.2' }
+    }
   ])
+  await appendFile(
+    path,
+    `${JSON.stringify({
+      type: 'message',
+      id: 'b2',
+      parentId: 'b1',
+      timestamp: '2026-05-01T10:00:01.000Z',
+      message: { role: 'user', content: [{ type: 'text', text: OVERSIZED.toString() }] }
+    })}\n`
+  )
+
+  const result = await scanAiVaultSessions({ ...roots, platform: 'linux' })
+  expect(result.sessions.find((entry) => entry.filePath === path)?.agent).toBe('omp')
   expect(result.issues).toEqual([
     {
       executionHostId: 'local',
-      agent: 'claude',
-      kind: 'notice',
+      agent: 'pi',
       path,
-      message: expect.stringContaining('Skipped 1 oversized transcript record')
+      ...aiVaultScanIssueText('transcriptTooLarge', { params: { label: 'OMP' } })
     }
   ])
+})
+
+it('keeps a non-user Codex transcript out of the list and issues after a skipped record', async () => {
+  const root = await tempRoot('orca-record-budget-worker-')
+  const roots = isolatedScanRoots(root)
+  const dir = roots.codexSessionsDir
+  const path = join(dir, codexFixture().fileName)
+
+  await mkdir(dir, { recursive: true })
+  await writeFile(path, OVERSIZED)
+  await appendFile(path, `\n${codexWorkerFixtureLines().join('\n')}\n`)
+
+  const result = await scanAiVaultSessions(roots)
+  expect(result.sessions.find((entry) => entry.filePath === path)).toBeUndefined()
+  expect(result.issues).toEqual([])
 })

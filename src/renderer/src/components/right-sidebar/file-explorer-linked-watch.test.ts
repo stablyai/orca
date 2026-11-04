@@ -124,9 +124,7 @@ describe('linked-directory watcher invalidation', () => {
       refreshTree,
       refreshDir: async () => undefined,
       isCoveredByFullRefresh: () => true,
-      dirConcurrency: 4,
-      trailingMs: 0,
-      maxWaitMs: 0
+      dirConcurrency: 4
     })
     f.refreshTree.mockImplementation(scheduler.requestFullRefresh)
     for (let i = 0; i < 100; i++) {

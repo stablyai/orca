@@ -22,6 +22,7 @@ vi.mock('../../../agent-hooks/wsl-hook-relay-manager', () => ({
     ensureForDistro: vi.fn(),
     getGuestEndpointFilePath: () => '/guest/endpoint.json',
     getOpenCodeOverlayDir: () => fixture.guestOverlay,
+    getClaudeAgentView: () => null,
     getGuestAgentPath: () => null
   }
 }))
@@ -210,6 +211,7 @@ describe('OpenCode installation uses the current enabled agents', () => {
       (agent) => {
         for (const selection of [
           { launchCommand: `${agent} --session fixture` },
+          { launchCommand: `sleep 30 && ${agent} --session fixture` },
           { launchAgent: agent }
         ]) {
           const env = buildPtyHostEnv(
@@ -467,9 +469,7 @@ it.each([true, false])(
   }
 )
 
-// Why: pre-1.4.209 panes exported Orca's retired <userData>/opencode-hooks/shared dir. OpenCode 2
-// treats OPENCODE_CONFIG_DIR as the only config dir, so inheriting it loaded a stale plugin and hid
-// the user's global config.
+// Retired shared overlays can hide user config and load stale plugins in OpenCode 2; clear inherited copies.
 describe.each([
   { name: 'marked', marked: true },
   { name: 'unmarked', marked: false }
