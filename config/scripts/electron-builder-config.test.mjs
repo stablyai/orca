@@ -136,6 +136,16 @@ describe('electron-builder config', () => {
     }
   })
 
+  // macOS 26 ignored Clear/Tinted/Dark icon styles because only the legacy .icns shipped (#16495).
+  it('ships the Icon Composer catalog under the bundle icon name on macOS', () => {
+    expect(electronBuilderConfig.mac.extendInfo.CFBundleIconName).toBe('icon')
+    expect(electronBuilderConfig.mac.extraResources).toContainEqual({
+      from: 'resources/build/Assets.car',
+      to: 'Assets.car'
+    })
+    expect(existsSync(join(REPO_ROOT, 'resources/build/Assets.car'))).toBe(true)
+  })
+
   // Bundled agent-browser answered "No skills found" because only its binary shipped (#17705).
   const hostBuilderPlatform = { darwin: 'mac', linux: 'linux', win32: 'win' }[process.platform]
   it.runIf(hostBuilderPlatform)(
