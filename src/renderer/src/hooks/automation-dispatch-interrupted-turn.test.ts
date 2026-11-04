@@ -16,7 +16,9 @@ const finalizeTerminalOwnership = vi.fn<AutomationTerminalOwnership['finalize']>
 async function createCompletion() {
   const { createAutomationDispatchCompletion } = await import('./automation-dispatch-completion')
   return createAutomationDispatchCompletion({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: completion reads only the run id.
     run: { id: 'run-1' } as never,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: completion reads only id and displayName.
     worktree: { id: 'wt-1', displayName: 'Automation worktree' } as never,
     precheckResult: null,
     markDispatchResult,
