@@ -13,6 +13,7 @@ import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
+import { useTaskProviderConnections } from '@/components/feature-wall/use-integration-connection-status'
 import { translate } from '@/i18n/i18n'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
@@ -71,8 +72,9 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     localPreflightContextKey(getLocalPreflightContext(s))
   )
   const linearStatus = useAppStore((s) => s.linearStatus)
-  const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
+  const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const settings = useAppStore((s) => s.settings)
   const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
@@ -81,19 +83,22 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     [rawVisibleTaskProviders]
   )
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
+  const taskProviderConnections = useTaskProviderConnections()
   const visibleTaskProviders = React.useMemo(
     () =>
       restoreAvailableDefaultTaskProvider(
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearStatus.connected === true
+          linearConnected: linearStatus.connected === true,
+          connected: taskProviderConnections
         },
         defaultTaskSource
       ),
     [
       defaultTaskSource,
       linearStatus.connected,
+      taskProviderConnections,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,
       preflightStatus?.glab?.installed
@@ -108,14 +113,22 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     if (!preflightStatusChecked || !preflightStatusCurrent) {
       void refreshPreflightStatus()
     }
-    if (!linearStatusChecked) {
+    if (taskProviderConnections.linear === undefined) {
       void checkLinearConnection()
     }
+    // Why: Jira hides once its status settles as disconnected; without a check its icon lingers.
+    if (taskProviderConnections.jira === undefined) {
+      void checkJiraConnection()
+    }
   }, [
+    checkJiraConnection,
     checkLinearConnection,
-    linearStatusChecked,
     preflightStatusChecked,
     preflightStatusCurrent,
+    // Why: a runtime switch drops pending checks, leaving both statuses undefined.
+    settings,
+    taskProviderConnections.jira,
+    taskProviderConnections.linear,
     refreshPreflightStatus
   ])
 
@@ -184,7 +197,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
             </span>
           </button>
           <span className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1 can-hover:pointer-events-none can-hover:opacity-0 can-hover:group-hover:pointer-events-auto can-hover:group-hover:opacity-100 can-hover:group-focus-within:pointer-events-auto can-hover:group-focus-within:opacity-100">
-            {visibleTaskProviders.includes('github') ? (
+            {visibleTaskProviders.includes('github') && taskProviderConnections.github !== false ? (
               <TaskProviderShortcut
                 label={translate(
                   'auto.components.sidebar.SidebarNav.0ccba862b8',

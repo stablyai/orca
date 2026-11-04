@@ -1,3 +1,7 @@
+import { useShallow } from 'zustand/react/shallow'
+import { selectTaskProviderConnections } from '@/store/task-provider-connections'
+import type { TaskProviderConnections } from '../../../../shared/task-providers'
+import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '@/store'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
@@ -232,4 +236,9 @@ export function useIntegrationConnectionStatus(): IntegrationConnectionStatus {
     jiraStatusContextKey,
     providerRuntimeContextKey
   })
+}
+
+/** Omit `repos` when no repo selection is in view; every git repo then counts. */
+export function useTaskProviderConnections(repos?: readonly Repo[]): TaskProviderConnections {
+  return useAppStore(useShallow((s) => selectTaskProviderConnections(s, repos)))
 }
