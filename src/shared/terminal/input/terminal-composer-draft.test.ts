@@ -128,6 +128,42 @@ describe('detectTerminalComposerDraft', () => {
     expect(detectTerminalComposerDraft(context)).toBeNull()
   })
 
+  it('does not read a dim ghost suggestion as the draft (#38015)', () => {
+    // Claude draws its next-prompt suggestion as dim text after the caret; only
+    // the raw slice sees it. A draft verdict here holds orchestration delivery
+    // until the user types or the input-hold cap passes.
+    const ghost = {
+      rows: ['❯'],
+      typedRows: ['❯'],
+      promptGlyphBoldRows: [false],
+      rowsBelow: ['────────'],
+      typedRowsBelow: ['────────'],
+      beforeCursor: '❯',
+      afterCursor: '',
+      rawAfterCursor: ' Try committing the staged changes',
+      cursorHidden: false,
+      cursorViewportRow: 4
+    }
+    expect(detectTerminalComposerDraft(ghost)).toBeNull()
+  })
+
+  it('still reads a wrapped draft whose only undimmed text sits below the caret', () => {
+    const wrapped = {
+      rows: ['❯ fix the'],
+      typedRows: ['❯ fix the'],
+      promptGlyphBoldRows: [false],
+      rowsBelow: ['failing test', '────────'],
+      typedRowsBelow: ['failing test', '────────'],
+      rowsBelowWrapped: [true, false],
+      beforeCursor: '❯ fix the',
+      afterCursor: '',
+      rawAfterCursor: '',
+      cursorHidden: false,
+      cursorViewportRow: 4
+    }
+    expect(detectTerminalComposerDraft(wrapped)?.text).toBe('fix thefailing test')
+  })
+
   it('keeps a typed draft whose stock placeholder is still rendered to its right', () => {
     // Repaints can leave the placeholder beside typed text; do not mask that user draft.
     const context = {

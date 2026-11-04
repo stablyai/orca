@@ -157,7 +157,20 @@ function detectTerminalComposer(
   }
   const cursorIndex = context.rows.length - 1
   const codexFooterIndex = findCodexFooterIndex(context)
-  let afterCursor = typedOnly ? context.afterCursor : context.afterCursor || context.rawAfterCursor
+  // Why the raw fallback only when undimmed text is empty everywhere: an agent's dim suggestion
+  // text after the caret (Claude's ghost prompt) is not a draft. Falling back whenever the
+  // undimmed-after-caret slice is empty would read that suggestion as the user's input and hold
+  // delivery until the cap (#38015). Undimmed text below the caret still proves a wrapped draft.
+  const hasUndimmedAfterCursor = context.afterCursor.trim().length > 0
+  const rawFallbackEligible =
+    !typedOnly &&
+    !hasUndimmedAfterCursor &&
+    (context.afterCursor.trim().length === 0 || context.typedRowsBelow.some((row) => row.trim()))
+  let afterCursor = typedOnly
+    ? context.afterCursor
+    : hasUndimmedAfterCursor || rawFallbackEligible
+      ? context.afterCursor || context.rawAfterCursor
+      : context.afterCursor
   let continuationRows = composerContinuationRows(context, afterCursor, codexFooterIndex, typedOnly)
   // Why: the continuation walk stops at the row that would close the frame; typed-only walks also
   // stop at dim suggestion rows, which still sit inside the frame.
