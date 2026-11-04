@@ -47,7 +47,13 @@ import { mobileAgentChildRowName, mobileAgentChildRowText } from '../../mobile-a
 
 type TaskKind = AgentSessionBackgroundTask['kind']
 
-function KindIcon({ kind, size }: { kind: TaskKind; size: number }): React.JSX.Element {
+export function BackgroundTaskKindIcon({
+  kind,
+  size
+}: {
+  kind: TaskKind
+  size: number
+}): React.JSX.Element {
   useMobileColorScheme()
   const props = { size, color: kindIconColor(kind), strokeWidth: 2 }
   switch (kind) {
@@ -95,7 +101,7 @@ function TaskRow({
   return (
     <>
       <View testID="background-task-row" style={styles.row}>
-        <KindIcon kind={row.kind} size={14} />
+        <BackgroundTaskKindIcon kind={row.kind} size={14} />
         <AgentStateDot state={row.displayState} />
         <Text style={styles.rowText} numberOfLines={1} ellipsizeMode="tail">
           <Text style={styles.lead}>{lead}</Text>
@@ -197,7 +203,7 @@ function MobileNativeChatBackgroundTasksImpl({
                   {index > 0 ? <Text style={styles.separator}>·</Text> : null}
                   {segment.kind ? (
                     <View style={view.isMonitoring ? undefined : styles.dimmed}>
-                      <KindIcon kind={segment.kind} size={12} />
+                      <BackgroundTaskKindIcon kind={segment.kind} size={12} />
                     </View>
                   ) : null}
                   <Text style={styles.segmentText} numberOfLines={1} ellipsizeMode="tail">

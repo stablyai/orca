@@ -3,15 +3,11 @@
 
 import {
   backgroundTaskBlocks,
-  claimBackgroundTaskTwins
+  withoutBackgroundTaskRows
 } from '../input/native-chat-background-task-row'
 import { isWordlessProviderFrameBlock } from '../native-chat-provider-frame-summary'
 import { isReplacedSubagentGroupTwin, subagentGroupBlocks } from './native-chat-subagent-summary'
-import {
-  isBackgroundTaskBlock,
-  isSubagentGroupBlock,
-  type NativeChatBlock
-} from '../native-chat-types'
+import { isSubagentGroupBlock, type NativeChatBlock } from '../native-chat-types'
 import { splitNativeChatBlocks } from '../tools/native-chat-tool-fold'
 import { nativeChatProseToMarkdown } from './native-chat-prose'
 
@@ -26,17 +22,13 @@ function derive(blocks: readonly NativeChatBlock[]) {
   )
   const groups = subagentGroupBlocks(split.prose)
   const tasks = backgroundTaskBlocks(split.prose)
-  // Remove fallback twins only when rendering their blocks; preserve real adjacent prose. Task twins need exact matching because provider sentences have no stable shape.
-  const taskTwins = claimBackgroundTaskTwins(split.prose)
+  // Remove fallback twins only when rendering their blocks; preserve real adjacent prose.
   const prose =
     groups.length === 0 && tasks.length === 0
       ? split.prose
-      : split.prose.filter(
-          (block, index) =>
-            !isSubagentGroupBlock(block) &&
-            !isBackgroundTaskBlock(block) &&
-            !taskTwins.twinTextIndexes.has(index) &&
-            !isReplacedSubagentGroupTwin(block, groups.length > 0)
+      : withoutBackgroundTaskRows(split.prose).filter(
+          (block) =>
+            !isSubagentGroupBlock(block) && !isReplacedSubagentGroupTwin(block, groups.length > 0)
         )
   return {
     prose,

@@ -24,6 +24,8 @@ export const sayMobileBackgroundTask: BackgroundTaskSay = (id, values) => {
         'session.backgroundTask.detailsUnavailable',
         'Task details are unavailable for this session.'
       ),
+    outputFile: () =>
+      translate('session.backgroundTask.outputFile', 'Output: {{value0}}', phraseValues),
     countAgents: () =>
       count === 1
         ? translate('session.backgroundTask.countAgents_one', '{{count}} agent', countValues)
