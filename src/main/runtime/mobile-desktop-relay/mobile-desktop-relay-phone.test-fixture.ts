@@ -111,12 +111,20 @@ export async function connectPhone(
         )
       )
     },
-    next: (id: string, predicate: (frame: Frame) => boolean = () => true) =>
-      vi.waitFor(() => {
-        const frame = frames.find((candidate) => candidate.id === id && predicate(candidate))
-        expect(frame).toBeDefined()
-        return frame!
-      })
+    // A large frame's round trip can outlast the default wait on a loaded runner; callers may extend it.
+    next: (
+      id: string,
+      predicate: (frame: Frame) => boolean = () => true,
+      { timeout }: { timeout?: number } = {}
+    ) =>
+      vi.waitFor(
+        () => {
+          const frame = frames.find((candidate) => candidate.id === id && predicate(candidate))
+          expect(frame).toBeDefined()
+          return frame!
+        },
+        timeout === undefined ? undefined : { timeout }
+      )
   }
 }
 

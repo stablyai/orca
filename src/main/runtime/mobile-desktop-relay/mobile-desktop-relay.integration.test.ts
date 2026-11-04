@@ -124,6 +124,8 @@ class SeatObservableRuntime extends OrcaRuntimeService {
 }
 
 const WORKTREE = 'id:repo-1::/tmp/worktree-a'
+// The 4 MiB round trip's own budget is the request's, not the fixture's default wait.
+const MAX_FORM_WAIT = { timeout: 30_000 }
 
 describe('mobile desktop relay: phone -> desktop -> server', () => {
   const cleanups: (() => Promise<void> | void)[] = []
@@ -568,17 +570,17 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     const phone = await connectPhone(desktop.server, 'iPhone', cleanups, 'v2')
     // The relay learns the server's ordinary-message support from the phone's targeted status.
     phone.send('status', 'status.get', {})
-    expect(isOk(await phone.next('status'))).toBe(true)
+    expect(isOk(await phone.next('status', undefined, MAX_FORM_WAIT))).toBe(true)
     const { params, content } = maximumRelayedForm(phone.token)
     phone.send('form', 'agentSession.respondToApproval', params)
-    const answer = await phone.next('form')
+    const answer = await phone.next('form', undefined, MAX_FORM_WAIT)
     expect(answeredForms).toHaveLength(1)
     expect(fingerprint(answeredForms[0]!.content)).toBe(fingerprint(content))
     // Only the declared identity changes: the server sees the phone's delegated device, never the phone token.
     expect(answeredForms[0]!.pairedDeviceId).toBe(children()[0]!.deviceId)
     expect(fingerprint(answer.result)).toBe(fingerprint({ content }))
     phone.send('after', 'status.get', {})
-    expect(isOk(await phone.next('after'))).toBe(true)
+    expect(isOk(await phone.next('after', undefined, MAX_FORM_WAIT))).toBe(true)
   })
 
   it("answers a targeted SSH state from the server, which holds a server workspace's SSH targets", async () => {
