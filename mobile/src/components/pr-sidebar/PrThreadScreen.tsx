@@ -1,4 +1,5 @@
-import { ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
+import { Check, Undo2 } from 'lucide-react-native'
 import type { PRCommentGroup } from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { threadDiffLines } from '../../../../src/shared/github/pr-comment-diff-hunk'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
@@ -12,7 +13,7 @@ import { MobileStateView } from '../MobileStateView'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { PrCommentAvatar } from './PrCommentAvatar'
-import { PrMiniButton } from './PrMiniButton'
+import { NavBarButton } from '../nav-bar/NavBarButton'
 import { PrThreadCode } from './PrThreadCode'
 import {
   PR_COMMENT_AVATAR,
@@ -71,6 +72,7 @@ export function PrThreadScreen({
   const location = prCommentLocation(root)
   const filePath = root.path
   const canResolve = actions !== undefined && isResolvableComment(root)
+  const resolveBusy = canResolve && root.threadId ? actions.isResolveBusy(root.threadId) : false
   return (
     <ScreenFrame
       title={t('pullRequest.screens.thread', 'Thread')}
@@ -89,14 +91,15 @@ export function PrThreadScreen({
       backLabel={t('pullRequest.screens.backToComments', 'Back to comments')}
       trailing={
         canResolve ? (
-          <PrMiniButton
-            label={
+          <NavBarButton
+            icon={resolveBusy ? ResolvingIcon : root.isResolved ? Undo2 : Check}
+            accessibilityLabel={
               root.isResolved
                 ? t('pullRequest.commentCard.unresolve', 'Unresolve')
                 : t('pullRequest.commentCard.resolve', 'Resolve')
             }
             onPress={() => void actions.toggleResolve(root)}
-            busy={root.threadId ? actions.isResolveBusy(root.threadId) : false}
+            disabled={resolveBusy}
           />
         ) : undefined
       }
@@ -160,6 +163,10 @@ export function PrThreadScreen({
       </ScrollView>
     </ScreenFrame>
   )
+}
+
+function ResolvingIcon({ color }: { color?: string }) {
+  return <ActivityIndicator size="small" color={color} />
 }
 
 const styles = themedStyleSheet(() => ({
