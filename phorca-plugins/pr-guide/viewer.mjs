@@ -169,8 +169,9 @@ export async function startViewer(initial, { run = runCli, generate = generateGu
           if (!receipt?.accepted) return send(503, { error: 'The local agent session did not accept the comment.' })
           send(200, { session: terminal.title })
         } else {
-          const posted = JSON.parse(await run(gh, ['api', endpoint, '-X', 'POST', '--input', '-'], JSON.stringify(payload), 100_000))
-          send(200, { url: posted.html_url })
+          const postedUrl = (await run(gh, ['api', endpoint, '-X', 'POST', '--input', '-', '--jq', '.html_url'], JSON.stringify(payload), 4096)).trim()
+          if (!postedUrl) throw new Error('GitHub did not return the comment URL.')
+          send(200, { url: postedUrl })
         }
       } else response.writeHead(404).end()
     } catch (error) {

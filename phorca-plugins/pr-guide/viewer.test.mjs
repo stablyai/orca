@@ -60,10 +60,10 @@ it('posts only valid current-PR inline comments to the matching GitHub PR', asyn
   const current = { ...source }
   const calls = []
   const viewer = await startViewer(snapshot, {
-    run: async (_file, args, stdin) => {
+    run: async (_file, args, stdin, maxBytes) => {
       if (args[0] === 'pr') return JSON.stringify(current)
-      calls.push({ args, payload: JSON.parse(stdin) })
-      return JSON.stringify({ html_url: 'https://github.com/a/b/pull/2#discussion_r1' })
+      calls.push({ args, payload: JSON.parse(stdin), maxBytes })
+      return 'https://github.com/a/b/pull/2#discussion_r1\n'
     },
     generate: async () => ({ ...snapshot, headSha: current.headRefOid, sourceFingerprint: prFingerprint(current) })
   })
@@ -99,9 +99,12 @@ it('posts only valid current-PR inline comments to the matching GitHub PR', asyn
     assert.equal(response.status, 200)
     assert.equal(calls.length, 1)
     assert.equal(calls[0].args[1], 'repos/a/b/pulls/2/comments')
+    assert.deepEqual(calls[0].args.slice(-2), ['--jq', '.html_url'])
+    assert.equal(calls[0].maxBytes, 4096)
     assert.deepEqual(calls[0].payload, { body: 'Check this', commit_id: snapshot.headSha, path: 'src/a.ts', line: 2, side: 'RIGHT' })
     assert.equal((await post({ kind: 'section', section: 0, body: 'Explain this section' })).status, 200)
     assert.equal(calls[1].args[1], 'repos/a/b/issues/2/comments')
+    assert.deepEqual(calls[1].args.slice(-2), ['--jq', '.html_url'])
     assert.deepEqual(calls[1].payload, { body: '**Guide section: Core**\n\nExplain this section' })
     current.title = 'Edited PR title'
     assert.equal((await post({ kind: 'inline', path: 'src/a.ts', line: 2, side: 'RIGHT', body: 'Stale' })).status, 409)
