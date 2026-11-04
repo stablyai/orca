@@ -1,5 +1,4 @@
 import type { WorktreeLineage } from '../worktree/lineage-types'
-import type { CrossStoreLineageView } from '../worktree/cross-store-lineage-resolution'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import {
@@ -7,7 +6,10 @@ import {
   type WorkspaceRowFactReader,
   type WorkspaceRowFilters
 } from '../workspace-view/workspace-row-filters'
-import { getSidebarLineageParentsByIdentity } from './worktree-lineage-projection'
+import {
+  getSidebarLineageParentsByIdentity,
+  type SidebarLineageParentIdentities
+} from './worktree-lineage-projection'
 
 export type VisibleSidebarWorktreeInputs = {
   /** Every catalog row, one per host-qualified identity. */
@@ -19,8 +21,8 @@ export type VisibleSidebarWorktreeInputs = {
   filters: WorkspaceRowFilters
   facts: WorkspaceRowFactReader<Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
-  /** Visible stores' cross-store parent records, merged into the same parent map. */
-  crossStoreLineage?: CrossStoreLineageView
+  /** Parents resolved once over every visible store's complete rows; ancestor injection reuses them. */
+  lineageParentIdentities?: SidebarLineageParentIdentities
   filterRepoIds: readonly string[]
   injectLineageAncestors?: boolean
   preserveLineageParentOrder?: boolean
@@ -35,7 +37,7 @@ export function selectVisibleSidebarWorktrees({
   filters,
   facts,
   worktreeLineageById,
-  crossStoreLineage,
+  lineageParentIdentities,
   filterRepoIds,
   injectLineageAncestors,
   preserveLineageParentOrder,
@@ -66,7 +68,7 @@ export function selectVisibleSidebarWorktrees({
       ancestorByIdentity,
       worktreeLineageById,
       selectedRepoIds,
-      crossStoreLineage
+      lineageParentIdentities
     )
   }
   all = all
@@ -81,7 +83,7 @@ export function selectVisibleSidebarWorktrees({
         ancestorByIdentity,
         worktreeLineageById,
         selectedRepoIds,
-        crossStoreLineage
+        lineageParentIdentities
       )
 }
 
@@ -90,7 +92,7 @@ function addVisibleLineageAncestors(
   ancestorByIdentity: ReadonlyMap<string, Worktree>,
   lineageById: Record<string, WorktreeLineage>,
   selectedRepoIds: ReadonlySet<string> | null,
-  crossStoreLineage: CrossStoreLineageView | undefined
+  lineageParentIdentities: SidebarLineageParentIdentities | undefined
 ): Worktree[] {
   const result: Worktree[] = []
   const included = new Set<string>()
@@ -98,7 +100,7 @@ function addVisibleLineageAncestors(
   const parentByIdentity = getSidebarLineageParentsByIdentity(
     lineageById,
     ancestorByIdentity,
-    crossStoreLineage
+    lineageParentIdentities
   )
 
   const addWithAncestors = (worktree: Worktree): void => {

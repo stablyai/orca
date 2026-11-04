@@ -36,7 +36,10 @@ type LineageProjection = {
   cyclicLineageIds?: Set<string>
   childrenByParentId?: Map<string, Worktree[]>
   sidebarParentByIdentity?: Map<string, Worktree>
-  sidebarParentByIdentityByView?: WeakMap<CrossStoreLineageView, Map<string, Worktree>>
+  sidebarParentByIdentityByResolution?: WeakMap<
+    SidebarLineageParentIdentities,
+    Map<string, Worktree>
+  >
 }
 
 /** Repeated O(worktrees) projections cache by both immutable input identities. Weak keys avoid retaining replaced store collections. */
@@ -196,20 +199,14 @@ export function getSidebarLineageParent(
     : undefined
 }
 
-/** Host-keyed nesting parents from same-store edges and, when given, resolved cross-store records;
- * a valid same-store edge wins and cycles have none. Cache assumes callers replace inputs rather than mutate them. */
-export function getSidebarLineageParentsByIdentity(
+/** Child host identity → parent host identity, resolved once over every visible store's complete rows. */
+export type SidebarLineageParentIdentities = ReadonlyMap<string, string>
+
+function resolveParentsByIdentity(
   lineageById: Readonly<Record<string, WorktreeLineage>>,
   rowsByHostIdentity: ReadonlyMap<string, Worktree>,
   crossStoreLineage?: CrossStoreLineageView
-): ReadonlyMap<string, Worktree> {
-  const projection = getLineageProjection(lineageById, rowsByHostIdentity)
-  const cached = crossStoreLineage
-    ? projection.sidebarParentByIdentityByView?.get(crossStoreLineage)
-    : projection.sidebarParentByIdentity
-  if (cached) {
-    return cached
-  }
+): Map<string, Worktree> {
   const parentByIdentity = crossStoreLineage
     ? resolveCrossStoreLineageParents(rowsByHostIdentity, crossStoreLineage)
     : new Map<string, Worktree>()
@@ -227,12 +224,52 @@ export function getSidebarLineageParentsByIdentity(
   for (const identity of cyclic) {
     parentByIdentity.delete(identity)
   }
-  if (crossStoreLineage) {
-    projection.sidebarParentByIdentityByView ??= new WeakMap()
-    projection.sidebarParentByIdentityByView.set(crossStoreLineage, parentByIdentity)
-  } else {
-    projection.sidebarParentByIdentity = parentByIdentity
+  return parentByIdentity
+}
+
+/** Same-store edges merged with cross-store records (a valid same-store edge wins), cycles dropped.
+ * Pass every visible store's unfiltered rows: a filtered-out twin must still make a parent ambiguous. */
+export function resolveSidebarLineageParentIdentities(
+  lineageById: Readonly<Record<string, WorktreeLineage>>,
+  completeRowsByHostIdentity: ReadonlyMap<string, Worktree>,
+  crossStoreLineage: CrossStoreLineageView
+): SidebarLineageParentIdentities {
+  return new Map(
+    [...resolveParentsByIdentity(lineageById, completeRowsByHostIdentity, crossStoreLineage)].map(
+      ([identity, parent]) => [identity, getWorktreeHostIdentity(parent)]
+    )
+  )
+}
+
+/** Host-keyed nesting parents; cycles have none. With resolved identities, only rows present here nest.
+ * Cache assumes callers replace inputs rather than mutate them. */
+export function getSidebarLineageParentsByIdentity(
+  lineageById: Readonly<Record<string, WorktreeLineage>>,
+  rowsByHostIdentity: ReadonlyMap<string, Worktree>,
+  parentIdentities?: SidebarLineageParentIdentities
+): ReadonlyMap<string, Worktree> {
+  const projection = getLineageProjection(lineageById, rowsByHostIdentity)
+  const cached = parentIdentities
+    ? projection.sidebarParentByIdentityByResolution?.get(parentIdentities)
+    : projection.sidebarParentByIdentity
+  if (cached) {
+    return cached
   }
+  if (!parentIdentities) {
+    const parentByIdentity = resolveParentsByIdentity(lineageById, rowsByHostIdentity)
+    projection.sidebarParentByIdentity = parentByIdentity
+    return parentByIdentity
+  }
+  const parentByIdentity = new Map<string, Worktree>()
+  for (const identity of rowsByHostIdentity.keys()) {
+    const parentIdentity = parentIdentities.get(identity)
+    const parent = parentIdentity === undefined ? undefined : rowsByHostIdentity.get(parentIdentity)
+    if (parent) {
+      parentByIdentity.set(identity, parent)
+    }
+  }
+  projection.sidebarParentByIdentityByResolution ??= new WeakMap()
+  projection.sidebarParentByIdentityByResolution.set(parentIdentities, parentByIdentity)
   return parentByIdentity
 }
 

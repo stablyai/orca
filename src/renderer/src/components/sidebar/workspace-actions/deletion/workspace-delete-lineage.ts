@@ -14,11 +14,12 @@ export function getWorkspaceDeleteLineage(
   lineageById: Record<string, WorktreeLineage>
 ): WorkspaceDeleteLineage {
   // Lineage IDs omit hosts; prefer the parent’s host so descendant deletion cannot reach another machine.
-  // Only the parent's own store is a delete target: a cross-store child never is, even when it nests.
+  // A row known to live in another store is never a delete target, even when it nests; unknown owners keep the host rule.
   const parentStoreKey = lineageStoreKeyOfRow(parent)
   const worktreeById = new Map<string, Worktree>()
   for (const worktree of worktrees) {
-    if (lineageStoreKeyOfRow(worktree) !== parentStoreKey) {
+    const storeKey = lineageStoreKeyOfRow(worktree)
+    if (parentStoreKey !== undefined && storeKey !== undefined && storeKey !== parentStoreKey) {
       continue
     }
     const claimed = worktreeById.get(worktree.id)

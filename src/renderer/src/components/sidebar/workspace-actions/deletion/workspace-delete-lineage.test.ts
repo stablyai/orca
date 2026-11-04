@@ -223,18 +223,24 @@ describe('getWorkspaceDeleteLineage', () => {
     expect(lineage.deleteAllTargets).toEqual([sshChild, sshParent])
   })
 
-  it('never targets a child saved in another store', () => {
-    const parent = makeWorktree('parent', '/workspaces/parent')
-    const serverChild: Worktree = {
-      ...makeWorktree('child', '/workspaces/parent/child'),
+  it('never targets a child known to live in another store; an unowned legacy child stays', () => {
+    const serverParent: Worktree = {
+      ...makeWorktree('parent', '/workspaces/parent'),
       hostId: toRuntimeExecutionHostId('build-box')
     }
+    const legacyChild = makeWorktree('child', '/workspaces/parent/child')
+    expect(
+      getWorkspaceDeleteLineage(serverParent, [serverParent, legacyChild], {
+        [legacyChild.id]: makeLineage(legacyChild, serverParent)
+      }).deleteAllTargets.map((worktree) => worktree.id)
+    ).toEqual(['child', 'parent'])
 
-    const lineage = getWorkspaceDeleteLineage(parent, [parent, serverChild], {
-      [serverChild.id]: makeLineage(serverChild, parent)
-    })
-
-    expect(lineage.descendants).toEqual([])
-    expect(lineage.deleteAllTargets).toEqual([parent])
+    const localParent: Worktree = { ...serverParent, hostId: LOCAL_EXECUTION_HOST_ID }
+    const serverChild: Worktree = { ...legacyChild, runtimeOwnerEnvironmentId: 'build-box' }
+    expect(
+      getWorkspaceDeleteLineage(localParent, [localParent, serverChild], {
+        [serverChild.id]: makeLineage(serverChild, localParent)
+      }).deleteAllTargets.map((worktree) => worktree.id)
+    ).toEqual(['parent'])
   })
 })

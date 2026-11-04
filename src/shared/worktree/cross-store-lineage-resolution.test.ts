@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { toRuntimeExecutionHostId } from '../execution-host'
-import { getSidebarLineageParentsByIdentity } from '../sidebar-list/worktree-lineage-projection'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId
+} from '../execution-host'
+import {
+  getSidebarLineageParentsByIdentity,
+  resolveSidebarLineageParentIdentities
+} from '../sidebar-list/worktree-lineage-projection'
 import { getWorktreeHostIdentity } from './host-qualified-identity'
 import type { CrossStoreLineageView, LineageStoreView } from './cross-store-lineage-resolution'
 import type { CrossStoreWorkspaceLineage, WorktreeLineage } from './lineage-types'
@@ -14,7 +21,7 @@ function row(id: string, instanceId: string, environmentId?: string): Worktree {
     id,
     instanceId,
     repoId: id.split('::')[0],
-    ...(environmentId ? { hostId: toRuntimeExecutionHostId(environmentId) } : {}),
+    hostId: environmentId ? toRuntimeExecutionHostId(environmentId) : LOCAL_EXECUTION_HOST_ID,
     path: id.split('::')[1],
     head: 'abc',
     branch: id,
@@ -59,14 +66,16 @@ function store(
 function parentIdsOf(
   rows: Worktree[],
   view: CrossStoreLineageView,
-  lineageById: Record<string, WorktreeLineage> = {}
+  lineageById: Record<string, WorktreeLineage> = {},
+  visibleRows: Worktree[] = rows
 ): Record<string, string> {
-  const byIdentity = new Map<string, Worktree>(
-    rows.map((worktree) => [getWorktreeHostIdentity(worktree), worktree])
-  )
+  const byIdentity = (list: Worktree[]) =>
+    new Map<string, Worktree>(list.map((worktree) => [getWorktreeHostIdentity(worktree), worktree]))
+  const resolved = resolveSidebarLineageParentIdentities(lineageById, byIdentity(rows), view)
+  const visible = byIdentity(visibleRows)
   return Object.fromEntries(
-    [...getSidebarLineageParentsByIdentity(lineageById, byIdentity, view)].map(
-      ([identity, parent]) => [byIdentity.get(identity)?.id, parent.id]
+    [...getSidebarLineageParentsByIdentity(lineageById, visible, resolved)].map(
+      ([identity, parent]) => [visible.get(identity)?.id, parent.id]
     )
   )
 }
@@ -96,6 +105,19 @@ describe('cross-store parent resolution', () => {
           ['copy-box', store(MAC_INSTALL)],
           ['build-box', store(SERVER_INSTALL, records)]
         ])
+      )
+    ).toEqual({})
+
+    const sshTwin = { ...macParent, hostId: toSshExecutionHostId('mac-ssh') }
+    expect(
+      parentIdsOf(
+        [macParent, sshTwin, serverChild],
+        new Map([
+          ['', store(MAC_INSTALL)],
+          ['build-box', store(SERVER_INSTALL, records)]
+        ]),
+        {},
+        [macParent, serverChild]
       )
     ).toEqual({})
 
