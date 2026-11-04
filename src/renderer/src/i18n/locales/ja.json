@@ -18416,10 +18416,31 @@
         "keepGoing": "いいえ、続ける"
       },
       "theme": {
-        "hints": {
-          "system": "OS に合わせる",
-          "dark": "目にやさしい",
-          "light": "明るく鮮明"
+        "modeLabel": "外観モード",
+        "looks": {
+          "activeNow": "現在",
+          "appThemes": "アプリテーマ",
+          "appliesTo": "各ルックはアプリ、エディター、ターミナルをまとめて配色します。",
+          "darkLook": "ダークルック",
+          "darkLooks": "ダークルック",
+          "lightLook": "ライトルック",
+          "lightLooks": "ライトルック",
+          "orcaDark": "Orca ダーク",
+          "orcaLight": "Orca ライト",
+          "previewDone": "完了まで",
+          "previewEdited": "3 ファイルを編集",
+          "previewPrompt": "設定ページのスタイルを変更",
+          "previewRead": "読み取り",
+          "previewStatus": "編集を承認: オン",
+          "previewWorkspaces": "ワークスペース",
+          "showsWhenDark": "システムがダークのときに表示",
+          "showsWhenLight": "システムがライトのときに表示",
+          "slotLabel": "編集するルック",
+          "sourceBuiltIn": "組み込み",
+          "sourceCommunity": "ターミナルパレット",
+          "systemCaption": "Orca は OS に合わせて、ダークとライトのルックを切り替えます。",
+          "terminalPalettes": "ターミナルパレット",
+          "terminalPalettesCaption": "Orca の配色もこれに合わせます"
         }
       },
       "integrations": {

@@ -19060,10 +19060,31 @@
         "keepGoing": "Hayır, devam et"
       },
       "theme": {
-        "hints": {
-          "system": "İşletim sistemiyle eşleştir",
-          "dark": "Gözü yormaz",
-          "light": "Parlak ve net"
+        "modeLabel": "Görünüm modu",
+        "looks": {
+          "activeNow": "şimdi",
+          "appThemes": "Uygulama temaları",
+          "appliesTo": "Her görünüm uygulamayı, düzenleyiciyi ve terminali birlikte renklendirir.",
+          "darkLook": "Koyu görünüm",
+          "darkLooks": "Koyu görünümler",
+          "lightLook": "Açık görünüm",
+          "lightLooks": "Açık görünümler",
+          "orcaDark": "Orca Koyu",
+          "orcaLight": "Orca Açık",
+          "previewDone": "Tamamlandı:",
+          "previewEdited": "3 dosya düzenlendi",
+          "previewPrompt": "ayarlar sayfasını yeniden tasarla",
+          "previewRead": "Okundu",
+          "previewStatus": "düzenlemeleri kabul et açık",
+          "previewWorkspaces": "Çalışma alanları",
+          "showsWhenDark": "Sisteminiz koyu olduğunda gösterilir",
+          "showsWhenLight": "Sisteminiz açık olduğunda gösterilir",
+          "slotLabel": "Düzenlenecek görünüm",
+          "sourceBuiltIn": "Yerleşik",
+          "sourceCommunity": "Terminal paleti",
+          "systemCaption": "Orca işletim sisteminizi izler ve koyu ile açık görünüm arasında geçiş yapar.",
+          "terminalPalettes": "Terminal paletleri",
+          "terminalPalettesCaption": "Orca renklerini buna uydurur"
         }
       },
       "integrations": {

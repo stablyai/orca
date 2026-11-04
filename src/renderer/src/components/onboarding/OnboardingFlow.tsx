@@ -331,6 +331,8 @@ export default function OnboardingFlow({
                   onThemeChange={flow.setTheme}
                   settings={flow.settings}
                   updateSettings={flow.updateSettings}
+                  lookBaseline={flow.themeLookBaseline}
+                  onLookBaselineChange={flow.setThemeLookBaseline}
                 />
               )}
               {currentStep.id === 'notifications' && (

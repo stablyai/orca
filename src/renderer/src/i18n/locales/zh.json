@@ -19696,10 +19696,31 @@
         "keepGoing": "不，继续"
       },
       "theme": {
-        "hints": {
-          "system": "匹配操作系统",
-          "dark": "轻松护眼",
-          "light": "明亮、清脆"
+        "modeLabel": "外观模式",
+        "looks": {
+          "activeNow": "当前",
+          "appThemes": "应用主题",
+          "appliesTo": "每种外观会同时为应用、编辑器和终端配色。",
+          "darkLook": "深色外观",
+          "darkLooks": "深色外观",
+          "lightLook": "浅色外观",
+          "lightLooks": "浅色外观",
+          "orcaDark": "Orca 深色",
+          "orcaLight": "Orca 浅色",
+          "previewDone": "完成于",
+          "previewEdited": "已编辑 3 个文件",
+          "previewPrompt": "重新设计设置页面样式",
+          "previewRead": "已读取",
+          "previewStatus": "接受编辑：开启",
+          "previewWorkspaces": "工作区",
+          "showsWhenDark": "系统为深色时显示",
+          "showsWhenLight": "系统为浅色时显示",
+          "slotLabel": "要编辑的外观",
+          "sourceBuiltIn": "内置",
+          "sourceCommunity": "终端调色板",
+          "systemCaption": "Orca 跟随操作系统，在深色和浅色外观之间切换。",
+          "terminalPalettes": "终端调色板",
+          "terminalPalettesCaption": "Orca 会随之重新配色"
         }
       },
       "integrations": {

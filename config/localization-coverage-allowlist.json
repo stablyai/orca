@@ -250,5 +250,61 @@
     "text": "text-[13px] leading-5",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/onboarding/ThemeLookPreview.tsx",
+    "kind": "jsx-text",
+    "text": "claude",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/onboarding/ThemeLookPreview.tsx",
+    "kind": "jsx-text",
+    "text": "README.md",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/onboarding/ThemeLookPreview.tsx",
+    "kind": "jsx-text",
+    "text": "Appearance.tsx",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/onboarding/ThemeLookPreview.tsx",
+    "kind": "jsx-text",
+    "text": "+ applyTheme(look)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/onboarding/ThemeLookPreview.tsx",
+    "kind": "jsx-text",
+    "text": "+ paintPreview(palette)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/onboarding/ThemeLookPreview.tsx",
+    "kind": "jsx-text",
+    "text": "- setTheme(&apos;dark&apos;)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/onboarding/ThemeLookPreview.tsx",
+    "kind": "jsx-text",
+    "text": "2.1s",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/onboarding/ThemeLookPreview.tsx",
+    "kind": "jsx-text",
+    "text": "feat/themes",
+    "dynamic": false,
+    "count": 1
   }
 ]

@@ -19074,10 +19074,31 @@
         "keepGoing": "Nein, fortfahren"
       },
       "theme": {
-        "hints": {
-          "system": "An Betriebssystem anpassen",
-          "dark": "Angenehm für die Augen",
-          "light": "Hell & klar"
+        "modeLabel": "Darstellungsmodus",
+        "looks": {
+          "activeNow": "jetzt",
+          "appThemes": "App-Designs",
+          "appliesTo": "Jeder Look färbt App, Editor und Terminal gemeinsam ein.",
+          "darkLook": "Dunkler Look",
+          "darkLooks": "Dunkle Looks",
+          "lightLook": "Heller Look",
+          "lightLooks": "Helle Looks",
+          "orcaDark": "Orca Dunkel",
+          "orcaLight": "Orca Hell",
+          "previewDone": "Fertig in",
+          "previewEdited": "3 Dateien bearbeitet",
+          "previewPrompt": "Einstellungsseite neu gestalten",
+          "previewRead": "Gelesen",
+          "previewStatus": "Änderungen annehmen an",
+          "previewWorkspaces": "Workspaces",
+          "showsWhenDark": "Wird angezeigt, wenn dein System dunkel ist",
+          "showsWhenLight": "Wird angezeigt, wenn dein System hell ist",
+          "slotLabel": "Zu bearbeitender Look",
+          "sourceBuiltIn": "Integriert",
+          "sourceCommunity": "Terminal-Palette",
+          "systemCaption": "Orca folgt deinem Betriebssystem und wechselt zwischen einem dunklen und einem hellen Look.",
+          "terminalPalettes": "Terminal-Paletten",
+          "terminalPalettesCaption": "Orca passt seine Farben daran an"
         }
       },
       "integrations": {

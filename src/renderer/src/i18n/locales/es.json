@@ -20337,10 +20337,31 @@
         "keepGoing": "No, continuar"
       },
       "theme": {
-        "hints": {
-          "system": "Igual que el SO",
-          "dark": "Suave a la vista",
-          "light": "Brillante y nítido"
+        "modeLabel": "Modo de apariencia",
+        "looks": {
+          "activeNow": "ahora",
+          "appThemes": "Temas de la app",
+          "appliesTo": "Cada estilo colorea la app, el editor y el terminal a la vez.",
+          "darkLook": "Estilo oscuro",
+          "darkLooks": "Estilos oscuros",
+          "lightLook": "Estilo claro",
+          "lightLooks": "Estilos claros",
+          "orcaDark": "Orca oscuro",
+          "orcaLight": "Orca claro",
+          "previewDone": "Hecho en",
+          "previewEdited": "3 archivos editados",
+          "previewPrompt": "rediseñar la página de ajustes",
+          "previewRead": "Leído",
+          "previewStatus": "aceptar ediciones activado",
+          "previewWorkspaces": "Espacios de trabajo",
+          "showsWhenDark": "Se muestra cuando tu sistema está en modo oscuro",
+          "showsWhenLight": "Se muestra cuando tu sistema está en modo claro",
+          "slotLabel": "Estilo a editar",
+          "sourceBuiltIn": "Integrado",
+          "sourceCommunity": "Paleta de terminal",
+          "systemCaption": "Orca sigue a tu sistema operativo y alterna entre un estilo oscuro y uno claro.",
+          "terminalPalettes": "Paletas de terminal",
+          "terminalPalettesCaption": "Orca cambia sus colores para combinar"
         }
       },
       "integrations": {
