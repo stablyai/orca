@@ -20256,6 +20256,7 @@
       "dismissDeliveryNotice": "Dismiss",
       "editDeliveryNotice": "Edit",
       "addSelectionToChat": "Add to chat",
+      "addSelectionNoChat": "Open a chat in this workspace, then add the selection again.",
       "messageNotSent": "Message not sent",
       "messageSending": "Sending…",
       "userMessage": {

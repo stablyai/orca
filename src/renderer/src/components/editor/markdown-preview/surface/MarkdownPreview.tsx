@@ -12,6 +12,9 @@ import { useMarkdownPreviewDocument } from '../document-worker/use-markdown-prev
 import { useMarkdownPreviewDocumentSearch } from '../search/use-markdown-preview-document-search'
 import type { VirtualMarkdownPreviewNavigation } from '../viewport/use-markdown-preview-navigation'
 import { useMarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
+import { readMarkdownPreviewChatSelection } from '../review/markdown-preview-chat-selection'
+import { SelectionAddToChatPopover } from '../../../native-chat/SelectionAddToChatPopover'
+import { addSelectionToWorkspaceChatOrExplain } from '../../../native-chat/native-chat-workspace-selection'
 
 const EMPTY_MARKDOWN_DOCUMENTS: MarkdownDocument[] = []
 
@@ -84,20 +87,37 @@ export default function MarkdownPreview({
     onOpenDocument
   })
 
+  const chatWorktreeId = foundation.sourceWorktree?.id ?? null
+  const chatRelativePath = foundation.sourceRelativePath
+
   return (
-    <MarkdownPreviewSurface
-      largePreview={largePreview}
-      documentState={documentState}
-      documentSearch={documentSearch}
-      largeNavigationRef={largeNavigationRef}
-      scrollCacheKey={scrollCacheKey}
-      foundation={foundation}
-      viewport={viewport}
-      reviewActions={reviewActions}
-      components={components}
-      filePath={filePath}
-      showTableOfContents={showTableOfContents}
-      onCloseTableOfContents={onCloseTableOfContents}
-    />
+    <>
+      <MarkdownPreviewSurface
+        largePreview={largePreview}
+        documentState={documentState}
+        documentSearch={documentSearch}
+        largeNavigationRef={largeNavigationRef}
+        scrollCacheKey={scrollCacheKey}
+        foundation={foundation}
+        viewport={viewport}
+        reviewActions={reviewActions}
+        components={components}
+        filePath={filePath}
+        showTableOfContents={showTableOfContents}
+        onCloseTableOfContents={onCloseTableOfContents}
+      />
+      <SelectionAddToChatPopover
+        rootRef={foundation.rootRef}
+        enabled={chatWorktreeId !== null && chatRelativePath !== null}
+        readQuotable={(root) =>
+          chatRelativePath === null
+            ? null
+            : readMarkdownPreviewChatSelection(root, displayedContent, chatRelativePath)
+        }
+        onAdd={(text) =>
+          chatWorktreeId && addSelectionToWorkspaceChatOrExplain(chatWorktreeId, text)
+        }
+      />
+    </>
   )
 }

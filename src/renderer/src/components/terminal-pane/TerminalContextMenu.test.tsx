@@ -70,6 +70,8 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     canExpandPane: true,
     menuPaneIsExpanded: false,
     onCopy: vi.fn(),
+    onAddSelectionToChat: vi.fn(),
+    hasSelection: false,
     onSelectAll: vi.fn(),
     onPaste: vi.fn(),
     onSplitRight: vi.fn(),

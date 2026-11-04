@@ -4,6 +4,8 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
+import { formatSelectionReference } from './selection-copy'
+import { addSelectionToWorkspaceChatOrExplain } from '../native-chat/native-chat-workspace-selection'
 import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 import {
   installEditorAddReviewNoteShortcut,
@@ -98,6 +100,29 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       state.showRightSidebarSearch({ query })
     }
   })
+  const addToChatAction = editorInstance.addAction({
+    id: 'orca.addSelectionToChat',
+    label: translate('components.native-chat.addSelectionToChat', 'Add to chat'),
+    precondition: 'editorHasSelection',
+    contextMenuGroupId: '9_cutcopypaste',
+    contextMenuOrder: 5,
+    run: () => {
+      const model = editorInstance.getModel()
+      const selection = editorInstance.getSelection()
+      if (!worktreeId || !model || !selection || selection.isEmpty()) {
+        return
+      }
+      addSelectionToWorkspaceChatOrExplain(
+        worktreeId,
+        formatSelectionReference({
+          relativePath: propsRef.current.relativePath,
+          language: propsRef.current.language,
+          selection,
+          selectedText: model.getValueInRange(selection)
+        })
+      )
+    }
+  })
   const onLargeTextPaste = (event: ClipboardEvent): void => {
     if (!event.composedPath().includes(editorDomNode)) {
       return
@@ -127,6 +152,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       cleanupAddReviewNoteShortcut()
       pasteCaptureNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
       searchInFilesAction.dispose()
+      addToChatAction.dispose()
     }
   }
 }

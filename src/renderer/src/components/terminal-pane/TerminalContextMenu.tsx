@@ -9,6 +9,7 @@ import {
   Minimize2,
   PanelBottomClose,
   PanelsTopLeft,
+  Quote,
   PanelRightClose,
   Pencil,
   RotateCcw,
@@ -49,6 +50,8 @@ type TerminalContextMenuProps = {
   canExpandPane: boolean
   menuPaneIsExpanded: boolean
   onCopy: () => void
+  onAddSelectionToChat: () => void
+  hasSelection: boolean
   onSelectAll: () => void
   onPaste: () => void
   onSplitRight: () => void
@@ -142,6 +145,8 @@ function TerminalContextMenuItems({
   canExpandPane,
   menuPaneIsExpanded,
   onCopy,
+  onAddSelectionToChat,
+  hasSelection,
   onSelectAll,
   onPaste,
   onSplitRight,
@@ -200,6 +205,10 @@ function TerminalContextMenuItems({
         <Copy />
         {translate('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}
         <DropdownMenuShortcut>{shortcuts.copy}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={!hasSelection} onSelect={onAddSelectionToChat}>
+        <Quote />
+        {translate('components.native-chat.addSelectionToChat', 'Add to chat')}
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={onSelectAll}>
         <TextSelect />

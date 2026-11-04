@@ -33,6 +33,7 @@ import { useAppStore } from '@/store'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useWslHostStartCardReplacesPaneError } from './use-wsl-host-stopped-pane'
+import { addTerminalPaneMenuSelectionToChat } from './terminal-pane-menu-copy-actions'
 
 export function TerminalPaneSurface({
   controller
@@ -279,6 +280,10 @@ export function TerminalPaneSurface({
           contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
         }
         onCopy={() => void contextMenu.onCopy()}
+        onAddSelectionToChat={() =>
+          addTerminalPaneMenuSelectionToChat(contextMenu.menuPane, tabId, worktreeId)
+        }
+        hasSelection={contextMenu.menuPane?.terminal.hasSelection() ?? false}
         onSelectAll={contextMenu.onSelectAll}
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}
