@@ -116,12 +116,23 @@ describe('codex thread goal requests', () => {
     ).resolves.toEqual({
       ok: false,
       rejected:
-        'This chat has no goal to pause or resume. Set one with /goal followed by the objective.'
+        'Codex has no goal to change in this chat. Set one with /goal followed by the objective.'
     })
     expect(request.mock.calls.map(([method]) => method)).toEqual([
       'thread/goal/set',
       'thread/goal/get'
     ])
+  })
+
+  it('says there is no goal when Codex reports a clear removed nothing', async () => {
+    const request = vi.fn(async () => ({ cleared: false }))
+    await expect(
+      changeCodexThreadGoal(session(request), { kind: 'clear' }, false, 5_000)
+    ).resolves.toEqual({
+      ok: false,
+      rejected:
+        'Codex has no goal to change in this chat. Set one with /goal followed by the objective.'
+    })
   })
 
   it('awaits a revoked clear and never activates the replacement', async () => {

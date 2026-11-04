@@ -6,5 +6,5 @@ export const AGENT_SESSION_GOAL_CONTROL_COPY = {
   pauseUnconfirmed:
     'Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.',
   stopUnconfirmed: 'Codex could not confirm Stop. Check the chat before continuing.',
-  noGoal: 'This chat has no goal to pause or resume. Set one with /goal followed by the objective.'
+  noGoal: 'Codex has no goal to change in this chat. Set one with /goal followed by the objective.'
 } as const

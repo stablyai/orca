@@ -1645,7 +1645,7 @@
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
         "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing.",
-        "noGoal": "This chat has no goal to pause or resume. Set one with /goal followed by the objective."
+        "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective."
       },
       "notices": {
         "compaction": "Context compacted",

@@ -101,10 +101,10 @@ describe('agent-implemented commands pass through to the agent', () => {
     ).toEqual({ handled: true, accepted: false, error: null })
   })
 
-  it('pauses, resumes or clears the current goal instead of setting it to that word', async () => {
+  it('pauses, resumes or clears the current goal; any other word is the objective', async () => {
     const changeThreadGoal = vi.fn(async () => true)
     const goalHost = { ...controller, agent: 'codex' as const, changeThreadGoal }
-    for (const text of ['/goal pause', '/goal Resume', '/goal clear']) {
+    for (const text of ['/goal pause', '/goal Resume', '/goal clear', '/goal constructor']) {
       expect(await dispatchStructuredAgentSessionComposerCommand(text, goalHost)).toEqual({
         handled: true,
         accepted: true,
@@ -114,7 +114,8 @@ describe('agent-implemented commands pass through to the agent', () => {
     expect(changeThreadGoal.mock.calls).toEqual([
       [{ kind: 'status', status: 'paused' }],
       [{ kind: 'status', status: 'active' }],
-      [{ kind: 'clear' }]
+      [{ kind: 'clear' }],
+      [{ kind: 'set', objective: 'constructor' }]
     ])
   })
 

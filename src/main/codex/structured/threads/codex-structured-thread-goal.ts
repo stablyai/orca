@@ -55,6 +55,15 @@ async function codexThreadGoalMissing(
   }
 }
 
+function readCodexClearedFlag(response: unknown): boolean | undefined {
+  return typeof response === 'object' &&
+    response !== null &&
+    'cleared' in response &&
+    typeof response.cleared === 'boolean'
+    ? response.cleared
+    : undefined
+}
+
 export async function changeCodexThreadGoal(
   session: Pick<CodexSession, 'connection' | 'threadId'>,
   change: AgentSessionThreadGoalChange,
@@ -66,12 +75,18 @@ export async function changeCodexThreadGoal(
   try {
     for (const request of codexThreadGoalRequests(session.threadId, change, replacesGoal)) {
       throwIfSignalAborted(signal)
-      await session.connection.request(request.method, request.params, { timeoutMs })
+      const response = await session.connection.request(request.method, request.params, {
+        timeoutMs
+      })
+      // A clear on its own reports whether a goal existed; Codex says nothing else when none did.
+      if (change.kind === 'clear' && readCodexClearedFlag(response) === false) {
+        return { ok: false, rejected: AGENT_SESSION_GOAL_CONTROL_COPY.noGoal }
+      }
       cleared ||= request.method === 'thread/goal/clear'
     }
   } catch (error) {
     if (isCodexAppServerRequestError(error)) {
-      // Codex words a missing goal with internal ids; say it as the CLI's /goal pause does.
+      // Codex words a missing goal with internal ids; say it in the user's terms instead.
       if (change.kind === 'status' && (await codexThreadGoalMissing(session, timeoutMs))) {
         return { ok: false, rejected: AGENT_SESSION_GOAL_CONTROL_COPY.noGoal }
       }

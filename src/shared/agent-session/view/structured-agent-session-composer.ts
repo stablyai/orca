@@ -189,15 +189,15 @@ export function isStructuredAgentSessionGoalCommand(text: string): boolean {
   return commandParts(text)?.name === 'goal'
 }
 
-const GOAL_CONTROLS: Readonly<Record<string, AgentSessionThreadGoalChange>> = {
-  pause: { kind: 'status', status: 'paused' },
-  resume: { kind: 'status', status: 'active' },
-  clear: { kind: 'clear' }
-}
+const GOAL_CONTROLS: ReadonlyMap<string, AgentSessionThreadGoalChange> = new Map([
+  ['pause', { kind: 'status', status: 'paused' }],
+  ['resume', { kind: 'status', status: 'active' }],
+  ['clear', { kind: 'clear' }]
+])
 
 /** `/goal pause|resume|clear` controls the current goal; any other text is a new objective. */
 export function structuredAgentSessionGoalChange(argument: string): AgentSessionThreadGoalChange {
-  return GOAL_CONTROLS[argument.toLowerCase()] ?? { kind: 'set', objective: argument }
+  return GOAL_CONTROLS.get(argument.toLowerCase()) ?? { kind: 'set', objective: argument }
 }
 
 /** `/clear`, `/compact` and goal changes that start work change the conversation; pausing or clearing a goal does not. */

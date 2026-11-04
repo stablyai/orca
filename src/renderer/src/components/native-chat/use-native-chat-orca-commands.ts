@@ -201,14 +201,19 @@ export function useNativeChatOrcaCommands(args: {
       (item: TItem) => {
         const leading = autocomplete.mode === 'slash' && autocomplete.dispatchable
         // An explicit Orca command pick overrides an earlier same-named skill pick.
-        if (leading && item.kind === 'command' && item.orcaOwned) {
+        const draft = textareaRef.current?.value ?? ''
+        // Text after the token makes /usage a message, so the pick only completes it.
+        const usageMessage =
+          item.name === NATIVE_CHAT_USAGE_COMMAND &&
+          draft.slice((draft.split(/\s/, 1)[0] ?? '').length).trim() !== ''
+        if (leading && item.kind === 'command' && item.orcaOwned && !usageMessage) {
           clearSkillOrigin()
           if (item.name === NATIVE_CHAT_USAGE_COMMAND) {
             openUsage()
             return
           }
           // The caret can sit right after `/resume` with a search already typed past it.
-          open(parseNativeChatResumeDraft(textareaRef.current?.value ?? '') ?? '')
+          open(parseNativeChatResumeDraft(draft) ?? '')
           return
         }
         pick(item)

@@ -2,6 +2,10 @@ import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { nativeChatImageSendBlock } from './native-chat-image-reattach'
+import {
+  isStructuredAgentSessionHostCommand,
+  structuredAgentSessionCommandChangesConversation
+} from '../../../../shared/agent-session/view/structured-agent-session-composer'
 
 export type NativeChatComposerSendState = {
   /** Why Send is disabled, when the user can do something about it. */
@@ -26,22 +30,30 @@ export function nativeChatComposerSendState(input: {
   editSession: { canSave: boolean } | undefined
   isWorking: boolean
   canStop: boolean
+  /** The draft is an Orca command such as /resume, which runs without the agent. */
+  orcaCommand?: boolean
 }): NativeChatComposerSendState {
   const { structuredTransport: transport } = input
   const imageBlock = nativeChatImageSendBlock(input.imageAttachments)
-  const sendHeld =
-    input.pastedTextSaving ||
-    input.disabled ||
-    transport?.sendOut === true ||
-    imageBlock.holdsSend ||
-    transport?.sendBlockedReason !== undefined
+  const localHold =
+    input.pastedTextSaving || input.disabled || transport?.sendOut === true || imageBlock.holdsSend
+  const hostHold = transport?.sendBlockedReason !== undefined
+  const sendHeld = localHold || hostHold
+  // Like Enter, a held host still takes commands that start no turn.
+  const runsWhileHostHolds =
+    input.orcaCommand === true ||
+    (transport !== undefined &&
+      input.imageAttachments.length === 0 &&
+      isStructuredAgentSessionHostCommand(input.draft, transport.threadGoal !== undefined) &&
+      !structuredAgentSessionCommandChangesConversation(input.draft))
+  const draftHeld = localHold || (hostHold && !runsWhileHostHolds)
   const hasDraft = input.draft.trim() !== '' || input.imageAttachments.length > 0
   // Like Enter, a typed draft sends while the agent works; only an empty one offers Stop.
   const sendButtonDisabled = input.editSession
     ? sendHeld || !input.editSession.canSave
     : input.isWorking && !hasDraft
       ? !input.canStop
-      : sendHeld || !hasDraft
+      : draftHeld || !hasDraft
   // The send's own resolver, so the hint withdraws wherever Cmd/Ctrl+Enter would send no differently.
   const followUp = transport?.sendFollowUp
   return {
