@@ -134,6 +134,7 @@ describe('orcad migration manifest contract', () => {
       prompt: 'Run tests',
       precheck: null,
       agentId: 'codex',
+      surface: 'chat',
       launchPreferences: { model: null, options: { effort: 'high', speed: 'fast' } },
       agentArgs: '--search --add-dir docs',
       runContext: {
@@ -177,6 +178,7 @@ describe('orcad migration manifest contract', () => {
     const imported = parseOrcadMigrationManifest(manifest({ dormantState })).payload.dormantState
       ?.automations?.[0]
     expect(imported).toMatchObject({
+      surface: 'chat',
       launchPreferences: { model: null, options: { effort: 'high', speed: 'fast' } },
       agentArgs: '--search --add-dir docs'
     })
