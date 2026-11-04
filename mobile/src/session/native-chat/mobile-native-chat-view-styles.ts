@@ -4,7 +4,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 
 const FLOATING_CONTROLS_BOTTOM = spacing.md
 const LOAD_EARLIER_HEIGHT = 44
-const LOAD_EARLIER_RETRY_HEIGHT = 28
+const RETRY_PILL_HEIGHT = 28
 
 export const styles = themedStyleSheet(() => ({
   hidden: { display: 'none' },
@@ -89,19 +89,19 @@ export const styles = themedStyleSheet(() => ({
     gap: spacing.sm,
     paddingHorizontal: spacing.md
   },
-  loadEarlierRetry: {
+  retryPill: {
     justifyContent: 'center',
-    height: LOAD_EARLIER_RETRY_HEIGHT,
+    height: RETRY_PILL_HEIGHT,
     paddingHorizontal: spacing.md,
     borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },
-  loadEarlierRetryPressed: {
+  retryPillPressed: {
     opacity: 0.6
   },
-  loadEarlierRetryLabel: {
+  retryPillLabel: {
     color: colors.textSecondary,
     fontSize: typography.metaSize,
     fontWeight: '600'

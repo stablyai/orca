@@ -287,7 +287,9 @@
       "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
       "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
       "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
-      "modelFallback": "Claude model değiştirdi: {{from}} → {{to}}."
+      "modelFallback": "Claude model değiştirdi: {{from}} → {{to}}.",
+      "signIn": "Oturum aç",
+      "signInHint": "Bu sohbeti çalıştıran bilgisayarda bir terminal açar"
     },
     "orcaStop": {
       "canContinue": "Bu konuşmada devam edebilirsiniz.",

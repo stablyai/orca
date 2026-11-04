@@ -287,7 +287,9 @@
       "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
       "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
       "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
-      "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。"
+      "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。",
+      "signIn": "登入",
+      "signInHint": "在執行此聊天的電腦上開啟終端機"
     },
     "orcaStop": {
       "canContinue": "您可以在此對話中繼續。",

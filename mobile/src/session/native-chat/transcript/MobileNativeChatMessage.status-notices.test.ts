@@ -174,6 +174,40 @@ describe('MobileNativeChatMessage status notices', () => {
     }
   )
 
+  it.each([
+    ['Claude', 'system', 'claude auth login'],
+    ['Claude', 'managed', 'claude auth login'],
+    ['Codex', 'system', 'codex login --device-auth'],
+    ['Codex', 'managed', null],
+    ['Grok', undefined, 'grok login --device-auth'],
+    ['Antigravity', undefined, null]
+  ] as const)(
+    'offers %s (%s account) sign-in in a host terminal',
+    (agentName, account, command) => {
+      const onRunInTerminal = vi.fn()
+      renderNotice(
+        {
+          kind: 'status',
+          tone: 'error',
+          ...agentSessionFailureWords(
+            agentSessionFailureFact('notSignedIn', account ? { account } : {}),
+            { surface: 'row', agentName }
+          )
+        },
+        { hostName: null, agentName, onRunInTerminal }
+      )
+      const signIn = renderer!.root.findAll(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityHint !== undefined
+      )
+      if (command === null) {
+        expect(signIn).toHaveLength(0)
+        return
+      }
+      act(() => signIn[0]!.props.onPress())
+      expect(onRunInTerminal).toHaveBeenCalledWith(command)
+    }
+  )
+
   // Protocol-shaped synthetic frames, not a live-provider reproduction.
   it.each([
     [

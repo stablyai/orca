@@ -1,5 +1,5 @@
 import { MobileQueuedMessageComposerContext } from '../mobile-queued-message-composer-context'
-import { useCallback, useLayoutEffect, useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
@@ -55,6 +55,8 @@ type Props = {
   hostName: string | null
   /** Offered for tapped links; absent where the host can't open a browser tab. */
   onOpenUrlInOrca?: (url: string) => void
+  /** Opens a host terminal tab in this chat's workspace running `command`. */
+  onRunInTerminal: (command: string) => void
 }
 
 // Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
@@ -82,7 +84,8 @@ export function MobileNativeChatOverlay({
   getSendCompletionGeneration,
   keyboardInset,
   hostName,
-  onOpenUrlInOrca
+  onOpenUrlInOrca,
+  onRunInTerminal
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
@@ -179,12 +182,19 @@ export function MobileNativeChatOverlay({
       onMicPressOut
     ]
   )
+  // Why a ref: rows read this through context, and the route's callback changes every render.
+  const runInTerminalRef = useRef(onRunInTerminal)
+  useLayoutEffect(() => {
+    runInTerminalRef.current = onRunInTerminal
+  }, [onRunInTerminal])
+  const runInTerminal = useCallback((command: string) => runInTerminalRef.current(command), [])
   const t = useMobileTranslation()
   const continuation = controller.nativeChatInterruptedContinue
   const noticeView = useMemo(
     () => ({
       hostName,
       ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
+      onRunInTerminal: runInTerminal,
       ...(continuation
         ? {
             continuation: {
@@ -198,7 +208,7 @@ export function MobileNativeChatOverlay({
           }
         : {})
     }),
-    [hostName, agent, continuation, onClearSendError]
+    [hostName, agent, continuation, onClearSendError, runInTerminal]
   )
   const markdownLinks = useMobileNativeChatMarkdownLinks({
     enabled: controller.showNativeChat,
