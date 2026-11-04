@@ -37,7 +37,7 @@ describe('Home Tasks section', () => {
   function render(connectedHosts: HostProfile[]) {
     const onOpen = vi.fn()
     act(() => {
-      tree = create(createElement(MobileHomeTasksSection, { connectedHosts, first: false, onOpen }))
+      tree = create(createElement(MobileHomeTasksSection, { connectedHosts, onOpen }))
     })
     return onOpen
   }

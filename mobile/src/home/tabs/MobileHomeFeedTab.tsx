@@ -70,11 +70,7 @@ export function MobileHomeFeedTab(props: {
           onOpenActions={props.onOpenHostActions}
           onPairDesktop={props.onPairDesktop}
         />
-        <MobileHomeTasksSection
-          connectedHosts={data.connectedHosts}
-          first={false}
-          onOpen={props.onOpenTasks}
-        />
+        <MobileHomeTasksSection connectedHosts={data.connectedHosts} onOpen={props.onOpenTasks} />
         <MobileHomeAppUpdateCard />
       </ScrollView>
     </>

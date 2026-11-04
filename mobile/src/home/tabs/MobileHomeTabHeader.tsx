@@ -67,13 +67,13 @@ const styles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 52,
+    minHeight: 44,
     paddingLeft: spacing.lg + spacing.xs,
     paddingRight: spacing.sm
   },
   title: {
     flexShrink: 1,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     letterSpacing: -0.4,
     color: colors.textPrimary

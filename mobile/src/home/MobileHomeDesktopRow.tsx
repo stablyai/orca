@@ -138,23 +138,17 @@ export function MobileHomeDesktopRow(props: {
       delayLongPress={400}
     >
       <View style={styles.tile}>
-        <MachineGlyph size={20} strokeWidth={1.8} color={colors.textPrimary} />
+        <MachineGlyph size={17} strokeWidth={1.8} color={colors.textPrimary} />
         <View style={[styles.tileDot, { backgroundColor: dotColor }]} />
       </View>
       <View style={styles.text}>
         <Text style={styles.title} numberOfLines={1}>
           {display.title}
         </Text>
-        {display.machineLine ? (
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {display.machineLine}
-          </Text>
-        ) : null}
-        <Text style={[styles.detail, { color: statusColor }]} numberOfLines={connected ? 1 : 2}>
-          {statusLine}
-          {needsYouLabel ? (
-            <Text style={{ color: colors.statusAmber }}>{` · ${needsYouLabel}`}</Text>
-          ) : null}
+        {/* State then machine on one line keeps a desktop to two lines; a cut-off loses the machine. */}
+        <Text style={styles.subtitle} numberOfLines={connected ? 1 : 2}>
+          <Text style={{ color: statusColor }}>{statusLine}</Text>
+          {display.machineLine ? ` · ${display.machineLine}` : ''}
         </Text>
         {details.map((line) => (
           <Text key={line} style={styles.detail} numberOfLines={3}>
@@ -163,6 +157,11 @@ export function MobileHomeDesktopRow(props: {
         ))}
       </View>
       <View style={styles.trailing}>
+        {needsYou > 0 ? (
+          <View style={styles.countPill}>
+            <Text style={styles.countPillText}>{needsYou}</Text>
+          </View>
+        ) : null}
         <ChevronRight size={16} color={colors.textMuted} />
       </View>
     </Pressable>

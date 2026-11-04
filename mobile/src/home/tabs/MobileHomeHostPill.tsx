@@ -98,6 +98,7 @@ const styles = themedStyleSheet(() => ({
     paddingLeft: spacing.md,
     paddingRight: 10,
     marginTop: spacing.xs,
+    marginBottom: spacing.sm,
     marginLeft: 2,
     borderRadius: radii.pill,
     backgroundColor: colors.bgPanel

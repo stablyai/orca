@@ -7,11 +7,9 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { HostProfile } from '../transport/types'
 import { homeListStyles as styles } from './home-list-styles'
-import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
 
 type HomeHostSectionProps = {
   connectedHosts: HostProfile[]
-  first: boolean
   onOpen: (hostId: string) => void
 }
 
@@ -43,8 +41,8 @@ function HomeSection(
   const Icon = props.icon
   return (
     <>
-      <MobileHomeSectionHeading title={props.title} first={props.first} />
-      <View style={styles.group}>
+      {/* The row already says Tasks, so it needs no heading of its own. */}
+      <View style={[styles.group, styles.headinglessGroup]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${props.title}, ${props.subtitle}`}
@@ -58,7 +56,7 @@ function HomeSection(
           onPress={() => hostPicker.pickHost(props.onOpen)}
         >
           <View style={styles.tile}>
-            <Icon size={20} strokeWidth={1.8} color={colors.textPrimary} />
+            <Icon size={17} strokeWidth={1.8} color={colors.textPrimary} />
           </View>
           <View style={styles.text}>
             <Text style={styles.title} numberOfLines={1}>
