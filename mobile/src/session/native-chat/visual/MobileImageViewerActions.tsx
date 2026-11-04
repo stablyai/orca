@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Pressable, type StyleProp, type ViewStyle } from 'react-native'
+import { Pressable } from 'react-native'
 import { Copy, Download, Share } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
 import { TransientToast, useTransientToast } from '../../../components/TransientToast'
@@ -9,6 +9,7 @@ import type { BridgeImageOperation } from '../../../mobile-web-shell/bridge/brid
 import { useImageActions } from '../../../platform/image-actions'
 import { ImageActionRefusedError } from '../../../platform/image-actions-contract'
 import { colors, feedback } from '../../../theme/mobile-theme'
+import type { ImageViewerActionsProps } from './MobileNativeChatImageViewer'
 
 function failureMessage(t: Translate, operation: BridgeImageOperation, error: unknown): string {
   if (error instanceof ImageActionRefusedError) {
@@ -29,11 +30,7 @@ export function MobileImageViewerActions({
   uri,
   buttonStyle,
   toastInset
-}: {
-  uri: string
-  buttonStyle: StyleProp<ViewStyle>
-  toastInset: number
-}): React.JSX.Element | null {
+}: ImageViewerActionsProps): React.JSX.Element | null {
   const t = useMobileTranslation()
   const imageActions = useImageActions()
   const act = useMemo(() => imageActions?.forImage(uri) ?? null, [imageActions, uri])
