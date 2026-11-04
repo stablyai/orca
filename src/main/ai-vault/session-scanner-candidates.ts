@@ -1,5 +1,5 @@
 import { prioritizeAntigravityTranscriptCandidates } from './scanners/antigravity/antigravity-transcript-candidates'
-import { readCodexRolloutSessionMetaId } from '../codex/codex-rollout-session-meta'
+import { readCodexRolloutSessionMetaId } from '../codex/history/rollouts/codex-rollout-session-meta'
 import {
   codexRolloutHardlinkIdentity,
   dedupeCodexRolloutAliases,

@@ -15,7 +15,7 @@ import { pruneMetadataMissingFromAuthoritativeLocalScan } from './worktrees/list
 import { listDetectedWorktreesForCapturedRepo } from './worktrees/listing/detected-provider-listing'
 import { getLocalWorktreeScanGeneration } from '../workspaces/catalog/local-worktree-scan-generation'
 import { agentHookServer } from '../agent-hooks/server'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   isRegisteredWorktreePath,
   registerWorktreeRootsForRepo

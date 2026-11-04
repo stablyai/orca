@@ -3,7 +3,7 @@ import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-status/title/agent-title-owner'
 import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import { hookLaneCanAnnouncePaneTurnEnd } from './agent-hook-completion-notifications'
 import { hookTurnEndEvidence } from './agent-hook-turn-end-capability'
 

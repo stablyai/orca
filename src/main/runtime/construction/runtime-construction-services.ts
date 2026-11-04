@@ -8,7 +8,7 @@ import type {
   RuntimeVisibleTerminalState,
   RuntimeLeafRecord
 } from '../runtime-terminal-state-records'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TuiIdleHookTurn } from '../tui-idle-hook-lane'
@@ -38,9 +38,9 @@ import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-ag
 import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/cli-command'
 import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox-pointer-submit'
-import type { WriteSettlement } from '../../../shared/pty-write-settlement'
+import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { StructuredPointerTarget } from '../orchestration/structured-mailbox-pointer-delivery'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type * as PtyControllerContract from '../runtime-pty-controller-contract'
 import type { RuntimeClientEventBus } from '../runtime-client-event-bus'

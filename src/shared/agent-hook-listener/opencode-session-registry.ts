@@ -1,4 +1,4 @@
-import { parsePaneKey } from '../stable-pane-id'
+import { parsePaneKey } from '../workspace-layout/stable-pane-id'
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { HookListenerState } from './listener-state'
 

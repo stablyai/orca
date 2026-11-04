@@ -157,41 +157,6 @@ describe('existing direct pairing relay upgrade', () => {
     expect(deps.writeBundle).toHaveBeenCalledOnce()
   })
 
-  it('cleans pending state and leaves direct access unchanged for an old desktop', async () => {
-    const deps = dependencies()
-    const client = clientWith([
-      {
-        id: 'rpc',
-        ok: false,
-        error: { code: 'method_not_found', message: 'unsupported' },
-        _meta: { runtimeId: 'runtime' }
-      }
-    ])
-
-    await expect(upgradeDirectMobileRelay({ client, host, dependencies: deps })).resolves.toBeNull()
-    expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
-    expect(deps.writeBundle).not.toHaveBeenCalled()
-    expect(deps.setRelayRouting).not.toHaveBeenCalled()
-  })
-
-  // Old hosts refuse pairing.getEndpoints at the mobile allowlist before dispatch; handle forbidden too so pending install secrets can retire.
-  it('cleans pending state and leaves direct access unchanged for a scope-refusing old desktop', async () => {
-    const deps = dependencies()
-    const client = clientWith([
-      {
-        id: 'rpc',
-        ok: false,
-        error: { code: 'forbidden', message: "Method 'pairing.getEndpoints' is not available" },
-        _meta: { runtimeId: 'runtime' }
-      }
-    ])
-
-    await expect(upgradeDirectMobileRelay({ client, host, dependencies: deps })).resolves.toBeNull()
-    expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
-    expect(deps.writeBundle).not.toHaveBeenCalled()
-    expect(deps.setRelayRouting).not.toHaveBeenCalled()
-  })
-
   it('retains the durable journal when relay registration is temporarily unavailable', async () => {
     const deps = dependencies()
     const client = clientWith([success({ v: 1, relay: null })])

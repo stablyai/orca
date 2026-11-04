@@ -1,8 +1,13 @@
-import type { WorkspaceKey, WorkspaceScope } from './folder-workspaces/folder-workspace-types'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from './worktree/host-qualified-identity'
+
+export type WorkspaceScope =
+  | { type: 'worktree'; worktreeId: string }
+  | { type: 'folder'; folderWorkspaceId: string }
+
+export type WorkspaceKey = `worktree:${string}` | `folder:${string}`
 
 export function worktreeWorkspaceKey(worktreeId: string): WorkspaceKey {
   return `worktree:${worktreeId}`

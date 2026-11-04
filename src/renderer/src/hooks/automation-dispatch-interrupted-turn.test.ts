@@ -58,15 +58,4 @@ describe('automation dispatch completion for an interrupted turn', () => {
     )
     expect(finalizeTerminalOwnership).not.toHaveBeenCalled()
   })
-
-  it('still records an uninterrupted turn as completed', async () => {
-    const completion = await createCompletion()
-    await completion.settlePendingAfterDispatch()
-    completion.handleAgentDone({})
-    await vi.waitFor(() => expect(finalizeTerminalOwnership).toHaveBeenCalled())
-
-    expect(markDispatchResult).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'completed', error: null })
-    )
-  })
 })

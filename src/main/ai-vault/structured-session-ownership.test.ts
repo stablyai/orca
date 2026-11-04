@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import { parseAiVaultListResult } from './session-list-result-validation'
 import { redactForTransport } from '../../shared/ai-vault/search/ai-vault-search-transport'
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'

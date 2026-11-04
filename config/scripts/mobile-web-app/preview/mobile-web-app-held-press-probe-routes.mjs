@@ -63,8 +63,8 @@ export default function HoldDictationProbeRoute() {
 `
 }
 
-export const ARROW_PAD_LABEL = 'Arrow keys'
-export const TAP_KEY_LABEL = 'Send Escape'
+export const REPEAT_KEY_LABEL = 'Arrow Up'
+export const TAP_KEY_LABEL = 'Escape'
 
 export function commandDockProbeRouteSource({
   commandDockModule,
@@ -114,7 +114,6 @@ export default function CommandDockProbeRoute() {
   })
   const dockKeys = useTerminalDockKeys({ activeHandle, sendInput: send })
   const liveInputRef = useRef(null)
-  const commandInputRef = useRef(null)
   globalThis.__orcaHeldPressProbe = {
     sent: () => [...sentRef.current],
     deliveries: () => [...deliveriesRef.current],
@@ -124,16 +123,11 @@ export default function CommandDockProbeRoute() {
   }
   const controller = {
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
-    bufferedTerminalDraftState: { input: '', setInput: noop },
-    autocompleteEnabled: false,
     liveInputCapture: '',
     activeHandle,
     activeSessionTab: null,
     dockKeys,
     liveInputRef,
-    commandInputRef,
-    commandFieldAnchorRef: { current: null },
-    commandDictationPreview: null,
     liveDictationText: '',
     customKeys: [],
     setShowCustomKeyModal: noop,
@@ -147,8 +141,6 @@ export default function CommandDockProbeRoute() {
     bindLiveInputField: noop,
     submitLiveInput: noop,
     canSend: true,
-    canCompose: true,
-    liveInputEnabled: false,
     showNativeChat: false,
     dictation: IDLE,
     cancelDictation: noop,
@@ -156,10 +148,8 @@ export default function CommandDockProbeRoute() {
     handleDictationPressIn: noop,
     handleDictationPressOut: noop,
     toggleDisplayMode: noop,
-    handleSend: () => Promise.resolve(),
     handleAccessoryKey: send,
     dismissSoftwareKeyboard: noop,
-    toggleLiveInput: noop,
     stopAccessoryRepeat: () => {
       repeatRef.current.push({ kind: 'stop' })
       accessory.stopAccessoryRepeat()
@@ -183,7 +173,7 @@ export default function CommandDockProbeRoute() {
     activeBrowserTab: null,
     keyboardLift: 0
   }
-  return <MobileSessionCommandDock controller={controller} keysInRail={false} />
+  return <MobileSessionCommandDock controller={controller} />
 }
 `
 }

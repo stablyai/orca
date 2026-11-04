@@ -19,4 +19,4 @@ export const { fetchCodexModelCatalogListing } = await vi.importActual<{
     configured?: { model?: string; effort?: string }
     listedServiceTiers?: readonly string[]
   }>
-}>('../../../main/codex/codex-structured-model-catalog')
+}>('../../../main/codex/structured/catalog/codex-structured-model-catalog')

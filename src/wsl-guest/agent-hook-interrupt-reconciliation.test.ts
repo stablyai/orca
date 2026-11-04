@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { RemoteAgentInterruptRequest } from '../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
-import { makePaneKey } from '../shared/stable-pane-id'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../shared/agent-status/contracts/agent-status-freshness'
 import { RelayAgentHookServer } from './agent-hook-server'
 
