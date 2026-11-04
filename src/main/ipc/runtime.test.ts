@@ -136,7 +136,10 @@ describe('registerRuntimeHandlers', () => {
   })
 
   it("serves the authoritative window's sidebar catalog to paired phones, and keeps it when omitted", () => {
-    const runtime = { syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }) }
+    const runtime = {
+      syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }),
+      notifyReposChangedForRemoteClients: vi.fn()
+    }
     registerRuntimeHandlers(runtime as never)
     const handler = handleMock.mock.calls.find(
       ([channel]) => channel === 'runtime:syncWindowGraph'
@@ -150,6 +153,34 @@ describe('registerRuntimeHandlers', () => {
     handler(event, graph)
 
     expect(readMobileProjectSections()).toEqual({ catalog: PROJECT_SECTION_PARITY_SERVED })
+  })
+
+  // #37067: a phone that read the catalog on the add's reposChanged keyed the new project wrongly.
+  it('tells paired clients to re-read when the served catalog changes, not when it is republished', () => {
+    const runtime = {
+      syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }),
+      notifyReposChangedForRemoteClients: vi.fn()
+    }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:syncWindowGraph'
+    )![1]
+    const currentMainFrame = {}
+    const event = { sender: { mainFrame: currentMainFrame }, senderFrame: currentMainFrame }
+    fromWebContentsMock.mockReturnValue({ id: 17 })
+    const graph = { tabs: [], leaves: [], rendererGeneration: 'renderer-1' }
+    const withNewProject = {
+      ...PROJECT_SECTION_PARITY_SERVED,
+      projects: [
+        ...PROJECT_SECTION_PARITY_SERVED.projects,
+        { id: 'repo:new-project', displayName: 'new-project' }
+      ]
+    }
+
+    handler(event, { ...graph, projectSectionCatalog: withNewProject })
+    handler(event, { ...graph, projectSectionCatalog: structuredClone(withNewProject) })
+
+    expect(runtime.notifyReposChangedForRemoteClients).toHaveBeenCalledTimes(1)
   })
 
   it('does not serve a catalog from a graph the runtime refused', () => {
