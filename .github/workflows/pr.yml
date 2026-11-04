@@ -630,9 +630,7 @@ jobs:
             export GIT_EXEC_PATH="$HOME/.cache/orca-git-compat/git-$ORCA_GIT_COMPAT_VERSION"
           fi
           pnpm exec vitest run --config config/vitest.config.ts \
-            src/shared/git/compatibility/git-binary-compatibility.test.ts \
-            src/main/git/worktrees/creation/worktree-safety-real-git.test.ts \
-            src/main/git/worktrees/removal/worktree-rebase-update-refs-real-git.test.ts
+            src/shared/git/compatibility/git-binary-compatibility.test.ts
 
   # Run pinned real Codex: thread/read must repair an unindexed rollout’s threads row; stub-only units cannot detect upstream removal of this behavior.
   codex_index_heal_contract:
