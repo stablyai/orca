@@ -81,7 +81,8 @@ export type WorktreeMeta = {
   baseRef?: string
   /** True when Orca checked out a pre-existing local branch that delete must not prune. */
   preserveBranchOnDelete?: boolean
-  /** The user switched to or created the current branch in Orca, so first-work naming must not rename it. */
+  /** The user switched to or created the current branch in Orca, so first-work naming must not rename it.
+   *  Create writes it either way; absent means a worktree older than that, which is not the same as `false`. */
   branchNameIsUserChosen?: boolean
   /** See {@link Worktree.pushTarget}. Persisted so refreshed worktree lists keep the target. */
   pushTarget?: GitPushTarget
