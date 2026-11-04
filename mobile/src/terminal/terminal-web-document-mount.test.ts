@@ -32,7 +32,11 @@ vi.mock('./document/create-terminal-document', async (importOriginal) => {
   }
 })
 
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: async () => null }
+}))
 vi.mock('react-native', () => ({
+  useColorScheme: () => 'dark',
   View: 'View',
   Text: 'Text',
   Pressable: 'Pressable',

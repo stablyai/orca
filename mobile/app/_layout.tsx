@@ -10,6 +10,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import * as Notifications from 'expo-notifications'
 import { colors } from '../src/theme/mobile-theme'
 import { startMobileAppearance } from '../src/theme/mobile-appearance'
+import { startMobileTerminalAppearance } from '../src/storage/terminal-theme-startup'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
@@ -42,6 +43,7 @@ SplashScreen.preventAutoHideAsync()
 const appearanceReady = startMobileAppearance()
 // Likewise the UI language: the saved choice and its catalog load under the splash.
 const languageReady = startMobileUiLanguage()
+const terminalAppearanceReady = startMobileTerminalAppearance()
 
 // Create orca-desktop channel at boot: background FCM can arrive before socket subscription, and Android drops unknown-channel pushes.
 void ensureDesktopNotificationChannel().catch(() => {})
@@ -174,7 +176,7 @@ export default function RootLayout() {
 
   // Hide splash only after Stack layout; a placeholder render can precede real screen content and expose a grey gap.
   const onNavigatorLayout = useCallback(async () => {
-    await Promise.all([appearanceReady, languageReady])
+    await Promise.all([appearanceReady, languageReady, terminalAppearanceReady])
     // Let the language switch commit before revealing the first frame.
     await new Promise((resolve) => requestAnimationFrame(resolve))
     await SplashScreen.hideAsync()

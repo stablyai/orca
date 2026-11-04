@@ -5,7 +5,11 @@ const probe = vi.hoisted(() => ({
   changeApp: (_state: string) => {},
   leaveRoute: () => {}
 }))
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: async () => null }
+}))
 vi.mock('react-native', () => ({
+  useColorScheme: () => 'dark',
   View: 'View',
   StyleSheet: { create: (value: unknown) => value },
   AppState: {
