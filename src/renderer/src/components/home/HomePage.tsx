@@ -28,11 +28,7 @@ export default function HomePage({
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-sleek bg-background pt-5 text-foreground md:pt-6">
         <header
           className="flex shrink-0 items-center gap-3 px-3 pb-3 md:px-5"
-          style={
-            {
-              paddingRight: 'max(0.75rem, var(--window-controls-width, 0px))'
-            } as React.CSSProperties
-          }
+          style={{ paddingRight: 'max(0.75rem, var(--window-controls-width, 0px))' }}
         >
           <h1 className="truncate text-base font-semibold leading-8">
             {translate('auto.components.home.HomePage.title', 'Home')}

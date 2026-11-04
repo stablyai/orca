@@ -107,7 +107,7 @@ export function HomeAmbientView({
           ))}
         </div>
       ) : null}
-      <Button variant="ghost" size="sm" onClick={onExit} className="text-muted-foreground">
+      <Button variant="ghost" size="sm" onClick={onExit}>
         {translate('auto.components.home.HomeAmbientView.exit', 'Exit rest mode')}
       </Button>
     </div>

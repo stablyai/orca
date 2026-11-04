@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { formatDuration } from '../stats/usage-formatters'
 import { getRecentUsageDays } from '../stats/usage-overview-daily-series'
@@ -94,7 +94,7 @@ export function HomeActivityCard(): React.JSX.Element {
                 'auto.components.home.HomeActivityCard.sessions',
                 'Sessions in tracked range'
               )}
-              value={overview.sessions.toLocaleString()}
+              value={overview.sessions.toLocaleString(getIntlLocale())}
             />
             <Metric
               label={translate(
@@ -110,7 +110,7 @@ export function HomeActivityCard(): React.JSX.Element {
         <div className="mt-3 grid grid-cols-3 gap-3 border-t border-border/60 pt-3">
           <Metric
             label={translate('auto.components.home.HomeActivityCard.agents', 'Agents, all time')}
-            value={statsSummary.totalAgentsSpawned.toLocaleString()}
+            value={statsSummary.totalAgentsSpawned.toLocaleString(getIntlLocale())}
           />
           <Metric
             label={translate('auto.components.home.HomeActivityCard.agentTime', 'Agent time')}
@@ -118,7 +118,7 @@ export function HomeActivityCard(): React.JSX.Element {
           />
           <Metric
             label={translate('auto.components.home.HomeActivityCard.prs', 'PRs created')}
-            value={statsSummary.totalPRsCreated.toLocaleString()}
+            value={statsSummary.totalPRsCreated.toLocaleString(getIntlLocale())}
           />
         </div>
       ) : null}

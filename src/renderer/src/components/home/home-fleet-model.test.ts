@@ -2,8 +2,29 @@ import { describe, expect, it } from 'vitest'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { buildHomeFleet } from './home-fleet-model'
 
-function card(paneKey: string, bucket: DashboardCard['bucket'], stateChangedAt: number) {
-  return { paneKey, bucket, stateChangedAt, startedAt: 1, finishedAt: null } as DashboardCard
+function card(
+  paneKey: string,
+  bucket: DashboardCard['bucket'],
+  stateChangedAt: number
+): DashboardCard {
+  return {
+    paneKey,
+    bucket,
+    stateChangedAt,
+    ptyId: null,
+    agentType: 'claude',
+    dotState: 'idle',
+    task: paneKey,
+    repoId: 'repo',
+    worktreeId: 'wt',
+    tabId: 'tab',
+    leafId: null,
+    repoName: 'repo',
+    worktreeName: 'wt',
+    startedAt: 1,
+    finishedAt: null,
+    unseen: false
+  }
 }
 
 describe('buildHomeFleet', () => {

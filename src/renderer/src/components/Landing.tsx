@@ -125,6 +125,16 @@ function GitHubStarButton({
   )
 }
 
+/** Setup nudges for the active execution host; Home reuses it when it stands in for Landing. */
+export function LandingPreflightNotice(): React.JSX.Element | null {
+  const repos = useAppStore((s) => s.repos)
+  // Probe the active execution host, including remote runtimes.
+  const { preflightIssues } = useLandingPreflightRuntime()
+  return preflightIssues.length > 0 ? (
+    <PreflightBanner issues={preflightIssues} repos={repos} />
+  ) : null
+}
+
 export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
@@ -134,8 +144,6 @@ export default function Landing(): React.JSX.Element {
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
   const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
 
-  // Probe the active execution host, including remote runtimes.
-  const { preflightIssues } = useLandingPreflightRuntime()
   const [starState, setStarState] = useLandingOrcaStarState()
 
   return (
@@ -156,7 +164,7 @@ export default function Landing(): React.JSX.Element {
             {translate('auto.components.Landing.6ca6ff404e', 'ORCA')}
           </h1>
 
-          {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} repos={repos} />}
+          <LandingPreflightNotice />
 
           <p className="text-sm text-muted-foreground text-center">
             {hasProjects
