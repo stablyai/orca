@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { CLAUDE_CLI_CONVERSATIONS } from '../claude/claude-cli-conversations'
-import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/agent-session/structured-agent-session-create-adoption'
+import {
+  resolveStructuredAgentSessionAdoptionForCreate,
+  resolveStructuredAgentSessionAdoptionForCreateOrFresh
+} from '../runtime/agent-session/structured-agent-session-create-adoption'
 import {
   captureStructuredAgentCliSource,
   structuredAgentCliSourcePath,
@@ -432,6 +435,28 @@ it('imports early and late Claude history with an absent locator and captured na
       })
     ])
   )
+})
+
+it('starts a new chat when the resumed conversation has no saved transcript', async () => {
+  const importer = CLAUDE_CLI_CONVERSATIONS.transcriptImport!
+  const selectedAccountHome = { variable: 'CLAUDE_CONFIG_DIR', path: root }
+  vi.spyOn(importer, 'accountHomeCandidates').mockReturnValue([selectedAccountHome])
+  const find = vi.spyOn(importer, 'findTranscript')
+  const input = {
+    settings: {},
+    agent: 'claude' as const,
+    transcriptImport: importer,
+    providerSessionId: id,
+    selectedAccountHome,
+    launchEnv: {},
+    workspaceCwd: root
+  }
+  expect(await resolveStructuredAgentSessionAdoptionForCreateOrFresh(input)).toBeNull()
+  expect(find).toHaveBeenCalled()
+  find.mockRejectedValueOnce(Object.assign(new Error('projects unreadable'), { code: 'EACCES' }))
+  await expect(resolveStructuredAgentSessionAdoptionForCreateOrFresh(input)).rejects.toMatchObject({
+    refusal: { details: { reason: 'transcriptUnreadable' } }
+  })
 })
 
 it('judges the lookup and its re-admission against one store resolved once per account', async () => {
