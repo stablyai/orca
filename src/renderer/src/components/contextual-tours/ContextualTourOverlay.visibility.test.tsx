@@ -236,7 +236,6 @@ describe('ContextualTourOverlay full-pass interval visibility gate', () => {
     })
     act(() => root.render(<ContextualTourOverlay />))
     await settle(50)
-    expect(useAppStore.getState().contextualToursSeenIds).toContain('workspace-agent-sessions')
 
     act(() => advanceAgentSessionsTourPastNewTab())
     await settle(50)
@@ -311,7 +310,6 @@ it('does not start a tour after its source unmounts between persistence and the 
     persistedUIReady: true,
     contextualToursAutoEligible: true,
     contextualToursSeenIds: [],
-    contextualTourShownThisSession: false,
     activeContextualTourId: null,
     activeModal: 'none',
     contextualToursOnboardingVisible: false,

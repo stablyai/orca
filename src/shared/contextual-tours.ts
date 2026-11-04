@@ -293,22 +293,20 @@ export function hasContextualTourActionStep(tour: ContextualTour): boolean {
 
 export function hasUndoneContextualTourAction(
   tour: ContextualTour,
-  featureInteractions: FeatureInteractionState
+  featureInteractions: FeatureInteractionState,
+  fromStepIndex = 0
 ): boolean {
-  return tour.steps.some(
-    (step) =>
-      step.advanceOnFeatureInteraction !== undefined &&
-      !isContextualTourStepDone(step, featureInteractions)
-  )
+  return tour.steps
+    .slice(fromStepIndex)
+    .some(
+      (step) =>
+        step.advanceOnFeatureInteraction !== undefined &&
+        !isContextualTourStepDone(step, featureInteractions)
+    )
 }
 
-/** Look steps up by id: inserting a step shifts every later index. */
-export function getContextualTourStepIndex(
-  id: ContextualTourId,
-  stepId: ContextualTourStepId
-): number {
-  return getContextualTour(id).steps.findIndex((step) => step.id === stepId)
-}
+export const getContextualTourStepIndex = (id: ContextualTourId, stepId: ContextualTourStepId) =>
+  getContextualTour(id).steps.findIndex((step) => step.id === stepId)
 
 export function normalizeContextualTourIds(value: unknown): ContextualTourId[] {
   if (!Array.isArray(value)) {

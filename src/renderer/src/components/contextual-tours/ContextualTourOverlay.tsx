@@ -48,7 +48,8 @@ export function ContextualTourOverlay(): JSX.Element | null {
     s.activeContextualTourId
       ? hasUndoneContextualTourAction(
           getContextualTour(s.activeContextualTourId),
-          s.featureInteractions
+          s.featureInteractions,
+          s.activeContextualTourStepIndex
         )
       : false
   )

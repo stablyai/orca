@@ -108,7 +108,8 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
     {
       // Keep this interaction counted only up to the first split, as before the tour could resume.
       recordFeatureInteraction:
-        !(hasSplitTerminalPane || hasSplitTab) || activeContextualTourId === 'workspace-agent-sessions'
+        !(hasSplitTerminalPane || hasSplitTab) ||
+        activeContextualTourId === 'workspace-agent-sessions'
     }
   )
 
