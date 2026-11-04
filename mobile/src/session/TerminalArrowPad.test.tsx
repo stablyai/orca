@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
 import { TerminalArrowPad } from './TerminalArrowPad'
+import { useTerminalDockKeys } from './use-terminal-dock-keys'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 vi.mock('react-native', async () => {
@@ -13,7 +14,11 @@ vi.mock('react-native', async () => {
       React.createElement('Pressable', props, children),
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+    StyleSheet: {
+      create: (styles: unknown) => styles,
+      hairlineWidth: 1,
+      absoluteFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }
+    },
     Text: 'Text',
     View: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('View', props, children)
@@ -175,5 +180,41 @@ describe('TerminalArrowPad', () => {
     })
     expect(tap).toHaveBeenCalledOnce()
     expect(scrollView.props.scrollEnabled).toBe(true)
+  })
+
+  it('consumes held sticky modifiers from useTerminalDockKeys when tapping an arrow quadrant', () => {
+    const tap = vi.fn(async () => true)
+    const hold = vi.fn()
+    const prepareAccessoryPress = vi.fn(() => ({ tap, hold }))
+
+    function Harness() {
+      const dockKeys = useTerminalDockKeys({
+        activeHandle: 'term-1',
+        sendInput: vi.fn(async () => true)
+      })
+      return createElement(MobileSessionAccessoryKeys, {
+        controller: createController({ dockKeys, prepareAccessoryPress })
+      })
+    }
+
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+
+    const pad = renderer!.root.find(
+      (node) => typeof node.type === 'string' && node.props?.accessibilityLabel === 'Arrow keys'
+    )
+
+    act(() => {
+      pad.props.onResponderGrant({
+        nativeEvent: { pageX: 50, pageY: 50, locationX: 4, locationY: 16 }
+      })
+    })
+    expect(prepareAccessoryPress).toHaveBeenLastCalledWith({ bytes: '\x1b[D' })
+
+    act(() => {
+      pad.props.onResponderRelease({})
+    })
+    expect(tap).toHaveBeenCalledOnce()
   })
 })

@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native'
+import {
+  Platform,
+  StyleSheet,
+  View,
+  type GestureResponderEvent,
+  type LayoutChangeEvent,
+  type ViewStyle
+} from 'react-native'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -9,6 +16,9 @@ import { terminalDockStyles as styles } from './terminal-dock-styles'
 export type TerminalArrowKey = 'arrowUp' | 'arrowDown' | 'arrowLeft' | 'arrowRight'
 
 const DRAG_START_DISTANCE = 10
+const WEB_TOUCH_LOCK_STYLE = Platform.select<ViewStyle>({
+  web: { touchAction: 'none', userSelect: 'none' } as ViewStyle
+})
 
 function directionOf(dx: number, dy: number): TerminalArrowKey {
   if (Math.abs(dx) > Math.abs(dy)) {
@@ -82,7 +92,12 @@ export function TerminalArrowPad({
     <View
       // The chevrons must not become the touch target, or locationX/Y would be measured from them.
       pointerEvents="box-only"
-      style={[styles.arrowPad, dragging && styles.arrowPadDragging, disabled && styles.disabled]}
+      style={[
+        styles.arrowPad,
+        WEB_TOUCH_LOCK_STYLE,
+        dragging && styles.arrowPadDragging,
+        disabled && styles.disabled
+      ]}
       onLayout={(event: LayoutChangeEvent) => {
         sizeRef.current = event.nativeEvent.layout
       }}
@@ -92,7 +107,9 @@ export function TerminalArrowPad({
         const { pageX, pageY, locationX, locationY } = event.nativeEvent
         dragRef.current = { x: pageX, y: pageY, direction: null }
         const { width, height } = sizeRef.current
-        const side = sideAt(locationX, locationY, width, height)
+        const localX = Number.isFinite(locationX) ? locationX : width / 2
+        const localY = Number.isFinite(locationY) ? locationY : height / 2
+        const side = sideAt(localX, localY, width, height)
         setHot(side)
         onHoldChange(true)
         onPressStart(side)
@@ -148,25 +165,32 @@ export function TerminalArrowPad({
         }
       }}
     >
-      <ChevronLeft
-        size={12}
-        strokeWidth={2.6}
-        color={iconColor('arrowLeft')}
-        style={styles.arrowLeft}
-      />
-      <ChevronRight
-        size={12}
-        strokeWidth={2.6}
-        color={iconColor('arrowRight')}
-        style={styles.arrowRight}
-      />
-      <ChevronUp size={11} strokeWidth={2.6} color={iconColor('arrowUp')} style={styles.arrowUp} />
-      <ChevronDown
-        size={11}
-        strokeWidth={2.6}
-        color={iconColor('arrowDown')}
-        style={styles.arrowDown}
-      />
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <ChevronLeft
+          size={12}
+          strokeWidth={2.6}
+          color={iconColor('arrowLeft')}
+          style={styles.arrowLeft}
+        />
+        <ChevronRight
+          size={12}
+          strokeWidth={2.6}
+          color={iconColor('arrowRight')}
+          style={styles.arrowRight}
+        />
+        <ChevronUp
+          size={11}
+          strokeWidth={2.6}
+          color={iconColor('arrowUp')}
+          style={styles.arrowUp}
+        />
+        <ChevronDown
+          size={11}
+          strokeWidth={2.6}
+          color={iconColor('arrowDown')}
+          style={styles.arrowDown}
+        />
+      </View>
     </View>
   )
 }

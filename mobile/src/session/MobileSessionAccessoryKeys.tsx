@@ -159,7 +159,7 @@ export function MobileSessionAccessoryKeys({
             disabled={!canSend}
             // Prepared on touch-down so a lift after a terminal switch cannot land on the new terminal.
             onPressStart={(side) => {
-              const modifiers = dockKeys?.takeModifiers() ?? NO_STICKY_MODIFIERS
+              const modifiers = dockKeys?.takeModifiers?.() ?? NO_STICKY_MODIFIERS
               const input = terminalDockKeyInput(side, modifiers)
               padPressRef.current = {
                 modifiers,
