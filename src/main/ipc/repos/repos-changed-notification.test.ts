@@ -20,4 +20,19 @@ describe('notifyReposChanged', () => {
 
     expect(notifier.notifyAutomationsChanged).toHaveBeenCalledWith({ reason: 'definition' })
   })
+
+  it('still refreshes automation lists when the repo broadcast throws', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const notifier = {
+      notifyReposChangedForRemoteClients: vi.fn(() => {
+        throw new Error('client stream closed')
+      }),
+      notifyAutomationsChanged: vi.fn()
+    }
+    setRepoRemoteClientNotifier(notifier)
+
+    notifyReposChanged(null)
+
+    expect(notifier.notifyAutomationsChanged).toHaveBeenCalledOnce()
+  })
 })

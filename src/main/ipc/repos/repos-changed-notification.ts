@@ -20,13 +20,19 @@ export function notifyReposChanged(mainWindow: BrowserWindow | null): void {
     mainWindow.webContents.send('repos:changed')
   }
   // Paired clients refetch only on this event, including host-side deletes and renames (#11994).
-  try {
-    repoRemoteClientNotifier?.notifyReposChangedForRemoteClients()
-    // Automation owners are projected from projects, so open lists must re-read them (STA-12812).
+  broadcast('repo', () => repoRemoteClientNotifier?.notifyReposChangedForRemoteClients())
+  // Automation owners are projected from projects, so open lists must re-read them (STA-12812).
+  broadcast('automation', () =>
     repoRemoteClientNotifier?.notifyAutomationsChanged({ reason: 'definition' })
-  } catch (err) {
-    // Broadcast failure must not reject an already committed mutation.
-    console.error('[repos] failed to notify remote clients of repo change', err)
-  }
+  )
   scheduleCurrentWorktreeBaseDirectoryWatcherSync()
+}
+
+// Broadcast failure must not reject an already committed mutation or skip the other broadcast.
+function broadcast(kind: string, send: () => void): void {
+  try {
+    send()
+  } catch (err) {
+    console.error(`[repos] failed to notify ${kind} change for a repo change`, err)
+  }
 }
