@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { probeClaudeCliVersion } from '../../claude-hook-event-versions'
+import recordedUltracodeSettings from '../../__fixtures__/ultracode-settings.json'
 import {
   CLAUDE_APPLY_FLAG_SETTINGS_CONTROL,
   CLAUDE_EFFORT_FLAG,
@@ -518,10 +519,10 @@ describe('Claude Ultracode effort', () => {
       workflow = settings.ultracode ?? workflow
     })
     session.connection.applyFlagSettings = applyFlagSettings
-    session.connection.getSettings = async () => ({
-      effective: { effortLevel: 'xhigh' },
-      applied: { effort: 'xhigh', ultracode: workflow }
-    })
+    session.connection.getSettings = async () =>
+      workflow
+        ? recordedUltracodeSettings.available
+        : { effective: { effortLevel: 'xhigh' }, applied: { effort: 'xhigh', ultracode: false } }
     await setClaudeStructuredOption(session, { key: 'effort', value: 'ultracode' }, undefined)
     await vi.waitFor(() => expect(session.confirmedOptions.has('effort')).toBe(true))
     expect(claudeExecutionObservations(session)).toEqual({ effort: 'ultracode' })
@@ -539,10 +540,10 @@ describe('Claude Ultracode effort', () => {
     async (ultracode) => {
       const session = sessionFor(vi.fn(async () => undefined))
       session.connection.applyFlagSettings = vi.fn(async () => {})
-      session.connection.getSettings = async () => ({
-        effective: { effortLevel: 'xhigh' },
-        applied: { effort: 'xhigh', ultracode }
-      })
+      session.connection.getSettings = async () =>
+        ultracode === false
+          ? recordedUltracodeSettings.unavailable
+          : { effective: { effortLevel: 'xhigh' }, applied: { effort: 'xhigh' } }
       await expect(
         setClaudeStructuredOption(session, { key: 'effort', value: 'ultracode' }, undefined)
       ).resolves.toEqual({ effort: 'ultracode' })
