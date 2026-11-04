@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from './agent-status/process/agent-process-recognition'
 import { selectForegroundProcessCandidate } from './foreground-process-selection'
 
 // Released 6.9.0 PagerArgs single/JSON/file flags, forwarded by outer Commands::Agent.

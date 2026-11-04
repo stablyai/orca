@@ -38,6 +38,7 @@ export type WorktreeCardPrDisplay =
       state?: HostedReviewInfo['state']
       url?: string
       status?: HostedReviewInfo['status']
+      checksSummary?: HostedReviewInfo['checksSummary']
     }
 
 type WorktreeCardPrDisplayOptions = {

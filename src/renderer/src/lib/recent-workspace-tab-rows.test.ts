@@ -4,11 +4,11 @@ import {
   type RecentWorkspaceTabRow
 } from './recent-workspace-tab-rows'
 import type { TabPaneInputSources } from '../../../shared/sidebar-list/smart-attention'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
-  type AgentStatusState
-} from '../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../shared/agent-status/contracts/agent-status-types'
 
 const NOW = 1_700_000_000_000
 const LEAF_ID = '11111111-2222-4333-8444-555555555555'

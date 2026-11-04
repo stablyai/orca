@@ -4,7 +4,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent
 } from '@/components/ui/dropdown-menu'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import { createElement } from 'react'
 import { act, fireEvent, render } from '@testing-library/react'
 import { expect, vi } from 'vitest'
@@ -18,7 +18,7 @@ import {
 } from './use-agent-launch-picker-inventory'
 import { agentPickerAcquisitionDiagnostics } from './agent-launch-picker-acquisition'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
-import * as picker from '../../../../shared/agent-launch-picker'
+import * as picker from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import {
   applyNativeChatSessionOptionPicks,
   structuredLaunchSeedOptions

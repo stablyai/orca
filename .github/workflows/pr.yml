@@ -989,7 +989,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Use blob:none for merge-base history because blobs are ~89% of pack; fetch rare historical contents on demand.
+          # Requested historical snapshots acquire their blobs before timed extraction.
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false

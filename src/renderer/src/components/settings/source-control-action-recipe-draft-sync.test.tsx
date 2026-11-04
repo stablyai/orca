@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, fireEvent, renderHook, waitFor } from '@testing-library/react'
 import { expect, it } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   getDefaultSourceControlAiSettings,
   normalizeSourceControlAiSettings

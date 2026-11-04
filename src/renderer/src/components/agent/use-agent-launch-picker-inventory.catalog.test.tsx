@@ -7,8 +7,9 @@ import {
   inventoryCatalog as catalog
 } from './agent-launch-picker-freshness-test-fixture'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import * as picker from '../../../../shared/agent-launch-picker'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import * as picker from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { agentPickerArgumentsText } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
@@ -124,7 +125,7 @@ it('shows unsupported rather than perpetual busy for a null-target SSH catalog w
   expect(entry.arguments).toBe('--debug')
   expect(draft.arguments).toBeUndefined()
   expect(picker.agentPickerLaunchInputs(draft, entry)).not.toHaveProperty('agentArgs')
-  expect(picker.agentPickerArgumentsText(entry, draft)).toBe('--debug')
+  expect(agentPickerArgumentsText(entry, draft)).toBe('--debug')
 })
 
 it('uses the existing known host registration to show no-discovery without a futile catalog retry', async () => {

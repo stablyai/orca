@@ -8,10 +8,10 @@ import type { NativeChatComposerHandle } from '../native-chat/NativeChatComposer
 import { AgentLaunchPromptComposer } from './AgentLaunchPromptComposer'
 import {
   agentPickerButtonOrder,
-  type agentPickerEntryOptions,
   type AgentPickerEntry,
   type AgentPickerSurface
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { agentPickerEntryOptions } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import { formatKeybinding } from '../../../../shared/keybindings'
 
 export function agentLaunchSetupArgumentsNote(

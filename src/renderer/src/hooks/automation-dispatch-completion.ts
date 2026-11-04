@@ -8,7 +8,8 @@ import type {
   AutomationPrecheckResult,
   AutomationRun
 } from '../../../shared/automations-types'
-import type { AgentStateHistoryEntry, AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStateHistoryEntry } from '../../../shared/agent-status/lifecycle/agent-state-history'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   selectAutomationAgentStatusEntryChange,
   UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY

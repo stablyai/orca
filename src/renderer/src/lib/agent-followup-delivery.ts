@@ -1,10 +1,10 @@
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-paste-draft'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess
-} from '../../../shared/agent-process-recognition'
+} from '../../../shared/agent-status/process/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 
 export async function sendFollowupPromptWhenAgentReady(args: {

@@ -3,8 +3,8 @@ import {
   type TextGenerationFailureFields
 } from './text-generation-failure-copy'
 import { findOptionOccurrence } from './command-option-occurrence'
-import { planAgentBinary } from './agent-command-plan'
-export { planAgentBinary } from './agent-command-plan'
+import { planAgentBinary } from './agent-launch/startup/agent-command-plan'
+
 import type { CommandTemplateBackslash } from './commit-message-prompt'
 import {
   getCommitMessageAgentSpec,
@@ -18,7 +18,7 @@ import {
   planAdditionalAgentArgs,
   compactRecipeOptions
 } from './commit-message-generation-options'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import { mergeOpenCodeGenerationArgs } from './opencode-generation-command'
 import { buildAntigravityGenerationInput } from './antigravity-generation-stream'
 

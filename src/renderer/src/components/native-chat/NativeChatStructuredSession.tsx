@@ -155,7 +155,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     rootRef,
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
-  const fileLinkProps = { onLinkClick, allowFileUriLinks: onLinkClick !== undefined }
+  const links = { onLinkClick, allowFileUriLinks: onLinkClick !== undefined }
   const handOff = useNativeChatHandOff({
     pane: props,
     directory: fileLinkContext,
@@ -319,7 +319,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                     awaitingInput={prompt === null ? null : 'shown'}
                     turnActivity={controller.turnActivity}
                     stopping={stopControls.stopping}
-                    {...{ ...fileLinkProps, structuredAttachments: true }}
+                    {...{ ...links, structuredAttachments: true }}
                     runtimeContext={imageRuntimeContext}
                     deliveryNotices={deliveryNotices}
                   />
@@ -371,7 +371,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               isSubmitting={promptResponse.holds(prompt)}
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
-              {...fileLinkProps}
+              {...links}
             />
           ) : null}
           {prompt && questionBody ? (
@@ -383,9 +383,10 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
               answerInputRef={questionAnswerInputRef}
+              {...links}
             />
           ) : null}
-          {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
+          {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits, links)}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer

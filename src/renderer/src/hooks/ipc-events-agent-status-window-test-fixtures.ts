@@ -4,7 +4,7 @@ import { vi } from 'vitest'
 import type {
   AgentStatusClearIpcPayload,
   MigrationUnsupportedPtyEntry
-} from '../../../shared/agent-status-types'
+} from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusSetData } from './ipc-events-agent-status-store-test-fixtures'
 
 export function buildWindowApi(args: {

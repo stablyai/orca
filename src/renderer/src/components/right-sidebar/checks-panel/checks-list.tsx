@@ -44,6 +44,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
     rows,
     passingCount,
     failingCount,
+    cancelledCount,
     pendingCount,
     neutralCount,
     toggleCheckExpanded,
@@ -80,6 +81,13 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                 '{{count}} failing',
                 { count: failingCount, defaultValue_one: '{{count}} failing' }
               )}
+            </span>
+          )}
+          {cancelledCount > 0 && (
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <CircleDashed className="size-3" />
+              {cancelledCount}{' '}
+              {translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}
             </span>
           )}
           {pendingCount > 0 && (

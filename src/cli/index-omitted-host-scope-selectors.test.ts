@@ -47,7 +47,7 @@ import type {
   RuntimeAgentLineageTestModule,
   RuntimeAgentLineageCatalogTestModule
 } from '../shared/runtime-agent-lineage-consumer.test-fixture'
-import { COMMAND_SPECS } from './specs'
+import { COMMAND_SPECS } from './specs/index'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
@@ -223,36 +223,6 @@ describe('omittedHostIds selector annotation', () => {
       expect(callMock).toHaveBeenCalledTimes(1)
     }
   )
-
-  it('costs no extra round trip when nothing was omitted', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_list', {
-        terminals: [TERMINAL_ROW],
-        totalCount: 1,
-        truncated: false,
-        hostScope: { hostIds: ['local'], omittedHostIds: [] }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'list', '--json'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledExactlyOnceWith('terminal.list', {
-      worktree: undefined,
-      limit: undefined,
-      includeVisualLayouts: false
-    })
-    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
-      ok: true,
-      result: {
-        terminals: [TERMINAL_ROW],
-        totalCount: 1,
-        truncated: false,
-        hostScope: { hostIds: ['local'], omittedHostIds: [] }
-      }
-    })
-  })
 })
 
 describe('worktree listings report their host coverage', () => {

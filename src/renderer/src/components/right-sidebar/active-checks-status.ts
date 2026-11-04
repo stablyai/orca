@@ -1,6 +1,8 @@
+import { getProviderChecksOutcome } from '../../../../shared/provider-check-summary'
 import type { AppState } from '../../store/types'
 import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-request-types'
+type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
@@ -104,7 +106,7 @@ function computeActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus 
   )
   const hostedReview = state.hostedReviewCache?.[hostedReviewCacheKey]?.data ?? null
   if (hostedReview && hostedReview.provider !== 'github') {
-    return hostedReview.status
+    return getProviderChecksOutcome(hostedReview.checksSummary, hostedReview.status)
   }
   if (
     (activeWorktree.linkedGitLabMR ?? null) !== null ||
@@ -116,10 +118,10 @@ function computeActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus 
   }
   const branchPR = state.prCache[prCacheKey]?.data ?? null
   if (branchPR && !isGitHubPRSuppressed(activeWorktree, branchPR.number)) {
-    return branchPR.checksStatus
+    return getProviderChecksOutcome(branchPR.checksSummary, branchPR.checksStatus)
   }
   return hostedReview?.provider === 'github' &&
     !isGitHubPRSuppressed(activeWorktree, hostedReview.number)
-    ? hostedReview.status
+    ? getProviderChecksOutcome(hostedReview.checksSummary, hostedReview.status)
     : null
 }

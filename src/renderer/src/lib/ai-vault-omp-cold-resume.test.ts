@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import { createTestStore, makeTab } from '@/store/slices/store-test-helpers'
-import { buildAgentResumeStartupPlan } from './tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import { buildAiVaultResumeStartupForWorktree } from './ai-vault-resume-command'
 
 describe('AI Vault OMP cold resume', () => {

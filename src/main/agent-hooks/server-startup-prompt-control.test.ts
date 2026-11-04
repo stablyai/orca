@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
-import { parseAgentHookEndpointFile } from '../../shared/agent-hook-endpoint-file'
-import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../shared/opencode-startup-prompt'
+import { parseAgentHookEndpointFile } from '../../shared/agent-hook-listener/transport/agent-hook-endpoint-file'
+import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../shared/agent-launch/startup/opencode-startup-prompt'
 import { PANE } from './server.test-fixtures'
 
 describe('startup prompt control with status hooks disabled', () => {

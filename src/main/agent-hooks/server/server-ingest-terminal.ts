@@ -1,16 +1,16 @@
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
-import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal-status-equivalence'
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-status/lifecycle/agent-terminal-status-equivalence'
+import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { agentSubagentsEqual } from '../../../shared/agent-status-subagent-snapshot'
-import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
+import { agentSubagentsEqual } from '../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
+import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
 import { programStatusHookYieldEndsAt } from './program-status/hook-precedence'
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'

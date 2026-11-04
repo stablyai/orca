@@ -1,5 +1,5 @@
-import type { TuiAgent } from './tui-agent'
-import { isTuiAgent } from './tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
 import { isAgentSessionHandleProvider } from './agent-session/lifecycle/agent-session-provider-handle'
 import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from './native-chat/input/native-chat-session-option-defaults'
 import {
@@ -11,7 +11,7 @@ import type { CatalogOption } from './agent-session/options/agent-session-option
 import {
   agentPermissionHasTerminalChoice,
   type AgentPermissionChoice
-} from './tui-agent-permission-choice'
+} from './agent-launch/permissions/tui-agent-permission-choice'
 
 /** Agents whose model an action can pick: the ones whose session catalog lists models. */
 export function sourceControlActionAgentPicksModel(

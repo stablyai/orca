@@ -1,3 +1,4 @@
+import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -127,4 +128,18 @@ describe('the long-press details sheet', () => {
     act(() => renderer?.unmount())
     expect(texts(render({ cliCreated: true }).root)[2]).toBe('Created from Orca CLI')
   })
+})
+
+it('renders a cancelled branch PR without calling it failing', () => {
+  render({
+    linkedPR: {
+      number: 4,
+      state: 'open',
+      checksStatus: 'failure',
+      checksSummary: summarizeProviderChecks([{ status: 'completed', conclusion: 'cancelled' }])
+    }
+  })
+  const text = JSON.stringify(renderer?.toJSON())
+  expect(text).toContain('Cancelled')
+  expect(text).not.toContain('Checks: Failing')
 })

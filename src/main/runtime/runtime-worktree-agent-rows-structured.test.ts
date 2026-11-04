@@ -1,8 +1,8 @@
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { statusFeedChildView } from '../native-chat/agent-session-wire/structured-agent-session-status-feed-test-session'
-import { normalizeAgentStatusPayload } from '../../shared/agent-status-types'
+import { normalizeAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import { resolveWorktreeCatalogSnapshot } from './rpc/worktree-catalog-snapshot'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 

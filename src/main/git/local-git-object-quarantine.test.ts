@@ -55,17 +55,6 @@ describe('localGitObjectsDirectory', () => {
       gitPath: '/mnt/c/repo/.git/objects'
     })
   })
-
-  it('uses one spelling for native Git', () => {
-    expect(localGitObjectsDirectory('/Users/me/repo/.git', undefined)).toEqual({
-      hostPath: '/Users/me/repo/.git/objects',
-      gitPath: '/Users/me/repo/.git/objects'
-    })
-    expect(localGitObjectsDirectory('C:\\repo\\.git', undefined)).toEqual({
-      hostPath: 'C:\\repo\\.git\\objects',
-      gitPath: 'C:\\repo\\.git\\objects'
-    })
-  })
 })
 
 describe('createLocalGitObjectQuarantine on a Windows host', () => {

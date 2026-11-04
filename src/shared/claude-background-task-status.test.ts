@@ -10,7 +10,7 @@ import {
   markClaudeLeadTurnInterrupted,
   seedClaudeSubagentRosterFromSnapshots
 } from './agent-hook-listener/providers/claude-roster-state'
-import { normalizeHookPayload } from './agent-hook-listener'
+import { normalizeHookPayload } from './agent-hook-listener/normalization/normalize-hook-payload'
 import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import { makePaneKey } from './stable-pane-id'
 

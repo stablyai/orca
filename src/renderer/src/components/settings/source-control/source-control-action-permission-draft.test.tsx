@@ -9,7 +9,7 @@ import { resolveSourceControlActionRecipe } from '../../../../../shared/source-c
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import * as lifts from '../../../../../shared/source-control-action-permission-lift'
-import * as shell from '../../../../../shared/tui-agent-startup-shell'
+import * as shell from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { expect, it, vi } from 'vitest'
 import '../__fixtures__/settings-persistence-test-fixture'
 import {
@@ -25,7 +25,7 @@ import {
   normalizeSourceControlActionRecipe,
   type SourceControlActionRecipe
 } from '../../../../../shared/source-control-ai-actions'
-import { agentPermissionArgsForLaunch } from '../../../../../shared/agent-permission-args'
+import { agentPermissionArgsForLaunch } from '../../../../../shared/agent-launch/permissions/agent-permission-args'
 import { SourceControlActionArguments } from './SourceControlActionArguments'
 import { useRepositorySourceControlAiGlobalUx } from '../repository/source-control/repository-source-control-ai-global-ux'
 import { useSourceControlActionRecipeDraftState } from './source-control-action-recipe-draft-state'

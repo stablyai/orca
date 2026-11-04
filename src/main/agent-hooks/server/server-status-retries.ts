@@ -1,18 +1,18 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
 import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-transcript-poll'
-import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
 } from '../../../shared/agent-hook-listener/grok-result-discovery'
-import type { AgentHookSource } from '../../../shared/agent-hook-relay'
-import { pickHostTurnEnd } from '../../../shared/agent-status-types'
+import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
-import { AgentTranscriptPollScheduler } from '../../../shared/agent-transcript-poll-scheduler'
+import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,

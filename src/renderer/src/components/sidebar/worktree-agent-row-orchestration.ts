@@ -1,7 +1,7 @@
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 
 import { orchestrationContextsEqual } from '@/store/slices/agent-status/agent-status-orchestration-context'
 

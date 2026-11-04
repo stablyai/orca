@@ -14,7 +14,7 @@ import {
   structuredAgentSessionModelId,
   structuredAgentSessionOwnValue
 } from './structured-agent-session-option-state'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 
 /** Query base or immutable launch seed, with finite controller operations above it.
  *  Display provenance stays separate from accepted input while catalog labels load. */

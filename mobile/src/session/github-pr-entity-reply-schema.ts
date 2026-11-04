@@ -159,7 +159,9 @@ const checkSummarySchema = z
     passed: prCount('passed'),
     failed: prCount('failed'),
     pending: prCount('pending'),
-    neutral: prCount('neutral')
+    neutral: prCount('neutral'),
+    cancelled: salvagedOptional('cancelled', z.number().int().nonnegative()),
+    scope: z.literal('pipeline').optional()
   })
   .transform((summary): ProviderCheckSummary => ({
     state: summary.state,
@@ -167,7 +169,14 @@ const checkSummarySchema = z
     passed: summary.passed ?? 0,
     failed: summary.failed ?? 0,
     pending: summary.pending ?? 0,
-    neutral: summary.neutral ?? 0
+    neutral: summary.neutral ?? 0,
+    ...(summary.cancelled !== undefined &&
+    [summary.total, summary.passed, summary.failed, summary.pending, summary.neutral].every(
+      (count) => count !== undefined
+    )
+      ? { cancelled: summary.cancelled }
+      : {}),
+    ...(summary.scope ? { scope: summary.scope } : {})
   }))
 
 export function prCheckSummary(name: string) {

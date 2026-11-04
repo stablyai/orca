@@ -1,9 +1,12 @@
-import type { AgentChoicePatch, AgentDedicatedChoices } from './agent-launch-choices'
+import type {
+  AgentChoicePatch,
+  AgentDedicatedChoices
+} from './agent-launch/choices/agent-launch-choices'
 import {
   normalizeActionModelSelection,
   readActionModelSelection
 } from './source-control-action-model-selection'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { ActionModelSelection, SourceControlActionRecipe } from './source-control-ai-actions'
 
 /** Fold accepted choice effects into this recipe owner without rewriting another source. */
