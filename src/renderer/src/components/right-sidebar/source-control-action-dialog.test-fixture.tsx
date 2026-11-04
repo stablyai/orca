@@ -25,6 +25,7 @@ import {
   normalizeSourceControlActionRecipe
 } from '../../../../shared/source-control-ai-actions'
 import { useSourceControlAgentActionDialog } from './useSourceControlAgentActionDialog'
+import { SourceControlTextGenerationDialog } from './source-control/ai/text-generation-dialog'
 import * as dialogController from './useSourceControlAgentActionDialog'
 import {
   render,
@@ -167,6 +168,41 @@ export async function pickDialogAgent(label: string, terminal: boolean) {
     throw new Error(`Missing agent row ${label}`)
   }
   fireEvent.click(row)
+}
+
+export function mountTextGenerationDialog(customAgentCommand = '') {
+  const settings = getDefaultSettings('/tmp/source-control-shared-picker')
+  settings.sourceControlAi = {
+    ...settings.sourceControlAi!,
+    enabled: true,
+    agentId: 'codex',
+    selectedModelByAgent: { codex: 'gpt-5.4-mini' },
+    selectedThinkingByModel: { 'gpt-5.4-mini': 'xhigh' },
+    customAgentCommand,
+    actions: { commitMessage: { agentId: 'codex', commandInputTemplate: '{basePrompt}' } }
+  }
+  const repo = { ...TEST_REPO, sourceControlAi: undefined }
+  useAppStore.setState({ settings, repos: [repo] })
+  const onGenerate = vi.fn()
+  const onSaveDefaults = vi.fn().mockResolvedValue(undefined)
+  const onOpenChange = vi.fn()
+  const view = render(
+    <SourceControlTextGenerationDialog
+      open
+      actionId="commitMessage"
+      title="Customize commit message"
+      description="Configure this generation."
+      generateLabel="Generate commit message"
+      settings={settings}
+      repo={repo}
+      discoveryHostKey="host"
+      onGenerate={onGenerate}
+      onOpenChange={onOpenChange}
+      onSaveDefaults={onSaveDefaults}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  return { view, repo, onGenerate, onSaveDefaults, onOpenChange }
 }
 
 export function renderDialog(

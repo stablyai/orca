@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { CommitMessageAiSettings } from '../../../../shared/commit-message-ai-types'
 import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentCapability,
   isCustomAgentId,
+  listCommitMessageAgentCapabilities,
   resolveCommitMessageAgentChoice
 } from '../../../../shared/commit-message-agent-spec'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../shared/commit-message-host-key'
@@ -13,6 +14,12 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store/index'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { aiCommitPrPickerEntry } from './ai-commit-pr-picker'
 import {
   EMPTY_COMMIT_MESSAGE_AI_SETTINGS,
   readCommitMessageAiSettings,
@@ -33,13 +40,16 @@ export type AiCommitPrSettingsViewModel = {
   unsupportedAgentLabel: string | null
   toggleAi: () => void
   onAgentChange: (newAgentId: string) => void
-  onModelChange: (newModelId: string) => void
-  onThinkingChange: (newLevelId: string) => void
+  pickerEntries: AgentPickerEntry[]
+  onPick: (agent: TuiAgent, draft?: AgentPickerDraft) => void
   writeConfig: (patch: Partial<CommitMessageAiSettings>) => void
 }
 
 /** List what Commit message generation can run on this host, including saved discovery. */
-function getTextGenerationCapability(agentId: string, settings: GlobalSettings | null) {
+function getTextGenerationCapability(
+  agentId: string,
+  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'> | null
+) {
   const capability = isTuiAgent(agentId) ? getCommitMessageAgentCapability(agentId) : undefined
   if (!capability || !settings) {
     return capability
@@ -108,10 +118,11 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
   const unsupportedAgentLabel = unsupportedConfiguredAgentLabel ?? unsupportedDefaultAgentLabel
 
   const writeConfig = (patch: Partial<CommitMessageAiSettings>): void => {
-    if (!settings) {
+    const latest = useAppStore.getState().settings
+    if (!latest) {
       return
     }
-    updateSettings({ commitMessageAi: { ...config, ...patch } })
+    updateSettings({ commitMessageAi: { ...readCommitMessageAiSettings(latest), ...patch } })
   }
 
   const toggleAi = (): void => {
@@ -132,74 +143,72 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
     writeConfig(seedCommitMessageAiEnablePatch(config, seedAgentId))
   }
 
-  const onAgentChange = (newAgentId: string): void => {
-    if (isCustomAgentId(newAgentId)) {
-      writeConfig({ agentId: CUSTOM_AGENT_ID })
+  const sourceControlAi = settings?.sourceControlAi
+  const pickerEntries = useMemo(
+    () =>
+      listCommitMessageAgentCapabilities().map((capability) =>
+        aiCommitPrPickerEntry(
+          getTextGenerationCapability(capability.id, { sourceControlAi, commitMessageAi: config })!,
+          config
+        )
+      ),
+    [sourceControlAi, config]
+  )
+
+  const onPick = (agent: TuiAgent, draft?: AgentPickerDraft): void => {
+    const latestSettings = useAppStore.getState().settings
+    if (!latestSettings) {
       return
     }
-    const capability = getTextGenerationCapability(newAgentId, settings)
+    const latest = readCommitMessageAiSettings(latestSettings)
+    const capability = getTextGenerationCapability(agent, latestSettings)
     if (!capability) {
       return
     }
-    const nextSelectedModelByAgent = { ...config.selectedModelByAgent }
-    if (!nextSelectedModelByAgent[capability.id]) {
-      nextSelectedModelByAgent[capability.id] = capability.defaultModelId
-    }
-    const newModel = resolveCommitMessageSelectedModel(
-      { ...config, agentId: capability.id },
-      capability
-    )
-    const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
-    if (
-      newModel.thinkingLevels &&
-      newModel.defaultThinkingLevel &&
-      !nextSelectedThinkingByModel[newModel.id]
-    ) {
-      nextSelectedThinkingByModel[newModel.id] = newModel.defaultThinkingLevel
-    }
-    writeConfig({
-      agentId: capability.id,
-      selectedModelByAgent: nextSelectedModelByAgent,
-      selectedThinkingByModel: nextSelectedThinkingByModel
-    })
-  }
-
-  const onModelChange = (newModelId: string): void => {
-    if (!activeCapability) {
+    const agentChanged =
+      resolveCommitMessageAgentChoice(
+        latest.agentId,
+        latestSettings.defaultTuiAgent,
+        latestSettings.disabledTuiAgents
+      ) !== agent
+    const modelChanged = draft?.textChanges?.includes('model')
+    const effortChanged = draft?.textChanges?.includes('effort')
+    if (!agentChanged && !modelChanged && !effortChanged) {
       return
     }
-    const model = activeCapability.models.find((m) => m.id === newModelId)
+    const model = modelChanged
+      ? capability.models.find((model) => model.id === draft?.choices.model)
+      : resolveCommitMessageSelectedModel(latest, capability)
     if (!model) {
       return
     }
-    const nextSelectedModelByAgent = {
-      ...config.selectedModelByAgent,
-      [activeCapability.id]: model.id
+    const selectedModelByAgent = { ...latest.selectedModelByAgent }
+    if (modelChanged || !selectedModelByAgent[agent]) {
+      selectedModelByAgent[agent] = modelChanged ? model.id : capability.defaultModelId
     }
-    const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
-    if (
-      model.thinkingLevels &&
-      model.defaultThinkingLevel &&
-      !nextSelectedThinkingByModel[model.id]
-    ) {
-      nextSelectedThinkingByModel[model.id] = model.defaultThinkingLevel
+    const selectedThinkingByModel = { ...latest.selectedThinkingByModel }
+    const effort = effortChanged ? draft?.choices.options?.effort : undefined
+    if (effort !== undefined) {
+      selectedThinkingByModel[model.id] = effort
+    } else if (model.defaultThinkingLevel && !selectedThinkingByModel[model.id]) {
+      selectedThinkingByModel[model.id] = model.defaultThinkingLevel
     }
-    writeConfig({
-      selectedModelByAgent: nextSelectedModelByAgent,
-      selectedThinkingByModel: nextSelectedThinkingByModel
+    updateSettings({
+      commitMessageAi: {
+        ...latest,
+        ...(agentChanged ? { agentId: agent } : {}),
+        selectedModelByAgent,
+        selectedThinkingByModel
+      }
     })
   }
 
-  const onThinkingChange = (newLevelId: string): void => {
-    if (!activeModel) {
-      return
+  const onAgentChange = (agentId: string): void => {
+    if (isCustomAgentId(agentId)) {
+      writeConfig({ agentId: CUSTOM_AGENT_ID })
+    } else if (isTuiAgent(agentId)) {
+      onPick(agentId)
     }
-    writeConfig({
-      selectedThinkingByModel: {
-        ...config.selectedThinkingByModel,
-        [activeModel.id]: newLevelId
-      }
-    })
   }
 
   return {
@@ -214,8 +223,8 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
     unsupportedAgentLabel,
     toggleAi,
     onAgentChange,
-    onModelChange,
-    onThinkingChange,
+    pickerEntries,
+    onPick,
     writeConfig
   }
 }

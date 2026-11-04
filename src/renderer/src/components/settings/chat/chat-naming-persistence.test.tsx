@@ -19,6 +19,8 @@ import type {
   SourceControlAiSettingsPatch
 } from '../../../../../shared/source-control-ai-types'
 import { useAiCommitPrSettings } from '../../feature-wall/useAiCommitPrSettings'
+import { aiCommitPrPickerDraft } from '../../feature-wall/ai-commit-pr-picker'
+import { applyAgentPickerEdit } from '../../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import { useSourceControlActionRecipeDraftState } from '../source-control/source-control-action-recipe-draft-state'
 import { useAppStore } from '../../../store/index'
 import { useSettingsInteractionController } from '../page/use-settings-interaction-controller'
@@ -645,7 +647,12 @@ it('shows and edits the discovered Commit message model on the AI author card', 
   })
   expect(result.current.activeModel?.id).toBe('gpt-6.1-sol')
   expect(result.current.activeThinking).toBe('high')
-  act(() => result.current.onThinkingChange('low'))
+  const entry = result.current.pickerEntries.find((entry) => entry.agent === 'codex')!
+  const draft = applyAgentPickerEdit(entry, aiCommitPrPickerDraft(entry), {
+    kind: 'choice',
+    patch: { options: { effort: 'low' } }
+  })
+  act(() => result.current.onPick('codex', draft))
   await waitFor(() =>
     expect(
       useAppStore.getState().settings?.commitMessageAi?.selectedThinkingByModel['gpt-6.1-sol']

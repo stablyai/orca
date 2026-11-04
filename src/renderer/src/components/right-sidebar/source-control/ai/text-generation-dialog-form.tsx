@@ -11,7 +11,11 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog'
+import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { commitMessagePickerModel } from '@/components/feature-wall/ai-commit-pr-picker'
+import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { planSourceControlTextGeneration } from '@/lib/source-control-generation-plan'
 import {
   CUSTOM_AGENT_ID,
@@ -33,8 +37,6 @@ import {
   type CommitMessageGenerationAgentChoice
 } from './text-generation-params'
 import { translate } from '@/i18n/i18n'
-
-const UNCONFIGURED_AGENT_SELECT_VALUE = ''
 
 export type SourceControlTextGenerationSaveTarget = {
   target: SourceControlAiWriteTarget
@@ -91,7 +93,22 @@ export function SourceControlTextGenerationDialogForm({
   onOpenChange,
   onSaveDefaults
 }: SourceControlTextGenerationDialogFormProps): React.JSX.Element {
-  const capabilities = useMemo(() => listCommitMessageAgentCapabilities(), [])
+  const entries = useMemo<AgentPickerEntry[]>(
+    () =>
+      listCommitMessageAgentCapabilities().map((capability) => ({
+        agent: capability.id,
+        label: agentLabel(capability.id),
+        rows: [{ agent: capability.id, kind: 'cli' }],
+        surfaces: ['terminal'],
+        defaultSurface: 'terminal',
+        terminal: {},
+        structured: {},
+        catalog: { origin: 'unknown' },
+        arguments: ''
+      })),
+    []
+  )
+  const pickerModel = useMemo(() => commitMessagePickerModel(entries), [entries])
   const showCustomAgent = Boolean(
     baseParams && (isCustomAgentId(baseParams.agentId) || baseParams.customAgentCommand?.trim())
   )
@@ -230,46 +247,43 @@ export function SourceControlTextGenerationDialogForm({
               'Agent'
             )}
           </Label>
-          <Select
-            value={agentId || UNCONFIGURED_AGENT_SELECT_VALUE}
-            onValueChange={(value) => {
-              if (value === UNCONFIGURED_AGENT_SELECT_VALUE) {
-                return
-              }
-              setAgentId(value === CUSTOM_AGENT_ID ? CUSTOM_AGENT_ID : (value as TuiAgent))
+          <AgentLaunchPicker
+            model={pickerModel}
+            entries={entries}
+            setupDisabled
+            agent={agentId && !isCustomAgentId(agentId) ? agentId : null}
+            triggerLabel={
+              isCustomAgentId(agentId)
+                ? translate(
+                    'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
+                    'Custom command'
+                  )
+                : undefined
+            }
+            emptyLabel={translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.cce2cbd01d',
+              'Choose agent'
+            )}
+            onPick={(agent) => {
+              setAgentId(agent)
               setGenerationError(null)
             }}
           >
-            <SelectTrigger size="sm" className="h-8 text-xs">
-              <SelectValue
-                placeholder={translate(
-                  'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.cce2cbd01d',
-                  'Choose agent'
+            {showCustomAgent ? (
+              <DropdownMenuItem
+                onSelect={() => {
+                  setAgentId(CUSTOM_AGENT_ID)
+                  setGenerationError(null)
+                }}
+              >
+                <Terminal className="size-3.5 text-muted-foreground" />
+                {translate(
+                  'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
+                  'Custom command'
                 )}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {capabilities.map((capability) => (
-                <SelectItem key={capability.id} value={capability.id}>
-                  <span className="flex items-center gap-2">
-                    <AgentIcon agent={capability.id} size={14} />
-                    {agentLabel(capability.id)}
-                  </span>
-                </SelectItem>
-              ))}
-              {showCustomAgent ? (
-                <SelectItem value={CUSTOM_AGENT_ID}>
-                  <span className="flex items-center gap-2">
-                    <Terminal className="size-3.5 text-muted-foreground" />
-                    {translate(
-                      'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
-                      'Custom command'
-                    )}
-                  </span>
-                </SelectItem>
-              ) : null}
-            </SelectContent>
-          </Select>
+              </DropdownMenuItem>
+            ) : null}
+          </AgentLaunchPicker>
         </div>
 
         <div className="space-y-2">

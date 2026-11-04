@@ -49,6 +49,7 @@ export const AgentLaunchPicker = memo(
     disabled,
     setupDisabled,
     matchTriggerWidth,
+    portalContainer,
     emptyLabel,
     cli,
     children,
@@ -69,6 +70,7 @@ export const AgentLaunchPicker = memo(
     disabled?: boolean
     setupDisabled?: boolean
     matchTriggerWidth?: boolean
+    portalContainer?: HTMLElement | null
     emptyLabel?: string
     /** True when this launch is the terminal and a chat exists, so the closed field says "(CLI)". */
     cli?: boolean
@@ -187,6 +189,7 @@ export const AgentLaunchPicker = memo(
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
+            portalContainer={portalContainer}
             align="start"
             className={
               matchTriggerWidth
