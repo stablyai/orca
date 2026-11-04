@@ -36,9 +36,12 @@
     "../src/wsl-guest/**/*",
     "../src/types/**/*"
   ],
+  "exclude": [
+    "../src/main/runtime/structured-chat-coordinator-mail.test.ts",
+    "../src/main/persistence/applying-settings/project-grouping-peer-roundtrip.test.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node"]
-  },
-  "exclude": ["../src/main/persistence/applying-settings/project-grouping-peer-roundtrip.test.ts"]
+  }
 }

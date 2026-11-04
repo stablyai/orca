@@ -65,10 +65,7 @@ describe('MobileNativeChatMessage', () => {
       expect(mobileNativeChatDisplayCopyText(message)).toBe(
         'Review complete\n\nThe **result** is ready.'
       )
-      const refold = findAllByHostType(tree.root, 'Pressable').find(
-        (node) => node.props.accessibilityState?.expanded === true && node !== toggle
-      )!
-      act(() => refold.props.onPress())
+      act(() => toggle.props.onPress())
       expect(findAllByHostType(tree.root, 'MobileMarkdown')).toHaveLength(0)
     } finally {
       await activateMobileUiLocale('en')

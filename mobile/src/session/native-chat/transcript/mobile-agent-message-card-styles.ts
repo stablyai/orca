@@ -32,7 +32,6 @@ export const styles = themedStyleSheet(() => ({
   compactSender: { minWidth: 0, flexShrink: 1, minHeight: 44 },
   compactAvatar: { width: 24, height: 24, borderRadius: 12 },
   compactBody: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm, gap: spacing.xs },
-  refold: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   card: {
     flexDirection: 'row',
     gap: spacing.md,

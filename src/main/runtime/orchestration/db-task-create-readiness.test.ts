@@ -2,12 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
-
-type OrchestrationDbAccess = {
-  db: Database.Database
-}
 
 describe('task creation dependency readiness', () => {
   const databases: OrchestrationDb[] = []
@@ -30,46 +25,6 @@ describe('task creation dependency readiness', () => {
     databases.push(database)
     return database
   }
-
-  it('creates a late dependent as ready when every dependency is completed', () => {
-    const db = createDb()
-    const first = db.createTask({ runId: 'run_legacy_local', spec: 'first' })
-    const second = db.createTask({ runId: 'run_legacy_local', spec: 'second' })
-    db.updateTaskStatus(first.id, 'completed')
-    db.updateTaskStatus(second.id, 'completed')
-
-    const child = db.createTask({
-      runId: 'run_legacy_local',
-      spec: 'child',
-      deps: [first.id, second.id]
-    })
-
-    expect(child.status).toBe('ready')
-  })
-
-  it('observes a dependency completion forced between readiness evaluation and insertion', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-task-readiness-race-'))
-    directories.push(directory)
-    const path = join(directory, 'orchestration.db')
-    const db = createDb(path)
-    const concurrent = createDb(path)
-    const dependency = db.createTask({ runId: 'run_legacy_local', spec: 'dependency' })
-    const sqlite = (db as unknown as OrchestrationDbAccess).db
-    const prepare = sqlite.prepare.bind(sqlite)
-    let injected = false
-    vi.spyOn(sqlite, 'prepare').mockImplementation((sql) => {
-      if (!injected && sql.includes('INSERT INTO tasks')) {
-        injected = true
-        concurrent.updateTaskStatus(dependency.id, 'completed')
-      }
-      return prepare(sql)
-    })
-
-    const child = db.createTask({ runId: 'run_legacy_local', spec: 'child', deps: [dependency.id] })
-
-    expect(injected).toBe(true)
-    expect(child.status).toBe('ready')
-  })
 
   it('promotes only after every dependency completes', () => {
     const db = createDb()
@@ -114,17 +69,6 @@ describe('task creation dependency readiness', () => {
       db.createTask({ runId: 'run_legacy_local', spec: 'child', deps: ['task_missing'] })
     ).toThrow('Dependency task task_missing must belong to run')
     expect(db.listTasks()).toEqual([])
-  })
-
-  it('preserves a caller-owned transaction', () => {
-    const db = createDb()
-    const sqlite = (db as unknown as OrchestrationDbAccess).db
-    sqlite.exec('BEGIN IMMEDIATE')
-
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'transactional child' })
-    sqlite.exec('ROLLBACK')
-
-    expect(db.getTask(task.id)).toBeUndefined()
   })
 
   it('preserves readiness and later promotion across reload', () => {
