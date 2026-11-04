@@ -298,7 +298,7 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
 } satisfies AcpLaunchSpec
 
 const MCODE_SESSION_HISTORY: StructuredAgentSessionHistory = {
-  rowAgents: ['mcode'],
+  rowAgents: [],
   rowSessionId: (link) => link.handle.nativeId,
   parseResumeArgs: () => null
 }
@@ -310,9 +310,7 @@ export const MCODE_LAUNCH_SPEC = {
   env: {},
   dialect: GENERIC_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('mcode')?.loginCommand ?? [],
-  account: directoryAccountBinding('MINIMAX_CODE_HOME', (homePath) =>
-    join(homePath, '.minimax-code')
-  ),
+  account: directoryAccountBinding('MINIMAX_DATA_DIR', (homePath) => join(homePath, '.minimax')),
   installDirectories: () => [],
   modelDiscovery: {
     kind: 'unavailable',

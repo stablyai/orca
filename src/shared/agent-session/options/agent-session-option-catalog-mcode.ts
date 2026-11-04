@@ -34,14 +34,14 @@ export const MCODE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
   models: [
     {
-      id: 'MiniMax-M3',
+      id: 'minimax/MiniMax-M3',
       label: 'MiniMax M3',
       contextWindowTokens: 1_000_000,
       isDefault: true,
       options: [MCODE_EFFORT]
     },
     {
-      id: 'MiniMax-M3.1-flash',
+      id: 'minimax/MiniMax-M3.1-flash',
       label: 'MiniMax M3.1 Flash',
       contextWindowTokens: 1_000_000,
       options: [MCODE_EFFORT]

@@ -60,8 +60,7 @@ const logFileResolvers = {
   kimi: () => null,
   muse: jsonlLog,
   jcode: jsonLog,
-  kiro: (filePath) => kiroTranscriptPathForMetadata(filePath) || null,
-  mcode: jsonlLog
+  kiro: (filePath) => kiroTranscriptPathForMetadata(filePath) || null
 } satisfies Record<AiVaultAgent, LogFileResolver>
 
 export function aiVaultSessionLogFilePath(
