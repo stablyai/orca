@@ -163,3 +163,8 @@ function reportFact(message: MailSourceMessage): ReportFact {
   }
   return { kind: 'invalid' }
 }
+
+/** The same committed cutoff is used before dispatch and at final admission. */
+export function structuredMailAfterStop(createdAt: number, stopAt: number | null): boolean {
+  return stopAt === null || createdAt > Math.floor(stopAt / 1000)
+}

@@ -14,6 +14,8 @@ import {
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
 import { sendAgentTurn, type StructuredSessionTurnOutcome } from './send-agent-turn'
+import { sessionCrewChanges } from './crew/crew-changes'
+import { structuredMailAfterStop } from './structured-mail-source'
 import { subscribeForRedrive } from './structured-session-journal-redrive'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 
@@ -75,7 +77,34 @@ async function observeMailSend(
 }
 
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
+  const readEligibility = (sessionId: string) => {
+    const host = getStructuredAgentSessionHost()
+    const state = host?.reads.readQueueStop(sessionId)
+    const fence = host?.deps.store.getConversation(sessionId)?.currentFence
+    return host && state && fence !== undefined
+      ? {
+          host,
+          fence,
+          key: `${state.epoch}:${state.stopSequence}:${state.resumedSequence}:${state.clearedSequence}`,
+          stopAt: state.stopAt
+        }
+      : null
+  }
   return {
+    attachment: getStructuredAgentSessionHost,
+    readEligibility,
+    async openEligibility(sessionId) {
+      const host = getStructuredAgentSessionHost()
+      if (!host || !host.deps.store.getConversation(sessionId)) {
+        return null
+      }
+      try {
+        await host.reads.openQueueStop(sessionId)
+        return host === getStructuredAgentSessionHost() ? readEligibility(sessionId) : null
+      } catch {
+        return null
+      }
+    },
     observe(sessionId, operationId) {
       return observeMailSend(sessionId, operationId)
     },
@@ -118,7 +147,6 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
     },
 
     watchJournal(sessionId, onActivity) {
-      const host = getStructuredAgentSessionHost()
       let seen: string | undefined
       // Only what mail waits on: a card handed over, deleted or edited (each moves the queue's
       // revision without adding a card, so a new card, the lane's own included, changes nothing),
@@ -127,14 +155,30 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       const relevant = (journal: AgentSessionJournal) => {
         const order = journal.inputOrder
         const state = journal.queuedMessages.inputState()
-        const { cleared, resumedSequence } = state.queuePauseMarks
+        const { cleared, resumedSequence, latestStop } = state.queuePauseMarks
         const changes = state.queue.revision - state.queue.cards.size
-        const key = `${state.epoch}:${changes}:${order.unsettledSubmissions().length}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared?.sequence}:${resumedSequence}:${state.items.size}`
+        const key = `${state.epoch}:${changes}:${order.unsettledSubmissions().length}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared?.sequence}:${resumedSequence}:${latestStop?.sequence}:${state.items.size}`
         const changed = key !== seen
         seen = key
         return changed
       }
-      return host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}
+      let host = getStructuredAgentSessionHost()
+      let stop = host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}
+      const unsubscribe = sessionCrewChanges.subscribe(() => {
+        const next = getStructuredAgentSessionHost()
+        if (host === next) {
+          return
+        }
+        stop()
+        host = next
+        seen = undefined
+        stop = host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}
+        onActivity()
+      })
+      return () => {
+        unsubscribe()
+        stop()
+      }
     },
 
     currentFence(sessionId) {
@@ -170,7 +214,7 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
               }
               // Only mail written after the Stop wakes the chat; the same second is an order nobody
               // can tell, so it waits too.
-              if (stop && !(input.createdAt > Math.floor(stop.at / 1000))) {
+              if (!structuredMailAfterStop(input.createdAt, stop?.at ?? null)) {
                 throw new StructuredMailRefusal('held')
               }
             }

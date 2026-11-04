@@ -1,3 +1,4 @@
+import type { StructuredMailDeliveryRequest } from '../orchestration/structured-mailbox-pointer-host-contract'
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
 import type { selectFreshExplicitAgentStatus } from '../runtime-hook-agent-row-selection'
@@ -256,10 +257,9 @@ export abstract class RuntimeConstructionServices {
   protected abstract resolveOrchestrationPointerSubmitTarget(
     ptyId: string
   ): OrchestrationMailboxPointerSubmitTarget | null
-  abstract deliverPendingMessagesForHandle(
-    handle: string,
-    reservedTypes?: ReadonlySet<string>
-  ): void
+  abstract deliverPendingMessagesForHandle(...args: StructuredMailDeliveryRequest): void
+  protected abstract discoverPendingMessagesForHandle(handle: string): void
+  protected abstract onRoutedMailboxMessageTypes(handle: string, types: readonly string[]): void
   protected abstract writeOrchestrationPointerPty(
     ptyId: string,
     data: string

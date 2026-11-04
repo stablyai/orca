@@ -42,6 +42,8 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
+    this.orchestrationStructuredMailboxPointerDelivery.reset()
+    this.deferredMailHandBacks.clear()
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
@@ -50,6 +52,26 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
     this.bindWorkerTerminalAutoRelease(db)
+  }
+
+  private readonly deferredMailHandBacks = new Map<string, MailHandBack[]>()
+
+  protected flushDeferredMailHandBacks(mailbox: string): void {
+    const pending = this.deferredMailHandBacks.get(mailbox)
+    this.deferredMailHandBacks.delete(mailbox)
+    const db = this._orchestrationDb
+    if (db) {
+      for (const handBack of pending ?? []) {
+        this.offerHandedBackMail(db, handBack)
+      }
+    }
+  }
+
+  private deferMailHandBack(handBack: MailHandBack): void {
+    const pending = this.deferredMailHandBacks.get(handBack.mailbox) ?? []
+    pending.push(handBack)
+    this.deferredMailHandBacks.set(handBack.mailbox, pending)
+    this.mailPointerRepointScheduler.schedule(handBack.mailbox)
   }
 
   private bindMailHandBack(db: OrchestrationDb): void {
@@ -64,7 +86,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     }
     try {
       if (db.db.isTransaction) {
-        this.mailPointerRepointScheduler.schedule(handBack.mailbox)
+        this.deferMailHandBack(handBack)
         return
       }
       // Re-read committed rows so rolled-back settlements wake nobody.
@@ -73,7 +95,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
       }
     } catch (error) {
       console.warn('[orchestration] failed to offer handed-back helper mail', error)
-      this.mailPointerRepointScheduler.schedule(handBack.mailbox)
+      this.deferMailHandBack(handBack)
     }
   }
 

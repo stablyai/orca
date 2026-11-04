@@ -1,21 +1,12 @@
+import { StructuredMailAdmission } from './structured-mail-admission'
 /** Chat sessions get each orchestration message whole, as its own ordinary message: the chat's queue holds it
  *  behind running work or a question, and the agent is handed one per turn. Terminals keep the PTY pointer lane. */
 
-import type { MessageRow, OrchestrationDb } from './db'
-import type { OrchestrationCliCommand } from './cli-command'
-import {
-  heldOrchestrationPageCursor,
-  selectOrchestrationPointerBatch,
-  shouldReleaseOrchestrationPointer,
-  type OrchestrationMessageWaiter
-} from './mailbox-pointer-eligibility'
-import {
-  settleStructuredMailAdmit,
-  type StructuredMailAdmitStep
-} from './structured-mailbox-admit-step'
-import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
-import { structuredMailMessage, structuredMailWrittenAt } from './structured-mail-source'
-import type { SenderSnapshotResolver } from './agent-message-sender'
+import type { OrchestrationDb } from './db'
+import { selectOrchestrationPointerBatch } from './mailbox-pointer-eligibility'
+import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
+import type { StructuredMailDeliveryCause } from './structured-mailbox-pointer-host-contract'
+
 import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
 import {
   orchestrationMailNotice,
@@ -23,37 +14,11 @@ import {
 } from '../../../shared/agent-session/agent-session-message-source'
 import { StructuredMailboxParking } from './structured-mailbox-parking'
 import { StructuredMailSettledState } from './structured-mail-settled-state'
-import {
-  hasStructuredMailSends,
-  settleStructuredMailSends,
-  structuredMailAttempt,
-  StructuredMailAuthority,
-  type StructuredMailResend
-} from './structured-mail-custody'
+import { StructuredMailDiscovery } from './structured-mail-discovery'
+import { hasStructuredMailSends, StructuredMailAuthority } from './structured-mail-custody'
 
-export type StructuredPointerTarget = {
-  sessionId: string
-  /** Direct peer mail has no Dispatch; that absence must not prevent worker nudges. */
-  dispatchId: string | null
-}
-
-type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
-  getDb: () => OrchestrationDb | null
-  getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
-  /** Resolve dispatch or direct-worker mail to its session; null delegates to the PTY lane. */
-  resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
-  /** The runtime's own delivery for a mailbox, whichever lane owns it: a terminal's included. */
-  redeliver?: (mailboxHandle: string) => void
-  /** Whether nothing can own the mailbox again; read from the database unless a test supplies it. */
-  mailboxEnded?: (mailboxHandle: string) => boolean
-  /** Why no chat resolves a mailbox; read from the database unless a test supplies it. */
-  unresolvedCustody?: (mailboxHandle: string) => 'elsewhere' | 'unverifiable'
-  /** The CLI name the recipient runs, for the reply line and the oversized-message pointer. */
-  getCliCommand: () => OrchestrationCliCommand
-  /** What Orca calls a sender now, snapshotted onto the message; null when it has no name. */
-  senderSnapshot: SenderSnapshotResolver
-  host: StructuredMailboxPointerHost
-}
+import type { StructuredPointerDeliveryDependencies } from './structured-mailbox-delivery-contract'
+export type { StructuredPointerTarget } from './structured-mailbox-delivery-contract'
 
 export class OrchestrationStructuredMailboxPointerDelivery<
   TWaiter extends OrchestrationMessageWaiter
@@ -66,14 +31,30 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     onActivity: (sessionId) => this.onJournalActivity(sessionId)
   })
 
+  private readonly discovery = new StructuredMailDiscovery()
+  private readonly admission: StructuredMailAdmission<TWaiter>
   private readonly authority: StructuredMailAuthority
   private readonly settledState = new StructuredMailSettledState()
 
   constructor(private readonly deps: StructuredPointerDeliveryDependencies<TWaiter>) {
     this.authority = new StructuredMailAuthority({ ...deps, resolve: deps.resolveStructuredTarget })
+    this.admission = new StructuredMailAdmission({
+      ...deps,
+      authority: this.authority,
+      parking: this.parking,
+      discover: (mailbox) => this.discover(mailbox),
+      redeliver: (mailbox) => this.redeliver(mailbox)
+    })
   }
 
-  deliverForHandle(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): boolean {
+  deliverForHandle(
+    mailboxHandle: string,
+    reservedTypes?: ReadonlySet<string>,
+    cause: StructuredMailDeliveryCause = 'discovery'
+  ): boolean {
+    if (cause === 'discovery') {
+      this.discover(mailboxHandle)
+    }
     const target = this.deps.resolveStructuredTarget(mailboxHandle)
     // Earlier sends are settled even when no chat owns the mailbox now; only an owner is sent to.
     if (!target && !hasStructuredMailSends(this.deps.getDb(), mailboxHandle)) {
@@ -81,6 +62,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       // it has seen what this cleanup marked.
       if (!this.inFlight.has(mailboxHandle)) {
         this.settledState.forget(mailboxHandle)
+        this.discovery.forget(mailboxHandle)
+        this.parking.unpark(mailboxHandle)
       }
       return false
     }
@@ -90,12 +73,25 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     return target !== null
   }
 
+  /** Record the event now; deferred redrives only service this pending discovery. */
+  discover(mailboxHandle: string): void {
+    this.discovery.request(mailboxHandle)
+  }
+
+  reset(): void {
+    this.admission.reset()
+    this.discovery.clear()
+    this.parking.clear()
+    this.settledState.clear()
+    this.rerun.clear()
+  }
+
   /** Retry mail parked on this session's settlement or reattach journal edge. */
   onJournalActivity(sessionId: string): void {
     // The watch stays through its own redrive: only a move, or the last obligation ending, ends it.
-    for (const [mailboxHandle, parked] of this.parking.parkedFor(sessionId)) {
+    for (const [mailboxHandle] of this.parking.parkedFor(sessionId)) {
       this.settledState.invalidate(mailboxHandle)
-      void this.deliver(mailboxHandle, parked.reservedTypes).catch(() => undefined)
+      void this.deliver(mailboxHandle).catch(() => undefined)
     }
   }
 
@@ -107,6 +103,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
 
   /** Prune only this recorded session; settlement removes resolver identity and transient nulls also affect siblings. */
   forgetSession(sessionId: string): void {
+    for (const [mailbox] of this.parking.parkedFor(sessionId)) {
+      this.discovery.forget(mailbox)
+    }
     this.parking.forget(sessionId)
     this.settledState.forgetSession(sessionId)
     // Settlement can end the Dispatch a card still waits for: this session's mailboxes, by its index.
@@ -122,7 +121,10 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   /** Mail a check took, a move re-addressed, or an owner gave up may still wait as a card: delete
    *  those cards so no agent is handed it. Visible cleanup only; the queue asks at handover anyway.
    *  Only the mailboxes the action touched; every one only at startup and reset. */
-  withdrawStale(mailboxes?: Iterable<string>): void {
+  withdrawStale(
+    mailboxes?: Iterable<string>,
+    cause: StructuredMailDeliveryCause = 'service'
+  ): void {
     let scope: Iterable<string>
     try {
       scope = mailboxes ?? this.deps.getDb()?.getStructuredMailSendMailboxes() ?? []
@@ -132,7 +134,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     }
     for (const mailboxHandle of scope) {
       this.settledState.invalidate(mailboxHandle)
-      this.deliverForHandle(mailboxHandle)
+      this.deliverForHandle(mailboxHandle, undefined, cause)
     }
   }
 
@@ -159,7 +161,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       for (const { messageId } of mail.messages) {
         const row = db.getStructuredMailSend(mail.mailbox, messageId)
         if (row?.session_id === sessionId) {
-          db.releaseStructuredMailSend(row)
+          if (db.releaseStructuredMailSend(row)) {
+            this.admission.released(db, row)
+          }
         }
       }
       // After the queue's write lane unwinds, through whichever lane owns the mailbox now.
@@ -195,169 +199,146 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   }
 
   private async pass(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): Promise<void> {
-    let currentReservedTypes = reservedTypes
-    // Each message is offered to each owner once per pass; one it no longer owes waits for an edge.
-    const offered = new Set<string>()
-    // Mail the person's Stop holds: later mail still goes, and the mailbox stays parked for it.
-    const pass = { held: false }
-    let afterSequence: number | undefined
-    for (;;) {
-      const db = this.deps.getDb()
-      if (!db) {
-        return
-      }
-      // Earlier sends only when something they wait on moved: a fresh arrival or the next page
-      // finds them reserved (stamped delivered), so selection skips them anyway.
-      const owner = this.deps.resolveStructuredTarget(mailboxHandle)?.sessionId ?? null
-      const { outstanding, resend, released } =
-        this.settledState.needsSettling(mailboxHandle, owner) || this.authority.ended(mailboxHandle)
-          ? await this.settledState.settle(mailboxHandle, owner, () =>
-              settleStructuredMailSends({
-                db,
-                mailboxHandle,
-                host: this.deps.host,
-                cliCommand: this.deps.getCliCommand(),
-                owed: (sessionId, messageIds) =>
-                  this.authority.owedTo(sessionId, mailboxHandle, messageIds)
-              })
-            )
-          : { outstanding: new Set<string>(), resend: [], released: false }
-      let target = this.deps.resolveStructuredTarget(mailboxHandle)
-      if (!target || this.authority.ended(mailboxHandle)) {
-        if (!hasStructuredMailSends(db, mailboxHandle)) {
-          // Nothing of it is left in any chat: no edge is owed to it.
-          this.parking.unpark(mailboxHandle)
-          this.settledState.forget(mailboxHandle)
-        }
-        if (released) {
-          // Mail a chat gave back goes to whoever owns the mailbox now, a terminal included.
-          queueMicrotask(() => this.redeliver(mailboxHandle))
-        }
-        return
-      }
-      for (const again of resend) {
-        const message = db.getMessageById(again.row.message_id)
-        if (!message || again.row.session_id !== target.sessionId) {
-          continue
-        }
-        if ((await this.admit(db, mailboxHandle, target, message, pass, again)) === 'park') {
-          this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
-          return
-        }
-      }
-      const page = selectOrchestrationPointerBatch({
+    const walk = this.discovery.get(mailboxHandle)
+    walk.protect(reservedTypes)
+    const db = this.deps.getDb()
+    if (!db) {
+      return
+    }
+    this.admission.flushReleaseHints()
+    if (db.db?.isTransaction) {
+      this.deps.scheduleRedelivery?.(mailboxHandle)
+      return
+    }
+    let target = this.deps.resolveStructuredTarget(mailboxHandle)
+    if (target) {
+      this.parking.park(mailboxHandle, target.sessionId, reservedTypes)
+    }
+    const owner = target?.sessionId ?? null
+    const { resend, released } = await this.settledState.settleMailbox(
+      mailboxHandle,
+      owner,
+      this.authority.ended(mailboxHandle),
+      {
         db,
         mailboxHandle,
-        waiters: this.deps.getMessageWaiters(mailboxHandle),
-        reservedTypes: currentReservedTypes,
-        afterSequence
+        host: this.deps.host,
+        cliCommand: this.deps.getCliCommand(),
+        owed: (sessionId, ids) => this.authority.owedTo(sessionId, mailboxHandle, ids),
+        onReleased: (row) => this.admission.released(db, row)
+      }
+    )
+    if (!this.discovery.owns(mailboxHandle, walk) || db !== this.deps.getDb()) {
+      return
+    }
+    target = this.deps.resolveStructuredTarget(mailboxHandle)
+    if (released) {
+      this.discover(mailboxHandle)
+    }
+    if (!target || this.authority.ended(mailboxHandle)) {
+      if (!hasStructuredMailSends(db, mailboxHandle)) {
+        this.parking.unpark(mailboxHandle)
+        this.discovery.forget(mailboxHandle)
+        this.settledState.forget(mailboxHandle)
+      }
+      if (released) {
+        queueMicrotask(() => this.redeliver(mailboxHandle))
+      }
+      return
+    }
+    const reconcile = () =>
+      this.discovery.reconcile(mailboxHandle, walk, {
+        ...this.deps,
+        db,
+        parking: this.parking,
+        reservedTypes,
+        retrying: resend.length > 0
       })
-      const batch = page.messages.filter(
-        (message) =>
-          !outstanding.has(message.id) && !offered.has(`${message.id}:${target?.sessionId}`)
-      )
-      if (batch.length === 0) {
-        if (pass.held || hasStructuredMailSends(db, mailboxHandle)) {
-          // Cards still in the chat, or mail its Stop holds: read again on this session's next edge.
-          this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
-        } else {
-          this.parking.unpark(mailboxHandle)
-          this.settledState.forget(mailboxHandle)
-        }
+    for (const again of resend) {
+      const current = await reconcile()
+      if (!current) {
         return
       }
-      let heldCount = 0
-      for (const message of batch) {
-        // Whoever owns the mailbox now: a takeover during one send moves the rest of the batch.
-        target = this.deps.resolveStructuredTarget(mailboxHandle)
-        if (!target) {
-          return
-        }
-        if (offered.has(`${message.id}:${target.sessionId}`)) {
-          continue
-        }
-        offered.add(`${message.id}:${target.sessionId}`)
-        // Parked first, so a send that throws is retried on this session's next journal edge.
-        this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
-        const step = await this.admit(db, mailboxHandle, target, message, pass)
-        if (step === 'park') {
-          // An edge during the send may have taken the entry; the refusal still waits for the next one.
-          this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
-          return
-        }
-        // A non-held admission, or a skipped row, keeps this pass from walking past the page.
-        heldCount = step === 'held' ? heldCount + 1 : Number.NEGATIVE_INFINITY
+      const message = db.getMessageById(again.row.message_id)
+      if (!message || again.row.session_id !== current.target.sessionId) {
+        continue
       }
-      // The arrival snapshot protects its first handoff; successors derive live waiter ownership.
-      currentReservedTypes = undefined
-      afterSequence =
-        heldOrchestrationPageCursor(page.messages, heldCount === batch.length, afterSequence) ??
-        afterSequence
-    }
-  }
-
-  // A session whose agent is not running needs nothing first: an accepted send starts it.
-  private async admit(
-    db: OrchestrationDb,
-    mailboxHandle: string,
-    target: StructuredPointerTarget,
-    message: MessageRow,
-    pass: { held: boolean },
-    again?: StructuredMailResend
-  ): Promise<StructuredMailAdmitStep> {
-    const sessionId = target.sessionId
-    const fence = this.deps.host.currentFence(sessionId)
-    if (fence === null) {
-      return 'park'
-    }
-    const { body, whole } = structuredMailMessage({
-      db,
-      mailboxHandle,
-      dispatchId: target.dispatchId,
-      message,
-      cliCommand: this.deps.getCliCommand(),
-      senderSnapshot: this.deps.senderSnapshot
-    })
-    const attempt = structuredMailAttempt(mailboxHandle, message.id, sessionId, again)
-    // Reserved before the send, with its delivered stamp, so a crash after it lands finds the card
-    // instead of sending twice. Only the pass whose reservation lands sends.
-    if (!db.reserveStructuredMailSend(attempt, again?.row.operation_id)) {
-      return 'next'
-    }
-    // The host's last answer, set inside its own check: a holder, so the read after the send sees it.
-    const last: { owed: QueuedMessageOwed } = { owed: 'owed' }
-    const outcome = await this.deps.host.send({
-      sessionId,
-      dispatchId: target.dispatchId,
-      operationId: attempt.operation_id,
-      expectedRuntimeFence: fence,
-      body,
-      createdAt: structuredMailWrittenAt(db, mailboxHandle, message),
-      stillOwed: () => {
-        last.owed = this.authority.owedTo(sessionId, mailboxHandle, [message.id])
-        return (
-          last.owed === 'owed' &&
-          !shouldReleaseOrchestrationPointer(
-            this.deps.getDb(),
-            mailboxHandle,
-            [message],
-            this.deps.getMessageWaiters(mailboxHandle)
-          )
-        )
+      const step = await this.admission.admit(
+        db,
+        mailboxHandle,
+        current.target,
+        message,
+        walk,
+        again
+      )
+      if (step === 'park') {
+        this.settledState.invalidate(mailboxHandle)
+        return
       }
-    })
-    return settleStructuredMailAdmit({
-      db,
-      attempt,
-      outcome,
-      owed: last.owed,
-      whole,
-      held: pass
-    })
+    }
+    for (;;) {
+      const current = await reconcile()
+      if (!current) {
+        return
+      }
+      if (!walk.pending) {
+        break
+      }
+      if (walk.page.length === 0) {
+        const page = selectOrchestrationPointerBatch({
+          db,
+          mailboxHandle,
+          waiters: this.deps.getMessageWaiters(mailboxHandle),
+          reservedTypes: walk.reservedTypes,
+          afterSequence: walk.afterSequence
+        })
+        walk.page = page.messages
+        if (walk.page.length === 0) {
+          walk.complete()
+          break
+        }
+      }
+      const message = walk.page[0]
+      if (!message) {
+        continue
+      }
+      const generation = walk.generation
+      const step = await this.admission.admit(db, mailboxHandle, current.target, message, walk)
+      if (!this.discovery.owns(mailboxHandle, walk) || db !== this.deps.getDb()) {
+        return
+      }
+      if (step === 'park') {
+        return
+      }
+      // Reconcile before touching the retained page: a Stop/Resume or arrival may have reset it.
+      if (!(await reconcile())) {
+        return
+      }
+      if (walk.generation !== generation) {
+        continue
+      }
+      walk.afterSequence = message.sequence
+      walk.page.shift()
+      // A first handoff's protected types no longer exclude earlier rows after that handoff.
+      if (walk.reservedTypes?.size && step !== 'held') {
+        walk.relaxReserved()
+      }
+    }
+    const currentOwner = this.deps.resolveStructuredTarget(mailboxHandle)?.sessionId ?? null
+    if (this.settledState.needsSettling(mailboxHandle, currentOwner)) {
+      void this.deliver(mailboxHandle, reservedTypes)
+    }
+    if (!walk.held && !hasStructuredMailSends(db, mailboxHandle)) {
+      this.parking.unpark(mailboxHandle)
+      this.discovery.forget(mailboxHandle)
+      this.settledState.forget(mailboxHandle)
+    }
   }
 
   private redeliver(mailboxHandle: string): void {
-    const redeliver = this.deps.redeliver ?? ((handle: string) => this.deliverForHandle(handle))
-    redeliver(mailboxHandle)
+    const deliver =
+      this.deps.redeliver ??
+      ((handle: string) => this.deliverForHandle(handle, undefined, 'service'))
+    deliver(mailboxHandle)
   }
 }

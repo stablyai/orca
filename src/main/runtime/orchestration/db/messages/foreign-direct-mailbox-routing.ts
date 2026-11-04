@@ -189,16 +189,28 @@ export function getUnreadDirectMessageTypes(
   ).map((row) => row.type)
 }
 
+/** Idle ownership only needs existence, never every unread row's type. */
+export function hasUnreadDirectMessages(this: OrchestrationDb, directHandle: string): boolean {
+  return (
+    this.db
+      .prepare(`SELECT 1 FROM messages INDEXED BY idx_messages_unread_current_inbox
+    WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery' LIMIT 1`)
+      .get(directHandle) !== undefined
+  )
+}
+
 export type ForeignDirectMailboxRoutingMethods = {
   findActiveDispatchForDirectMessageOwner: typeof findActiveDispatchForDirectMessageOwner
   routeForeignDirectMessagesToOwnedMailboxes: typeof routeForeignDirectMessagesToOwnedMailboxes
   getUnreadDirectMessageTypes: typeof getUnreadDirectMessageTypes
+  hasUnreadDirectMessages: typeof hasUnreadDirectMessages
 }
 
 export function attachForeignDirectMailboxRouting(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     findActiveDispatchForDirectMessageOwner,
     routeForeignDirectMessagesToOwnedMailboxes,
-    getUnreadDirectMessageTypes
+    getUnreadDirectMessageTypes,
+    hasUnreadDirectMessages
   })
 }

@@ -27,6 +27,7 @@ type Mail = {
   delivery_contract: string
   read: number
   delivered_at: string | null
+  created_at: string
 }
 
 /** dispatch:d1 behind one chat session at a time: idle sends start a turn, busy ones wait as cards. */
@@ -37,6 +38,7 @@ function harness(options: { busy?: boolean } = {}) {
   let busy = options.busy ?? false
   let owner = 'session-1'
   let ended = false
+  let stopAt: number | null = null
   /** The next sends' answers, in order; a send with none queued or starts a turn. */
   const answers: ((operationId: string) => Promise<StructuredPointerSendOutcome>)[] = []
   /** What each chat holds per operation id: a waiting card, or what its handoff became. */
@@ -45,7 +47,7 @@ function harness(options: { busy?: boolean } = {}) {
   const watching = new Map<string, () => void>()
   const db = {
     getRun: () => undefined,
-    getDispatchContextById: () => ({ run_id: 'run_1' }),
+    getDispatchContextById: () => ({ run_id: 'run_1', created_at: '1970-01-01 00:00:00' }),
     getOutstandingMailboxDelivery: () => undefined,
     getUndeliveredUnreadMessages: (
       handle: string,
@@ -134,7 +136,12 @@ function harness(options: { busy?: boolean } = {}) {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every OrchestrationDb method the delivery and its custody reads call; the class's other members are never reached.
   const orchestrationDb = db as unknown as OrchestrationDb
+  const attachment = {}
+  const eligibility = () => ({ host: attachment, fence: 4, key: `epoch-1:${stopAt}`, stopAt })
   const host: StructuredMailboxPointerHost = {
+    attachment: () => attachment,
+    readEligibility: eligibility,
+    openEligibility: async () => eligibility(),
     currentFence: () => 4,
     watchJournal: (sessionId, onActivity) => {
       watching.set(sessionId, onActivity)
@@ -228,7 +235,8 @@ function harness(options: { busy?: boolean } = {}) {
         priority: 'normal',
         delivery_contract: 'standard',
         read: 0,
-        delivered_at: null
+        delivered_at: null,
+        created_at: id === 'm1' ? '1970-01-01 00:00:00' : '2026-11-03 12:00:01'
       })
     },
     deliver: async () => {
@@ -241,6 +249,9 @@ function harness(options: { busy?: boolean } = {}) {
       await flush()
     },
     settle: (id: string, state: StructuredMailSendState) => chat.set(operation(id), state),
+    setStop: (next: number | null) => {
+      stopAt = next
+    },
     setBusy: (next: boolean) => {
       busy = next
     },
@@ -458,11 +469,15 @@ describe('structured mailbox delivery: each message whole', () => {
     const h = harness()
     h.receive('m1')
     h.receive('m2')
-    h.answers.push(async () => ({ kind: 'held' }))
+    h.answers.push(async () => {
+      h.setStop(1)
+      return { kind: 'held' }
+    })
     await h.deliver()
     expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: null })
     expect(h.mail.get('m2')?.read).toBe(1)
     // Their send writes Resume: a journal edge, with nothing new in the mailbox.
+    h.setStop(null)
     await h.journal()
     expect(h.mail.get('m1')?.read).toBe(1)
   })
@@ -672,6 +687,14 @@ describe('structured mailbox delivery across a real database close and reopen', 
         getCliCommand: () => 'orca-dev',
         senderSnapshot: () => ({ name: null, agent: null }),
         host: {
+          attachment: () => reopened,
+          readEligibility: () => ({ host: reopened, fence: 4, key: 'epoch-1:0', stopAt: null }),
+          openEligibility: async () => ({
+            host: reopened,
+            fence: 4,
+            key: 'epoch-1:0',
+            stopAt: null
+          }),
           currentFence: () => 4,
           watchJournal: () => () => {},
           observe: async () => state,

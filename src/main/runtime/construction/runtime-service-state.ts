@@ -38,8 +38,7 @@ import { OrchestrationMailboxOwner } from '../orchestration/mailbox-owner'
 import { OrchestrationMailboxDeliveryTarget } from '../orchestration/mailbox-delivery-target'
 import { OrchestrationMailboxPointerDelivery } from '../orchestration/mailbox-pointer-delivery'
 import { OrchestrationMailboxNotificationCoordinator } from '../orchestration/mailbox-notification-coordinator'
-import type { RuntimeMessageWaiter } from '../runtime-message-waiters'
-import { RuntimeMessageWaiters } from '../runtime-message-waiters'
+import { RuntimeMessageWaiters, type RuntimeMessageWaiter } from '../runtime-message-waiters'
 import type { WorkerTurnStopReportDeps } from '../orchestration/worker-turn-stop-report'
 import type { RuntimeSkillCommands } from '../runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from '../runtime-terminal-stream-consumers'
@@ -246,10 +245,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getDb: () => this._orchestrationDb,
     getTerminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
     getTerminalProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
-    onRoutedMessageTypes: (mailboxHandle, types) =>
-      this.messageWaiters.notifyRouted(mailboxHandle, types),
-    onForeignMailboxRouted: (mailboxHandle, messageType) =>
-      this.notifyMessageArrived(mailboxHandle, messageType)
+    onRoutedMessageTypes: (handle, types) => this.onRoutedMailboxMessageTypes(handle, types),
+    onForeignMailboxRouted: (handle, type) => this.notifyMessageArrived(handle, type)
   })
 
   protected readonly orchestrationMailboxDeliveryTarget = new OrchestrationMailboxDeliveryTarget({
@@ -285,7 +282,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       getDb: () => this._orchestrationDb,
       getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
       resolveStructuredTarget: (handle) => this.resolveStructuredMailboxTarget(handle),
-      redeliver: (handle) => this.deliverPendingMessagesForHandle(handle),
+      redeliver: (handle) => this.deliverPendingMessagesForHandle(handle, undefined, 'service'),
+      scheduleRedelivery: (handle) => this.mailPointerRepointScheduler.schedule(handle),
       getCliCommand: localOrchestrationCliCommand,
       senderSnapshot: (party, reportedDispatchId) =>
         this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId),
@@ -317,13 +315,15 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       },
       getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
       hasTerminalHandle: (handle) => this.hasMailboxTerminalHandle(handle),
-      deliverForHandle: (handle, reservedTypes) =>
-        this.deliverPendingMessagesForHandle(handle, reservedTypes),
+      deliverForHandle: (handle, reservedTypes, cause) =>
+        this.deliverPendingMessagesForHandle(handle, reservedTypes, cause),
       notifyMessageArrived: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
       resolveMessageWaiters: (waiters) => this.messageWaiters.resolveNotified(waiters)
     })
 
-  protected readonly messageWaiters = new RuntimeMessageWaiters()
+  protected readonly messageWaiters = new RuntimeMessageWaiters((handle) =>
+    this.discoverPendingMessagesForHandle(handle)
+  )
 
   protected readonly workerTurnStopReportDeps: WorkerTurnStopReportDeps = {
     getDb: () => this._orchestrationDb,

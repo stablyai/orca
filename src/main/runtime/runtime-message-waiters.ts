@@ -33,6 +33,8 @@ export type RuntimeMessageWaiter = {
 export class RuntimeMessageWaiters {
   private readonly waitersByHandle = new Map<string, Set<RuntimeMessageWaiter>>()
 
+  constructor(private readonly onExclusionsChanged?: (handle: string) => void) {}
+
   notifyRouted(handle: string, types: readonly string[]): void {
     if (types.length === 0) {
       return
@@ -92,6 +94,7 @@ export class RuntimeMessageWaiters {
         this.waitersByHandle.set(handle, waiters)
       }
       waiters.add(waiter)
+      this.onExclusionsChanged?.(handle)
     })
   }
 
@@ -158,6 +161,7 @@ export class RuntimeMessageWaiters {
       return
     }
     waiters.delete(waiter)
+    this.onExclusionsChanged?.(waiter.handle)
     if (waiters.size === 0) {
       this.waitersByHandle.delete(waiter.handle)
     }

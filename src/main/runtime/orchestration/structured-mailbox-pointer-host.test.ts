@@ -1,3 +1,4 @@
+import { sessionCrewChanges } from './crew/crew-changes'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
@@ -239,6 +240,55 @@ describe('structured mailbox pointer host', () => {
         } as never)
       ).resolves.toEqual(expected)
     }
+  })
+
+  it('opens a swept chat at rest to read its committed Stop, without a timeline read', async () => {
+    let open = false
+    const openQueueStop = vi.fn(async () => {
+      open = true
+    })
+    const snapshot = vi.fn()
+    hostRef.current = {
+      deps: { store: { getConversation: () => ({ currentFence: 9 }) } },
+      reads: {
+        openQueueStop,
+        readQueueStop: () =>
+          open
+            ? {
+                epoch: 'epoch1',
+                stopSequence: 3,
+                stopAt: 1000,
+                resumedSequence: 0,
+                clearedSequence: 0
+              }
+            : undefined
+      },
+      journalSnapshot: snapshot
+    }
+    const adapter = createStructuredMailboxPointerHost()
+    expect(adapter.readEligibility('s1')).toBeNull()
+    expect(await adapter.openEligibility('s1')).toMatchObject({ fence: 9, stopAt: 1000 })
+    expect(openQueueStop).toHaveBeenCalledWith('s1')
+    expect(snapshot).not.toHaveBeenCalled()
+  })
+
+  it('rebinds an absent or replaced host and cancels stale subscriptions', () => {
+    const wake = vi.fn()
+    const stop = createStructuredMailboxPointerHost().watchJournal('s1', wake)
+    const unwatch = vi.fn()
+    const observeJournalPublications = vi.fn(() => unwatch)
+    hostRef.current = { observeJournalPublications }
+    sessionCrewChanges.notify()
+    expect(observeJournalPublications).toHaveBeenCalledTimes(1)
+    expect(wake).toHaveBeenCalledTimes(1)
+    sessionCrewChanges.notify()
+    expect(wake).toHaveBeenCalledTimes(1)
+    hostRef.current = null
+    sessionCrewChanges.notify()
+    expect(unwatch).toHaveBeenCalledTimes(1)
+    stop()
+    sessionCrewChanges.notify()
+    expect(wake).toHaveBeenCalledTimes(2)
   })
 
   it('reads the runtime fence off the durable record', () => {

@@ -53,7 +53,27 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     }
   }))
   const journalOf = async (id: string) => (await context().conversation(id)).journal
+  const readQueueStop = (sessionId: string) => {
+    const journal = context().sessions.get(sessionId)?.journal
+    if (!journal) {
+      return undefined
+    }
+    const state = journal.queuedMessages.inputState()
+    const stop = journal.queuedMessages.userStopInForce()
+    return {
+      epoch: state.epoch,
+      stopSequence: stop?.sequence ?? 0,
+      stopAt: stop?.event.at ?? null,
+      resumedSequence: state.queuePauseMarks.resumedSequence,
+      clearedSequence: state.queuePauseMarks.cleared?.sequence ?? 0
+    }
+  }
   return {
+    readQueueStop,
+    openQueueStop: async (sessionId: string) => {
+      await context().conversation(sessionId)
+      return readQueueStop(sessionId)
+    },
     readModelCatalog,
     queuedSendAnswer: async (id: string, messageId: string) =>
       queuedSendAnswer(await journalOf(id), messageId),

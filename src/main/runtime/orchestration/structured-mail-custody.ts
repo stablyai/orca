@@ -169,6 +169,7 @@ export async function settleStructuredMailSends(input: {
   host: Pick<StructuredMailboxPointerHost, 'observe' | 'withdraw' | 'wakeQueue'>
   cliCommand: OrchestrationCliCommand
   owed: (sessionId: string, messageIds: readonly string[]) => QueuedMessageOwed
+  onReleased?: (row: StructuredMailSendRow) => void
 }): Promise<{ outstanding: Set<string>; resend: StructuredMailResend[]; released: boolean }> {
   const { db, mailboxHandle, host } = input
   const outstanding = new Set<string>()
@@ -184,7 +185,10 @@ export async function settleStructuredMailSends(input: {
     const retire = (consumed: boolean) => db.retireStructuredMailSend(row, consumed)
     // No longer this chat's: mail still unread goes to whoever owns the mailbox now, never read.
     const release = () => {
-      released = db.releaseStructuredMailSend(row) || released
+      if (db.releaseStructuredMailSend(row)) {
+        released = true
+        input.onReleased?.(row)
+      }
     }
     switch (state.kind) {
       case 'accepted':

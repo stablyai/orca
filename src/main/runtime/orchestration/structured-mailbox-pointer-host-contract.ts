@@ -19,7 +19,24 @@ export type StructuredPointerSendOutcome =
 /** What became of one earlier send, as the chat's host answers it without replaying it. */
 export type StructuredMailSendState = StructuredSendAnswer
 
+export type StructuredMailEligibility = {
+  host: object
+  fence: number
+  key: string
+  stopAt: number | null
+}
+
+export type StructuredMailDeliveryCause = 'discovery' | 'service'
+export type StructuredMailDeliveryRequest = [
+  handle: string,
+  reservedTypes?: ReadonlySet<string>,
+  cause?: StructuredMailDeliveryCause
+]
+
 export type StructuredMailboxPointerHost = {
+  readEligibility: (sessionId: string) => StructuredMailEligibility | null
+  openEligibility: (sessionId: string) => Promise<StructuredMailEligibility | null>
+  attachment: () => object | null
   send: (input: {
     sessionId: string
     dispatchId: string | null

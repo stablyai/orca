@@ -1,3 +1,4 @@
+import { settleStructuredMailSends } from './structured-mail-custody'
 /** When the lane must settle a mailbox's earlier sends again, and when a session's status matters to
  *  its mail. Settling asks the chat what became of every send still out, so it runs only when
  *  something those sends wait on moved: never per arrival or page. In memory only: a restart settles
@@ -27,6 +28,17 @@ export class StructuredMailSettledState {
     return settled
   }
 
+  settleMailbox(
+    mailbox: string,
+    owner: string | null,
+    ended: boolean,
+    input: Parameters<typeof settleStructuredMailSends>[0]
+  ) {
+    return this.needsSettling(mailbox, owner) || ended
+      ? this.settle(mailbox, owner, () => settleStructuredMailSends(input))
+      : Promise.resolve({ resend: [], released: false })
+  }
+
   /** No send of it is left in any chat. */
   forget(mailboxHandle: string): void {
     this.settled.delete(mailboxHandle)
@@ -38,15 +50,17 @@ export class StructuredMailSettledState {
    *  follows an answer is a change. */
   statusChanged(sessionId: string, status: string | null, fence: number | null): boolean {
     const edge = `${status}:${fence}`
-    if (status === null) {
-      this.edges.delete(sessionId)
-      return true
-    }
     if (this.edges.get(sessionId) === edge) {
       return false
     }
     this.edges.set(sessionId, edge)
     return true
+  }
+
+  clear(): void {
+    this.edges.clear()
+    this.settled.clear()
+    this.changes.clear()
   }
 
   forgetSession(sessionId: string): void {

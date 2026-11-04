@@ -135,7 +135,7 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
     return []
   }
   const mailboxes = db.runsBoundToCoordinator(party).map((run) => `run:${run.id}`)
-  if (db.getUnreadDirectMessageTypes(party.address).length > 0) {
+  if (db.hasUnreadDirectMessages(party.address)) {
     mailboxes.push(party.address)
   }
   // Re-derive Dispatch mail through current party identity; a cleared or restarted session has no future idle edge.
