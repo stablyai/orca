@@ -115,12 +115,12 @@ describe('Open agents as', () => {
 
 describe('Chat UI launch tip experiment', () => {
   it.each([
-    [[], 'treatment', false],
-    [['chat-ui-here'], 'treatment', true],
-    [['chat-ui-here'], 'control', false]
+    [[], 'treatment'],
+    [['chat-ui-here'], 'treatment'],
+    [['chat-ui-here'], 'control']
   ] as const)(
-    'reports a switch to Chat with seen tips %j in %s as launch_tip_shown=%s',
-    async (seen, cohort, shown) => {
+    'reports a switch with consumed tips %j in %s without inferring display',
+    async (seen, cohort) => {
       useAppStore.setState({ featureTipsSeenIds: [...seen] })
       renderSection({
         agentDefaultSurface: 'terminal',
@@ -136,8 +136,7 @@ describe('Chat UI launch tip experiment', () => {
         expect(track).toHaveBeenCalledExactlyOnceWith('agent_default_surface_changed', {
           from_mode: 'terminal',
           to_mode: 'chat',
-          source: 'settings',
-          launch_tip_shown: shown
+          source: 'settings'
         })
       )
     }

@@ -97,7 +97,7 @@ describe('Chat UI corner card', () => {
     await act(async () => button('Use Chat UI').click())
     expect(updateSettingsOrThrow).toHaveBeenCalledExactlyOnceWith({ agentDefaultSurface: 'chat' })
     expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
-      launch_tip_experiment_version: 'corner-card-v2',
+      launch_tip_experiment_version: 'corner-card-v3',
       variant: 'chat_ui_off',
       action: 'use_chat_ui'
     })
@@ -159,7 +159,7 @@ describe('Chat UI corner card', () => {
     act(() => button('Stay in terminal').click())
     expect(updateSettingsOrThrow).not.toHaveBeenCalled()
     expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
-      launch_tip_experiment_version: 'corner-card-v2',
+      launch_tip_experiment_version: 'corner-card-v3',
       variant: 'chat_ui_off',
       action: 'stay_in_terminal'
     })
