@@ -201,10 +201,10 @@ export function createClaudeTranscriptImportPlan(input: {
       }
       uuids.push(uuid)
       if (!decoded) {
-        if (hasWork) {
-          if (sourceObservedAt !== undefined) {
-            workAt = Math.max(workAt ?? sourceObservedAt, sourceObservedAt)
-          }
+        if (hasWork && sourceObservedAt !== undefined) {
+          workAt = Math.max(workAt ?? sourceObservedAt, sourceObservedAt)
+        }
+        if (hasWork || envelope?.role === 'assistant') {
           translator.handle({
             type: 'message',
             sessionId: input.sessionId,
