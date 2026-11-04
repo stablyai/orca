@@ -1,5 +1,6 @@
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import type {
+  StructuredSessionOpenFailure,
   StructuredSessionOpenSource,
   StructuredSessionOpenResult,
   StructuredSessionOpenDeps
@@ -110,17 +111,7 @@ function presentDesktopStructuredSession(
   } else if (result.kind === 'failed') {
     const agent = source.kind === 'sender' ? (source.displayName ?? '') : (source.agent ?? '')
     if (result.failure.reason === 'workspace-missing') {
-      toast.error(
-        result.failure.workspaceKind === 'folder'
-          ? translate(
-              'auto.lib.activateAiVaultStructuredSession.folderWorkspaceRemoved',
-              'The folder workspace was removed.'
-            )
-          : translate(
-              'auto.lib.activateAiVaultStructuredSession.worktreeDeleted',
-              'The worktree was deleted.'
-            )
-      )
+      toast.error(structuredSessionWorkspaceMissingMessage(result.failure))
     } else if (result.failure.reason === 'gone') {
       if (result.failure.surface === 'terminal') {
         const terminalGone = deps.terminalGone ?? showAgentPaneUnavailable
@@ -134,4 +125,18 @@ function presentDesktopStructuredSession(
       deps.unavailable(agent)
     }
   }
+}
+
+export function structuredSessionWorkspaceMissingMessage(
+  failure: Pick<StructuredSessionOpenFailure, 'workspaceKind'>
+): string {
+  return failure.workspaceKind === 'folder'
+    ? translate(
+        'auto.lib.activateAiVaultStructuredSession.folderWorkspaceRemoved',
+        'The folder workspace was removed.'
+      )
+    : translate(
+        'auto.lib.activateAiVaultStructuredSession.worktreeDeleted',
+        'The worktree was deleted.'
+      )
 }
