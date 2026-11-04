@@ -201,7 +201,6 @@ export function buildSearchableSimulatorTabs({
         document: buildPaletteTabDocument({
           id: tab.id,
           title: simulatorPaletteTabTitle(tab),
-          secondaryTexts: [],
           worktreeName: resolveWorktreeDisplayName(worktree),
           branch: resolveWorktreeBranchLabel(worktree),
           repoName,

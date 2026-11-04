@@ -239,7 +239,6 @@ export function buildSearchableWorkspaceTabEntries({
           document: buildPaletteTabDocument({
             id: tab.id,
             title,
-            secondaryTexts: [],
             worktreeName,
             branch,
             repoName,
@@ -291,7 +290,8 @@ export function buildSearchableWorkspaceTabEntries({
         document: buildPaletteTabDocument({
           id: tab.id,
           title,
-          secondaryTexts: [file.relativePath, file.filePath],
+          secondaryTexts: [file.relativePath],
+          locationTexts: [file.filePath],
           worktreeName,
           branch,
           repoName
