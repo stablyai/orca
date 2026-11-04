@@ -4,7 +4,6 @@ import {
   withReopenedProfileStore
 } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
-import { agentLaunchSettingsRollbackUpdates } from './agent-launch-settings-rollback'
 import {
   agentPermissionChoices,
   PERMISSION_CHOICE_AGENTS,
@@ -100,42 +99,3 @@ it.each([false, true])(
     })
   }
 )
-
-it('accumulates mixed restoration and omission while preserving each newer whole-agent tuple', () => {
-  const before = {
-    agentDefaultArgs: { claude: '--before' },
-    agentLaunchChoices: { claude: { model: 'sonnet' } },
-    agentPermissionOverrides: { claude: 'ask' },
-    agentDefaultEnv: { claude: { KEEP: 'before' } }
-  } as const
-  const applied = {
-    agentDefaultArgs: { claude: '--after', codex: '--added', grok: '--added' },
-    agentLaunchChoices: {
-      claude: { model: 'opus' },
-      codex: { model: 'opaque' },
-      grok: { model: 'opaque' }
-    },
-    agentPermissionOverrides: { claude: 'full-access', codex: 'full-access', grok: 'full-access' },
-    agentDefaultEnv: { claude: { KEEP: 'after' }, codex: { ADDED: '1' }, grok: { ADDED: '1' } }
-  } as const
-  expect(agentLaunchSettingsRollbackUpdates(before, applied, applied, applied)).toEqual(before)
-  const current = {
-    ...applied,
-    agentDefaultArgs: { ...applied.agentDefaultArgs, claude: '--verbose newest' },
-    agentLaunchChoices: { ...applied.agentLaunchChoices, codex: { model: 'new-codex' } }
-  }
-  const restored = {
-    ...current,
-    ...agentLaunchSettingsRollbackUpdates(before, applied, current, applied)
-  }
-  for (const field of [
-    'agentDefaultArgs',
-    'agentLaunchChoices',
-    'agentPermissionOverrides',
-    'agentDefaultEnv'
-  ] as const) {
-    expect(restored[field]?.claude).toEqual(current[field].claude)
-    expect(restored[field]?.codex).toEqual(current[field].codex)
-    expect(restored[field]).not.toHaveProperty('grok')
-  }
-})

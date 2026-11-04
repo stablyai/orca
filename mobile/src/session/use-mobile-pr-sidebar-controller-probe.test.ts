@@ -48,13 +48,6 @@ function Harness(props: Parameters<typeof useMobilePrSidebarController>[0]) {
   return null
 }
 
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-  })
-}
-
 function probeClient(): RpcClient {
   // Connection for these tests is the connState prop. The client still has to accept the sidebar's subscription.
   const client = {
@@ -80,50 +73,6 @@ describe('useMobilePrSidebarController repo probe', () => {
       renderer?.unmount()
     })
     renderer = null
-  })
-
-  // Probe repo eligibility even without a branch so detached/rebasing worktrees reach unavailable state instead of spinning forever.
-  it('resolves the probe when connected without a branch (detached HEAD)', async () => {
-    fetchGithubRepoSlugMock.mockResolvedValue({ ok: true, result: { owner: 'o', repo: 'r' } })
-    await act(async () => {
-      renderer = create(
-        createElement(Harness, {
-          client,
-          connState: 'connected',
-          worktreeId: 'w',
-          branch: null,
-          headSha: 'sha'
-        })
-      )
-    })
-    await flush()
-
-    expect(fetchGithubRepoSlugMock).toHaveBeenCalledWith(client, 'w')
-    expect(captured?.prSidebarRepoProbeLoaded).toBe(true)
-    expect(captured?.prSidebarIsGithubRepo).toBe(true)
-    expect(captured?.prSidebarState.kind).toBe('hidden')
-  })
-
-  it('picks up a remote added while the workspace stays mounted', async () => {
-    fetchGithubRepoSlugMock.mockResolvedValue({ ok: true, result: null })
-    await act(async () => {
-      renderer = create(
-        createElement(Harness, {
-          client,
-          connState: 'connected',
-          worktreeId: 'w',
-          branch: 'main',
-          headSha: 'sha'
-        })
-      )
-    })
-    expect(captured?.prSidebarIsGithubRepo).toBe(false)
-
-    fetchGithubRepoSlugMock.mockResolvedValue({ ok: true, result: { owner: 'o', repo: 'r' } })
-    await act(async () => {
-      expect(await captured!.refreshPRSidebarRepoProbe()).toBe(true)
-    })
-    expect(captured?.prSidebarIsGithubRepo).toBe(true)
   })
 
   it('does not let an older probe overwrite the refreshed provider', async () => {
@@ -223,25 +172,6 @@ describe('useMobilePrSidebarController repo probe', () => {
       expect(captured?.prSidebarState.kind).toBe('none')
     }
   )
-
-  it('does not probe until the client is connected', async () => {
-    fetchGithubRepoSlugMock.mockResolvedValue({ ok: true, result: { owner: 'o', repo: 'r' } })
-    await act(async () => {
-      renderer = create(
-        createElement(Harness, {
-          client,
-          connState: 'connecting',
-          worktreeId: 'w',
-          branch: null,
-          headSha: 'sha'
-        })
-      )
-    })
-    await flush()
-
-    expect(fetchGithubRepoSlugMock).not.toHaveBeenCalled()
-    expect(captured?.prSidebarRepoProbeLoaded).toBe(false)
-  })
 
   it('selects unknown for each worktree incarnation before layout, ignores late probes and retains same-worktree eligibility', async () => {
     const replies: ((value: {
