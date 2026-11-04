@@ -202,6 +202,11 @@ describe('typed creation through the startup and recorded resume owners', () => 
       expect(() =>
         pi('--model anthropic/claude', { agentCmdOverrides: { pi: 'pi --api-key key' } })
       ).toThrow(/--provider beside/)
+      expect(() =>
+        pi('--model anthropic/claude', {
+          agentCmdOverrides: { pi: 'pi --name --provider --api-key key' }
+        })
+      ).toThrow(/--provider beside/)
     })
 
     it('keep dash-leading operands of default options', () => {
