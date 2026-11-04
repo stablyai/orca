@@ -180,7 +180,7 @@ function harness(options: { busy?: boolean } = {}) {
       getMessageWaiters: () => undefined,
       resolveStructuredTarget: (handle) =>
         handle === mailbox && !ended ? { sessionId: owner, dispatchId: 'd1' } : null,
-      mailboxEnded: () => ended,
+      mailboxEnded: (handle) => handle !== mailbox || ended,
       unresolvedCustody: () => 'unverifiable',
       getCliCommand: () => 'orca-dev',
       senderSnapshot: () => ({ name: 'Coordinator', agent: null }),
