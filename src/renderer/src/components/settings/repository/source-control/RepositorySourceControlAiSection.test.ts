@@ -389,7 +389,7 @@ it.each(['own', 'parent'] as const)(
     if (!command.ok) {
       throw new Error(command.error)
     }
-    expect(command.tokens).toEqual(['claude', '--model', 'opus', '--verbose', 'fix'])
+    expect(command.tokens).toEqual(['claude', '--model', 'opus', '--verbose', '--', 'fix'])
     fireEvent.keyDown(document, { key: 'Escape' })
     view.rerender(tree(saved))
     await configure()
