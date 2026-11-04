@@ -3,23 +3,23 @@ import {
   authorizeWindowsCheckout,
   nativeWindowsMarkerMissing,
   usesNativeWindowsRemoval
-} from '../git/windows-worktree-removal'
-import { pruneGitWorktrees } from '../git/worktree-prune-guard'
+} from '../git/worktrees/removal/windows-worktree-removal'
+import { pruneGitWorktrees } from '../git/worktrees/removal/worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { ArchiveHookOverride } from '../../shared/worktree/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../workspaces/removal/worktree-archive-hook-gate'
 import type { Repo } from '../../shared/repo-types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import type { LocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
-import { assertWorktreeCleanForRemoval, listWorktreesStrict, removeWorktree } from '../git/worktree'
-import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
+import { assertWorktreeCleanForRemoval } from '../git/worktrees/removal/worktree-removal-preflight'
+import { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
+import { removeWorktree } from '../git/worktrees/removal/worktree-removal'
+import { getWorktreeSharedLinkPaths } from '../git/worktrees/content-paths/worktree-shared-directories'
 import { runHook, getEffectiveHooks } from '../workspace-hooks/hooks'
-import {
-  findExistingWorktreeSymlinkPaths,
-  removeWorktreeLinkedPaths
-} from '../ipc/worktree-symlinks'
+import { findExistingWorktreeSymlinkPaths } from '../git/worktrees/content-paths/worktree-symlink-detection'
+import { removeWorktreeLinkedPaths } from '../ipc/worktree-symlinks'
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
-import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,

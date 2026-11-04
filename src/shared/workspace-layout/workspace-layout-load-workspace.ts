@@ -1,5 +1,5 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
-import { checkRunDetailsOwnerScope } from '../check-run-details-owner-scope'
+import { checkRunDetailsOwnerScope } from '../source-control/checks/check-run-details-owner-scope'
 import type { Tab } from '../tab-types'
 import { normalizeTerminalLayoutPtyOwnership } from '../terminal-layout-pty-ownership'
 import { sanitizeTerminalLayoutPaneTitles } from '../terminal-pane-title-sanitization'

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyPRBotAuthorOverride } from '../../../shared/pr-bot-author-overrides'
+import { applyPRBotAuthorOverride } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 
 const store = vi.hoisted(() => ({
   settings: { prBotAuthorOverrides: [] as string[] },

@@ -1,6 +1,6 @@
 // Persist windowless chat tabs too, so the host layout remains complete.
 
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import { loadWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load'

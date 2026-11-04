@@ -9,7 +9,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 const scratchFolderPrefixes = vi.hoisted((): string[] => [])
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 // Why: off Windows a WSL objects path is relative, so a real scratch dir would land in the cwd.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
@@ -25,9 +28,9 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-import { findGitSubcommandIndex } from '../../shared/git-command-classification'
-import { GIT_CAPABILITY_RETRY_INTERVAL_MS } from '../../shared/git-capability-cache'
-import { getLocalGitCapabilityCache } from '../git/git-capability-state'
+import { findGitSubcommandIndex } from '../../shared/git/commands/git-command-classification'
+import { GIT_CAPABILITY_RETRY_INTERVAL_MS } from '../../shared/git/commands/git-capability-cache'
+import { getLocalGitCapabilityCache } from '../git/command-runner/git-capability-state'
 import { CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS } from './conflict-summary-cache'
 import { __resetPRConflictSummaryCachesForTests, getPRConflictSummary } from './conflict-summary'
 

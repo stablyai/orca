@@ -1,3 +1,4 @@
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'
@@ -10,8 +11,14 @@ import {
   fetchHostedReviewForBranch,
   fetchPRCheckDetails,
   fetchPRChecks,
-  fetchPRForBranch
+  fetchPRForBranch,
+  fetchWorkItemDetails
 } from './github-pr-rpc'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
+import {
+  GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
+  GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
+} from '../../../src/shared/task-source-runtime-capabilities'
 import { githubPrCheckDetailsSchema } from './github-pr-check-reply-schema'
 import { assignableUsersSchema, prChecksSchema } from './github-pr-entity-reply-schema'
 import {
@@ -467,13 +474,93 @@ describe('fetch wrappers', () => {
     expect(none).toEqual({ ok: true, result: null })
   })
 
-  it('fetchAssignableUsers returns empty list edge without prRepo', async () => {
+  it.each([
+    // The capability sets real builds advertise. One with the read intent gets it on both loads, with the owner.
+    [
+      'explicit intent',
+      [
+        GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY,
+        GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY,
+        GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY
+      ],
+      { ownerRepo: true, canonical: false },
+      { ownerRepo: true, canonical: true }
+    ],
+    // A canonical-only build predates exact targets: an ordinary load without the owner, Refresh with the owner only.
+    [
+      'canonical only',
+      [GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY],
+      { ownerRepo: false, canonical: undefined },
+      { ownerRepo: true, canonical: undefined }
+    ],
+    // A build with neither keeps today's params for both.
+    [
+      'neither',
+      [],
+      { ownerRepo: false, canonical: undefined },
+      { ownerRepo: false, canonical: undefined }
+    ]
+  ])(
+    'fetchWorkItemDetails sends the addressed read intent a %s host understands',
+    async (_host, capabilities, ordinary, refresh) => {
+      const prRepo = { owner: 'fork', repo: 'widgets', host: 'github.corp' }
+      const sent: unknown[] = []
+      const client = createFakeRpcClient()
+      client.sendRequest = async (method, params) => {
+        if (method === 'status.get') {
+          return okResponse({
+            runtimeId: 'r',
+            hostDescriptor: { installationId: 'r' },
+            capabilities
+          })
+        }
+        sent.push(params)
+        return okResponse({
+          item: {
+            id: 'PR_93',
+            type: 'pr',
+            number: 93,
+            title: 'fork',
+            state: 'open',
+            url: 'https://github.corp/fork/widgets/pull/93',
+            prRepo,
+            labels: [],
+            updatedAt: '',
+            author: null
+          },
+          body: '',
+          comments: []
+        })
+      }
+      for (const refreshing of [false, true]) {
+        const out = await fetchWorkItemDetails(client, WORKTREE_ID, {
+          prNumber: 93,
+          prRepo,
+          refresh: refreshing
+        })
+        expect(out.ok).toBe(true)
+      }
+      const shape = (params: unknown) => ({
+        ownerRepo: typeof params === 'object' && params !== null && 'ownerRepo' in params,
+        canonical:
+          typeof params === 'object' && params !== null && 'canonical' in params
+            ? params.canonical
+            : undefined
+      })
+      expect(sent.map(shape)).toEqual([ordinary, refresh])
+      expect(sent[1]).toMatchObject({ number: 93, type: 'pr' })
+    }
+  )
+
+  it('refuses missing accepted picker identity before any send', async () => {
     const { client, sendRequest } = mockClient(okResponse([]))
-    const out = await fetchAssignableUsers(client, WORKTREE_ID)
-    expect(out).toEqual({ ok: true, result: [] })
-    const [method, params] = sendRequest.mock.calls[0]!
-    expect(method).toBe('github.listAssignableUsers')
-    expect('prRepo' in (params as object)).toBe(false)
+    const out = await fetchAssignableUsers(
+      { ...createFakeRpcClient(), ...client },
+      WORKTREE_ID,
+      null
+    )
+    expect(out).toMatchObject({ ok: false, error: expect.stringContaining('identify') })
+    expect(sendRequest).not.toHaveBeenCalled()
   })
 
   it('surfaces { ok:false, error } on a failed response', async () => {

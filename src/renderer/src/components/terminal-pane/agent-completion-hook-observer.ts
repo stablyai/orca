@@ -1,4 +1,4 @@
-import { isRecognizedAgentType } from '../../../../shared/agent-process-recognition'
+import { isRecognizedAgentType } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type {
   AgentCompletionCoordinatorOptions,
   AgentCompletionStatusSnapshot

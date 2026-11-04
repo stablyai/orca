@@ -1,6 +1,6 @@
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { isWebClientLocation } from './web-client-location'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../shared/source-control-runtime-capabilities'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
 import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'

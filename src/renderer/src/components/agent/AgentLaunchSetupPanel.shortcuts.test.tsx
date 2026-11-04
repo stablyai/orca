@@ -3,11 +3,16 @@ import { act } from 'react'
 import { fireEvent, getByRole, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { entry, host, root, onUse } from './agent-launch-setup-panel-test-fixture'
-import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
+import {
+  AgentLaunchSetupPanel,
+  entry,
+  host,
+  root,
+  onUse
+} from './agent-launch-setup-panel-test-fixture'
 import { changePrompt } from '../native-chat/native-chat-prompt-editor.test-support'
 import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
-import type { AgentPickerSurface } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerSurface } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 beforeEach(() => clearNativeChatComposerDraftsForTests())
 afterEach(() => vi.restoreAllMocks())

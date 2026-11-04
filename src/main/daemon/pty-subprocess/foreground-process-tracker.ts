@@ -16,7 +16,7 @@ import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
   type RecognizedAgentProcess
-} from '../../../shared/agent-process-recognition'
+} from '../../../shared/agent-status/process/agent-process-recognition'
 import {
   shouldInspectOuterWrapperForegroundName,
   shouldInspectOuterWrapperForegroundProcess

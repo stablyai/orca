@@ -1,4 +1,7 @@
-import type { HostedReviewInfo, HostedReviewForBranchArgs } from '../../../../shared/hosted-review'
+import type {
+  HostedReviewInfo,
+  HostedReviewForBranchArgs
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { singlePaneLayoutSnapshot } from './terminal-helpers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTerminalTab, makeWorktree } from './worktrees-slice-test-fixtures'

@@ -1,5 +1,5 @@
 import { normalizeExecutionHostId, type ExecutionHostId } from './execution-host'
-import type { HostedReviewProvider } from './hosted-review'
+import type { HostedReviewProvider } from './source-control/hosted-review/hosted-review-contracts'
 import {
   WORKSPACE_CLEANUP_AGENT_STATE_VALUES,
   WORKSPACE_CLEANUP_BLOCKER_MODE_VALUES,

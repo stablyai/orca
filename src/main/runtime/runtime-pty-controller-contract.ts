@@ -1,10 +1,13 @@
-import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
-import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
+import type {
+  TerminalLimitStatus,
+  TerminalLimitUpdate
+} from '../../shared/terminal/runtime-policy/terminal-limit-policy'
+import type { TerminalViewAttributes } from '../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
 import type { RuntimePaneCreateClaim } from '../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
-import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
+import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
 import type {
   AutomaticWorkResumeOutcome,
   AutomaticWorkStatus,
@@ -15,7 +18,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session/agent-session-host-authority'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyBindingSourceExpectation } from '../persistence/loading-store/store'
@@ -29,7 +32,7 @@ import type {
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { StartupCwdFallback } from '../../shared/startup-cwd-fallback'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type { PaneResumeOutcome } from '../../shared/workspace-layout/workspace-layout-published'
 
 export type PtyInventoryRefreshOptions = {

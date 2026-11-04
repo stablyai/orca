@@ -14,7 +14,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { finishAcceptedWorktreeRemoval } from '../../workspaces/removal/worktree-background-removal'
-import { preservedBranchCleanupScopeKey } from '../../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupScopeKey } from '../../../shared/git/branches/preserved-branch-cleanup'
 import {
   getRuntimeWorktreeRemovalOptionsKey,
   type RemoveManagedWorktreeOptions,
@@ -26,7 +26,7 @@ import {
   resolveWorktreeRemovalRoute
 } from '../../workspaces/removal/worktree-removal-execution-host-route'
 import { listWorktreesOnRemovalRoute } from '../worktree-removal-route-listing'
-import { authorizeUnregisteredWindowsRemoval } from '../../git/windows-worktree-removal'
+import { authorizeUnregisteredWindowsRemoval } from '../../git/worktrees/removal/windows-worktree-removal'
 import { findRegisteredDeletableWorktree } from '../../workspaces/removal/worktree-removal-safety'
 import { removeRuntimeUnregisteredWorktree } from '../runtime-unregistered-worktree-removal'
 import { removeStaleLocalWorktreeRegistration } from '../../workspaces/removal/local-worktree-removal-recovery'

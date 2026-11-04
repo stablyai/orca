@@ -1,7 +1,7 @@
 import { resetMobileNativeChatDraftInputsForTests } from './mobile-native-chat-draft-inputs'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { buildAgentTuiClearInputForText } from '../../../../../src/shared/agent-tui-input-clear'
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../../../transport/types'
@@ -42,6 +42,9 @@ function makeClient(responses: (RpcResponse | Promise<RpcResponse>)[]): Pick<
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
+      if (method === 'terminal.read') {
+        return ok('read', {})
+      }
       calls.push({ method, params: params as Record<string, unknown> })
       const response = responses.shift()
       if (!response) {
@@ -133,7 +136,14 @@ describe('useMobileNativeChatImageAttachments', () => {
     const trackedClient: Pick<RpcClient, 'sendRequest'> = {
       sendRequest: (method, params) => {
         if (method === 'terminal.send') {
-          order.push((params as { text?: string }).text === '\x15' ? 'clear' : 'paste')
+          order.push(
+            params !== null &&
+              typeof params === 'object' &&
+              'text' in params &&
+              params.text === AGENT_TUI_CLEAR_INPUT_MAX
+              ? 'clear'
+              : 'paste'
+          )
         }
         return client.sendRequest(method, params)
       }
@@ -160,7 +170,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(accepted).toBe(true)
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls).toHaveLength(2)
-    expect(sendCalls[0]?.params).toMatchObject({ text: '\x15', enter: false })
+    expect(sendCalls[0]?.params).toMatchObject({ text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false })
     expect(sendCalls[1]?.params).toMatchObject({
       text: `\x1b[200~${agent === 'omp' ? '@' : ''}/tmp/a.png\x1b[201~ `,
       enter: false
@@ -200,7 +210,7 @@ describe('useMobileNativeChatImageAttachments', () => {
 
     const firstSend = client.calls.find((c) => c.method === 'terminal.send')
     expect(firstSend?.params).toMatchObject({
-      text: buildAgentTuiClearInputForText(draft),
+      text: AGENT_TUI_CLEAR_INPUT_MAX,
       enter: false
     })
     expect(firstSend?.params.text).not.toBe('\x15')
@@ -534,7 +544,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(accepted).toBe(true)
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls).toHaveLength(3)
-    expect(sendCalls[2]?.params).toMatchObject({ text: '\x15', enter: false })
+    expect(sendCalls[2]?.params).toMatchObject({ text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false })
     expect(baseSend).toHaveBeenCalledWith(...textSend('hi again'))
   })
 
@@ -569,7 +579,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(accepted).toBe(true)
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls).toHaveLength(3)
-    expect(sendCalls[2]?.params).toMatchObject({ text: '\x15', enter: false })
+    expect(sendCalls[2]?.params).toMatchObject({ text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false })
     expect(baseSend).toHaveBeenNthCalledWith(1, ...textSend('pic', ['file:///a.jpg']))
     expect(baseSend).toHaveBeenNthCalledWith(2, ...textSend('later message'))
   })
@@ -605,7 +615,11 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(accepted).toBe(true)
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls).toHaveLength(3)
-    expect(sendCalls[2]?.params).toMatchObject({ terminal: 'term-1', text: '\x15', enter: false })
+    expect(sendCalls[2]?.params).toMatchObject({
+      terminal: 'term-1',
+      text: AGENT_TUI_CLEAR_INPUT_MAX,
+      enter: false
+    })
     expect(baseSend).toHaveBeenNthCalledWith(2, ...textSend('later message'))
   })
 
@@ -662,8 +676,8 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(accepted).toBe(true)
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls).toHaveLength(4)
-    expect(sendCalls[2]?.params).toMatchObject({ text: '\x15', enter: false })
-    expect(sendCalls[3]?.params).toMatchObject({ text: '\x15', enter: false })
+    expect(sendCalls[2]?.params).toMatchObject({ text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false })
+    expect(sendCalls[3]?.params).toMatchObject({ text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false })
     expect(baseSend).toHaveBeenNthCalledWith(1, ...textSend('hi', ['file:///a.jpg']))
     expect(baseSend).toHaveBeenNthCalledWith(2, ...textSend('hi again'))
   })
@@ -709,7 +723,11 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(accepted).toBe(false)
     expect(baseSend).toHaveBeenCalledTimes(1)
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
-    expect(sendCalls[2]?.params).toMatchObject({ terminal: 'term-1', text: '\x15', enter: false })
+    expect(sendCalls[2]?.params).toMatchObject({
+      terminal: 'term-1',
+      text: AGENT_TUI_CLEAR_INPUT_MAX,
+      enter: false
+    })
   })
 
   it('defers the heal instead of burning a rejected clear while the lease is closed', async () => {
@@ -751,7 +769,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(accepted).toBe(true)
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls).toHaveLength(3)
-    expect(sendCalls[2]?.params).toMatchObject({ text: '\x15', enter: false })
+    expect(sendCalls[2]?.params).toMatchObject({ text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false })
   })
 
   it('heals rejected image submits independently across terminals', async () => {
@@ -815,8 +833,8 @@ describe('useMobileNativeChatImageAttachments', () => {
 
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls.slice(4).map((call) => call.params)).toMatchObject([
-      { terminal: 'term-1', text: '\x15', enter: false },
-      { terminal: 'term-2', text: '\x15', enter: false }
+      { terminal: 'term-1', text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false },
+      { terminal: 'term-2', text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false }
     ])
     expect(baseSend).toHaveBeenCalledTimes(4)
   })

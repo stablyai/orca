@@ -8,14 +8,12 @@ import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-ag
 import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import {
-  detectAgentStatusFromTitle,
-  isClaudeManagementTitle
-} from '../../../shared/agent-detection'
+import { detectAgentStatusFromTitle } from '../../../shared/agent-status/title/agent-title-status'
+import { isClaudeManagementTitle } from '../../../shared/agent-status/title/agent-title-core'
 import {
   GENERIC_PROCESS_NAME_AGENTS,
   recognizeAgentProcess
-} from '../../../shared/agent-process-recognition'
+} from '../../../shared/agent-status/process/agent-process-recognition'
 import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import type { OrchestrationDb } from './db'

@@ -1,8 +1,6 @@
-import {
-  isWebviewDragPassthroughActive,
-  registerWebviewDragPassthroughSurface
-} from './host-guest/webview-drag-passthrough'
+import { registerWebviewDragPassthroughSurface } from './host-guest/webview-drag-passthrough'
 import { registerBrowserClientPagePositionSync } from './browser-client-page-position-driver'
+import { syncBrowserClientPagePaintRetention } from './browser-client-page-paint-retention'
 import type { BrowserClientPageRendererIdentity as RendererPageIdentity } from '../../../../shared/browser-client-page-renderer-protocol'
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
 
@@ -41,9 +39,9 @@ export function attachBrowserClientRetainedPage(
   if (!page.host.parentElement) {
     throw new Error('browser_client_page_renderer_retained_host_unavailable')
   }
-  const stopTrackingViewport = showRetainedHost(page.host, container)
-  const attachment = { container, stopTrackingViewport }
+  const attachment = { container, stopTrackingViewport: () => {} }
   page.visibleAttachment = attachment
+  attachment.stopTrackingViewport = showRetainedHost(page, container)
   let detached = false
   return {
     webview: page.webview,
@@ -67,54 +65,26 @@ export function attachBrowserClientRetainedPage(
         return
       }
       detached = true
-      stopTrackingViewport()
+      attachment.stopTrackingViewport()
       if (
         pages.get(page.key) === page &&
         page.status === 'attached' &&
         page.visibleAttachment === attachment
       ) {
         page.visibleAttachment = null
-        hideRetainedHost(page.host)
+        syncBrowserClientPagePaintRetention(page)
       }
     }
   }
 }
 
-/** Derive pointer-events from current visibility and drag state; restoring a captured value would fail across mid-drag hide/show. */
-function applyRetainedHostPointerEvents(
-  host: HTMLDivElement,
-  visible: boolean,
-  dragPassthrough: boolean
-): void {
-  host.style.pointerEvents = visible && !dragPassthrough ? 'auto' : 'none'
-}
-
 /** Register the body-level host for drag passthrough; hidden creation and derived show state also cover enrollment mid-drag. */
 export function enrolRetainedHostDragPassthrough(page: RetainedPage): () => void {
-  return registerWebviewDragPassthroughSurface((passthrough) => {
-    applyRetainedHostPointerEvents(page.host, page.visibleAttachment !== null, passthrough)
-  })
+  return registerWebviewDragPassthroughSurface(() => syncBrowserClientPagePaintRetention(page))
 }
 
-function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => void {
-  host.inert = false
-  host.removeAttribute('aria-hidden')
-  applyRetainedHostPointerEvents(host, true, isWebviewDragPassthroughActive())
-  let appliedBounds = ''
-  const syncViewport = (): void => {
-    const bounds = container.getBoundingClientRect()
-    const next = `${bounds.left}|${bounds.top}|${bounds.width}|${bounds.height}`
-    if (next === appliedBounds) {
-      return
-    }
-    appliedBounds = next
-    Object.assign(host.style, {
-      left: `${bounds.left}px`,
-      top: `${bounds.top}px`,
-      width: `${bounds.width}px`,
-      height: `${bounds.height}px`
-    })
-  }
+function showRetainedHost(page: RetainedPage, container: HTMLElement): () => void {
+  const syncViewport = (): void => syncBrowserClientPagePaintRetention(page)
   const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncViewport)
   observer?.observe(container)
   window.addEventListener('resize', syncViewport)
@@ -134,16 +104,4 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
     window.removeEventListener('resize', syncViewport)
     window.removeEventListener('scroll', syncViewport, true)
   }
-}
-
-function hideRetainedHost(host: HTMLDivElement): void {
-  host.inert = true
-  host.setAttribute('aria-hidden', 'true')
-  Object.assign(host.style, {
-    left: '-10000px',
-    top: '0',
-    width: '1px',
-    height: '1px',
-    pointerEvents: 'none'
-  })
 }

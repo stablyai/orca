@@ -116,7 +116,6 @@ export class StructuredAgentSessionHost {
       now: () => this.now(),
       runtimeState: this.runtimeState,
       wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
-      stopStartingChild: (...args) => this.lifetime.stopStartingChild(...args),
       failStartingChild: (...args) => this.lifetime.failStartingChild(...args),
       trackOpen: (open) => this.tasks.trackAttach(open)
     })
@@ -157,6 +156,7 @@ export class StructuredAgentSessionHost {
     conversation: (id) => this.lifetime.conversation(id)
   }))
   sessionAgent = this.reads.sessionAgent
+  attentionReads = this.reads.attentionReads
   readModelCatalog = this.reads.readModelCatalog
   childAccountHome = this.reads.childAccountHome
   prospectiveAccountHome = this.reads.prospectiveAccountHome

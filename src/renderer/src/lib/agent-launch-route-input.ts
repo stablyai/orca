@@ -7,7 +7,7 @@ import {
 import type { AppState } from '@/store/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../shared/terminal-startup-cwd'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { workspaceKindForWorktreeId } from '../../../shared/workspace-launch-kind'
 import type { AgentLaunchRoutingInput } from '@/lib/agent-launch-routing'
 // Import the resolver directly: the connection-context facade reaches the store root and creates a launch-graph cycle.
@@ -112,6 +112,8 @@ export function selectAgentLaunchRouteView(state: AppState): AgentLaunchRouteVie
 
 export type AgentLaunchRouteArgs = {
   agent: TuiAgent
+  /** Invocation preference; host admission can still fall back to Terminal. */
+  preferredSurface?: 'chat'
   workspace: ProspectiveWorkspace
   prompt?: string
   promptDelivery?: NativeChatLaunchPromptDelivery
@@ -209,6 +211,7 @@ export function buildAgentLaunchRouteInput(
   return {
     agent,
     settings: store.settings,
+    preferredSurface: args.preferredSurface,
     executionHostId,
     hostCapabilities,
     ...(parseExecutionHostId(executionHostId)?.kind === 'runtime'

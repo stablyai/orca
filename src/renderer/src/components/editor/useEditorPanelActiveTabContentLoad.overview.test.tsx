@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { useEditorPanelActiveTabContentLoad } from './useEditorPanelActiveTabContentLoad'
 
 // The active tab's load is a user act that may start a stopped WSL distro.

@@ -10,7 +10,7 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { getWorktreeSymlinkPathFilterState } from '@/components/settings/worktree-symlink-path-filter'
+import { getWorktreeSymlinkPathFilterState } from '@/lib/directory-path-suggestion-filter'
 import { joinPath } from '@/lib/path'
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'

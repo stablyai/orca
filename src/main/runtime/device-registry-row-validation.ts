@@ -4,7 +4,7 @@ import type { DeviceEntry } from './device-registry'
 import { parseMobilePushRegistration } from '../../shared/mobile-push-contract'
 import { isDevicePublicKeyB64 } from '../../shared/device-key-proof'
 import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from './rpc/rpc-method-permission'
-import { isRecord } from '../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 const GRANTABLE: ReadonlySet<string> = new Set(RUNTIME_DEVICE_GRANTS)
 

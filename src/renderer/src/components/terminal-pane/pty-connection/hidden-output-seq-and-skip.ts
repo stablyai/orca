@@ -1,14 +1,14 @@
 import { useAppStore } from '@/store'
-import { parseTerminalKittyKeyboardFlags } from '../../../../../shared/terminal-kitty-keyboard-flags'
+import { parseTerminalKittyKeyboardFlags } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import {
   containsStatefulRendererQuery,
   extractHiddenStartupRendererQueryData
-} from '../../../../../shared/terminal-reply-query-extraction'
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import {
   resolveTerminalColorSchemeMode,
   scanMode2031ReplyDecision
-} from '../../../../../shared/terminal-color-scheme-protocol'
+} from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import { installTerminalLiveScrollbackRestore } from '@/lib/pane-manager/terminal-live-scrollback-restore'
 import type { PtyDataMeta } from '../pty-dispatcher'
 import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies'

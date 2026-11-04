@@ -41,38 +41,6 @@ describe('hydrateWorkspaceSession', () => {
     vi.clearAllMocks()
   })
 
-  it('preserves tabs for a known repo whose worktrees have not loaded yet', () => {
-    // Why (#1158): empty per-repo worktrees can mean a degraded fetch or reconnect race, not that persisted tabs are stale.
-    const store = createTestStore()
-    const stalledWt = 'repo1::/path/wt1'
-
-    store.setState({
-      repos: [
-        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: { repo1: [] }
-    })
-
-    store.getState().hydrateWorkspaceSession({
-      activeRepoId: 'repo1',
-      activeWorktreeId: stalledWt,
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        [stalledWt]: [makeTab({ id: 'tab1', worktreeId: stalledWt })]
-      },
-      terminalLayoutsByTabId: {
-        tab1: makeLayout()
-      }
-    })
-
-    const s = store.getState()
-    expect(s.tabsByWorktree[stalledWt]).toHaveLength(1)
-    expect(s.tabsByWorktree[stalledWt][0].id).toBe('tab1')
-    expect(s.terminalLayoutsByTabId['tab1']).toBeDefined()
-    expect(s.activeWorktreeId).toBe(stalledWt)
-    expect(s.activeTabId).toBe('tab1')
-  })
-
   it('preserves tabs for a known repo after a non-authoritative worktree fetch', () => {
     // Why (#1158): metadata fallback means the runtime did not prove deletion.
     const store = createTestStore()

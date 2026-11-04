@@ -8,7 +8,7 @@ import type {
   GitConflictKind,
   GitConflictResolutionStatus,
   GitStatusEntry
-} from '../../../../shared/git-status-types'
+} from '../../../../shared/git/status/git-status-types'
 import { ConflictReviewFileTree, CONFLICT_REVIEW_ROW_HEIGHT_PX } from './ConflictReviewFileTree'
 
 const VIEWPORT_HEIGHT_PX = 600

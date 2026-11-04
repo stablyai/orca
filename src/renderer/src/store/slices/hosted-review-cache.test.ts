@@ -7,7 +7,7 @@ import {
   _getHostedReviewRequestGenerationCountForTest
 } from './hosted-review-request-state'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
 const runtimeRpc = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
