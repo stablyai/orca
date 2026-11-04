@@ -74,7 +74,24 @@ export function emitPinnedGroup(
   if (!allowImportedFallback) {
     return
   }
-  // Insert imported fallbacks after the repo’s last row, backwards to avoid shifting later targets.
+  insertImportedFallbacksAfterRepoRows(
+    result,
+    firstItemIndex,
+    importedWorktreesByRepo,
+    (repoId) => !renderedNaturalAnchorRepoIds.has(repoId),
+    noticeHostContextLabelByRepoId
+  )
+}
+
+/** Outside project grouping no header owns a repo, so its hidden-worktrees line follows the repo's last row. */
+export function insertImportedFallbacksAfterRepoRows(
+  result: Row[],
+  firstItemIndex: number,
+  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>,
+  shouldPlace: (repoId: string) => boolean,
+  noticeHostContextLabelByRepoId?: ReadonlyMap<string, NoticeHostContext>
+): void {
+  // Insert backwards so earlier targets keep their indexes.
   const lastResultIndexByRepoId = new Map<string, number>()
   for (let index = firstItemIndex; index < result.length; index++) {
     const row = result[index]
@@ -85,7 +102,7 @@ export function emitPinnedGroup(
   const inserts = [...lastResultIndexByRepoId.entries()].sort((left, right) => right[1] - left[1])
   for (const [repoId, index] of inserts) {
     const candidate = importedWorktreesByRepo.get(repoId)
-    if (candidate && !renderedNaturalAnchorRepoIds.has(repoId)) {
+    if (candidate && shouldPlace(repoId)) {
       result.splice(
         index + 1,
         0,

@@ -6,7 +6,11 @@ import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './group-keys'
-import { appendOrderedGroups, type SectionAppendContext } from './group-sections'
+import {
+  appendImportedLinesAfterRepoRows,
+  appendOrderedGroups,
+  type SectionAppendContext
+} from './group-sections'
 
 import {
   getLaneHostWorktreeCounts,
@@ -228,6 +232,24 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       noticeHostContextLabelByRepoId,
       mixedWorktreeHostContextLabels
     )
+    const sectionContext: SectionAppendContext = {
+      result,
+      groupBy,
+      collapsedGroups,
+      workspaceStatuses,
+      repoMap,
+      repoOf,
+      defaultHostId,
+      hostLabelById,
+      projectIndex,
+      importedWorktreesByRepo,
+      newExternalWorktreesInboxByRepo,
+      pendingByRepo,
+      mixedWorktreeHostContextLabels,
+      noticeHostContextLabelByRepoId,
+      occurrencePlan,
+      importedLineRepoIds: new Set()
+    }
     if (groupBy === 'none') {
       // Folder-only accounts must still render flat rows (#15362).
       if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {
@@ -251,12 +273,14 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
         })
         if (!collapsedGroups.has(ALL_GROUP_KEY)) {
+          const firstItemIndex = result.length
           appendWorktreeRows(result, repoOf, occurrencePlan, {
             collapsedGroups,
             groupDepth: 0,
             sectionKey: ALL_GROUP_KEY,
             hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
           })
+          appendImportedLinesAfterRepoRows(sectionContext, firstItemIndex)
           for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
             compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
           )) {
@@ -265,24 +289,6 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
         }
       }
       return result
-    }
-
-    const sectionContext: SectionAppendContext = {
-      result,
-      groupBy,
-      collapsedGroups,
-      workspaceStatuses,
-      repoMap,
-      repoOf,
-      defaultHostId,
-      hostLabelById,
-      projectIndex,
-      importedWorktreesByRepo,
-      newExternalWorktreesInboxByRepo,
-      pendingByRepo,
-      mixedWorktreeHostContextLabels,
-      noticeHostContextLabelByRepoId,
-      occurrencePlan
     }
 
     if (groupBy !== 'repo' || projectGroups.length === 0) {

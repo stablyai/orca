@@ -143,8 +143,42 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows).toEqual([])
   })
 
-  it('does not emit unpinned imported worktree cards outside repo grouping', () => {
+  it('shows one imported line after the repo rows in its first status section', () => {
+    const review = { ...worktree, id: 'wt-review', workspaceStatus: 'in-review' as const }
     const rows = buildRows(
+      'workspace-status',
+      [worktree, review],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [worktree.id, worktree],
+        [review.id, review]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    const cards = rows.filter((row) => row.type === 'imported-worktrees-card')
+    expect(cards).toMatchObject([{ placement: 'pinned-fallback', repo: { id: 'repo-1' } }])
+    const cardIndex = rows.indexOf(cards[0]!)
+    expect(rows[cardIndex - 1]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
+    expect(rows.slice(cardIndex + 1)).toMatchObject([
+      { type: 'header' },
+      { type: 'item', worktree: { id: 'wt-review' } }
+    ])
+  })
+
+  it('shows the imported line in a later status section when the first is collapsed', () => {
+    const review = { ...worktree, id: 'wt-review', workspaceStatus: 'in-review' as const }
+    const firstKey = buildRows(
       'workspace-status',
       [worktree],
       repoMap,
@@ -154,7 +188,22 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       undefined,
       {},
-      new Map([[worktree.id, worktree]]),
+      new Map([[worktree.id, worktree]])
+    )[0]!
+    const rows = buildRows(
+      'workspace-status',
+      [worktree, review],
+      repoMap,
+      null,
+      new Set([firstKey.type === 'header' ? firstKey.key : '']),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [worktree.id, worktree],
+        [review.id, review]
+      ]),
       false,
       undefined,
       [],
@@ -162,7 +211,10 @@ describe('buildRows with pinned worktrees', () => {
       new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
     )
 
-    expect(rows.some((row) => row.type === 'imported-worktrees-card')).toBe(false)
+    expect(rows.slice(-2)).toMatchObject([
+      { type: 'item', worktree: { id: 'wt-review' } },
+      { type: 'imported-worktrees-card', placement: 'pinned-fallback' }
+    ])
   })
 
   it('places non-repo imported fallbacks after each repo last pinned row when expanded', () => {
@@ -553,7 +605,7 @@ describe('buildRows with pinned worktrees', () => {
     )
   })
 
-  it('suppresses duplicate-mode imported fallback only when a natural anchor renders', () => {
+  it('moves the duplicate-mode imported line from Pinned to the open natural section', () => {
     const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
     const imported = new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
     const expanded = buildRows(
@@ -591,7 +643,11 @@ describe('buildRows with pinned worktrees', () => {
       imported
     )
 
-    expect(expanded.some((row) => row.type === 'imported-worktrees-card')).toBe(false)
+    expect(expanded.filter((row) => row.type === 'imported-worktrees-card')).toHaveLength(1)
+    expect(expanded.at(-1)).toMatchObject({
+      type: 'imported-worktrees-card',
+      placement: 'pinned-fallback'
+    })
     expect(collapsedAll).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'imported-worktrees-card', placement: 'pinned-fallback' })

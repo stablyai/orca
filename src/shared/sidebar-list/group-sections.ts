@@ -12,6 +12,7 @@ import {
   getMixedHostContextLabels,
   getProjectHeaderHostRepos
 } from './host-labels'
+import { insertImportedFallbacksAfterRepoRows } from './pinned-group-rows'
 import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
 import type { ProjectGroupingIndex } from '../project-section-grouping'
 import {
@@ -48,6 +49,8 @@ export type SectionAppendContext = {
   mixedWorktreeHostContextLabels: Map<string, string> | undefined
   noticeHostContextLabelByRepoId: Map<string, NoticeHostContext> | undefined
   occurrencePlan: WorktreeOccurrencePlan<Worktree>
+  /** Repos whose hidden-worktrees line a section already drew; each repo gets one. */
+  importedLineRepoIds: Set<string>
 }
 
 function getProjectHeaderHostScope(
@@ -212,6 +215,7 @@ export function appendOrderedGroups(
         groupBy === 'repo'
           ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
           : undefined
+      const firstItemIndex = result.length
       appendWorktreeRows(result, repoOf, occurrencePlan, {
         collapsedGroups,
         groupDepth: projectGroupDepth,
@@ -219,9 +223,35 @@ export function appendOrderedGroups(
         hostContextLabelByRepoId,
         hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
       })
+      if (groupBy !== 'repo') {
+        appendImportedLinesAfterRepoRows(ctx, firstItemIndex)
+      }
       for (const pair of folderPairs) {
         result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))
       }
     }
   }
+}
+
+/** Draws each repo's hidden-worktrees line in the first open section that shows its rows. */
+export function appendImportedLinesAfterRepoRows(
+  ctx: Pick<
+    SectionAppendContext,
+    'result' | 'importedWorktreesByRepo' | 'noticeHostContextLabelByRepoId' | 'importedLineRepoIds'
+  >,
+  firstItemIndex: number
+): void {
+  insertImportedFallbacksAfterRepoRows(
+    ctx.result,
+    firstItemIndex,
+    ctx.importedWorktreesByRepo,
+    (repoId) => {
+      if (ctx.importedLineRepoIds.has(repoId)) {
+        return false
+      }
+      ctx.importedLineRepoIds.add(repoId)
+      return true
+    },
+    ctx.noticeHostContextLabelByRepoId
+  )
 }
