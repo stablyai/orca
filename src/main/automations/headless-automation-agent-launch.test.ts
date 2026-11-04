@@ -86,12 +86,12 @@ function harness(
       title: 'Nightly',
       suppressStartupUpdatePrompt: true
     })),
-    resolveManagedTerminalWorkspaceTarget: vi.fn(async () => ({
+    resolveManagedTerminalWorkspaceTarget: vi.fn(async (selector: string) => ({
       managedWorktree: {
         displayName: 'repo',
         ...(options.workspaceHostId ? { hostId: options.workspaceHostId } : {})
       },
-      scope: { folderWorkspace: null }
+      scope: await host.showTerminalWorkspaceLaunchScope(selector)
     })),
     getAgentStatusRowsForPane: vi.fn((_paneKey: string) => [
       { state: 'done', agentType: 'claude', receivedAt: 2 }
@@ -117,7 +117,9 @@ function harness(
   host.showTerminalWorkspaceLaunchScope.mockImplementation(async (selector) => ({
     id: selector.replace(/^id:/, ''),
     path: '/repo',
-    connectionId: null,
+    connectionId: options.workspaceHostId?.startsWith('ssh:')
+      ? options.workspaceHostId.slice(4)
+      : null,
     repo: null,
     folderWorkspace: null
   }))
@@ -259,7 +261,12 @@ describe('headless automation agent launch', () => {
     }
     expect(deliverTerminalAgentLaunchPrompt).toHaveBeenCalledTimes(2)
     expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
-    expect(runtime.resolveManagedTerminalWorkspaceTarget).toHaveBeenCalledTimes(2)
+    expect(runtime.resolveManagedTerminalWorkspaceTarget.mock.calls).toEqual(
+      Array.from({ length: 2 }, () => [
+        ['id:wt-1', 'local', false],
+        ['id:wt-1', undefined, false]
+      ]).flat()
+    )
   })
 
   it('reuses a pinned SSH folder with local project history without fresh transport acquisition', async () => {

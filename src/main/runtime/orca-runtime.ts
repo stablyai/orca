@@ -259,7 +259,10 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   }
 
   /** Apply a window command to the partitions that hold its tab. */
-  async applyLayoutCommand(command: WindowLayoutCommand, run?: TerminalCloseRunOptions) {
+  async applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: TerminalCloseRunOptions
+  ): Promise<LayoutApplyReply> {
     // Wait for live terminal placement before creating the first workspace surface.
     const placing = this.livePlacementSettledFor(command)
     const apply = (): Promise<LayoutApplyReply> =>
