@@ -9,6 +9,7 @@ import {
 } from './acp-errors'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
 import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
+import captures from '../native-chat/agent-session-wire/__fixtures__/startup-protocol-rejections.json'
 
 const peers: AcpJsonRpcPeer[] = []
 const agents: AcpScriptedAgent[] = []
@@ -381,5 +382,47 @@ describe('ACP JSON-RPC peer', () => {
     await tick()
     expect(peer.closed).toBe(true)
     input.destroy()
+  })
+
+  it('settles a call with the final answer the agent wrote after it stopped reading', async () => {
+    const { response } = captures.acp
+    const { peer, agent } = fixture()
+    const asked = deferred<unknown>()
+    agent.on(captures.acp.request.method, asked.resolve)
+    const load = peer.request(captures.acp.request.method, {}).catch((error: unknown) => error)
+    await asked.promise
+    // The agent closes its stdin before the last chunk of its answer reaches Orca.
+    agent.stdin.emit('finish')
+    await expect(peer.request('late', {})).rejects.toBeInstanceOf(AcpConnectionClosedError)
+    agent.stdout.write(`${JSON.stringify({ ...response, id: 1 })}\n`)
+    expect(await load).toMatchObject({ code: response.error.code, data: response.error.data })
+    expect(peer.closed).toBe(true)
+  })
+
+  it('keeps an earlier call answerable when a later write fails', async () => {
+    const input = new PassThrough()
+    let writes = 0
+    const output = new Writable({
+      write(_chunk, _encoding, callback) {
+        writes += 1
+        if (writes === 1) {
+          callback()
+        } else {
+          setImmediate(() => callback(new Error('Broken pipe from write')))
+        }
+      }
+    })
+    const peer = new AcpJsonRpcPeer(input, output)
+    peers.push(peer)
+    const first = peer.request('session/new', {}).catch((error: unknown) => error)
+    await tick()
+    const second = peer.request('session/set_mode', {}).catch((error: unknown) => error)
+    await tick()
+    input.write(
+      `${JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: -32600, message: 'refused' } })}\n`
+    )
+    expect(await first).toBeInstanceOf(AcpRpcError)
+    input.end()
+    expect(await second).toMatchObject({ message: 'Broken pipe from write' })
   })
 })

@@ -3983,7 +3983,7 @@
             "copyFilePathFailed": "Kopieren des Dateipfads fehlgeschlagen",
             "downloadOpenWithDefaultApp": "Herunterladen und mit Standard-App öffnen",
             "downloadOpenFailed": "„{{value0}}“ konnte nicht heruntergeladen werden.",
-            "openInThisGroup": "In dieser Gruppe öffnen",
+            "openInNewTab": "In neuem Tab öffnen",
             "openInThisGroupRefused": "{{value0}} konnte nicht in dieser Gruppe geöffnet werden"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -7677,7 +7677,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Computer Use öffnen",
-          "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
+          "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
           "333984cf90": "Bestehende Browser-Sitzung verwenden"
         },
         "BrowserUseEnableSwitch": {
@@ -7797,7 +7797,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Ermöglicht Agenten, lokale Desktop-Apps zu untersuchen und zu bedienen.",
-          "93255aaf18": "Computer Use-Skill",
+          "93255aaf18": "Orca Computer Use-Skill",
           "45f8e22c2e": "Öffnen",
           "d95d1cfab8": "Aktualisieren",
           "0c29da5805": "Bereit",
@@ -8682,8 +8682,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Befehlsvorlage",
-          "2b2f38652b": "Benutzerdefinierter Befehl",
-          "0ffb081b3a": "Standardagenten verwenden",
           "f4310cf63f": "Agent",
           "1cd88d470a": "Anpassen",
           "403876bb48": "Globale Einstellung verwenden",
@@ -9228,7 +9226,7 @@
           "902f5dee1f": "Beim Auswählen kopieren",
           "9129b7e805": "Das Bewegen des Mauszeigers über einen Terminalbereich aktiviert diesen ohne Klick.",
           "8eefeaa3da": "Fokus folgt der Maus",
-          "96fe15def8": "Verhalten von Maus und Zwischenablage in Terminalbereichen.",
+          "96fe15def8": "Verhalten von Scrollen, Maus und Zwischenablage in Terminalbereichen.",
           "45721f3e67": "Terminalinteraktion",
           "9c0b1c1792": "Ein",
           "c1fc9e9444": "GPU-Beschleunigung",
@@ -20014,7 +20012,8 @@
         "effortPickerFailed": "Die Auswahl des Denkaufwands konnte nicht geöffnet werden.",
         "modelApplyFailed": "Modell {{value}} konnte nicht angewendet werden.",
         "effortApplyFailed": "Denkaufwand {{value}} konnte nicht angewendet werden."
-      }
+      },
+      "settings": "Chat-Einstellungen"
     },
     "tab": {
       "bar": {
@@ -20378,7 +20377,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Linken Rand beim Kopieren entfernen",
         "copyTrimsGutterDescription": "Den linken Rand vor der Agentenausgabe entfernen, damit kopierter Text nicht eingerückt ist. Entfernt wird nur die gemeinsame Einrückung aller ausgewählten Zeilen.",
-        "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren."
+        "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren.",
+        "scrollOnUserInput": "Bei Eingabe nach unten scrollen",
+        "scrollOnUserInputDescription": "Tippen oder Einfügen im hochgescrollten Zustand springt zur neuesten Ausgabe. Deaktiviere dies, um deine Position zu behalten."
       },
       "terminal": {
         "clipboard": {
@@ -20393,6 +20394,15 @@
             "whitespace": "Leerraum",
             "spaces": "Leerzeichen"
           }
+        },
+        "search": {
+          "typing": "tippen",
+          "input": "eingabe",
+          "jump": "springen",
+          "bottom": "unten",
+          "scrollback": "scrollback",
+          "snap": "einrasten",
+          "position": "position"
         }
       },
       "nativeChat": {
@@ -23093,6 +23103,12 @@
     "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
   },
   "agentPicker": {
+    "catalogUnsupported": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Du kannst deine Auswahl beibehalten oder Argumente verwenden.",
+    "catalogFailed": "Modelle für {{agent}} konnten nicht geladen werden. Schließe die Agentenauswahl und öffne sie erneut.",
+    "catalogSignIn": "Melde dich bei {{agent}} an, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
+    "catalogInstall": "Installiere {{agent}} auf diesem Host, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
+    "catalogUnresolved": "Modelle für {{agent}} wurden nicht geladen. Schließe die Agentenauswahl und öffne sie erneut.",
+    "catalogEmpty": "Für {{agent}} sind keine Modelle verfügbar.",
     "setByArguments": "Durch Argumente festgelegt",
     "searchModels": "Modelle suchen",
     "noModels": "Keine Modelle entsprechen deiner Suche.",
@@ -23107,6 +23123,8 @@
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
     "launchTerminal": "Terminal starten",
+    "use": "Verwenden",
+    "select": "Agent auswählen",
     "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
     "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien"
   }

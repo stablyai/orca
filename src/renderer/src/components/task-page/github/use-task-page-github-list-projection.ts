@@ -13,13 +13,13 @@ import {
 } from '../task-page-source-context'
 import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
 import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
+import { useTaskPageGitHubListPending } from './use-task-page-github-list-pending'
 export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetadataModel) {
   const {
     repos,
     fetchPRChecks,
     taskSource,
     githubMode,
-    tasksLoading,
     tasksFiltering,
     githubPageSize,
     pages,
@@ -61,7 +61,9 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     () => typeFilteredCurrentPageItems.length - filteredWorkItems.length,
     [filteredWorkItems.length, typeFilteredCurrentPageItems.length]
   )
-  const showGitHubTaskSkeletons = tasksFiltering || (tasksLoading && filteredWorkItems.length === 0)
+  const githubListPending = useTaskPageGitHubListPending(model)
+  const showGitHubTaskSkeletons =
+    tasksFiltering || (githubListPending && filteredWorkItems.length === 0)
   const loadedGitHubAuthorLogins = useMemo(() => {
     const seen = new Set<string>()
     const logins: string[] = []
@@ -169,38 +171,23 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
   })
 
   // Why: load only the clicked page so a high-page jump doesn't exhaust GitHub's Search API rate bucket.
-  const nextModel = model as typeof model & {
-    applyTypeFilter: typeof applyTypeFilter
-    currentPageItems: typeof currentPageItems
-    typeFilteredCurrentPageItems: typeof typeFilteredCurrentPageItems
-    filteredWorkItems: typeof filteredWorkItems
-    softHiddenVisibleCount: typeof softHiddenVisibleCount
-    showGitHubTaskSkeletons: typeof showGitHubTaskSkeletons
-    loadedGitHubAuthorLogins: typeof loadedGitHubAuthorLogins
-    primaryGithubFilterSlug: typeof primaryGithubFilterSlug
-    showPRManagementColumns: typeof showPRManagementColumns
-    githubTaskGridClass: typeof githubTaskGridClass
-    ensurePRChecksLoaded: typeof ensurePRChecksLoaded
-    lastLoadedPageIndex: typeof lastLoadedPageIndex
-    lastLoadedPageFull: typeof lastLoadedPageFull
-    fallbackTotalPages: typeof fallbackTotalPages
-    totalPages: typeof totalPages
-  }
-  nextModel.applyTypeFilter = applyTypeFilter
-  nextModel.currentPageItems = currentPageItems
-  nextModel.typeFilteredCurrentPageItems = typeFilteredCurrentPageItems
-  nextModel.filteredWorkItems = filteredWorkItems
-  nextModel.softHiddenVisibleCount = softHiddenVisibleCount
-  nextModel.showGitHubTaskSkeletons = showGitHubTaskSkeletons
-  nextModel.loadedGitHubAuthorLogins = loadedGitHubAuthorLogins
-  nextModel.primaryGithubFilterSlug = primaryGithubFilterSlug
-  nextModel.showPRManagementColumns = showPRManagementColumns
-  nextModel.githubTaskGridClass = githubTaskGridClass
-  nextModel.ensurePRChecksLoaded = ensurePRChecksLoaded
-  nextModel.lastLoadedPageIndex = lastLoadedPageIndex
-  nextModel.lastLoadedPageFull = lastLoadedPageFull
-  nextModel.fallbackTotalPages = fallbackTotalPages
-  nextModel.totalPages = totalPages
-  return nextModel
+  return Object.assign(model, {
+    applyTypeFilter,
+    currentPageItems,
+    typeFilteredCurrentPageItems,
+    filteredWorkItems,
+    softHiddenVisibleCount,
+    githubListPending,
+    showGitHubTaskSkeletons,
+    loadedGitHubAuthorLogins,
+    primaryGithubFilterSlug,
+    showPRManagementColumns,
+    githubTaskGridClass,
+    ensurePRChecksLoaded,
+    lastLoadedPageIndex,
+    lastLoadedPageFull,
+    fallbackTotalPages,
+    totalPages
+  })
 }
 export type TaskPageGitHubListProjectionModel = ReturnType<typeof useTaskPageGitHubListProjection>

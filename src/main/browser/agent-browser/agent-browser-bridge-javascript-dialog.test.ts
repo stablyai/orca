@@ -33,10 +33,10 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
   })
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
-vi.mock('../cdp-ws-proxy', () => ({ CdpWsProxy: CdpWsProxyMock }))
+vi.mock('../cdp/transport/cdp-ws-proxy', () => ({ CdpWsProxy: CdpWsProxyMock }))
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
-import { installBrowserJavaScriptDialogs } from '../browser-javascript-dialogs'
+import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import {
   createFakeAgentBrowserChild,

@@ -15,7 +15,7 @@ import {
   updateBufferedTerminalDraft
 } from './buffered-terminal-draft-restoration'
 
-interface BufferedTerminalDraftSend {
+export type BufferedTerminalDraftSend = {
   readonly draft: string
   readonly handle: string
   readonly token: BufferedTerminalDraftRestorationToken

@@ -9,7 +9,7 @@ import { SessionTerminationController } from './session-termination-controller'
 import { SessionProcessInspection } from './session-process-inspection'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 

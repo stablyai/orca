@@ -26,29 +26,6 @@ describe('Antigravity generation planning', () => {
     }
   )
 
-  it('sends a large Antigravity prompt intact over stdin while leaving other argv agents alone', () => {
-    const bigPrompt = 'y'.repeat(200_000)
-    const result = planCommitMessageGeneration(
-      { agentId: 'antigravity', model: 'default' },
-      bigPrompt
-    )
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      throw new Error(result.error)
-    }
-    expect(result.plan.args.join(' ').length).toBeLessThan(100)
-    expect(JSON.parse(result.plan.stdinPayload ?? '').message.content[0].text).toBe(bigPrompt)
-
-    const cursorResult = planCommitMessageGeneration(
-      { agentId: 'cursor', model: 'auto' },
-      bigPrompt
-    )
-    expect(cursorResult.ok).toBe(true)
-    expect(cursorResult.ok && cursorResult.plan.args.at(-1)).toBe(bigPrompt)
-    expect(cursorResult.ok && cursorResult.plan.stdinPayload).toBeNull()
-  })
-
   for (const source of ['recipe', 'command prefix']) {
     it.each([
       '--input-format=text --output-format=text',

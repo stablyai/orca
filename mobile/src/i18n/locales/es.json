@@ -840,7 +840,8 @@
     },
     "prSidebar": {
       "loading": "Cargando pull request…",
-      "notPermitted": "Acceso no permitido: tu cuenta de GitHub no está conectada."
+      "notPermitted": "Acceso no permitido: tu cuenta de GitHub no está conectada.",
+      "retryLoading": "Reintentar cargar la pull request"
     },
     "protocolBlockScreen": {
       "backToHosts": "Volver a hosts",
@@ -1692,7 +1693,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "La rama actual no está disponible.",
-      "providerUnavailable": "El panel de revisión alojada no está disponible para este proveedor."
+      "githubRemoteRequired": "Esta pestaña necesita un remoto de GitHub para mostrar los detalles de las solicitudes de incorporación. Para otras plataformas compatibles, crea una revisión desde Cambios y ábrela en el navegador."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "No se pudieron cargar las personas",

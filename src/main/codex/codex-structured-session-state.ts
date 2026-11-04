@@ -12,6 +12,7 @@ import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acqu
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
+import { AgentSessionStartEndings } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
 import {
   createCodexTurnOpenWaits,
   type CodexTurnOpenWaits
@@ -30,7 +31,7 @@ import type {
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { StructuredAgentSessionProviderOpen } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
-import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexSandboxPolicy } from './codex-structured-sandbox-policy'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
@@ -256,6 +257,8 @@ export function createCodexAcquisitionAttempt(): CodexAcquisitionAttempt {
 
 export class CodexAcquisitionRegistry {
   private readonly attempts = new Map<string, CodexAcquisitionAttempt>()
+  /** Children that ended on their own before they were ready answer for it, open included. */
+  readonly endings = new AgentSessionStartEndings()
   private closing = false
 
   get size(): number {
@@ -316,6 +319,7 @@ export class CodexAcquisitionRegistry {
 
   close(): void {
     this.closing = true
+    this.endings.clear()
   }
 }
 

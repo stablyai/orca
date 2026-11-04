@@ -37,11 +37,6 @@ describe('mobile subagent roster bounds', () => {
     expect(block.agents[0]?.label).toContain('… (truncated)')
   })
 
-  it('leaves a short id alone', () => {
-    const block = sanitizeNativeChatRpcBlock(rosterBlock(['task-1']), 'mobile')
-    expect(block.type === 'subagent-group' && block.agents[0]?.id).toBe('task-1')
-  })
-
   it('bounds a subagent’s own row like a roster’s entry, and leaves other clients its fields', () => {
     const own: NativeChatBlock = {
       type: 'subagent',

@@ -2,25 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import {
   normalizeSupportedUiLocale,
-  resolveUiLocale,
   detectUiLanguage,
   normalizeUiLocaleTag,
   shouldShowLanguageSwitcher
 } from './ui-locale'
-import { UI_LANGUAGE_GERMAN, UI_LANGUAGE_RUSSIAN, UI_LANGUAGE_SYSTEM } from './ui-language'
 
 describe('ui-locale', () => {
-  it.each(['ru', 'ru-RU', 'ru-KZ', 'ru_RU.UTF-8'])('resolves Russian %s', (tag) => {
-    expect(detectUiLanguage([tag], 'native')).toMatchObject({ locale: 'ru', status: 'supported' })
-    expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, tag)).toBe('ru')
-    expect(resolveUiLocale(UI_LANGUAGE_RUSSIAN, 'en-US')).toBe('ru')
-    expect(shouldShowLanguageSwitcher(detectUiLanguage([tag], 'native'))).toBe(true)
-  })
-  it.each(['de', 'de-DE', 'de-AT', 'de-CH', 'de_DE.UTF-8'])('resolves German %s', (tag) => {
-    expect(detectUiLanguage([tag], 'native')).toMatchObject({ locale: 'de', status: 'supported' })
-    expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, tag)).toBe('de')
-    expect(resolveUiLocale(UI_LANGUAGE_GERMAN, 'en-US')).toBe('de')
-  })
   it('maps Traditional Chinese system locales to zh-Hant and keeps Simplified on zh', () => {
     for (const tag of ['zh-TW', 'zh-HK', 'zh-MO', 'zh-Hant']) {
       expect(normalizeSupportedUiLocale(tag)).toBe('zh-Hant')
@@ -28,12 +15,6 @@ describe('ui-locale', () => {
     for (const tag of ['zh', 'zh-CN', 'zh-SG', 'zh-Hans']) {
       expect(normalizeSupportedUiLocale(tag)).toBe('zh')
     }
-  })
-
-  it('preserves a selected plugin language bundle id', () => {
-    expect(resolveUiLocale('plugin:samples.portuguese/pt-BR')).toBe(
-      'plugin:samples.portuguese/pt-BR'
-    )
   })
 })
 

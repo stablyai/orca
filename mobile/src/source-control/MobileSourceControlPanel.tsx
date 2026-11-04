@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useHostConnectionInputs } from '../transport/client-context-connection-metrics'
 import { View } from 'react-native'
 import { GitBranch, RefreshCw } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -243,6 +244,7 @@ export function MobileSourceControlPanel({
     ],
     [gitMenu, ioBusy, onRefresh, t]
   )
+  const hostConnection = useHostConnectionInputs(hostId)
   const { prTab, prMenuGroups, branchCompare } = useMobileSourceControlPrTab({
     state,
     activeTab,
@@ -256,6 +258,7 @@ export function MobileSourceControlPanel({
     onRefresh,
     openersRef: prOpeners,
     openScreen: openHubScreen,
+    hostConnection,
     shared: nextStep
   })
 
@@ -343,6 +346,7 @@ export function MobileSourceControlPanel({
         <View style={activeTab === 'changes' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
           <MobileSourceControlContent
             state={state}
+            stageAllInBar={nextStep.view.kind === 'composer' && primaryAction.kind === 'stage'}
             bottomInset={barInset}
             onOpenCommits={openCommitsScreen}
           />

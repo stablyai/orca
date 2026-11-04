@@ -4,6 +4,7 @@ import { admitNativeChatPastedText } from './native-chat-composer-pasted-text-re
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
@@ -81,6 +82,10 @@ export function useNativeChatPtyComposerSend(args: {
       agent: args.agent,
       readInputLine: () => args.readTerminalDraft?.()
     })
+    if (launchSendOptions.clearInput === null) {
+      args.setNotice(translate('components.native-chat.messageNotSent', 'Message not sent'))
+      return
+    }
     let pendingId: string | undefined
     const sendOptions =
       args.agent === 'claude' && classification === 'chat'

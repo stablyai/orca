@@ -57,7 +57,7 @@ vi.mock('../../wsl/host-lifecycle/wsl-host-e2e-fake-connector', () => ({
 vi.mock('../../orcad/orcad-artifact-materializer', () => ({ hasOrcadTemplate: () => true }))
 vi.mock('../../ssh/orcad-terminal-census-client', () => ({ requestOrcadTerminalCensus: vi.fn() }))
 
-import { registerWslHostHandlers } from '../wsl-host-handlers'
+import { registerWslHostHandlers } from '../wsl/wsl-host-handlers'
 import { registerRuntimeEnvironmentConnectivityHandlers } from './runtime-environment-connectivity-handlers'
 import {
   findWslHostDeployment,

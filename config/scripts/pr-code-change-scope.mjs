@@ -193,7 +193,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/ws-transport.ts',
   'src/shared/web-origin-security.ts',
   'src/shared/browser-client-host-placement',
-  'src/shared/agent-launch-intent',
+  'src/shared/agent-launch/contracts/agent-launch-intent',
   'src/shared/rpc-contract/agent-launch-params',
   'src/shared/agent-session/agent-session-wire',
   'src/shared/agent-session/view/structured-agent-session-projection.test.ts',

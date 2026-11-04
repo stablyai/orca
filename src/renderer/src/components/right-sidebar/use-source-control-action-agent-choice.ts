@@ -2,15 +2,15 @@ import {
   buildAgentLaunchRouteInput,
   workspaceKindForWorktreeId
 } from '@/lib/agent-launch-route-input'
-import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import { pickSourceControlLaunchAgent } from '../../../../shared/source-control-launch-agent-selection'
 import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
@@ -81,9 +81,13 @@ export function useSourceControlActionAgentChoice(args: {
             observation.model.state === 'settled' &&
             observation.model.rows.some((row) => row.kind === 'chat' && row.agent === agent)
         })
-  // A saved chat stays implicit so a host that stops running chats falls back to a terminal.
-  const liveSurface = args.livePick ?? (recipe.surface === 'terminal' ? 'terminal' : undefined)
-  const selection = observation.selectionFor(selectedAgent, liveSurface)
+  const savedSurface = recipe.agentId === selectedAgent ? recipe.surface : undefined
+  const liveSurface = args.livePick ?? savedSurface
+  const selection = observation.selectionFor(
+    selectedAgent,
+    args.livePick ?? (savedSurface === 'terminal' ? 'terminal' : undefined),
+    savedSurface === 'chat' ? 'chat' : undefined
+  )
   const enabledDetectedAgents = detectedAgents.filter((agent) =>
     isTuiAgentEnabled(agent, disabledAgents)
   )

@@ -22,6 +22,8 @@ import { useMobileSessionTerminalSubscription } from './use-mobile-session-termi
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
 
+vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
+
 const HANDLE = 'term-1'
 const PHONE = { cols: 55, rows: 44 }
 
@@ -67,6 +69,7 @@ function subscriptionHarness(opts: {
   }
   const fields = {
     client: {
+      onStateChange: () => () => {},
       subscribe: vi.fn(
         (_method: string, params: Record<string, unknown>, onData: StreamHandler) => {
           order.push(`subscribe ${JSON.stringify(params.viewport ?? null)}`)

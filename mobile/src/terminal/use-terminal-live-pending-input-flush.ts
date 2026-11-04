@@ -19,6 +19,7 @@ import {
   queueTerminalLiveControlSend,
   queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush,
+  type TerminalLiveMirrorSender,
   type TerminalLiveInputFailure
 } from './terminal-live-pending-flush-state'
 
@@ -115,15 +116,14 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     return waitForTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
   }, [])
 
-  const sendQueuedMirrorPayload = useCallback(
-    (handle: string, payload: string): Promise<boolean> =>
-      sendLiveTerminalInputRef.current(handle, payload),
+  const sendQueuedMirrorPayload = useCallback<TerminalLiveMirrorSender>(
+    (handle, payload, enqueue) =>
+      sendLiveTerminalInputRef.current(handle, payload, undefined, enqueue),
     [sendLiveTerminalInputRef]
   )
-
-  const sendQueuedPointerPayload = useCallback(
-    (handle: string, payload: string): Promise<boolean> =>
-      sendLiveTerminalInputRef.current(handle, payload, 'pointer'),
+  const sendQueuedPointerPayload = useCallback<TerminalLiveMirrorSender>(
+    (handle, payload, enqueue) =>
+      sendLiveTerminalInputRef.current(handle, payload, 'pointer', enqueue),
     [sendLiveTerminalInputRef]
   )
 

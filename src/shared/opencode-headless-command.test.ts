@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { tokenizeStartupCommand } from './tui-agent-startup-shell'
+import { tokenizeStartupCommand } from './agent-launch/startup/tui-agent-startup-shell'
 import { tokenizeCommandLine } from './agent-command-line-entrypoint'
 import { isOpenCodeRunCommand } from './opencode-headless-command'
 

@@ -3617,7 +3617,7 @@
             "copyLinkFailed": "リンクのコピーに失敗しました",
             "downloadOpenWithDefaultApp": "ダウンロードしてデフォルトのアプリで開く",
             "downloadOpenFailed": "「{{value0}}」のダウンロードに失敗しました。",
-            "openInThisGroup": "このグループで開く",
+            "openInNewTab": "新しいタブで開く",
             "openInThisGroupRefused": "{{value0}} をこのグループで開けませんでした"
           },
           "TerminalQuickCommandsSubmenu": {
@@ -7042,7 +7042,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "コンピュータ操作を開く",
-          "79209b37b9": "Cookie のインポートが適切でない場合、コンピュータ操作はローカルアプリを制御し、該当する場合は既存のログインブラウザセッションを使用することがあります。コンピュータ操作スキルをインストールします。 macOS ではプライバシー許可も必要です。",
+          "79209b37b9": "Cookie のインポートが適切でない場合、コンピュータ操作はローカルアプリを制御し、該当する場合は既存のログインブラウザセッションを使用することがあります。Orca Computer Use スキルをインストールします。 macOS ではプライバシー許可も必要です。",
           "333984cf90": "既存のブラウザセッションを使用する"
         },
         "BrowserUseEnableSwitch": {
@@ -7162,7 +7162,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Agent がローカルデスクトップアプリを検査および操作できるようにします。",
-          "93255aaf18": "パソコン利用スキル",
+          "93255aaf18": "Orca Computer Use スキル",
           "45f8e22c2e": "オープン",
           "d95d1cfab8": "更新",
           "0c29da5805": "準備完了",
@@ -8041,8 +8041,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "コマンドテンプレート",
-          "2b2f38652b": "カスタムコマンド",
-          "0ffb081b3a": "デフォルトの Agent を使用する",
           "f4310cf63f": "Agent",
           "1cd88d470a": "カスタマイズ",
           "403876bb48": "グローバルを使用する",
@@ -8583,7 +8581,7 @@
           "902f5dee1f": "選択時にコピー",
           "9129b7e805": "ターミナルペインにマウスを移動すると、クリックしなくてもターミナルペインがアクティブになります。",
           "8eefeaa3da": "フォーカスはマウスに追従します",
-          "96fe15def8": "ターミナルペインのマウスとクリップボードの動作。",
+          "96fe15def8": "ターミナルペインのスクロール、マウス、クリップボードの動作。",
           "45721f3e67": "ターミナルの相互作用",
           "9c0b1c1792": "オン",
           "c1fc9e9444": "GPU アクセラレーション",
@@ -19322,7 +19320,8 @@
         "cancelled": "Orca はこのチャットを自動的には続けません。",
         "scheduled": "Orca は {{time}} にこのチャットを続けます。",
         "cancel": "続けない"
-      }
+      },
+      "settings": "チャット設定"
     },
     "tab": {
       "bar": {
@@ -19685,7 +19684,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "コピー時に余白をトリミングする",
         "copyTrimsGutterDescription": "左側のガターをドロップすると、Agent の出力が後ろに描画されるため、コピーされたテキストはインデントされません。選択した行ごとに共有されるインデントのみが削除されます。",
-        "copyOnSelectDescription": "ターミナルやチャットで選択したテキストをクリップボードに自動的にコピーします。"
+        "copyOnSelectDescription": "ターミナルやチャットで選択したテキストをクリップボードに自動的にコピーします。",
+        "scrollOnUserInput": "入力時に一番下へスクロール",
+        "scrollOnUserInputDescription": "上にスクロール中に入力または貼り付けを行うと、最新の出力に移動します。オフにすると現在の位置を維持します。"
       },
       "terminal": {
         "clipboard": {
@@ -19700,6 +19701,15 @@
             "highlight": "ハイライト",
             "chat": "チャット"
           }
+        },
+        "search": {
+          "typing": "タイピング",
+          "input": "入力",
+          "jump": "ジャンプ",
+          "bottom": "一番下",
+          "scrollback": "スクロールバック",
+          "snap": "スナップ",
+          "position": "位置"
         }
       },
       "nativeChat": {
@@ -22315,6 +22325,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "このホストでは{{agent}}のモデルを利用できません。現在の選択を保持するか、引数を使用できます。",
+    "catalogFailed": "{{agent}}のモデルを読み込めませんでした。Agent 選択を閉じて開き直してください。",
+    "catalogSignIn": "{{agent}}にサインインしてモデルを読み込み、Agent 選択を開き直してください。",
+    "catalogInstall": "このホストに{{agent}}をインストールしてモデルを読み込み、Agent 選択を開き直してください。",
+    "catalogUnresolved": "{{agent}}のモデルは読み込まれていません。Agent 選択を閉じて開き直してください。",
+    "catalogEmpty": "{{agent}}に利用可能なモデルはありません。",
     "search": "Agent と設定を検索…",
     "configure": "{{agent}} を設定",
     "arguments": "引数",
@@ -22329,6 +22345,8 @@
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
     "legacyModelCount": "{{total}} 個のモデル",
+    "use": "使用",
+    "select": "Agent を選択",
     "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",
     "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル"
   },

@@ -4,7 +4,7 @@ import { Session } from './session'
 import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({

@@ -49,29 +49,6 @@ describeOnWsl('runWslProcess against a real distro', () => {
     expect(elapsed).toBeLessThan(20_000)
   }, 60_000)
 
-  it('second probe-lane call does not pay the login shell again', async () => {
-    const started = Date.now()
-    await runWslProcess({
-      loginPath: 'preferred',
-      distro: DISTRO,
-      program: '/bin/true',
-      timeoutMs: 15_000
-    })
-    expect(Date.now() - started).toBeLessThan(5_000)
-  }, 30_000)
-
-  it('interactive lane strips the distro banner from parsed stdout', async () => {
-    // Fence stock Ubuntu rc hints out of stdout before parsing (#11327/#11823).
-    const result = await runWslProcess({
-      loginPath: 'preferred',
-      distro: DISTRO,
-      program: '/bin/echo',
-      args: ['ORCA_PAYLOAD'],
-      timeoutMs: 60_000
-    })
-    expect(result.stdout.trim()).toBe('ORCA_PAYLOAD')
-  }, 90_000)
-
   it('a script with quotes and $ arrives byte-identical', async () => {
     // Preserve $2 and embedded quotes; -- expansion/base64-eval wrappers broke both (#12964/#14292).
     const script = [

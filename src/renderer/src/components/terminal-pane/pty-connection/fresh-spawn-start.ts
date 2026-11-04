@@ -220,7 +220,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           } else if (coldRestore?.hasSleepingRecord) {
             session.showSessionRestoredBanner()
           }
-          session.clearSleepingRecordAfterColdRestoreSpawn(coldRestore)
+          session.keepResumeRecordAfterColdRestoreSpawn(coldRestore)
         } else if (
           session.paneStartup?.launchConfig ||
           (startupOverride && 'launchConfig' in startupOverride)

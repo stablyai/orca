@@ -8,7 +8,7 @@ import type {
 } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 /** Absolute registration-time ceiling, independent of shorter protocol-step bounds. */
 export const STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS = 10 * 60_000
@@ -47,6 +47,22 @@ export class StructuredAgentSessionStartupExpiredError extends Error {
 
 export function isStructuredAgentSessionStartupExpired(reason: unknown): boolean {
   return reason instanceof Error && reason.name === 'StructuredAgentSessionStartupExpiredError'
+}
+
+/** How long after an acquisition's own root exit its adapter may take to answer for the start.
+ *  Every adapter's post-exit work (output drain, initialize-answer join) finishes well inside it. */
+export const STRUCTURED_AGENT_SESSION_STARTUP_EXIT_GRACE_MS = 5_000
+
+/** The adapter gave no outcome within the grace after its process exited: a broken contract. */
+export class StructuredAgentSessionStartupContractError extends Error {
+  constructor(agent: string) {
+    super(`the ${agent} adapter gave no startup outcome after its process exited`)
+    this.name = 'StructuredAgentSessionStartupContractError'
+  }
+}
+
+export function isStructuredAgentSessionStartupContractBreach(reason: unknown): boolean {
+  return reason instanceof Error && reason.name === 'StructuredAgentSessionStartupContractError'
 }
 
 export type StructuredAgentSessionAcquisitionReceipt = Pick<

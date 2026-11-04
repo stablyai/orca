@@ -9,8 +9,8 @@ import {
   STRUCTURED_LAUNCH_OPTION_IDS,
   STRUCTURED_LAUNCH_SEED_OPTION_IDS
 } from '../../native-chat/input/native-chat-session-option-defaults'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
-import { usesInstalledAgentModelCatalog } from '../../agent-model-catalog-ownership'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
+import { usesInstalledAgentModelCatalog } from './agent-model-catalog-ownership'
 import { structuredAgentSessionShownModel } from './structured-agent-session-option-snapshot'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type {
@@ -64,6 +64,7 @@ export type StructuredAgentSessionOptionState = {
   permissionMode: string | null
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
+  reportedModel?: string
   reportedEffort?: string
   /** The host is still listing models; it only keeps a seed from settling to built-in, since controls follow their data. */
   listingInProgress?: boolean
@@ -138,7 +139,7 @@ export function applyStructuredAgentSessionModelCatalog(
     acceptedInputSources: state.optionsAnswerPresent
       ? state.acceptedInputSources
       : {
-          ...(namesDefault ? { model: 'policy', effort: 'policy' } : {}),
+          ...(namesDefault ? { model: 'policy' } : {}),
           fastMode: 'policy',
           ...Object.fromEntries(
             Object.entries(state.acceptedInputSources ?? {}).filter(
@@ -157,6 +158,12 @@ export function applyStructuredAgentSessionOptions(
   launch: { newLaunch: boolean; coherentCatalog?: boolean } = { newLaunch: false }
 ): StructuredAgentSessionOptionState {
   const { current } = result
+  let acceptedInputSources = current.acceptedInputSources
+  const policyEffort = acceptedInputSources?.effort === 'policy'
+  if (policyEffort) {
+    acceptedInputSources = { ...acceptedInputSources }
+    delete acceptedInputSources.effort
+  }
   const installed = usesInstalledAgentModelCatalog(state.record.agent, launch.coherentCatalog)
   const keepCatalog = installed || result.modelsKnown === false
   // Catalog defaults supply picker context without claiming the chat chose them.
@@ -164,7 +171,7 @@ export function applyStructuredAgentSessionOptions(
     state.record,
     {
       ...(current.model ? { model: current.model } : {}),
-      ...(current.effort ? { effort: current.effort } : {}),
+      ...(!policyEffort && current.effort ? { effort: current.effort } : {}),
       ...(current.fastMode !== undefined ? { fastMode: current.fastMode } : {}),
       ...(current.serviceTier ? { serviceTier: current.serviceTier } : {})
     },
@@ -181,6 +188,7 @@ export function applyStructuredAgentSessionOptions(
   return {
     ...state,
     optionsAnswerPresent: true,
+    reportedModel: current.reportedModel,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
     catalog: keepCatalog
       ? state.catalog
@@ -197,7 +205,7 @@ export function applyStructuredAgentSessionOptions(
         : installed && state.catalogSource === 'seed'
           ? 'seed'
           : 'live',
-    acceptedInputSources: current.acceptedInputSources,
+    acceptedInputSources,
     olderHost: current.defaulted === undefined ? true : undefined,
     defaultsUnsent: current.defaulted !== undefined && !launch.newLaunch ? true : undefined,
     verifiedModelIds: keepCatalog
@@ -220,22 +228,15 @@ function structuredAgentSessionControlsModelId(
     : null
 }
 
-/** Runtime reports describe the process whose options answer carried them; a newer fence has none until it answers. */
-export function structuredAgentSessionReportsAtFence<
-  T extends Pick<StructuredAgentSessionOptionState, 'reportedPermissionMode' | 'reportedEffort'>
->(state: T, answeredFence: number | null | undefined, fence: number | null): T {
-  return answeredFence === fence ||
-    (state.reportedPermissionMode === undefined && state.reportedEffort === undefined)
-    ? state
-    : { ...state, reportedPermissionMode: undefined, reportedEffort: undefined }
-}
-
 export function commitStructuredAgentSessionOption(
   state: StructuredAgentSessionOptionState,
   id: string,
   value: string,
   origin: 'picked' | 'seeded' = 'picked'
 ): StructuredAgentSessionOptionState {
+  if (id === 'model') {
+    state = { ...state, reportedModel: undefined }
+  }
   if (id === 'model' || id === 'effort') {
     state = { ...state, reportedEffort: undefined }
   }

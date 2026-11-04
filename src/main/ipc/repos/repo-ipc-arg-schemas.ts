@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { TaskSourceContextSchema } from '../../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachment-schema'

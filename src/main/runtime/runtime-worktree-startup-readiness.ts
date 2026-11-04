@@ -6,8 +6,8 @@ import {
   resolvePasteReadySignal
 } from '../../shared/draft-paste-ready-scanner'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import type { TuiAgent } from '../../shared/tui-agent'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
   WorktreeStartupDraftPaste,

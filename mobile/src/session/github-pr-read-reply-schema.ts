@@ -205,6 +205,7 @@ const workItemSchema = z
   .looseObject({
     id: prText('id'),
     number: prCount('number'),
+    prRepo: prRepoIdentity('prRepo'),
     type: salvagedOptional('type', z.enum(['issue', 'pr'] as const)),
     state: salvagedOptional('state', z.enum(PR_STATE)),
     title: prText('title'),
@@ -233,6 +234,7 @@ const workItemSchema = z
       : {
           id: item.id,
           type: item.type,
+          prRepo: item.prRepo,
           number: item.number,
           title: item.title ?? '',
           state: item.state,

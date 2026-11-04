@@ -10,7 +10,7 @@ import {
   type AgentProcessPresence
 } from './agent-process-presence'
 import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 type ExistingAgentIdentity = {
   agentType?: AgentType

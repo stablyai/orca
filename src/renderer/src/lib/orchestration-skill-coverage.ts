@@ -1,6 +1,6 @@
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../shared/skills'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   getNativeChatAgentProfile,
   readsSkillSource,
@@ -8,7 +8,7 @@ import {
 } from '../../../shared/native-chat/native-chat-agent-profiles'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import { TUI_AGENT_AUTO_PICK_ORDER } from '../../../shared/tui-agent-selection'
+import { TUI_AGENT_AUTO_PICK_ORDER } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 
 export type OrchestrationSkillAgentStatus = {
   agent: TuiAgent

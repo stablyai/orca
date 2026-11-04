@@ -799,7 +799,8 @@
     },
     "prSidebar": {
       "loading": "正在加载 PR…",
-      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。"
+      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。",
+      "retryLoading": "重试加载 PR"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主机列表",
@@ -1639,7 +1640,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "当前分支不可用。",
-      "providerUnavailable": "此提供商的托管评审面板不可用。"
+      "githubRemoteRequired": "此标签页需要 GitHub 远程仓库才能显示拉取请求详情。对于其他受支持的平台，请在“更改”中创建审查，然后在浏览器中打开。"
     },
     "reviewerPickerDrawer": {
       "loadFailed": "加载人员失败",

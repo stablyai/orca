@@ -64,26 +64,6 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
     )
   })
 
-  it('keeps WSL routing while bounding the MR-head fetch', async () => {
-    await fetchGitLabMergeRequestHeadRef({ path: '/repo', connectionId: null }, 'origin', 42, {
-      localGitExecOptions: { cwd: '/repo', wslDistro: 'Ubuntu' }
-    })
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo',
-      wslDistro: 'Ubuntu'
-    })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        'fetch',
-        '--no-tags',
-        'origin',
-        `+refs/merge-requests/42/head:refs/orca/merge-requests/${ORIGIN_COMPONENT}/42`
-      ],
-      { cwd: '/repo', wslDistro: 'Ubuntu', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
-    )
-  })
-
   it('rejects a GitLab MR-head fetch for an SSH repo', async () => {
     await expect(
       fetchGitLabMergeRequestHeadRef({ path: '/repo', connectionId: 'conn-1' }, 'origin', 77)

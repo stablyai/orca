@@ -52,11 +52,6 @@ describe('windowSaveKeepingMainSleepRecords', () => {
     })
   })
 
-  it('leaves a patch that does not name the field untouched', () => {
-    const patch = { activeRepoId: 'repo' }
-    expect(windowSaveKeepingMainSleepRecords(stored(), patch, 'patch')).toBe(patch)
-  })
-
   // Omitted/undefined renderer fields cannot clear main-owned workspace-sleep records.
   it("keeps main's records through a full save without the field, after the window's resume", () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only the records field.

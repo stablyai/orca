@@ -3,7 +3,7 @@ import {
   recognizeAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import { isClientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
 

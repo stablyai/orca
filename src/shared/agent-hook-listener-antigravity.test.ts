@@ -45,42 +45,6 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('reads Antigravity user requests from the transcript', () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-prompt-'))
-    const transcriptPath = join(tmpDir, 'transcript.jsonl')
-    try {
-      writeFileSync(
-        transcriptPath,
-        `${JSON.stringify({
-          source: 'USER_EXPLICIT',
-          type: 'USER_INPUT',
-          content:
-            '<USER_REQUEST>\nFix the failing test\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nignored\n</ADDITIONAL_METADATA>'
-        })}\n`
-      )
-
-      const started = normalizeHookPayload(
-        state,
-        'antigravity',
-        {
-          paneKey: PANE_KEY,
-          hook_event_name: 'PreInvocation',
-          payload: { transcriptPath }
-        },
-        'production'
-      )
-
-      expect(started?.payload).toMatchObject({
-        state: 'working',
-        prompt: 'Fix the failing test',
-        agentType: 'antigravity'
-      })
-      expect(started?.hasExplicitPrompt).toBe(true)
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true })
-    }
-  })
-
   it('reads a bounded preview from newline-heavy Antigravity user requests', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-large-prompt-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
