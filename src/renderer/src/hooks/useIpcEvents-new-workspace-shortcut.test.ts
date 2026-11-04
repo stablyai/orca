@@ -1,7 +1,86 @@
-import { describe, expect, it } from 'vitest'
-import { buildNewWorkspaceShortcutModalData } from './ipc-events/new-workspace-command'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  buildNewWorkspaceShortcutModalData,
+  openNewWorkspaceFromShortcut
+} from './ipc-events/new-workspace-command'
+
+const mocks = vi.hoisted(() => ({ startCreateFromCurrentWorkspace: vi.fn() }))
+vi.mock('@/components/sidebar/folder-workspace-create', () => mocks)
+
+beforeEach(() => mocks.startCreateFromCurrentWorkspace.mockReset())
 
 describe('buildNewWorkspaceShortcutModalData', () => {
+  it('uses the current folder for an ordinary global create shortcut', () => {
+    const openModal = vi.fn()
+    mocks.startCreateFromCurrentWorkspace.mockReturnValue({ kind: 'started' })
+    openNewWorkspaceFromShortcut({
+      activeModal: 'none',
+      activeView: 'terminal',
+      taskPageData: {},
+      openModal
+    })
+
+    expect(mocks.startCreateFromCurrentWorkspace).toHaveBeenCalledTimes(1)
+    expect(openModal).not.toHaveBeenCalled()
+  })
+
+  it('seeds the composer with the current git worktree repo', () => {
+    const openModal = vi.fn()
+    mocks.startCreateFromCurrentWorkspace.mockReturnValue({
+      kind: 'composer',
+      initialRepoId: 'last-opened-repo'
+    })
+    openNewWorkspaceFromShortcut({
+      activeModal: 'none',
+      activeView: 'terminal',
+      taskPageData: {},
+      openModal
+    })
+
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'shortcut',
+      initialRepoId: 'last-opened-repo'
+    })
+  })
+
+  it('carries the current worktree host into the shortcut composer', () => {
+    const openModal = vi.fn()
+    const initialWorkspaceTarget = { projectId: 'repo:twin', hostId: 'ssh:box' }
+    mocks.startCreateFromCurrentWorkspace.mockReturnValue({
+      kind: 'composer',
+      initialRepoId: 'twin',
+      initialWorkspaceTarget
+    })
+    openNewWorkspaceFromShortcut({
+      activeModal: 'none',
+      activeView: 'terminal',
+      taskPageData: {},
+      openModal
+    })
+
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'shortcut',
+      initialRepoId: 'twin',
+      initialWorkspaceTarget
+    })
+  })
+
+  it('keeps the task-page shortcut on the composer path', () => {
+    const openModal = vi.fn()
+    mocks.startCreateFromCurrentWorkspace.mockReturnValue({ kind: 'started' })
+    openNewWorkspaceFromShortcut({
+      activeModal: 'none',
+      activeView: 'tasks',
+      taskPageData: {},
+      openModal
+    })
+
+    expect(mocks.startCreateFromCurrentWorkspace).not.toHaveBeenCalled()
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'shortcut'
+    })
+  })
+
   it('does not reuse stale task context outside the Tasks view', () => {
     const data = buildNewWorkspaceShortcutModalData({
       activeView: 'terminal',

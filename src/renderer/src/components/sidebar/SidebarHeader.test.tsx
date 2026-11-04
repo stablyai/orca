@@ -4,6 +4,9 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SidebarHeader from './SidebarHeader'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import { makeFolderWorkspace, makeProjectGroup } from './folder-workspace-composer-submit-fixtures'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -14,6 +17,10 @@ const mocks = vi.hoisted(() => {
   return {
     bucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
     openWorkspaceCreationComposerWithTourHandoff: vi.fn(),
+    activateAndRevealFolderWorkspace: vi.fn(),
+    createFolderWorkspace: vi.fn(),
+    toastError: vi.fn(),
+    runBackgroundWorktreeCreation: vi.fn(),
     popoverContentProps,
     shortcutLabel,
     toast: vi.fn()
@@ -21,12 +28,29 @@ const mocks = vi.hoisted(() => {
 })
 
 type MockState = {
-  repos: { id: string }[]
+  repos: {
+    id: string
+    kind?: string
+    projectGroupId?: string
+    path?: string
+    connectionId?: string
+  }[]
+  activeWorktreeId: string | null
+  activeWorkspaceKey: string | null
+  activeWorkspaceExecutionHostId: string | null
+  activeRepoId: string | null
+  folderWorkspaces: FolderWorkspace[]
+  projectGroups: ProjectGroup[]
+  createFolderWorkspace: typeof mocks.createFolderWorkspace
+  runtimeStatusByEnvironmentId: Map<string, never>
   groupBy: string
   sidebarBody: 'workspaces' | 'agents'
   sidebarWidth: number
   setSidebarBody: (body: 'workspaces' | 'agents') => void
   openModal: (modal: string, data?: unknown) => void
+  closeModal: () => void
+  activeModal: 'none' | 'add-repo'
+  worktreesByRepo: Record<string, { id: string; repoId: string; path: string }[]>
   updateSettings: (patch: Record<string, unknown>) => void
   activeContextualTourId: string | null
   settings?: {
@@ -75,7 +99,15 @@ vi.mock('../contextual-tours/workspace-creation-tour-handoff', () => ({
   openWorkspaceCreationComposerWithTourHandoff: mocks.openWorkspaceCreationComposerWithTourHandoff
 }))
 
-vi.mock('sonner', () => ({ toast: mocks.toast }))
+vi.mock('sonner', () => ({ toast: Object.assign(mocks.toast, { error: mocks.toastError }) }))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace
+}))
+
+vi.mock('@/lib/worktree-creation-flow', () => ({
+  runBackgroundWorktreeCreation: mocks.runBackgroundWorktreeCreation
+}))
 
 // Expose open state directly to isolate this header test from Radix portals.
 vi.mock('@/components/ui/popover', () => ({
@@ -109,14 +141,29 @@ beforeEach(() => {
   mocks.bucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
   mocks.openWorkspaceCreationComposerWithTourHandoff.mockClear()
   mocks.toast.mockClear()
+  mocks.toastError.mockReset()
+  mocks.createFolderWorkspace.mockReset().mockResolvedValue(makeFolderWorkspace())
+  mocks.activateAndRevealFolderWorkspace.mockReset()
+  mocks.runBackgroundWorktreeCreation.mockReset()
   mocks.shortcutLabel.current = '⌘N'
   mockState = {
     repos: [],
+    activeWorktreeId: null,
+    activeWorkspaceKey: null,
+    activeWorkspaceExecutionHostId: null,
+    activeRepoId: null,
+    folderWorkspaces: [],
+    projectGroups: [],
+    createFolderWorkspace: mocks.createFolderWorkspace,
+    runtimeStatusByEnvironmentId: new Map<string, never>(),
     groupBy: 'repo',
     sidebarBody: 'workspaces',
     sidebarWidth: 280,
     setSidebarBody: vi.fn(),
     openModal: vi.fn(),
+    closeModal: vi.fn(),
+    activeModal: 'none',
+    worktreesByRepo: {},
     updateSettings: vi.fn(),
     activeContextualTourId: null,
     settings: {}
@@ -198,6 +245,185 @@ describe('SidebarHeader', () => {
     })
 
     expect(mockState.openModal).toHaveBeenCalledWith('add-repo')
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
+  it('keeps the composer path for the current git worktree', async () => {
+    mockState.activeWorkspaceKey = 'worktree:current-worktree'
+    mockState.activeWorktreeId = 'current-worktree'
+    mockState.activeRepoId = 'current-repo'
+    mockState.repos = [{ id: 'other-repo' }, { id: 'current-repo' }]
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledTimes(1)
+    expect(mocks.createFolderWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('seeds the composer from the current git worktree when another repo is selected', async () => {
+    mockState.activeWorkspaceKey = 'worktree:current-worktree'
+    mockState.activeWorktreeId = 'current-worktree'
+    mockState.activeRepoId = 'other-repo'
+    mockState.repos = [
+      { id: 'other-repo', kind: 'git' },
+      { id: 'current-repo', kind: 'git' }
+    ]
+    mockState.worktreesByRepo = {
+      'current-repo': [{ id: 'current-worktree', repoId: 'current-repo', path: '/tmp/current' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledWith({
+      initialRepoId: 'current-repo'
+    })
+  })
+
+  it('carries the SSH host when the current worktree shares its repo id with a local checkout', async () => {
+    mockState.activeWorkspaceKey = 'worktree:ssh-worktree'
+    mockState.activeWorktreeId = 'ssh-worktree'
+    mockState.activeWorkspaceExecutionHostId = 'ssh:box'
+    mockState.activeRepoId = 'twin'
+    mockState.repos = [
+      { id: 'twin', kind: 'git', path: '/src/twin' },
+      { id: 'twin', kind: 'git', path: '/home/alice/twin', connectionId: 'box' }
+    ]
+    mockState.worktreesByRepo = {
+      twin: [{ id: 'ssh-worktree', repoId: 'twin', path: '/home/alice/twin' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledWith({
+      initialRepoId: 'twin',
+      initialWorkspaceTarget: expect.objectContaining({ hostId: 'ssh:box' })
+    })
+  })
+
+  it('opens the dialog without a repo when the current host has no registration of that repo', async () => {
+    mockState.activeWorkspaceKey = 'worktree:ssh-worktree'
+    mockState.activeWorktreeId = 'ssh-worktree'
+    mockState.activeWorkspaceExecutionHostId = 'ssh:box'
+    mockState.repos = [{ id: 'twin', kind: 'git', path: '/src/twin' }]
+    mockState.worktreesByRepo = {
+      twin: [{ id: 'ssh-worktree', repoId: 'twin', path: '/home/alice/twin' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledWith()
+  })
+
+  it('creates in the inferred SSH folder when the project group has no host pin', async () => {
+    mockState.projectGroups = [makeProjectGroup()]
+    mockState.folderWorkspaces = [makeFolderWorkspace()]
+    mockState.repos = [
+      {
+        id: 'repo-1',
+        projectGroupId: 'group-1',
+        path: '/repo/platform/app',
+        connectionId: 'box'
+      }
+    ]
+    mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+    mockState.activeWorkspaceExecutionHostId = 'ssh:box'
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.createFolderWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectGroupId: 'group-1',
+        folderPath: '/repo/platform/hi',
+        connectionId: 'box'
+      }),
+      { runtimeEnvironmentId: null }
+    )
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
+  it('closes an open Add project dialog before creating the current folder', async () => {
+    mockState.projectGroups = [makeProjectGroup()]
+    mockState.folderWorkspaces = [makeFolderWorkspace()]
+    mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+    mockState.activeModal = 'add-repo'
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mockState.closeModal).toHaveBeenCalledTimes(1)
+    expect(mocks.createFolderWorkspace).toHaveBeenCalled()
+  })
+
+  it('creates an Open as Folder workspace without the composer', async () => {
+    mockState.activeWorkspaceKey = 'worktree:notes::/tmp/notes'
+    mockState.activeWorktreeId = 'notes::/tmp/notes'
+    mockState.activeRepoId = 'other-repo'
+    mockState.repos = [
+      { id: 'other-repo', kind: 'git' },
+      { id: 'notes', kind: 'folder', path: '/tmp/notes' }
+    ]
+    mockState.worktreesByRepo = {
+      notes: [{ id: 'notes::/tmp/notes', repoId: 'notes', path: '/tmp/notes' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.runBackgroundWorktreeCreation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'notes',
+        setupDecision: 'skip',
+        agent: null,
+        telemetrySource: 'sidebar'
+      })
+    )
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
+  it('creates and reveals a default folder workspace in the current folder project', async () => {
+    mockState.projectGroups = [{ ...makeProjectGroup(), executionHostId: 'runtime:folder-host' }]
+    mockState.folderWorkspaces = [makeFolderWorkspace({ executionHostId: 'runtime:folder-host' })]
+    mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+    mockState.activeWorkspaceExecutionHostId = 'runtime:folder-host'
+    mockState.activeWorktreeId = 'previous-git-worktree'
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.createFolderWorkspace).toHaveBeenCalledWith(
+      {
+        projectGroupId: 'group-1',
+        name: 'Platform workspace',
+        folderPath: '/repo/platform/hi',
+        connectionId: null,
+        linkedTask: null
+      },
+      { runtimeEnvironmentId: 'folder-host' }
+    )
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      agent: null,
+      runtimeEnvironmentId: 'folder-host'
+    })
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+    expect(mockState.openModal).not.toHaveBeenCalled()
+  })
+
+  it('shows the existing error toast when direct folder creation fails', async () => {
+    mockState.projectGroups = [makeProjectGroup()]
+    mockState.folderWorkspaces = [makeFolderWorkspace()]
+    mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+    mocks.createFolderWorkspace.mockRejectedValue(new Error('Folder is unavailable. Try again.'))
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.toastError).toHaveBeenCalledWith('Folder is unavailable. Try again.')
+    expect(mocks.activateAndRevealFolderWorkspace).not.toHaveBeenCalled()
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
   })
 })
