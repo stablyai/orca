@@ -10,6 +10,7 @@ import type {
 } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type * as ProviderAccountsClient from '@/runtime/runtime-provider-accounts-client'
 
 const markLiveCodexSessionsForRestart = vi.fn(async () => {})
 const toastSuccess = vi.fn()
@@ -79,7 +80,8 @@ vi.mock('@/lib/codex-session-restart', () => ({
   ) => accounts.find((entry) => entry.id === accountId)?.email ?? 'System default'
 }))
 
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/runtime-provider-accounts-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProviderAccountsClient>()),
   fetchProviderAccountsSnapshot: vi.fn(async () => ({
     codex: codexSnapshot(null),
     claude: { accounts: [], activeAccountId: null },

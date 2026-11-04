@@ -19,7 +19,7 @@ type CodexSignInActionDependencies = {
   mountedRef: MutableRefObject<boolean>
   reauthenticatingAccountId: string | null
   recordFeatureInteraction: AppState['recordFeatureInteraction']
-  setAccounts: Dispatch<SetStateAction<CodexRateLimitAccountsState>>
+  setAccounts: (accounts: CodexRateLimitAccountsState) => void
   setReauthenticatingAccountId: Dispatch<SetStateAction<string | null>>
 }
 
@@ -74,17 +74,21 @@ export async function signInCodexAccount(
     } else if (mountedRef.current && menuOpenRef.current) {
       await fetchInactiveCodexAccountUsage()
     }
-    toast.success(
-      translate('auto.components.status.bar.StatusBar.codexSignInSuccess', 'Signed in to Codex')
-    )
+    if (mountedRef.current) {
+      toast.success(
+        translate('auto.components.status.bar.StatusBar.codexSignInSuccess', 'Signed in to Codex')
+      )
+    }
   } catch (error) {
     console.error('Failed to re-authenticate Codex account from status bar:', error)
-    toast.error(
-      translate(
-        'auto.components.status.bar.StatusBar.codexSignInError',
-        'Codex sign-in failed. Please try again.'
+    if (mountedRef.current) {
+      toast.error(
+        translate(
+          'auto.components.status.bar.StatusBar.codexSignInError',
+          'Codex sign-in failed. Please try again.'
+        )
       )
-    )
+    }
   } finally {
     if (mountedRef.current) {
       setReauthenticatingAccountId(null)

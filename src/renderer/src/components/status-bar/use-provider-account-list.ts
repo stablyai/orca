@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import {
   fetchProviderAccountsSnapshot,
   getProviderAccountsOwnerKey,
+  invalidateProviderAccountsSnapshot,
   type ProviderAccountsSnapshot
 } from '@/runtime/runtime-provider-accounts-client'
 import { observedProviderAccounts } from '@/runtime/observed-provider-accounts'
@@ -9,6 +10,17 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 
 const noSubscription = () => () => {}
 const noSnapshot = () => null
+const accountListRefreshListeners = new Map<string, Set<() => void>>()
+
+export function refreshProviderAccountLists(
+  target: RuntimeClientTarget,
+  provider: 'claude' | 'codex'
+): void {
+  invalidateProviderAccountsSnapshot(target)
+  accountListRefreshListeners
+    .get(`${getProviderAccountsOwnerKey(target)}:${provider}`)
+    ?.forEach((refresh) => refresh())
+}
 
 /** The switchers share snapshot loading; a failed provider half never replaces its roster. */
 export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
@@ -24,7 +36,7 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
     [environmentId]
   )
   const ownerKey = `${getProviderAccountsOwnerKey(ownerTarget)}:${provider}`
-  const mountedRef = useMemo(() => ({ current: true, ownerKey }), [ownerKey])
+  const mountedRef = useMemo(() => ({ current: true, ownerKey, requestVersion: 0 }), [ownerKey])
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -55,6 +67,8 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
       if (!mountedRef.current) {
         return
       }
+      mountedRef.requestVersion += 1
+      invalidateProviderAccountsSnapshot(ownerTarget)
       if (observing) {
         observation.setAccounts(next)
       } else {
@@ -65,20 +79,25 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
         }))
       }
     },
-    [mountedRef, observing, observation, ownerKey]
+    [mountedRef, observing, observation, ownerKey, ownerTarget]
   )
   const loadAccounts = useCallback(async () => {
+    if (!mountedRef.current) {
+      return
+    }
+    const requestVersion = ++mountedRef.requestVersion
     const snapshot = await fetchProviderAccountsSnapshot(ownerTarget)
+    if (!mountedRef.current || mountedRef.requestVersion !== requestVersion) {
+      return
+    }
     if (snapshot.failedProviders?.includes(provider)) {
       console.error(`${provider} account list failed; keeping previous state.`)
       return
     }
-    if (mountedRef.current) {
-      if (observing) {
-        observation.setAccounts(snapshot[provider])
-      } else {
-        setLocal({ ownerKey, accounts: snapshot[provider], known: true })
-      }
+    if (observing) {
+      observation.setAccounts(snapshot[provider])
+    } else {
+      setLocal({ ownerKey, accounts: snapshot[provider], known: true })
     }
   }, [provider, ownerTarget, ownerKey, observing, observation, mountedRef])
   useEffect(() => {
@@ -88,5 +107,21 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
       )
     }
   }, [loadAccounts, observing, provider, syncKey])
+  useEffect(() => {
+    const refresh = () => {
+      void loadAccounts().catch((error: unknown) =>
+        console.error(`Failed to load ${provider} accounts:`, error)
+      )
+    }
+    const listeners = accountListRefreshListeners.get(ownerKey) ?? new Set()
+    listeners.add(refresh)
+    accountListRefreshListeners.set(ownerKey, listeners)
+    return () => {
+      listeners.delete(refresh)
+      if (listeners.size === 0) {
+        accountListRefreshListeners.delete(ownerKey)
+      }
+    }
+  }, [loadAccounts, ownerKey, provider])
   return { accounts, setAccounts, accountsLoaded, loadAccounts, mountedRef }
 }
