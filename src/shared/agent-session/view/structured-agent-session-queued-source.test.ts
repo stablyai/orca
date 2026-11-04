@@ -7,7 +7,7 @@ import {
 } from '../agent-session-message-source'
 import { agentMessageSenderLabel } from '../agent-message-presentation'
 import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued-message-wire'
-import { mobileQueuedMessageCards } from '../../../../mobile/src/session/mobile-structured-queued-message-cards'
+import { projectQueuedMessageCards } from './structured-agent-session-queued-cards'
 
 vi.mock('../agent-session-message-source', async (importOriginal) => {
   const original = await importOriginal<typeof MessageSourceModule>()
@@ -35,6 +35,13 @@ function label(value: AgentMessageSender, snapshotName: string | null = null): s
     snapshotName,
     localChat: false,
     fallback: 'an agent'
+  })
+}
+
+function queuedLabels(message: AgentSessionQueuedMessage, queuePaused = false) {
+  return projectQueuedMessageCards([message], [], { queuePaused }).map((card) => {
+    const value = card.from?.senders[0]
+    return { label: value ? label(value, value.name) : null, hold: card.hold }
   })
 }
 
@@ -78,23 +85,23 @@ it('reuses unchanged queued provenance and refreshes changed, removed and replac
     }
     for (let rebuild = 0; rebuild < 5; rebuild++) {
       const queuePaused = rebuild % 2 === 0
-      const cards = mobileQueuedMessageCards([message], [], { queuePaused })
-      expect(cards.map((card) => [card.attribution, card.hold])).toEqual([
-        [`From ${LONG_LABEL}`, queuePaused ? 'queue-paused' : 'turn']
+      const cards = queuedLabels(message, queuePaused)
+      expect(cards.map((card) => [card.label, card.hold])).toEqual([
+        [LONG_LABEL, queuePaused ? 'queue-paused' : 'turn']
       ])
     }
     expect(normalizations.mock.calls.map(([input]) => String(input).length)).toEqual([size])
     message.body.from = source('changed-source')
-    expect(mobileQueuedMessageCards([message], [])[0]?.attribution).toBe('From changed-source')
+    expect(queuedLabels(message)[0]?.label).toBe('changed-source')
     expect(normalizations).toHaveBeenCalledTimes(2)
     message.body.from = undefined
-    expect(mobileQueuedMessageCards([message], [])[0]?.attribution).toBeNull()
+    expect(queuedLabels(message)[0]?.label).toBeNull()
     expect(normalizations).toHaveBeenCalledTimes(2)
     message.body.from = original
-    expect(mobileQueuedMessageCards([message], [])[0]?.attribution).toBe(`From ${LONG_LABEL}`)
+    expect(queuedLabels(message)[0]?.label).toBe(LONG_LABEL)
     expect(normalizations).toHaveBeenCalledTimes(3)
     const replaced = { ...message, body: { ...message.body, from: source('replacement-source') } }
-    expect(mobileQueuedMessageCards([replaced], [])[0]?.attribution).toBe('From replacement-source')
+    expect(queuedLabels(replaced)[0]?.label).toBe('replacement-source')
     expect(normalizations).toHaveBeenCalledTimes(4)
   }
 })
