@@ -1,4 +1,4 @@
-import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
@@ -10,7 +10,7 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../../../providers/pty-provider-contract'
-import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
+import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
 import type { StablePaneOwner } from '../pane/stable-owner'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import { writeToTerminal } from '../../../../shared/terminal-restore-parity-fixture'
+import { writeToTerminal } from '../../../../shared/terminal/replay/testing/terminal-restore-parity-fixture'
 import { TerminalResumeEscapeGap } from './terminal-resume-escape-gap'
 
 function terminal(): Terminal {

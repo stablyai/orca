@@ -118,6 +118,7 @@ export function useStructuredAgentSessionSends(args: {
       const sent = sendStructuredAgentSessionMessage({
         sessionId,
         target,
+        onCreated: request?.onCreated,
         text,
         attachments,
         ...(request?.callerKeepsText ? { callerKeepsText: request.callerKeepsText } : {}),

@@ -1,4 +1,4 @@
-import { getAgentRowConversationName } from '../../../../shared/agent-row-conversation-name'
+import { getAgentRowConversationName } from '../../../../shared/agent-status/presentation/agent-row-conversation-name'
 import { DASHBOARD_MAX_LABEL_LENGTH } from '../../../../shared/dashboard-snapshot'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'

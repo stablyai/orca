@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
-import {
-  getDefaultSourceControlAiSettings,
-  resolveSourceControlActionRecipe
-} from '../../../src/shared/source-control-ai'
+import { getDefaultSourceControlAiSettings } from '../../../src/shared/source-control/ai/settings/source-control-ai-settings'
+import { resolveSourceControlActionRecipe } from '../../../src/shared/source-control/ai/source-control-ai-operation-policy'
 import { buildAgentStartupPlan } from '../../../src/shared/agent-launch/startup/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../../src/shared/agent-launch/startup/agent-startup-plan-inputs'
 import { toAgentLaunchPreferences } from '../../../src/shared/agent-launch/choices/agent-launch-preferences'

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 

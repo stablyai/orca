@@ -7,7 +7,7 @@ import {
   hasAgentModelOptionValues,
   yieldAgentChoicesToArgs
 } from '../../agent-launch/choices/agent-choice-layers'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog

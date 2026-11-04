@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../shared/skills'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {

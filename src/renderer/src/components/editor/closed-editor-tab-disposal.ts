@@ -7,7 +7,7 @@ import {
   hasDiffViewerModelPaths,
   type MonacoModelRegistry,
   type DisposableMonacoModel
-} from './diff-monaco-model-disposal'
+} from './diff/monaco-view/diff-monaco-model-disposal'
 import { toEditorModelUri } from './editor-model-uri'
 import {
   isKeptEditorBufferView,

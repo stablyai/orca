@@ -10,7 +10,7 @@ import {
   queueTerminalLiveControlSend,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
-import { TERMINAL_INPUT_MAX_BYTES } from '../../../src/shared/terminal-input'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../../src/shared/terminal/input/terminal-input'
 
 const accepted: RpcResponse = { id: 'send', ok: true, result: { send: { accepted: true } } }
 const opened: RpcResponse = { id: 'open', ok: true, result: { inputSessionId: 'session' } }

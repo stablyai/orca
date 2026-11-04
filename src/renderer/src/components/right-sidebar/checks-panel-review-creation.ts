@@ -1,11 +1,10 @@
 import type {
-  HostedReviewCreationBlockedReason,
   HostedReviewCreationEligibility,
   HostedReviewLookupOutcome
-} from '../../../../shared/hosted-review'
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PRRefreshErrorType } from '../../../../shared/github/pull-request-refresh-types'
-import { normalizeHostedReviewBaseRef } from '../../../../shared/hosted-review-refs'
-import { isHostedReviewCreateEligibilityConfirmable } from '../../../../shared/hosted-review-create-confirmation'
+import { normalizeHostedReviewBaseRef } from '../../../../shared/source-control/hosted-review/hosted-review-refs'
+import { isHostedReviewCreateEligibilityConfirmable } from '../../../../shared/source-control/hosted-review/hosted-review-create-confirmation'
 import type { ChecksPanelReviewLookup } from './checks-panel-review-lookup-authority'
 // Share hard-error definitions so composer gating and empty-state copy cannot drift.
 import { HARD_REFRESH_ERROR_TYPES } from './checks-panel-review-state-model'
@@ -99,5 +98,3 @@ export function computeChecksPanelConfirmedReadiness(
   }
   return { confirmed: true, needsPush: eligibility?.blockedReason === 'needs_push' }
 }
-
-export type { HostedReviewCreationBlockedReason }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { HostedReviewCreationBlockedReason } from '../../../src/shared/hosted-review'
+import type { HostedReviewCreationBlockedReason } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import {
   buildMobileCreatePrAction,

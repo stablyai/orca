@@ -1,4 +1,7 @@
-import type { FolderWorkspace, WorkspaceKey } from '../../shared/folder-workspace-types'
+import type {
+  FolderWorkspace,
+  WorkspaceKey
+} from '../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../shared/worktree/types'
 import type {
   WorktreeLineage,

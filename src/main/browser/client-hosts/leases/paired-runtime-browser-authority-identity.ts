@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import type { PairedRuntimeConnection } from '../../../../shared/paired-runtime-connection'
-import type { KnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { BrowserClientPageAuthorityIdentity } from '../../client-pages/execution/browser-client-page-command-executor-dependencies'
 
 export function derivePairedRuntimeBrowserAuthorityIdentity(input: {

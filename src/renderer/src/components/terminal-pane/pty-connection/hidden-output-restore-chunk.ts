@@ -7,8 +7,8 @@ import type { PendingHiddenOutputRestoreChunk } from './pending-hidden-output-re
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
   scanTerminalReplyQuerySequences
-} from '../../../../../shared/terminal-reply-query-scan'
-import { isPrimaryDeviceAttributesQuerySequence } from '../../../../../shared/terminal-reply-query-extraction'
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
+import { isPrimaryDeviceAttributesQuerySequence } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { writeXtermParseBarrier } from '@/lib/pane-manager/xterm-parse-barrier'
 

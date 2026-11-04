@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE
-} from '../../../../shared/browser-extension-worker-api'
+} from '../../../../shared/browser/extensions/browser-extension-worker-api'
 
 const scripts = new Map<string, string>()
 

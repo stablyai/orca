@@ -1,16 +1,16 @@
-import { extractHiddenStartupRendererQueryData } from '../../../../shared/terminal-reply-query-extraction'
+import { extractHiddenStartupRendererQueryData } from '../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import {
   INITIAL_MODE_2031_REPLY_SCAN_STATE,
   scanMode2031ReplyDecision,
   type Mode2031ReplyScanState
-} from '../../../../shared/terminal-color-scheme-protocol'
+} from '../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import {
   INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE,
   advanceDroppedSynchronizedOutputLatch
-} from '../../../../shared/terminal-synchronized-output-scan'
+} from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import { recordCrashBreadcrumb } from '../../../crash-reporting/crash-breadcrumb-store'
-import { terminalOutputBacklogCapChars } from '../../../../shared/terminal-scrollback-policy'
+import { terminalOutputBacklogCapChars } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { isHiddenPtyDeliveryGateEnabled } from './pty-hidden-delivery-gate'
 import type { PendingPtyData } from './pty-pending-data-drain-contract'
 import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'

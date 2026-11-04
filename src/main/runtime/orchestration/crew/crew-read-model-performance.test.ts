@@ -1,7 +1,7 @@
 import { readCrewTraffic } from './crew-query'
 import { readCrewParentInputs } from './crew-parent-inputs'
 
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { RuntimeAgentOrchestrationProjection } from '../../runtime-agent-orchestration-projection'
 import { readOrchestrationFleetAgentStatusSnapshot } from '../../orchestration-fleet-agent-status-snapshot'
 import { RuntimeOrchestrationSenderNames } from '../../runtime-orchestration-sender-names'

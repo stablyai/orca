@@ -10,7 +10,14 @@ import {
   STRUCTURED_LAUNCH_SEED_OPTION_IDS
 } from '../../native-chat/input/native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
-import { usesInstalledAgentModelCatalog } from './agent-model-catalog-ownership'
+import {
+  usesInstalledAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from './agent-model-catalog-ownership'
+import {
+  fillUnknownCatalogEfforts,
+  enrichStructuredAgentEfforts
+} from './agent-session-model-efforts'
 import { structuredAgentSessionShownModel } from './structured-agent-session-option-snapshot'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type {
@@ -64,6 +71,7 @@ export type StructuredAgentSessionOptionState = {
   permissionMode: string | null
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
+  reportedModel?: string
   reportedEffort?: string
   /** The host is still listing models; it only keeps a seed from settling to built-in, since controls follow their data. */
   listingInProgress?: boolean
@@ -109,7 +117,7 @@ export function applyStructuredAgentSessionModelCatalog(
     state = { ...state, listingInProgress }
   }
   if (state.catalogSource === 'live' && !installed) {
-    return state
+    return enrichStructuredAgentEfforts(state, catalog)
   }
   const models =
     catalog.origin === 'unknown'
@@ -165,6 +173,13 @@ export function applyStructuredAgentSessionOptions(
   }
   const installed = usesInstalledAgentModelCatalog(state.record.agent, launch.coherentCatalog)
   const keepCatalog = installed || result.modelsKnown === false
+  let answeredCatalog = structuredAgentSessionOptionCatalog(seed, result, state.record.agent)
+  if (usesModelSpecificAcpEfforts(state.record.agent)) {
+    answeredCatalog = {
+      ...answeredCatalog,
+      models: fillUnknownCatalogEfforts(answeredCatalog.models, state.catalog?.models ?? [])
+    }
+  }
   // Catalog defaults supply picker context without claiming the chat chose them.
   replaceStructuredAgentSessionAnsweredValues(
     state.record,
@@ -187,10 +202,9 @@ export function applyStructuredAgentSessionOptions(
   return {
     ...state,
     optionsAnswerPresent: true,
+    reportedModel: current.reportedModel,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
-    catalog: keepCatalog
-      ? state.catalog
-      : structuredAgentSessionOptionCatalog(seed, result, state.record.agent),
+    catalog: keepCatalog ? state.catalog : answeredCatalog,
     fastModeRestricted:
       installed &&
       result.fastModeSupport?.supported === false &&
@@ -226,22 +240,15 @@ function structuredAgentSessionControlsModelId(
     : null
 }
 
-/** Runtime reports describe the process whose options answer carried them; a newer fence has none until it answers. */
-export function structuredAgentSessionReportsAtFence<
-  T extends Pick<StructuredAgentSessionOptionState, 'reportedPermissionMode' | 'reportedEffort'>
->(state: T, answeredFence: number | null | undefined, fence: number | null): T {
-  return answeredFence === fence ||
-    (state.reportedPermissionMode === undefined && state.reportedEffort === undefined)
-    ? state
-    : { ...state, reportedPermissionMode: undefined, reportedEffort: undefined }
-}
-
 export function commitStructuredAgentSessionOption(
   state: StructuredAgentSessionOptionState,
   id: string,
   value: string,
   origin: 'picked' | 'seeded' = 'picked'
 ): StructuredAgentSessionOptionState {
+  if (id === 'model') {
+    state = { ...state, reportedModel: undefined }
+  }
   if (id === 'model' || id === 'effort') {
     state = { ...state, reportedEffort: undefined }
   }

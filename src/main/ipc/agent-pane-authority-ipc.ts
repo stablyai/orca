@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { isStablePaneId } from '../../shared/stable-pane-id'
-import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server'
+import { isValidPaneKey } from '../agent-hooks/server/server-status-identity'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../agent-hooks/migration-unsupported-pty-state'
 
 const MAX_PTY_ID_LENGTH = 512

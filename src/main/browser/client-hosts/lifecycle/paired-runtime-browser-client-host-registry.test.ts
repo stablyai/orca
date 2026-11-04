@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { PairedRuntimeBrowserClientHostRegistry } from './paired-runtime-browser-client-host-registry'
 
 const authority: BrowserClientHostLeaseAuthority = {

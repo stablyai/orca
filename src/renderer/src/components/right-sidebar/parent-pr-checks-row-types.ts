@@ -1,12 +1,13 @@
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type {
   CheckStatus,
+  ProviderCheckSummary,
   GitHubRepositoryIdentity,
   PRInfo
 } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { AppState } from '@/store'
 import { translate } from '@/i18n/i18n'
 
@@ -32,6 +33,7 @@ export type ParentPrChecksRowStatus =
   | 'refreshError'
   | 'unsupported'
   | 'unavailable'
+  | 'cancelled'
   | 'failing'
   | 'pending'
   | 'success'
@@ -58,7 +60,8 @@ export type ParentPrChecksRow = {
   branch: string | null
   status: ParentPrChecksRowStatus
   group: ParentPrChecksGroupKey
-  checkTone: CheckStatus
+  checkTone: CheckStatus | 'cancelled'
+  checksSummary?: ProviderCheckSummary
   title: string
   reviewNumber: number | null
   reviewLabel: string | null

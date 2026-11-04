@@ -9,7 +9,11 @@ import {
   createManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -85,6 +89,7 @@ describe('wake through main in a layout-owner build', () => {
   // Main's start of the revealed pane is its wake: the window records none of its own.
   it('asks main to start the revealed pane alone, and records no wake itself', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const deps = buildPaneConnectionDeps(() => mockStoreState, {
@@ -109,6 +114,8 @@ describe('wake through main in a layout-owner build', () => {
       ptyId: 'pty-main',
       bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
     })
+    bindPaneAgentTitleMocks(args[2], agentTitleMocks)
+
     const binding = connectPanePty(...args)
     await flushAsyncTicks()
     const onPtyExit = createdTransportOptions[0]?.onPtyExit

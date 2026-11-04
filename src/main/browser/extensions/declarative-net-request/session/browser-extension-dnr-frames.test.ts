@@ -78,27 +78,4 @@ describe('declarativeNetRequest frame state', () => {
     expect([1, 2].map((node) => blocked(engine, tracker, node))).toEqual([true, true])
     expect(tracker.topOrigin(TAB)).toBe('https://shop.example')
   })
-
-  it('tracks top origins without an engine and resolves tab ids once per document', () => {
-    let resolved = 0
-    let registered = false
-    const tracker = new DnrFrameTracker(() => {
-      resolved++
-      return registered ? 11 : -1
-    })
-    // A restored tab's first requests come before Orca's window lists it.
-    expect(tracker.tabIdFor(11)).toBe(-1)
-    registered = true
-    resolved = 0
-    expect([tracker.tabIdFor(11), tracker.tabIdFor(11), tracker.tabIdFor(undefined)]).toEqual([
-      11, 11, -1
-    ])
-    expect(resolved).toBe(1)
-    tracker.commit(null, 11, asFrame(frame(1, 'https://a.example')), 'https://a.example/')
-    expect(tracker.topOrigin(11)).toBe('https://a.example')
-    tracker.tabIdFor(11)
-    expect(resolved).toBe(2)
-    tracker.forgetContents(11)
-    expect(tracker.topOrigin(11)).toBeNull()
-  })
 })

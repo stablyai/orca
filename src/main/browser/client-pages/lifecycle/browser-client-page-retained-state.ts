@@ -1,4 +1,4 @@
-import type { BrowserClientHostedPageInventory } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type {
   BrowserClientPageNetworkRoute,
   BrowserClientPageRenderer

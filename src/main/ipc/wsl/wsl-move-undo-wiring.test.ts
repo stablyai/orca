@@ -24,7 +24,7 @@ const host = vi.hoisted(() => ({
 vi.mock('../../wsl/host-lifecycle/wsl-host-kept-for-peers', () => ({
   wasWslHostKeptForPeers: () => host.keptForPeers
 }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   listEnvironments: () => {
     if (host.unreadable) {
       throw new Error('environment store unreadable')

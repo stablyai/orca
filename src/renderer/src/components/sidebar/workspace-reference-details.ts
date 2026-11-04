@@ -9,11 +9,11 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared
 import {
   getWorkspaceAttachmentKey,
   getWorkspaceAttachmentUrlScope
-} from '../../../../shared/workspace-attachment-normalization'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+} from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceAttachmentSourceContext } from './workspace-attachment-source-result'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 

@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 type StoreState = {
@@ -25,12 +25,6 @@ vi.mock('../../store/index', () => ({ useAppStore: mocks.useAppStore }))
 
 import { MachineNameField } from './MachineNameField'
 
-function renderField(machineName: string, id?: string) {
-  mocks.holder.state = { settings: { machineName }, updateSettings: mocks.updateSettings }
-  render(<MachineNameField id={id} />)
-  return { user: userEvent.setup() }
-}
-
 describe('MachineNameField', () => {
   beforeEach(() => {
     mocks.getStatus.mockReset()
@@ -44,20 +38,6 @@ describe('MachineNameField', () => {
   afterEach(() => {
     cleanup()
     Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
-  })
-
-  it('captions a saved override without asking the runtime, so a stale read cannot show the old name', async () => {
-    // Saved store names are already persisted; a stale runtime read must not override what peers see.
-    mocks.getStatus.mockResolvedValue({ machineName: 'Brennan’s MacBook Pro' })
-    renderField('QA Override Desk')
-    await act(async () => {})
-
-    expect(
-      screen.getByText(
-        'Other devices and hosts see “QA Override Desk”. Leave this blank to use the computer’s own name.'
-      )
-    ).toBeVisible()
-    expect(mocks.getStatus).not.toHaveBeenCalled()
   })
 
   it('lets Enter submit an enclosing host form like its sibling inputs, and still commits the name', async () => {

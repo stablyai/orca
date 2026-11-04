@@ -18,7 +18,7 @@ import {
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
-import type { ConflictResolution } from '../../../../../../shared/source-control-entry-actions'
+import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import { CONFLICT_RESOLUTION_ICONS, getLocalizedConflictResolutionLabel } from './conflict-label'
 import { OpenInContextSubmenu } from '@/components/right-sidebar/open-in-context-submenu'
 

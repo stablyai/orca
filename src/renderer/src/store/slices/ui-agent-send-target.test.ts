@@ -1,7 +1,7 @@
 import type { StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
@@ -186,7 +186,7 @@ describe('createUISlice agent send target mode', () => {
           stateHistory: []
         }
       }
-    } as Partial<AppState>)
+    } satisfies Partial<AppState>)
   }
 
   it('disables sidebar target rows that need permission', async () => {
@@ -201,7 +201,7 @@ describe('createUISlice agent send target mode', () => {
           state: 'blocked'
         }
       }
-    } as Partial<AppState>)
+    } satisfies Partial<AppState>)
 
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
@@ -462,55 +462,68 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
     vi.useRealTimers()
   })
 
-  it('dismisses live and retained agent notifications only when the event is unvisited', () => {
-    const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
-    vi.stubGlobal('window', { api: { notifications: { dismiss } } })
-    const store = createAgentSendStore()
-    store.setState({
-      tabsByWorktree: {
-        'wt-live': [makeTerminalTab(tabId, 'wt-live')]
-      },
-      agentStatusByPaneKey: {
-        [livePaneKey]: makeAgentEntry(livePaneKey, 1_000),
-        [skippedPaneKey]: makeAgentEntry(skippedPaneKey, 3_000)
-      },
-      retainedAgentsByPaneKey: {
-        [retainedPaneKey]: {
-          entry: makeAgentEntry(retainedPaneKey, 2_000),
-          worktreeId: 'wt-retained',
-          tab: makeTerminalTab('tab-retained', 'wt-retained'),
-          agentType: 'codex',
-          startedAt: 2_000
+  it.each([undefined, 'remote-host'])(
+    'dismisses unvisited live and retained notifications on %s',
+    (environmentId) => {
+      const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
+      vi.stubGlobal('window', { api: { notifications: { dismiss } } })
+      const store = createAgentSendStore()
+      const tab = (id: string, worktreeId: string) => ({
+        ...makeTerminalTab(id, worktreeId),
+        ptyId: environmentId ? `remote:${environmentId}@@${id}` : id
+      })
+      store.setState({
+        tabsByWorktree: {
+          'wt-live': [tab(tabId, 'wt-live')]
+        },
+        agentStatusByPaneKey: {
+          [livePaneKey]: makeAgentEntry(livePaneKey, 1_000),
+          [skippedPaneKey]: makeAgentEntry(skippedPaneKey, 3_000)
+        },
+        retainedAgentsByPaneKey: {
+          [retainedPaneKey]: {
+            entry: makeAgentEntry(retainedPaneKey, 2_000),
+            worktreeId: 'wt-retained',
+            tab: tab('tab-retained', 'wt-retained'),
+            agentType: 'codex',
+            startedAt: 2_000
+          }
+        },
+        acknowledgedAgentsByPaneKey: {
+          [skippedPaneKey]: 4_000
         }
-      },
-      acknowledgedAgentsByPaneKey: {
-        [skippedPaneKey]: 4_000
-      }
-    } as Partial<AppState>)
+      } satisfies Partial<AppState>)
 
-    store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey, skippedPaneKey])
+      store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey, skippedPaneKey])
 
-    expect(dismiss).toHaveBeenCalledWith(
-      [
-        buildAgentNotificationId({
-          worktreeId: 'wt-live',
-          paneKey: livePaneKey,
-          stateStartedAt: 1_000
-        }),
-        buildAgentNotificationId({
-          worktreeId: 'wt-retained',
-          paneKey: retainedPaneKey,
-          stateStartedAt: 2_000
-        })
-      ],
-      [livePaneKey, retainedPaneKey, skippedPaneKey]
-    )
+      const qualify = (id: string | null) =>
+        environmentId ? JSON.stringify([`runtime:${environmentId}`, id]) : id
+      expect(dismiss).toHaveBeenCalledWith(
+        [
+          qualify(
+            buildAgentNotificationId({
+              worktreeId: 'wt-live',
+              paneKey: livePaneKey,
+              stateStartedAt: 1_000
+            })
+          ),
+          qualify(
+            buildAgentNotificationId({
+              worktreeId: 'wt-retained',
+              paneKey: retainedPaneKey,
+              stateStartedAt: 2_000
+            })
+          )
+        ],
+        [livePaneKey, retainedPaneKey, skippedPaneKey]
+      )
 
-    dismiss.mockClear()
-    vi.setSystemTime(new Date('2026-06-02T12:00:01Z'))
-    store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey])
+      dismiss.mockClear()
+      vi.setSystemTime(new Date('2026-06-02T12:00:01Z'))
+      store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey])
 
-    // Nothing rebuilt twice; main still gets the subjects so it can retire what it announced.
-    expect(dismiss).toHaveBeenCalledWith([], [livePaneKey, retainedPaneKey])
-  })
+      // Nothing rebuilt twice; main still gets the subjects so it can retire what it announced.
+      expect(dismiss).toHaveBeenCalledWith([], [livePaneKey, retainedPaneKey])
+    }
+  )
 })

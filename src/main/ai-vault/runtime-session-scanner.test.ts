@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeEnvironment: vi.fn(),
@@ -7,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   resolveEnvironment: vi.fn()
 }))
 
-vi.mock('../../shared/runtime-environment-store', () => ({
+vi.mock('../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   listEnvironments: mocks.listEnvironments,
   resolveEnvironment: mocks.resolveEnvironment
 }))

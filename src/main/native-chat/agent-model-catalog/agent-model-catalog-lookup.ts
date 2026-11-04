@@ -15,7 +15,10 @@ import {
   projectAgentModelCatalogDefault
 } from './agent-model-catalog-workspace'
 import { resolveAgentModelCatalogScope } from './agent-model-catalog-scope'
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   agentModelCatalogReleasedOwner,
   bindAgentModelCatalogScope,
@@ -33,6 +36,7 @@ export type AgentModelCatalogClaim = Pick<
   controller: AbortController
   promise: Promise<void>
   ready: Promise<void>
+  demandModel: (model: string | undefined) => void
 }
 
 export function createAgentModelCatalogLookup(
@@ -60,11 +64,24 @@ export function createAgentModelCatalogLookup(
     let coldWorkspace = params.workspace !== undefined && workspaceIdentity === null
     const retirement = operation.retirement
     const previous = claims.get(key)
+    const selectedModel = usesModelSpecificAcpEfforts(params.agent)
+      ? (params.selectedModel ??
+        (params.sessionId ? deps.getConversation(params.sessionId)?.options?.model : undefined))
+      : undefined
     if (previous?.identity === identity) {
+      previous.demandModel(selectedModel)
       return previous.promise
     }
     previous?.controller.abort()
     const controller = operation.controller
+    let target = selectedModel
+    let targetFingerprint: string | undefined
+    const demandModel = (model: string | undefined) => {
+      target = model
+      if (targetFingerprint) {
+        deps.store.efforts.demand(targetFingerprint, model)
+      }
+    }
     const ready = Promise.withResolvers<void>()
     const valid = (): boolean =>
       Date.now() < deadline &&
@@ -181,6 +198,7 @@ export function createAgentModelCatalogLookup(
         return
       }
       const { fingerprint, exact, resolved, cwd } = scope
+      targetFingerprint = fingerprint
       Object.assign(bound, { fingerprint, exact, cwd })
       bindAgentModelCatalogScope(bindings, bindingKey, bound, requestKey)
       bound.projecting = projectAgentModelCatalogDefault(
@@ -210,18 +228,25 @@ export function createAgentModelCatalogLookup(
         probeHome,
         workspacePath: cwd ?? folder
       })
-      if (probe && probeHome && deps.store.probeDue(fingerprint)) {
+      if (
+        probe &&
+        probeHome &&
+        (deps.store.probeDue(fingerprint) ||
+          deps.store.efforts.due(fingerprint, target) ||
+          deps.store.isListing(fingerprint))
+      ) {
         void deps.store.refresh(
           fingerprint,
           params.agent,
-          () => {
-            const task = list()
+          (selected) => {
+            const task = list(selected)
             tasks.add(task)
             void task.finally(() => tasks.delete(task)).catch(() => {})
             return task
           },
           current,
-          signal
+          signal,
+          target
         )
       }
       // Demand owns ingestion until settlement, even when its caller only needs the snapshot.
@@ -242,7 +267,15 @@ export function createAgentModelCatalogLookup(
     })
     tasks.add(promise)
     void promise.finally(() => tasks.delete(promise)).catch(() => {})
-    claims.set(key, { identity, controller, promise, ready: ready.promise, params, current })
+    claims.set(key, {
+      identity,
+      controller,
+      promise,
+      ready: ready.promise,
+      params,
+      current,
+      demandModel
+    })
     return promise
   }
 }

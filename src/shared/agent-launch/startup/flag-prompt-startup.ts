@@ -4,7 +4,7 @@ import type { SessionOptionValue } from '../../native-chat/input/native-chat-ses
 import type { TuiAgent } from '../catalog/tui-agent'
 import { TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
-import { findOpenCodeRunCommand } from '../../opencode-headless-command'
+import { findOpenCodeRunCommand } from '../../agent-status/process/opencode-headless-command'
 import { openCodeStartupPromptEnv } from './opencode-startup-prompt'
 
 export function appliedSessionOptionProps(values: Record<string, SessionOptionValue>) {

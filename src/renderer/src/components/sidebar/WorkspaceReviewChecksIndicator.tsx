@@ -1,3 +1,4 @@
+import { getProviderChecksOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
 import React from 'react'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceReviewChecksSummary } from '../../../../shared/workspace-review-checks'
@@ -5,16 +6,19 @@ import { ReviewIcon } from './worktree-review-helpers'
 import { reviewStateLabel } from './WorktreeCardMetadataStatusBadges'
 
 export function workspaceReviewChecksLabel(summary: WorkspaceReviewChecksSummary): string {
+  const outcome = getProviderChecksOutcome(summary)
   const status =
-    summary.state === 'failure'
-      ? translate('workspace.links.checksFailed', 'Failed')
-      : summary.state === 'pending'
-        ? translate('workspace.links.checksPending', 'Pending')
-        : summary.state === 'success'
-          ? translate('workspace.links.checksPassing', 'Passing')
-          : summary.state === 'unknown'
-            ? translate('workspace.links.checksUnknown', 'Unknown')
-            : translate('workspace.links.checksNeutral', 'Neutral')
+    outcome === 'cancelled'
+      ? translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+      : outcome === 'failure'
+        ? translate('workspace.links.checksFailed', 'Failed')
+        : outcome === 'pending'
+          ? translate('workspace.links.checksPending', 'Pending')
+          : outcome === 'success'
+            ? translate('workspace.links.checksPassing', 'Passing')
+            : outcome === 'unknown'
+              ? translate('workspace.links.checksUnknown', 'Unknown')
+              : translate('workspace.links.checksNeutral', 'Neutral')
   const checks = translate(
     'workspace.links.allReviewChecks',
     'Reviews: {{count}} · Checks: {{status}}',

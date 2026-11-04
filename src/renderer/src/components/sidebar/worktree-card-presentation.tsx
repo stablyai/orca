@@ -1,5 +1,5 @@
 import React from 'react'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 
 import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import { hasWorktreeCardDetails } from './WorktreeCardMeta'

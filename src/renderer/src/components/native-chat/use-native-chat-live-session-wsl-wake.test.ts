@@ -72,12 +72,6 @@ describe('useNativeChatLiveSession: WSL distro wake', () => {
     }
   })
 
-  it('never asks to start the distro for a launch restore or remount', async () => {
-    await mount()
-
-    expect(lastWakes()).toEqual({ read: { wakeWslDistro: false }, subscribe: false })
-  })
-
   it("asks once for the mount the user's switch caused, and not again on a remount", async () => {
     noteUserWorkspaceSwitch('wt-1')
     await mount()

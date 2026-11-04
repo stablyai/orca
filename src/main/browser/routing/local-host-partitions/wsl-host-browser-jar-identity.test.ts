@@ -7,7 +7,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { KnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { defaultWslOrcadEnvironmentId } from '../../../wsl/orcad/wsl-orcad-deploy'
 
 const bindings = vi.hoisted(() => ({ filePath: '' }))

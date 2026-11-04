@@ -1,6 +1,6 @@
 import type * as ReactModule from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 type Cleanup = () => void
@@ -135,11 +135,11 @@ vi.mock('@/lib/terminal-theme', () => ({
   })
 }))
 
-vi.mock('../../../../../../shared/terminal-fonts', () => ({
+vi.mock('../../../../../../shared/terminal/appearance/terminal-fonts', () => ({
   resolveTerminalFontWeights: () => ({ fontWeight: 500, fontWeightBold: 700 })
 }))
 
-vi.mock('../../../../../../shared/terminal-ligatures', () => ({
+vi.mock('../../../../../../shared/terminal/appearance/terminal-ligatures', () => ({
   resolveTerminalLigaturesEnabled: () => mockLigaturesAddon.enabled
 }))
 

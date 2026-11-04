@@ -5,7 +5,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import {
   getOrcadSshDeployment,
   type OrcadDeploymentLink
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   authorityKey,

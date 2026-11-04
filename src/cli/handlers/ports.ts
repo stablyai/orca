@@ -1,5 +1,5 @@
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { RuntimeWorktreeRecord } from '../../shared/runtime-types'
 import type { WorkspacePortHostScanResult } from '../../shared/workspace-ports'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'

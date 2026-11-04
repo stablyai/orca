@@ -4,7 +4,7 @@ import { afterEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getActivatableBrowserWorkspaceTab } from './browser-workspace-tab-activation'
 

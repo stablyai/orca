@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-launch/startup/agent-prompt-injection'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
@@ -7,16 +7,14 @@ import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scann
 import { useAppStore } from '@/store'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
-import {
-  BRACKETED_PASTE_END,
-  BRACKETED_PASTE_START
-} from '@/components/terminal-pane/terminal-bracketed-paste'
+import '@/components/terminal-pane/terminal-bracketed-paste'
+import '../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
 import { waitForAgentReady } from './agent-ready-wait'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
-import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
+import { isExpectedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
@@ -27,8 +25,7 @@ export {
 } from './agent-draft-paste-content'
 
 // Bracketed paste keeps prompt insertion atomic; callers separately choose whether to submit with Enter.
-export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
-export { BRACKETED_PASTE_END }
+
 const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS
 
 // Budget PTY creation and composer readiness separately: slow spawn must neither consume composer grace nor delay failed-launch reporting (STA-3367).

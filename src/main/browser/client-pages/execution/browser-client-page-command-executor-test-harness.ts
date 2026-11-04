@@ -1,5 +1,5 @@
 import type { BrowserRoutePreparePageInput } from '../../routing/sessions/browser-route-session-state'
-import type { BrowserClientHostCommandEvent } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { vi } from 'vitest'
 import { BrowserClientPageCommandExecutor } from './browser-client-page-command-executor'
 import type {

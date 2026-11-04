@@ -13,15 +13,15 @@ import {
   hasAnyRecordedLegacyWslCodexPane,
   hasRecordedManagedHostCodexPane,
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
-  reconcileCodexPaneAccountsWithLivePtys,
-  type CodexPaneHomeRoute
-} from '../codex/codex-pane-account-registry'
-import { reconcileRetainedCodexHookHomes } from '../codex/retained-codex-hook-state'
-import { codexHookService } from '../codex/hook-service'
+  reconcileCodexPaneAccountsWithLivePtys
+} from '../codex/configuration/homes/codex-pane-account-registry'
+import type { CodexPaneHomeRoute } from '../codex/configuration/homes/codex-pane-account-registry-types'
+import { reconcileRetainedCodexHookHomes } from '../codex/hooks/installation/retained-codex-hook-state'
+import { codexHookService } from '../codex/hooks/installation/hook-service'
 import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
-} from '../agent-hooks/managed-agent-hook-controls'
+} from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { agentHookServer } from '../agent-hooks/server'
 import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
 import { installLocalHookRootEvidence } from '../agent-hooks/local-hook-root-evidence'

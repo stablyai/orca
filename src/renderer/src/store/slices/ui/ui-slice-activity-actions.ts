@@ -43,6 +43,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           const liveEntry = s.agentStatusByPaneKey?.[key]
           if (liveEntry) {
             collectAcknowledgedAgentNotificationId({
+              state: s,
               ids: notificationIdsToDismiss,
               worktreeId: resolvePaneKeyWorktreeIdFromTabs(s, key) ?? liveEntry.worktreeId,
               paneKey: key,
@@ -54,8 +55,10 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           const retained = s.retainedAgentsByPaneKey?.[key]
           if (retained) {
             collectAcknowledgedAgentNotificationId({
+              state: s,
               ids: notificationIdsToDismiss,
               worktreeId: retained.worktreeId,
+              ptyId: retained.tab.ptyId,
               paneKey: key,
               stateStartedAt: retained.entry.stateStartedAt,
               previousAckAt: prev

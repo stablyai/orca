@@ -1,4 +1,4 @@
-import { getWorkspaceReferenceIdentity } from '../../../../shared/workspace-reference-identity'
+import { getWorkspaceReferenceIdentity } from '../../../../shared/workspace-attachments/workspace-reference-identity'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
 import {
@@ -12,7 +12,7 @@ import {
   getWorkspaceAttachmentUrlScope,
   matchesWorkspaceAttachmentIdentity,
   normalizeWorkspaceAttachments
-} from '../../../../shared/workspace-attachment-normalization'
+} from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 
 export function getWorkspaceAttachmentSourceContext(
   provider: TaskProvider,
