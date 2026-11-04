@@ -131,7 +131,8 @@ it.each([
         worktreeId,
         environmentId: 'paired-host',
         targetGroupId: groupId,
-        activate: true
+        activate: true,
+        selectWorktree: false
       },
       { userAct: true }
     )
@@ -160,31 +161,55 @@ it.each([
   expect(store.getState().activeWorktreeId).toBe('another-workspace')
 })
 
-it('removes an empty split when accepted host creation cannot be mirrored', async () => {
-  createRemote.mockImplementation(actualCreation.createWebRuntimeSessionTerminal)
-  vi.useFakeTimers()
-  try {
-    const worktreeId = folderWorkspaceKey('paired-folder')
-    const { target } = sourceChat(worktreeId)
-    runtimeOwners.set(worktreeId, 'paired-host')
-    const call = vi.fn().mockImplementation(async ({ method }: { method: string }) => {
-      if (method === 'session.tabs.createTerminal') {
-        return { id: 'create', ok: true, result: { tab: { id: 'host-tab' } } }
+it.each([true, false])(
+  'settles real host creation with split=%s and later navigation',
+  async (split) => {
+    createRemote.mockImplementation(actualCreation.createWebRuntimeSessionTerminal)
+    vi.useFakeTimers()
+    try {
+      const worktreeId = folderWorkspaceKey('paired-folder')
+      const { source, target } = sourceChat(worktreeId)
+      store.getState().setActiveWorktree(worktreeId, 'runtime:paired-host')
+      runtimeOwners.set(worktreeId, 'paired-host')
+      const call = vi.fn().mockImplementation(async ({ method }: { method: string }) => {
+        if (method === 'session.tabs.createTerminal') {
+          return { id: 'create', ok: true, result: { tab: { id: 'host-tab' } } }
+        }
+        throw new Error('snapshot unavailable')
+      })
+      Object.assign(window.api, { runtimeEnvironments: { call } })
+      if (split) {
+        runNativeChatSplitTarget(target, 'down')
+      } else {
+        void store.getState().openNewTerminalTabInActiveWorkspace()
       }
-      throw new Error('snapshot unavailable')
-    })
-    Object.assign(window.api, { runtimeEnvironments: { call } })
-    runNativeChatSplitTarget(target, 'down')
-    await vi.advanceTimersByTimeAsync(10_500)
-    expect(call.mock.calls.some(([args]) => args.method === 'session.tabs.createTerminal')).toBe(
-      true
-    )
-    expect(store.getState().groupsByWorktree[worktreeId]).toHaveLength(1)
-    expect(store.getState().tabsByWorktree[worktreeId] ?? []).toEqual([])
-  } finally {
-    vi.useRealTimers()
+      const groupId = store.getState().activeGroupIdByWorktree[worktreeId]
+      const laterWorkspace = folderWorkspaceKey('another-folder')
+      store.getState().setActiveWorktree(laterWorkspace, 'local')
+      await vi.advanceTimersByTimeAsync(10_500)
+      expect(call).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'paired-host',
+          method: 'session.tabs.createTerminal',
+          params: expect.objectContaining({
+            worktree: `id:${worktreeId}`,
+            targetGroupId: split ? groupId : undefined
+          })
+        })
+      )
+      expect(store.getState()).toMatchObject({
+        activeWorktreeId: split ? laterWorkspace : worktreeId,
+        activeWorkspaceKey: split ? laterWorkspace : worktreeId,
+        activeWorkspaceExecutionHostId: split ? 'local' : 'runtime:paired-host'
+      })
+      expect(store.getState().unifiedTabsByWorktree[worktreeId]).toEqual([source])
+      expect(store.getState().groupsByWorktree[worktreeId]).toHaveLength(1)
+      expect(store.getState().tabsByWorktree[worktreeId] ?? []).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
   }
-})
+)
 
 it('keeps floating chat splits local while a remote workspace is selected', async () => {
   const { target } = sourceChat(FLOATING_TERMINAL_WORKTREE_ID)

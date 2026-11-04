@@ -62,7 +62,8 @@ export async function openNewTerminalTabInWorkspace(
           worktreeId,
           environmentId: runtimeEnvironmentId,
           targetGroupId: splitGroupId ?? groupId,
-          activate: true
+          activate: true,
+          selectWorktree: !split
         },
         { userAct: true }
       )
