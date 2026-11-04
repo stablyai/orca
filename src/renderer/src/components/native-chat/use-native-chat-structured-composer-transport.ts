@@ -42,12 +42,13 @@ export function useNativeChatStructuredComposerTransport(args: {
   optionPickerRequest: NativeChatOptionPickerRequest | null
   setOptionPickerRequest: Dispatch<SetStateAction<NativeChatOptionPickerRequest | null>>
   onError: NativeChatStructuredComposerTransport['onError']
-  onSubmitted: () => void
+  reveal: { revealLatest: () => void; captureRevealLatest: () => () => void }
   /** Host reason for refusing turns and holding Send. */
   sendBlockedReason?: string | null
 }): NativeChatStructuredComposerTransport {
   const { props, controller, sendThroughLaunch, starting, worktreeId, optionPickerRequest } = args
-  const { setOptionPickerRequest, onError, onSubmitted } = args
+  const { setOptionPickerRequest, onError } = args
+  const { revealLatest: onSubmitted, captureRevealLatest: captureAdmittedReveal } = args.reveal
   const { transportEnabled } = args
   const sendBlockedReason = args.sendBlockedReason ?? null
   const acceptsImages = useStructuredAgentAcceptsImages(
@@ -110,6 +111,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       worktreeId,
       onError,
       onSubmitted,
+      captureAdmittedReveal,
       runtime: props.target.kind === 'local' ? 'local' : 'remote',
       sessionId: props.sessionId,
       runtimeEnvironmentId:
@@ -127,6 +129,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     worktreeId,
     onError,
     onSubmitted,
+    captureAdmittedReveal,
     optionPickerRequest,
     props.agent,
     props.sessionId,

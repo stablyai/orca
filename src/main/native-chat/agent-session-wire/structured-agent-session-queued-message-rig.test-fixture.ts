@@ -46,7 +46,7 @@ export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
     sessionId?: string
     legacyInputs?: true
-    idleSweep?: { idleMs: number; intervalMs: number }
+    idleSweep?: StructuredAgentSessionHostDeps['idleSweep']
     now?: () => number
     /** Teardown records its restart offers, which `restartOffers` lists. */
     recoveryCapsule?: true

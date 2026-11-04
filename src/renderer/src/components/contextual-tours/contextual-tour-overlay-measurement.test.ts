@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getContextualTour } from '../../../../shared/contextual-tours'
+import { getContextualTour, getContextualTourStepIndex } from '../../../../shared/contextual-tours'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { measureContextualTourOverlayRenderState } from './contextual-tour-overlay-measurement'
 
@@ -20,7 +20,10 @@ describe('contextual tour overlay measurement', () => {
 
     const result = measureContextualTourOverlayRenderState({
       tour: getContextualTour('workspace-agent-sessions'),
-      activeStepIndex: 0,
+      activeStepIndex: getContextualTourStepIndex(
+        'workspace-agent-sessions',
+        'agent-sessions-split'
+      ),
       sidebarOpen: true,
       keybindings: undefined,
       previousTelemetryTotalSteps: 0

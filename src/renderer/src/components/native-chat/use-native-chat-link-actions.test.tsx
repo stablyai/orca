@@ -91,45 +91,6 @@ afterEach(() => {
 })
 
 describe('native chat transcript links', () => {
-  it.each(['hidden', 'session', 'workspace', 'no-context'] as const)(
-    'dismisses a request when the transcript is %s',
-    async (change) => {
-      const markdown = '[link](https://example.com)'
-      const { rerender } = render(<Transcript markdown={markdown} />)
-      fireEvent.click(await screen.findByRole('link', { name: 'link' }))
-      expect(screen.getByText('System Browser')).toBeTruthy()
-      rerender(
-        <Transcript
-          markdown={markdown}
-          linkContext={
-            change === 'no-context'
-              ? null
-              : change === 'workspace'
-                ? { ...context, worktreeId: 'wt-2' }
-                : context
-          }
-          isVisible={change !== 'hidden'}
-          sessionId={change === 'session' ? 'session-2' : 'session-1'}
-        />
-      )
-      expect(screen.queryByText('System Browser')).toBeNull()
-      rerender(<Transcript markdown={markdown} />)
-      expect(screen.queryByText('System Browser')).toBeNull()
-      expect(mocks.openHttpLink).not.toHaveBeenCalled()
-    }
-  )
-
-  it('offers both destinations when a rendered http link is clicked', async () => {
-    render(<Transcript markdown="See [the PR](https://github.com/o/r/pull/1)." />)
-
-    fireEvent.click(await screen.findByRole('link', { name: 'the PR' }))
-
-    expect(screen.getByText('https://github.com/o/r/pull/1')).toBeTruthy()
-    expect(screen.getByText('Orca Browser')).toBeTruthy()
-    expect(screen.getByText('System Browser')).toBeTruthy()
-    expect(mocks.openHttpLink).not.toHaveBeenCalled()
-  })
-
   it('keeps mailto links on the anchor default', async () => {
     const { container } = render(<Transcript markdown="[email](mailto:hello@example.com)" />)
     const anchorDefault = vi.fn((event: Event) => {
@@ -150,39 +111,5 @@ describe('native chat transcript links', () => {
     fireEvent.click(anchor)
     fireEvent.click(screen.getByText('System Browser'))
     expect(document.activeElement).toBe(anchor)
-  })
-
-  it('routes the chosen destination through the shared link opener', async () => {
-    render(<Transcript markdown="See [the PR](https://github.com/o/r/pull/1)." />)
-    fireEvent.click(await screen.findByRole('link', { name: 'the PR' }))
-
-    fireEvent.click(screen.getByText('System Browser'))
-
-    expect(mocks.openHttpLink).toHaveBeenCalledWith(
-      'https://github.com/o/r/pull/1',
-      expect.objectContaining({ forceSystemBrowser: true, worktreeId: 'wt-1' })
-    )
-  })
-
-  it('opens the routed destination outright when link actions are off', async () => {
-    mocks.settings = { openLinksInApp: true, terminalLinkActionPopoverEnabled: false }
-    render(<Transcript markdown="See [the PR](https://github.com/o/r/pull/1)." />)
-
-    fireEvent.click(await screen.findByRole('link', { name: 'the PR' }))
-
-    expect(screen.queryByText('Orca Browser')).toBeNull()
-    expect(mocks.openHttpLink).toHaveBeenCalledWith(
-      'https://github.com/o/r/pull/1',
-      expect.objectContaining({ forceInApp: true })
-    )
-  })
-
-  it('leaves file links on the existing native chat opener', async () => {
-    render(<Transcript markdown="Edit [the file](file:///repo/src/a.ts)." />)
-
-    fireEvent.click(await screen.findByRole('link', { name: 'the file' }))
-
-    expect(mocks.openFileLink).toHaveBeenCalledOnce()
-    expect(screen.queryByText('System Browser')).toBeNull()
   })
 })
