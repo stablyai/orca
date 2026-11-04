@@ -1,18 +1,12 @@
-import {
-  createNativeChatFileHref,
-  routeNativeChatHref
-} from '../../../../shared/native-chat/native-chat-href-routing'
-import {
-  formatFileLinkLocation,
-  parseFileLinkLocation
-} from '../../../../shared/file-links/file-link-location'
+import { createNativeChatFileHref, routeNativeChatHref } from './native-chat-href-routing'
+import { formatFileLinkLocation, parseFileLinkLocation } from '../file-links/file-link-location'
 import {
   extractTerminalFileLinkReadings,
   extractTerminalFileLinks,
   type ParsedTerminalFileLink
-} from '../../../../shared/terminal/links/terminal-links'
-import { ROOTED_PATH_START_PATTERN } from '../../../../shared/terminal/links/terminal-file-link-detection-ranges'
-import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
+} from '../terminal/links/terminal-links'
+import { ROOTED_PATH_START_PATTERN } from '../terminal/links/terminal-file-link-detection-ranges'
+import { preferLongestNonOverlappingMatches } from '../longest-non-overlapping-matches'
 
 type MarkdownNode = {
   type: string
@@ -256,9 +250,7 @@ function transformFileLinks(node: MarkdownNode, exists: FileLinkExists): void {
   node.children = children
 }
 
-/** Explicit markdown links stay links; detected paths link only once `exists` confirms them. */
-export function remarkNativeChatFileLinks(
-  exists: FileLinkExists
-): () => (tree: MarkdownNode) => void {
-  return () => (tree) => transformFileLinks(tree, exists)
+/** Explicit markdown links stay links; detected paths in an mdast tree link only once `exists` confirms them, in place. */
+export function linkNativeChatFilePaths(tree: MarkdownNode, exists: FileLinkExists): void {
+  transformFileLinks(tree, exists)
 }

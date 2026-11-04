@@ -2,10 +2,8 @@ import type { IDisposable, ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { createFilePathLinkProvider, getTerminalFileOpenHint } from './terminal-link-handlers'
-import {
-  TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES,
-  type TerminalPathExistsCache
-} from './terminal-path-exists-cache'
+import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
+import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from '../../../../shared/path-exists-cache-lru'
 import { getConnectionId } from '@/lib/connection-context'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {

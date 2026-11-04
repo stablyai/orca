@@ -3,11 +3,9 @@ import type { ParsedTerminalFileLink } from '../../../../shared/terminal/links/t
 import type * as FileLinkTargetModule from '@/components/terminal-pane/terminal-file-link-target'
 import type { FileLinkPathExistence } from '@/components/terminal-pane/terminal-file-link-target'
 import type * as FilePathMappingModule from '@/components/terminal-pane/terminal-file-path-mapping'
-import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from '@/components/terminal-pane/terminal-path-exists-cache'
-import {
-  createNativeChatFileLinkExistence,
-  UNVERIFIABLE_RETRY_DELAYS_MS
-} from './native-chat-file-link-existence'
+import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from '../../../../shared/path-exists-cache-lru'
+import { createNativeChatFileLinkExistence } from './native-chat-file-link-existence'
+import { UNVERIFIABLE_RETRY_DELAYS_MS } from '../../../../shared/native-chat/native-chat-file-link-existence'
 
 const connection = vi.hoisted(() => ({
   resolved: true,

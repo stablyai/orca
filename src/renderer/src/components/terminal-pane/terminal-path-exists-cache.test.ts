@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from '../../../../shared/path-exists-cache-lru'
 import {
-  TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES,
   getTerminalPathExistsCacheKey,
   readTerminalPathExistence,
   startTerminalPathExistsProbe,
