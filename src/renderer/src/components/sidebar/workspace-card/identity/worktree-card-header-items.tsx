@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { resolveRepoHeaderColor } from '../../project-header-color'
+import { resolveRepoHeaderColor } from '../../worktree-list/rows/project-header-color'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { formatSparseDirectoryPreview } from '../controller/worktree-card-model'
 

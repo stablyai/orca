@@ -109,13 +109,13 @@ vi.mock('./worktree-delete-execution', () => ({
   runWorktreeDeletesInParallel: vi.fn()
 }))
 
-vi.mock('../../stale-workspace-list-toast', () => ({
+vi.mock('../../worktree-list/listing/stale-workspace-list-toast', () => ({
   showWorkspaceListChangedToast: vi.fn()
 }))
 
 import './delete-worktree-flow'
 import { runWorktreeDeletesInParallel } from './worktree-delete-execution'
-import { showWorkspaceListChangedToast } from '../../stale-workspace-list-toast'
+import { showWorkspaceListChangedToast } from '../../worktree-list/listing/stale-workspace-list-toast'
 
 function makeWorktree(id: string, path: string): Worktree {
   return {

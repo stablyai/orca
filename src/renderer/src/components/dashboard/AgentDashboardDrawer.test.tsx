@@ -40,7 +40,7 @@ vi.mock('./AgentDashboardSettingsMenu', () => ({
   AgentDashboardSettingsMenu: () => null
 }))
 
-vi.mock('../sidebar/use-workspace-kanban-outside-dismiss', () => ({
+vi.mock('../sidebar/workspace-board/surface/use-workspace-kanban-outside-dismiss', () => ({
   isWorkspaceBoardKeepOpenTarget: () => false,
   useWorkspaceKanbanOutsideDismiss: () => undefined
 }))

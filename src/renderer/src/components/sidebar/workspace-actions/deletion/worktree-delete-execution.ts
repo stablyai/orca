@@ -14,7 +14,7 @@ import {
   toWorktreeRemovalTarget,
   type WorktreeRemovalTarget
 } from '../../../../../../shared/worktree/removal'
-import { showWorkspaceListChangedToast } from '../../stale-workspace-list-toast'
+import { showWorkspaceListChangedToast } from '../../worktree-list/listing/stale-workspace-list-toast'
 import { showPreservedBranchBatchToast } from './preserved-branch-batch-toast'
 import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'

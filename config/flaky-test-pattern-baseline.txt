@@ -577,8 +577,8 @@
 1 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.unsent-message.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/settings/accounts/providers/GrokAccountsSection.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/SidebarToolbar.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeList.lineage-agent-expansion-coupling.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeList.lineage-child-real-card.test.tsx
+1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-agent-expansion-coupling.test.tsx
+1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-child-real-card.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/status-bar/workspace-space-worktree-row.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/TabBarCreateEntry.history.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/open-tab-search.test.ts

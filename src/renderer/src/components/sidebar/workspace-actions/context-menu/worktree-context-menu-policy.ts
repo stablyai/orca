@@ -6,7 +6,8 @@ import type {
   Worktree
 } from '../../../../../../shared/worktree/types'
 import { getProjectedWorktreeLineage } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
-import { getWorkspaceStatus } from '../../workspace-status'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
 import { translate } from '@/i18n/i18n'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 

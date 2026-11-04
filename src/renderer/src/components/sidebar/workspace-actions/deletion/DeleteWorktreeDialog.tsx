@@ -38,7 +38,7 @@ import { useConfirmedWorktreeDeleteTargets } from './use-confirmed-worktree-dele
 import { runLineageDeleteAll } from './delete-worktree-lineage-delete-all'
 import { runDialogForceDelete } from './delete-worktree-dialog-force-delete'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
-import { useSidebarHostScopeOptions } from '../../use-sidebar-host-scope-options'
+import { useSidebarHostScopeOptions } from '../../worktree-list/controls/use-sidebar-host-scope-options'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-targets'

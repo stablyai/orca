@@ -19,7 +19,7 @@ import {
 import {
   WorkspaceReviewChecksIndicator,
   workspaceReviewChecksLabel
-} from '../../WorkspaceReviewChecksIndicator'
+} from '../../workspace-status/presentation/WorkspaceReviewChecksIndicator'
 import { ReviewChecksIndicator } from '../metadata/WorktreeCardMetadataStatusBadges'
 import { WorktreeCardStatusSlot } from '../surface/WorktreeCardStatusSlot'
 import { buildParentPrChecksProjection } from '../../../right-sidebar/parent-pr-checks-rows'
