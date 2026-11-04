@@ -20,18 +20,23 @@ function createAssetReferenceNormalizer(replacements) {
     )
 }
 
-export function normalizeManifestSourcePaths(value) {
+export function normalizeManifestSourcePaths(value, normalizeReferences = (text) => text) {
   if (typeof value === 'string') {
-    return value.replace(/node_modules\/\.pnpm\/[^/]+\/node_modules\//g, 'node_modules/')
+    return normalizeReferences(
+      value.replace(/node_modules\/\.pnpm\/[^/]+\/node_modules\//g, 'node_modules/')
+    )
   }
   if (Array.isArray(value)) {
-    return value.map(normalizeManifestSourcePaths)
+    return value.map((child) => normalizeManifestSourcePaths(child, normalizeReferences))
   }
   if (!value || typeof value !== 'object') {
     return value
   }
   const entries = Object.entries(value)
-    .map(([key, child]) => [normalizeManifestSourcePaths(key), normalizeManifestSourcePaths(child)])
+    .map(([key, child]) => [
+      normalizeManifestSourcePaths(key, normalizeReferences),
+      normalizeManifestSourcePaths(child, normalizeReferences)
+    ])
     .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
   assert.equal(
     new Set(entries.map(([key]) => key)).size,
@@ -93,16 +98,19 @@ export function annotateJavascriptParityFiles(root, files) {
     if (!contents.has(file.path)) {
       return { ...file, comparablePath, comparableSha256: file.sha256 }
     }
-    let content = normalizeReferences(contents.get(file.path))
+    let content = contents.get(file.path)
     const manifest = file.path === 'renderer/.vite/manifest.json'
     if (manifest) {
-      content = JSON.stringify(normalizeManifestSourcePaths(JSON.parse(content)))
-    }
-    if (file.path === 'renderer/.orca-web-client-files.json') {
+      content = JSON.stringify(
+        normalizeManifestSourcePaths(JSON.parse(content), normalizeReferences)
+      )
+    } else if (file.path === 'renderer/.orca-web-client-files.json') {
       const members = JSON.parse(content)
       assert(Array.isArray(members) && members.every((member) => typeof member === 'string'))
       // Asset aliases can change the order of this file inventory after hash normalization.
-      content = JSON.stringify(members.sort())
+      content = JSON.stringify(members.map(normalizeReferences).sort())
+    } else {
+      content = normalizeReferences(content)
     }
     return {
       ...file,

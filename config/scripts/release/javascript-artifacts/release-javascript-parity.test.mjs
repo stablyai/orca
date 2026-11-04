@@ -82,6 +82,22 @@ it('normalizes hashed JSON assets while rejecting content and reference changes'
       'renderer/assets/i18n.js'
     ])
   }
+  for (const [path, content] of [
+    ['renderer/.vite/manifest.json', '{"locale":{"file":"assets/\\u0040asset:de.json\\u0040"}}'],
+    ['renderer/.orca-web-client-files.json', '["assets/\\u0040asset:de.json\\u0040"]']
+  ]) {
+    const broken = entries('BBBBBBBB', '{\n"hello":"Hallo"\n}\n')
+    broken[path] = content
+    expect(compareJavascriptParityFiles(before, inventory(broken))).toEqual([path])
+  }
+  for (const [path, content] of [
+    ['renderer/.vite/manifest.json', '{"locale":{"file":"assets/de\\u002dBBBBBBBB.json"}}'],
+    ['renderer/.orca-web-client-files.json', '["assets/de\\u002dBBBBBBBB.json"]']
+  ]) {
+    const escaped = entries('BBBBBBBB', '{\n"hello":"Hallo"\n}\n')
+    escaped[path] = content
+    expect(compareJavascriptParityFiles(before, inventory(escaped))).toEqual([])
+  }
   const suffixEntries = (reference) => ({
     ...entries('AAAAAAAA', '{"hello":"Hallo"}'),
     'renderer/assets/de.json-BBBBBBBB.json': '{}',
