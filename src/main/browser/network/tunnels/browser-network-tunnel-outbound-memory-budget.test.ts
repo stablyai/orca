@@ -2,6 +2,29 @@ import { describe, expect, it } from 'vitest'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from './browser-network-tunnel-outbound-memory-budget'
 
 describe('BrowserNetworkTunnelOutboundMemoryBudgetRegistry', () => {
+  it('admits enough 1 KiB claims that chunk accounting never precedes byte exhaustion', () => {
+    const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
+    const lease = registry.acquire('host-a')!
+
+    // Eight stalled 2 MiB-window streams of 1 KiB frames hold ~16 Ki claims for only 16 MiB,
+    // well inside the byte budget; the claim bound must not shed them first.
+    const releases: (() => void)[] = []
+    for (let index = 0; index < 17_000; index += 1) {
+      const release = lease.claimApplicationBytes(1024)
+      if (!release) {
+        break
+      }
+      releases.push(release)
+    }
+    expect(releases).toHaveLength(17_000)
+
+    for (const release of releases) {
+      release()
+    }
+    expect(registry.evidence().claims).toBe(0)
+    lease.release()
+  })
+
   it('shares one host ceiling across application, encrypted queue, and native buffers', () => {
     const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
       hostMaxBytes: 10,
