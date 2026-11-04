@@ -9,13 +9,13 @@ import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
-import { MarkdownPreviewSizeGate } from './MarkdownPreviewSizeGate'
+import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
 import type { FileContent } from './editor-panel-content-types'
 import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
 import { translate } from '@/i18n/i18n'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
-import { useMarkdownDocuments } from './useMarkdownDocuments'
-import type { MarkdownRenderState } from './markdown-render-mode'
+import { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
+import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
 
 // Retry is a user act: it may start a stopped WSL distro.
 const USER_RETRY = { wakeWslDistro: true }

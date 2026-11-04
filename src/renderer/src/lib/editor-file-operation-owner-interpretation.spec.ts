@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { resolveEditorModelOwner } from '@/components/editor/editor-model-owner'
+import { resolveEditorModelOwner } from '@/components/editor/model-lifetime/identity/editor-model-owner'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
 import { makeFolderWorkspace } from '@/components/sidebar/folder-workspace-composer-submit-fixtures'

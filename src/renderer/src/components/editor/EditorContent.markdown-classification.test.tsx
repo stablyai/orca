@@ -10,7 +10,7 @@ const classifiers = vi.hoisted(() => ({
 }))
 
 // Cache decisions but resolve localized messages per read; use message text as the stub reason to expose both seams.
-vi.mock('./markdown-rich-mode', () => ({
+vi.mock('./markdown/render-mode/markdown-rich-mode', () => ({
   getMarkdownRichModeEligibilityDecision: ({
     content,
     sizeOverridden
@@ -40,11 +40,11 @@ vi.mock('./editor-lazy-views', () => {
   }
 })
 
-vi.mock('./RichMarkdownErrorBoundary', () => ({
+vi.mock('./rich-markdown/instance/RichMarkdownErrorBoundary', () => ({
   RichMarkdownErrorBoundary: ({ children }: { children: React.ReactNode }) => children
 }))
 
-vi.mock('./useMarkdownDocuments', () => ({
+vi.mock('./markdown/documents/useMarkdownDocuments', () => ({
   useMarkdownDocuments: () => ({
     markdownDocuments: [],
     onOpenDocLink: () => {},
@@ -74,7 +74,7 @@ vi.mock('@/store', () => {
 
 import { EditorContent } from './EditorContent'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
-import { resetMarkdownRichModeEligibilityCache } from './markdown-rich-mode-eligibility-cache'
+import { resetMarkdownRichModeEligibilityCache } from './markdown/render-mode/markdown-rich-mode-eligibility-cache'
 
 function openFile(
   language: 'markdown' | 'typescript' = 'markdown',
