@@ -187,9 +187,15 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
         {
           identity: { provider: 'orca', clientMessageId: firstRequest.clientMessageId },
           body: initial.body,
+          ownerFence: attached.fence,
           turnScope: AGENT_JOURNAL_THREAD_SCOPE
         },
-        { identity: firstTurnIdentity, body: firstTurn, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+        {
+          identity: firstTurnIdentity,
+          body: firstTurn,
+          ownerFence: attached.fence,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
       ],
       undefined,
       rig.store.getRecord(SESSION)!.providerHandleChain.at(-1)!.handle

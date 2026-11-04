@@ -70,6 +70,7 @@ it('captures persisted folder attention without installing the chat host or open
     {
       identity: { provider: 'orca', clientMessageId: 'kept-history' },
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'retained history' }] },
+      ownerFence: 0,
       turnScope: { kind: 'thread' }
     }
   ])
