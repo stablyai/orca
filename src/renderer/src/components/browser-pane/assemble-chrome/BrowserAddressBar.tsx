@@ -6,9 +6,8 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { findPage } from '@/store/slices/browser-page-records'
-import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../shared/browser-url'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
-import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
+import { useBrowserAddressBarSuggestionsBuilder } from './use-browser-address-bar-suggestions-builder'
 import { useBrowserAddressBarInlineCompletion } from './use-browser-address-bar-inline-completion'
 import { useBrowserAddressBarSwitchToTab } from './use-browser-address-bar-switch-to-tab'
 import { useBrowserAddressBarEditHandoff } from './use-browser-address-bar-edit-handoff'
@@ -18,6 +17,7 @@ import { useBrowserAddressBarDismissal } from './use-browser-address-bar-dismiss
 import { useBrowserAddressBarEscape } from './use-browser-address-bar-escape'
 import { useBrowserAddressBarSuggestionPreview } from './use-browser-address-bar-suggestion-preview'
 import { useRemoveSuggestionRow } from './use-browser-address-bar-row-removal'
+import { useClearAddressBarHistory } from './use-browser-address-bar-clear-history'
 import { isRemovableHistoryRow, isRemoveRowShortcut } from '../history/browser-history-row-removal'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
 import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
@@ -76,10 +76,6 @@ export default function BrowserAddressBar({
   const prePreviewValueRef = useRef<string | null>(null)
   // Match suggestions against the typed query while the input previews a full URL.
   const autocompleteQuery = prePreviewValueRef.current ?? value
-  const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
-  const workspaceDocHistory = useAppStore((s) => s.workspaceDocHistory)
-  const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
-  const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
   const pageAddress = useAppStore((s) =>
     toDisplayUrl(findPage(s.browserPagesByWorkspace, pageId)?.url ?? '')
   )
@@ -105,21 +101,7 @@ export default function BrowserAddressBar({
     [clearAddressBarTimers]
   )
 
-  const searchEngine: SearchEngine =
-    (browserDefaultSearchEngine as SearchEngine | null) ?? DEFAULT_SEARCH_ENGINE
-
-  const buildSuggestions = useCallback(
-    (query: string, inline: true | string | null) =>
-      buildBrowserAddressBarSuggestions({
-        browserUrlHistory,
-        workspaceDocHistory,
-        kagiSessionLink: browserKagiSessionLink,
-        searchEngine,
-        value: query,
-        inline
-      }),
-    [browserUrlHistory, workspaceDocHistory, searchEngine, browserKagiSessionLink]
-  )
+  const buildSuggestions = useBrowserAddressBarSuggestionsBuilder()
   const { inlineText, completeTyping, clearInline, showInline, acceptOnCaretMove } =
     useBrowserAddressBarInlineCompletion({ inputRef, value, buildSuggestions, prePreviewValueRef })
   useBrowserAddressBarEditHandoff({
@@ -180,6 +162,9 @@ export default function BrowserAddressBar({
     onChange,
     onLeave
   })
+
+  const handleClearHistory = useClearAddressBarHistory(restoreTypedQuery)
+
   // Why nothing for an empty bar: row 0 always shows what Enter does, and there Enter does nothing.
   const selectedValue =
     selectedValueOverride &&
@@ -434,6 +419,7 @@ export default function BrowserAddressBar({
               switchFocusedUrl={switchFocused ? selectedValue : null}
               onSwitchToTab={switchToTab.switchToTab}
               onRemove={removeSuggestion}
+              onClearHistory={handleClearHistory}
             />
           </PopoverContent>
         )}

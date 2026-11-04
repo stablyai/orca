@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
     activateBrowserPage: ReturnType<typeof vi.fn>
     removeBrowserHistoryEntry: ReturnType<typeof vi.fn>
     removeWorkspaceDocHistoryEntry: ReturnType<typeof vi.fn>
+    clearBrowserHistory: ReturnType<typeof vi.fn>
     requestBrowserFocus: ReturnType<typeof vi.fn>
   } = {
     browserUrlHistory: [],
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => {
     activateBrowserPage: vi.fn(),
     removeBrowserHistoryEntry: vi.fn(),
     removeWorkspaceDocHistoryEntry: vi.fn(),
+    clearBrowserHistory: vi.fn(),
     requestBrowserFocus: vi.fn()
   }
   return state
@@ -51,6 +53,10 @@ vi.mock('@/components/tab-bar/open-tab-search-entries', () => ({
           }
         ]
       : []
+}))
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() }
 }))
 
 vi.mock('@/lib/browser-page-palette-activation', () => ({
@@ -87,7 +93,8 @@ vi.mock('@/components/ui/command', () => ({
       {children}
     </button>
   ),
-  CommandList: ({ children }: { children: ReactNode }) => <div>{children}</div>
+  CommandList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  CommandSeparator: () => <hr data-slot="command-separator" />
 }))
 
 function historyEntry(overrides: Partial<BrowserHistoryEntry>): BrowserHistoryEntry {
@@ -155,6 +162,7 @@ describe('BrowserAddressBar autocomplete preview', () => {
     mocks.browserDefaultSearchEngine = null
     mocks.browserKagiSessionLink = null
     mocks.openPageUrl = null
+    mocks.clearBrowserHistory = vi.fn()
     mocks.activateBrowserPage.mockReturnValue({
       status: 'activated',
       pageId: 'page-2',
@@ -637,5 +645,32 @@ describe('BrowserAddressBar autocomplete preview', () => {
     })
     // Collapsed, so the press places a caret and the click can expand it to the whole URL.
     expect(input.selectionStart).toBe(input.selectionEnd)
+  })
+
+  it('clears history when clicking the clear history button', async () => {
+    const onNavigate = vi.fn()
+    const onSubmit = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <AddressBarHarness initialValue="local" onNavigate={onNavigate} onSubmit={onSubmit} />
+      )
+    })
+
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    await act(async () => {
+      input?.focus()
+    })
+
+    const clearBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+      b.textContent?.includes('Clear history')
+    )
+    expect(clearBtn).not.toBeUndefined()
+
+    await act(async () => {
+      clearBtn?.click()
+    })
+
+    expect(mocks.clearBrowserHistory).toHaveBeenCalled()
   })
 })
