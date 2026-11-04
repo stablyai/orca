@@ -58,7 +58,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 
-vi.mock('@/components/sidebar/CacheTimer', () => ({
+vi.mock('@/components/sidebar/workspace-card/activity/CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownForPane: () => null
 }))
@@ -66,8 +66,8 @@ vi.mock('@/components/sidebar/CacheTimer', () => ({
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
-import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
-import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
+import { CompactAgentRow } from '@/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row'
+import { buildSubagentChildRows } from '@/components/sidebar/workspace-card/activity/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 

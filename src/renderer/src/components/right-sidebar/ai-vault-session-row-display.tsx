@@ -4,7 +4,7 @@ import {
 } from '../../../../shared/antigravity-session-origin'
 import type React from 'react'
 import { Badge } from '@/components/ui/badge'
-import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostContextBadge'
+import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'

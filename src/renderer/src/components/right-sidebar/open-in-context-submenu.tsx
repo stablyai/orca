@@ -19,7 +19,7 @@ import {
   getOpenInEntryAvailability,
   openOpenInAppsSettings,
   openWorktreePath
-} from '@/components/sidebar/WorktreeOpenInMenu'
+} from '@/components/sidebar/workspace-actions/open/WorktreeOpenInMenu'
 
 type OpenInContextSubmenuProps = {
   path?: string
