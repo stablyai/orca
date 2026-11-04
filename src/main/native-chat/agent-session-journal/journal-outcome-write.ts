@@ -2,9 +2,8 @@ import { retainJournalReadViews } from './journal-read-view'
 import type { JournalPersistencePlan } from './journal-persistence-plan'
 import { prepareJournalAcceptance, journalInputAcceptance } from './journal-input-provenance'
 
-import { copyJournalNativeState } from './journal-input-conversion'
-import { journalInputOrder } from './journal-input-order'
 import type Database from '../../sqlite/sync-database'
+import { journalInputOrder } from './journal-input-order'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import {
@@ -23,9 +22,10 @@ export function prepareJournalOutcomeWrite(
   db: Database.Database,
   live: JournalReducerState,
   rows: readonly JournalRow[],
-  savedAt: number
+  savedAt: number,
+  finishFold?: (draft: JournalReducerState) => void
 ): { state: JournalReducerState; adopt: () => JournalReducerState } {
-  const prepared = prepareJournalOutcomeAppend(db, live, rows, savedAt)
+  const prepared = prepareJournalOutcomeAppend(db, live, rows, savedAt, finishFold)
   applyJournalOutcomeAppend(db, prepared.append)
   return prepared
 }
@@ -35,13 +35,20 @@ export function prepareJournalOutcomeAppend(
   db: Database.Database,
   live: JournalReducerState,
   rows: readonly JournalRow[],
-  savedAt: number
+  savedAt: number,
+  finishFold?: (draft: JournalReducerState) => void
 ): { append: JournalOutcomeAppend; state: JournalReducerState; adopt: () => JournalReducerState } {
   const previous = journalOutcomeSource(db, live.sessionId, live.epoch)
   if (previous && previous.through !== live.lastSequence) {
     throw new Error('journal outcome writer has stale coverage')
   }
-  const transition = planJournalOutcomeRows(live, rows, savedAt, !previous || previous.format < 2)
+  const transition = planJournalOutcomeRows(
+    live,
+    rows,
+    savedAt,
+    !previous || previous.format < 2,
+    finishFold
+  )
   return {
     ...transition,
     append: {
@@ -61,8 +68,7 @@ export function publishJournalOutcomeEpoch(
   db: Database.Database,
   sessionId: string,
   epoch: string,
-  rows: readonly JournalRow[],
-  previous?: JournalReducerState
+  rows: readonly JournalRow[]
 ): { adopt: () => JournalReducerState } {
   const first = rows[0]
   if (!first || first.seq !== 1 || first.kind !== 'epoch') {
@@ -72,9 +78,6 @@ export function publishJournalOutcomeEpoch(
   const initial = createJournalReducerState(sessionId, epoch, (id) =>
     journalInputAcceptance(db, sessionId, id)
   )
-  if (previous) {
-    copyJournalNativeState(previous, initial)
-  }
   journalInputOrder(initial).beginReconstruction()
   const transition = persistJournalOutcomeRows(
     db,
@@ -102,7 +105,8 @@ export async function prepareJournalOutcomePlan(
   plan: JournalPersistencePlan,
   live: JournalReducerState,
   rows: readonly JournalRow[],
-  savedAt: number
+  savedAt: number,
+  finishFold?: (draft: JournalReducerState) => void
 ): Promise<{ state: JournalReducerState; adopt: () => JournalReducerState }> {
   const previous = await plan.source(live.sessionId, live.epoch)
   if (previous && previous.through !== live.lastSequence) {
@@ -118,7 +122,7 @@ export async function prepareJournalOutcomePlan(
     rows,
     savedAt,
     !previous || previous.format < 2,
-    undefined,
+    finishFold,
     acceptance
   )
   plan.add({
@@ -145,21 +149,16 @@ export async function publishJournalOutcomeEpochPlan(
   plan: JournalPersistencePlan,
   sessionId: string,
   epoch: string,
-  rows: readonly JournalRow[],
-  previous?: JournalReducerState
+  rows: readonly JournalRow[]
 ): Promise<{ adopt: () => JournalReducerState }> {
   const first = rows[0]
   if (!first || first.seq !== 1 || first.kind !== 'epoch') {
     throw new Error('missing founding epoch')
   }
   const acceptance = await prepareJournalAcceptance(plan, sessionId, [
-    ...(previous?.inputEntries.keys() ?? []),
     ...journalOutcomeAcceptanceIds(rows)
   ])
   const initial = createJournalReducerState(sessionId, epoch, acceptance)
-  if (previous) {
-    copyJournalNativeState(previous, initial)
-  }
   journalInputOrder(initial).beginReconstruction()
   const transition = planJournalOutcomeRows(
     initial,

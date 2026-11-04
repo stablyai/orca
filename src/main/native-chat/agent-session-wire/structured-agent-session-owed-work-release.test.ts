@@ -93,7 +93,7 @@ beforeEach(async () => {
     journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
-    idleSweep: { intervalMs: SWEEP_MS, idleMs: IDLE_MS },
+    idleSweep: { intervalMs: SWEEP_MS, idleMs: () => IDLE_MS },
     now: () => clock,
     statusSink: {
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),

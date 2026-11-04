@@ -1,5 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { SessionHostPartitionOperations } from './session-host-partitions'
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'

@@ -3,7 +3,7 @@ import {
   composeStructuredLaunch,
   composeStructuredLaunchRead
 } from '../../runtime/structured-agent-launch-composition'
-import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../../codex/structured/launch/codex-structured-agent-definition'
 import { afterEach, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'

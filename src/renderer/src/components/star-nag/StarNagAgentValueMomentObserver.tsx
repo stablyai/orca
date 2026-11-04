@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { agentTurnEndedUncleanly } from '../../../../shared/agent-main-agent-verdict'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { agentTurnEndedUncleanly } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { useAppStore } from '@/store'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 

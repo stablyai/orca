@@ -1,6 +1,6 @@
 import type { PersistedState } from './persisted-state-types'
 import type { SshRemotePtyLease } from './ssh-types'
-import { makePaneKey } from './stable-pane-id'
+import { makePaneKey } from './workspace-layout/stable-pane-id'
 
 export function moveRecordKey<T>(
   record: Record<string, T> | undefined,

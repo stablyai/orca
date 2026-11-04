@@ -12,7 +12,7 @@ import {
 } from '@/hooks/useAgentDetectionTarget'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 type DetectionReadState = Pick<
   AppState,

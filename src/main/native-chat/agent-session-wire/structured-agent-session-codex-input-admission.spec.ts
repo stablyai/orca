@@ -2,7 +2,7 @@ import { setTestJournalTrigger } from '../agent-session-journal/journal-host-dat
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import * as autoSandbox from '../../codex/codex-structured-auto-sandbox'
+import * as autoSandbox from '../../codex/structured/launch/codex-structured-auto-sandbox'
 import { expect, it, vi } from 'vitest'
 import { codexInputFinalizationFixture } from './structured-agent-session-codex-input-host.test'
 import {
@@ -54,7 +54,6 @@ it.each(CODEX_INPUT_FINALIZATION_ADMISSION_CASES)(
     })
     await host.flushStreamedEvents(SESSION)
     await fixture.pick('auto')
-    const measured = population > 0 ? fixture.measureInputWork('close', population) : undefined
     let later = ''
     const paused = Promise.withResolvers<unknown>()
     const held = Promise.withResolvers<void>()
@@ -235,7 +234,6 @@ it.each(CODEX_INPUT_FINALIZATION_ADMISSION_CASES)(
       await blocking
       await stopping
       await fixture.waitForInputFinalization(journal, id)
-      await measured?.()
     }
   }
 )

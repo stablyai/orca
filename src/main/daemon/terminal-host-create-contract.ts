@@ -1,15 +1,15 @@
 import type { SurfaceExecutorAdmission } from '../../shared/workspace-surfaces/surface-executor-contract'
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
-import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import type { PtyStartupIngressIntent } from '../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session/agent-session-host-authority'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
 export type CreateOrAttachOptions = {
   surfaceExecution?: SurfaceExecutorAdmission

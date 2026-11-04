@@ -12,7 +12,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -152,6 +156,8 @@ describe('connectPanePty', () => {
     )
     try {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -194,7 +200,13 @@ describe('connectPanePty', () => {
         callback?.()
       })
 
-      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks)
+        )
+      )
       await flushAsyncTicks(6)
 
       vi.useFakeTimers()

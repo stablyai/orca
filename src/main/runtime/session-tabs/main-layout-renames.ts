@@ -5,7 +5,7 @@ import type {
   RuntimeTerminalRename,
   RuntimeTerminalSetPaneTitle
 } from '../../../shared/runtime-terminal-contracts'
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WindowLayoutCommand } from '../runtime-layout-apply'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'

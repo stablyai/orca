@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION } from '../../shared/client-hosted-browser-page-record'
-import type { PersistedClientHostedBrowserPage } from '../../shared/client-hosted-browser-page-record'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import {
+  CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION,
+  type PersistedClientHostedBrowserPage
+} from '../../shared/workspace-session/client-hosted-browser-page-record'
+
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import {
   SESSION_FIELDS_COPIED_BY_OWNER_KEY,
   SESSION_FIELDS_PRUNED_BY_OWNER_KEY,

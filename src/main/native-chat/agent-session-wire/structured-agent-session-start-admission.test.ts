@@ -19,6 +19,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -70,7 +71,7 @@ let probeOwner: Mock<(record: unknown) => Promise<AgentSessionOwnerProbe>>
 let delivered: string[]
 let events: StructuredAgentSessionEventSink | undefined
 let initialAttach: ReturnType<typeof hostTestAttachParams>
-let idleSweep: { intervalMs: number; idleMs: number }
+let idleSweep: StructuredAgentSessionHostDeps['idleSweep']
 
 async function startHost(): Promise<void> {
   host = new StructuredAgentSessionHost({
@@ -217,7 +218,7 @@ beforeEach(async () => {
   holds.clear()
   reached.clear()
   delivered = []
-  idleSweep = { intervalMs: 60 * 60_000, idleMs: 60 * 60_000 }
+  idleSweep = { intervalMs: 60 * 60_000, idleMs: () => 60 * 60_000 }
   acquire = vi.fn(async (input) => {
     events = input.events
     await at('spawn')
@@ -480,7 +481,7 @@ describe('a start racing the host', () => {
   })
 
   it('dispatches a send an idle-sweep close races, without deadlock', async () => {
-    idleSweep = { intervalMs: 5, idleMs: 0 }
+    idleSweep = { intervalMs: 5, idleMs: () => 0 }
     const { first, release } = await heldAt('spawn')
     await first.sent
     await new Promise((resolve) => setTimeout(resolve, 30))

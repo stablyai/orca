@@ -1,0 +1,683 @@
+import {
+  openTestJournalHostDatabase,
+  setTestLaterRowFailure
+} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { writeFile } from 'node:fs/promises'
+import { importLegacyTranscriptIntoJournal } from '../../../native-chat/agent-session-journal/journal-legacy-import'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { join } from 'node:path'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { openTestAgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { recoverStructuredRewind } from '../../../native-chat/agent-session-wire/structured-rewind-recovery'
+import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/journal-history-origin'
+import { describe, expect, it } from 'vitest'
+import { registerCodexCatchUpEchoTests } from './codex-structured-thread-catch-up-echo.spec'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { createCodexJournalTranslator } from '../journal/codex-structured-journal-translation'
+import {
+  SESSION,
+  THREAD,
+  chat,
+  turn,
+  codexWith
+} from './codex-thread-catch-up-contract-test-fixture'
+describe('Codex chat catch-up', () => {
+  registerCodexCatchUpEchoTests({ chat, turn, codexWith, sessionId: SESSION, threadId: THREAD })
+
+  it('settles recent unresolved exact proof before unrelated known history or a failed import', async () => {
+    const c = await chat({ now: 1_000 })
+    for (let n = 0; n < 1_030; n++) {
+      await c.journal.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: `turn-${n}`, ordinal: 0 },
+        { kind: 'turn', turnId: `turn-${n}`, state: 'completed' },
+        { fence: 1, turnScope: { kind: 'thread' } }
+      )
+      await c.journal.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: `turn-${n}`, ordinal: 1 },
+        { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: `answer ${n}` }] },
+        { fence: 1, turnScope: { kind: 'thread' } }
+      )
+    }
+    const proof = (id: string) => ({
+      ...turn(1_029),
+      items: [
+        {
+          type: 'userMessage',
+          id: 'receipt',
+          clientId: id,
+          content: [{ type: 'text', text: 'rendering' }]
+        },
+        { type: 'userMessage', id: 'accepted', clientId: 'already-accepted', content: [] }
+      ]
+    })
+    for (const id of ['already-accepted', 'U', 'failed-import']) {
+      await c.journal.appendSubmission({
+        clientMessageId: id,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] },
+        payloadFingerprint: id,
+        fence: 1,
+        handoverRecorded: true
+      })
+    }
+    await c.journal.resolveDispatch({
+      clientMessageId: 'already-accepted',
+      state: 'accepted',
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1029', ordinal: 2 },
+      fence: 1
+    })
+    const settled: string[] = []
+    const onReceipt = async (
+      clientMessageId: string,
+      providerIdentity: Extract<
+        Parameters<typeof c.journal.resolveDispatch>[0],
+        { state: 'accepted' }
+      >['providerIdentity']
+    ) => {
+      settled.push(clientMessageId)
+      await c.journal.resolveDispatch({
+        clientMessageId,
+        providerIdentity,
+        state: 'accepted',
+        fence: 1
+      })
+    }
+    const history = Array.from({ length: 1_030 }, (_, n) => turn(n))
+    // This known old turn exceeds the independent full-import budget, but need not be translated.
+    history[0] = {
+      ...turn(0),
+      items: Array.from({ length: 2_000 }, (_, n) => ({
+        type: 'agentMessage',
+        id: `large-${n}`,
+        text: 'old'
+      }))
+    }
+    history[1_029] = proof('U')
+    await c.open(history, { onReceipt })
+    expect(settled).toEqual(['U'])
+    expect(c.journal.submission('U')?.dispatchState).toBe('accepted')
+    await c.open([], {
+      onReceipt,
+      connection: {
+        request: async (_method, params) => {
+          if (params?.itemsView === 'summary') {
+            throw new Error('unrelated transcript failure')
+          }
+          return { data: [proof('failed-import')], nextCursor: null }
+        }
+      }
+    })
+    expect(settled).toEqual(['U', 'failed-import'])
+    await c.reopen()
+    expect(c.journal.submission('failed-import')?.dispatchState).toBe('accepted')
+    await c.journal.appendSubmission({
+      clientMessageId: 'cancelled',
+      body: { kind: 'message', role: 'user', blocks: [] },
+      payloadFingerprint: 'cancelled',
+      fence: 1
+    })
+    await c.open([], {
+      onReceipt,
+      assertCurrent: () => {
+        throw new Error('obsolete open')
+      },
+      connection: { request: async () => ({ data: [proof('cancelled')], nextCursor: null }) }
+    })
+    expect(settled).toEqual(['U', 'failed-import'])
+
+    for (const id of ['old-gap', 'fetched-known', 'V']) {
+      await c.journal.appendSubmission({
+        clientMessageId: id,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'same input' }] },
+        payloadFingerprint: id,
+        fence: 1,
+        handoverRecorded: true
+      })
+    }
+    const olderTurns = [
+      {
+        ...proof('old-gap'),
+        id: 'old-gap-turn',
+        items: [
+          ...proof('old-gap').items,
+          ...Array.from({ length: 1_100 }, (_, n) => ({
+            type: 'agentMessage',
+            id: `oversized-${n}`,
+            text: 'answer'
+          }))
+        ]
+      },
+      { ...proof('fetched-known'), id: 'turn-0' },
+      { ...turn(0), id: 'failing-gap' },
+      ...history.slice(1)
+    ]
+    const server = codexWith(olderTurns)
+    await c.open([], {
+      onReceipt,
+      connection: {
+        request: async (method, params) => {
+          if (params?.itemsView === 'full' && params.cursor === '1028') {
+            throw new Error('later import page failed')
+          }
+          return server.request(method, params)
+        }
+      }
+    })
+    // Recent proof stops at 1024 known turns. The oldest import page also contains a known turn.
+    expect(settled).toEqual(['U', 'failed-import', 'old-gap', 'fetched-known'])
+    expect(
+      c.journal.item(
+        agentJournalItemKey({
+          provider: 'codex',
+          threadId: THREAD,
+          turnId: 'old-gap-turn',
+          ordinal: 0
+        })
+      )
+    ).toBeNull()
+    await c.reopen()
+    expect(c.journal.submission('old-gap')?.dispatchState).toBe('accepted')
+    expect(c.journal.submission('fetched-known')?.dispatchState).toBe('accepted')
+    expect(c.journal.submission('V')?.dispatchState).toBe('pending')
+
+    for (const n of [100, 1_000]) {
+      for (const id of [`tail-${n}`, `second-${n}`]) {
+        await c.journal.appendSubmission({
+          clientMessageId: id,
+          body: { kind: 'message', role: 'user', blocks: [] },
+          payloadFingerprint: id,
+          fence: 1
+        })
+      }
+      let visits = 0
+      const tail = Array.from({ length: n }, (_, i) => ({
+        get type() {
+          visits++
+          return 'agentMessage'
+        },
+        id: `tail-${i}`,
+        text: 'old answer'
+      }))
+      const exact = (id: string) => ({ type: 'userMessage', id, clientId: id, content: [] })
+      const ordinals: number[] = []
+      await c.open([], {
+        onReceipt: async (id, identity) => {
+          if (identity.provider === 'codex') {
+            ordinals.push(identity.ordinal)
+          }
+          await onReceipt(id, identity)
+        },
+        connection: {
+          request: async (_method, params) => ({
+            data:
+              params?.itemsView === 'summary'
+                ? []
+                : [
+                    {
+                      ...turn(0),
+                      items: [exact(`tail-${n}`), ...tail, exact(`second-${n}`), ...tail]
+                    }
+                  ],
+            nextCursor: null
+          })
+        }
+      })
+      // Other unresolved controls remain in this session, so all tail must still be inspected.
+      expect(ordinals).toEqual([0, n + 1])
+      expect(visits).toBeGreaterThanOrEqual(n)
+    }
+
+    for (const fence of ['abort', 'owner']) {
+      const abort = new AbortController()
+      let current = true
+      const first = `${fence}-committed`
+      const next = `${fence}-blocked`
+      for (const id of [first, next]) {
+        await c.journal.appendSubmission({
+          clientMessageId: id,
+          body: { kind: 'message', role: 'user', blocks: [] },
+          payloadFingerprint: id,
+          fence: 1,
+          handoverRecorded: true
+        })
+      }
+      const read = {
+        signal: abort.signal,
+        assertCurrent: () => {
+          if (!current) {
+            throw new Error('owner changed')
+          }
+        },
+        onReceipt,
+        connection: {
+          request: async () => ({ data: [proof(first), proof(next)], nextCursor: null })
+        }
+      }
+      await c.open([], {
+        ...read,
+        onReceipt: async (id, identity) => {
+          await onReceipt(id, identity)
+          if (fence === 'abort') {
+            abort.abort()
+          } else {
+            current = false
+          }
+        }
+      })
+      expect(settled).toContain(first)
+      expect(settled).not.toContain(next)
+      await c.reopen()
+      expect(c.journal.submission(first)?.dispatchState).toBe('accepted')
+      expect(c.journal.submission(next)?.dispatchState).toBe('pending')
+      expect(c.journal.submission('V')?.dispatchState).toBe('pending')
+      // Losing ownership or cancellation during a read forbids a new proof callback.
+      const blocked = new AbortController()
+      current = true
+      await c.open([], {
+        ...read,
+        signal: blocked.signal,
+        connection: {
+          request: async () => {
+            if (fence === 'abort') {
+              blocked.abort()
+            } else {
+              current = false
+            }
+            return { data: [proof(next)], nextCursor: null }
+          }
+        }
+      })
+      expect(settled).not.toContain(next)
+    }
+  })
+
+  it('does zero proof-only item work after its final target at N and 10N', async () => {
+    for (const n of [100, 1_000]) {
+      const c = await chat({ now: 1_000 })
+      await c.journal.appendSubmission({
+        clientMessageId: 'last',
+        body: { kind: 'message', role: 'user', blocks: [] },
+        payloadFingerprint: 'last',
+        fence: 1
+      })
+      let visits = 0
+      const known = {
+        ...turn(0),
+        items: [
+          { type: 'userMessage', id: 'exact', clientId: 'last', content: [] },
+          ...Array.from({ length: n }, (_, i) => ({
+            get type() {
+              visits++
+              return 'agentMessage'
+            },
+            id: `tail-${i}`,
+            text: 'old'
+          }))
+        ]
+      }
+      await c.journal.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: 'turn-0', ordinal: 0 },
+        { kind: 'turn', turnId: 'turn-0', state: 'completed' },
+        { fence: 1, turnScope: { kind: 'thread' } }
+      )
+      await c.open([known], {
+        connection: {
+          request: async (_method, params) => ({
+            data: [params?.itemsView === 'summary' ? { ...known, items: [] } : known],
+            nextCursor: null
+          })
+        },
+        onReceipt: (id, providerIdentity) =>
+          c.journal.acceptLate({
+            clientMessageId: id,
+            providerIdentity,
+            state: 'accepted',
+            fence: 1
+          })
+      })
+      expect(visits).toBe(0)
+      expect(c.journal.submission('last')?.dispatchState).toBe('accepted')
+    }
+  })
+
+  it('retains the complete outside answer tail through catch-up, disk reopen and display', async () => {
+    const c = await chat({ now: 1_000 })
+    await c.open([turn(1)])
+    const answer = `${'outside answer paragraph\n'.repeat(1_024)}END-OF-OUTSIDE-ANSWER-30883`
+    const outside = { ...turn(2), items: [{ type: 'agentMessage', id: 'a-2', text: answer }] }
+    await c.open([turn(1), outside])
+    await c.reopen()
+    const items = c.journal.snapshot().items
+    const stored = items.find(
+      (item) =>
+        item.body.kind === 'message' &&
+        item.body.role === 'assistant' &&
+        item.body.blocks.some((block) => block.type === 'text' && block.text === answer)
+    )
+    expect(stored?.body).toEqual({
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: answer }]
+    })
+    const displayed = projectStructuredItemsToNativeChat(items).flatMap((message) => message.blocks)
+    expect(displayed).toContainEqual({ type: 'text', text: answer })
+  })
+
+  it('commits a 600-message import once, rolls back a later partition failure, and recovers', async () => {
+    const c = await chat({ now: 1_000 })
+    await c.open([turn(1)])
+    const before = c.journal.snapshot()
+    const large = {
+      ...turn(2),
+      items: Array.from({ length: 600 }, (_, n) => ({
+        type: 'agentMessage',
+        id: `item-${n}`,
+        text: `answer ${n}`
+      }))
+    }
+    const seq = c.journal.cursor().sequence
+    const database = await openTestJournalHostDatabase(c.root)
+    await setTestLaterRowFailure(database, { afterSequence: seq + 1 })
+    expect((await c.open([turn(1), large])).ok).toBe(false)
+    expect(c.deferred.state().failed).toBe(true)
+    expect(c.journal.snapshot()).toEqual(before)
+    await setTestLaterRowFailure(database, null)
+    await c.reopen()
+    expect(c.journal.snapshot()).toEqual(before)
+    c.publications.length = 0
+    await c.open([turn(1), large])
+    expect(c.texts()).toHaveLength(603)
+    expect(c.publications).toEqual([before.items.length + 602])
+    await c.reopen()
+    await c.open([turn(1), large])
+    expect(c.texts()).toHaveLength(603)
+  })
+  it('adds the turns made outside the chat once, in order, after the chat rows', async () => {
+    const c = await chat({ now: 1_000 })
+
+    await c.open([turn(1)])
+    expect(c.texts()).toEqual(['user:ask 1', 'assistant:answer 1'])
+
+    await c.open([turn(1), turn(2), turn(3)])
+    const caughtUp = [
+      'user:ask 1',
+      'assistant:answer 1',
+      '(continued-outside)',
+      'user:ask 2',
+      'assistant:answer 2',
+      'user:ask 3',
+      'assistant:answer 3'
+    ]
+    expect(c.texts()).toEqual(caughtUp)
+
+    await c.open([turn(1), turn(2), turn(3)])
+    expect(c.texts()).toEqual(caughtUp)
+
+    // An external rewind preserves displayed rows and adds a notice.
+    await c.open([turn(1), turn(2), turn(4)])
+    expect(c.texts().slice(caughtUp.length)).toEqual([
+      '(continued-outside-rewound)',
+      'user:ask 4',
+      'assistant:answer 4'
+    ])
+
+    // Summary-only history cannot be imported.
+    await c.open([turn(1), turn(2), turn(4), turn(6, 'summary')])
+    expect(c.texts().slice(caughtUp.length + 3)).toEqual([])
+  })
+
+  it('recovers an older gap behind newer native work after a failed read and restart', async () => {
+    const c = await chat({ now: 1_000 })
+    await c.open([turn(1)])
+    const failed = {
+      request: async () => {
+        throw new Error('read failed')
+      }
+    }
+    await c.open([turn(1), turn(2)], { connection: failed })
+    const native = createCodexJournalTranslator({
+      sink: c.deferred.sink,
+      sessionId: SESSION,
+      primaryThreadId: () => THREAD
+    })
+    for (const [method, params] of [
+      ['turn/started', { turn: { id: 'turn-3' } }],
+      [
+        'item/completed',
+        { turnId: 'turn-3', item: { type: 'agentMessage', id: 'native', text: 'native C' } }
+      ],
+      ['turn/completed', { turn: { id: 'turn-3', status: 'completed' } }]
+    ] as const) {
+      native.handle({ type: 'notification', sessionId: SESSION, threadId: THREAD, method, params })
+    }
+    await c.deferred.drained()
+    native.dispose()
+    const before = c.journal.snapshot().items
+    await c.reopen()
+    await c.open([turn(1), turn(2), turn(3)])
+    expect(c.journal.snapshot().items.slice(0, before.length)).toEqual(before)
+    expect(c.texts().slice(-4)).toEqual([
+      '(continued-outside)',
+      'user:ask 2',
+      'assistant:answer 2',
+      'assistant:answer 3'
+    ])
+    await c.open([turn(1), turn(2), turn(3), turn(4)])
+    expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 4', 'assistant:answer 4'])
+  })
+
+  it('uses the continued-outside notice after a receipt-only known turn', async () => {
+    const c = await chat({ now: 1_000 })
+    const body = { kind: 'message' as const, role: 'user' as const, blocks: [] }
+    await c.journal.appendSubmission({
+      clientMessageId: 'receipt',
+      body,
+      payloadFingerprint: 'receipt',
+      fence: 1
+    })
+    await c.journal.resolveDispatch({
+      clientMessageId: 'receipt',
+      state: 'accepted',
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 },
+      fence: 1
+    })
+    await c.open([turn(1), turn(2)])
+    expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 2', 'assistant:answer 2'])
+  })
+
+  it('keeps rollback reasoning and message identities immutable across turns', async () => {
+    const c = await chat({ now: 1_000 })
+    const withReasoning = (n: number) => ({
+      ...turn(n),
+      items: [
+        { type: 'reasoning', id: 'item-2', summary: [{ text: `reason ${n}` }] },
+        { type: 'agentMessage', id: 'same-message-id', text: `answer ${n}` }
+      ]
+    })
+    await c.open([withReasoning(1)])
+    const before = c.journal.snapshot().items
+    await c.open([withReasoning(2)])
+    expect(c.journal.snapshot().items.slice(0, before.length)).toEqual(before)
+    expect(c.texts().filter((text) => text.startsWith('assistant:'))).toEqual([
+      'assistant:answer 1',
+      'assistant:answer 2'
+    ])
+    const reasoning = c.journal
+      .snapshot()
+      .items.filter((item) => item.body.kind === 'message' && item.body.role === 'reasoning')
+    expect(new Set(reasoning.map((item) => item.itemId)).size).toBe(2)
+    expect(new Set(reasoning.map((item) => JSON.stringify(item.turnScope))).size).toBe(2)
+  })
+
+  it('retains the original adoption cutoff through native rewind and disk recovery', async () => {
+    const clock = { now: 50_000 }
+    const c = await chat(clock)
+    let store = await openTestAgentSessionRecordStore(c.root)
+    const callerKey = 'catch-up-test'
+    await store.reserveOwner({
+      sessionId: SESSION,
+      location: {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: 'workspace-1',
+        workspaceKind: 'folder'
+      },
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: join(c.root, 'qa-codex') },
+      expectedFence: null,
+      spawnToken: 'fixture-only',
+      claimKeyId: 'fixture',
+      handoffOperationId: null,
+      probe: { outcome: 'indeterminate', reason: 'fixture' },
+      operation: {
+        callerKey,
+        operationId: '0000000050000-00000000000000000000000000000001',
+        fingerprint: 'create'
+      },
+      now: clock.now
+    })
+    await store.commitProcessIdentity({
+      sessionId: SESSION,
+      fence: 1,
+      process: {
+        hostId: 'local',
+        pid: 424242,
+        processStartTimeMs: clock.now,
+        spawnToken: 'fixture-only'
+      },
+      now: clock.now
+    })
+    await store.proveOwner({
+      sessionId: SESSION,
+      fence: 1,
+      link: {
+        linkId: 'adopted',
+        handle: codexProviderHandle(THREAD),
+        origin: 'adopted',
+        mintedAtFence: 1,
+        observedAt: clock.now
+      },
+      now: clock.now
+    })
+    const filePath = join(c.root, 'rollout.jsonl')
+    await writeFile(
+      filePath,
+      [
+        {
+          timestamp: '1970-01-01T00:01:40.000Z',
+          type: 'event_msg',
+          payload: { type: 'user_message', message: 'old A ask' }
+        },
+        {
+          timestamp: '1970-01-01T00:01:50.000Z',
+          type: 'event_msg',
+          payload: { type: 'agent_message', message: 'old A answer' }
+        }
+      ]
+        .map((line) => JSON.stringify(line))
+        .join('\n')
+    )
+    clock.now = 200_000
+    expect(
+      await importLegacyTranscriptIntoJournal({
+        journal: c.journal,
+        agent: 'codex',
+        sessionId: THREAD,
+        fence: 1,
+        options: { filePath }
+      })
+    ).toMatchObject({ ok: true, imported: 2 })
+    const original = c.journal.snapshot().items
+    const dated = (n: number) => ({ ...turn(n), startedAt: n, completedAt: n + 10 })
+    await c.open([dated(100), dated(300)])
+    const target = agentJournalItemKey({
+      provider: 'codex',
+      threadId: THREAD,
+      turnId: 'turn-300',
+      ordinal: 0
+    })
+    const operationId = '0000000500000-00000000000000000000000000000002'
+    await store.admitOperation({
+      callerKey,
+      operationId,
+      fingerprint: 'rewind',
+      now: 500_000
+    })
+    await store.transitionHandoff(SESSION, (record) => ({
+      ...record,
+      rewind: {
+        operationId,
+        callerKey,
+        itemId: target,
+        expectedEpoch: c.journal.epoch,
+        phase: 'provider-succeeded'
+      }
+    }))
+    clock.now = 500_000
+    const deps = () => ({ store, logger: testEventSinkLogging().logger })
+    await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
+    expect(
+      c.journal
+        .snapshot()
+        .items.slice(0, original.length)
+        .map(({ itemId, body, observedAt, turnScope }) => ({ itemId, body, observedAt, turnScope }))
+    ).toEqual(
+      original.map(({ itemId, body, observedAt, turnScope }) => ({
+        itemId,
+        body,
+        observedAt,
+        turnScope
+      }))
+    )
+    await c.reopen()
+    store = await openTestAgentSessionRecordStore(c.root)
+    await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
+    expect(store.getRecord(SESSION)?.rewind?.phase).toBe('completed')
+    expect(usableJournalHistoryOrigin(c.journal.historyOrigin())?.importedAt).toBe(200_000)
+    await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])
+    expect(c.texts().filter((text) => text.startsWith('assistant:'))).toEqual([
+      'assistant:old A answer',
+      'assistant:answer 250',
+      'assistant:answer 600'
+    ])
+    expect(
+      c.journal
+        .snapshot()
+        .items.slice(0, original.length)
+        .map(({ itemId, body, observedAt, turnScope }) => ({ itemId, body, observedAt, turnScope }))
+    ).toEqual(
+      original.map(({ itemId, body, observedAt, turnScope }) => ({
+        itemId,
+        body,
+        observedAt,
+        turnScope
+      }))
+    )
+    const complete = c.journal.snapshot()
+    await c.reopen()
+    await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])
+    expect(c.journal.snapshot()).toEqual(complete)
+  })
+
+  it('keeps erased-origin legacy chats readable without guessing from native IDs', async () => {
+    const c = await chat({ now: 200_000 })
+    const kept = {
+      identity: { provider: 'legacy', agent: 'codex', sessionId: THREAD, recordId: '#0' } as const,
+      ownerFence: 1,
+      body: {
+        kind: 'message' as const,
+        role: 'user' as const,
+        blocks: [{ type: 'text' as const, text: 'legacy' }]
+      }
+    }
+    await c.journal.replaceEpochItems('session_created', 1, [kept])
+    await c.reopen()
+    await c.journal.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'native', ordinal: 0 },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'ordinary reply' }] },
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+    await c.open([turn(3)])
+    expect(c.texts()).toEqual(['user:legacy', 'assistant:ordinary reply'])
+  })
+})

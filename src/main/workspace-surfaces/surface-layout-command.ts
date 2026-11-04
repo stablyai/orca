@@ -12,7 +12,7 @@ import type {
   SurfaceLayoutView,
   SurfaceCommandOutcome
 } from '../../shared/workspace-surfaces/surface-command'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { missingSurfaceTargets, compareSurfaceTarget } from './surface-layout-targets'
 import { existingLayoutCreateOutcome } from '../persistence/terminal-topology/terminal-pane-admission'
 import { runTargetOf } from '../../shared/workspace-surfaces/surface-allocation'

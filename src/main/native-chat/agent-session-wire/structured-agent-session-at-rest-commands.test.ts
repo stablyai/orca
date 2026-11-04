@@ -25,7 +25,7 @@ import {
 
 import { AtRestCommandCatalog } from './at-rest-command-catalog'
 import { startAgentSessionCommandMenuQuery } from '../../../shared/agent-session/agent-session-command-menu-query'
-import { createCodexAtRestSkillCatalog } from '../../codex/codex-at-rest-skills-probe'
+import { createCodexAtRestSkillCatalog } from '../../codex/structured/catalog/codex-at-rest-skills-probe'
 import {
   bindAtRestCommandContexts,
   retireAtRestCommandSettings,

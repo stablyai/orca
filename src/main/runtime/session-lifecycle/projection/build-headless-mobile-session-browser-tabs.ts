@@ -23,7 +23,7 @@ import {
 import type {
   TerminalPaneCloseTarget,
   TerminalSurfaceCloseTarget
-} from '../../../../shared/terminal-surface-close-target'
+} from '../../../../shared/workspace-layout/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'

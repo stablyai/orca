@@ -1,9 +1,14 @@
+import { mutateTestJournalFixture } from './journal-drained-fixture-test-support'
 import { restoreJournalAsync, readJournalRowsAfterCursorAsync } from './journal-async-open'
 import {
   updateTestJournalRowJson,
   setTestJournalTrigger,
   setTestJournalOutcomeFormat
 } from './journal-native-fixture-test-support'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { journalInputSourceBody } from './journal-input-source'
+import { readFileSync } from 'node:fs'
+import { z } from 'zod'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalInputOrder } from './journal-input-order'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -29,9 +34,14 @@ import {
   projectionWriter,
   expectProjectionMatches
 } from './journal-projection-test-support'
+import {
+  registerRetainedOutcomeContract,
+  registerRetainedEchoBoundaryContract
+} from './journal-retained-outcomes.spec'
 
 let root: string
 let database: JournalHostDatabase
+const experimentRoots: string[] = []
 const rigs: ReturnType<typeof projectionWriter>[] = []
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcome-prefix-'))
@@ -46,6 +56,9 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
+  for (const ownedRoot of experimentRoots.splice(0)) {
+    await rm(ownedRoot, { recursive: true, force: true })
+  }
 })
 const item = (seq: number, itemId = 'stream'): JournalRow => ({
   ...base(seq),
@@ -201,6 +214,240 @@ it('refuses to publish a new epoch over one the caller did not see, writing noth
   )
 })
 
+const historicalFixture = z
+  .object({
+    main: z.literal('981ad63bbfc020e02a7b3ab3bd48c298f85a88d4'),
+    branch: z.literal('6d34b4e5a391d485b5e41195d88152d9f1512fdf'),
+    cleaner: z.literal('af1ee720dd7bc0ed450dba17efdeb9ba14291e65'),
+    prefix: frozenDatabase(),
+    raw: frozenDatabase(),
+    stopped: frozenDatabase(),
+    cleanedStoppedKeys: z.array(z.tuple([z.number(), z.string(), z.string()])),
+    frozen: z.unknown(),
+    publicSnapshot: z.unknown(),
+    oldStoppedCarry: z.unknown(),
+    rawSources: z.unknown(),
+    admission: z.unknown(),
+    sourceSha256: z.record(z.string(), z.string())
+  })
+  .parse(
+    JSON.parse(
+      readFileSync(
+        new URL('./__fixtures__/journal-historical-inputs.json', import.meta.url),
+        'utf8'
+      )
+    )
+  )
+
+function frozenDatabase() {
+  return z.object({
+    session: z.object({ session_id: z.string(), workspace_id: z.string(), epoch: z.string() }),
+    rows: z.array(z.tuple([z.number(), z.number(), z.string()])),
+    source: z
+      .object({
+        session_id: z.string(),
+        epoch: z.string(),
+        generation: z.number(),
+        format: z.number(),
+        through_seq: z.number(),
+        prefix_seq: z.number()
+      })
+      .nullable(),
+    outcomes: z.array(
+      z.tuple([z.number(), z.string(), z.string(), z.number(), z.string(), z.string(), z.number()])
+    )
+  })
+}
+
+// Exact rows/outcomes and public values captured from the pinned writers, before/after real cleanup.
+async function seedFrozen(
+  db: JournalHostDatabase,
+  fixture: z.output<ReturnType<typeof frozenDatabase>>
+) {
+  await mutateTestJournalFixture(db, (connection) => {
+    connection
+      .prepare('INSERT INTO journal_sessions VALUES (?, ?, ?)')
+      .run(fixture.session.session_id, fixture.session.workspace_id, fixture.session.epoch)
+    const insert = connection.prepare(
+      'INSERT INTO journal_rows (session_id,epoch,seq,ts,row_json) VALUES (?,?,?,?,?)'
+    )
+    for (const [seq, ts, json] of fixture.rows) {
+      insert.run(sessionId, epoch, seq, ts, json)
+    }
+    const source = fixture.source
+    if (source) {
+      connection
+        .prepare('INSERT INTO journal_outcome_generations VALUES (?,?,?)')
+        .run(source.generation, sessionId, epoch)
+      connection
+        .prepare('INSERT INTO journal_outcome_epochs VALUES (?,?,?,?,?,?)')
+        .run(
+          sessionId,
+          epoch,
+          source.generation,
+          source.format,
+          source.through_seq,
+          source.prefix_seq
+        )
+      const outcome = connection.prepare('INSERT INTO journal_outcomes VALUES (?,?,?,?,?,?,?,?)')
+      for (const row of fixture.outcomes) {
+        outcome.run(source.generation, ...row)
+      }
+    }
+  })
+}
+
+it('main-outcome-old-prefix-source-roundtrip', async () => {
+  const readJournalHistoricalInputs = async (db: JournalHostDatabase, id: string) => {
+    const load = await db.read((read) => restoreJournalAsync(read, id))
+    return load && { load, sources: load.state.inputs.sources }
+  }
+  const { strictJournalInputSource } = await import('./journal-input-source-schema')
+  const { encodeJournalState } = await import('./journal-state-codec')
+  const { renderJournalState } = await import('./journal-reducer')
+  const { carriedStoppedHistory } =
+    await import('../agent-session-wire/structured-agent-session-stopped-history-selection')
+  const { AGENT_JOURNAL_THREAD_SCOPE } =
+    await import('../../../shared/agent-session/journal/agent-session-journal-types')
+  const words = (text: string): AgentJournalMessageItem => ({
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text }]
+  })
+  await seedFrozen(database, historicalFixture.prefix)
+  const before = await liveTestJournalRows(database, sessionId)
+  const current = (await readJournalHistoricalInputs(database, sessionId))!.load
+  expect(current).toMatchObject({ newer: null, damage: null })
+  const encoded = encodeJournalState(current.state)
+  const { inputEntries, inputCards, ...common } = z
+    .record(z.string(), z.unknown())
+    .parse(JSON.parse(encoded.stateJson))
+  expect(inputEntries).toEqual([])
+  expect(inputCards).toEqual([])
+  expect({ ...encoded, stateJson: JSON.stringify(common) }).toEqual(historicalFixture.frozen)
+  expect(renderJournalState(current.state)).toEqual(historicalFixture.publicSnapshot)
+  expect(journalInputSourceBody(current.state.inputs.sources.get('U'))).toEqual(words('original U'))
+  expect(journalInputSourceBody(current.state.inputs.sources.get('V'))).toEqual(words('edited Q'))
+  expect([...current.state.submissions]).toEqual([])
+  expect([...current.state.inputs.candidates]).toEqual([])
+  expect([...current.state.items.keys()]).toEqual(['survivor-a', 'survivor-b'])
+  expect(current.state.queue.cards.get('Q')).toMatchObject({
+    state: 'withdrawn',
+    body: words('final edit')
+  })
+  expect(await liveTestJournalRows(database, sessionId)).toEqual(before)
+  expect(JSON.parse(before.at(-1)!.rowJson)).toMatchObject({ v: 5 })
+
+  const rawRoot = await mkdtemp(join(tmpdir(), 'orca-32267-raw-fixture-'))
+  experimentRoots.push(rawRoot)
+  const rawDb = await openTestJournalHostDatabase(rawRoot)
+  await seedFrozen(rawDb, historicalFixture.raw)
+  const raw = (await readJournalHistoricalInputs(rawDb, sessionId))!.load
+  expect(raw).toMatchObject({ newer: null, damage: null })
+  expect([...raw.state.inputs.sources]).toEqual(historicalFixture.rawSources)
+  expect(raw.state.queue.cards.get('raw-Q')?.recovers).toBe('raw-U')
+  const unsupported = (await liveTestJournalRows(rawDb, sessionId))
+    .at(-1)!
+    .rowJson.replace('recovers', 'notADeclaredSource')
+  expect(parseJournalRow(unsupported, true)).toEqual({ ok: false, unreadable: true })
+
+  const { startJournalOutcomeLog, JOURNAL_OUTCOME_MARKER_VERSION } =
+    await import('./journal-outcome-format')
+  const rawPrefix = await liveTestJournalRows(rawDb, sessionId)
+  await mutateTestJournalFixture(rawDb, (db) => {
+    startJournalOutcomeLog(db, sessionId, epoch, raw.state.lastSequence, 20_000)
+    const marker = { v: 6, kind: 'outcomes', epoch, seq: raw.state.lastSequence + 1, ts: 20_000 }
+    db.prepare('UPDATE journal_rows SET row_json=? WHERE session_id=? AND epoch=? AND seq=?').run(
+      JSON.stringify(marker),
+      sessionId,
+      epoch,
+      marker.seq
+    )
+  })
+  expect(JOURNAL_OUTCOME_MARKER_VERSION).toBe(6)
+  expect((await liveTestJournalRows(rawDb, sessionId)).slice(0, rawPrefix.length)).toEqual(
+    rawPrefix
+  )
+  const dispatchedRaw = (await readJournalHistoricalInputs(rawDb, sessionId))!.load
+  expect(dispatchedRaw).toMatchObject({ newer: null, damage: null })
+  expect([...dispatchedRaw.state.inputs.sources]).toEqual(historicalFixture.rawSources)
+  expect(dispatchedRaw.state.queue.cards.get('raw-Q')?.recovers).toBe('raw-U')
+  expect((await rawDb.read((read) => restoreJournalAsync(read, sessionId)))?.newer).toBeNull()
+
+  const stoppedRoot = await mkdtemp(join(tmpdir(), 'orca-32267-stop-fixture-'))
+  experimentRoots.push(stoppedRoot)
+  let stoppedDb = await openTestJournalHostDatabase(stoppedRoot)
+  await seedFrozen(stoppedDb, historicalFixture.stopped)
+  const selected = async () => {
+    const historical = (await readJournalHistoricalInputs(stoppedDb, sessionId))!
+    const state = historical.load.state
+    expect(state.submissions.get('stopped-U')).toMatchObject({
+      dispatchState: 'rejected',
+      rejection: { kind: 'cancelled', neverReachedAgent: true },
+      answeredInTurn: null
+    })
+    const evidence = historical.sources.get('stopped-U')!
+    expect(evidence).toEqual(historicalFixture.admission)
+    expect(state.inputs.sources.get('stopped-U')).toBe(evidence)
+    expect(strictJournalInputSource.safeParse(evidence).success).toBe(true)
+    expect(
+      strictJournalInputSource.safeParse({
+        ...evidence,
+        providerHandle: codexProviderHandle('invented')
+      }).success
+    ).toBe(false)
+    expect(evidence).not.toHaveProperty('providerHandle')
+    return carriedStoppedHistory(
+      {
+        journal: {
+          context: { floor: () => null },
+          inputOrder: journalInputOrder(state),
+          submissionBody: (id) => journalInputSourceBody(state.inputs.sources.get(id))
+        }
+      },
+      AGENT_JOURNAL_THREAD_SCOPE,
+      state.submissions.get('next')!,
+      words('next human words')
+    )
+  }
+  expect(await selected()).toEqual(historicalFixture.oldStoppedCarry)
+  const firstItem = historicalFixture.stopped.outcomes.find(
+    ([, field, key]) => field === 'items' && key === JSON.stringify('orca:stopped-U')
+  )!
+  expect(JSON.parse(firstItem[5])).toMatchObject({ revision: 0, sequence: 2, observedAt: 2001 })
+  const kept = new Set(historicalFixture.cleanedStoppedKeys.map((key) => JSON.stringify(key)))
+  // Apply the exact removal set from the real pinned cleaner; immutable record bytes stay unchanged.
+  for (const [seq, field, key] of historicalFixture.stopped.outcomes) {
+    if (!kept.has(JSON.stringify([seq, field, key]))) {
+      await mutateTestJournalFixture(stoppedDb, (db) =>
+        db
+          .prepare(
+            'DELETE FROM journal_outcomes WHERE generation=1 AND seq=? AND field=? AND entry_key=?'
+          )
+          .run(seq, field, key)
+      )
+    }
+  }
+  expect(kept.size).toBeLessThan(historicalFixture.stopped.outcomes.length)
+  await closeTestJournalHostDatabases()
+  stoppedDb = await openTestJournalHostDatabase(stoppedRoot)
+  expect(await selected()).toEqual(historicalFixture.oldStoppedCarry)
+  const wrong = { ...JSON.parse(firstItem[5]), sequence: 999 }
+  await mutateTestJournalFixture(stoppedDb, (db) =>
+    db
+      .prepare(
+        "UPDATE journal_outcomes SET value_json=? WHERE generation=1 AND seq=? AND field='items' AND entry_key=?"
+      )
+      .run(JSON.stringify(wrong), firstItem[0], firstItem[2])
+  )
+  expect((await readJournalHistoricalInputs(stoppedDb, sessionId))!.sources.has('stopped-U')).toBe(
+    false
+  )
+})
+
+registerRetainedOutcomeContract()
+
+registerRetainedEchoBoundaryContract()
 // A frozen marker-5 prefix and an outcome-only format-1 chat carry different evidence.
 it.each(['prefix', 'zero', 'recreated'] as const)(
   'lifts actual %s evidence once, then treats native tombstones as authoritative',

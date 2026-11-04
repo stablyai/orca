@@ -51,7 +51,7 @@ it.each([false, true])(
       expect(await database.read((read) => read.prepare('PRAGMA journal_mode').get())).toEqual({
         journal_mode: 'delete'
       })
-      await database.maintenance({ kind: 'vacuum' })
+      await database.maintenance({ kind: 'retired', after: 0 })
     } finally {
       stop()
     }
@@ -105,7 +105,7 @@ it('does not admit maintenance or mutations on a newer read-only journal', async
   }
   database = await openTestJournalHostDatabase(root)
   expect(database.readOnly).toBe(true)
-  await expect(database.maintenance({ kind: 'vacuum' })).rejects.toMatchObject({
+  await expect(database.maintenance({ kind: 'retired', after: 0 })).rejects.toMatchObject({
     code: 'journal_read_only'
   })
   await expect(

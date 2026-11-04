@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
 import type { OrchestrationDb } from './orchestration/db'
 import {

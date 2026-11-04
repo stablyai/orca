@@ -3,7 +3,7 @@ import {
   OPENCODE_MODEL_CONFIG_REFUSAL,
   OPENCODE_MODEL_TRANSPORT_REFUSAL,
   OPENCODE_MODEL_VERSION_REFUSAL
-} from '../../../shared/agent-launch-model-preferences'
+} from '../../../shared/agent-launch/choices/agent-launch-model-preferences'
 
 // Unanchored so caller-owned context around an Electron wrapper survives.
 const IPC_INVOKE_PREFIX = /Error invoking remote method '[^']*':\s*(?:Error:\s*)?/

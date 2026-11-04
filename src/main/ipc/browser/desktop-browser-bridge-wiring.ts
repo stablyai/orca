@@ -9,11 +9,11 @@ import {
 } from '../../../shared/desktop-browser-bridge-protocol'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   getPreferredPairedRuntimeConnection
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
 import { browserManager } from '../../browser/browser-manager'
@@ -37,7 +37,7 @@ import { isRuntimeEnvironmentManuallyDisconnected } from '../runtime-environment
 import { setDesktopBrowserBridgeControl } from './desktop-browser-bridge-reconcile'
 import { markRemoteCliDrivenWorkspace } from '../../browser/desktop-browser-bridge/remote-cli-driven-workspaces'
 import { persistedStore } from '../ssh/ssh-ipc-context'
-import { localSshBrowserTargetIdForSession } from '../../browser/local-ssh-browser-partitions'
+import { localSshBrowserTargetIdForSession } from '../../browser/routing/local-host-partitions/local-ssh-browser-partitions'
 
 const ATTACH_TIMEOUT_MS = 15_000
 const BRIDGE_CLIENT_ID = randomUUID()

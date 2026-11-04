@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import type { AgentType } from '../../shared/agent-status-types'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
 import {

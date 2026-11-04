@@ -9,7 +9,7 @@
  * retained row (as SSH's delta does; see `planOrcadDeltaMove`). The same goes for a project the
  * host still holds after its move was dropped from the journal.
  */
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { isOrcadMigrationLocalWslSource } from '../../../shared/orcad-migration/orcad-migration-source-kind'
 import type { ProjectGroup } from '../../../shared/project-group-types'

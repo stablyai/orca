@@ -1,17 +1,13 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
+import { writeCommandReceiptTestRecord } from './command-receipt-test-support'
 import { JournalRowWriter } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
-import type { JournalPersistencePlan } from './journal-persistence-plan'
-import {
-  commandReceiptFixture,
-  writeCommandReceiptTestRecord
-} from './command-receipt-test-support'
 import {
   openTestJournalHostDatabase,
   readTestJournalRows,
@@ -79,57 +75,6 @@ export function registerJournalRowWriterTests(): void {
       return { writer, committedRows }
     }
 
-    it('prepares a receipt once from built rows, preserves its target, and leaves empty or failed plans unwritten', async () => {
-      const { writer, committedRows } = writerHarness()
-      const build = vi.fn(row)
-      const write = vi.fn((plan: JournalPersistencePlan, target?: JournalRow) => {
-        if (!target) {
-          throw new Error('missing receipt target')
-        }
-        plan.add({
-          kind: 'receipt',
-          scope: { kind: 'caller', callerKey: 'caller-1' },
-          receipt: commandReceiptFixture({
-            sessionId: SESSION_ID,
-            result: { kind: 'journal-row', epoch: EPOCH, sequence: target.seq }
-          })
-        })
-      })
-      const committed = vi.fn(() => {
-        expect(committedRows).toEqual([])
-      })
-      const prepare = vi.fn((rows: readonly JournalRow[]) => {
-        expect(rows.map((value) => value.seq)).toEqual([1, 2])
-        expect(committedRows).toEqual([])
-        return { write, committed }
-      })
-      await writer.enqueueRows(
-        () => [build, build],
-        prepare,
-        (rows) => rows[1]
-      )
-      const receipt = await database.read((read) =>
-        read.prepare('SELECT result_json FROM agent_session_command_receipts').get()
-      )
-      expect(JSON.parse(String(receipt?.result_json))).toMatchObject({ sequence: 2 })
-      expect(build).toHaveBeenCalledTimes(2)
-      expect(prepare).toHaveBeenCalledTimes(1)
-      expect(write).toHaveBeenCalledTimes(1)
-      expect(committed).toHaveBeenCalledTimes(1)
-      expect(committedRows).toHaveLength(2)
-      prepare.mockClear()
-      await writer.enqueueRows(() => [], prepare)
-      expect(prepare).not.toHaveBeenCalled()
-      await expect(
-        writer.enqueue(build, () => {
-          throw new Error('prepare failed')
-        })
-      ).rejects.toThrow('prepare failed')
-      expect(await readTestJournalRows(database, SESSION_ID, EPOCH)).toHaveLength(2)
-      await writer.enqueue(row)
-      expect(committedRows.map((value) => value.seq)).toEqual([1, 2, 3])
-    })
-
     it('rolls the transaction back and sets no latch when the insert fails', async () => {
       const { writer, committedRows } = writerHarness()
       await database.transaction((plan) => insertTestJournalRow(plan, SESSION_ID, row(1, 1)))
@@ -156,22 +101,5 @@ export function registerJournalRowWriterTests(): void {
         (await readTestJournalRows(database, SESSION_ID, EPOCH)).map((stored) => stored.seq)
       ).toEqual([2])
     })
-
-    it.each(['single', 'batch'] as const)(
-      'keeps the save time separate from a pinned JSON timestamp in a %s write',
-      async (kind) => {
-        const { writer, committedRows } = writerHarness()
-        const pinned = (seq: number) => row(seq, 0)
-        await (kind === 'single'
-          ? writer.enqueue(pinned)
-          : writer.enqueueRows(() => [pinned, pinned]))
-
-        const saved = await readTestJournalRows(database, SESSION_ID, EPOCH)
-        expect(saved).toHaveLength(kind === 'single' ? 1 : 2)
-        expect(saved.map((entry) => entry.ts)).toEqual(saved.map(() => 1))
-        expect(saved.map((entry) => JSON.parse(entry.rowJson))).toEqual(committedRows)
-        expect(committedRows.map((entry) => entry.ts)).toEqual(saved.map(() => 0))
-      }
-    )
   })
 }

@@ -1,4 +1,4 @@
-import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSurface } from '../../shared/workspace-surfaces/surface-content'
 import type { SurfaceHostDomain } from '../../shared/workspace-surfaces/surface-profile-domain'
 

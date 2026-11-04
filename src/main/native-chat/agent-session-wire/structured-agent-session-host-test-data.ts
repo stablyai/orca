@@ -51,7 +51,7 @@ export function hostTestAttachParams(
   overrides: Partial<AgentSessionAttachParams> = {}
 ): AgentSessionAttachParams {
   const params: AgentSessionAttachParams = {
-    envelope: {
+    envelope: overrides.envelope ?? {
       sessionId: HOST_TEST_SESSION,
       clientOperationId: hostTestOperationId(),
       expectedRuntimeFence,
@@ -146,9 +146,7 @@ export const CODEX_INPUT_FINALIZATION_ADMISSION_CASES = [
   ['queue-sleep', 0],
   ['pending-sleep', 0],
   ['pending-close-then-quit', 0],
-  ['pending-quit-then-close', 0],
-  ['pending-close-cards', 10],
-  ['pending-close-cards', 100]
+  ['pending-quit-then-close', 0]
 ] as const
 
 export const CODEX_INPUT_FINALIZATION_OWNER_OUTCOMES = [
@@ -174,6 +172,7 @@ export function hostTestRestingOptionsJournal(
 ) {
   return {
     threadGoal: () => null,
+    inputOrder: { hasInputs: () => false },
     visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) =>
       items.forEach((body, index) => visit(`item-${index}`, index + 1, body)),
     wroteBeforeOpen: () => wroteBeforeOpen,

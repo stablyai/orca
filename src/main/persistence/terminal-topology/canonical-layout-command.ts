@@ -8,7 +8,7 @@ import type {
   LayoutCommand,
   LayoutEffects
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import type { SessionHostPartitionOperations } from '../loading-store/session-host-partitions'
 import type { WorkspaceSurfaceCommands } from '../loading-store/workspace-surface-commands'

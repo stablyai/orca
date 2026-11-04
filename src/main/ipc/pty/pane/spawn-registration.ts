@@ -1,4 +1,4 @@
-import { classifyTerminalCreationFailure } from '../../../../shared/terminal-start-failure'
+import { classifyTerminalCreationFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
 import { PaneOwnerContentionError } from './pane-spawn-operation'
 import type { Store } from '../../../persistence/loading-store/store'

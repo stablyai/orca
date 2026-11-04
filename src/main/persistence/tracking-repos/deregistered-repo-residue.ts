@@ -6,7 +6,7 @@ import {
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { addWorkspaceSessionWorktreeOwners } from '../restoring-sessions/session-worktree-ownership'
 import { splitWorktreeId } from '../../../shared/worktree/id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
 import { ownerKeyWorktreeIds } from '../../orca-profiles/profile-project-worktree-identity'
 import type { WorkspaceSurface } from '../../../shared/workspace-surfaces/surface-content'

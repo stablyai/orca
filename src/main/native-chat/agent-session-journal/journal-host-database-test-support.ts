@@ -1,3 +1,8 @@
+import { pinTestJournalInputMode } from './journal-historical-inputs.test-support'
+export {
+  pinTestJournalInputMode,
+  finishTestJournalHistoricalInputs
+} from './journal-historical-inputs.test-support'
 // Share the actual asynchronous owner per test profile; native fixtures never hold a second handle.
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -9,14 +14,12 @@ import { journalNativeTestInstrumentation } from './journal-native-test-instrume
 import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { JournalHostDatabase } from './journal-host-database'
-import { applyJournalRow } from './journal-reducer'
 import { restoreJournalAsync } from './journal-async-open'
 import type { JournalLoad } from './journal-open'
 import {
   insertTestJournalRow,
   publishTestJournalEpoch
 } from './journal-native-fixture-test-support'
-import { serializeJournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
 export * from './journal-native-fixture-test-support'
@@ -182,31 +185,4 @@ export async function loadTestJournal(
 ): Promise<JournalLoad | null> {
   const database = await openTestJournalHostDatabase(stateDirectory)
   return database.read((read) => restoreJournalAsync(read, sessionId))
-}
-
-/** Old-writer fixtures keep their input format until the current build replaces the epoch. */
-export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
-  const projection = journal['projection']
-  const prepare = projection.prepare.bind(projection)
-  projection.prepare = async (plan, rows, savedAt) => {
-    const state = journal['state']
-    if (await plan.source(state.sessionId, state.epoch)) {
-      return prepare(plan, rows, savedAt)
-    }
-    plan.add({
-      kind: 'rows',
-      sessionId: state.sessionId,
-      rows: rows.map((row) => ({
-        epoch: row.epoch,
-        seq: row.seq,
-        savedAt,
-        json: serializeJournalRow(row)
-      }))
-    })
-    return () => {
-      for (const row of rows) {
-        applyJournalRow(state, row, savedAt)
-      }
-    }
-  }
 }

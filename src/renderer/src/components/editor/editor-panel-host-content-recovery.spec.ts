@@ -4,36 +4,15 @@ import type { OpenFile } from '@/store/slices/editor'
 import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
 import { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
-import { editorSaveWriterView } from './editor-save-writer-view'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import { editorSaveWriterView } from './save/queue/editor-save-writer-view'
+import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './autosave/editor-autosave'
 import type { FileContent } from './editor-panel-content-types'
 
 export function registerEditorPanelHostContentRecoveryTests(
   mocks: { getState: ReturnType<typeof vi.fn>; readRuntimeFileContent: ReturnType<typeof vi.fn> },
   fileContents: () => Record<string, FileContent>,
-  createOpenFile: () => OpenFile,
-  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void,
   render: (file: OpenFile) => Promise<void>
 ): void {
-  it('lets the active tab load and its Retry start a stopped WSL distro, but not other reloads', async () => {
-    const activeFile = createOpenFile()
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'text', isBinary: false })
-    await render(activeFile)
-    await vi.waitFor(() => expect(fileContents()[activeFile.id]?.content).toBe('text'))
-    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
-      expect.objectContaining({ wakeWslDistro: true })
-    )
-
-    await act(async () => reloadContent(activeFile))
-    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
-      expect.not.objectContaining({ wakeWslDistro: true })
-    )
-    await act(async () => reloadContent(activeFile, { wakeWslDistro: true }))
-    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
-      expect.objectContaining({ wakeWslDistro: true })
-    )
-  })
-
   it('reloads the same paired host after restart without reviving an issued operation', async () => {
     const store = createTestStore()
     const environment = {

@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto'
 import { MAX_SURFACE_COMMAND_LIFETIME_MS } from '../workspace-surfaces/surface-command-receipts'
 import type { SurfaceStorageMutation } from '../../shared/workspace-surfaces/surface-storage-command'
 
-import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
 import type { WorkspaceSurfaceReader } from '../../shared/workspace-surfaces/surface-reader'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { TerminalSurfaceCloseOptions } from './terminal-surface-close'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { WorkspaceSurface } from '../../shared/workspace-surfaces/surface-content'
 import { projectSurfaceSession } from '../../shared/workspace-surfaces/surface-session-projection'
 import { seedWorkspaceSurfaces } from './surface-migration'

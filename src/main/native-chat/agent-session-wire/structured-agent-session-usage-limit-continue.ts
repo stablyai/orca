@@ -9,13 +9,15 @@ import {
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { restoreJournalAsync } from '../agent-session-journal/journal-async-open'
-import { renderJournalState } from '../agent-session-journal/journal-reducer'
+import { renderJournalStatus } from '../agent-session-journal/journal-public-read'
+import { journalInputOrder } from '../agent-session-journal/journal-input-order'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { sendStructuredAgentSessionTurn } from './structured-agent-session-host-mutations'
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
 
+type SavedCut = NativeChatUsageLimitCut | null
 type Cut = NativeChatUsageLimitCut & { resetsAt: number; turnEndedAt: number }
 type Attempt = { identity: string; count: number; at: number; unconfirmed?: boolean }
 type Deps = {
@@ -31,25 +33,26 @@ type Deps = {
   }
   sessions: ReadonlyMap<string, unknown>
   /** Reads an unopened chat's saved cut; history-sized, so the sweep budgets it. */
-  readSavedCut: (
-    id: string
-  ) => NativeChatUsageLimitCut | null | Promise<NativeChatUsageLimitCut | null>
+  readSavedCut: (id: string) => SavedCut | Promise<SavedCut>
   serialize: <T>(id: string, run: () => Promise<T>) => Promise<T>
   send: (
     params: Parameters<typeof sendStructuredAgentSessionTurn>[2]
   ) => ReturnType<typeof sendStructuredAgentSessionTurn>
-  readLoadedCut: (id: string) => NativeChatUsageLimitCut | null
+  readLoadedCut: (id: string) => SavedCut
   publish: (id: string) => void
   now: () => number
 }
 
 /** Reads a chat's saved conversation without opening it, as main does for unopened chats. */
 export async function readSavedUsageLimitCut(
-  database: JournalHostDatabase,
+  db: JournalHostDatabase,
   id: string
-): Promise<NativeChatUsageLimitCut | null> {
-  const load = await database.read((read) => restoreJournalAsync(read, id))
-  const snapshot = load && !load.newer && !load.damage ? renderJournalState(load.state) : null
+): Promise<SavedCut> {
+  const load = await db.read((read) => restoreJournalAsync(read, id))
+  const snapshot =
+    load && !load.newer && !load.damage
+      ? renderJournalStatus(load.state, journalInputOrder(load.state))
+      : null
   return snapshot ? latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions) : null
 }
 
@@ -62,7 +65,7 @@ export class StructuredAgentSessionUsageLimitContinue {
   private stopSettings: (() => void) | undefined
   private running = false
   private disposed = false
-  private readonly coldCuts = new Map<string, NativeChatUsageLimitCut | null>()
+  private readonly coldCuts = new Map<string, SavedCut>()
   /** Pass of each chat's last failed history read; failed reads wait behind unread chats. */
   private readonly coldFailures = new Map<string, number>()
   private readonly attempts = new Map<string, Attempt>()
@@ -130,7 +133,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.coldFailures.delete(id)
   }
 
-  private readCut(id: string): NativeChatUsageLimitCut | null {
+  private readCut(id: string): SavedCut {
     if (this.deps.sessions.has(id)) {
       this.coldCuts.delete(id)
       return this.deps.readLoadedCut(id)
@@ -139,7 +142,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     return this.coldCuts.get(id) ?? null
   }
 
-  private async loadColdCut(id: string): Promise<NativeChatUsageLimitCut | null> {
+  private async loadColdCut(id: string): Promise<SavedCut> {
     if (!this.deps.sessions.has(id) && !this.coldCuts.has(id)) {
       const cut = await this.deps.readSavedCut(id)
       if (!this.disposed && !this.deps.sessions.has(id)) {

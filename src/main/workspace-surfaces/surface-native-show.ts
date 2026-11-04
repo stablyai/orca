@@ -1,7 +1,7 @@
 import { parseSurface } from './surface-rows'
 import type Database from '../sqlite/sync-database'
 import type { WorkspaceSurfaceRepository } from './surface-repository'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { SurfaceStorageCommand } from '../../shared/workspace-surfaces/surface-storage-command'
 import type { SurfaceCommandOutcome } from '../../shared/workspace-surfaces/surface-command'
 import { readSurfaceChatRecord } from './surface-native-membership'

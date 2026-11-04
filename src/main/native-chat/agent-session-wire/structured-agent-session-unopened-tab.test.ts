@@ -2,7 +2,7 @@ import { mutateTestJournalFixture } from '../agent-session-journal/journal-drain
 import { cp, rm } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { JOURNAL_OUTCOME_MARKER_VERSION } from '../agent-session-journal/journal-outcome-format'
 import type Database from '../../sqlite/sync-database'
 import {
   closeTestJournalHostDatabases,
@@ -76,7 +76,7 @@ async function relaunchWith(
 const damaged = (db: Database.Database) => updateTestJournalRowJson(db, SESSION, 1, '}{')
 const savedByNewerOrca = async (db: Database.Database) => {
   const epochRow = (await liveTestJournalRows(db, SESSION)).find((row) => row.seq === 1)!
-  const newer = { ...JSON.parse(epochRow.rowJson), v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION + 2 }
+  const newer = { ...JSON.parse(epochRow.rowJson), v: JOURNAL_OUTCOME_MARKER_VERSION + 1 }
   updateTestJournalRowJson(db, SESSION, 1, JSON.stringify(newer))
 }
 

@@ -3,7 +3,7 @@ import type {
   SurfaceExecutorAdmission,
   SurfaceExecutorDecision
 } from '../../shared/workspace-surfaces/surface-executor-contract'
-import type { TerminalStartFailure } from '../../shared/terminal-start-failure'
+import type { TerminalStartFailure } from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type {
   AsyncIoHealthRequest,
   FullDiskAccessStatusRequest,
@@ -27,9 +27,9 @@ export type {
   InspectProcessRequest
 } from './daemon-foreground-process-protocol'
 
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/tui-agent'
-import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import type { PtyStartupIngressIntent } from '../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding

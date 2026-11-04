@@ -56,7 +56,7 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   useShortcutLabel: (actionId: string) => actionId
 }))
 
-vi.mock('@/store', async () => {
+vi.mock('@/store/index', async () => {
   const React = await vi.importActual<typeof ReactModule>('react')
   const getSnapshot = (selector: (state: Record<string, unknown>) => unknown): unknown => {
     if (mockAppState.snapshotCache.has(selector)) {
@@ -150,7 +150,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }
 }))
 
-vi.mock('./FileExplorer', () => ({
+vi.mock('./file-explorer/panel/FileExplorer', () => ({
   default: () => <div data-file-explorer />
 }))
 
@@ -158,15 +158,15 @@ vi.mock('./FolderWorkspaceWorktreesPanel', () => ({
   default: () => <div data-folder-workspace-worktrees-panel />
 }))
 
-vi.mock('./FolderWorkspacePrChecksPanel', () => ({
+vi.mock('./hosted-review/folder-checks/FolderWorkspacePrChecksPanel', () => ({
   default: () => <div data-folder-workspace-pr-checks-panel />
 }))
 
-vi.mock('./SourceControl', () => ({
+vi.mock('./source-control/panel/SourceControl', () => ({
   default: () => <div data-source-control />
 }))
 
-vi.mock('./ChecksPanel', () => ({
+vi.mock('./checks-panel/ChecksPanel', () => ({
   default: () => <div data-checks-panel />
 }))
 

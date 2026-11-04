@@ -9,8 +9,6 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
-import { replaceJournalEpoch } from './journal-epoch-replacement'
-import type { JournalLoad } from './journal-open'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
@@ -66,24 +64,6 @@ export function createFixture() {
 
   function item(ordinal: number): AgentJournalItemIdentity {
     return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
-  }
-
-  async function replace(input: {
-    items: Parameters<typeof replaceJournalEpoch>[0]['items']
-    onPublished?: (loaded: JournalLoad) => void
-  }): Promise<void> {
-    await replaceJournalEpoch({
-      database,
-      identity: IDENTITY,
-      reason: 'legacy_import',
-      fence: 1,
-      items: input.items,
-      queuePause: { lifted: false, liveStop: null, reopened: false },
-      queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
-      now,
-      mintEpoch: () => `epoch-${clock}`,
-      onPublished: input.onPublished ?? (() => undefined)
-    })
   }
 
   beforeEach(async () => {
@@ -156,7 +136,6 @@ export function createFixture() {
     journals,
     legacyInputs,
     now,
-    replace,
     get root() {
       return root
     },

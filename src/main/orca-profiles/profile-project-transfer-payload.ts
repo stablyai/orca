@@ -10,7 +10,7 @@ import {
 } from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { WorkspaceKey } from '../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../shared/workspace-scope'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SparsePreset } from '../../shared/worktree/create-types'
@@ -19,8 +19,11 @@ import {
   extractRetiredNameRegistriesByNamespace,
   mergeRetiredNameRegistryMaps
 } from './profile-project-retired-name-transfer'
-import type { TransferProfileState } from './profile-project-state-file'
-import { rebuildRepoBackedProjectState } from './profile-project-state-file'
+
+import {
+  type TransferProfileState,
+  rebuildRepoBackedProjectState
+} from './profile-project-state-file'
 import { mergeHostWorkspaceSessions, mergeWorkspaceSessions } from './profile-project-session-state'
 import {
   extractHostSessionsForTransfer,

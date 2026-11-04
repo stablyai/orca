@@ -16,10 +16,10 @@ import { readPiRpcModelOptions } from '../../../../main/pi/rpc-model-options'
 
 import {
   agentPickerDraft,
-  agentPickerModels,
   agentPickerLaunchInputs,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { agentPickerModels } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 
 it.each([`--settings '{"fastMode":true}' --settings ./team.json`, `--settings '{broken'`])(
   'keeps opaque effective settings literal and Fast unclaimed: %s',
@@ -73,7 +73,10 @@ it.each(['direct Use', 'blur then Use'] as const)(
       terminal: {},
       structured: {},
       arguments: '',
-      ownerKey: 'buffer-owner'
+      ownerKey: 'buffer-owner',
+      agent: 'codex',
+      label: 'Codex',
+      rows: [{ agent: 'codex', kind: 'terminal' }]
     }
     const change = vi.fn()
     act(() =>
@@ -84,38 +87,42 @@ it.each(['direct Use', 'blur then Use'] as const)(
       )
     )
     const input = host.querySelector<HTMLTextAreaElement>('textarea')!
-    const text = '--model sonnet --effort high --verbose'
+    const text = '--no-alt-screen -m gpt-6.1-sol -c model_reasoning_effort=low'
     for (let length = 1; length <= text.length; length++) {
       fireEvent.change(input, { target: { value: text.slice(0, length) } })
       expect(input.value).toBe(text.slice(0, length))
       expect(change.mock.calls.at(-1)?.[0].choices.model).toBeUndefined()
       expect(host.querySelector('button[aria-label="Remove --model s"]')).toBeNull()
     }
-    fireEvent.change(input, { target: { value: '--debug' } })
+    const submit = [...host.querySelectorAll('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Launch terminal'
+    )!
     if (acceptance === 'blur then Use') {
-      fireEvent.blur(input)
+      fireEvent.blur(input, { relatedTarget: submit })
     }
-    fireEvent.click(
-      [...host.querySelectorAll('button')].find(
-        (button) => button.getAttribute('aria-label') === 'Launch terminal'
-      )!
-    )
+    expect(input.value).toBe(text)
+    fireEvent.click(submit)
     expect(onUse).toHaveBeenCalledOnce()
     const accepted = onUse.mock.calls[0][0]
     expect(accepted.pendingArguments).toBeUndefined()
-    expect(accepted.arguments).toBe('--debug')
-    expect(accepted.choices.model).toBeUndefined()
-    expect(accepted.choices.options?.effort).toBeUndefined()
+    expect(accepted.acceptedEdits?.arguments).toBe(text)
+    expect(accepted.arguments).toBe('--no-alt-screen')
+    expect(accepted.choices.model).toBe('gpt-6.1-sol')
+    expect(accepted.choices.options?.effort).toBe('low')
     expect(
-      agentPickerLaunchInputs({ ...accepted, surface: 'chat' }, own).sessionOptions?.model
-    ).toBeUndefined()
+      agentPickerLaunchInputs({ ...accepted, surface: 'chat' }, own).sessionOptions
+    ).toMatchObject({
+      model: 'gpt-6.1-sol',
+      effort: 'low'
+    })
   }
 )
 
 it.each(['pending click', 'blur then click'] as const)(
   'removes the current model domain after accepting newer text through %s',
   async (transition) => {
-    const reconcile = await import('../../../../shared/agent-choice-reconciliation')
+    const reconcile =
+      await import('../../../../shared/agent-launch/choices/agent-choice-reconciliation')
     const accepted = vi.spyOn(reconcile, 'reconcileAgentChoiceArgsDetailed')
     const own: AgentPickerEntry = {
       ...entry,
@@ -234,9 +241,10 @@ it('explains no-flag choices from the recorded Pi catalog and keeps them usable 
 })
 
 it('bounds whole current-snapshot work on rendered replacement, acceptance and chip removal', async () => {
-  const args = await import('../../../../shared/agent-choice-args')
-  const reconcile = await import('../../../../shared/agent-choice-reconciliation')
-  const profile = await import('../../../../shared/agent-launch-profile')
+  const args = await import('../../../../shared/agent-launch/choices/agent-choice-args')
+  const reconcile =
+    await import('../../../../shared/agent-launch/choices/agent-choice-reconciliation')
+  const profile = await import('../../../../shared/agent-launch/choices/agent-launch-profile')
   const catalog =
     await import('../../../../shared/agent-session/options/agent-session-option-catalog')
   const reconciliation = vi.spyOn(reconcile, 'reconcileAgentChoiceArgsDetailed')
@@ -326,6 +334,9 @@ it('bounds whole current-snapshot work on rendered replacement, acceptance and c
     const acceptance = counts()
     const accepted = onUse.mock.calls.at(-1)![0]
     expect(accepted.pendingArguments).toBeUndefined()
+    expect(accepted.acceptedEdits?.arguments).toBe(
+      `${'--search '.repeat(textCopies)}--add-dir folder${(events - 1) % 10}`
+    )
     expect(accepted.choices.model).toBe('gpt-5.6-sol')
     expect(JSON.stringify(accepted)).not.toContain('folder0folder1')
     clear()
@@ -339,7 +350,8 @@ it('bounds whole current-snapshot work on rendered replacement, acceptance and c
     const tenN = measure(30, false)
     const many = measure(30, true)
     const optionsOnly = measure(30, true, 1, 1, false)
-    const populated = measure(30, true, available.length, 10)
+    const populated = measure(30, true, available.length)
+    const longText = measure(30, true, available.length, 10)
     expect(many.chipCount).toBeGreaterThan(n.chipCount)
     for (let index = 0; index < spies.length; index++) {
       expect(tenN.typing[index]).toBeLessThanOrEqual(n.typing[index] * 10 + 4)
@@ -359,7 +371,9 @@ it('bounds whole current-snapshot work on rendered replacement, acceptance and c
       expect(new Set(lookups).size).toBe(1)
     }
     expect(optionsOnly.chipCount).toBeGreaterThan(n.chipCount)
-    expect(populated.retained).toBeLessThan(many.retained + 100)
+    expect(populated.retained).toBe(many.retained)
+    // The folded receipt retains authored source and its execution projection, never edit history.
+    expect(longText.retained - populated.retained).toBe(2 * 9 * 9)
     for (let index = 0; index < spies.length; index++) {
       expect(populated.acceptance[index]).toBeLessThanOrEqual(many.acceptance[index] + 4)
       expect(populated.removal[index]).toBeLessThanOrEqual(many.removal[index] + 4)

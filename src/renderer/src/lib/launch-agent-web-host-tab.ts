@@ -1,4 +1,4 @@
-import type { AgentLaunchChoices } from '../../../shared/agent-launch-choices'
+import type { AgentLaunchChoices } from '../../../shared/agent-launch/choices/agent-launch-choices'
 import { structuredAgentLabel } from './agent-session/launch/structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
@@ -14,15 +14,15 @@ import {
 } from '@/runtime/web-runtime-terminal-creation'
 import type { LaunchAgentStartupPromptPlan } from '@/lib/launch-agent-startup-prompt-plan'
 import type { Tab } from '../../../shared/tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { AgentTerminalLaunchCompletion } from './agent-session/launch/structured-agent-session-launch-admission'
 import {
   agentLaunchNeedsPreparedCommand,
   toAgentLaunchPreferences
-} from '../../../shared/agent-launch-preferences'
+} from '../../../shared/agent-launch/choices/agent-launch-preferences'
 
 /** Paired web tabs are host-owned; never create a local tab, and return tabId:null. */
 export async function launchAgentInWebHostTab(args: {

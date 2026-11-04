@@ -8,7 +8,7 @@ import {
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
-import type { AgentJournalTurnOutcome } from '../../../shared/agent-turn-outcome'
+import type { AgentJournalTurnOutcome } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
 
 /** Open the send’s turn; repeat with interrupted to end it. */
 export async function openRigTurnFor(

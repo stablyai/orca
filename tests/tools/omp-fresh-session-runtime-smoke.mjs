@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { OMP_FRESH_CONFIG_SOURCE } from '../../src/shared/omp-fresh-launch.ts'
+import { OMP_FRESH_CONFIG_SOURCE } from '../../src/shared/agent-launch/startup/omp-fresh-launch.ts'
 
 assert.ok(process.argv[2], 'Pass a read-only OMP checkout path')
 const scratch = await mkdtemp(join(tmpdir(), 'orca-omp-fresh-proof-'))

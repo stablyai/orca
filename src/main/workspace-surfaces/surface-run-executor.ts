@@ -6,7 +6,7 @@ import type {
   SurfaceExecutionProvenance
 } from '../../shared/workspace-surfaces/surface-execution-provenance'
 import { randomUUID } from 'node:crypto'
-import type { PtyCreationDisposition } from '../../shared/pty-creation-disposition'
+import type { PtyCreationDisposition } from '../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 import type { SurfaceResource } from '../../shared/workspace-surfaces/surface-allocation'
 import {
   surfaceExecutorKey,

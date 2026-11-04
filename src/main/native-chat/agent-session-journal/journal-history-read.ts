@@ -1,3 +1,6 @@
+import { journalContextCursor, projectJournalRows } from './journal-context-cursor'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournalOptions, JournalReadSince } from './journal-store-contracts'
 
@@ -35,15 +38,20 @@ export class JournalHistoryReader {
       since: JournalReadSince,
       view: PublicRead,
       canonicalItemId: (id: string) => string,
-      context: Context
-    ) => T
+      context: Context,
+      facts: Pick<
+        ReturnType<typeof captureJournalReadView>,
+        'hasSubmission' | 'queueSourceIds' | 'snapshotForItems'
+      >
+    ) => T,
+    materialize: (view: PublicRead) => AgentJournalSnapshot = (view) => view.currentSnapshot()
   ): Promise<T> {
     return this.readCapturedSince(
       cursor,
       limit,
       () => {
         const view = this.publicRead()
-        const materialized = { snapshot: view.snapshot, normalizationKey: view.normalizationKey }
+        const materialized = capturedView(materialize(view), view.normalizationKey)
         const context = capture(materialized)
         return {
           capture: captureJournalReadView(this.state(), materialized.snapshot),
@@ -54,9 +62,10 @@ export class JournalHistoryReader {
       (since, retained) =>
         consume(
           since,
-          { snapshot: retained.capture.snapshot(), normalizationKey: retained.normalizationKey },
+          capturedView(retained.capture.snapshot(), retained.normalizationKey),
           retained.capture.canonical,
-          retained.context
+          retained.context,
+          retained.capture
         ),
       (retained) => retained.capture.close()
     )
@@ -71,7 +80,9 @@ export class JournalHistoryReader {
   ): Promise<T> {
     const request = await this.options.database.snapshot(() => ({
       state: {
-        epoch: this.state().epoch,
+        epoch: journalContextCursor(this.state()).epoch,
+        physicalEpoch: this.state().epoch,
+        contextBoundary: this.state().contextBoundary,
         lastSequence: this.state().lastSequence,
         oldestSequence: this.state().oldestSequence
       },
@@ -82,14 +93,22 @@ export class JournalHistoryReader {
       const since = await readJournalSinceAsync(
         {
           state,
-          rowsAfter: (after) =>
-            readJournalRowsAfterCursorAsync(
+          rowsAfter: async (after) => {
+            const read = await readJournalRowsAfterCursorAsync(
               request.read,
               this.options.identity.sessionId,
-              state.epoch,
+              state.physicalEpoch,
               after,
               limit
             )
+            return {
+              ...read,
+              rows: projectJournalRows(
+                { epoch: state.physicalEpoch, contextBoundary: state.contextBoundary },
+                read.rows
+              )
+            }
+          }
         },
         cursor
       )
@@ -101,5 +120,20 @@ export class JournalHistoryReader {
         release(request.view.view)
       }
     }
+  }
+}
+
+function capturedView(snapshot: PublicRead['snapshot'], normalizationKey: string): PublicRead {
+  const selected = (ids: ReadonlySet<string>) => ({
+    ...snapshot,
+    submissions: snapshot.submissions.filter((input) =>
+      ids.has(agentJournalSubmissionKey(input.clientMessageId))
+    )
+  })
+  return {
+    snapshot,
+    normalizationKey,
+    currentSnapshot: () => snapshot,
+    snapshotForItems: selected
   }
 }

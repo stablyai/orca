@@ -1,5 +1,5 @@
 import { releaseSurfaceAdmissions } from '../../workspace-surfaces/surface-admission-capture'
-import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import { surfaceLayoutOutcome } from '../../workspace-surfaces/surface-layout-outcome'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSurfaceReader } from '../../../shared/workspace-surfaces/surface-reader'

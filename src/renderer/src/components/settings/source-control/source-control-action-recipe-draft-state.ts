@@ -2,22 +2,22 @@ import {
   transportActionArgumentChoices,
   demoteActionArgumentChoices,
   type ActionArgumentChoices
-} from '../../../../../shared/source-control-action-argument-document'
-import { liftActionPermissionArgs } from '../../../../../shared/source-control-action-permission-lift'
+} from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
+import { liftActionPermissionArgs } from '../../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
 import { useEffect, useMemo, useRef, useState, type SetStateAction } from 'react'
 import type {
   SourceControlAiSettings,
   SourceControlAiModelChoice,
   SourceControlAiSettingsPatch
-} from '../../../../../shared/source-control-ai-types'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   setSourceControlActionDefault,
   SOURCE_CONTROL_TEXT_ACTION_IDS,
   type SourceControlActionLaunchPreferences,
   type SourceControlActionId
-} from '../../../../../shared/source-control-ai-actions'
-import type { SourceControlAiModelEdits } from '../../../../../shared/source-control-ai-action-model-edits'
-import { replayGlobalTextModelEdits } from '../source-control-text-action-model-replay'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { SourceControlAiModelEdits } from '../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
+import { replayGlobalTextModelEdits } from './text-actions/source-control-text-action-model-replay'
 import {
   type ActionRecipeDraftState,
   readActionRecipeInputValues,

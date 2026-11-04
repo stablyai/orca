@@ -12,7 +12,7 @@ import {
   fakeCodex,
   identityFor as codexIdentity,
   THREAD_ID
-} from '../../codex/codex-structured-session-adapter-fixture'
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import {
   openAcpAdapterRig,
   sendHello,

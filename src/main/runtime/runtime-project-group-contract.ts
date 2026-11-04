@@ -1,6 +1,6 @@
 import type { OpenNativeOwnerRemovalStore } from './workspaces/canonical-owner-removal'
-import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachment-mutation'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachments/workspace-attachment-mutation'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'

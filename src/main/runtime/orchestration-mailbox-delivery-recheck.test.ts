@@ -2,7 +2,7 @@ import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   createBoundRun,
   createDatabase,

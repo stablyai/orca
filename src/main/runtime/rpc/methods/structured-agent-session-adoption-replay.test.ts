@@ -1,4 +1,4 @@
-import type { AgentProcessVerdict } from '../../../../shared/agent-process-presence'
+import type { AgentProcessVerdict } from '../../../../shared/agent-status/process/agent-process-presence'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { appendFile, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY

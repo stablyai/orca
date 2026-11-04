@@ -8,7 +8,10 @@ import { DaemonPtyCheckpointPersistence } from './daemon-pty-checkpoint-persiste
 import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import type { ListSessionsResult } from './types'
 import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
-import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
+import type {
+  TerminalLimitStatus,
+  TerminalLimitUpdate
+} from '../../shared/terminal/runtime-policy/terminal-limit-policy'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 
 export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersistence {

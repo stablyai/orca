@@ -15,7 +15,7 @@ import {
   type HostedReviewCreationEligibilityArgs,
   type HostedReviewForBranchArgs,
   hostedReviewForBranchReply
-} from '../../../shared/hosted-review'
+} from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { readHostedReviewForBranch } from '../../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../../workspaces/catalog/repo-worktrees'

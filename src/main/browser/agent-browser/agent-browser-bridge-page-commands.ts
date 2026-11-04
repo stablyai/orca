@@ -16,9 +16,9 @@ import { AgentBrowserBridgeMouseCommands } from './agent-browser-bridge-mouse-co
 import {
   answerBrowserJavaScriptDialog,
   getBrowserJavaScriptDialog
-} from '../browser-javascript-dialogs'
+} from '../guest-lifecycle/prompts/browser-javascript-dialogs'
 import { captureRemoteCliBrowserRevocation } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
-import { ExpectedPageUrlGuard, getRequestedPageUrl } from '../browser-expected-page-url'
+import { ExpectedPageUrlGuard, getRequestedPageUrl } from '../cdp/input/browser-expected-page-url'
 
 /** Keep JSON results stable across CLI payload versions. */
 export type BrowserDialogAnswer = { accepted: boolean; browserPageId?: string; checkedUrl?: string }

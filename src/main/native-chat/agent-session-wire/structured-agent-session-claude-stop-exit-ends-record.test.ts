@@ -98,7 +98,7 @@ beforeEach(async () => {
     mintSpawnToken: () => 'spawn-a',
     logger: log.logger,
     // Tick manually with no idle threshold to reap resting agents.
-    idleSweep: { intervalMs: 3_600_000, idleMs: 0 },
+    idleSweep: { intervalMs: 3_600_000, idleMs: () => 0 },
     now: () => now
   })
   initialAttach = hostTestAttachParams(null, {

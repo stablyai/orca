@@ -1,3 +1,4 @@
+import { isolateJournalTransition } from './journal-reducer-transition'
 import { expect } from 'vitest'
 import type { JournalHostDatabase } from './journal-host-database'
 import { JournalRowWriter } from './journal-row-writer'
@@ -74,7 +75,7 @@ export function projectionWriter(database: JournalHostDatabase, initial: Journal
     readOnly: () => false,
     highestFence: () => state.highestFence,
     nextSequence: () => state.lastSequence + 1,
-    prepare: (db, rows, savedAt) => projection.prepare(db, rows, savedAt),
+    prepare: (db, rows, savedAt, finishFold) => projection.prepare(db, rows, savedAt, finishFold),
     commit: () => undefined
   })
   return { writer, projection, state: () => state, queue }
@@ -93,4 +94,13 @@ export async function expectProjectionMatches(
   expect(restored?.damage).toBeNull()
   expect(restored?.newer).toBeNull()
   expect(restored && encodeJournalState(restored.state)).toStrictEqual(encodeJournalState(state))
+}
+
+/** Reducer nodes the draft reaches to fold `row` onto `state`, without adopting it. */
+export const trackedJournalDraftNodes = (state: JournalReducerState, row: JournalRow) => {
+  const transition = isolateJournalTransition(state, (draft) => applyJournalRow(draft, row, row.ts))
+  return {
+    canonical: transition.tracked() - transition.trackedDerived(),
+    derived: transition.trackedDerived()
+  }
 }

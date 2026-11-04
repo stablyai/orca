@@ -7,7 +7,7 @@ import {
 } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
 import { isHostLocalProjectId } from '../../../shared/project-host-setup-projection'
-import { isEphemeralVmRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { isEphemeralVmRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isMergedAwayExecutionHost } from '../../../shared/managed-orcad-execution-host'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,

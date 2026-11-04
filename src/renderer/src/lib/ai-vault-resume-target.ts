@@ -3,7 +3,7 @@ import {
   getAiVaultResumeWorkspaceExecutionHostId as getWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus as getWorkspaceTargetStatus,
   type AiVaultResumeTargetStatus
-} from '../../../shared/ai-vault-resume-target'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-target'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'

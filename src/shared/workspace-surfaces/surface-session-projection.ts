@@ -1,12 +1,12 @@
 import type { SurfaceSessionProjectionCache } from './surface-session-projection-cache'
 import type { ExecutionHostId } from '../execution-host'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../workspace-layout/workspace-layout-minted-ids'
 import { saveWorkspaceLayout } from '../workspace-layout/workspace-layout-save'
 import type { WorkspaceSurface } from './surface-content'
 import { projectSurfaceWorkspace } from './surface-layout'
-import { parsePaneKey } from '../stable-pane-id'
+import { parsePaneKey } from '../workspace-layout/stable-pane-id'
 
 export function unresolvedSurfaceNativeSessionIds(
   surfaces: readonly WorkspaceSurface[],

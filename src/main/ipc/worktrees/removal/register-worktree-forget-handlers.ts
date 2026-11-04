@@ -14,7 +14,7 @@ import { getLocalPtyProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { killAllProcessesForWorktree } from '../../../runtime/worktree-teardown'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
-import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   notifyWorktreesChanged,
   cleanupUnusedWorktreePushTargetRemote

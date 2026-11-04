@@ -1,9 +1,9 @@
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   terminalViewAttributesEqual,
   terminalViewColorQueryReplyColors,
   type TerminalViewAttributes
-} from '../../../shared/terminal-view-attributes'
+} from '../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 

@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { RuntimeStore } from '../../runtime-store-contract'
 

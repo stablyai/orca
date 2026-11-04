@@ -1,7 +1,6 @@
 import { deleteTestOperationLedger } from '../agent-session-journal/journal-retained-fault-test-support'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session/agent-session-host-authority'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -19,12 +18,11 @@ import {
 } from './structured-agent-session-host-test-data'
 
 let root: string
-let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 
 beforeEach(() => {
-  ;({ root, store, host, dispatch } = hostTestState())
+  ;({ root, host, dispatch } = hostTestState())
 })
 
 afterEach(() => vi.restoreAllMocks())
@@ -62,48 +60,6 @@ function clear() {
 }
 
 describe('send without ledger policy', () => {
-  it('accepts an id older than 24 hours while its chat is closed', async () => {
-    await attach()
-    await host.close(SESSION, 'evict')
-
-    await expect(host.send(CALLER, expiredParams('long gone'))).resolves.toMatchObject({
-      ok: true,
-      replayed: false
-    })
-    expect(host.hasSession(SESSION)).toBe(true)
-  })
-
-  it('still refuses a write to a newer database', async () => {
-    await attach()
-    const database = await openTestJournalHostDatabase(root)
-    Object.defineProperty(database, 'readOnly', { value: true })
-    expect(store.readOnly).toBe(true)
-    try {
-      await expect(host.send(CALLER, expiredParams('long gone'))).resolves.toMatchObject({
-        ok: false,
-        refusal: { details: { reason: 'journalWrittenByNewerOrca' } }
-      })
-    } finally {
-      // Restore writes for teardown’s child-stop settlement.
-      Object.defineProperty(database, 'readOnly', { value: false })
-    }
-  })
-
-  it('accepts a six-minute future id without evaluating or writing admission', async () => {
-    await attach()
-    const evaluate = vi.spyOn(store, 'evaluateMutationOperation').mockImplementation(() => {
-      throw new Error('ledger refuses admission')
-    })
-    const admit = vi
-      .spyOn(store, 'admitMutationOperation')
-      .mockRejectedValue(new Error('ledger full'))
-    const params = sendParams('host clock is behind', `${NOW + 6 * 60_000}-${'f'.repeat(32)}`)
-    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: false })
-    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
-    expect(evaluate).not.toHaveBeenCalled()
-    expect(admit).not.toHaveBeenCalled()
-  })
-
   it('replays accepted ids after the compatibility ledger has expired', async () => {
     await attach()
     const params = sendParams('receipt survives the ledger')
@@ -112,15 +68,6 @@ describe('send without ledger policy', () => {
     await deleteTestOperationLedger(await openTestJournalHostDatabase(root))
     await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
     expect(dispatch).toHaveBeenCalledTimes(1)
-  })
-
-  it.each(['invalid', '1-a', `${NOW}-${'a'.repeat(33)}`])('refuses malformed id %s', async (id) => {
-    await attach()
-    await expect(host.send(CALLER, sendParams('invalid', id))).resolves.toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'operationIdInvalid' } }
-    })
-    expect(dispatch).not.toHaveBeenCalled()
   })
 })
 

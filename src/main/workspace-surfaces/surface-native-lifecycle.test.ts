@@ -28,7 +28,7 @@ import { agentSessionRecordFixture } from '../native-chat/agent-session-record-t
 import { closeMobileStructuredSessionPresentation } from '../runtime/session-tabs/structured-session-tab-presentation'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeMobileSessionAgentTab } from '../../shared/runtime-types'
-import { filterWorkspaceSessionTabs } from '../../shared/workspace-session-tab-filter'
+import { filterWorkspaceSessionTabs } from '../../shared/workspace-session/workspace-session-tab-filter'
 import Database from '../sqlite/sync-database'
 import { installSurfaceNativeRuntimeOwner } from './surface-native-runtime-owner'
 import { holdNativeJournalSql } from '../native-chat/agent-session-journal/journal-native-test-instrumentation'

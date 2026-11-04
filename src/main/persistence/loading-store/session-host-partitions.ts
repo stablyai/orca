@@ -1,6 +1,6 @@
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobile-session-terminal-persistence-retirement'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -9,9 +9,9 @@ import {
 } from '../../../shared/execution-host'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
-import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
-import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-host-field-ownership'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
+import { withoutRedundantGlobalFields } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { readTerminalScrollbackSnapshotSync } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
@@ -31,8 +31,8 @@ import {
 
 import type { StoreRuntimeState } from './store-runtime-state'
 import { canonicalSessionProjection } from './canonical-session-projection'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import { scheduleSave } from './write-scheduling'
+
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import {
   preserveMissingWorkspaceSessionTerminalBindings,
   sshTargetIdForWorkspaceSessionHost

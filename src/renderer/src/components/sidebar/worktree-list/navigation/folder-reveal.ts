@@ -1,10 +1,10 @@
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import {
   folderWorkspaceToWorktree,
   getFolderWorkspaceHostIdentity
-} from '../../../../../../shared/folder-workspace-worktree'
+} from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   parseWorkspaceKey

@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
 import { collectLayoutLeafIdsInOrder } from '../../shared/workspace-layout/terminal-pane-tree'

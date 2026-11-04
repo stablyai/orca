@@ -1,3 +1,5 @@
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { restoreRetainedJournalInputsAsync } from './journal-retained-inputs'
 import { startJournalRowFold, type JournalLoad } from './journal-open'
 import type { JournalReadConnection } from './journal-sql-owner'
 import { readJournalLegacyCardsAsync } from './journal-queue-import'
@@ -33,18 +35,46 @@ export async function restoreJournalAsync(
     }
     let baseline: JournalReducerState | undefined
     if (source.prefix > 0) {
-      const prefix = await foldJournalFromStateAsync(read, empty, source.prefix, true)
+      const prefix = await foldJournalFromStateAsync(
+        read,
+        empty,
+        source.prefix,
+        source.marker === 5 ? 'marker5' : 'sources',
+        true
+      )
       if (prefix.newer || prefix.damage || prefix.state.lastSequence !== source.prefix) {
         const gap = { sequence: prefix.state.lastSequence + 1, cause: 'sequence-gap' as const }
         return { ...prefix, damage: prefix.newer ? null : (prefix.damage ?? gap) }
       }
       baseline = prefix.state
     }
-    return {
-      state: await readJournalOutcomesAsync(read, sessionId, epoch, source, baseline),
-      newer: null,
-      damage: null
+    const prefixRevisions =
+      baseline &&
+      new Map(
+        [...baseline.submissions.keys()].map((id) => {
+          const key = agentJournalSubmissionKey(id)
+          return [
+            key,
+            baseline.items.get(key)?.revision ?? baseline.tombstones.get(key) ?? 0
+          ] as const
+        })
+      )
+    const state = await readJournalOutcomesAsync(read, sessionId, epoch, source, baseline)
+    if (source.marker === 5 && source.prefix > 0) {
+      const observations = await foldJournalFromStateAsync(
+        read,
+        createJournalReducerState(sessionId, epoch),
+        source.prefix,
+        'sources'
+      )
+      if (observations.newer || observations.damage) {
+        return observations
+      }
+      state.inputs = observations.state.inputs
+      state.inputs.candidates.clear()
     }
+    await restoreRetainedJournalInputsAsync(read, state, source, prefixRevisions)
+    return { state, newer: null, damage: null }
   } catch (error) {
     if (error instanceof AgentSessionJournalError && error.code === 'journal_read_only') {
       return { state: empty, newer: { sequence: 1 }, damage: null }
@@ -60,12 +90,13 @@ async function foldJournalFromStateAsync(
   read: JournalReadConnection,
   state: JournalReducerState,
   through = Number.MAX_SAFE_INTEGER,
+  interpretation: 'marker5' | 'sources' = 'sources',
   deferNativeCleanup = false
 ): Promise<JournalLoad> {
   let acceptance = await prepareJournalAcceptance(read, state.sessionId, [])
   const ownerState = createJournalReducerState(state.sessionId, state.epoch, (id) => acceptance(id))
   const fold = startJournalRowFold(
-    { sessionId: state.sessionId, epoch: state.epoch, deferNativeCleanup },
+    { sessionId: state.sessionId, epoch: state.epoch, interpretation, deferNativeCleanup },
     ownerState
   )
   const pages = iterateJournalEpochRowsAsync(
@@ -76,7 +107,10 @@ async function foldJournalFromStateAsync(
     through
   )
   for await (const page of pages) {
-    const admitted = page.map((entry) => ({ entry, parsed: parseJournalRow(entry.rowJson) }))
+    const admitted = page.map((entry) => ({
+      entry,
+      parsed: parseJournalRow(entry.rowJson, interpretation === 'sources')
+    }))
     const ids = admitted.flatMap(({ parsed }) => {
       return parsed.ok && (parsed.row.kind === 'submission' || parsed.row.kind === 'dispatch')
         ? [parsed.row.clientMessageId]

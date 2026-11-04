@@ -2,7 +2,7 @@ import { TerminalHostSurfaceExecution } from './terminal-host-surface-execution'
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
 import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
-import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
+import type { PtyFencedTerminationRequest } from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { Session } from './session'
 import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
 import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
@@ -14,8 +14,11 @@ import { getAliveTerminalHostSession } from './terminal-host-session-access'
 import { writeSessionInput } from './session-input-path'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
-import { createOrAttachClaimedAgentSession } from './terminal-host-agent-session-claim'
-import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
+import {
+  createOrAttachClaimedAgentSession,
+  type InternalCreateOrAttachOptions
+} from './terminal-host-agent-session-claim'
+
 import { TerminalHostAgentSessionGenerations } from './terminal-host-agent-session-generations'
 import { resolveTerminalHostSessionCwd } from './terminal-host-session-cwd'
 import { TerminalHostTombstones } from './terminal-host-tombstones'
@@ -26,8 +29,11 @@ import {
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { randomUUID } from 'node:crypto'
-import { inspectTerminalHostSession } from './terminal-host-process-inspection'
-import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
+import {
+  inspectTerminalHostSession,
+  type TerminalHostProcessInspection
+} from './terminal-host-process-inspection'
+
 import {
   confirmTerminalHostForegroundProcess,
   confirmTerminalHostShellForeground,

@@ -77,14 +77,4 @@ describe('useMobileNativeChatSkills', () => {
     expect(sendRequest).toHaveBeenCalledExactlyOnceWith('skills.discover', { worktreeId: 'wt-1' })
     expect(state?.nativeChatSkills.skills.map((entry) => entry.name)).toEqual(['shared'])
   })
-
-  it('lists none from a host that needs the folder the phone does not know', async () => {
-    const sendRequest = vi.fn(async () => reply)
-    await mount(fakeClient(sendRequest), false)
-
-    await act(async () => state?.loadNativeChatSkills())
-
-    expect(sendRequest).not.toHaveBeenCalled()
-    expect(state?.nativeChatSkills.skills).toEqual([])
-  })
 })

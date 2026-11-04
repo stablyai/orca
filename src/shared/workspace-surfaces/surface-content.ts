@@ -1,6 +1,6 @@
 import type { SurfaceExecutionProvenance } from './surface-execution-provenance'
-import type { AgentType } from '../agent-status-types'
-import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
+import type { AgentType } from '../agent-status/contracts/agent-status-types'
+import type { TerminalPaneLayoutNode } from '../workspace-layout/terminal-tab-types'
 import type {
   LayoutLeaf,
   LayoutTab,

@@ -1,3 +1,5 @@
+import { isNativeOutcomeField } from './journal-outcome-format-2'
+import { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalInputOrder } from './journal-input-order'
 import type { JournalReducerState } from './journal-reducer'
@@ -31,11 +33,17 @@ export function planJournalOutcomeRows(
   const fold = () => {
     for (const row of rows) {
       const { stored } = journalRowReadBack(state.sessionId, row)
-      applyJournalRow(transition.state, stored, savedAt ?? row.ts)
+      applyJournalRow(transition.state, transition.input(stored), savedAt ?? row.ts)
       if (row === rows.at(-1)) {
         finish?.(transition.state)
       }
-      const changes = transition.changes(true)
+      const changes = transition
+        .changes(true)
+        .filter(
+          (entry) =>
+            isNativeOutcomeField(entry.path) ||
+            OUTCOME_FORMAT_1_COLLECTIONS.some((path) => path === entry.path)
+        )
       if (upgradeNative) {
         for (const path of ['inputEntries', 'inputCards'] as const) {
           const changed = new Set(

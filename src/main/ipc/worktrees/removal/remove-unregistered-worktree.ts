@@ -8,7 +8,7 @@ import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-ty
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaWorktreeDirectory,

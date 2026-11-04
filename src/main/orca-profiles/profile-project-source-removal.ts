@@ -1,6 +1,5 @@
 import { removeProjectColdEvidence } from './profile-project-cold-evidence'
-import type { WorkspaceKey } from '../../shared/folder-workspace-types'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { type WorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
   rebuildRepoBackedProjectState,
   type TransferProfileState

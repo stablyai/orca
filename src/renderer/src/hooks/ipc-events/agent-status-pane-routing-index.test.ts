@@ -9,7 +9,7 @@ import {
   makeWorktree,
   TEST_REPO
 } from '../../store/slices/store-test-helpers'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   agentStatusPaneRoutingIndexCounters,
   createAgentStatusPaneRoutingIndex,

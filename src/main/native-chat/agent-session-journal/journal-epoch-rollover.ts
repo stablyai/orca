@@ -7,8 +7,8 @@ import { agentSessionJournalProviderHandle } from '../../../shared/agent-session
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
-import { buildJournalQueueRow } from './journal-queue-events'
-import type { JournalQueueRestatement } from './journal-queued-messages'
+import { buildJournalQueueRow, type JournalQueueCardChange } from './journal-queue-events'
+import type { JournalOperationReceipt } from './journal-row-writer'
 import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
 import { settleJournalCommit } from './journal-committed-effects'
 
@@ -20,7 +20,7 @@ export async function publishNewEpoch(input: {
   fence: number
   now: number
   /** Unhanded cards wait again; replacement submissions may relink them. */
-  queue: JournalQueueRestatement
+  queue: { cards: readonly JournalQueueCardChange[]; receipt: JournalOperationReceipt }
   /** The epoch the caller built from (null: none yet); a different stored epoch refuses. */
   expectedEpoch?: string | null
   /** Adopt committed state before fallible follow-up work. */

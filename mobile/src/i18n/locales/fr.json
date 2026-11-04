@@ -5,10 +5,13 @@
       "connecting": "Connexion à l'hôte…",
       "connectingTo": "Connexion à {{name}}…",
       "default": "Valeur par défaut du système",
+      "fableWindow": "Fable",
       "hostNotFound": "Hôte introuvable",
       "invalidSnapshot": "État des comptes invalide reçu de l'hôte",
       "loadingAccounts": "Chargement des comptes…",
       "manageAccountsHint": "Ajoutez ou réauthentifiez des comptes dans Paramètres → Comptes sur l'ordinateur.",
+      "mcpWindow": "MCP",
+      "otherAgents": "Autres agents",
       "refreshAccounts": "Actualiser les comptes",
       "sessionWindow": "5 h",
       "switchFailed": "Impossible de changer de compte",
@@ -112,13 +115,8 @@
       "tryAgain": "Réessayer"
     },
     "terminalSettings": {
-      "autocomplete": "Complétion et correction automatiques",
-      "autocompleteOff": "Désactivé",
-      "autocompleteOn": "Activé",
       "defaultText": "Par défaut (100 %)",
       "keepPhoneSize": "Conserver à la taille téléphone (par défaut)",
-      "keyboardInputDescription": "La complétion, la correction automatique et les suggestions orthographiques s'appliquent uniquement à la saisie de commandes en mémoire tampon. Utilisez le bouton à double chevron au-dessus du clavier pour quitter la saisie en direct, puis modifiez votre commande avant d'appuyer sur Envoyer. Ces fonctions sont désactivées par défaut pour éviter de modifier les commandes, les options ou les chemins.",
-      "keyboardInputHeading": "SAISIE AU CLAVIER",
       "largeText": "Grand (125 %)",
       "largerText": "Plus grand (150 %)",
       "largestText": "Le plus grand (200 %)",
@@ -287,7 +285,8 @@
       "stoppedManually": "Arrêté manuellement",
       "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
       "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
-      "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets)."
+      "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
+      "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "Vous pouvez continuer dans cette conversation.",
@@ -334,7 +333,10 @@
       "emptyAnswer": "Réponse vide",
       "resolved": "Résolu",
       "resolver": "Répondu sur {{device}}",
-      "unavailable": "Réponse sélectionnée indisponible"
+      "unavailable": "Réponse sélectionnée indisponible",
+      "thisPhone": "ce téléphone",
+      "computer": "l’ordinateur",
+      "otherDevice": "un autre appareil"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "Disponible après le démarrage de la session.",
@@ -564,6 +566,24 @@
     "agentMessage": {
       "handedOffToAgent": "Confié à un agent",
       "startedAgent": "Agent démarré"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "La réponse de la pièce jointe est illisible. Réessayez.",
+      "incompleteReply": "La pièce jointe a changé ou sa réponse était incomplète. Fermez-la et réessayez.",
+      "notText": "Ce fichier ne peut pas être prévisualisé en texte. Enregistrez-le pour l’ouvrir dans une autre application.",
+      "openFailed": "Impossible d’ouvrir la pièce jointe. Réessayez.",
+      "hostUpdate": "Cet hôte ne peut pas encore ouvrir les pièces jointes texte. Mettez Orca à jour sur cet hôte, puis réessayez.",
+      "copyTooLarge": "Ce fichier est trop volumineux pour être copié. Enregistrez-le plutôt.",
+      "connectionChanged": "La connexion a changé. Réessayez d’ouvrir la pièce jointe.",
+      "hostChanged": "L’hôte de la pièce jointe a changé. Fermez-la et rouvrez-la.",
+      "readFailed": "Impossible de lire cette pièce jointe. Reconnectez-vous et réessayez. Le fichier a peut-être été supprimé ou modifié.",
+      "copyFrame": "La copie intégrale de cette pièce jointe nécessite la prochaine mise à jour du téléphone.",
+      "copyFailed": "Impossible de copier la pièce jointe. Réessayez.",
+      "pastedText": "Texte collé",
+      "textAttachment": "Pièce jointe texte",
+      "byteSize": "{{size}} octets",
+      "saveUpdate": "L’enregistrement sera disponible dans une mise à jour du téléphone.",
+      "fullCopySaveUpdate": "La copie intégrale et l’enregistrement de cette pièce jointe seront disponibles dans une mise à jour du téléphone."
     }
   },
   "common": {
@@ -760,6 +780,9 @@
     },
     "hostCard": {
       "hostActions": "Actions pour {{title}}",
+      "needsYou_many": "{{count}} ont besoin de vous",
+      "needsYou_one": "{{count}} a besoin de vous",
+      "needsYou_other": "{{count}} ont besoin de vous",
       "openHost": "Ouvrir {{title}}",
       "pairingInvalid": "Appairage invalide",
       "pairingTemporarilyUnavailable": "Appairage temporairement indisponible",
@@ -840,7 +863,8 @@
     },
     "prSidebar": {
       "loading": "Chargement de la pull request…",
-      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté."
+      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté.",
+      "retryLoading": "Réessayer de charger la pull request"
     },
     "protocolBlockScreen": {
       "backToHosts": "Retour aux hôtes",
@@ -1293,10 +1317,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "{{count}} en activité",
+      "heading": "Agents",
+      "showAll": "Tout afficher ({{count}})",
+      "showFewer": "Afficher moins"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Ignorer la mise à jour Orca {{version}}",
       "title": "Orca {{version}} est disponible",
       "updateAccessibilityLabel": "Orca {{version}} est disponible, touchez pour mettre à jour"
+    },
+    "automationsTab": {
+      "connectDesktop": "Connectez {{desktop}} pour afficher et exécuter des automatisations.",
+      "createHint": "Touchez + pour planifier un agent.",
+      "emptyTitle": "Planifier le travail des agents",
+      "lastStatus": "Dernière : {{status}}",
+      "newAutomation": "Nouvelle automatisation",
+      "noAutomations": "Aucune automatisation pour l'instant",
+      "pairDesktop": "Appairez un ordinateur pour afficher et exécuter des automatisations.",
+      "paused": "En pause",
+      "scheduled": "Planifiées",
+      "showFor": "Afficher les automatisations de",
+      "toggleFailed": "Impossible de mettre à jour {{name}}",
+      "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations."
     },
     "emptyState": {
       "connectedDescription": "Votre ordinateur apparaîtra ici. Tout est chiffré de bout en bout.",
@@ -1308,9 +1352,7 @@
       "title": "Connectez votre ordinateur"
     },
     "listFooter": {
-      "hostPickerTitle": "Ouvrir les tâches sur",
-      "automationsHeading": "Automatisations",
-      "automationsHostPickerTitle": "Ouvrir les automatisations sur"
+      "hostPickerTitle": "Ouvrir les tâches sur"
     },
     "listHeader": {
       "desktopsHeading": "Ordinateurs"
@@ -1321,6 +1363,33 @@
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "removeHostTitle": "Supprimer l'hôte",
       "tryAgain": "Veuillez réessayer."
+    },
+    "stats": {
+      "agentTime": "Temps agent",
+      "agentsSpawned": "Agents lancés",
+      "days": "{{days}} j",
+      "heading": "Vos statistiques",
+      "hours": "{{hours}} h",
+      "minutes": "{{minutes}} min",
+      "prsCreated": "PRs créées"
+    },
+    "tabs": {
+      "automations": "Automatisations",
+      "chooseDesktop": "{{desktop}}, choisir un autre ordinateur",
+      "feed": "Activité",
+      "usage": "Utilisation"
+    },
+    "usage": {
+      "active": "Actif",
+      "addAccounts": "Ajoutez des comptes dans Paramètres → Comptes sur l'ordinateur.",
+      "connectDesktop": "Connectez {{desktop}} pour voir l'utilisation des comptes d'agent.",
+      "emptyTitle": "Aucune utilisation pour l'instant",
+      "openAccountsHint": "Ouvre les comptes de cet ordinateur",
+      "pairDesktop": "Appairez un ordinateur pour voir l'utilisation des comptes d'agent.",
+      "refresh": "Actualiser l'utilisation",
+      "showUsageFor": "Afficher l'utilisation de",
+      "updatedAgo": "Mis à jour il y a {{time}}",
+      "updatedJustNow": "Mis à jour à l'instant"
     }
   },
   "hooks": {
@@ -1715,15 +1784,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Masquer le clavier",
       "sendKey": "Envoyer {{label}}",
-      "modifierHint": "S’applique à la touche suivante. Touchez deux fois pour la maintenir active.",
       "typeCharacter": "Saisir {{character}}",
       "interrupt": "Interrompre le terminal",
       "keysModeLabel": "Mode touches : la saisie va directement au terminal. Passer en mode message",
       "messageModeLabel": "Mode message : écrivez, puis envoyez. Passer en mode touches",
-      "keysMode": "Touches",
-      "messageMode": "Message",
       "moreKeys": "Plus de touches et d’actions",
-      "showKeyboard": "Afficher le clavier"
+      "showKeyboard": "Afficher le clavier",
+      "dismissKeyboardHint": "Masque le clavier virtuel et garde la session de terminal en cours ouverte.",
+      "switchToDesktopMode": "Passer en mode bureau",
+      "switchToPhoneMode": "Basculer en mode téléphone",
+      "pasteFromClipboard": "Coller depuis le presse-papiers",
+      "paste": "Coller",
+      "addCustomShortcut": "Ajouter un raccourci personnalisé"
     },
     "activeContent": {
       "createTab": "Créer un onglet",
@@ -1850,11 +1922,7 @@
     },
     "commandDock": {
       "liveInputHint": "Le texte saisi est envoyé directement au terminal actif.",
-      "liveInputLabel": "Saisie en direct dans le terminal",
-      "sendCommand": "Envoyer la commande",
-      "messageAgentPlaceholder": "Message à {{agent}}",
-      "writeCommandPlaceholder": "Écrivez une commande, puis envoyez-la",
-      "theAgent": "l'agent"
+      "liveInputLabel": "Saisie en direct dans le terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Ignorer l'avertissement de création de l'espace de travail"
@@ -2108,7 +2176,8 @@
       "promptUnconfirmed": "L'agent a démarré, mais l'envoi du prompt n'a pas pu être confirmé."
     },
     "prActionsEngine": {
-      "mergeFailed": "Impossible de merger la pull request."
+      "mergeFailed": "Impossible de merger la pull request.",
+      "refreshFailed": "Impossible d’actualiser la pull request."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent démarré",
@@ -2537,14 +2606,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "Impossible d’enregistrer la disposition",
       "saveFailedMessage": "Cette disposition s’applique pour le moment. Sélectionnez-la à nouveau pour réessayer de l’enregistrer."
-    },
-    "terminalArrowPad": {
-      "label": "Touches fléchées",
-      "hint": "Touchez un côté pour une pression ou maintenez et faites glisser pour répéter",
-      "up": "Haut",
-      "down": "Bas",
-      "left": "Gauche",
-      "right": "Droite"
     },
     "terminalMoreKeys": {
       "sendKey": "Envoyer {{label}}",
@@ -3287,7 +3348,6 @@
       "pipelineJobs_one": "{{count}} job",
       "pipelineJobs_other": "{{count}} jobs",
       "rerunAll": "Tout relancer",
-      "rerunFailed": "Relancer les vérifications échouées",
       "subIssueTitle": "Titre du sous-ticket",
       "subIssues": "Sous-tickets"
     },
@@ -3521,7 +3581,6 @@
       "requestReview": "Demander une revue",
       "requestReviewers": "Demander des reviewers",
       "rerunAll": "Tout relancer",
-      "rerunFailed": "Relancer celles en échec",
       "reviewers": "Reviewers",
       "viewFile": "Afficher"
     },
@@ -3975,7 +4034,6 @@
       "unknownResult": "Résultat inconnu",
       "notReported": "Non communiqué",
       "searchOptions": "Rechercher des options",
-      "scheduleAgentWorkAndViewRuns": "Planifier le travail des agents et voir les exécutions",
       "task": "Tâche",
       "review": "Vérifier"
     },

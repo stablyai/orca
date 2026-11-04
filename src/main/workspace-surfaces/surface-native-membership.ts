@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type Database from '../sqlite/sync-database'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { WorkspaceSurface } from '../../shared/workspace-surfaces/surface-content'
 import {
   surfaceChatProjectionSchema,

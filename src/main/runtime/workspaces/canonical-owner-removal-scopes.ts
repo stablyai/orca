@@ -1,3 +1,4 @@
+import { workspaceSessionPartitionHostId as workspaceSessionOwnerPartitionForHost } from '../../../shared/workspace-session/workspace-session-partition-owner'
 import { isDeepStrictEqual } from 'node:util'
 import {
   getRepoExecutionHostId,
@@ -14,10 +15,7 @@ import {
   captureCanonicalOwnerRemoval,
   type OpenNativeOwnerRemovalStore
 } from './canonical-owner-removal'
-import {
-  workspaceSessionOwnerPartitionForHost,
-  workspaceSessionPartitionIdsForHost
-} from '../../persistence/restoring-sessions/session-owner-removal'
+import { workspaceSessionPartitionIdsForHost } from '../../persistence/restoring-sessions/session-owner-removal'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../workspaces/removal/worktree-removal-repo-owner'
 import {
   assertWslMoveWorkspaceWritable,

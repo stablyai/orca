@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { namesCliConversation } from '../../shared/structured-agent-cli-conversation-adoption'
 import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'

@@ -2,7 +2,7 @@ import { memo } from 'react'
 import { useAppStore } from '@/store'
 import { useTranslation } from 'react-i18next'
 import { shallow } from 'zustand/shallow'
-import type { GitFileStatus } from '../../../../shared/git-status-types'
+import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { OpenFile } from '../../store/slices/editor'
 import SortableTab from './SortableTab'
 import TerminalSortableTab from './TerminalSortableTab'
@@ -16,7 +16,7 @@ import {
   useStructuredChatTabConversationName,
   useStructuredChatTabNamingFailure
 } from '@/runtime/structured-conversation-name'
-import { agentTypeToIconAgent } from '@/lib/agent-status'
+import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
 
 // Why only values and `actions`: anything a tab draws must be a compared prop, or a skipped render shows it stale.

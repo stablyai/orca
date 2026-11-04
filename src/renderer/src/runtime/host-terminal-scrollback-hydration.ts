@@ -1,4 +1,4 @@
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { SessionReadTerminalScrollbackResult } from '../../../shared/rpc-contract/session-terminal-scrollback-params'
 import { SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
 import { useAppStore } from '@/store'
@@ -6,7 +6,7 @@ import {
   runtimeEnvironmentIdForWorkspaceOwner,
   type RuntimeEnvironmentOwnerMatch
 } from '@/lib/resolve-owner'
-import type { OrcadDeploymentLink } from '../../../shared/runtime-environments'
+import type { OrcadDeploymentLink } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   callRuntimeRpc,
   peekRuntimeEnvironmentCapability,

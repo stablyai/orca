@@ -1,7 +1,7 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { sameAgentLaunchPickerModel } from '../../tab-bar/new-tab-agent-menu-model'
 import { memo, useCallback, useLayoutEffect, useRef, type ComponentProps } from 'react'
-import { pickSourceControlLaunchAgent } from '../../../../../shared/source-control-launch-agent-selection'
+import { pickSourceControlLaunchAgent } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import {
@@ -13,7 +13,7 @@ import {
   canonicalSourceControlActionSelection,
   pickSourceControlActionAgent,
   type CurrentActionSelection
-} from '../../../../../shared/source-control-action-selection'
+} from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { useAppStore } from '@/store/index'
 import {
@@ -22,9 +22,9 @@ import {
   type SourceControlAgentRows
 } from '@/lib/source-control-agent-picker'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-launch-route-input'
-import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch-runtime-capability'
-import type { SourceControlActionRecipe } from '../../../../../shared/source-control-ai-actions'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import type { SourceControlActionRecipe } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
 
 /** The shared surface rows configure a recipe here; they never start an agent. */

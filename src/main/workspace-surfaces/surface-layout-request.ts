@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { MAX_SURFACE_COMMAND_LIFETIME_MS } from './surface-command-receipts'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type {
   LayoutCommand,
   LayoutContext
@@ -10,7 +10,7 @@ import type { WorkspaceSurfaceReader } from '../../shared/workspace-surfaces/sur
 import type { SurfaceTarget } from '../../shared/workspace-surfaces/surface-command'
 import type { SurfaceStorageCommand } from '../../shared/workspace-surfaces/surface-storage-command'
 import { surfaceLayoutTargetRequirements } from './surface-layout-targets'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { normalizeSurfaceLayoutCommand } from './surface-layout-aliases'
 import { captureSurfaceAdmission } from './surface-admission-capture'
 

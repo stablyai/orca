@@ -1,11 +1,11 @@
 import { surfaceExecutionProvenanceSchema } from './surface-execution-provenance'
 import { z } from 'zod'
-import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../workspace-layout/terminal-tab-types'
 import { CreateTerminalTabCommand } from '../rpc-contract/workspace-layout-terminal-tab-params'
-import { sleepingAgentSessionRecordSchema } from '../workspace-session-sleeping-agents'
+import { sleepingAgentSessionRecordSchema } from '../workspace-session/workspace-session-sleeping-agents'
 import type { SurfaceContent, SurfaceLeaf, WorkspaceSurface } from './surface-content'
 import { collectLayoutLeafIdsInOrder } from '../workspace-layout/terminal-pane-tree'
-import { isTerminalLeafId } from '../stable-pane-id'
+import { isTerminalLeafId } from '../workspace-layout/stable-pane-id'
 
 const id = z.string().min(1)
 const leafId = id.refine(isTerminalLeafId)

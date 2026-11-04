@@ -21,7 +21,7 @@ import {
   rememberPreservedBranchCleanupTarget
 } from './preserved-branch-cleanup'
 import { removeWorktreeMetadataAndTransientState } from './worktree-removal-ownership'
-import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 
 export async function finishLocalWorktreeRemoval({
   context,

@@ -9,14 +9,14 @@ import { sendLayoutApply } from '@/runtime/layout-apply-send'
 import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { layoutFrameTerminalTab } from '@/runtime/layout-frame-terminal-panes'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { pickStoredFields } from '../../../../shared/workspace-layout/stored-record-fields'
 import type {
   CommandOf,
   LayoutApplyReply
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { AppState } from '../types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   clearWindowTabMark,
   markWindowTabStarting,

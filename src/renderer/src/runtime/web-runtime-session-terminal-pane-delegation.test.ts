@@ -5,7 +5,7 @@ import {
   peekWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
 } from './web-session-focus-intent'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 

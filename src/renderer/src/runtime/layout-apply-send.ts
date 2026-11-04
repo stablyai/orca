@@ -1,4 +1,4 @@
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 // Store-free so store slices can send; `layout-owner-command` reads the store for other callers.
 import {
   runtimeEnvironmentIdForWorkspaceOwner,

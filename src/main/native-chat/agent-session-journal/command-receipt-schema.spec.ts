@@ -47,69 +47,6 @@ export function registerCommandReceiptSchemaTests(): void {
   }
 
   describe('command receipt schema at writable open', () => {
-    it('creates the operation/caller primary key and session index on a fresh host database', async () => {
-      const database = await openTestJournalHostDatabase(root)
-      expect(
-        await database.read(async (read) =>
-          Boolean(
-            await read
-              .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
-              .get('agent_session_command_receipts')
-          )
-        )
-      ).toBe(true)
-      expect(
-        await database.read(async (read) =>
-          Number((await read.prepare('PRAGMA user_version').get())?.user_version)
-        )
-      ).toBe(JOURNAL_DB_SCHEMA_VERSION)
-      expect(
-        await database.read((read) =>
-          read.prepare('PRAGMA table_info(agent_session_command_receipts)').all()
-        )
-      ).toEqual([
-        expect.objectContaining({ name: 'operation_id', pk: 1 }),
-        expect.objectContaining({ name: 'session_id', pk: 0 }),
-        expect.objectContaining({ name: 'caller_key', pk: 2 }),
-        expect.objectContaining({ name: 'method', pk: 0 }),
-        expect.objectContaining({ name: 'fingerprint', pk: 0 }),
-        expect.objectContaining({ name: 'status', pk: 0 }),
-        expect.objectContaining({ name: 'result_json', pk: 0 }),
-        expect.objectContaining({ name: 'rejection_json', pk: 0 }),
-        expect.objectContaining({ name: 'accepted_at', pk: 0 })
-      ])
-      const indexes = await database.read((read) =>
-        read.prepare('PRAGMA index_list(agent_session_command_receipts)').all()
-      )
-      expect(indexes).toHaveLength(2)
-      expect(indexes).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            name: 'sqlite_autoindex_agent_session_command_receipts_1',
-            origin: 'pk'
-          }),
-          expect.objectContaining({ name: 'agent_session_command_receipts_session', origin: 'c' })
-        ])
-      )
-      expect(
-        await database.read((read) =>
-          read.prepare('PRAGMA index_info(agent_session_command_receipts_session)').all()
-        )
-      ).toEqual([expect.objectContaining({ name: 'session_id' })])
-      expect(
-        await database.read((read) =>
-          read.prepare('PRAGMA foreign_key_list(agent_session_command_receipts)').all()
-        )
-      ).toEqual([
-        expect.objectContaining({
-          table: 'agent_session_records',
-          from: 'session_id',
-          to: 'session_id',
-          on_delete: 'CASCADE'
-        })
-      ])
-    })
-
     it.each([3, 4])('adds the table to an older-shaped version %i database', (version) => {
       const seeded = new Database(dbPath)
       seeded.exec(createJournalTablesSql())

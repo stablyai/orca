@@ -1,7 +1,7 @@
 import { rekeySurfacePaneProfileRecords } from '../../workspace-surfaces/surface-pane-profile-records'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { patchStoredSession } from '../../../shared/workspace-layout/workspace-layout-record-patch'
 import { projectSurfaceSession } from '../../../shared/workspace-surfaces/surface-session-projection'
 import { emptySurfaceProfileDomain } from '../../../shared/workspace-surfaces/surface-profile-domain'

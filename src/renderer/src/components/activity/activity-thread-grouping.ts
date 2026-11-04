@@ -1,7 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { translate } from '@/i18n/i18n'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {
@@ -12,7 +12,8 @@ import {
   threadAgentStateLabel,
   type ActivityThreadStatusId
 } from './activity-thread-presentation'
-import type { ActivityGroupBy, ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
+import type { ActivityGroupBy } from '../../../../shared/agents-view-thread-filters'
+import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 // Use exhaustive, unique attention ranks so new states fail typecheck and recency cannot reorder headers.
 const ACTIVITY_STATUS_GROUP_RANK: Record<ActivityThreadStatusId, number> = {

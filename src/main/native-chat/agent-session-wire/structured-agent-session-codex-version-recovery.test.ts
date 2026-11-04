@@ -13,7 +13,7 @@ let rig: QueuedMessageTestRig
 beforeEach(async () => {
   rig = await createQueuedMessageTestRig({
     restartable: true,
-    idleSweep: { idleMs: 0, intervalMs: 60 * 60 * 1000 }
+    idleSweep: { idleMs: () => 0, intervalMs: 60 * 60 * 1000 }
   })
 })
 afterEach(() => rig.dispose())

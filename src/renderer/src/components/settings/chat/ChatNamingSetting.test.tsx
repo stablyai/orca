@@ -3,8 +3,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control-ai-types'
-import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control-ai'
+import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { ChatNamingSetting } from './ChatNamingSetting'
 import {
   savedChatNamingCatalog,
@@ -13,7 +13,7 @@ import {
 import { toast } from 'sonner'
 import { startTransition, StrictMode, Suspense } from 'react'
 
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import '../__fixtures__/settings-persistence-test-fixture'
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 

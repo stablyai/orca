@@ -1,11 +1,11 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { commitCanonicalResumeRecordEdit } from '../../terminal/stop/canonical-resume-record-edit'
 // Share recorded-session ownership checks and in-flight claims between pane reopen and targeted resume.
 
 import { findPaneSleepingRecord } from './pane-sleeping-record'
 import { hookRowPaneResumeRecord, isPaneLocalHookRow } from './hook-row-pane-resume-record'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { OrcaRuntimeWithApplyMobileSessionTabNavigation } from './apply-mobile-session-tab-navigation'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
 import {

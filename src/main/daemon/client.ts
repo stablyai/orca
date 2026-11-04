@@ -9,7 +9,10 @@ import {
   DaemonProtocolError,
   type DaemonEndpointIdentity
 } from './types'
-import { writeRefused, type WriteSettlement } from '../../shared/pty-write-settlement'
+import {
+  writeRefused,
+  type WriteSettlement
+} from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import {
   armDaemonSocketCloseHandlers,
   connectDaemonSocket,
@@ -72,17 +75,14 @@ export class DaemonClient {
     return this.connected
   }
 
-  getDaemonIdentity(): DaemonEndpointIdentity | null {
-    return this.daemonIdentity ? { ...this.daemonIdentity } : null
-  }
+  getDaemonIdentity = (): DaemonEndpointIdentity | null =>
+    this.daemonIdentity ? { ...this.daemonIdentity } : null
 
   /**
    * The last daemon's resize model, kept through a disconnect (the next hello replaces it): null is
    * an older daemon, undefined that no daemon has answered yet.
    */
-  getDaemonResizeModel(): string | null | undefined {
-    return this.daemonResizeModel
-  }
+  getDaemonResizeModel = (): string | null | undefined => this.daemonResizeModel
 
   hasObservedAuthenticatedDisconnect(): boolean {
     return this.observedAuthenticatedDisconnect

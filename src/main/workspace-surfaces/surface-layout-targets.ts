@@ -5,7 +5,7 @@ import type {
   SurfaceLayoutRequest,
   SurfaceTarget
 } from '../../shared/workspace-surfaces/surface-command'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { rowKey, readSurface } from './surface-rows'
 
 export function missingSurfaceTargets(

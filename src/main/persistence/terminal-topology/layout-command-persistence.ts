@@ -1,7 +1,7 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSurfaceCommands } from '../loading-store/workspace-surface-commands'
 import { applyCanonicalLayoutCommand, changesSurfaceContent } from './canonical-layout-command'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
   CommandOf,
   LayoutApplyOutcome,

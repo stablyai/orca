@@ -3,7 +3,7 @@ import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { sendLayoutApply } from '@/runtime/layout-apply-send'
 import type { PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   clearWindowTabMark,
   markWindowTabStarting

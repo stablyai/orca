@@ -1,6 +1,5 @@
-import { compactJournalOutcomePage } from './journal-native-compaction'
 import { sweepJournalRetiredPage } from './journal-native-retired-page'
-import { journalPragmaNumber, openJournalDatabase } from './journal-database'
+import { openJournalDatabase } from './journal-database'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
@@ -115,29 +114,11 @@ port.on('message', ({ id, command }: JournalSqlRequest) => {
     if (command.type === 'maintenance') {
       const start = performance.now()
       const unit = command.unit
-      if (unit.kind === 'vacuum') {
-        const more =
-          journalPragmaNumber(db, 'auto_vacuum') === 2 &&
-          journalPragmaNumber(db, 'freelist_count') > 0
-        if (more) {
-          db.pragma('incremental_vacuum(32)')
-        }
-        port.postMessage({
-          type: 'maintained',
-          id,
-          more,
-          elapsed: performance.now() - start
-        } satisfies JournalSqlResponse)
-        return
-      }
       db.exec('BEGIN IMMEDIATE')
       outcome = 'not-committed'
       let result
       try {
-        result =
-          unit.kind === 'retired'
-            ? sweepJournalRetiredPage(db, unit.after)
-            : { progress: compactJournalOutcomePage(db, unit.active) }
+        result = sweepJournalRetiredPage(db, unit.after)
         outcome = 'indeterminate'
         db.exec('COMMIT')
       } catch (error) {
@@ -160,7 +141,7 @@ port.on('message', ({ id, command }: JournalSqlRequest) => {
         type: 'maintained',
         id,
         ...result,
-        more: 'progress' in result ? result.progress.more : result.more,
+        more: result.more,
         elapsed: performance.now() - start
       } satisfies JournalSqlResponse)
       return

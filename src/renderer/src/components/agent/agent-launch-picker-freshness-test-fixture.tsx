@@ -4,9 +4,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent
 } from '@/components/ui/dropdown-menu'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import { createElement } from 'react'
-import { act, fireEvent, render } from '@testing-library/react'
+import { act, fireEvent, getByRole, render } from '@testing-library/react'
 import { expect, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
@@ -18,7 +18,7 @@ import {
 } from './use-agent-launch-picker-inventory'
 import { agentPickerAcquisitionDiagnostics } from './agent-launch-picker-acquisition'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
-import * as picker from '../../../../shared/agent-launch-picker'
+import * as picker from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import {
   applyNativeChatSessionOptionPicks,
   structuredLaunchSeedOptions
@@ -333,7 +333,7 @@ export async function exerciseRetainedAgentPickerPublications({
     fireEvent.change(document.querySelector('textarea')!, {
       target: { value: '--model private/retained --accepted' }
     })
-    fireEvent.blur(document.querySelector('textarea')!)
+    fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
     fireEvent.change(document.querySelector('textarea')!, { target: { value: '--latest-pending' } })
     fireEvent.change(document.querySelector('input[placeholder="Search agents and setups…"]')!, {
       target: { value: 'no results' }

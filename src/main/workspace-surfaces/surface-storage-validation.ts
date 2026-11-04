@@ -10,8 +10,8 @@ import {
 import { z } from 'zod'
 import { LayoutApplyParams } from '../../shared/rpc-contract/workspace-layout-params'
 import { expectedResumeRecordsSchema } from '../../shared/rpc-contract/workspace-layout-sleep-wake-params'
-import { workspaceSessionStateSchema } from '../../shared/workspace-session-schema'
-import { sleepingAgentSessionRecordSchema } from '../../shared/workspace-session-sleeping-agents'
+import { workspaceSessionStateSchema } from '../../shared/workspace-session/workspace-session-schema'
+import { sleepingAgentSessionRecordSchema } from '../../shared/workspace-session/workspace-session-sleeping-agents'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import {
   surfaceAllocationSchema,

@@ -1,3 +1,7 @@
+import { assertTestJournalHistoricalInputs } from './journal-historical-inputs.test-support'
+import { buildJournalQueueRow, type JournalQueueChange } from './journal-queue-events'
+import { applyJournalRow } from './journal-reducer'
+import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
 import {
@@ -183,4 +187,40 @@ export function writeTestLegacyTerminalGaps(
     })
   }
   return seq
+}
+
+/** Persist a prior-build queue row verbatim, then replay it through the production fold. */
+export async function appendTestJournalQueueRow(
+  db: JournalPersistencePlan | JournalHostDatabase,
+  journal: AgentSessionJournal,
+  messageId: string,
+  change: JournalQueueChange
+): Promise<void> {
+  if (db instanceof JournalHostDatabase) {
+    await db.transaction(
+      async (plan) => {
+        const state = journal['state']
+        await assertTestJournalHistoricalInputs(plan, journal)
+        const row = buildJournalQueueRow(
+          state,
+          messageId,
+          change,
+          state.lastSequence + 1,
+          Date.now()
+        )
+        insertTestJournalRow(plan, state.sessionId, row)
+        return row
+      },
+      false,
+      (row) => {
+        applyJournalRow(journal['state'], row)
+      }
+    )
+    return
+  }
+  const state = journal['state']
+  await assertTestJournalHistoricalInputs(db, journal)
+  const row = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, Date.now())
+  insertTestJournalRow(db, state.sessionId, row)
+  applyJournalRow(state, row)
 }

@@ -230,11 +230,12 @@ it.each([10, 100])(
         projecting = previous
       }
     })
-    const snapshotSources: string[] = []
-    const readSnapshot = journal.snapshot.bind(journal)
-    const snapshot = vi.spyOn(journal, 'snapshot').mockImplementation(() => {
-      snapshotSources.push(projecting ? 'status-projection' : 'other')
-      return readSnapshot()
+    const statusSources: string[] = []
+    const snapshot = vi.spyOn(journal, 'snapshot')
+    const readStatus = journal.statusRead.bind(journal)
+    const statusRead = vi.spyOn(journal, 'statusRead').mockImplementation(() => {
+      statusSources.push(projecting ? 'status-projection' : 'other')
+      return readStatus()
     })
     const append = vi.spyOn(current.host, 'appendAgentStart')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -287,12 +288,13 @@ it.each([10, 100])(
       dedupe,
       scan,
       snapshot,
+      statusRead,
       append,
       warn
     ]) {
       counter.mockClear()
     }
-    snapshotSources.length = 0
+    statusSources.length = 0
     tabVisits = dispatchVisits = taskVisits = workerVisits = 0
     const publishers = facts.map(() => prepareWorkerStartCard(runtime, admitted.caller))
     await Promise.all(captures.mock.results.map((result) => result.value))
@@ -303,7 +305,7 @@ it.each([10, 100])(
     expect(epochReads).toHaveBeenCalledTimes(4 * count)
     expect(serialized).toHaveBeenCalledTimes(count)
     expect(inserts).toHaveBeenCalledTimes(count)
-    expect(snapshotSources).toEqual(['status-projection'])
+    expect(statusSources).toEqual(['status-projection'])
     // Duplicate callbacks still name the sender but must stop before row serialization/insertion.
     facts.forEach((fact, index) => publishers[index](fact))
     await eventually(() => expect(append).toHaveBeenCalledTimes(2 * count))
@@ -324,8 +326,9 @@ it.each([10, 100])(
     expect(tabVisits).toBeLessThanOrEqual(2 * count * tabs.length)
     expect(dedupe).toHaveBeenCalledTimes(2 * count)
     expect(scan).not.toHaveBeenCalled()
-    expect(snapshot).toHaveBeenCalledTimes(1)
-    expect(snapshotSources).toEqual(['status-projection'])
+    expect(statusRead).toHaveBeenCalledTimes(1)
+    expect(snapshot).not.toHaveBeenCalled()
+    expect(statusSources).toEqual(['status-projection'])
     expect(
       journalQueries.mock.calls.filter(
         ([query]) => /FROM journal_rows/.test(query) && !/seq = 1/.test(query)

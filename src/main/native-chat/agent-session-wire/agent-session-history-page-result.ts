@@ -13,6 +13,7 @@ import type {
 
 export function buildPage(input: {
   snapshot: AgentJournalSnapshot
+  submissions?: AgentJournalSnapshot['submissions']
   direction: AgentSessionHistoryDirection
   items: AgentJournalRenderItem[]
   removedItemIds?: string[]
@@ -34,7 +35,7 @@ export function buildPage(input: {
     direction: input.direction,
     items: input.items,
     removedItemIds: input.removedItemIds ?? [],
-    submissions: input.snapshot.submissions.filter((submission) =>
+    submissions: (input.submissions ?? input.snapshot.submissions).filter((submission) =>
       pageItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
     ),
     window: {

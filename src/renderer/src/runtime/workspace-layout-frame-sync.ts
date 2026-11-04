@@ -3,9 +3,13 @@
 import { showFramePatch, withMovedTabsSelected } from '@/store/slices/tabs/moved-tab-selection'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { applyLayoutFrame, EMPTY_WORKSPACE_LAYOUT_CACHE } from '@/store/workspace-layout-cache'
-import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import {
+  applyLayoutFrame,
+  EMPTY_WORKSPACE_LAYOUT_CACHE,
+  type WorkspaceLayoutCache
+} from '@/store/workspace-layout-cache'
+
 import { terminalLayoutsPatch } from '@/store/workspace-layout-frame-store-patch'
 import {
   layoutHoldsBoundPane,

@@ -20,7 +20,7 @@ vi.mock('./browser-renderer-trust', () => ({
   isTrustedBrowserRenderer: (sender: unknown) => mocks.isTrusted(sender)
 }))
 
-vi.mock('../../browser/browser-client-page-metadata-transport', () => ({
+vi.mock('../../browser/client-pages/renderer/browser-client-page-metadata-transport', () => ({
   publishBrowserClientPageMetadata: (environmentId: string, params: unknown) =>
     mocks.publish(environmentId, params)
 }))

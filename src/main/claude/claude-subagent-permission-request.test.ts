@@ -12,8 +12,8 @@ import type {
   AgentJournalRenderItem,
   AgentJournalResolution
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import type { AgentStatusStructuredSessionSubject } from '../../shared/agent-status-subject'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AgentStatusStructuredSessionSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer } from '../agent-hooks/server'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'

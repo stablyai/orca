@@ -3,12 +3,12 @@ import { hostedReviewSshConnectionId } from '../source-control/hosted-review-exe
 import type {
   CreateStackedHostedReviewInput,
   CreateStackedHostedReviewResult
-} from '../../shared/hosted-review'
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
-} from '../../shared/hosted-review-refs'
+} from '../../shared/source-control/hosted-review/hosted-review-refs'
 import { acquire, ghExecFileAsync, ghRepoExecOptions, githubRepoContext, release } from './gh-utils'
 import {
   getOriginGitHubApiRepository,
@@ -26,7 +26,7 @@ import {
   type GitHubStackPullRequest,
   type NumberedHostedReviewSummary
 } from './github-stack-api-responses'
-import { stackedReviewFailure } from '../../shared/stacked-hosted-review-failure-copy'
+import { stackedReviewFailure } from '../../shared/source-control/hosted-review/stacked-hosted-review-failure-copy'
 
 type StackedPullRequestPlan =
   | {

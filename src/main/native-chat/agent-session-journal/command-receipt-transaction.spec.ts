@@ -9,11 +9,10 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import { replaceJournalEpoch } from './journal-epoch-replacement'
+import { AgentSessionJournal } from './journal-store'
 import {
   insertTestJournalRow,
   publishTestJournalEpoch,
-  deleteTestJournalRow,
   corruptTestCommandReceipt
 } from './journal-native-fixture-test-support'
 import type { JournalRow } from './journal-row-schema'
@@ -163,36 +162,19 @@ export function registerCommandReceiptTransactionTests(): void {
   })
 
   describe('command receipts across epoch replacement', () => {
-    it('survives deletion of its referenced journal epoch as retained spent proof', async () => {
-      await database.transaction((db) => {
-        insertTestJournalRow(db, identity.sessionId, epochRow(1, 1000))
-        buildCommandReceiptTransaction(scope, receipt).write(db)
-      })
-      await deleteTestJournalRow(database, identity.sessionId, 1)
-      expect(await storedRows()).toEqual([])
-      expect(await readReceipt()).toEqual({ verdict: 'readable', receipt })
-    })
-
     it('survives the actual replacement transaction without transferring or copying results', async () => {
       await database.transaction((db) => {
         insertTestJournalRow(db, identity.sessionId, epochRow(1, 1000))
+        publishTestJournalEpoch(db, identity.sessionId, 'epoch-1', identity.workspaceId)
         buildCommandReceiptTransaction(scope, receipt).write(db)
       })
-      await replaceJournalEpoch({
-        database,
-        identity,
-        reason: 'legacy_import',
-        fence: 0,
-        items: [],
-        queuePause: { lifted: false, liveStop: null, reopened: false },
-        queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
-        now: () => 2000,
-        mintEpoch: () => 'epoch-2',
-        onPublished: () => undefined
-      })
+      const journal = new AgentSessionJournal({ database, identity })
+      await journal.open()
+      await journal.replaceEpochItems('legacy_import', 0, [])
       expect(
         await database.read((read) => read.prepare('SELECT epoch FROM journal_rows').all())
-      ).toEqual([{ epoch: 'epoch-2' }])
+      ).toEqual([{ epoch: 'epoch-1' }, { epoch: 'epoch-1' }])
+      await journal.close()
       expect(await readReceipt()).toEqual({ verdict: 'readable', receipt })
       await expect(
         database.transaction((plan) => buildCommandReceiptTransaction(scope, receipt).write(plan))

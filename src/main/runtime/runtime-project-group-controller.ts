@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'
 import type {
   RuntimeProjectGroupDependencies,
@@ -13,7 +13,7 @@ import type { ProjectGroup } from '../../shared/project-group-types'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
-} from '../../shared/folder-workspace-path-status'
+} from '../../shared/folder-workspaces/folder-workspace-path-status'
 import {
   assertFolderWorkspacePathUsable,
   folderWorkspacePathRefusal,

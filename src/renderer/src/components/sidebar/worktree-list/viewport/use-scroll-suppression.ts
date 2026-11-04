@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
-import { SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT } from '../../WorktreeCardAgents'
+import { SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT } from '../../workspace-card/activity/WorktreeCardAgents'
 import {
   createPendingRevealScroll,
   isRevealScrollSettling,
   type PendingRevealScroll
-} from '../../worktree-sidebar-reveal-scroll-settle'
+} from '../navigation/worktree-sidebar-reveal-scroll-settle'
 
 export const USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 500
 export const EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 300

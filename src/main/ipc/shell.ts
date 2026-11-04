@@ -7,7 +7,7 @@ import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
-} from '../../shared/shell-open-types'
+} from '../../shared/shell/opening/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
 import {
   repoIconPickFailure,

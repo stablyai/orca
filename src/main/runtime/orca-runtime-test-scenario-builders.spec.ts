@@ -17,12 +17,10 @@ const { TEST_WORKTREE_PATH, makeHeadlessTerminalLayout, makeRuntimeStoreWithWork
   fixtures
 const { makeWorkspaceSessionWithHeadlessTerminal, store } = fixtures
 
-import type {
-  BrowserClientHostCommandEvent,
-  RuntimeBrowserClientPlacement,
-  TerminalSideEffectBatch,
-  WorkspaceSessionState
-} from './orca-runtime-test-mocks.spec'
+import type { RuntimeBrowserClientPlacement } from './orca-runtime-test-mocks.spec'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import type { BrowserClientHostCommandEvent } from '../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
 import type { OrchestrationDb } from './orchestration/db'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>

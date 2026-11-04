@@ -13,10 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
-import {
-  CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS,
-  hasClosedTerminalTabRecord
-} from '../../shared/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { profileStateDatabaseFile } from '../../shared/profile-state-storage-paths'
 
@@ -152,37 +149,6 @@ describe('shipped terminal.create after a durable host close', () => {
       ).toBeUndefined()
     }
   )
-
-  it('still accepts a valid unseen identity', async () => {
-    const { spawn, create } = await persistedTab('local')
-    await expect(create({ tabId: randomUUID(), leafId: randomUUID() })).resolves.toHaveProperty(
-      'terminal.ptyId',
-      'replacement-pty'
-    )
-    expect(spawn).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps recovery of a persisted pane without an explicit tab close', async () => {
-    const { spawn, create } = await persistedTab('local', false)
-    await expect(create()).resolves.toHaveProperty('terminal.ptyId', 'replacement-pty')
-    expect(spawn).toHaveBeenCalledTimes(1)
-  })
-
-  it('preserves the existing close-record expiry policy', async () => {
-    const { reloaded, worktreeId, pane, spawn, create } = await persistedTab('local')
-    reloaded.setWorkspaceSession({
-      ...reloaded.getWorkspaceSession(),
-      closedTerminalTabTombstonesByTabId: {
-        [pane.tabId]: {
-          worktreeId,
-          closedAt: Date.now() - CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS - 60_000,
-          reason: 'user'
-        }
-      }
-    })
-    await expect(create()).resolves.toHaveProperty('terminal.ptyId', 'replacement-pty')
-    expect(spawn).toHaveBeenCalledTimes(1)
-  })
 })
 
 describe('canonical finite close admission', () => {

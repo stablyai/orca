@@ -10,16 +10,16 @@ import type { LegacyWorkerRecoveryCandidate } from '../runtime-legacy-worker-ter
 import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/orchestration-legacy-worker-terminal-recovery'
 
 import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driver-resources'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from '../run-terminal-client-use'
 import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../shared/execution-host'
 import { RuntimePreservedBranchCleanup } from '../runtime-preserved-branch-cleanup'
 import type * as TerminalContracts from '../runtime-terminal-contracts'
 
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
-import type { AgentStatus } from '../../../shared/agent-detection'
+import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../runtime-legacy-worker-terminal-recovery-persistence'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../runtime-legacy-worker-terminal-recovery-controller'
 import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/worker-terminal-release-reconciliation'

@@ -1,3 +1,4 @@
+import './journal-input-order-recovery.spec'
 import { journalInputOrder } from './journal-input-order'
 import {
   writeCommandReceiptTestRecord,
@@ -80,7 +81,7 @@ it('preserves the forced queue place through command removal, two epoch replacem
       await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
       expect(knownPredecessors(journal, 'M')).toEqual(['D'])
       expect(journal.inputOrder.forced('M')).toBe(true)
-      expect(journal.queuedMessages.get('C')).toBeNull()
+      expect(journal.queuedMessages.get('C')).toMatchObject({ state: 'withdrawn' })
       expect(selectStructuredAgentSessionInput(journal)).toMatchObject({
         kind: 'card',
         card: { messageId: 'D' }
@@ -160,6 +161,11 @@ it.each(['resume', 'accepted'] as const)(
       const floor = journal.reopenFloor()!
       const before = journal.cursor()
       let committed = 0
+      const captureLifetime = new AbortController()
+      const capturedKeys = journal.inputOrder.captureKeys(new Set(), captureLifetime.signal)
+      const mKey = agentJournalSubmissionKey('M')
+      expect(capturedKeys.has(mKey)).toBe(false)
+      expect(capturedKeys.has(agentJournalSubmissionKey('forced'))).toBe(true)
       await expect(
         append('M', {
           write: () => {
@@ -172,6 +178,8 @@ it.each(['resume', 'accepted'] as const)(
       ).rejects.toThrow('receipt transaction fails')
       expect(journal.cursor()).toEqual(before)
       expect(journal.submission('M')).toBeUndefined()
+      expect(capturedKeys.changes.size).toBe(0)
+      expect(capturedKeys.has(mKey)).toBe(false)
       expect(journal.reopenFloor()).toEqual(floor)
       expect(
         (await loadTestJournal(root, identity.sessionId))!.state.queuePauseMarks.reopenedSequence
@@ -204,6 +212,12 @@ it.each(['resume', 'accepted'] as const)(
         }
       })
       expect(target).toEqual(cursor)
+      const committedKeys = journal.inputOrder.captureKeys(new Set(), captureLifetime.signal)
+      expect(capturedKeys.has(mKey)).toBe(false)
+      expect(committedKeys.has(mKey)).toBe(true)
+      expect(capturedKeys.same(committedKeys)).toBe(false)
+      expect([...capturedKeys.changes]).toEqual([[mKey, false]])
+      captureLifetime.abort()
       expect(committed).toBe(1)
       expect(journal.reopenFloor()).toBeNull()
       const marks = (
@@ -229,6 +243,8 @@ it.each(['resume', 'accepted'] as const)(
       } else {
         expect(journal.queuedMessages.pauses()).toEqual([])
       }
+      expect([...capturedKeys.changes]).toEqual([[mKey, false]])
+      expect(committedKeys.changes.size).toBe(0)
       const beforePrefixes = ['forced', 'M', 'ordinary-held'].map((id) =>
         knownPredecessors(journal, id)
       )
@@ -248,8 +264,9 @@ it.each(['resume', 'accepted'] as const)(
       expect(journal.reopenFloor()).toEqual(foreignFloor)
       expect(foreignFloor.epoch).not.toBe(journal.epoch)
       const beforeForeign = journal.cursor()
-      await append('new-epoch')
-      expect(journal.cursor().sequence).toBe(beforeForeign.sequence + 1)
+      const appended = await append('new-epoch')
+      expect(journal.cursor()).toEqual(appended)
+      expect(appended.sequence).toBe(beforeForeign.sequence + 2) // Same physical epoch commits the reopen mark before admission.
       expect(knownPredecessors(journal, 'new-epoch')).toEqual([])
       expect(['forced', 'M', 'ordinary-held'].map((id) => knownPredecessors(journal, id))).toEqual(
         beforePrefixes

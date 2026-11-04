@@ -3,14 +3,14 @@ import {
   hasClosedTerminalTabRecord,
   recordClosedTerminalTabTombstone,
   pruneClosedTerminalTabTombstones
-} from '../../shared/closed-terminal-tab-tombstones'
+} from '../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import { invalidateSurfaceCapture } from './surface-transaction-changes'
 import { readSurfaceHostSession } from './surface-host-profile-session'
 import { retireSurfaceRunAfterKernelChange } from './surface-kernel-retirement'
 import { showNativeSurface } from './surface-native-show'
 import type Database from '../sqlite/sync-database'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { SurfaceProfileDomain } from '../../shared/workspace-surfaces/surface-profile-domain'
 import { emptySurfaceHostDomain } from '../../shared/workspace-surfaces/surface-profile-domain'
 import type {

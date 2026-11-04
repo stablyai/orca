@@ -1,18 +1,29 @@
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import {
+  type AgentSessionHistoryDirection,
+  type AgentSessionSubagentRosterEntry,
+  AGENT_SESSION_HISTORY_DEFAULT_LIMIT,
+  AGENT_SESSION_HISTORY_MAX_LIMIT
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   agentJournalSubmissionKey,
   boundJournalKeyComponent
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
+  AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 import { agentSessionHostStatusBody } from '../../../shared/agent-session/view/agent-session-host-status-rows'
+import { isSubagentBlock } from '../../../shared/native-chat/native-chat-types'
 import {
   subagentFoldKey,
   subagentItemBlock
 } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
 
@@ -96,6 +107,13 @@ export function measureHistoryItem(item: AgentJournalRenderItem): HistoryItemFor
 export type HistoryReader = {
   form: (item: AgentJournalRenderItem) => HistoryItemForm
   budgetBytes: number
+  /** Forward reads project touched identities; cold reads include retained sources before bounds. */
+  snapshot?: (
+    journal: AgentSessionJournal,
+    snapshot?: AgentJournalSnapshot,
+    touched?: ReadonlySet<string>
+  ) => AgentJournalSnapshot
+  queueSourceIds?: (journal: AgentSessionJournal, messageId: string) => readonly string[]
 }
 
 export function boundHistoryItemsByBytes(
@@ -196,4 +214,49 @@ export function wholeSubagentGroupsStart(
     }
   }
   return whole
+}
+
+export function resolveHistoryLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) {
+    return AGENT_SESSION_HISTORY_DEFAULT_LIMIT
+  }
+  return Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, Math.max(1, Math.floor(limit)))
+}
+
+export function isSubagentRow(item: AgentJournalRenderItem): boolean {
+  return item.body.kind === 'message' && item.body.blocks.some(isSubagentBlock)
+}
+
+export type HistoryPageInput = {
+  snapshot: AgentJournalSnapshot
+  submissions?: AgentJournalSnapshot['submissions']
+  direction: AgentSessionHistoryDirection
+  items: AgentJournalRenderItem[]
+  removedItemIds?: string[]
+  hasOlder: boolean
+  hasNewer: boolean
+  fallbackCursor: AgentJournalCursor
+  nextCursor: AgentJournalCursor | undefined
+  fence?: number
+  subagentRoster?: AgentSessionSubagentRosterEntry[]
+}
+
+/** Window by own-agent rows, retaining contiguous subagent work and whole sibling groups within byte bounds. */
+export function conversationWindow(
+  items: readonly AgentJournalRenderItem[],
+  limit: number
+): AgentJournalRenderItem[] {
+  const own = items.filter((item) => isRootAgentJournalItem(item) && !isSubagentRow(item))
+  if (own.length === items.length) {
+    return newestWholeSequenceGroups(items, limit)
+  }
+  const ownWindow = newestWholeSequenceGroups(own, limit)
+  const start = ownWindow.length < own.length ? ownWindow[0]?.sequence : undefined
+  if (start === undefined) {
+    return [...items]
+  }
+  const reach = newestWholeSequenceGroups(own, 2 * limit)
+  const floor = reach.length < own.length ? reach[0]!.sequence : Number.NEGATIVE_INFINITY
+  const whole = wholeSubagentGroupsStart(items, start, floor)
+  return items.filter((item) => item.sequence >= whole)
 }

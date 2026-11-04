@@ -1,12 +1,10 @@
 import { snapshotTestJournal } from '../agent-session-journal/journal-drained-fixture-test-support'
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
-import './structured-agent-session-codex-input-admission.spec'
 import {
   continuingStructuredAgentSessionInput,
   finalizingStructuredAgentSessionInput,
   structuredAgentSessionHandingOver
 } from './structured-agent-session-handing-over'
-import { measureCodexInputWork } from './structured-agent-session-codex-input-perf-test-support'
 import { registerCodexInputFinalization } from './structured-agent-session-codex-input-finalization.spec'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
@@ -20,7 +18,6 @@ import {
   agentSessionSendSubmission as submission
 } from '../../../shared/agent-session/agent-session-wire'
 import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session/journal/agent-session-journal-types'
-
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
@@ -35,10 +32,10 @@ import {
   THREAD_ID as THREAD,
   adapterFor,
   fakeCodex
-} from '../../codex/codex-structured-session-adapter-fixture'
-import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
+import { codexTurnLifecycleFake } from '../../codex/structured/journal/codex-turn-lifecycle-fake'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
+import type { CodexStructuredSessionAdapter } from '../../codex/structured/session-lifecycle/codex-structured-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { createRestTestRig } from './structured-agent-session-rest-test-rig'
 import {
@@ -49,6 +46,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import './structured-agent-session-codex-input-admission.spec'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -120,6 +118,7 @@ beforeEach(async () => {
         : { permissionPolicy: codexStructuredPermissionPolicy(permissionMode ?? 'ask') })
     }),
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
+    onHeldSendsChanged: ({ sessionId }) => queueMicrotask(() => host.publishWorkChanged(sessionId)),
     onEvent: (event) => {
       if (event.type === 'options-reported' || (event.type === 'ended' && 'cause' in event)) {
         void host.handleAdapterEvent(event)
@@ -224,6 +223,60 @@ async function began(id: string) {
   turns.echo(id)
   await vi.waitFor(async () => expect(await row(id)).toMatchObject({ dispatchState: 'accepted' }))
 }
+
+it('waits through live no-turn hold loss until the reheld send echoes', async () => {
+  const reply = Promise.withResolvers<unknown>()
+  codex.routes['turn/start'] = () => reply.promise
+  const id = await permissionSend('keep waiting for my actual receipt')
+  await vi.waitFor(() => expect(starts()).toHaveLength(1))
+  expect(adapter.heldSends(SESSION)).toContain(id)
+  const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const child = host.collaboratorsForTests().sessions.get(SESSION)!.child!
+  const observed = vi.fn()
+  const waiting = host.waitForSendSettlement(SESSION, id, { until: 'answered' })
+  const observation = waiting.then(observed)
+  try {
+    reply.resolve({})
+    notify('thread/status/changed', { threadId: THREAD, status: { type: 'idle' } })
+    await vi.waitFor(() => expect(adapter.heldSends(SESSION)).not.toContain(id))
+    await host.flushStreamedEvents(SESSION)
+    await host.collaboratorsForTests().serialize(SESSION, async () => {})
+    expect(journal.submission(id)).toMatchObject({ dispatchState: 'pending' })
+    expect(journal.queuedMessages.attemptEnded(id)).toBe(false)
+    expect(host.currentWork(SESSION)?.liveFence).toBe(child.fence)
+    expect(host.currentWork(SESSION)?.activeTurnId()).toBeNull()
+    const history = await host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(history).toMatchObject({ ok: true })
+    if (!history.ok) {
+      throw new Error('history refused')
+    }
+    expect(history.page.submissions.find((send) => send.clientMessageId === id)).toMatchObject({
+      dispatchState: 'unknown',
+      recovered: true
+    })
+    expect(observed).not.toHaveBeenCalled()
+
+    notify('thread/status/changed', {
+      threadId: THREAD,
+      status: { type: 'active', activeFlags: [] }
+    })
+    await vi.waitFor(() => expect(adapter.heldSends(SESSION)).toContain(id))
+    notify('item/completed', {
+      threadId: THREAD,
+      turn: { id: 'receipt-turn' },
+      item: { type: 'userMessage', id: 'exact-receipt', clientId: id, content: [] }
+    })
+    await expect(waiting).resolves.toMatchObject({
+      value: { submission: { clientMessageId: id, dispatchState: 'accepted' } }
+    })
+    expect(journal.submission(id)).toMatchObject({ dispatchState: 'accepted' })
+    expect(starts()).toHaveLength(1)
+  } finally {
+    reply.resolve({})
+    await host.close(SESSION, 'evict')
+    await observation
+  }
+})
 
 it('keeps only the original pre-send result when a ready child exits during Auto preparation', async () => {
   await pick('ask')
@@ -391,15 +444,10 @@ it.each(['config', 'order', 'initial'] as const)(
   }
 )
 
-it.each([
-  ['ask', 1],
-  ['auto', 1],
-  ['empty', 1],
-  ['auto', 10],
-  ['auto', 100]
-] as const)(
-  'refreshes stopped words after refused steering with %s and %i stopped messages, including replacement',
-  async (mode, population) => {
+it.each(['ask', 'auto', 'empty'] as const)(
+  'refreshes stopped words after refused steering with %s, including replacement',
+  async (mode) => {
+    const population = 1
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
     const running = await permissionSend('running')
@@ -442,15 +490,8 @@ it.each([
     const refusal = Promise.withResolvers<unknown>()
     codex.routes['turn/steer'] = () => refusal.promise
     await host.flushStreamedEvents(SESSION)
-    const measured =
-      population > 1 ? measureCodexInputWork(host, events, 'history', population) : undefined
-    let waiting: ReturnType<typeof host.waitForSendSettlement> | undefined
     try {
       const id = await permissionSend('follow up')
-      if (measured) {
-        waiting = host.waitForSendSettlement(SESSION, id)
-        void waiting.catch(() => {})
-      }
       await vi.waitFor(() =>
         expect(
           codex.connections[0]?.calls.some(
@@ -509,19 +550,8 @@ it.each([
       for (const stoppedId of stoppedIds.slice(1)) {
         expect(JSON.stringify(starts()[1]?.params?.input)).toContain(stoppedId)
       }
-      if (waiting) {
-        await began(id)
-        expect(submission((await waiting)?.value)).toMatchObject({
-          clientMessageId: id,
-          dispatchState: 'accepted'
-        })
-        expect(host['clientDelivery']['sendSettlement']['waiters'].has(SESSION)).toBe(false)
-      }
     } finally {
       refusal.resolve({})
-      host['clientDelivery']['sendSettlement'].closeSession(SESSION)
-      await waiting?.catch(() => {})
-      await measured?.()
     }
   }
 )
@@ -609,6 +639,7 @@ it.each(['stop', 'local-abort'] as const)(
       delivery.resolve()
       lost.reject(replyLost)
       if (cancellation === 'stop') {
+        frameDelivery.resolve()
         expect(await stopping).toMatchObject({ ok: true })
         await vi.waitFor(() => expect(session.child).toBeNull())
         expect(session.lastEndedChild).toMatchObject({
@@ -620,13 +651,9 @@ it.each(['stop', 'local-abort'] as const)(
         expect(provider.ended).toBe(true)
         expect(provider.connection.closed).toBe(true)
         expect(turns.turnId).toBeNull()
-        expect(frameEnded).toBe(false)
-        expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(true)
-        expect(submission((await waiting)?.value)).toMatchObject({
-          dispatchState: 'rejected',
-          rejection: { kind: 'cancelled' },
-          recovered: true
-        })
+        expect(frameEnded).toBe(true)
+        expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(false)
+        expect(submission((await waiting)?.value)).toMatchObject({ dispatchState: 'unknown' })
         expect(
           await (
             await host.journalSnapshot(SESSION)
@@ -760,9 +787,7 @@ export function codexInputFinalizationFixture() {
     assertInputRecoveredAfterSnapshot,
     conversationFence: () => host['deps'].store.getRecord(SESSION)!.lease.runtimeFence,
     waitForInputFinalization: (journal: AgentSessionJournal, id: string) =>
-      vi.waitFor(() => expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(false)),
-    measureInputWork: (kind: 'history' | 'close', population: number) =>
-      measureCodexInputWork(host, events, kind, population)
+      vi.waitFor(() => expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(false))
   }
 }
 

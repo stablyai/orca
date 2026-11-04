@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createStore } from 'zustand/vanilla'
 import 'zustand/shallow'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import '../../../shared/terminal-surface-id'
+import '../../../shared/workspace-layout/terminal-surface-id'
 import type { BrowserCertificateFailure } from '../../../shared/browser-workspace-types'
 import type { RuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
 import {

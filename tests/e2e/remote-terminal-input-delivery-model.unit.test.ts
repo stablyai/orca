@@ -7,7 +7,7 @@ import {
 } from './remote-terminal-input-model-link'
 import { resetRemoteRuntimeTerminalMultiplexersForTests } from '../../src/renderer/src/runtime/remote-runtime-terminal-multiplexer'
 import { createRemoteRuntimePtyTransport } from '../../src/renderer/src/components/terminal-pane/remote-runtime-pty-transport'
-import { iterateTerminalInputChunks } from '../../src/shared/terminal-input'
+import { iterateTerminalInputChunks } from '../../src/shared/terminal/input/terminal-input'
 
 // Exercise real transport/multiplexer/journal → host dispatcher/ledger across lossy, buffered, late-delivered frames, refused writes and runtime restarts.
 // Require remaining input exactly once/in order; withdrawn bytes may arrive only if already handed off, and healthy links must settle without resends.

@@ -30,11 +30,11 @@ import {
   type PtyBindingOrigin,
   type PtyBindingSpan
 } from './pty-binding-span'
-import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../shared/workspace-layout/terminal-pane-placement'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../../shared/terminal-leaf-move'
+} from '../../../shared/workspace-layout/terminal-leaf-move'
 import {
   admitPane,
   moveLeaf,

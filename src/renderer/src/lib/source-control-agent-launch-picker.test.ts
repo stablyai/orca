@@ -1,30 +1,30 @@
-import * as profile from '../../../shared/agent-launch-profile'
+import * as profile from '../../../shared/agent-launch/choices/agent-launch-profile'
 import { entry } from './source-control-agent-picker-test-fixture'
 import { readFileSync } from 'node:fs'
 
 import { z } from 'zod'
 import { describe, expect, it, vi } from 'vitest'
-import * as reconciliation from '../../../shared/agent-choice-reconciliation'
+import * as reconciliation from '../../../shared/agent-launch/choices/agent-choice-reconciliation'
 import {
   agentPickerEffectiveChoices,
   agentPickerLaunchInputs,
   type AgentPickerEntry
-} from '../../../shared/agent-launch-picker'
+} from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { getDefaultSettings } from '../../../shared/constants'
 
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit,
   type AgentPickerEdit
-} from '../../../shared/agent-launch-picker-edits'
-import { captureSourceControlActionSelection } from '../../../shared/source-control-ai-operation-policy'
+} from '../../../shared/agent-launch/picker/agent-launch-picker-edits'
+import { captureSourceControlActionSelection } from '../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   canonicalSourceControlActionSelection,
   selectSourceControlActionRecipe
-} from '../../../shared/source-control-action-selection'
-import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
-import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
-import { agentPickerPanelArguments } from '../../../shared/agent-launch-picker-arguments'
+} from '../../../shared/source-control/ai/recipes/source-control-action-selection'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { agentPickerPanelArguments } from '../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 
 import {
   applySourceControlPickerDraft,

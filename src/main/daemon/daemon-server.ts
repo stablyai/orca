@@ -6,7 +6,7 @@ import {
 import { randomUUID } from 'node:crypto'
 import type { Socket } from 'node:net'
 import { setImmediate as waitForImmediate } from 'node:timers/promises'
-import { extractHiddenStartupRendererQueryData } from '../../shared/terminal-reply-query-extraction'
+import { extractHiddenStartupRendererQueryData } from '../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import {
   BackgroundTransientFactRelay,
   BACKGROUND_STREAM_DROP_ENABLED

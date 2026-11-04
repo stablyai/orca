@@ -5,7 +5,7 @@ import type { WorkspaceSurfaceCommands } from '../loading-store/workspace-surfac
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../../shared/terminal-leaf-move'
+} from '../../../shared/workspace-layout/terminal-leaf-move'
 import { planTerminalLeafMove } from './terminal-leaf-move'
 import { captureSurfaceLayoutCommand } from '../../workspace-surfaces/surface-layout-request'
 import { surfaceLayoutOutcome } from '../../workspace-surfaces/surface-layout-outcome'

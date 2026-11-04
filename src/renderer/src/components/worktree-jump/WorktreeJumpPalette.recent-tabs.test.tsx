@@ -9,7 +9,7 @@ import type { AppState } from '@/store/types'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   LEAF_ID,
   makeAgentEntry,
@@ -47,7 +47,7 @@ vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
 
-vi.mock('@/components/sidebar/StatusIndicator', () => ({
+vi.mock('@/components/sidebar/workspace-card/surface/StatusIndicator', () => ({
   default: () => <span data-status-indicator="true" />
 }))
 

@@ -1,10 +1,10 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobile-session-terminal-persistence-retirement'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { setMigrationUnsupportedPty } from '../../agent-hooks/migration-unsupported-pty-state'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
-import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
 import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   deleteRemovedTerminalScrollbackSnapshotsAsync,

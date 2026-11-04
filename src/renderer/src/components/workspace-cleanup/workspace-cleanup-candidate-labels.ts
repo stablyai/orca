@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupBlocker } from '../../../../shared/workspace-cleanup'
-import type { WorkspaceCleanupGitState } from '../../../../shared/workspace-cleanup-filter-model'
+import type { WorkspaceCleanupBlocker } from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import type { WorkspaceCleanupGitState } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 type ContextDetailKind = 'terminal' | 'editor' | 'browser' | 'diff' | 'agent'
 

@@ -1,8 +1,8 @@
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { SurfaceKey } from '../../shared/workspace-surfaces/surface-content'
 import type { WorkspaceSurfaceReader } from '../../shared/workspace-surfaces/surface-reader'
 import type { SurfaceStorageCommand } from '../../shared/workspace-surfaces/surface-storage-command'
-import { hasClosedTerminalTabRecord } from '../../shared/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../shared/workspace-layout/closed-terminal-tab-tombstones'
 
 type Witness = { valid: boolean; keys: string[] }
 type Capture = { registry: SurfaceAdmissionRegistry; witness: Witness }
