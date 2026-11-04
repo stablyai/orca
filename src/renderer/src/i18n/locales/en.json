@@ -19455,6 +19455,7 @@
         "useTerminalInstead": "Use Terminal instead",
         "terminalTipHow": "Show how to start an agent in a terminal",
         "terminalTip": "Switch back any time in <em>Settings → Chat UI</em>. You can also start any agent in a terminal from the <em>+</em> menu.",
+        "terminalTipWeb": "Switch back any time in <em>Settings → Onboarding checklist</em>. You can also start any agent in a terminal from the <em>+</em> menu.",
         "terminalTipCaption": "Click <em>+</em> in the tab bar, then pick an agent marked <em>(CLI)</em>. If a chat agent's CLI is installed, hover its row and click the terminal icon to use the CLI.",
         "chatTip": "Want chat too? Turn it on any time in <em>Settings → Chat UI</em>.",
         "turnOnChat": "Turn on now"
@@ -21321,7 +21322,7 @@
       "cta": "Use Chat UI",
       "saveFailed": "Could not turn on Chat UI. Turn it on in Settings → Chat UI.",
       "terminalSaveFailed": "Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.",
-      "switched": "Agents now open in Chat UI. You can switch back any time in Settings → Chat UI.",
+      "switched": "Chat UI is now the default for new agents. You can switch back any time in Settings → Chat UI.",
       "dismiss": "Dismiss",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",

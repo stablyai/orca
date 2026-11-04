@@ -4,6 +4,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { i18n, translate } from '@/i18n/i18n'
 import type { AgentSurface } from './use-onboarding-flow-types'
 import { TerminalLaunchDemo } from './TerminalLaunchDemo'
@@ -187,10 +188,18 @@ export function ChatModeTerminalTip() {
       <span>
         <Trans
           i18n={i18n}
-          defaults={translate(
-            'components.onboarding.agentStep.terminalTip',
-            'Switch back any time in <em>Settings → Chat UI</em>. You can also start any agent in a terminal from the <em>+</em> menu.'
-          )}
+          defaults={
+            // The browser client has no Chat UI launch switch; its default lives in the checklist.
+            isWebClientLocation()
+              ? translate(
+                  'components.onboarding.agentStep.terminalTipWeb',
+                  'Switch back any time in <em>Settings → Onboarding checklist</em>. You can also start any agent in a terminal from the <em>+</em> menu.'
+                )
+              : translate(
+                  'components.onboarding.agentStep.terminalTip',
+                  'Switch back any time in <em>Settings → Chat UI</em>. You can also start any agent in a terminal from the <em>+</em> menu.'
+                )
+          }
           components={emphasis}
         />
       </span>

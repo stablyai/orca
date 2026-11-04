@@ -31,7 +31,7 @@ export async function setAgentDefaultSurfaceFromFeatureTip(
       toast.success(
         translate(
           'featureTips.chatUiHere.switched',
-          'Agents now open in Chat UI. You can switch back any time in Settings → Chat UI.'
+          'Chat UI is now the default for new agents. You can switch back any time in Settings → Chat UI.'
         )
       )
     }
