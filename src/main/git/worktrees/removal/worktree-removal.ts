@@ -9,7 +9,10 @@ import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
+import {
+  invalidateWslLinkedWorktreeGitRouting,
+  prepareWslLinkedWorktreeGitRouting
+} from '../../command-runner/wsl-linked-worktree-git-routing'
 import type { RemoveWorktreeOptions } from '../worktree-operation-options'
 import {
   getErrorCode,
@@ -36,6 +39,11 @@ export async function removeWorktree(
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
   options = removalWorkerOptions(options)
+  // Windows-Git-authored worktrees are registered by drive path, which WSL Git cannot match.
+  if (await prepareWslLinkedWorktreeGitRouting(worktreePath, options.wslDistro)) {
+    const { wslDistro: _hostGitOwnsWorktree, ...hostOptions } = options
+    options = hostOptions
+  }
   try {
     // Wait out ref packing before deleting branches; concurrent pruning can finish safely.
     return await withRepoRefMaintenancePaused('worktree-remove', () =>
