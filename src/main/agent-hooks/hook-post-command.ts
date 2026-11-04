@@ -1,5 +1,6 @@
 import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { ORCA_HOOK_RAW_JSON_TRANSPORT } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import { AGENT_HOOK_METADATA_CACHE_DIR } from '../../shared/agent-hook-listener/transport/agent-hook-spool'
 
 // Older curl needs C numeric parsing; keep the parent script's UTF-8 locale unchanged.
 export function posixCurlCommand(curlCommand = 'curl', options: { exec?: boolean } = {}): string {
@@ -8,10 +9,7 @@ export function posixCurlCommand(curlCommand = 'curl', options: { exec?: boolean
 
 const PACK_HOOK_METADATA = `printf '%s\\037%s\\037%s\\037%s\\037%s\\037%s' "$ORCA_PANE_KEY" "$ORCA_TAB_ID" "$ORCA_AGENT_LAUNCH_TOKEN" "$ORCA_WORKTREE_ID" "$ORCA_AGENT_HOOK_ENV" "$ORCA_AGENT_HOOK_VERSION" | base64 | tr -d '\\n'`
 
-/**
- * Defines `orca_hook_pack_metadata`: it reuses the packed header from a per-pane file beside the
- * endpoint while every input matches, so base64 runs only on a pane's first event.
- */
+/** Defines `orca_hook_pack_metadata`, which reuses a pane's packed header while every input matches. */
 export function buildPosixHookMetadataCacheLines(): string[] {
   return [
     'orca_hook_pack_metadata() {',
@@ -23,7 +21,7 @@ export function buildPosixHookMetadataCacheLines(): string[] {
     '    orca_hook_meta_id=$ORCA_PANE_KEY',
     // Name it like the spool file, which may sit on a Windows drive under WSL.
     '    while :; do case "$orca_hook_meta_id" in *[/:]*) orca_hook_meta_id="${orca_hook_meta_id%%[/:]*}_${orca_hook_meta_id#*[/:]}" ;; *) break ;; esac; done',
-    '    orca_hook_meta_file="${ORCA_AGENT_HOOK_ENDPOINT%/*}/hook-metadata/pane-$orca_hook_meta_id"',
+    `    orca_hook_meta_file="\${ORCA_AGENT_HOOK_ENDPOINT%/*}/${AGENT_HOOK_METADATA_CACHE_DIR}/pane-$orca_hook_meta_id"`,
     '    orca_hook_meta_line=',
     '    IFS= read -r orca_hook_meta_line 2>/dev/null < "$orca_hook_meta_file"',
     '    orca_hook_metadata=${orca_hook_meta_line%% *}',
@@ -45,8 +43,8 @@ type PosixAgentHookPostOptions = {
   decisionHeaderVar?: string
   /** Take the header from `buildPosixHookMetadataCacheLines` instead of packing it every event. */
   cachedMetadata?: boolean
-  /** Pass the raw-JSON body as a here-document instead of a printf pipe; `exec` needs its own subshell. */
-  heredocBody?: 'fork' | 'exec'
+  /** Exec curl in place of the caller's own subshell; only for a post inside `$(...)`. */
+  execCurl?: boolean
 }
 
 export function buildPosixAgentHookPostCommand(
@@ -68,11 +66,11 @@ export function buildPosixAgentHookPostCommand(
         `  orca_hook_metadata=$(${PACK_HOOK_METADATA}) && \\`,
         '  [ -n "$orca_hook_metadata" ] && \\'
       ]
-  const rawCurl = options.heredocBody
-    ? `  ${posixCurlCommand(options.curlCommand, { exec: options.heredocBody === 'exec' })} -sS -X POST ${url} \\`
+  const rawCurl = options.execCurl
+    ? `  ${posixCurlCommand(options.curlCommand, { exec: true })} -sS -X POST ${url} \\`
     : `  printf '%s' "$payload" | ${curlCommand} -sS -X POST ${url} \\`
-  // The here-document adds one trailing newline, which JSON parsing ignores.
-  const rawBody = options.heredocBody
+  // A pipe would fork. The here-document needs a writable TMPDIR or /tmp, and its newline adds a body byte.
+  const rawBody = options.execCurl
     ? [`  ${indent}--data-binary @- <<ORCA_HOOK_PAYLOAD`, '$payload', 'ORCA_HOOK_PAYLOAD']
     : [`  ${indent}--data-binary @-`]
   return [

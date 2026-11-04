@@ -1,8 +1,7 @@
 /** Capture before Orca inserts its managed-script shell. */
 export const HOOK_PARENT_CAPTURE = 'ORCA_HOOK_AGENT_PID="${PPID:-}"; export ORCA_HOOK_AGENT_PID; '
 
-// Runs on every hook event: Linux reads /proc with builtins and macOS starts only `ps`.
-// It is not cached, as no shell builtin can tell a reused PID from the process that had it.
+// Uncached, as no builtin tells a reused PID from its old process: Linux reads /proc, macOS runs only ps.
 export function buildHookProcessCapture(): string[] {
   return [
     'orca_agent_process=',
@@ -10,8 +9,9 @@ export function buildHookProcessCapture(): string[] {
     'orca_agent_start_ticks() { orca_agent_start=${20-}; }',
     '[ -z "${ORCA_PANE_KEY:-}" ] || case "${ORCA_HOOK_AGENT_PID:-}" in ""|*[!0-9]*) ;; *)',
     '  if [ -r "/proc/$ORCA_HOOK_AGENT_PID/stat" ]; then',
-    '    orca_agent_stat= orca_agent_boot= orca_agent_start=',
-    '    IFS= read -r orca_agent_stat 2>/dev/null < "/proc/$ORCA_HOOK_AGENT_PID/stat"',
+    '    orca_agent_stat= orca_agent_line= orca_agent_boot= orca_agent_start=',
+    // Read to EOF: a command name may contain a newline, and the strip below takes the last ") ".
+    '    while IFS= read -r orca_agent_line || [ -n "$orca_agent_line" ]; do orca_agent_stat="$orca_agent_stat$orca_agent_line "; orca_agent_line=; done 2>/dev/null < "/proc/$ORCA_HOOK_AGENT_PID/stat"',
     '    IFS= read -r orca_agent_boot 2>/dev/null < /proc/sys/kernel/random/boot_id',
     '    orca_agent_start_ticks ${orca_agent_stat##*) }',
     '    case "$orca_agent_start" in ""|*[!0-9]*) ;; *)',

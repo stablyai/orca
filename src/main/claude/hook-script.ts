@@ -111,14 +111,12 @@ export function getManagedScript(
           buildPosixAgentHookPostCommand(source, {
             decisionHeaderVar: 'orca_hook_decides',
             cachedMetadata: true,
-            heredocBody: 'exec'
+            execCurl: true
           })
         )
-      : buildPosixAgentHookPostCommand(source, {
-          cachedMetadata: true,
-          heredocBody: 'fork'
-        }).map((line, index, lines) =>
-          index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
+      : buildPosixAgentHookPostCommand(source, { cachedMetadata: true }).map(
+          (line, index, lines) =>
+            index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
         )),
     'exit 0',
     ''
