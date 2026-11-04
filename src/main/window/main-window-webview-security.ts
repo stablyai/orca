@@ -3,28 +3,29 @@ import { join } from 'node:path'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { browserManager } from '../browser/browser-manager'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
 import {
   enforceLocalSshWebRtcPolicyForGuest,
   isLocalSshBrowserPartition
-} from '../browser/local-ssh-browser-partitions'
+} from '../browser/routing/local-host-partitions/local-ssh-browser-partitions'
 import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
-} from '../browser/browser-route-session-runtime'
+} from '../browser/routing/sessions/browser-route-session-runtime'
 import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
 import { DOC_PREVIEW_PARTITION, parseDocPreviewUrl } from '../../shared/doc-preview-scheme'
-import { setDocPreviewFailureSink } from '../browser/doc-preview-failure-notice'
+import { setDocPreviewFailureSink } from '../browser/document-preview/doc-preview-failure-notice'
 import {
   getDocPreviewGrant,
   revokeAllDocPreviewGrants
-} from '../browser/doc-preview-grant-registry'
-import { isDocPreviewSession } from '../browser/doc-preview-protocol'
+} from '../browser/document-preview/doc-preview-grant-registry'
+import { isDocPreviewSession } from '../browser/document-preview/doc-preview-protocol'
 import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
-import { parseChromeExtensionUrl } from '../../shared/browser-extension-url'
-import { getBrowserExtensionSessionForProfile } from '../browser/extensions/browser-extension-session-loader'
-import { installBrowserJavaScriptDialogs } from '../browser/browser-javascript-dialogs'
+import { parseChromeExtensionUrl } from '../../shared/browser/extensions/browser-extension-url'
+import { getBrowserExtensionSessionForProfile } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
+import { installBrowserJavaScriptDialogs } from '../browser/guest-lifecycle/prompts/browser-javascript-dialogs'
+import { installNativeChatVisualGuestTheme } from '../host/native-chat-visual-guest-theme'
 import {
   admitPluginFrameAttach,
   attachPluginFrameGuest,
@@ -57,6 +58,7 @@ function isAdmissibleExtensionPageAttach(partition: string, src: string): boolea
 }
 
 export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): void {
+  installNativeChatVisualGuestTheme(mainWindow)
   installPrivilegedWindowNavigationPolicy(mainWindow.webContents)
   // Why: plugin panels are frames of this renderer; same IP-handling fence as doc preview guests.
   mainWindow.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp')

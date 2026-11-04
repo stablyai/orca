@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
-import { resolveWorktreeHostPath } from '../../../../shared/git-metadata-path'
+import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
 
 // Keep read-only symlink detection independent of APFS materialization and child-process imports.
 

@@ -10,9 +10,9 @@ import {
   projectAgentChildWorkLegacyBackgroundTasks,
   projectAgentChildWorkLegacySubagents,
   type AgentChildWorkLegacyBackgroundProjection
-} from '../agent-status-child-work-projection'
-import type { AgentChildWorkView } from '../agent-status-child-work-view'
-import type { AgentSubagentSnapshot } from '../agent-status-subagent-snapshot'
+} from '../agent-status/child-work/agent-status-child-work-projection'
+import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
+import type { AgentSubagentSnapshot } from '../agent-status/contracts/agent-status-subagent-snapshot'
 
 /** Keep the pre-view Codex background-task ID; journal links use the bare thread ID. */
 export function codexAgentBackgroundTaskId(threadId: string): string {

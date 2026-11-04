@@ -254,3 +254,24 @@ it('notifies transient declaration changes without disk churn and restores only 
   release.resolve()
   await refresh
 })
+
+it('retains chat-only effort declarations across the existing discovery cache round trip', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ultracode-catalog-'))
+  onTestFinished(() => fsPromises.rm(directory, { recursive: true, force: true }))
+  const store = new AgentModelCatalogStore()
+  await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+  const model = {
+    id: 'opus',
+    label: 'Opus',
+    isDefault: true,
+    efforts: [{ value: 'xhigh', label: 'Extra high' }],
+    chatEfforts: [{ value: 'ultracode', label: 'Ultracode' }]
+  }
+  store.recordSuccess('fp', 'claude', { origin: 'probe', models: [model] }, 'discovery')
+  await store.flushPersistence()
+  const reloaded = new AgentModelCatalogStore()
+  await reloaded.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+  expect(reloaded.get('fp')?.models).toMatchObject([
+    { id: model.id, efforts: model.efforts, chatEfforts: model.chatEfforts }
+  ])
+})

@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { AiVaultSearchRequestSchema } from '../../shared/ai-vault-search-contract'
-import { SESSION_SEARCH_QUERY_MAX_LENGTH } from './session-search-engine-types'
-import type { SessionSearchRequest, SessionSearchResponse } from './session-search-engine-types'
+import { AiVaultSearchRequestSchema } from '../../shared/ai-vault/search/ai-vault-search-contract'
+import {
+  SESSION_SEARCH_QUERY_MAX_LENGTH,
+  type SessionSearchRequest,
+  type SessionSearchResponse
+} from './session-search-engine-types'
+
 import { planSessionSearchQuery } from './session-search-query-planner'
 import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import { EMPTY_SNIPPET, sessionSearchSnippet } from './session-search-snippet'

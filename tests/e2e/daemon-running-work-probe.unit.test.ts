@@ -3,7 +3,7 @@ import { Session } from '../../src/main/daemon/session'
 import { inspectTerminalHostProcess } from '../../src/main/daemon/terminal-host-process-inspection'
 import type * as SnapshotReader from '../../src/shared/process-table-snapshot-reader'
 import type { ProcessTableRow } from '../../src/shared/process-table-snapshot'
-import { probePtyRunningWorkWithInspection } from '../../src/shared/pty-running-work-probe'
+import { probePtyRunningWorkWithInspection } from '../../src/shared/terminal/pty/lifecycle/pty-running-work-probe'
 
 const { readSnapshot } = vi.hoisted(() => ({
   readSnapshot: vi.fn()

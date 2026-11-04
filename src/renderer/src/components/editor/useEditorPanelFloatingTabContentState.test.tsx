@@ -56,7 +56,7 @@ vi.mock('@/store', () => ({
   )
 }))
 
-vi.mock('./useEditorPanelExternalContentEvents', () => ({
+vi.mock('./external-changes/useEditorPanelExternalContentEvents', () => ({
   useEditorPanelExternalContentEvents: vi.fn(),
   usePruneClosedEditorContent: vi.fn()
 }))

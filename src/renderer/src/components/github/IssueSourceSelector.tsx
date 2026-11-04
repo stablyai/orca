@@ -121,27 +121,29 @@ export default function IssueSourceSelector({
   const shownIssueSource =
     issueSource === undefined ? (effective === 'upstream' ? upstream : origin) : issueSource
   // Let issue-only callers omit the tooltip without coupling this control to page identity.
-  if (suppressTooltip || !shownIssueSource) {
+  if (suppressTooltip) {
     return group
   }
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>{group}</TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={4} className="max-w-[260px]">
-        <Trans
-          i18n={i18n}
-          defaults={translate(
-            'auto.components.github.IssueSourceSelector.showingIssuesFromRepo',
-            'Showing issues from <repo/>'
-          )}
-          components={{
-            repo: (
-              <span className="font-mono">{`${shownIssueSource.owner}/${shownIssueSource.repo}`}</span>
-            )
-          }}
-        />
-      </TooltipContent>
+      {shownIssueSource && (
+        <TooltipContent side="bottom" sideOffset={4} className="max-w-[260px]">
+          <Trans
+            i18n={i18n}
+            defaults={translate(
+              'auto.components.github.IssueSourceSelector.showingIssuesFromRepo',
+              'Showing issues from <repo/>'
+            )}
+            components={{
+              repo: (
+                <span className="font-mono">{`${shownIssueSource.owner}/${shownIssueSource.repo}`}</span>
+              )
+            }}
+          />
+        </TooltipContent>
+      )}
     </Tooltip>
   )
 }

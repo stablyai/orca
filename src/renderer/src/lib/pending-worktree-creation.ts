@@ -1,8 +1,13 @@
-import type { agentPickerLaunchInputs } from '../../../shared/agent-launch-picker'
+import type { agentPickerLaunchInputs } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
-import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type {
+  WorkspaceLinkedItem as FolderWorkspaceLinkedTask,
+  GitPushTarget,
+  WorkspaceLinkedItem,
+  WorkspaceStatus
+} from '../../../shared/worktree/types'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
@@ -11,12 +16,8 @@ import type {
   WorktreeCheckoutProgress
 } from '../../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
-import type {
-  GitPushTarget,
-  WorkspaceLinkedItem,
-  WorkspaceStatus
-} from '../../../shared/worktree/types'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+
+import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
@@ -131,7 +132,7 @@ export type PendingWorktreeCreation = {
   startedAt: number
   // Remote/runtime targets without phase events need one indeterminate spinner, never a checklist stuck at step one.
   indeterminate: boolean
-  // Background creates reveal the loader immediately; older callers opt in, keeping faux tabs stable through terminal handoff.
+  // Instant folder creates retain the initiating surface; explicit opens and retries reveal progress.
   loaderVisible: boolean
   error?: string
   provisioningLog?: string
@@ -146,6 +147,12 @@ export type PendingWorktreeCreation = {
   /** The launch owns the captured input until its replacement surface is published. */
   chatInputHandedOff?: boolean
   request: WorktreeCreationRequest
+}
+
+export function pendingWorktreeCreationIsVisible(
+  entry: PendingWorktreeCreation | undefined
+): boolean {
+  return entry !== undefined && (entry.loaderVisible || entry.status === 'error')
 }
 
 /** Draft scope of the chat composer shown while this creation has no workspace yet. */

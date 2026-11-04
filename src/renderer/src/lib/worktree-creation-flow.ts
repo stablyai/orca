@@ -1,4 +1,3 @@
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   findPendingLinkedWorkItemCreationId,
@@ -9,6 +8,10 @@ import {
 import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
 import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  isInstantFolderWorktreeCreation,
+  showWorktreeCreationError
+} from '@/lib/worktree-creation-surface'
 import { executeWorktreeCreation } from '@/lib/worktree-creation-flow-execute'
 import {
   getInitialWorktreeCreationPhase,
@@ -25,18 +28,15 @@ type ContinueBackgroundWorktreeCreationOptions = {
 
 // Contain fire-and-forget rejections or pending creation UI remains stuck without errors.
 function startWorktreeCreation(creationId: string, request: WorktreeCreationRequest): void {
-  executeWorktreeCreation(creationId, request).catch((error: unknown) => {
+  const originView = useAppStore.getState().activeView
+  executeWorktreeCreation(creationId, request, originView).catch((error: unknown) => {
     console.error('worktree create: unhandled failure', creationId, error)
     const store = useAppStore.getState()
     if (!store.pendingWorktreeCreations[creationId]) {
       return
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
-    store.updatePendingWorktreeCreation(creationId, { status: 'error', error: message })
-    // Inline creation errors need a separate toast only after navigation away.
-    if (!(store.activeView === 'terminal' && store.activePendingCreationId === creationId)) {
-      toast.error(message)
-    }
+    showWorktreeCreationError(store, creationId, originView, message)
   })
 }
 
@@ -69,19 +69,25 @@ function revealPendingCreation(
 ): void {
   const store = useAppStore.getState()
   const indeterminate = getWorktreeCreationIndeterminate(request)
+  const loaderVisible = !(
+    isInstantFolderWorktreeCreation(store, request) &&
+    phase !== 'preparing' &&
+    phase !== 'provisioning-vm'
+  )
   store.beginPendingWorktreeCreation({
     creationId,
     phase,
     status: 'creating',
     startedAt: Date.now(),
     indeterminate,
-    // Give creation its tab strip synchronously; delayed reveal flashes the prior workspace’s tabs.
-    loaderVisible: true,
+    loaderVisible,
     request
   })
   seedPendingChatDraft(creationId, request)
   // Creation UI renders only in terminal view; activate it before publishing the panel.
-  store.setActiveView('terminal')
+  if (loaderVisible) {
+    store.setActiveView('terminal')
+  }
   store.setSidebarOpen(true)
 }
 
@@ -93,6 +99,7 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
     request
   )
   if (existingCreationId) {
+    store.updatePendingWorktreeCreation(existingCreationId, { loaderVisible: true })
     store.setActivePendingWorktreeCreation(existingCreationId)
     store.setActiveView('terminal')
     store.setSidebarOpen(true)
@@ -153,6 +160,7 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   }
   store.updatePendingWorktreeCreation(creationId, {
     status: 'creating',
+    loaderVisible: true,
     startedAt: Date.now(),
     phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,

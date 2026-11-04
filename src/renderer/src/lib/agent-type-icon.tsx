@@ -1,8 +1,8 @@
 import type React from 'react'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import { AgentIcon } from './agent-catalog'
 import { AgentLetterIcon } from './agent-icon-glyphs'
-import { agentTypeToIconAgent } from './agent-status'
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
 
 /** Status-row icon: known agents get their brand icon, any other OSC 7501 program its first letter. */
 export function AgentTypeIcon({

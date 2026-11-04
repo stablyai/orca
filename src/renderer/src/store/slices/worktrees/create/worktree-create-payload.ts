@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import type {
   CreateWorktreeArgs,
@@ -6,7 +6,7 @@ import type {
 } from '../../../../../../shared/worktree/create-types'
 import type { PerforceSettings } from '../../../../../../shared/perforce/perforce-settings'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
 import type {
   ClientAutomationWorkspaceProvenance,

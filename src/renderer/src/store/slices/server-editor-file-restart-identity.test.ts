@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { buildWorkspaceSessionPayload } from '../../lib/workspace-session'
 import '../../runtime/web-session-tabs-sync/mirrored-editor-file-identity'
 import { buildHydratedEditorSessionState } from './editor/actions/hydrated-editor-session-state'

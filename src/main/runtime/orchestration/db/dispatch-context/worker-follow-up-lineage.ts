@@ -9,8 +9,8 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration-worker-output'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isLocalHookConnectionId } from '../../../../../shared/wsl-hook-relay-contract'
 import type { DispatchContextRow } from '../../types'
 import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'

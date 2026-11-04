@@ -6,18 +6,18 @@ import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
-} from '../ai-vault-search-contract'
+} from '../ai-vault/search/ai-vault-search-contract'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelReadParams,
   BrowserClientFileChannelWriteParams
-} from '../browser-client-file-channel-protocol'
+} from '../browser/client-hosting/browser-client-file-channel-protocol'
 import {
   BrowserClientHostAttachParams,
   BrowserClientHostCommandResultParams,
   BrowserNetworkTunnelAttachParams
-} from '../browser-client-host-protocol'
-import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
+} from '../browser/client-hosting/browser-client-host-protocol'
+import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
 import {
   BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
@@ -28,13 +28,7 @@ import {
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultParams
 } from '../desktop-browser-bridge-protocol'
-import { RegisterDeviceKeyParamsSchema } from '../device-key-registration-contract'
 import { HostAccountLaunchEnvParams } from '../host-account-launch-env'
-import {
-  PairingGetEndpointsParamsSchema,
-  PairingProvisionRelayParamsSchema
-} from '../mobile-relay-credential-contract'
-import { MobileRelayHostWorktreesParamsSchema } from '../mobile-relay-hosts-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
@@ -44,6 +38,12 @@ import {
 } from '../orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
 import { CrewSubscribeParams } from '../orchestration-crew'
+import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
+import {
+  PairingGetEndpointsParamsSchema,
+  PairingProvisionRelayParamsSchema
+} from '../remote-runtime/relay/mobile-relay-credential-contract'
+import { MobileRelayHostWorktreesParamsSchema } from '../remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,
@@ -680,6 +680,7 @@ import {
   TerminalHandle,
   TerminalInspectProcess,
   TerminalListParams,
+  TerminalOpenInputSession,
   TerminalRead,
   TerminalReadKittyFile,
   TerminalRecoverPane,
@@ -1550,6 +1551,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.isRunningAgent': TerminalHandle,
   'terminal.list': TerminalListParams,
   'terminal.multiplex': TerminalMultiplex,
+  'terminal.openInputSession': TerminalOpenInputSession,
   'terminal.read': TerminalRead,
   'terminal.readKittyFile': TerminalReadKittyFile,
   'terminal.recoverPane': TerminalRecoverPane,

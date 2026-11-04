@@ -29,7 +29,7 @@ import {
   SESSION
 } from '../runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
 import { registerRuntimeHandlers } from './runtime'
-import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
+import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { PROJECT_SECTION_PARITY_SERVED } from '../../shared/project-section-parity.test-fixture'
 import { readMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
 

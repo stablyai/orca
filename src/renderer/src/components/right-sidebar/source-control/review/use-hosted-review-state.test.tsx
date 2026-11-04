@@ -2,7 +2,7 @@
 
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
 import { useSourceControlHostedReviewState } from './use-hosted-review-state'
 import { useSourceControlHostedReviewProviderHint } from './use-hosted-review-provider-hint'

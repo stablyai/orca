@@ -5,7 +5,7 @@ import { renderCommand } from '../../orchestration-mutation-recovery'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import type { RuntimeRpcSuccess } from '../../runtime-client'
 import { withReceiptNext } from './receipt-next-text'
-import { escapeTerminalControlCharacters } from '../../../shared/terminal-control-character-escape'
+import { escapeTerminalControlCharacters } from '../../../shared/terminal/output/terminal-control-character-escape'
 
 type AgentViewFields = Record<string, unknown>
 

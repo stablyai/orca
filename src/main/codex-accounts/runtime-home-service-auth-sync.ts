@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { getSystemCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import {
   removeFileAtomicallyIfUnchanged,
   writeFileAtomically,

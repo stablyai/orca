@@ -1,10 +1,10 @@
 import { resolve as resolvePath } from 'node:path'
-import type { TuiAgent } from '../shared/tui-agent'
+import type { TuiAgent } from '../shared/agent-launch/catalog/tui-agent'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
-import { projectGroupIdFromRepoId } from '../shared/folder-workspace-worktree'
+import { projectGroupIdFromRepoId } from '../shared/folder-workspaces/folder-workspace-worktree'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,

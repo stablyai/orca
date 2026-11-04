@@ -3,7 +3,7 @@ import type { Repo } from '../../../shared/repo-types'
 import {
   deriveGitRemoteIdentity,
   type GitRemoteIdentity
-} from '../../../shared/git-remote-identity'
+} from '../../../shared/git/remotes/git-remote-identity'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { resolveGitRouteForHost } from '../../providers/execution-host-provider-dispatch'
 

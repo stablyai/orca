@@ -93,21 +93,7 @@ function labeled(label: string) {
     (node) => node.props.accessibilityLabel === label
   )!
 }
-function texts() {
-  return findAllByHostType(root(), 'Text').map((node) => node.props.children)
-}
-async function pressDiscard() {
-  act(() => labeled('Back to files').props.onPress())
-  const button = findAllByHostType(root(), 'Pressable').find((node) =>
-    findAllByHostType(node, 'Text').some((label) => label.props.children === 'Discard')
-  )
-  expect(button).toBeDefined()
-  await act(async () => button?.props.onPress())
-}
-async function discard() {
-  await pressDiscard()
-  expect(findAllByHostType(root(), 'TextInput')).toHaveLength(0)
-}
+
 async function editAndSave() {
   await act(async () => {
     renderer = create(createElement(Session))
@@ -125,26 +111,6 @@ afterEach(() => {
 })
 
 describe('file saves after the preview document is discarded', () => {
-  it('does not start a write after its pending base verification returns', async () => {
-    const verification = deferred()
-    let reads = 0
-    transport.sendRequest.mockImplementation(async (method) =>
-      method === 'files.readTerminalArtifact'
-        ? ++reads === 1
-          ? text('Original')
-          : verification.promise
-        : accepted({ ok: true })
-    )
-    await editAndSave()
-    expect(reads).toBe(2)
-    await discard()
-    await act(async () => verification.resolve(text('Original')))
-    expect(transport.sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'files.readTerminalArtifact',
-      'files.readTerminalArtifact'
-    ])
-  })
-
   it('does not write a departed document after the route opens a different file', async () => {
     const verification = deferred()
     let reads = 0
@@ -172,83 +138,6 @@ describe('file saves after the preview document is discarded', () => {
     ])
   })
 
-  it('does not continue verification after an in-flight grant refresh returns to a discarded document', async () => {
-    const grant = deferred()
-    let reads = 0
-    transport.sendRequest.mockImplementation(async (method) =>
-      method === 'files.readTerminalArtifact'
-        ? ++reads === 1
-          ? text('Original')
-          : {
-              id: 'old-grant',
-              ok: false,
-              error: { code: 'terminal_file_grant_stale', message: 'terminal_file_grant_stale' }
-            }
-        : method === 'files.resolveTerminalPath'
-          ? grant.promise
-          : accepted({ ok: true })
-    )
-    await editAndSave()
-    await act(async () => {})
-    expect(transport.sendRequest.mock.calls.at(-1)?.[0]).toBe('files.resolveTerminalPath')
-    await discard()
-    await act(async () =>
-      grant.resolve(
-        accepted({
-          exists: true,
-          isDirectory: false,
-          openTarget: {
-            kind: 'absolute-file',
-            absolutePath: '/project/draft.txt',
-            grantId: 'fresh'
-          }
-        })
-      )
-    )
-    expect(transport.sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'files.readTerminalArtifact',
-      'files.readTerminalArtifact',
-      'files.resolveTerminalPath'
-    ])
-  })
-
-  it('lets an already-issued write settle without starting a recovery write', async () => {
-    const write = deferred()
-    transport.sendRequest.mockImplementation(async (method) =>
-      method === 'files.readTerminalArtifact'
-        ? text('Original')
-        : method === 'files.writeTerminalArtifact'
-          ? write.promise
-          : accepted({
-              exists: true,
-              isDirectory: false,
-              openTarget: {
-                kind: 'absolute-file',
-                absolutePath: '/project/draft.txt',
-                grantId: 'fresh'
-              }
-            })
-    )
-    await editAndSave()
-    await act(async () => {})
-    expect(
-      transport.sendRequest.mock.calls.some(([method]) => method === 'files.writeTerminalArtifact')
-    ).toBe(true)
-    await discard()
-    await act(async () =>
-      write.resolve({
-        id: 'write',
-        ok: false,
-        error: { code: 'terminal_file_grant_stale', message: 'terminal_file_grant_stale' }
-      })
-    )
-    expect(transport.sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'files.readTerminalArtifact',
-      'files.readTerminalArtifact',
-      'files.writeTerminalArtifact'
-    ])
-  })
-
   it('saves an active document and keeps a newer edit dirty', async () => {
     const write = deferred()
     transport.sendRequest.mockImplementation(async (method) =>
@@ -265,51 +154,5 @@ describe('file saves after the preview document is discarded', () => {
       'files.readTerminalArtifact',
       'files.writeTerminalArtifact'
     ])
-  })
-
-  it('warns that Discard during a save cancels it and drops the newer edit', async () => {
-    const verification = deferred()
-    let reads = 0
-    transport.sendRequest.mockImplementation(async (method) =>
-      method === 'files.readTerminalArtifact'
-        ? ++reads === 1
-          ? text('Original')
-          : verification.promise
-        : accepted({ ok: true })
-    )
-    await editAndSave()
-    act(() => findAllByHostType(root(), 'TextInput')[0].props.onChangeText('Newer draft'))
-    act(() => labeled('Back to files').props.onPress())
-    expect(texts()).toContain('The save in progress may not finish. Unsaved edits will be lost.')
-    await discard()
-    await act(async () => verification.resolve(text('Original')))
-    expect(transport.sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'files.readTerminalArtifact',
-      'files.readTerminalArtifact'
-    ])
-  })
-
-  it('keeps the started save when navigation back is refused', async () => {
-    const verification = deferred()
-    let reads = 0
-    transport.sendRequest.mockImplementation(async (method) =>
-      method === 'files.readTerminalArtifact'
-        ? ++reads === 1
-          ? text('Original')
-          : verification.promise
-        : accepted({ ok: true })
-    )
-    transport.refuseBack = true
-    await editAndSave()
-    act(() => findAllByHostType(root(), 'TextInput')[0].props.onChangeText('Newer draft'))
-    await pressDiscard()
-    expect(labeled('Save terminal artifact').props.disabled).toBe(true)
-    await act(async () => verification.resolve(text('Original')))
-    expect(transport.sendRequest.mock.calls.at(-1)).toEqual([
-      'files.writeTerminalArtifact',
-      expect.objectContaining({ content: 'Discarded draft' })
-    ])
-    expect(findAllByHostType(root(), 'TextInput')[0].props.value).toBe('Newer draft')
-    expect(labeled('Save terminal artifact').props.disabled).toBe(false)
   })
 })

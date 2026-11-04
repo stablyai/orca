@@ -7,7 +7,7 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
 import { usePerforceWorkspace } from './perforce/use-perforce-workspace'
 import { usePerforceWorkspaceTarget } from '@/lib/perforce-workspace-target'
-import { getPluginPanelActivityItems } from './plugin-panel-activity-items'
+import { getPluginPanelActivityItems } from './plugin-panels/plugin-panel-activity-items'
 import {
   getPortsPanelOwnerKey,
   portsPanelHostForOwnerKey,

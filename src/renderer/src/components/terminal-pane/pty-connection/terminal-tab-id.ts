@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 type TerminalTabLookup = {
   getTab?: (tabId: string) => { contentType: string; entityId: string } | null

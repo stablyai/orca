@@ -28,7 +28,7 @@ import {
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
 } from '../../../../../../shared/worktree-runtime-capabilities'
 import { ensureLocalRuntimeCapabilities } from '../../../../runtime/local-runtime-capabilities'
-import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
+import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/workspace-creation/base-ref-update/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { announcePerforceCopy } from '@/components/perforce-copies/perforce-copy-announcement'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'

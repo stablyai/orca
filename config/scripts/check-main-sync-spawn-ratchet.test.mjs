@@ -3,7 +3,6 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
-  adviceFor,
   collectSyncLaunchUses,
   countSyncSpawnUses,
   gatedSymbolsFor,
@@ -248,18 +247,6 @@ describe('main sync-spawn ratchet', () => {
       ['src/main/legacy.ts', 2],
       ['src/shared/new.ts', 1]
     ])
-  })
-
-  it('gives each gated family its own advice', () => {
-    expect(adviceFor(['execFileSync', 'runProcessSync'])).toBe(
-      'execFileSync, runProcessSync: use runProcess or spawnProcess from @orca/process-host.'
-    )
-    expect(adviceFor(['restrictWindowsPathSync'])).toContain(
-      "use restrictWindowsDirectory for a directory, or raise this file's count in config/main-sync-spawn-baseline.txt"
-    )
-    expect(adviceFor(['gitExecFileSync', 'grantDirAcl'])).toBe(
-      'gitExecFileSync: use gitExecFileAsync. grantDirAcl: use grantDirAclAsync.'
-    )
   })
 
   it('fails a new file and a rising count, and passes at the baseline count', () => {

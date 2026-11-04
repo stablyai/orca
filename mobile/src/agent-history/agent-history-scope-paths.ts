@@ -1,8 +1,8 @@
-import { deriveAiVaultScopeSessionPaths } from '../../../src/shared/ai-vault-scope-paths'
+import { deriveAiVaultScopeSessionPaths } from '../../../src/shared/ai-vault/scanning/ai-vault-scope-paths'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   type AiVaultScope
-} from '../../../src/shared/ai-vault-types'
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 
 type ScopeWorktree = Pick<Worktree, 'worktreeId' | 'path' | 'repoId' | 'priorWorktreeIds'>

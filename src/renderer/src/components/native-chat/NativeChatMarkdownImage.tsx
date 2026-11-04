@@ -10,9 +10,9 @@ import {
 import {
   getLocalImageCacheKey,
   getLocalImageSrcCacheKey,
-  releaseLocalImageSrcByKey,
   useLocalImageSrc
-} from '@/components/editor/useLocalImageSrc'
+} from '@/components/editor/document-images/useLocalImageSrc'
+import { releaseLocalImageBlob as releaseLocalImageSrcByKey } from '@/components/editor/document-images/local-image-src-cache'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -27,7 +27,7 @@ import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
 import { jiraImageReference } from '../../../../shared/jira/jira-attachment-image'
-import { filesystemPathToFileUri } from '../../../../shared/file-uri-path'
+import { filesystemPathToFileUri } from '../../../../shared/file-links/file-uri-path'
 import {
   createNativeChatFileHref,
   routeNativeChatHref

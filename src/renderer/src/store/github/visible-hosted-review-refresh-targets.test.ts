@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Repo } from '../../../../shared/repo-types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import '../../../../shared/global-settings-test-fixture'
 import { getHostedReviewCacheKey } from '../slices/hosted-review-cache-identity'
 import {
@@ -17,7 +17,7 @@ import {
   getVisibleHostedReviewWorkspaces,
   visibleHostedReviewRefreshInputsChanged
 } from './visible-hosted-review-refresh-targets'
-import '@/components/sidebar/workspace-reference-details'
+import '@/components/sidebar/workspace-card/review/workspace-reference-details'
 import { createVisibleHostedReviewRefreshScheduler } from './visible-hosted-review-refresh-scheduler'
 import '../slices/hosted-review-card-refresh'
 

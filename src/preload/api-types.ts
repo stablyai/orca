@@ -230,11 +230,7 @@ export type {
   PtyManagementSeveredDaemon,
   PtyManagementSeveredDaemonRestartResult
 } from './api/pty-management-api'
-export type {
-  ShellOpenExternalEditorRequest,
-  ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
-} from './api/shell-api'
+
 export type {
   DiagnosticsBundlePayload,
   DiagnosticsStatusPayload,

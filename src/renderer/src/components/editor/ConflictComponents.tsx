@@ -13,7 +13,10 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { ConflictReviewEntry, OpenFile } from '@/store/slices/editor'
-import type { GitConflictKind, GitStatusEntry } from '../../../../shared/git-status-types'
+import type {
+  GitConflictKind,
+  GitStatusEntry
+} from '../../../../shared/git/status/git-status-types'
 import { ConflictReviewFileTree } from './ConflictReviewFileTree'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'

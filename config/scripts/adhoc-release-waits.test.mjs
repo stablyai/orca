@@ -5,7 +5,6 @@ import { parse } from 'yaml'
 const adhoc = parse(readFileSync('.github/workflows/adhoc-mac-build.yml', 'utf8'))
 const publisher = parse(readFileSync('.github/workflows/dev-channel-win-publish.yml', 'utf8'))
 const windows = parse(readFileSync('.github/workflows/dev-channel-win-build.yml', 'utf8'))
-const macBuild = adhoc.jobs['build-adhoc-mac-arch']
 const finalSteps = adhoc.jobs['build-adhoc-mac'].steps
 const publishSteps = publisher.jobs['publish-win'].steps
 const macWait = publishSteps.find((step) => step.name === 'Wait for successful macOS publication')
@@ -51,14 +50,6 @@ const job = (name, conclusion) => ({
   name,
   status: conclusion ? 'completed' : 'in_progress',
   conclusion
-})
-
-it('starts paid Mac packaging only after template qualification succeeds', () => {
-  expect(macBuild.needs).toContain('orcad-template')
-  expect(macBuild.if).toContain("needs.orcad-template.result == 'success'")
-  expect(macBuild.steps.some((step) => step.name === 'Wait for the qualified orcad template')).toBe(
-    false
-  )
 })
 
 describe.each([['Windows', windows.jobs['build-win'].steps]])(

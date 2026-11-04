@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { sourceControlRepoAgentRows } from '@/lib/source-control-agent-picker'
 import { canSaveSourceControlActionSurface } from '../../source-control/SourceControlActionAgentPicker'
-import { SOURCE_CONTROL_ACTION_IDS } from '../../../../../../shared/source-control-ai-actions'
+import { SOURCE_CONTROL_ACTION_IDS } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { invalidateAgentPickerDrafts } from '../../../agent/agent-launch-picker-drafts'
 import { useSourceControlActionAgentInventory } from '../../source-control/use-source-control-action-agent'
 import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
@@ -32,6 +32,11 @@ export function useRepositoryActionPickerInputs(props: RepositorySourceControlAi
   })
   const actions = useMemo(
     () => ({
+      onActionTextModelChoice: (
+        ...args: Parameters<
+          NonNullable<RepositorySourceControlAiActionRowsProps['onActionTextModelChoice']>
+        >
+      ) => current.current.props.onActionTextModelChoice?.(...args),
       onActionModeChange: (
         ...args: Parameters<RepositorySourceControlAiActionRowsProps['onActionModeChange']>
       ) => current.current.props.onActionModeChange(...args),

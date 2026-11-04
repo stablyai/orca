@@ -1,7 +1,7 @@
 import {
   DeviceCredentialInstalledSchema,
   PairingGetEndpointsResultSchema
-} from '../../../src/shared/mobile-relay-credential-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from './rpc-operation'
 import { rpcResultVariant } from './rpc-operation-result-reader'
 

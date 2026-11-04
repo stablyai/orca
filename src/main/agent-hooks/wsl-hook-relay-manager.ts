@@ -18,7 +18,7 @@ import { wireWslRelayLink } from './wsl-hook-relay-link'
 import type { WslRelayRecovery } from './wsl-hook-relay-recovery'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
-import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
+import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   sanitizeWslHookInstanceKey,
   WSL_HOOK_FS_METHODS,
@@ -27,7 +27,7 @@ import {
 import {
   recordManagedWslCodexHome,
   wslRuntimeHomePathsEqual
-} from '../codex/managed-wsl-codex-home-registry'
+} from '../codex/configuration/homes/managed-wsl-codex-home-registry'
 import {
   createWslRelayRecoveryForManager,
   markWslRelayFailed,

@@ -8,7 +8,7 @@ import type {
 import {
   ALL_TUI_AGENTS,
   TUI_AGENT_DISPLAY_NAMES
-} from '../../../../../shared/tui-agent-display-names'
+} from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { translate } from '@/i18n/i18n'
 import { uniqueKeywords } from '../search/settings-search-keywords'
 

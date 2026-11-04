@@ -3,7 +3,7 @@ import {
   normalizeOptionalField,
   normalizePromptField,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH
-} from '../../agent-status-field-normalization'
+} from '../../agent-status/contracts/agent-status-field-normalization'
 import {
   AGENT_JOURNAL_MESSAGE_SEND_MODES,
   AGENT_JOURNAL_MESSAGE_STATES,
@@ -12,12 +12,12 @@ import {
   type AgentJournalRenderItem,
   type AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import type { AgentTurnOutcome } from '../../agent-turn-outcome'
+import type { AgentTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import { agentJournalToolCallLifecycle } from '../../agent-journal-tool-call-lifecycle'
 import { agentJournalLinkageFields } from '../journal/agent-session-journal-producer'
 import { structuredAgentSessionStatusBlock } from './structured-agent-session-status-block'
 import { agentJournalItemRowOrigin } from '../journal/agent-session-journal-position'
-import { AGENT_STATUS_TOOL_NAME_MAX_LENGTH } from '../../agent-status-types'
+import { AGENT_STATUS_TOOL_NAME_MAX_LENGTH } from '../../agent-status/contracts/agent-status-types'
 import { describeToolInput } from '../../native-chat/tools/native-chat-tool-summary'
 import { statusStructuredAgentSessionToolCall } from './structured-agent-session-live-turn'
 import {

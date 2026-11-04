@@ -94,7 +94,7 @@ vi.mock('@/components/terminal/background-terminal-worktree-mount', () => ({
 }))
 
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
-import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 
 const request = {

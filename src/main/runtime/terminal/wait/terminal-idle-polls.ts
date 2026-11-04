@@ -1,4 +1,4 @@
-import { isShellProcess } from '../../../../shared/agent-detection'
+import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason

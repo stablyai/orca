@@ -1,16 +1,16 @@
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
-import * as agentLaunchCapabilities from './agent-launch-runtime-capability'
+import * as agentLaunchCapabilities from './agent-launch/contracts/agent-launch-runtime-capability'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   AGENT_SESSION_RUNTIME_CAPABILITIES
 } from './agent-session/agent-session-runtime-capabilities'
-import { AI_VAULT_RUNTIME_CAPABILITIES } from './ai-vault-runtime-capabilities'
+import { AI_VAULT_RUNTIME_CAPABILITIES } from './ai-vault/contracts/ai-vault-runtime-capabilities'
 import {
   AUTOMATION_RUNTIME_CAPABILITIES,
   AUTOMATION_RUNTIME_CLIENT_CAPABILITIES
 } from './automation-runtime-capabilities'
 import { BROWSER_RUNTIME_CAPABILITIES } from './browser-runtime-capabilities'
-import { DEVICE_KEY_RUNTIME_CAPABILITIES } from './device-key-capability'
+import { DEVICE_KEY_RUNTIME_CAPABILITIES } from './remote-runtime/pairing/device-key-capability'
 import { FILES_RUNTIME_CAPABILITIES } from './files-runtime-capabilities'
 import { HOST_RUNTIME_CAPABILITIES } from './host-runtime-capabilities'
 import { MOBILE_RUNTIME_CAPABILITIES } from './mobile-runtime-capabilities'
@@ -23,9 +23,9 @@ import {
   SESSION_TABS_RUNTIME_CAPABILITIES
 } from './session-tabs-runtime-capabilities'
 import { SKILL_RUNTIME_CAPABILITIES } from './skill-install-capability'
-import { SOURCE_CONTROL_RUNTIME_CAPABILITIES } from './source-control-runtime-capabilities'
+import { SOURCE_CONTROL_RUNTIME_CAPABILITIES } from './source-control/runtime/source-control-runtime-capabilities'
 import { TASK_SOURCE_RUNTIME_CAPABILITIES } from './task-source-runtime-capabilities'
-import { TERMINAL_RUNTIME_CAPABILITIES } from './terminal-runtime-capabilities'
+import { TERMINAL_RUNTIME_CAPABILITIES } from './terminal/runtime-policy/terminal-runtime-capabilities'
 import { WORKSPACE_PORTS_RUNTIME_CAPABILITIES } from './workspace-ports-runtime-capabilities'
 import {
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
@@ -44,20 +44,20 @@ export const MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION = 2
 export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 
 // Why stars: importers keep reading every capability from here while each area owns its module.
-export * from './ai-vault-runtime-capabilities'
+
 export * from './browser-runtime-capabilities'
 export * from './files-runtime-capabilities'
 export * from './host-runtime-capabilities'
 
 export * from './mobile-runtime-capabilities'
 export * from './preflight-runtime-capabilities'
-export * from './source-control-runtime-capabilities'
+
 export * from './task-source-runtime-capabilities'
-export * from './terminal-runtime-capabilities'
+
 export * from './workspace-ports-runtime-capabilities'
 export * from './worktree-runtime-capabilities'
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
-export { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from './terminal-quick-command-capabilities'
+
 export {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE,

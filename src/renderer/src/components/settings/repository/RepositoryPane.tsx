@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
 import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
+import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { Label } from '../../ui/label'
@@ -73,6 +74,8 @@ type RepositoryPaneProps = {
     projectId: string,
     updates: ProjectUpdateArgs['updates']
   ) => void | Promise<unknown>
+  /** Lets the repository's text pickers save model lists its host reports. */
+  writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
 
 export function RepositoryPane({
@@ -92,7 +95,8 @@ export function RepositoryPane({
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false,
-  updateProject
+  updateProject,
+  writeSourceControlAiSettings
 }: RepositoryPaneProps): React.JSX.Element {
   const isFolder = isFolderRepo(repo)
   // Bind writes to the switcher-selected owner; same-ID/self-paired repos must not use focused-host fallback.
@@ -380,6 +384,7 @@ export function RepositoryPane({
         key="source-control-ai"
         repo={repo}
         updateRepo={updateSelectedRepo}
+        writeSourceControlAiSettings={writeSourceControlAiSettings}
       />
     ) : null,
     !isFolder &&
