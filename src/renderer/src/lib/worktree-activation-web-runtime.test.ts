@@ -25,7 +25,7 @@ import { makeRun } from '../components/automations/automations-page-fixtures'
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '../components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 registerWorktreeActivationReset()
