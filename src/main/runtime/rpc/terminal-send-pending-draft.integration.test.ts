@@ -8,6 +8,7 @@ import { AgentPromptPendingInputError } from '../terminal/input/agent-prompt-per
 
 const CLAUDE_RULE = '─'.repeat(60)
 
+/** A `terminal.send` RPC request shaped like the CLI's text-plus-Enter agent prompt. */
 function cliPrompt(handle: string, text: string, extra: Record<string, unknown> = {}): RpcRequest {
   return {
     id: 'request-1',
@@ -24,6 +25,15 @@ function cliPrompt(handle: string, text: string, extra: Record<string, unknown> 
   }
 }
 
+/**
+ * A real `OrcaRuntimeService` with one pane whose rendered screen is a Claude composer.
+ *
+ * The frame is fed through `onPtyData`, so the guard reads it the same way it reads a live
+ * pane. `composerRow` is the composer's prompt row: `'\u276F '` for an empty composer, or the
+ * glyph plus text for one already holding a draft.
+ *
+ * @returns The runtime, the pty write spy that proves whether bytes were sent, and the handle.
+ */
 async function makeClaudeRuntime(composerRow: string): Promise<{
   runtime: OrcaRuntimeService
   write: ReturnType<typeof vi.fn>
@@ -73,6 +83,7 @@ async function makeClaudeRuntime(composerRow: string): Promise<{
   return { runtime, write, handle: terminal.handle }
 }
 
+/** Assert a send was accepted and actually wrote `text` followed by its own Enter. */
 async function expectPasted(
   send: Promise<unknown>,
   write: ReturnType<typeof vi.fn>,

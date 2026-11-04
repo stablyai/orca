@@ -66,6 +66,18 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     }
   }
 
+  /**
+   * Paste an agent prompt into a pane and submit it, as one serialized submission.
+   *
+   * The order is the contract. Entry guards run before any byte is written — permission
+   * first, then the composer — so a blocked prompt reports `agent_prompt_blocked` and a pane
+   * holding an unsent draft refuses with `pending-input` (#16289) rather than appending to the
+   * user's text. The caller's `beforeWrite` hook can poll for up to a second, so the composer
+   * is re-read after it and `assertWritable` runs last, immediately before the write: a pane
+   * that stopped or a handle that went stale mid-await must not reach it.
+   *
+   * @returns How many submits were written, and the delivery receipt when one was observed.
+   */
   protected async writeTerminalAgentPrompt(
     handle: string,
     ptyId: string,
