@@ -32,9 +32,7 @@ export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV =
   importedValues.exportedSETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV =
   importedValues.exportedSETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
-export const TERMINAL_INPUT_CHUNK_MAX_BYTES = importedValues.exportedTERMINAL_INPUT_CHUNK_MAX_BYTES
-export const TERMINAL_INPUT_MAX_BYTES = importedValues.exportedTERMINAL_INPUT_MAX_BYTES
-export const TERMINAL_INPUT_TOO_LARGE_ERROR = importedValues.exportedTERMINAL_INPUT_TOO_LARGE_ERROR
+
 export const TUI_AGENT_CONFIG = importedValues.exportedTUI_AGENT_CONFIG
 export const WATCHER_REMOVAL_DRAIN_BUDGET_MS =
   importedValues.exportedWATCHER_REMOVAL_DRAIN_BUDGET_MS
@@ -254,7 +252,6 @@ export type {
 export type { RuntimeTerminalAgentStatusEvent } from './orca-runtime'
 export type { Tab } from '../../shared/tab-types'
 export type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
-export type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 
 export type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'
 export type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'

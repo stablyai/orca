@@ -29,7 +29,7 @@ import type {
   Worktree
 } from '../../../../shared/worktree/types'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
-import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
+import type { TerminalGitHubPRLink } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TerminalPaneRecoveryOutcome } from '../../../../shared/terminal-tab-types'
 import type {

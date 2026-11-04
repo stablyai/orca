@@ -1,6 +1,6 @@
 import { nextQueryCandidate, parsePtyStartupQuery } from './pty-startup-query'
 import { PtyOwnerColorQueryReplies } from './pty-owner-color-query-replies'
-import { TerminalKittyKeyboardModeTracker } from './terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from './terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
 import { deliverTerminalQueryReplyPayload } from './terminal-query-reply-delivery'

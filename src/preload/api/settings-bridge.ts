@@ -2,11 +2,11 @@ import { ipcRenderer } from 'electron'
 import type {
   TerminalConfigImportPreview,
   TerminalConfigImportSource
-} from '../../shared/terminal-config-import-preview'
+} from '../../shared/terminal/appearance/terminal-config-import-preview'
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
-} from '../../shared/terminal-custom-themes'
+} from '../../shared/terminal-themes/terminal-custom-themes'
 import type { PreloadApi } from '../api-types'
 
 export const settingsApi = {

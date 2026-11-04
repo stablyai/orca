@@ -1,5 +1,5 @@
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
-import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
+import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal/input/terminal-input'
 import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import {
@@ -15,7 +15,7 @@ import {
   type TerminalProcessInspection
 } from '../../../shared/terminal-process-inspection'
 
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 
 export type RuntimeTerminalProcessInspection = TerminalProcessInspection
 

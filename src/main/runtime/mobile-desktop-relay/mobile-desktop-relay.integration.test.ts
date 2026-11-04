@@ -18,7 +18,7 @@ import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   DelegatedMobileDeviceSyncParamsSchema
 } from '../../../shared/delegated-mobile-device-contract'
-import { decodeTerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
+import { decodeTerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { mintBrowserScreencastSubscriptionId } from '../browser-screencast-subscription-id'
 import { OrcaRuntimeService } from '../orca-runtime'

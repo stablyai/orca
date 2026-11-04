@@ -14,7 +14,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrchestrationCompatibilityHostStamp } from '../../shared/orchestration-compatibility-evidence'
-import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type {
   RuntimeTerminalPresentation,
   RuntimeTerminalWait,
@@ -24,7 +24,7 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'

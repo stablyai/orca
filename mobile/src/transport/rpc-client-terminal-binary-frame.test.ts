@@ -5,7 +5,7 @@ import { RpcClientTerminalStreamRouter } from './rpc-client-terminal-stream-rout
 import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 
 function encodeFrame(opcode: TerminalStreamOpcode, streamId: number, payload: unknown): Uint8Array {
   const body =

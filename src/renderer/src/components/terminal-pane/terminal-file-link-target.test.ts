@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { extractTerminalFileLinks } from '../../../../shared/terminal-links'
+import { extractTerminalFileLinks } from '../../../../shared/terminal/links/terminal-links'
 import type * as FilePathMappingModule from './terminal-file-path-mapping'
 import {
   mayCheckFileLinkTargetUnprompted,

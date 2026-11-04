@@ -187,7 +187,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'config/scripts/check-runtime-launcher-protocol-ratchet',
   'src/main/daemon/daemon-protocol-version.ts',
   'src/shared/protocol-version',
-  'src/shared/terminal-stream-protocol',
+  'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser-client-host-protocol',
   'src/shared/browser-network-tunnel-protocol',
   // Both released/current WebSocket transports must accept web upgrade marker (cross-version-web-upgrade-marker).
