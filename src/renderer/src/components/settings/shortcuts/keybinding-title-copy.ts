@@ -10,7 +10,6 @@ import {
   TUI_AGENT_DISPLAY_NAMES
 } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { translate } from '@/i18n/i18n'
-import { translateTabMoveToSplitTitle } from '@/lib/tab-move-to-split-copy'
 import { uniqueKeywords } from '../search/settings-search-keywords'
 
 type StaticKeybindingActionId = Exclude<
@@ -79,10 +78,14 @@ const STATIC_TITLE_COPY = {
   'tab.close': () => translate('keybindings.title.tabClose', 'Close active tab'),
   'tab.closeAll': () => translate('keybindings.title.tabCloseAll', 'Close all editor tabs'),
   'tab.rename': () => translate('keybindings.title.tabRename', 'Rename active tab'),
-  'tab.moveToSplitRight': () => translateTabMoveToSplitTitle('right'),
-  'tab.moveToSplitLeft': () => translateTabMoveToSplitTitle('left'),
-  'tab.moveToSplitDown': () => translateTabMoveToSplitTitle('down'),
-  'tab.moveToSplitUp': () => translateTabMoveToSplitTitle('up'),
+  'tab.moveToSplitRight': () =>
+    translate('keybindings.title.tabMoveToSplitRight', 'Move tab to split right'),
+  'tab.moveToSplitLeft': () =>
+    translate('keybindings.title.tabMoveToSplitLeft', 'Move tab to split left'),
+  'tab.moveToSplitDown': () =>
+    translate('keybindings.title.tabMoveToSplitDown', 'Move tab to split down'),
+  'tab.moveToSplitUp': () =>
+    translate('keybindings.title.tabMoveToSplitUp', 'Move tab to split up'),
   'tab.reopenClosed': () => translate('keybindings.title.tabReopenClosed', 'Reopen closed tab'),
   'tab.nextSameType': () => translate('keybindings.title.tabNextSameType', 'Next tab (same type)'),
   'tab.previousSameType': () =>

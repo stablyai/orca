@@ -8,7 +8,6 @@ import {
   ensureTerminalVisible,
   getActiveTabId
 } from './helpers/store'
-import { openTerminalTabInActiveGroup } from './helpers/terminal-tab-open'
 
 // Mod+Alt+M is unused by the built-in map, so the chord cannot be stolen by another action.
 const CHORD = 'Mod+Alt+M'
@@ -20,7 +19,11 @@ test('a bound chord moves the active tab into a split pane column', async ({ orc
   await waitForActiveTerminalManager(orcaPage)
 
   // A lone tab cannot move — dropUnifiedTab rejects splitting a group's only tab.
-  await openTerminalTabInActiveGroup(orcaPage)
+  await orcaPage.evaluate(async () => {
+    const state = window.__store!.getState()
+    const groupId = state.activeGroupIdByWorktree[state.activeWorktreeId!]
+    await state.openNewTerminalTabInActiveWorkspace(groupId!)
+  })
 
   await orcaPage.evaluate(async (chord) => {
     await window.__store!.getState().setKeybindingOverride('tab.moveToSplitRight', [chord])
@@ -48,7 +51,7 @@ test('a bound chord moves the active tab into a split pane column', async ({ orc
   const splitMenu = orcaPage.getByRole('menu').nth(1)
   const rightMenuItem = splitMenu.getByRole('menuitem').first()
   await expect(rightMenuItem).toBeVisible()
-  await expect(rightMenuItem.locator('[data-slot="dropdown-menu-shortcut"]')).toHaveText(
+  await expect(rightMenuItem.locator('[data-slot="context-menu-shortcut"]')).toHaveText(
     isMac ? '⌘⌥M' : 'Ctrl+Alt+M'
   )
   await orcaPage.keyboard.press('Escape')
