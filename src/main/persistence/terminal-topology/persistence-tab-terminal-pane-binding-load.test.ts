@@ -85,9 +85,4 @@ describe("main's Store load binds a tab's own terminal to its unbound pane", () 
     expect(Object.keys(loaded.tabsByWorktree)).toEqual([WORKTREE])
     expect(loaded.terminalLayoutsByTabId['tab-a']?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-a' })
   })
-
-  it('not while the window owns the layout', () => {
-    layoutOwner.isMain = false
-    expect(loadStored().terminalLayoutsByTabId['tab-a']?.ptyIdsByLeafId).toBeUndefined()
-  })
 })

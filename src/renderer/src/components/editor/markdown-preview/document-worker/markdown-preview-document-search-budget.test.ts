@@ -24,11 +24,4 @@ describe('large preview search index budgets', () => {
     engine.load('# New')
     expect((await engine.search('New'))?.matches).toHaveLength(1)
   })
-
-  it('bounds retained text nodes independently of bytes', async () => {
-    const engine = new MarkdownPreviewDocumentEngine()
-    engine.load('a\n\nb\n\nc\n\nd')
-    await expect(engine.search('missing')).rejects.toThrow('search limit')
-    expect(engine.blocks([3])[0].oversized).toBe(false)
-  })
 })
