@@ -9,7 +9,13 @@ describe('isCodexAuthError', () => {
   it('matches Codex authentication refresh failures', () => {
     expect(isCodexAuthError('Access token could not be refreshed')).toBe(true)
     expect(isCodexAuthError('Sign in with ChatGPT')).toBe(true)
+    expect(
+      isCodexAuthError(
+        'Your authentication token has been invalidated. Please try signing in again.'
+      )
+    ).toBe(true)
     expect(isCodexAuthError('plain provider error')).toBe(false)
+    expect(isCodexAuthError('RPC failed')).toBe(false)
     expect(isCodexAuthError(null)).toBe(false)
   })
 })

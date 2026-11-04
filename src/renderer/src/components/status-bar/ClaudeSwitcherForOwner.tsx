@@ -40,6 +40,7 @@ import {
   InlineUsageSignInAction,
   InlineUsageSkeleton
 } from './InlineProviderUsage'
+import { previewAccountRowUsage } from './usage-roster-row-state'
 import { AccountSwitchList } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
@@ -288,6 +289,14 @@ export function ClaudeSwitcherForOwner({
           const inactiveUsage = target.id
             ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
             : null
+          const rowPreview = previewAccountRowUsage({
+            active: target.active && !hasActiveRuntimeEnvironment,
+            activeLimits: claude,
+            inactive: inactiveUsage
+          })
+          const rowFetching = target.active
+            ? claude?.status === 'fetching'
+            : Boolean(inactiveUsage?.isFetching)
           // Why local only: the hidden sign-in runs on this device, not a remote server.
           const signInId = target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
 
@@ -327,13 +336,16 @@ export function ClaudeSwitcherForOwner({
                   {target.hint ? (
                     <span className="text-3xs leading-4 text-muted-foreground">{target.hint}</span>
                   ) : null}
-                  {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                  {rowPreview.kind === 'loading' ? (
                     <InlineUsageSkeleton />
-                  ) : inactiveUsage?.rateLimits ? (
-                    <InlineUsageBars
-                      limits={inactiveUsage.rateLimits}
-                      isFetching={inactiveUsage.isFetching}
-                    />
+                  ) : rowPreview.kind === 'usage' ? (
+                    <InlineUsageBars limits={rowPreview.limits} isFetching={rowFetching} />
+                  ) : rowPreview.kind === 'message' || rowPreview.kind === 'sign-in' ? (
+                    <span
+                      className={`text-[10px] text-muted-foreground ${rowFetching ? 'animate-pulse' : ''}`}
+                    >
+                      {rowPreview.label}
+                    </span>
                   ) : null}
                 </div>
               ) : null}
