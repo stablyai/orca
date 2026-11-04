@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import sleepFrames from './__fixtures__/codex-app-server-sleep.json'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { createCodexJournalTranslator } from './structured/journal/codex-structured-journal-translation'
 
 // Recorded from Codex 0.162.1 app-server calling clock.sleep on 2026-11-03.
 it('publishes the requested sleep duration and clears it before the next activity', () => {
