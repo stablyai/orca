@@ -1,19 +1,24 @@
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { agentSessionFormBooleanLabels } from '../../../../shared/agent-session-form-copy'
+import { useNativeChatSettledBody } from './native-chat-settled-body'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import {
   NATIVE_CHAT_RECEIPT_COPY,
   nativeChatReceiptAnswerHeading,
-  nativeChatReceiptAnswers,
+  nativeChatReceiptAnswerEntries,
+  nativeChatReceiptBody,
   nativeChatReceiptDevice,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
 } from '../../../../shared/native-chat/native-chat-resolution-receipt'
 
 export function NativeChatResolutionReceipt({
-  body,
+  body: presentation,
   disclosureId,
   awaiting = true,
   onLinkClick
@@ -25,6 +30,13 @@ export function NativeChatResolutionReceipt({
   awaiting?: boolean
   onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element | null {
+  useUiLanguageRevision()
+  const hydrated = useNativeChatSettledBody(presentation)
+  const body = nativeChatReceiptBody(
+    presentation,
+    hydrated.status === 'ready' ? hydrated.body : null
+  )
+  const incomplete = !!body.deferredBody
   const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`
   const subject = nativeChatReceiptSubject(body)
   if (body.resolution.state === 'pending') {
@@ -45,7 +57,9 @@ export function NativeChatResolutionReceipt({
   })
   const title = body.kind === 'approval' ? (body.displayName ?? body.title) : body.question
   // Non-empty only once resolved, and then each question is listed with its answer.
-  const answers = nativeChatReceiptAnswers(body)
+  const answers = incomplete
+    ? []
+    : nativeChatReceiptAnswerEntries(body, agentSessionFormBooleanLabels(translate))
   return (
     <div
       className="space-y-1 border-l border-border pl-3 text-xs text-chat-foreground-faint"
@@ -65,16 +79,37 @@ export function NativeChatResolutionReceipt({
       {body.kind === 'approval' && body.detail ? (
         <p className="line-clamp-3 whitespace-pre-wrap break-words">{body.detail}</p>
       ) : null}
-      {answers.map((answer, index) => {
+      {incomplete ? (
+        hydrated.status === 'loading' ? (
+          <LoadingSpinner className="size-3" />
+        ) : (
+          <p>
+            {translate(
+              'components.native-chat.receipt.unavailable',
+              NATIVE_CHAT_RECEIPT_COPY.unavailable
+            )}
+          </p>
+        )
+      ) : null}
+      {answers.map(({ key, answer }) => {
         const heading = nativeChatReceiptAnswerHeading(subject, answer)
         return (
-          <div
-            key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
-          >
+          <div key={key}>
             {heading ? (
-              <NativeChatQuestionText content={heading} onLinkClick={onLinkClick} />
+              // Form field titles stay plain, as the form card shows them; question text carries links.
+              body.kind === 'question' ? (
+                <NativeChatQuestionText content={heading} onLinkClick={onLinkClick} />
+              ) : (
+                <p>{heading}</p>
+              )
             ) : null}
-            <p className="line-clamp-3 whitespace-pre-wrap break-words">
+            <p
+              className={
+                body.kind === 'approval' && body.form
+                  ? 'whitespace-pre-wrap break-words'
+                  : 'line-clamp-3 whitespace-pre-wrap break-words'
+              }
+            >
               {answer.answer === ''
                 ? translate(
                     'components.native-chat.receipt.emptyAnswer',

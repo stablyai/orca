@@ -52,10 +52,14 @@ export class RpcClientSocketSession {
     this.armConnectTimeout()
   }
 
-  sendEncrypted(request: RpcRequest): boolean {
+  sendEncrypted(request: RpcRequest, maxBytes = 4 * 1024 * 1024): boolean {
     if (this.socket.readyState === WebSocket.OPEN && this.framing) {
       try {
-        if (this.framing.sendText(JSON.stringify(request))) {
+        const serialized = JSON.stringify(request)
+        if (new TextEncoder().encode(serialized).length > maxBytes) {
+          return false
+        }
+        if (this.framing.sendText(serialized)) {
           return true
         }
       } catch {

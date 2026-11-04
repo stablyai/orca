@@ -15,3 +15,7 @@ export function openExternalLink(url: string): void {
 function report(url: string, error: unknown): void {
   console.warn('[platform] could not open a URL', { url }, error)
 }
+
+export function useExternalLinkAvailable(url: string | undefined): boolean {
+  return Boolean(url)
+}

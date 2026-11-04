@@ -1,3 +1,4 @@
+import type { AgentSessionFormContent } from '../agent-session-form'
 import type {
   AgentJournalQuestion,
   AgentJournalQuestionItem
@@ -22,6 +23,7 @@ export type AgentSessionQuestionAnswer = {
 
 /** What a client chose on a prompt: a decision id for an approval, per-question answers for a question. */
 export type AgentSessionPromptResponse =
+  | { kind: 'form'; content: AgentSessionFormContent }
   | { kind: 'option'; optionId: string }
   | { kind: 'answers'; answers: AgentSessionQuestionAnswer[] }
 

@@ -180,7 +180,7 @@ internal class OrcaMobileWebShellView(
   fun postBridgeMessage(json: String) {
     val proxy = replyProxy ?: throw MobileWebShellBridgeUnavailableException()
     val byteCount = json.toByteArray(Charsets.UTF_8).size
-    if (!acceptsMobileWebShellBridgeByteCount(byteCount)) {
+    if (byteCount > MOBILE_WEB_SHELL_BRIDGE_MAX_OUTBOUND_BYTES) {
       throw MobileWebShellBridgeMessageTooLargeException(byteCount)
     }
     proxy.postMessage(json)
@@ -394,7 +394,7 @@ internal class MobileWebShellBridgeUnavailableException :
 
 internal class MobileWebShellBridgeMessageTooLargeException(byteCount: Int) : CodedException(
   "A bridge message of $byteCount bytes exceeds the " +
-    "$MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES byte cap"
+    "$MOBILE_WEB_SHELL_BRIDGE_MAX_OUTBOUND_BYTES byte cap"
 )
 
 /** The shell already pads bars/keyboard; zero (never consume) insets to prevent WebView M144+ bar and M139+ IME double-padding. */

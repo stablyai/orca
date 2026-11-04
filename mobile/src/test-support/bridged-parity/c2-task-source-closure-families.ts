@@ -88,8 +88,8 @@ export const C2_TASK_SOURCE_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-create-linear': 'identical'
   },
   'tasks.task-list-gitlab-items': {
-    'matrix-tasks.task-list-gitlab-items-gitlab.listworkitems-1': 'params-undefined',
-    'tk-list-gitlab-items': 'params-undefined'
+    'matrix-tasks.task-list-gitlab-items-gitlab.listworkitems-1': 'result-absent-settlement',
+    'tk-list-gitlab-items': 'identical'
   },
   'tasks.task-list-gitlab-todos': {
     'matrix-tasks.task-list-gitlab-todos-gitlab.todos-1': 'result-absent-settlement',

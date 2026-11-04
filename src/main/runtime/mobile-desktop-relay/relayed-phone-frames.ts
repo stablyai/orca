@@ -2,6 +2,7 @@ import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
+import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../../../shared/runtime-ordinary-message-capability'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import {
   readTerminalStreamFrameId,
@@ -10,16 +11,46 @@ import {
 
 const STRIPPED_ENVELOPE_FIELDS = new Set(['deviceToken', 'executionHost'])
 
-// Swap every desktop-token occurrence, including composite subscription ids; field lists silently rot.
+const CLIENT_ID_METHODS = new Set([
+  'terminal.subscribe',
+  'terminal.send',
+  'terminal.setDisplayMode',
+  'terminal.updateViewport',
+  'terminal.unsubscribe',
+  'terminal.viewClaudeAgent'
+])
+
+// Translate authenticated identity positions; application strings remain opaque.
 export function rewriteRelayedPhoneRequest(
   frame: string,
   phoneDesktopToken: string,
   phoneHostToken: string,
   requestId?: string
 ): string {
-  const parsed: unknown = JSON.parse(frame.split(phoneDesktopToken).join(phoneHostToken))
+  const parsed: unknown = JSON.parse(frame)
   if (!isRecord(parsed)) {
     throw new Error('relayed_phone_frame_not_an_object')
+  }
+  const params = parsed.params
+  if (isRecord(params)) {
+    if (
+      CLIENT_ID_METHODS.has(String(parsed.method)) &&
+      isRecord(params.client) &&
+      params.client.id === phoneDesktopToken
+    ) {
+      params.client = { ...params.client, id: phoneHostToken }
+    }
+    if (parsed.method === 'terminal.resizeForClient' && params.clientId === phoneDesktopToken) {
+      params.clientId = phoneHostToken
+    }
+    if (
+      parsed.method === 'terminal.unsubscribe' &&
+      typeof params.subscriptionId === 'string' &&
+      params.subscriptionId.endsWith(`:${phoneDesktopToken}`)
+    ) {
+      params.subscriptionId =
+        params.subscriptionId.slice(0, -phoneDesktopToken.length) + phoneHostToken
+    }
   }
   // Socket authentication owns host identity; routing targets belong only to the desktop.
   const forwarded = Object.fromEntries(
@@ -84,21 +115,24 @@ export class RelayedPhoneReplies {
     {
       hostStreamIds: number[]
       swallow: boolean
+      method?: string
       browserScreencast?: () => boolean
       settle?: (reply: unknown) => void
       cancel?: () => void
     }
   >()
+  private ordinaryMessages = false
   private readonly desktopStreamIds = new Map<number, number>()
 
   constructor(private readonly allocateStreamId: () => number) {}
 
   noteForwarded(
     requestId: string,
-    options: { swallowReplies?: boolean; browserScreencast?: () => boolean } = {}
+    options: { swallowReplies?: boolean; method?: string; browserScreencast?: () => boolean } = {}
   ): void {
     this.openRequests.set(requestId, {
       hostStreamIds: [],
+      method: options.method,
       swallow: options.swallowReplies === true,
       browserScreencast: options.browserScreencast
     })
@@ -142,7 +176,12 @@ export class RelayedPhoneReplies {
     }
     this.openRequests.clear()
     this.desktopStreamIds.clear()
+    this.ordinaryMessages = false
     return ids
+  }
+
+  supportsOrdinaryMessages(): boolean {
+    return this.ordinaryMessages
   }
 
   /** Return the phone frame, or null to drop it. */
@@ -159,6 +198,14 @@ export class RelayedPhoneReplies {
     const open = this.openRequests.get(parsed.id)
     open?.settle?.(parsed)
     const result = parsed.result
+    if (
+      open?.method === 'status.get' &&
+      parsed.ok === true &&
+      isRecord(result) &&
+      Array.isArray(result.capabilities)
+    ) {
+      this.ordinaryMessages = result.capabilities.includes(RUNTIME_ORDINARY_MESSAGE_CAPABILITY)
+    }
     let rewritten = false
     if (
       open?.browserScreencast?.() &&

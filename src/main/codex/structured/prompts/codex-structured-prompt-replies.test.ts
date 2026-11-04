@@ -1,3 +1,5 @@
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { codexPromptIdentity } from './codex-structured-prompt-items'
 import { describe, expect, it } from 'vitest'
 import { AGENT_SESSION_ID_MAX_LENGTH } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
@@ -50,7 +52,7 @@ function userInputRequest(questionIds: string[]): {
       itemId: 'codex-item-1',
       threadId: 'thread-1',
       turnId: 'turn-1',
-      questions: questionIds.map((id) => ({ id }))
+      questions: questionIds.map((id) => ({ id, question: 'Question?' }))
     }
   }
 }
@@ -80,7 +82,7 @@ describe('codex question option ids', () => {
       params: {
         itemId: 'codex-item-1',
         threadId: 'thread-1',
-        questions: [{ id: longQuestionId, options: [{ label: longAnswer }] }]
+        questions: [{ id: longQuestionId, question: 'Question?', options: [{ label: longAnswer }] }]
       }
     })
 
@@ -137,12 +139,12 @@ describe('CodexPromptRegistry', () => {
       method: 'item/commandExecution/requestApproval',
       params: { itemId: 'other-thread-item', threadId: 'thread-2', turnId: 'turn-1' }
     })
-    registry.bindJournalItemId('journal-root', 'thread-1', 'root-item', 'turn-1')
+    registry.bindJournalItemId(promptId('root-item'), 'thread-1', 'root-item', 'turn-1')
 
     registry.clearTurn('thread-1', 'turn-1')
 
     expect(registry.find('root-item')).toBeNull()
-    expect(registry.find('journal-root')).toBeNull()
+    expect(registry.find(promptId('root-item'))).toBeNull()
     expect(registry.find('other-item')?.requestId).toBe(2)
     expect(registry.find('other-thread-item')?.requestId).toBe(3)
   })
@@ -156,11 +158,11 @@ describe('CodexPromptRegistry', () => {
       params: { itemId: 'root-item', threadId: 'thread-1' }
     })
 
-    registry.bindJournalItemId('journal-root', 'thread-1', 'root-item', turnId)
+    registry.bindJournalItemId(promptId('root-item'), 'thread-1', 'root-item', turnId)
 
     expect(registry.bytes).toBeLessThanOrEqual(MAX_CODEX_PROMPT_REGISTRY_BYTES)
     registry.clearTurn('thread-1', turnId)
-    expect(registry.find('journal-root')).toBeNull()
+    expect(registry.find(promptId('root-item'))).toBeNull()
   })
 
   it('reserves enough bytes for a wire-valid multibyte backfilled turn id', () => {
@@ -173,9 +175,9 @@ describe('CodexPromptRegistry', () => {
     const reservedBytes = registry.bytes
     const turnId = '界'.repeat(AGENT_SESSION_ID_MAX_LENGTH)
 
-    registry.bindJournalItemId('journal-root', 'thread-1', 'root-item', turnId)
+    registry.bindJournalItemId(promptId('root-item'), 'thread-1', 'root-item', turnId)
 
-    expect(registry.find('journal-root')?.turnId).toBe(turnId)
+    expect(registry.find(promptId('root-item'))?.turnId).toBe(turnId)
     expect(registry.bytes).toBe(reservedBytes)
     expect(registry.bytes).toBeLessThanOrEqual(MAX_CODEX_PROMPT_REGISTRY_BYTES)
   })
@@ -196,13 +198,17 @@ describe('CodexPromptRegistry', () => {
   it('addresses a prompt by its journal item id once bound, and forgets both', () => {
     const registry = new CodexPromptRegistry()
     const prompt = registry.register(userInputRequest(['q1']))
-    registry.bindJournalItemId('codex:thread-1:turn-1:2', 'thread-1', 'codex-item-1')
+    registry.bindJournalItemId(
+      promptId('codex-item-1', 'thread-1', 'q1'),
+      'thread-1',
+      'codex-item-1'
+    )
 
-    expect(registry.find('codex:thread-1:turn-1:2')).toBe(prompt)
+    expect(registry.find(promptId('codex-item-1', 'thread-1', 'q1'))).toBe(prompt)
     expect(registry.find('codex-item-1')).toBe(prompt)
 
     registry.forget(prompt as NonNullable<typeof prompt>)
-    expect(registry.find('codex:thread-1:turn-1:2')).toBeNull()
+    expect(registry.find(promptId('codex-item-1', 'thread-1', 'q1'))).toBeNull()
     expect(registry.find('codex-item-1')).toBeNull()
   })
 
@@ -217,18 +223,22 @@ describe('CodexPromptRegistry', () => {
 
     register(1, 'thread-root')
     register(2, 'thread-child')
-    registry.bindJournalItemId('journal-root', 'thread-root', 'item-2')
-    registry.bindJournalItemId('journal-child', 'thread-child', 'item-2')
+    registry.bindJournalItemId(promptId('item-2', 'thread-root'), 'thread-root', 'item-2')
+    registry.bindJournalItemId(promptId('item-2', 'thread-child'), 'thread-child', 'item-2')
 
-    expect(registry.find('journal-root')?.requestId).toBe(1)
-    expect(registry.find('journal-child')?.requestId).toBe(2)
+    expect(registry.find(promptId('item-2', 'thread-root'))?.requestId).toBe(1)
+    expect(registry.find(promptId('item-2', 'thread-child'))?.requestId).toBe(2)
     expect(registry.find('item-2')).toBeNull()
   })
 
-  it('keeps a journal-bound pending prompt answerable after the lookup window evicts it', () => {
+  it('keeps a journal-bound pending prompt answerable while refusing excess arrivals', () => {
     const registry = new CodexPromptRegistry()
     const first = registry.register(userInputRequest(['q1']))
-    registry.bindJournalItemId('journal-first', 'thread-1', 'codex-item-1')
+    registry.bindJournalItemId(
+      promptId('codex-item-1', 'thread-1', 'q1'),
+      'thread-1',
+      'codex-item-1'
+    )
 
     for (let index = 0; index <= MAX_CODEX_PROMPT_REGISTRY_ENTRIES; index += 1) {
       registry.register({
@@ -238,7 +248,7 @@ describe('CodexPromptRegistry', () => {
       })
     }
 
-    expect(registry.find('journal-first')).toBe(first)
+    expect(registry.find(promptId('codex-item-1', 'thread-1', 'q1'))).toBe(first)
   })
 })
 
@@ -373,12 +383,6 @@ describe('MCP tool-call approvals', () => {
   })
 
   it.each([
-    {
-      mode: 'url',
-      requestedSchema: undefined,
-      url: 'https://example.com',
-      elicitationId: 'link-1'
-    },
     { mode: 'future-mode', requestedSchema: undefined },
     { mode: 'openai/form' },
     { requestedSchema: { type: 'object', properties: [] } }
@@ -390,7 +394,7 @@ describe('MCP tool-call approvals', () => {
     ).toBeNull()
   })
 
-  it('leaves elicitations that ask for form input to the safe decline', () => {
+  it('registers general forms independently from empty tool approvals', () => {
     const registry = new CodexPromptRegistry()
 
     expect(
@@ -400,10 +404,10 @@ describe('MCP tool-call approvals', () => {
           requestedSchema: { type: 'object', properties: { name: { type: 'string' } } }
         })
       )
-    ).toBeNull()
+    ).toMatchObject({ questionIds: [], elicitation: { kind: 'form' } })
     expect(
       registry.register(mcpElicitationRequest(10, { ...MCP_TOOL_APPROVAL, _meta: {} }))
-    ).toBeNull()
+    ).toMatchObject({ questionIds: [], elicitation: { kind: 'form' } })
   })
 
   it.each([
@@ -420,3 +424,7 @@ describe('MCP tool-call approvals', () => {
     expect(answer(prompt, { kind: 'option', optionId })).toEqual(reply)
   })
 })
+
+function promptId(promptKey: string, threadId = 'thread-1', questionId?: string): string {
+  return agentJournalItemKey(codexPromptIdentity({ threadId, promptKey, questionId }))
+}

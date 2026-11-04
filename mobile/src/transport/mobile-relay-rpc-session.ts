@@ -1,7 +1,5 @@
-import {
-  throwIfSignalAborted,
-  waitForPromiseWithSignal
-} from '../../../src/shared/abort-signal-reason'
+import { preparedMobileRequestSender } from './prepared-mobile-rpc-request'
+import { createMobileOrdinaryMessageSupport } from './mobile-runtime-ordinary-messages'
 import { sharedPromiseSettlementWaiters } from '../../../src/shared/promise-settlement-waiters'
 import {
   PairingGetEndpointsResultSchema,
@@ -17,7 +15,6 @@ import {
   type RpcEnvelopeFields,
   type RpcRequestFrame
 } from './rpc-envelope-fields'
-import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
@@ -111,20 +108,17 @@ export function connectMobileRelayRpcSession(args: {
     onError: fail
   })
 
+  const ordinaryMessages = createMobileOrdinaryMessageSupport()
   const client: MobileRelayRpcSession = {
-    async sendRequest(method, params, options) {
-      if (options?.failWhenDisconnected && state !== 'connected') {
-        throw new Error(`Not connected: ${method}`)
-      }
-      throwIfSignalAborted(options?.signal)
-      const budget = openRpcRequestBudget(options)
-      const connectTimeoutMs = budget.timeoutMs ?? requestTimeoutMs
-      await waitForPromiseWithSignal(connectWaiters.wait(connectTimeoutMs), options?.signal)
-      throwIfSignalAborted(options?.signal)
-      const timeoutMs = resolvePostConnectRequestTimeout(budget, requestTimeoutMs)
-      options?.beforeSend?.()
-      return sendRpc(method, params, timeoutMs, false, options?.envelope, options?.signal)
-    },
+    getRequestByteCapacity: ordinaryMessages.capacity,
+    sendRequest: preparedMobileRequestSender({
+      getState: () => state,
+      waitForConnected: (timeoutMs) => connectWaiters.wait(timeoutMs ?? requestTimeoutMs),
+      send: (method, params, timeoutMs, envelope, signal) =>
+        sendRpc(method, params, timeoutMs, false, envelope, signal),
+      observe: ordinaryMessages.observe,
+      requestTimeoutMs
+    }),
 
     subscribe(method, params, listener, options) {
       if (closed) {
@@ -270,7 +264,9 @@ export function connectMobileRelayRpcSession(args: {
 
   function sendFrame({ envelope, ...request }: RpcRequestFrame): boolean {
     const wire = withRpcEnvelopeFields({ ...request, deviceToken: args.deviceToken }, envelope)
-    return link.sendText(JSON.stringify(wire))
+    const serialized = JSON.stringify(wire)
+    const fits = new TextEncoder().encode(serialized).length <= ordinaryMessages.capacity()
+    return fits && link.sendText(serialized)
   }
 
   function handleText(plaintext: string): void {

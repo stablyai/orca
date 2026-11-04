@@ -6,6 +6,33 @@ import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 
 afterEach(cleanup)
 
+it('opens an elicitation URL only on click, without answering the request', () => {
+  const onChoose = vi.fn()
+  const onOpenUrl = vi.fn()
+  render(
+    <NativeChatApprovalCard
+      approval={{
+        title: 'Connect service',
+        detail: 'https://example.com/connect',
+        url: 'https://example.com/connect',
+        options: [
+          { label: 'Continue', send: 'accept' },
+          { label: 'Decline', send: 'decline' },
+          { label: 'Cancel', send: 'cancel' }
+        ]
+      }}
+      onChoose={onChoose}
+      onOpenUrl={onOpenUrl}
+    />
+  )
+  expect(onOpenUrl).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Open link' }))
+  expect(onOpenUrl).toHaveBeenCalledWith('https://example.com/connect')
+  expect(onChoose).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+  expect(onChoose).toHaveBeenCalledWith('accept')
+})
+
 describe('NativeChatApprovalCard', () => {
   describe("a subject of a kind this build cannot draw: a newer Orca's", () => {
     // A subject kind a newer build wrote; this build draws only plans.

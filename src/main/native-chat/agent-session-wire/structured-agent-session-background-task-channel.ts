@@ -1,6 +1,7 @@
 import { structuredAgentSessionOwnerStatus } from './structured-agent-session-owner-status'
 import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session/requests/agent-session-current-requests-wire'
 import { readCurrentRequestsPiece } from './agent-session-current-requests'
+import { settledBodySubscriberEmit } from './agent-session-settled-body-subscriber-field'
 import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult
@@ -48,7 +49,8 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     request: AgentSessionHistoryRequest,
     scope?: AgentSessionHistoryScope,
     reader?: HistoryReader,
-    replaceNormalizedHistory = true
+    replaceNormalizedHistory = true,
+    readsSettledBodies = false
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
     const work = hostStructuredAgentSessionCurrentWork(
@@ -62,6 +64,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       scope,
       reader,
       replaceNormalizedHistory,
+      readsSettledBodies,
       ...(work ? { work } : {})
     })
     const backgroundTasks = this.read(request.sessionId)
@@ -101,6 +104,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const session = await this.conversation(input.sessionId)
     return this.subscribers.open({
       ...input,
+      emit: settledBodySubscriberEmit(input.emit, input.readsSettledBodies === true),
       journal: session.journal,
       fence: structuredAgentSessionConversationFence(this.deps.store, input.sessionId)
     })

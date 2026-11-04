@@ -42,6 +42,7 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   onConnectionPathChange?: (listener: () => void) => () => void
   // A page's client: the status its shell's gate already proved, so the page need not ask again.
   getShellHostStatus?: () => unknown
+  getRequestByteCapacity?: () => number
   /** False when this transport would refuse an `envelope`; absent means it carries one. */
   carriesRpcEnvelope?: () => boolean
   onStateChange: (listener: (state: ConnectionState) => void) => () => void

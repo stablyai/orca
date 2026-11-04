@@ -19,7 +19,8 @@ import {
   codexJournalPromptIdPart,
   encodeCodexJournalQuestionOptionId
 } from './codex-prompt-registry-bounds'
-import { codexMcpToolApprovalDecisions } from './codex-mcp-tool-approval'
+import { codexMcpToolApprovalDecisions, isCodexMcpToolApproval } from './codex-mcp-tool-approval'
+import { readCodexMcpElicitation } from './codex-mcp-elicitation'
 
 const APPROVAL_DECISION_LABELS: Record<CodexApprovalDecision, string> = {
   accept: 'Allow',
@@ -76,6 +77,25 @@ export function codexApprovalItem(input: {
 }): AgentJournalApprovalItem {
   const params = readParams(input.params)
   if (input.method === CODEX_MCP_ELICITATION_METHOD) {
+    if (!isCodexMcpToolApproval(params)) {
+      const elicitation = readCodexMcpElicitation(params)
+      if (elicitation) {
+        return {
+          kind: 'approval',
+          title: elicitation.message,
+          detail: elicitation.kind === 'url' ? elicitation.url : null,
+          ...(elicitation.kind === 'url'
+            ? { url: elicitation.url }
+            : { form: { fields: elicitation.fields } }),
+          options: [
+            ...(elicitation.kind === 'url' ? [{ id: 'accept', label: 'Continue' }] : []),
+            { id: 'decline', label: 'Decline' },
+            { id: 'cancel', label: 'Cancel' }
+          ],
+          resolution: { ...PENDING }
+        }
+      }
+    }
     return codexMcpToolApprovalItem(params)
   }
   return {
@@ -134,6 +154,7 @@ export function codexQuestionItems(input: {
   threadId: string
   promptKey: string
   params: unknown
+  method?: string
 }): CodexQuestionItem[] {
   const questions = readParams(input.params).questions
   if (!Array.isArray(questions)) {

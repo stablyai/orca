@@ -1,3 +1,4 @@
+import type { AgentSessionSettledBodyReader } from '../../../../shared/agent-session-settled-body-reader'
 import type { AppState } from '@/store/types'
 import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
 import type { AgentSessionHistoryPage } from '../../../../shared/agent-session/agent-session-wire'
@@ -15,6 +16,7 @@ export type StructuredAgentSessionReadSnapshot = {
 }
 
 export type StructuredAgentSessionReadOwner = {
+  settledBodies: AgentSessionSettledBodyReader
   trackSend: (id: string) => {
     issue: () => void
     settle: (uncertain: boolean) => void

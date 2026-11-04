@@ -1,19 +1,20 @@
 import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './structured-agent-session-usage-limit-continue'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './structured-agent-session-close-method'
+import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
+import { STRUCTURED_AGENT_SESSION_HISTORY_METHODS } from './structured-agent-session-history'
+import {
+  clientReadsSettledBodies,
+  STRUCTURED_AGENT_SESSION_ITEM_METHODS
+} from './structured-agent-session-item'
 import { clientRequestsCommands } from './structured-agent-session-policy'
 import {
   clientReadsCurrentRequests,
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
 } from './structured-agent-session-current-requests'
-import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
-import {
-  projectBackgroundTaskEvent,
-  projectBackgroundTaskHistory
-} from './structured-agent-session-background-task-capability'
-import {
-  projectTurnItemEvent,
-  projectTurnItemHistory
-} from './structured-agent-session-turn-item-capability'
+// Require structured.v1 from remote callers before exposing journals/mutations; legacy mobile may receive session-tab metadata placeholders.
+
+import { projectBackgroundTaskEvent } from './structured-agent-session-background-task-capability'
+import { projectTurnItemEvent } from './structured-agent-session-turn-item-capability'
 import { defineMethod, defineStreamingMethod } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
@@ -46,7 +47,6 @@ import {
 import { STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS } from './structured-agent-session-turn-completion-stream'
 import { STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS } from './structured-agent-session-thread-goal'
 import { STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS } from './structured-agent-session-conversation-outline'
-import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from './structured-agent-session-item'
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './structured-agent-session-options-read'
 import {
   AttachParams,
@@ -54,7 +54,6 @@ import {
   ConversationCommandParams,
   CreateParams,
   CreateSupportParams,
-  HistoryParams,
   RewindParams,
   SendParams,
   SleepWorkspaceParams,
@@ -67,10 +66,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { refusingStructuredAgentSessionCreatesClosedFirst } from './structured-agent-session-close-before-create'
 import * as queuedImages from './structured-agent-session-queued-image-capability'
-import {
-  projectReceiptDeviceEvent,
-  projectReceiptDeviceHistory
-} from './structured-agent-session-receipt-devices'
+import { projectReceiptDeviceEvent } from './structured-agent-session-receipt-devices'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
@@ -199,33 +195,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     }
   }),
   ...STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS,
-  defineMethod({
-    name: 'agentSession.history',
-    permission: 'workspace',
-    params: HistoryParams,
-    handler: async (params, ctx) => {
-      const host = await requireInstalledHost(ctx, params.sessionId)
-      return projectReceiptDeviceHistory(
-        projectTurnItemHistory(
-          queuedImages.projectQueuedImageCardHistory(
-            projectBackgroundTaskHistory(
-              await host.history(
-                params,
-                undefined,
-                queuedImages.queuedImageHistoryReader(ctx),
-                clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
-              ),
-              ctx
-            ),
-            ctx
-          ),
-          ctx,
-          host.sessionAgent(params.sessionId)
-        ),
-        ctx
-      )
-    }
-  }),
+  ...STRUCTURED_AGENT_SESSION_HISTORY_METHODS,
   defineStreamingMethod({
     name: 'agentSession.subscribe',
     permission: 'workspace',
@@ -243,6 +213,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       dispose = await host.subscribe({
         commandsOnRequest: clientRequestsCommands(ctx),
         readsCurrentRequests: clientReadsCurrentRequests(ctx),
+        readsSettledBodies: clientReadsSettledBodies(ctx),
         id: subscriptionId,
         sessionId: params.sessionId,
         ...queuedImages.queuedImageSubscriber(ctx),

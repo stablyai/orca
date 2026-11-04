@@ -1,3 +1,5 @@
+import { sendDirectRpcFrame } from './direct-rpc-frame'
+import { createMobileOrdinaryMessageSupport } from './mobile-runtime-ordinary-messages'
 import type { ConnectOptions, RpcClient, SendRequestOptions } from './rpc-client'
 import { DirectConnectionLog } from './direct-connection-log'
 import { RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
@@ -6,22 +8,13 @@ import {
   RpcClientReconnectSchedule,
   RPC_RECONNECT_ATTEMPT_LIMIT
 } from './rpc-client-reconnect-schedule'
-import { buildDirectRpcWireRequest, type RpcRequestFrame } from './rpc-envelope-fields'
+import type { RpcRequestFrame } from './rpc-envelope-fields'
 import { RpcClientRequestTracker } from './rpc-client-request-tracker'
 import { RpcClientSocketCloseController } from './rpc-client-socket-close-controller'
 import { RpcClientSocketFactory } from './rpc-client-socket-factory'
 import type { RpcClientSocketSession } from './rpc-client-socket-session'
-import {
-  RpcClientStreamRegistry,
-  type RpcStreamingListener,
-  type RpcStreamSubscribeOptions
-} from './rpc-client-stream-registry'
-import {
-  DECISIVE_PROBE_TIMEOUT_MS,
-  livenessProbeFrame,
-  LIVENESS_REQUEST_ID_PREFIX,
-  RpcSessionLivenessWatchdog
-} from './rpc-session-liveness-watchdog'
+import * as streams from './rpc-client-stream-registry'
+import * as liveness from './rpc-session-liveness-watchdog'
 import { isStaleForegroundDial } from './rpc-stale-dial'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from './types'
 import { negotiateMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
@@ -29,12 +22,13 @@ import { negotiateMobileRuntimeCapabilities } from './mobile-runtime-capability-
 const DIRECT_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
 
 export class DirectRpcClient implements RpcClient {
+  private readonly ordinaryMessages = createMobileOrdinaryMessageSupport()
   private socketSession: RpcClientSocketSession | null = null
   private readonly connectionState: RpcClientConnectionState
   private readonly reconnect: RpcClientReconnectSchedule
   private readonly requests: RpcClientRequestTracker
-  private readonly streams: RpcClientStreamRegistry
-  private readonly liveness: RpcSessionLivenessWatchdog
+  private readonly streams: streams.RpcClientStreamRegistry
+  private readonly liveness: liveness.RpcSessionLivenessWatchdog
   private readonly socketFactory: RpcClientSocketFactory
   private readonly authenticationRetry: RpcClientAuthenticationRetry
   private readonly socketClose: RpcClientSocketCloseController
@@ -63,18 +57,21 @@ export class DirectRpcClient implements RpcClient {
       getReconnectAttempt: () => this.reconnect.getAttempt(),
       isClosed: () => this.intentionallyClosed
     })
-    this.streams = new RpcClientStreamRegistry({
+    this.streams = new streams.RpcClientStreamRegistry({
       nextId: () => this.nextId(),
       getState: () => this.connectionState.get(),
       sendFrame: (frame) => this.sendFrame(frame)
     })
     this.requests = new RpcClientRequestTracker({
+      getGeneration: () => this.authenticationGeneration,
+      onResponse: (method, response, current, envelope) =>
+        this.ordinaryMessages.observe(method, response, current, envelope),
       nextId: () => this.nextId(),
       getState: () => this.connectionState.get(),
       waitForConnected: (timeoutMs) => this.waitForConnected(timeoutMs),
       sendFrame: (frame) => this.sendFrame(frame)
     })
-    this.liveness = new RpcSessionLivenessWatchdog({
+    this.liveness = new liveness.RpcSessionLivenessWatchdog({
       transport: 'direct',
       voluntaryProbeMinIntervalMs: DIRECT_FOREGROUND_PROBE_MIN_INTERVAL_MS,
       sendProbe: (identity, id) => identity === this.livenessSession && this.sendLivenessProbe(id),
@@ -142,11 +139,13 @@ export class DirectRpcClient implements RpcClient {
     return this.requests.sendRequest(method, params, options)
   }
 
+  getRequestByteCapacity = this.ordinaryMessages.capacity
+
   subscribe(
     method: string,
     params: unknown,
-    onData: RpcStreamingListener,
-    options?: RpcStreamSubscribeOptions
+    onData: streams.RpcStreamingListener,
+    options?: streams.RpcStreamSubscribeOptions
   ): () => void {
     return this.streams.subscribe(method, params, onData, options)
   }
@@ -185,7 +184,7 @@ export class DirectRpcClient implements RpcClient {
         } else {
           this.liveness.probeNow(
             this.livenessSession,
-            reason === 'network-change' ? DECISIVE_PROBE_TIMEOUT_MS : null
+            reason === 'network-change' ? liveness.DECISIVE_PROBE_TIMEOUT_MS : null
           )
         }
       }
@@ -228,6 +227,7 @@ export class DirectRpcClient implements RpcClient {
   }
 
   private openConnection(): void {
+    this.ordinaryMessages.reset()
     if (this.intentionallyClosed) {
       return
     }
@@ -255,7 +255,7 @@ export class DirectRpcClient implements RpcClient {
   }
 
   private handleRpcResponse(session: RpcClientSocketSession, response: RpcResponse): void {
-    if (response.id.startsWith(LIVENESS_REQUEST_ID_PREFIX)) {
+    if (response.id.startsWith(liveness.LIVENESS_REQUEST_ID_PREFIX)) {
       this.liveness.noteProbeReply(session, response.id)
       return
     }
@@ -295,21 +295,18 @@ export class DirectRpcClient implements RpcClient {
     this.requests.rejectAll(reason, { deliveryUnknown: true })
   }
 
-  // The one place a direct request gains its credential and its caller's envelope.
   private sendFrame(frame: RpcRequestFrame): boolean {
-    if (this.socketSession) {
-      return this.socketSession.sendEncrypted(buildDirectRpcWireRequest(frame, this.deviceToken))
-    }
-    console.log('[net] sendEncrypted FAILED — channel not ready', {
-      hasWs: false,
-      hasKey: false,
-      state: this.getState()
-    })
-    return false
+    return sendDirectRpcFrame(
+      this.socketSession,
+      frame,
+      this.deviceToken,
+      this.getRequestByteCapacity(),
+      this.getState()
+    )
   }
 
   private sendLivenessProbe(id: string): boolean {
-    const frame = livenessProbeFrame(id)
+    const frame = liveness.livenessProbeFrame(id)
     return this.getState() === 'connected' && this.sendFrame(frame)
   }
 

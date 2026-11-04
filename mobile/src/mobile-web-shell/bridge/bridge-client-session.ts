@@ -13,6 +13,7 @@ import type { BridgeTerminalKeyRail } from './bridge-terminal-key'
 
 export type BridgeShellSession = {
   sessionId: string
+  inboundMessageBytes?: number
   buildId: string
   grants: BridgeGrants
   route: BridgeInitRoute | null
@@ -48,6 +49,9 @@ export function readShellSession(
   return {
     sessionId: message.sessionId,
     buildId: message.buildId,
+    ...(message.inboundMessageBytes === undefined
+      ? {}
+      : { inboundMessageBytes: message.inboundMessageBytes }),
     grants: message.grants,
     route: message.route ?? null,
     pageRoutes: message.pageRoutes ?? [],

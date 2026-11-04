@@ -9,11 +9,7 @@ import {
 import { BridgeConnectionCache, type BridgeSnapshotOutcome } from './bridge-client-connection-cache'
 import type { BridgeConnectionPathSource } from './bridge-connection-snapshot'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
-import {
-  createBridgeClientShellSession,
-  shellSessionListeners,
-  type BridgeShellSessionListeners
-} from './bridge-client-shell-session'
+import * as shell from './bridge-client-shell-session'
 import type { BridgeShellSession } from './bridge-client-session'
 import { createBridgeInitHandshake, createPageReadyFrame } from './bridge-client-init-handshake'
 import {
@@ -69,13 +65,15 @@ export type BridgeRpcClientOptions = {
 export type BridgeRpcClient = RpcClient &
   BridgeConnectionPathSource &
   Required<Pick<RpcClient, 'getShellHostStatus'>> &
-  BridgeShellSessionListeners & {
+  shell.BridgeShellSessionListeners & {
     /**
      * Asks the shell to draw its key rail, while a terminal and its key row are on screen, until the
      * dispose is called; `listener` takes each press. Nothing is sent to a shell without the grant.
      */
     claimTerminalKeyRail: ReturnType<typeof createBridgeClientTerminalKeys>['claim']
     getShellSession: () => BridgeShellSession | null
+    getExternalLinkSupport: shell.BridgeClientShellSession['externalLinkSupport']
+    onExternalLinkSupport: (listener: () => void) => () => void
     // False without navigate lets tap handlers fall back safely instead of throwing into uncaught UI callbacks.
     notifyNavigate: (href: string, replace?: boolean) => boolean
     // The page owns no native history; ask the shell to pop. Missing grant returns false; older shells may also drop the new notify, so callers retain their router fallback.
@@ -111,7 +109,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   function sendFrame(frame: BridgeClientMessage): 'sent' | 'oversized' | 'port-failed' {
     try {
       const json = JSON.stringify(frame)
-      if (!isBridgeFrameWithinCap(json)) {
+      if (!isBridgeFrameWithinCap(json, shellSession.current()?.inboundMessageBytes)) {
         // Count UTF-8 bytes like Swift utf8.count and Kotlin UTF_8 size; JS code units undercount non-ASCII requests.
         report({ kind: 'send-oversized', bytes: utf8ByteLength(json) })
         return 'oversized'
@@ -153,7 +151,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   const snapshot = () => cache.require()
 
   // Repeated init for the same session updates route/insets/cache while preserving exchanges and the original storage snapshot. A different session id invalidates prior work.
-  const shellSession = createBridgeClientShellSession({
+  const shellSession = shell.createBridgeClientShellSession({
     onReplaced: () => {
       const replaced = new BridgeShellReplacedError()
       requests.closeAll(replaced)
@@ -221,9 +219,12 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     throwIfBridgeSignalAborted(requestOptions?.signal)
     requestOptions?.beforeSend?.()
     const id = nextId()
+    const cancel = () => {
+      sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'cancel', id, target: 'request' })
+    }
     const response = new Promise<RpcResponse>((resolve, reject) => {
       const frameOptions = readBridgeRequestFrameOptions(requestOptions, hasGrant)
-      requests.open(id, { resolve, reject })
+      requests.open(id, { resolve, reject }, requestOptions?.timeoutMs ?? 30_000, method, cancel)
       const outcome = sendFrame({
         v: BRIDGE_PROTOCOL_VERSION,
         type: 'request',
@@ -241,9 +242,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
         )
       }
     })
-    return requests.wait(id, response, requestOptions, () => {
-      sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'cancel', id, target: 'request' })
-    })
+    return requests.wait(id, response, requestOptions, cancel)
   }
 
   function subscribe(
@@ -313,6 +312,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     getLastInboundAt: () => snapshot().lastInboundAt,
     // Clients without migration generation use a constant zero; native screen readers still require a number.
     getGeneration: () => snapshot().generation ?? 0,
+    getRequestByteCapacity: () => shellSession.current()?.inboundMessageBytes ?? 655360,
     ...cache.pathSource(),
     getShellHostStatus: () => shellSession.current()?.hostStatus ?? null,
     carriesRpcEnvelope: () => hasGrant(BRIDGE_RPC_ENVELOPE_GRANT),
@@ -342,9 +342,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyPagePainted: notifications.notifyPagePainted,
     claimBack: back.claim,
     close,
-    ...shellSessionListeners(shellSession),
+    ...shell.shellSessionListeners(shellSession),
     claimTerminalKeyRail: terminalKeys.claim,
     getShellSession: shellSession.current,
+    getExternalLinkSupport: shellSession.externalLinkSupport,
+    onExternalLinkSupport: shellSession.onExternalLinkSupport,
     clearRouteParam: (param, value) =>
       posted({
         v: BRIDGE_PROTOCOL_VERSION,

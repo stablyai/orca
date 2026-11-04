@@ -16,7 +16,8 @@ export const LOCALIZATION_SURFACES = {
     sourceRoots: [
       path.join('mobile', 'app'),
       path.join('mobile', 'src'),
-      path.join('mobile', 'web-entry')
+      path.join('mobile', 'web-entry'),
+      path.join('src', 'shared', 'agent-session-form-copy.ts')
     ],
     runtimeRequiredPath: path.join('mobile', 'src', 'i18n', 'en-runtime-required.json'),
     syncCatalogCommand: 'pnpm run sync:mobile-localization',

@@ -8,18 +8,12 @@ import { publishHostDescriptor } from '../host-descriptor'
 import { GITHUB_ISSUE_METHODS } from '../rpc/methods/github-issue-methods'
 import { classifyExactGitHubOperation } from '../../../shared/github/exact-work-item-operation'
 import '../rpc/unused-default-rpc-methods.test-fixture'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import {
-  DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
-  DelegatedMobileDeviceSyncParamsSchema
-} from '../../../shared/delegated-mobile-device-contract'
 import { decodeTerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { mintBrowserScreencastSubscriptionId } from '../browser-screencast-subscription-id'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { setRuntimeBrowserCommandsFactory } from '../runtime-browser-commands-factory'
@@ -39,9 +33,18 @@ import { CLIENT_UI_METHODS } from '../rpc/methods/client-ui'
 import { PAIRING_METHODS } from '../rpc/methods/pairing'
 import { sendRequest } from '../runtime-rpc-test-harness'
 import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
-import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import type * as PassthroughSocketModule from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
-import { connectPhone, pair, TARGET, type Frame } from './mobile-desktop-relay-phone.test-fixture'
+import {
+  answeredForms,
+  connectPhone,
+  ECHO_FORM_METHODS,
+  fingerprint,
+  maximumRelayedForm,
+  pair,
+  relayHostsFor,
+  TARGET,
+  type Frame
+} from './mobile-desktop-relay-phone.test-fixture'
 
 const passthroughOpens = vi.hoisted(() => {
   const hostReplies: string[] = []
@@ -121,10 +124,13 @@ class SeatObservableRuntime extends OrcaRuntimeService {
 }
 
 const WORKTREE = 'id:repo-1::/tmp/worktree-a'
+// The 4 MiB round trip's own budget is the request's, not the fixture's default wait.
+const MAX_FORM_WAIT = { timeout: 30_000 }
 
 describe('mobile desktop relay: phone -> desktop -> server', () => {
   const cleanups: (() => Promise<void> | void)[] = []
   afterEach(async () => {
+    answeredForms.splice(0)
     passthroughOpens.holdStatus = false
     passthroughOpens.holdOpen = false
     for (const release of passthroughOpens.heldOpen.splice(0)) {
@@ -172,7 +178,8 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
         ...RUNTIME_CLIENT_CAPABILITY_METHODS,
         ...CLIENT_UI_METHODS,
         ...WORKTREE_METHODS,
-        ...PAIRING_METHODS
+        ...PAIRING_METHODS,
+        ...ECHO_FORM_METHODS
       ],
       enableWebSocket: true,
       wsPort: 0
@@ -191,53 +198,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     const desktopOnHost = pair(host.server, 'runtime', 'MacBook')
     const registry = host.server.getDeviceRegistry()!
     const children = () => registry.listDelegatedMobileDevices(desktopOnHost.pairedDeviceId!)
-    const syncedNames: string[][] = []
-    const retirementListeners = new Set<(environmentId: string) => void>()
-    const state = {
-      pairing: desktopOnHost,
-      capable: true,
-      hostedPages: new Set<string>(),
-      retire: (environmentId: string) =>
-        retirementListeners.forEach((listener) => listener(environmentId))
-    }
-    const hosts: MobileDesktopRelayHosts = {
-      list: () => ({
-        environments: [],
-        statusByEnvironmentId: new Map(),
-        sshTargetLabels: new Map(),
-        sshConnectionStates: new Map()
-      }),
-      resolve: async (environmentId) =>
-        environmentId === 'env-1'
-          ? { environmentId, fence: state.pairing.endpoint, pairing: state.pairing }
-          : null,
-      call: async (_host, method, params) => {
-        if (method === DELEGATED_MOBILE_DEVICE_SYNC_METHOD) {
-          const { phones } = DelegatedMobileDeviceSyncParamsSchema.parse(params)
-          syncedNames.push(phones.map((phone) => phone.name))
-        }
-        const response = await sendRemoteRuntimeRequest(
-          pairedRuntimeConnectionFromOffer(state.pairing),
-          method,
-          params,
-          5_000
-        )
-        return method === 'status.get' && !state.capable && response.ok
-          ? {
-              ...response,
-              result: { ...z.object({}).passthrough().parse(response.result), capabilities: [] }
-            }
-          : response
-      },
-      hostsBrowserPage: (environmentId, browserPageId) =>
-        environmentId === 'env-1' && state.hostedPages.has(browserPageId),
-      onEnvironmentRetired: (listener) => {
-        retirementListeners.add(listener)
-        return () => retirementListeners.delete(listener)
-      },
-      onStatusChanged: () => () => {},
-      watchChanges: () => ({ close: () => {}, current: () => true })
-    }
+    const { hosts, state, syncedNames } = relayHostsFor(desktopOnHost)
     desktop.server.setMobileDesktopRelayHosts(hosts)
     const metadata = readRuntimeMetadata(host.userDataPath)!
     const created = await sendRequest(metadata.transports[0]!.endpoint, {
@@ -602,6 +563,24 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     expect(server.runtimeId).toBe(host.runtime.getRuntimeId())
     expect(own.runtimeId).toBe(desktop.runtime.getRuntimeId())
     expect(server.capabilities).toEqual(host.runtime.getStatus().capabilities)
+  })
+
+  it('carries a maximum v2 phone form through the relay to the server and its answer back', async () => {
+    const { desktop, children } = await startTopology()
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups, 'v2')
+    // The relay learns the server's ordinary-message support from the phone's targeted status.
+    phone.send('status', 'status.get', {})
+    expect(isOk(await phone.next('status', undefined, MAX_FORM_WAIT))).toBe(true)
+    const { params, content } = maximumRelayedForm(phone.token)
+    phone.send('form', 'agentSession.respondToApproval', params)
+    const answer = await phone.next('form', undefined, MAX_FORM_WAIT)
+    expect(answeredForms).toHaveLength(1)
+    expect(fingerprint(answeredForms[0]!.content)).toBe(fingerprint(content))
+    // Only the declared identity changes: the server sees the phone's delegated device, never the phone token.
+    expect(answeredForms[0]!.pairedDeviceId).toBe(children()[0]!.deviceId)
+    expect(fingerprint(answer.result)).toBe(fingerprint({ content }))
+    phone.send('after', 'status.get', {})
+    expect(isOk(await phone.next('after', undefined, MAX_FORM_WAIT))).toBe(true)
   })
 
   it("answers a targeted SSH state from the server, which holds a server workspace's SSH targets", async () => {

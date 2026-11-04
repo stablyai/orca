@@ -6,20 +6,52 @@ import {
 } from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import type { RpcClient } from '../../transport/rpc-client'
 import { withReplyMeta } from '../bridged-parity/divergence-evidence'
-
 import { resolve } from 'node:path'
 import { operationModuleLoader } from './operation-module-loader'
 import { describe, expect, it, vi } from 'vitest'
-
+import { captureArguments } from './recording-values'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import { goldenBytes, goldenRecording } from './golden-recording'
-
 import { runRecording } from './run-recording'
-
 import type { RecordingScenario } from './recording-scenario'
 
 describe('recording boundaries', () => {
+  it('runs the actual stable-client projection and physical serialization', async () => {
+    const clock = vitestRecordingScheduler()
+    await clock.start()
+    const transport = new ScriptedRpcTransport(clock.elapsed)
+    try {
+      const result = transport.client.sendRequest(
+        'worktree.ps',
+        { omitted: undefined, nullable: null },
+        { timeoutMs: 7 }
+      )
+      await clock.flush()
+      expect(transport.requests[0].args).toEqual(
+        captureArguments(['worktree.ps', { omitted: undefined, nullable: null }, { timeoutMs: 7 }])
+      )
+      expect(JSON.parse(transport.payloads[0].json)).toEqual({
+        id: 'frame-1',
+        deviceToken: 'recording-device',
+        method: 'worktree.ps',
+        params: { nullable: null, supportsWorktreeVisibilitySourceDefaults: true }
+      })
+      transport.complete(
+        'worktree.ps#1',
+        { nullable: null, supportsWorktreeVisibilitySourceDefaults: true },
+        { ok: true, result: null }
+      )
+      await result
+    } finally {
+      await transport.dispose()
+      await clock.flush()
+      transport.causality.assertTransparentCalls()
+      transport.causality.close()
+      clock.stop()
+    }
+  })
+
   it('requires logical bindings plus matching params for concurrent same-method calls', async () => {
     const clock = vitestRecordingScheduler()
     await clock.start()

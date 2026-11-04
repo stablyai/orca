@@ -1,22 +1,46 @@
+import { useSyncExternalStore } from 'react'
 import { readBridgeExternalLinkUrl } from '../mobile-web-shell/bridge/bridge-caps'
+import {
+  canBridgeOpenExternalLink,
+  type BridgeExternalLinkSupport
+} from '../mobile-web-shell/bridge/bridge-external-link-support'
 
-// Use shell linking because RN Web window.open reports success even though both native WebViews refuse new windows.
-// Publish outside React for plain-function callers; missing publication/invalid URLs log refusal without throwing from tap handlers.
 type ExternalLinkOpener = (url: string) => boolean
-
+type SupportSource = {
+  read: () => BridgeExternalLinkSupport
+  subscribe: (listener: () => void) => () => void
+}
+const legacy: BridgeExternalLinkSupport = {
+  granted: true,
+  complete: false,
+  inboundMessageBytes: 655360
+}
 let post: ExternalLinkOpener = () => false
-
-export function publishExternalLinkOpener(opener: ExternalLinkOpener): void {
-  post = opener
+let source: SupportSource = {
+  read: () => ({ ...legacy, granted: false }),
+  subscribe: () => () => {}
 }
 
+export function publishExternalLinkOpener(
+  opener: ExternalLinkOpener,
+  support: SupportSource = { read: () => legacy, subscribe: () => () => {} }
+): void {
+  post = opener
+  source = support
+}
+export function canOpenExternalLink(url: string): boolean {
+  return canBridgeOpenExternalLink(url, source.read())
+}
+export function useExternalLinkAvailable(url: string | undefined): boolean {
+  return useSyncExternalStore(source.subscribe, () => url !== undefined && canOpenExternalLink(url))
+}
 export function openExternalLink(url: string): void {
-  // Validate before posting: the shell drops refused frames without a reply, which would otherwise look like successful navigation.
-  if (readBridgeExternalLinkUrl(url) === null) {
+  const support = source.read()
+  if (readBridgeExternalLinkUrl(url, support.complete) === null) {
     console.warn('[page] refused to open a URL outside the allowed schemes', { url })
     return
   }
-  if (!post(url)) {
+  if (!canBridgeOpenExternalLink(url, support) || !post(url)) {
     console.warn('[page] the shell did not take a URL to open', { url })
   }
 }

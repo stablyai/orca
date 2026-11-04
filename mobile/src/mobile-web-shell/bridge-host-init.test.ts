@@ -1,3 +1,4 @@
+import { BRIDGE_EXTERNAL_LINK_FULL_URL } from './bridge/bridge-frame-fields'
 import { describe, expect, it } from 'vitest'
 import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
 import { harness, ROUTE } from './bridge-host-test-harness'
@@ -46,6 +47,7 @@ describe('init and state', () => {
       throw new Error('expected an init frame')
     }
     expect(init.grants.native).toEqual([
+      BRIDGE_EXTERNAL_LINK_FULL_URL,
       BRIDGE_FAULT_GRANT,
       BRIDGE_RPC_ENVELOPE_GRANT,
       'navigate',

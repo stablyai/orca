@@ -661,7 +661,7 @@ describe('codex journal translation', () => {
         'approval-hard-watermark'
       ]
     ])
-    expect(deferred.state()).toMatchObject({ backpressured: true })
+    expect(deferred.state()).toMatchObject({ queuedOperations: 1, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -706,7 +706,7 @@ describe('codex journal translation', () => {
       'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq1',
       'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq2'
     ])
-    expect(deferred.state()).toMatchObject({ backpressured: true })
+    expect(deferred.state()).toMatchObject({ queuedOperations: 1, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })

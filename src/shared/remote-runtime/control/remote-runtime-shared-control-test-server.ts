@@ -26,7 +26,7 @@ export type SharedControlTestServer = {
 }
 
 type ServerOptions = {
-  resultForRequest?: (method: string) => unknown
+  resultForRequest?: (method: string, params?: unknown) => unknown
   delaySubscriptionReady?: boolean
   sendKeepaliveBeforeResponse?: boolean
   keepaliveDelayMs?: number
@@ -188,22 +188,27 @@ function handleRequest(
   const streaming = isStreamingMethod(request.method)
   const result = streaming
     ? { type: 'ready', subscriptionId: `${request.method}:subscription` }
-    : (options.resultForRequest?.(request.method) ?? { method: request.method })
+    : (options.resultForRequest?.(request.method, request.params) ?? { method: request.method })
   const sendResponse = (): void => {
-    if (options.sendUnknownResponseBeforeResponse) {
+    void Promise.resolve(result).then((result) => {
+      if (ws.readyState !== ws.OPEN) {
+        return
+      }
+      if (options.sendUnknownResponseBeforeResponse) {
+        sendEncrypted(ws, sharedKey, {
+          id: 'unknown-response-id',
+          ok: true,
+          result: { method: 'unknown' },
+          _meta: { runtimeId: 'runtime-test' }
+        })
+      }
       sendEncrypted(ws, sharedKey, {
-        id: 'unknown-response-id',
+        id: request.id,
         ok: true,
-        result: { method: 'unknown' },
+        result,
+        streaming: streaming ? true : undefined,
         _meta: { runtimeId: 'runtime-test' }
       })
-    }
-    sendEncrypted(ws, sharedKey, {
-      id: request.id,
-      ok: true,
-      result,
-      streaming: streaming ? true : undefined,
-      _meta: { runtimeId: 'runtime-test' }
     })
   }
   const closeAfterResponse = streaming && options.closeAfterStreamingResponse?.() === true

@@ -1,0 +1,55 @@
+[
+  {
+    "method": "mcpServer/elicitation/request",
+    "id": 0,
+    "params": {
+      "threadId": "recorded-thread",
+      "turnId": "recorded-turn",
+      "serverName": "capture",
+      "mode": "form",
+      "_meta": null,
+      "message": "Provide the requested details.",
+      "requestedSchema": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "string",
+            "enum": ["red", "blue"],
+            "enumNames": ["Red label", "Blue label"]
+          },
+          "confirmed": {
+            "type": "boolean"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "minLength": 0
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "count", "confirmed", "color"]
+      }
+    }
+  },
+  {
+    "method": "mcpServer/elicitation/request",
+    "id": 1,
+    "params": {
+      "threadId": "recorded-thread",
+      "turnId": "recorded-turn",
+      "serverName": "capture",
+      "mode": "url",
+      "_meta": null,
+      "message": "Connect the capture service to continue.",
+      "url": "https://example.com/connect",
+      "elicitationId": "capture-link"
+    }
+  }
+]

@@ -1,11 +1,14 @@
+import { BRIDGE_EXTERNAL_LINK_FULL_URL } from './bridge/bridge-frame-fields'
 import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
-import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
-import { BRIDGE_EXTERNAL_LINK_GRANT, BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
-
+import { clientFrame, createFakeRpcClient, shellLocalCall } from './bridge-host-test-fakes'
+import {
+  BRIDGE_EXTERNAL_LINK_GRANT,
+  BRIDGE_FAULT_GRANT,
+  BRIDGE_NAVIGATE_BACK_NOTIFY
+} from './bridge/bridge-envelope'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
-
 import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
 
 describe('notifications, refusals and the fence', () => {
@@ -117,6 +120,38 @@ describe('notifications, refusals and the fence', () => {
     expect(mine.requests.map((request) => request.method)).toEqual(['status.get'])
     expect(theirs.requests).toHaveLength(0)
   })
+
+  it('carries no host name into the client message it parsed', () => {
+    const bridge = harness({ ready: true })
+    bridge.host.receive(
+      clientFrame({ type: 'request', id: ID, method: 'status.get', hostId: 'other-host' })
+    )
+    expect(shellLocalCall(bridge.client.requests[0]!.args)).toEqual([
+      'status.get',
+      undefined,
+      {},
+      'function'
+    ])
+  })
+})
+
+// Back notify has no reply; diagnostics alone distinguish a successful pop from an empty native stack.
+describe('navigate-back', () => {
+  const back = clientFrame({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY })
+
+  it('pops the shell stack and asks the client for nothing', () => {
+    const bridge = harness({ routeGrants: ['navigate'] })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.last()).toMatchObject({
+      type: 'init',
+      grants: { native: [BRIDGE_EXTERNAL_LINK_FULL_URL, 'fault', 'rpcEnvelope', 'navigate'] }
+    })
+    bridge.host.receive(back)
+    expect(bridge.backPops).toEqual(['popped'])
+    expect(bridge.navigations).toEqual([])
+    expect(bridge.client.requests).toHaveLength(0)
+    expect(bridge.diagnostics).toEqual([])
+  })
 })
 
 // Validate external-link schemes at the envelope too; a page bypassing its own guard must not reach the device handler with arbitrary URLs.
@@ -124,19 +159,19 @@ describe('externalLink', () => {
   const open = (url: string) =>
     clientFrame({ type: 'notify', name: BRIDGE_EXTERNAL_LINK_GRANT, url })
 
-  it('hands over the URL the parser read, not the string the page sent', () => {
+  it('hands over the complete original URL after scheme validation', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    // The WHATWG parser strips tab/LF/CR and trims leading C0/space; these raw spellings pass a naive scheme check.
+    // Complete support preserves the original spelling after WHATWG scheme validation.
     bridge.host.receive(open('ht\ntps://example.com'))
     bridge.host.receive(open('https://example.com/a\r\n'))
     bridge.host.receive(open('  https://example.com/a  '))
     bridge.host.receive(open('https:example.com'))
     expect(bridge.externalLinks).toEqual([
-      'https://example.com/',
-      'https://example.com/a',
-      'https://example.com/a',
-      'https://example.com/'
+      'ht\ntps://example.com',
+      'https://example.com/a\r\n',
+      '  https://example.com/a  ',
+      'https:example.com'
     ])
   })
 
@@ -151,6 +186,15 @@ describe('externalLink', () => {
     expect(bridge.diagnostics).toEqual(
       Array.from({ length: 3 }, () => ({ kind: 'refused', refusal: 'unrecognised-message' }))
     )
+  })
+
+  it('refuses it from a page that has not asked for a session', () => {
+    const bridge = harness()
+    bridge.host.receive(open('https://example.com'))
+    expect(bridge.externalLinks).toEqual([])
+    expect(bridge.diagnostics).toEqual([
+      { kind: 'notify-refused', name: BRIDGE_EXTERNAL_LINK_GRANT, why: 'before-ready' }
+    ])
   })
 })
 
@@ -171,6 +215,8 @@ describe('haptics', () => {
   })
 })
 
+// A page that stops hearing back cannot probe the socket itself; native owns the connection it rides.
+
 describe('the page erasing a one-shot route param', () => {
   it('refuses a clear for a param the page may not erase', () => {
     const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
@@ -182,3 +228,5 @@ describe('the page erasing a one-shot route param', () => {
     expect(bridge.diagnostics).toEqual([{ kind: 'refused', refusal: 'unrecognised-message' }])
   })
 })
+
+// Only first-frame proves a rendered tree; WebView commit and pre-render ready cannot justify uncovering the page.

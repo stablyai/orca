@@ -1,3 +1,4 @@
+import { MobileNativeChatForm, type MobileNativeChatFormSubmit } from './MobileNativeChatForm'
 import { memo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
@@ -12,7 +13,11 @@ import {
   isNewerApprovalSubject,
   isPlanApprovalSubject
 } from '../../../../../src/shared/agent-session/agent-session-approval-subject'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
+import type {
+  MobileChatPermission,
+  MobilePermissionResponse
+} from './mobile-native-chat-permission'
+import { openExternalLink, useExternalLinkAvailable } from '../../../platform/external-link'
 
 function MobileNativeChatPermissionImpl({
   permission,
@@ -21,28 +26,92 @@ function MobileNativeChatPermissionImpl({
   onCollapse
 }: {
   permission: MobileChatPermission
-  onRespond: (send: string) => Promise<boolean>
+  onRespond: MobilePermissionResponse
   onCancel?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
   // Collapse writes nothing to the agent.
   onCollapse?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
+  const linkAvailable = useExternalLinkAvailable(permission.url)
   // Unknown newer-host subjects allow only cancellation; preserve their detail for the reader.
   const newerSubject = isNewerApprovalSubject(permission.subject)
-  const respond = async (send: string): Promise<void> => {
+  const respond = async (...args: Parameters<MobilePermissionResponse>): Promise<boolean> => {
     if (submittingRef.current) {
-      return
+      return false
     }
     submittingRef.current = true
     setSubmitting(true)
-    const accepted = await onRespond(send)
+    const accepted = await onRespond(...args)
     if (!accepted) {
       submittingRef.current = false
       setSubmitting(false)
     }
+    return accepted
   }
+  // A form's Submit is the row's primary action, pinned beside Decline/Cancel below the scrolling fields.
+  const actions = (submit?: MobileNativeChatFormSubmit): React.JSX.Element => (
+    <View testID="native-chat-approval-actions" style={styles.options}>
+      {submit ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.question.submit', 'Submit')}
+          accessibilityState={{ disabled: submit.disabled }}
+          style={({ pressed }) => [
+            styles.option,
+            styles.optionPrimary,
+            pressed && !submit.disabled && styles.optionPressed,
+            submit.disabled && styles.disabled
+          ]}
+          hitSlop={6}
+          onPress={submit.onPress}
+          disabled={submit.disabled}
+        >
+          <Text style={[styles.optionText, styles.optionTextPrimary]}>
+            {t('chat.question.submit', 'Submit')}
+          </Text>
+        </Pressable>
+      ) : null}
+      {permission.url ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={submitting || !linkAvailable}
+          accessibilityState={{ disabled: submitting || !linkAvailable }}
+          style={[
+            styles.option,
+            styles.optionSecondary,
+            (submitting || !linkAvailable) && styles.disabled
+          ]}
+          onPress={() => permission.url && openExternalLink(permission.url)}
+        >
+          <Text style={styles.optionText}>{t('chat.permission.openLink', 'Open link')}</Text>
+        </Pressable>
+      ) : null}
+      {permission.options.map((option, index) => {
+        const isPrimary = index === 0 && !permission.form
+        return (
+          <Pressable
+            key={`${option.send}:${option.label}`}
+            style={({ pressed }) => [
+              styles.option,
+              isPrimary ? styles.optionPrimary : styles.optionSecondary,
+              pressed && !submitting && styles.optionPressed,
+              newerSubject && styles.disabled
+            ]}
+            hitSlop={6}
+            onPress={() => respond(option.send)}
+            disabled={submitting || newerSubject}
+          >
+            <Text style={[styles.optionText, isPrimary && styles.optionTextPrimary]}>
+              {option.label}
+            </Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
   return (
     <View testID="native-chat-approval-card" style={styles.card}>
       <View style={styles.header}>
@@ -63,29 +132,17 @@ function MobileNativeChatPermissionImpl({
         />
       </View>
       <MobileNativeChatPermissionContext permission={permission} newerSubject={newerSubject} />
-      <View testID="native-chat-approval-actions" style={styles.options}>
-        {permission.options.map((option, index) => {
-          const isPrimary = index === 0
-          return (
-            <Pressable
-              key={`${option.send}:${option.label}`}
-              style={({ pressed }) => [
-                styles.option,
-                isPrimary ? styles.optionPrimary : styles.optionSecondary,
-                pressed && !submitting && styles.optionPressed,
-                newerSubject && styles.disabled
-              ]}
-              hitSlop={6}
-              onPress={() => respond(option.send)}
-              disabled={submitting || newerSubject}
-            >
-              <Text style={[styles.optionText, isPrimary && styles.optionTextPrimary]}>
-                {option.label}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
+      {permission.form && !newerSubject ? (
+        <MobileNativeChatForm
+          form={permission.form}
+          disabled={submitting}
+          submitDisabled={permission.formSubmitEnabled === false}
+          onSubmit={(content) => respond('', content, permission.prompt)}
+          renderActions={actions}
+        />
+      ) : (
+        actions()
+      )}
     </View>
   )
 }

@@ -1,3 +1,4 @@
+import type { RemoteRuntimeOrdinarySender } from '../remote-runtime-ordinary-sender'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
 import * as sharedControlState from './remote-runtime-shared-control-state'
 
@@ -8,7 +9,9 @@ import type {
   SharedControlPendingRequest
 } from './remote-runtime-shared-control-types'
 
-export function sendSharedControlRequest(args: {
+export async function sendSharedControlRequest(args: {
+  ordinary?: RemoteRuntimeOrdinarySender
+  probe?: () => Promise<unknown>
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>
   requestId: string
   state: Parameters<typeof sharedControlProtocol.sendSharedControlEncryptedSerialized>[0]['state']
@@ -16,20 +19,44 @@ export function sendSharedControlRequest(args: {
   handshake: Parameters<
     typeof sharedControlProtocol.sendSharedControlEncryptedSerialized
   >[0]['handshake']
-}): void {
-  sharedControlSend.sendSharedControlRequest({
-    pendingRequests: args.pendingRequests,
-    requestId: args.requestId,
-    send: (serialized) =>
-      sharedControlProtocol.sendSharedControlEncryptedSerialized({
-        state: args.state,
-        ws: args.ws,
-        handshake: args.handshake,
-        serialized
-      }),
-    reject: (id, error) =>
-      sharedControlState.rejectSharedControlPendingRequest(args.pendingRequests, id, error)
-  })
+}): Promise<void> {
+  const serialized = args.pendingRequests.get(args.requestId)?.preparedRequest?.serializedRequest
+  try {
+    if (serialized && args.ordinary && args.probe) {
+      const admission = args.ordinary.admit(serialized, args.ws, args.probe, () =>
+        args.pendingRequests.has(args.requestId)
+      )
+      if (admission !== true && !(await admission)) {
+        return
+      }
+    }
+    sharedControlSend.sendSharedControlRequest({
+      pendingRequests: args.pendingRequests,
+      requestId: args.requestId,
+      send: (serialized) =>
+        args.ordinary
+          ? args.ordinary.send(
+              serialized,
+              args.ws,
+              args.handshake,
+              args.state === 'ready' || args.state === 'awaiting_authenticated'
+            )
+          : sharedControlProtocol.sendSharedControlEncryptedSerialized({
+              state: args.state,
+              ws: args.ws,
+              handshake: args.handshake,
+              serialized
+            }),
+      reject: (id, error) =>
+        sharedControlState.rejectSharedControlPendingRequest(args.pendingRequests, id, error)
+    })
+  } catch (error) {
+    sharedControlState.rejectSharedControlPendingRequest(
+      args.pendingRequests,
+      args.requestId,
+      sharedControlProtocol.toRemoteRuntimeClientError(error)
+    )
+  }
 }
 
 export function replaySharedControlSubscriptions(args: {

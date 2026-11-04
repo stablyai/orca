@@ -26,7 +26,12 @@ export async function respondToStructuredAgentSessionPrompt({
   const answers = response.kind === 'answers' ? response.answers : []
   const promptTarget = { itemId: item.itemId, expectedRevision: item.revision }
   let fields: Record<string, unknown>
-  if (response.kind === 'option') {
+  if (response.kind === 'form') {
+    if (body.kind !== 'approval' || !body.form) {
+      return null
+    }
+    fields = { ...promptTarget, content: response.content }
+  } else if (response.kind === 'option') {
     fields = { ...promptTarget, optionId: response.optionId }
   } else if (await supportsStructuredAgentSessionQuestionAnswers(action.target)) {
     // Negotiated before mutate fingerprints the call: older hosts reject the strict field.

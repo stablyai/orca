@@ -35,7 +35,13 @@
     "../src/wsl-guest/**/*",
     "../src/types/**/*"
   ],
-  "exclude": ["../src/main/runtime/structured-chat-coordinator-mail.test.ts"],
+  "exclude": [
+    "../src/main/codex/codex-form-transport-envelope.test.ts",
+    "../src/main/codex/codex-installed-channel-contract-fixture.ts",
+    "../src/main/codex/codex-settled-body-contract-fixture.ts",
+    "../src/main/codex/codex-url-opener-contract.test.ts",
+    "../src/main/runtime/structured-chat-coordinator-mail.test.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node"]

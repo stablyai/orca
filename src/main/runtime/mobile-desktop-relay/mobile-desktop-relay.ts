@@ -1,6 +1,5 @@
-import { verifyRelayedGitHubAuthority } from './relay-github-authority'
-import { createRelayedBrowserTab } from './relayed-browser-tab-create'
-import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
+import { reserveRemoteRuntimeRetainedBytes } from '../../../shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
+import { sendRelayedRequest } from './relayed-request-send'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
@@ -24,7 +23,7 @@ const RELAY_CONNECT_TIMEOUT_MS = 15_000
 
 /** One socket per (phone connection, configured server), authenticated with memory-only delegated phone grants.
  * Forward execution-host methods only; old servers require an update, and revocation lasts until the next sync.
- * Replies stay opaque except stream-id renumbering; replace every upstream desktop-token occurrence. */
+ * Replies stay opaque except stream-id renumbering; map authenticated request identity positions. */
 export class MobileDesktopRelay {
   private readonly links = new Map<string, RelayLink>()
   private readonly grants: DelegatedPhoneGrantCache
@@ -65,93 +64,72 @@ export class MobileDesktopRelay {
     request: { id: string; method: string },
     frame: string
   ): void {
-    if (RELAYED_STREAM_CARRIERS.get(request.method) === 'phone-binary-frames') {
+    const { id, method } = request
+    if (RELAYED_STREAM_CARRIERS.get(method) === 'phone-binary-frames') {
       phone.reply(
         failure(
-          request.id,
+          id,
           'forbidden',
-          `Method '${request.method}' is driven by binary frames, which the desktop does not relay`
+          `Method '${method}' is driven by binary frames, which the desktop does not relay`
+        )
+      )
+      return
+    }
+    const lease = reserveRemoteRuntimeRetainedBytes(12 * frame.length + 64 * 1024)
+    if (!lease) {
+      phone.reply(
+        failure(
+          id,
+          'runtime_busy',
+          'The connection is busy. Try again after pending requests finish.'
         )
       )
       return
     }
     const link = this.linkFor(phone, environmentId)
-    link.replies.noteForwarded(request.id, {
+    link.replies.noteForwarded(id, {
+      method,
       browserScreencast:
-        request.method === 'status.get'
+        method === 'status.get'
           ? () => Boolean(this.options.hosts.browserHostClientId?.(environmentId))
           : undefined
     })
-    link.opened.then(
-      async ({ socket, hostToken, host }) => {
-        // An opening link may already have ended and answered; never send its request late.
-        if (!this.isCurrent(link)) {
-          return
-        }
-        const outgoing = withRelayedLaunchChatDefault(
-          rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
-          request.method,
-          this.options.nativeChatDefault
-        )
-        try {
-          if (request.method === 'status.get') {
-            await this.options.prepareBrowserHost?.(host)
-          }
-          if (
-            request.method === 'browser.tabCreate' &&
-            (await createRelayedBrowserTab({
-              hosts: this.options.hosts,
-              prepareBrowserHost: this.options.prepareBrowserHost,
-              link,
-              frame: outgoing,
-              socket,
-              isCurrent: () => this.isCurrent(link),
-              timeoutMs: RELAY_CONNECT_TIMEOUT_MS
-            }))
-          ) {
-            return
-          }
-          const verification = verifyRelayedGitHubAuthority({
-            method: request.method,
-            frame: outgoing,
-            socket,
-            replies: link.replies,
-            isCurrent: () => this.isCurrent(link),
-            timeoutMs: RELAY_CONNECT_TIMEOUT_MS
-          })
-          if (verification) {
-            await verification
-          }
+    link.opened
+      .then(
+        async (opened) => {
+          // An opening link may already have ended and answered; never send its request late.
           if (!this.isCurrent(link)) {
             return
           }
-        } catch (error) {
-          if (this.isCurrent(link)) {
-            const reply = link.replies.text(
-              failure(
-                request.id,
-                request.method === 'browser.tabCreate' ||
-                  request.method === 'status.get' ||
-                  (error instanceof Error && error.message === GITHUB_EXACT_OPERATION_UNSUPPORTED)
-                  ? 'remote_runtime_unavailable'
-                  : 'runtime_source_mismatch',
-                error instanceof Error
-                  ? error.message
-                  : 'Unable to confirm the executing Orca server.'
-              )
-            )
-            if (reply) {
-              phone.reply(reply)
+          const outgoing = withRelayedLaunchChatDefault(
+            rewriteRelayedPhoneRequest(frame, phone.deviceToken, opened.hostToken),
+            method,
+            this.options.nativeChatDefault
+          )
+          const sent = await sendRelayedRequest({
+            link,
+            opened,
+            method,
+            outgoing,
+            hosts: this.options.hosts,
+            prepareBrowserHost: this.options.prepareBrowserHost,
+            timeoutMs: RELAY_CONNECT_TIMEOUT_MS,
+            isCurrent: () => this.isCurrent(link),
+            refuse: (code, message) => {
+              const reply = link.replies.text(failure(id, code, message))
+              if (reply !== null) {
+                phone.reply(reply)
+              }
             }
+          })
+          if (sent === 'unsent') {
+            this.endLink(link, unavailable('The server connection could not take the request.'))
           }
-          return
-        }
-        if (!socket.send(outgoing)) {
-          this.endLink(link, unavailable('The server connection could not take the request.'))
-        }
-      },
-      () => {}
-    )
+        },
+        () => {}
+      )
+      .catch((error) => this.endLink(link, unavailable(String(error))))
+      .finally(() => lease.release())
   }
 
   /** Mirrors a phone's capability update to every server socket that phone has open. */

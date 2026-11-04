@@ -36,6 +36,10 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
     'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop main process, which does not check against RN libs, and its implementation sources keep their normal checks'
   ],
   [
+    'src/test-support/rpc-recording/recorded-request-params.test.ts',
+    'Checked transfer: strict Node program over emitted phone/host declarations (tsconfig.test.node.json)'
+  ],
+  [
     'src/transport/mobile-relay-browser-cancel-budget.test.ts',
     'Legacy runtime-only: the test body is not typechecked anywhere; it imports @orca/process-host, which does not check against RN libs, and its implementation sources keep their normal checks'
   ]
@@ -125,6 +129,7 @@ export function diffCensus(onDisk, inProgram, allowed = TESTS_OUTSIDE_PROGRAM) {
 }
 
 // A reason string never satisfies a transfer: its strict program must have passed with the body in it.
+// Desktop bodies the program also checks are not phone tests, so they need no RN exclusion.
 export function checkTransfers(result, allowed = TESTS_OUTSIDE_PROGRAM, nocheck = []) {
   const problems = []
   if (!result.ok) {
@@ -142,6 +147,14 @@ export function checkTransfers(result, allowed = TESTS_OUTSIDE_PROGRAM, nocheck 
     }
     if (nocheck.includes(file)) {
       problems.push(`checked transfer opts out with @ts-nocheck: ${file}`)
+    }
+  }
+  for (const file of result.external ?? []) {
+    if (!(result.programExternalFiles ?? []).includes(file)) {
+      problems.push(`checked desktop body is absent from its program: ${file}`)
+    }
+    if (nocheck.includes(file)) {
+      problems.push(`checked desktop body opts out with @ts-nocheck: ${file}`)
     }
   }
   return problems
@@ -302,11 +315,10 @@ export function main(root = process.cwd(), runNodeTests = () => runNodeTestsType
   const { added, stale } = diffBaseline(current, baseline)
   // The RN baseline does not apply here: transferred bodies and their declaration producers must be clean.
   const node = runNodeTests()
-  const transferProblems = checkTransfers(
-    node,
-    TESTS_OUTSIDE_PROGRAM,
-    findTsNocheckFiles(root, node.expected)
-  )
+  const transferProblems = checkTransfers(node, TESTS_OUTSIDE_PROGRAM, [
+    ...findTsNocheckFiles(root, node.expected),
+    ...findTsNocheckFiles(path.join(root, '..'), node.external)
+  ])
   if (transferProblems.length > 0) {
     printNodeTestsFailure(node)
     for (const problem of transferProblems) {
@@ -333,7 +345,7 @@ export function main(root = process.cwd(), runNodeTests = () => runNodeTestsType
   }
   const legacy = TESTS_OUTSIDE_PROGRAM.size - node.expected.length
   console.log(
-    `mobile tests typecheck ratchet OK — ${pass.programTestFiles.length} test file(s) checked in the RN program (${current.length} grandfathered), ${node.expected.length} checked in the phone/host contract program, ${legacy} legacy runtime-only allowance(s) whose bodies are not typechecked; none @ts-nocheck.`
+    `mobile tests typecheck ratchet OK — ${pass.programTestFiles.length} test file(s) checked in the RN program (${current.length} grandfathered), ${node.expected.length} checked in the phone/host contract program with ${node.external.length} desktop bod${node.external.length === 1 ? 'y' : 'ies'}, ${legacy} legacy runtime-only allowance(s) whose bodies are not typechecked; none @ts-nocheck.`
   )
   return 0
 }

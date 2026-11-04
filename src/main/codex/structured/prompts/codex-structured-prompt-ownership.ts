@@ -1,15 +1,16 @@
+import { canonicalAgentSessionFormContent } from '../../../../shared/agent-session-form'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import {
   agentSessionFailureFact,
   providerDiagnosticOf
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   AgentSessionPromptAnswerRejectedError,
-  AgentSessionPromptUnavailableError
-} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
-import type { AgentSessionCancelOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
+  AgentSessionPromptUnavailableError,
+  type AgentSessionCancelOutcome,
+  type StructuredAgentSessionAdapter
+} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   answerCodexPrompt,
   prepareCodexPromptAnswer,
@@ -201,6 +202,17 @@ export async function answerCodexStructuredPrompt(input: {
   }
   try {
     const prepared = prepareCodexAnswer(claim.prompt, request.response)
+    const retainedAnswer =
+      prepared.kind === 'answer'
+        ? prepared.answer
+        : prepared.kind === 'form'
+          ? canonicalAgentSessionFormContent(prepared.content)
+          : null
+    if (retainedAnswer !== null && !session.prompts.reserveAnswer(claim, retainedAnswer)) {
+      throw new AgentSessionPromptAnswerRejectedError(
+        'Codex prompt answers exceed the supported size.'
+      )
+    }
     await request.commit()
     if (
       sessions.get(request.sessionId) !== session ||

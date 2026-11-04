@@ -6,7 +6,8 @@ enum MobileWebShellBridge {
   static let handlerName = "orcaBridge"
 
   /// Enforce the shared UTF-8 JSON byte ceiling natively, before parsing.
-  static let maxMessageByteCount = 640 * 1024
+  static let maxMessageByteCount = 4 * 1024 * 1024
+  static let maxOutboundMessageByteCount = 640 * 1024
 
   /// Simulator 2026-09-18: WebKit lowercases custom-scheme hosts; use the request predicate’s ASCII-only fold for mixed-case base64url ids.
   static func accepts(_ source: MobileWebShellBridgeSource, sessionId: String) -> Bool {

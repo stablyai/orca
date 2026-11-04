@@ -68,6 +68,9 @@ const transforms = {
         ? [{ find: /^zod$/, replacement: process.env.ORCA_UNIT_ZOD_BUNDLE }]
         : []),
       ...createWorkspaceSourceResolver().aliases,
+      // Phone/host contract tests import through these names so their types come from emitted declarations.
+      { find: '@orca/test-mobile', replacement: resolve('mobile/src') },
+      { find: '@orca/test-host', replacement: resolve('src') },
       { find: '@renderer', replacement: resolve('src/renderer/src') },
       { find: '@', replacement: resolve('src/renderer/src') },
       { find: 'fs/promises', replacement: 'node:fs/promises' },

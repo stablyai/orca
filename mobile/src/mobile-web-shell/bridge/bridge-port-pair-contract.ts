@@ -57,6 +57,7 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   clientIdentity?: string | null
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   safeAreaInsets?: BridgeSafeAreaInsets
+  inboundMessageBytes?: number
   keyboardInset?: number
   foldDivision?: BridgeFoldDivision | null
   terminalKeyRail?: BridgeTerminalKeyRail

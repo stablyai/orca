@@ -143,11 +143,10 @@ function hasExpectedContext(
   )
 }
 
+// The re-encode is canonical, so equality alone rejects every other spelling, in linear time.
+// A whole-frame grammar regex here overflowed V8's backtrack stack on a valid maximum frame.
 function decodeCanonicalBase64(value: string, maxEncodedCharacters: number): Uint8Array | null {
-  if (
-    value.length > maxEncodedCharacters ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)
-  ) {
+  if (value.length > maxEncodedCharacters) {
     return null
   }
   const bytes = Buffer.from(value, 'base64')

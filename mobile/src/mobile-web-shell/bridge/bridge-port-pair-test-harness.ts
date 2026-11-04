@@ -64,6 +64,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   )
   const host = createBridgeHost({
     client: rpc,
+    inboundMessageBytes: options.inboundMessageBytes,
     post: (json) => {
       toPage.push(json)
       return Promise.resolve()

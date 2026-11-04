@@ -90,6 +90,8 @@ function fixture() {
   return { state, frames, control, answer, tracker, physical, logical, client, source, bodyCount }
 }
 
+const DESTINATION = JSON.stringify({ executionHost: 'runtime:server35636' })
+
 it('settles an abandoned status waiter before release and keeps its same-reader successor pinned', async () => {
   const count = 1
   const f = fixture()
@@ -97,8 +99,15 @@ it('settles an abandoned status waiter before release and keeps its same-reader 
   const readers = Array.from({ length: count }, () => createMobileChatAttachmentReader(f.client))
   const old = readers.map(f.source)
   const pending = old.map((source) => source.block(0).catch((error) => error))
-  await vi.waitFor(() => expect(f.frames).toHaveLength(count))
+  // A routed status probes the destination and its origin together: one ordered pair per read.
+  await vi.waitFor(() => expect(f.frames).toHaveLength(2 * count))
   const held = [...f.frames]
+  expect(held.map((frame) => [frame.method, frame.params, JSON.stringify(frame.envelope)])).toEqual(
+    Array.from({ length: count }, () => [
+      ['status.get', undefined, DESTINATION],
+      ['status.get', undefined, '{}']
+    ]).flat()
+  )
   old.forEach((source) => source.dispose())
   expect((await Promise.all(pending)).map((error) => error.name)).toEqual(
     Array(count).fill('AbortError')
@@ -114,11 +123,15 @@ it('settles an abandoned status waiter before release and keeps its same-reader 
     Array(count).fill('x')
   )
   expect(f.frames.every((frame) => !('signal' in frame) && !('beforeSend' in frame))).toBe(true)
+  const statuses = f.frames.filter((frame) => frame.method === 'status.get')
+  expect(statuses.length % 2 === 0 && statuses.length > 0).toBe(true)
+  expect(statuses.map((frame) => JSON.stringify(frame.envelope))).toEqual(
+    statuses.map((_, index) => (index % 2 === 0 ? DESTINATION : '{}'))
+  )
   expect(
-    f.frames.every(
-      (frame) =>
-        JSON.stringify(frame.envelope) === JSON.stringify({ executionHost: 'runtime:server35636' })
-    )
+    f.frames
+      .filter((frame) => frame.method !== 'status.get')
+      .every((frame) => JSON.stringify(frame.envelope) === DESTINATION)
   ).toBe(true)
   successors.forEach((source) => source.dispose())
   f.logical.close()

@@ -1,3 +1,11 @@
+import type { AgentJournalResolution } from '../../agent-session-prompt-resolution'
+export { AGENT_JOURNAL_RESOLUTION_STATES } from '../../agent-session-prompt-resolution'
+export type {
+  AgentJournalResolution,
+  AgentJournalResolutionState
+} from '../../agent-session-prompt-resolution'
+import type { AgentSessionSettledBodyDescriptor } from '../../agent-session-settled-body'
+import type { AgentSessionForm } from '../../agent-session-form'
 import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import type { AgentSessionProviderContextBoundary } from '../agent-session-provider-context'
@@ -6,7 +14,6 @@ import type { AgentSessionProviderContextBoundary } from '../agent-session-provi
 
 import type { UnreadAgentSessionFailureFact } from '../failures/agent-session-failure'
 import type { AgentSessionFailureRowWords } from '../failures/agent-session-failure-words'
-import type { AgentSessionQuestionAnswer } from '../agent-session-question-answer'
 import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat-tool-identity'
 import type { AgentSessionContextUsage } from '../agent-session-context-usage'
@@ -115,24 +122,6 @@ export type AgentJournalDiffItem = {
   patch: AgentJournalBoundedPayload
 }
 
-export const AGENT_JOURNAL_RESOLUTION_STATES = ['pending', 'resolved', 'cancelled'] as const
-export type AgentJournalResolutionState = (typeof AGENT_JOURNAL_RESOLUTION_STATES)[number]
-
-/** Durable resolution uses compare-and-set so competing clients cannot invoke the provider callback twice. */
-export type AgentJournalResolution = {
-  state: AgentJournalResolutionState
-  /** Option id the winner picked; null while pending or cancelled. For a question, the answer in the
-   *  packed form older clients read; `answers` is the same answer structured. */
-  selectedOptionId: string | null
-  /** Question answers. Absent on approvals and on rows written before hosts recorded it. */
-  answers?: AgentSessionQuestionAnswer[]
-  /** Opaque client identity of the resolver, for "answered on <device>". */
-  resolvedBy: string | null
-  /** Read-time device description; never written back into the journal. */
-  resolvedByDevice?: { kind: 'current' } | { kind: 'named'; name: string }
-  resolvedAt: number | null
-}
-
 export type AgentJournalPromptOption = {
   id: string
   label: string
@@ -192,6 +181,8 @@ export type AgentJournalApprovalItem = {
   matchedAskRule?: AgentJournalApprovalMatchedAskRule
   subject?: AgentJournalApprovalSubject
   detail: string | null
+  form?: AgentSessionForm
+  url?: string
   options: AgentJournalPromptOption[]
   resolution: AgentJournalResolution
 }
@@ -374,6 +365,8 @@ export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
   /** Set on the copy sent to a client when text in it was shortened to fit; never saved. The whole
    *  item comes from `agentSession.item`. A cut tool output or diff also says so in `truncated`. */
   shortened?: true
+  /** Wire-only durable body source; never part of a stored item body. */
+  settledBody?: AgentSessionSettledBodyDescriptor
 }
 
 // ─── Submissions ────────────────────────────────────────────────────────────

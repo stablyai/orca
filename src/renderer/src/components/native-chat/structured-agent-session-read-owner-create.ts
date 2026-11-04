@@ -1,8 +1,7 @@
+import { createNativeChatSettledBodyReader } from '@/runtime/structured-agent-session-settled-body-client'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  type AgentProviderSessionMetadata,
-  agentProviderSessionsEqual
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryResult
@@ -28,10 +27,7 @@ import type {
   StructuredAgentSessionReadEffects
 } from './structured-agent-session-read-owner-contract'
 
-import {
-  adoptStructuredReadOwner,
-  forgetStructuredReadOwner
-} from './structured-agent-session-read-owner-registry'
+import * as owners from './structured-agent-session-read-owner-registry'
 
 export function countsTowardInitialHistory(item: AgentJournalRenderItem): boolean {
   return item.body.kind !== 'status' || !item.body.providerFrame
@@ -42,6 +38,7 @@ export function createReadOwner(
   sessionId: string,
   target: RuntimeClientTarget | null
 ): StructuredAgentSessionReadOwner {
+  const settledBodies = createNativeChatSettledBodyReader(target)
   let snapshot: StructuredAgentSessionReadSnapshot = {
     state: EMPTY_STRUCTURED_AGENT_SESSION,
     loadingOlder: false,
@@ -238,14 +235,14 @@ export function createReadOwner(
   const deleteIfUnused = (): void => {
     const subscriptions = activations.size + listeners.size + commandListeners.size
     if (subscriptions === 0 && !activity.retained()) {
-      forgetStructuredReadOwner(key, owner)
+      owners.forgetStructuredReadOwner(key, owner)
     }
   }
   const subscribeTo = (collection: Set<() => void>, listener: () => void): (() => void) => {
     if (disposed) {
       return () => {}
     }
-    adoptStructuredReadOwner(key, owner)
+    owners.adoptStructuredReadOwner(key, owner)
     collection.add(listener)
     return () => {
       collection.delete(listener)
@@ -253,6 +250,7 @@ export function createReadOwner(
     }
   }
   owner = {
+    settledBodies,
     trackSend: activity.trackSend,
     admit: activity.admit,
     publishCreated: (page) => {
@@ -265,7 +263,7 @@ export function createReadOwner(
         return () => {}
       }
       // Remounts and StrictMode re-run setup on an owner whose cleanup just forgot it.
-      adoptStructuredReadOwner(key, owner)
+      owners.adoptStructuredReadOwner(key, owner)
       const token = Symbol(sessionId)
       activations.set(token, effects)
       if (activations.size === 1) {
@@ -280,6 +278,7 @@ export function createReadOwner(
       }
     },
     resync: () => {
+      settledBodies.retry()
       const effects = activations.values().next().value
       if (!effects) {
         return
@@ -290,6 +289,7 @@ export function createReadOwner(
     dispose: () => {
       disposed = true
       activity.dispose()
+      settledBodies.dispose()
       activations.clear()
       listeners.clear()
       commandListeners.clear()

@@ -12,6 +12,7 @@ import {
 } from './bridge-client-errors'
 import { INIT, createPageClient, readError } from './bridge-page-client-test-harness'
 import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
+import { shellLocalCall } from '../bridge-host-test-fakes'
 
 const ENVELOPE = { executionHost: 'runtime:a', nested: { list: [1, 'two', null, true] } }
 
@@ -144,9 +145,9 @@ describe('bridge rpc envelope: shell side', () => {
       envelope: ENVELOPE
     })
     await pair.flush()
-    expect(pair.rpc.requests.map((request) => request.args)).toEqual([
-      ['worktree.ps', { a: 1 }, { timeoutMs: 50, envelope: ENVELOPE }],
-      ['worktree.ps', undefined, { envelope: ENVELOPE }]
+    expect(pair.rpc.requests.map((request) => shellLocalCall(request.args))).toEqual([
+      ['worktree.ps', { a: 1 }, { timeoutMs: 50, envelope: ENVELOPE }, 'function'],
+      ['worktree.ps', undefined, { envelope: ENVELOPE }, 'function']
     ])
     expect(pair.rpc.streams.map((stream) => stream.envelope)).toEqual([ENVELOPE])
   })
@@ -159,10 +160,11 @@ describe('bridge rpc envelope: shell side', () => {
     void pair.client.sendRequest('worktree.ps', { a: 1 }, { timeoutMs: 50 })
     pair.client.subscribe('terminal.subscribe', { terminal: 't' }, () => undefined)
     await pair.flush()
-    expect(pair.rpc.requests.map((request) => request.args)).toEqual([
-      ['worktree.ps'],
-      ['worktree.ps', { a: 1 }],
-      ['worktree.ps', { a: 1 }, { timeoutMs: 50 }]
+    // No envelope key reaches the native client; only the shell's local fence is added.
+    expect(pair.rpc.requests.map((request) => shellLocalCall(request.args))).toEqual([
+      ['worktree.ps', undefined, {}, 'function'],
+      ['worktree.ps', { a: 1 }, {}, 'function'],
+      ['worktree.ps', { a: 1 }, { timeoutMs: 50 }, 'function']
     ])
     expect(pair.rpc.streams.map((stream) => stream.envelope)).toEqual([undefined])
   })

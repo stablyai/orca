@@ -4,6 +4,15 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolveProjectCompilerInfo } from '../../config/scripts/run-typecheck-projects-in-parallel.mjs'
+import { resolveOxlintInvocation } from '../../config/scripts/oxlint-cli-invocation.mjs'
+import {
+  CONTRACT_LINT_CONFIG,
+  NODE_TEST_PROJECT,
+  partitionNodeTestBodies,
+  readNodeTestBodies
+} from '../../config/scripts/phone-host-contract-bodies.mjs'
+
+export { NODE_TEST_PROJECT, partitionNodeTestBodies, readNodeTestBodies }
 
 // Phone tests that drive real desktop sources cannot join the RN test program: RN's global timers
 // and Expo's process.env augmentation break the desktop graph. Each source graph emits genuine
@@ -11,7 +20,6 @@ import { resolveProjectCompilerInfo } from '../../config/scripts/run-typecheck-p
 // bodies against those declarations. Vitest still runs the tests against the original sources.
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
-export const NODE_TEST_PROJECT = 'mobile/tsconfig.test.node.json'
 // Mobile first, host second: the host owner rewrites every root src declaration, shared types included.
 export const DECLARATION_PROJECTS = [
   'mobile/tsconfig.test.mobile-declarations.json',
@@ -26,10 +34,37 @@ const LEAKED_NATIVE_GLOBALS = [
 ]
 const toPosix = (filePath) => filePath.replaceAll('\\', '/')
 
-// The two test bodies are the roots of the node test config, so no second list names them.
-export function readNodeTestRoots(root = repoRoot) {
-  const config = JSON.parse(fs.readFileSync(path.join(root, NODE_TEST_PROJECT), 'utf8'))
-  return config.files.filter((file) => /\.test\.tsx?$/.test(file)).sort()
+// Declarations and the phone test bodies share one `@/` namespace; a phone `@/` path that a renderer
+// file also occupies would silently resolve to the renderer, so name it instead.
+export function findShadowedPhoneAliases(output, phoneBodies = [], root = repoRoot) {
+  const renderer = path.join(output, 'src/renderer/src')
+  const sources = phoneBodies.map((body) => [body, path.join(root, body)])
+  const visit = (directory) => {
+    for (const entry of fs.existsSync(directory)
+      ? fs.readdirSync(directory, { withFileTypes: true })
+      : []) {
+      const file = path.join(directory, entry.name)
+      if (entry.isDirectory()) {
+        visit(file)
+      } else if (file.endsWith('.d.ts')) {
+        sources.push([toPosix(path.relative(output, file)), file])
+      }
+    }
+  }
+  visit(path.join(output, 'mobile/src'))
+  const problems = []
+  for (const [name, file] of sources) {
+    for (const [, spec] of fs.readFileSync(file, 'utf8').matchAll(/['"]@\/([^'"]+)['"]/g)) {
+      if (
+        ['.d.ts', '/index.d.ts'].some((suffix) =>
+          fs.existsSync(path.join(renderer, `${spec}${suffix}`))
+        )
+      ) {
+        problems.push(`phone alias resolves to a renderer file: ${name} imports @/${spec}`)
+      }
+    }
+  }
+  return problems
 }
 
 export function parseCompilerPass(output, code) {
@@ -42,22 +77,21 @@ export function parseCompilerPass(output, code) {
   return { ok: code === 0 && diagnostics.length === 0, code, diagnostics, files }
 }
 
-// Membership is the proof: both bodies, nothing else repository-owned that is not a declaration,
-// and no RN/Expo global file. Returns the problems; an empty list is a clean program.
+// Membership is the proof: every checked body, nothing else repository-owned that is not a declaration,
+// and no RN/Expo global file. Bodies are repository paths. Returns the problems; empty is clean.
 export function checkNodeTestProgram(files, { realRoot, expected }) {
   const prefix = `${toPosix(realRoot).replace(/\/$/, '')}/`
   const owned = files
     .filter((file) => file.startsWith(prefix) && !file.includes('/node_modules/'))
     .map((file) => file.slice(prefix.length))
-  const expectedPaths = expected.map((file) => `mobile/${file}`)
   const problems = []
-  for (const file of expectedPaths) {
+  for (const file of expected) {
     if (!owned.includes(file)) {
-      problems.push(`checked test body is missing from the program: ${file}`)
+      problems.push(`checked body is missing from the program: ${file}`)
     }
   }
   for (const file of owned) {
-    if (/\.tsx?$/.test(file) && !file.endsWith('.d.ts') && !expectedPaths.includes(file)) {
+    if (/\.tsx?$/.test(file) && !file.endsWith('.d.ts') && !expected.includes(file)) {
       problems.push(`implementation source re-entered the test program: ${file}`)
     }
   }
@@ -131,9 +165,65 @@ function mirrorDeclarationInputs(passes, root, output) {
   }
 }
 
-// Sequential: two declaration producers, then the strict check of the test bodies.
-export function runNodeTestsTypecheck({ root = repoRoot, run = runProcessSync } = {}) {
-  const expected = readNodeTestRoots(root)
+// The desktop bodies' imported APIs exist only as these declarations, so their type-aware lint runs
+// against this program while the fresh output exists; a pass that checked fewer bodies fails.
+export function lintExternalBodies(external, root, run) {
+  const { command, prefixArgs } = resolveOxlintInvocation(root)
+  const result = run({
+    program: command,
+    args: [
+      ...prefixArgs,
+      '--type-aware',
+      '--config',
+      CONTRACT_LINT_CONFIG,
+      '--tsconfig',
+      NODE_TEST_PROJECT,
+      '--deny-warnings',
+      '--format',
+      'json',
+      ...external
+    ],
+    cwd: root,
+    timeoutMs: null,
+    maxOutputBytes: 16 * 1024 * 1024
+  })
+  let report = { diagnostics: [], number_of_files: 0 }
+  try {
+    report = JSON.parse(result.stdout ?? '')
+  } catch {
+    report.diagnostics = [{ message: `${result.stdout ?? ''}${result.stderr ?? ''}` }]
+  }
+  const checked = report.number_of_files
+  return {
+    project: `type-aware lint of ${external.length} contract bodies`,
+    code: result.code,
+    ok:
+      result.code === 0 &&
+      report.diagnostics.length === 0 &&
+      external.length > 0 &&
+      checked === external.length,
+    files: [],
+    diagnostics: [
+      ...(checked === external.length
+        ? []
+        : [`linted ${checked} of ${external.length} contract bodies`]),
+      ...report.diagnostics.map(
+        (diagnostic) =>
+          `${diagnostic.filename ?? ''}:${diagnostic.labels?.[0]?.span?.line ?? ''}: ${diagnostic.code ?? ''} ${diagnostic.message}`
+      )
+    ]
+  }
+}
+
+// Sequential: two declaration producers, then the strict check of the test bodies, then (when asked)
+// their type-aware lint, all inside the one owned declaration output.
+export function runNodeTestsTypecheck({
+  root = repoRoot,
+  run = runProcessSync,
+  lint = false
+} = {}) {
+  const bodies = readNodeTestBodies(root)
+  const { local: expected, external } = partitionNodeTestBodies(bodies)
   const output = ownOutputDirectory(root)
   try {
     const producers = []
@@ -141,24 +231,45 @@ export function runNodeTestsTypecheck({ root = repoRoot, run = runProcessSync } 
       const pass = compile(project, [], root, run)
       producers.push(pass)
       if (!pass.ok) {
-        return { ok: false, expected, programTestFiles: [], failures: [pass], problems: [] }
+        return {
+          ok: false,
+          expected,
+          external,
+          programTestFiles: [],
+          programExternalFiles: [],
+          failures: [pass],
+          problems: []
+        }
       }
     }
     mirrorDeclarationInputs(producers, root, output)
     const check = compile(NODE_TEST_PROJECT, ['--noEmit'], root, run)
-    const problems = checkNodeTestProgram(check.files, {
-      realRoot: fs.realpathSync(root),
-      expected
-    })
-    const prefix = `${toPosix(fs.realpathSync(root))}/mobile/`
+    const problems = [
+      ...findShadowedPhoneAliases(
+        output,
+        expected.map((file) => `mobile/${file}`),
+        root
+      ),
+      ...checkNodeTestProgram(check.files, { realRoot: fs.realpathSync(root), expected: bodies })
+    ]
+    const prefix = `${toPosix(fs.realpathSync(root))}/`
+    const inProgram = check.files
+      .filter((file) => file.startsWith(prefix))
+      .map((file) => file.slice(prefix.length))
+    const failures = check.ok ? [] : [check]
+    if (lint && check.ok && problems.length === 0) {
+      const linted = lintExternalBodies(external, root, run)
+      if (!linted.ok) {
+        failures.push(linted)
+      }
+    }
     return {
-      ok: check.ok && problems.length === 0,
+      ok: failures.length === 0 && problems.length === 0,
       expected,
-      programTestFiles: check.files
-        .filter((file) => file.startsWith(prefix))
-        .map((file) => file.slice(prefix.length))
-        .filter((file) => expected.includes(file)),
-      failures: check.ok ? [] : [check],
+      external,
+      programTestFiles: expected.filter((file) => inProgram.includes(`mobile/${file}`)),
+      programExternalFiles: external.filter((file) => inProgram.includes(file)),
+      failures,
       problems
     }
   } finally {
@@ -183,10 +294,13 @@ export function printNodeTestsFailure(result) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const result = runNodeTestsTypecheck()
+  const lint = process.argv.includes('--lint')
+  const result = runNodeTestsTypecheck({ lint })
   if (!result.ok) {
     printNodeTestsFailure(result)
     process.exit(1)
   }
-  console.log(`phone/host contract tests check: ${result.programTestFiles.join(', ')}`)
+  console.log(
+    `phone/host contract tests check${lint ? ' and type-aware lint' : ''}: ${[...result.programTestFiles.map((file) => `mobile/${file}`), ...result.programExternalFiles].join(', ')}`
+  )
 }

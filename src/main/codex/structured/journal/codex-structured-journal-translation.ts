@@ -268,7 +268,7 @@ function createCodexTranslation(
     forgetCommand: (turnId) => commands.forget(turnId),
     commandProviderTurnId: (turnId) => commands.providerTurnId(turnId),
     cancelPrompt: (journalItemId) => prompts.cancel(journalItemId),
-    resolvePrompt: (journalItemId) => prompts.resolve(journalItemId),
+    resolvePrompt: (journalItemId: string) => prompts.resolve(journalItemId),
     flush: () => {
       items.streams.flush()
       genericFrames.flush()

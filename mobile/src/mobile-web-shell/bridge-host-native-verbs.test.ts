@@ -1,7 +1,8 @@
+import { BRIDGE_EXTERNAL_LINK_FULL_URL } from './bridge/bridge-frame-fields'
 // Inspect desktop requests as well as the native error: a leaked native method would also be refused by the desktop allowlist, masking a broken fence.
 import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
-import { bridgeId, clientFrame, flushBridge } from './bridge-host-test-fakes'
+import { bridgeId, clientFrame, flushBridge, shellLocalCall } from './bridge-host-test-fakes'
 
 function request(method: string, params?: unknown): string {
   return params === undefined
@@ -88,8 +89,8 @@ describe('a native method the page asks for', () => {
         params: { mime: 'text' }
       })
     )
-    expect(bridge.client.requests.map(({ args }) => args)).toEqual([
-      ['nativeish.clipboard.read', { mime: 'text' }]
+    expect(bridge.client.requests.map(({ args }) => shellLocalCall(args))).toEqual([
+      ['nativeish.clipboard.read', { mime: 'text' }, {}, 'function']
     ])
   })
 
@@ -205,7 +206,9 @@ describe('grants scoped to the route the page was opened for', () => {
     const bridge = harness({ routeGrants: navigationOnly, ready: true })
     expect(bridge.last()).toMatchObject({
       type: 'init',
-      grants: { native: ['fault', 'rpcEnvelope', 'navigate', 'storage'] }
+      grants: {
+        native: [BRIDGE_EXTERNAL_LINK_FULL_URL, 'fault', 'rpcEnvelope', 'navigate', 'storage']
+      }
     })
     for (const [method, params] of [
       ['native.clipboard.read', { mime: 'text' }],

@@ -4,6 +4,10 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  partitionNodeTestBodies,
+  readNodeTestBodies
+} from '../../mobile/scripts/check-node-tests-typecheck.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const require = createRequire(import.meta.url)
@@ -28,10 +32,10 @@ process.on('SIGINT', onInterrupt)
 process.on('SIGTERM', onTerminate)
 
 // The phone/host contract tests are typechecked by their own program; prove Bun actually ran and
-// passed them, with assertions, and Node did not. Their names come from that program's roots.
+// passed the phone-local ones, with assertions, and Node did not. Their names come from that
+// program's roots; roots outside mobile/ are desktop suites that root Node Vitest runs instead.
 function checkContractTestMembership() {
-  const config = JSON.parse(readFileSync(join(root, 'mobile/tsconfig.test.node.json'), 'utf8'))
-  const expected = config.files.filter((file) => /\.test\.tsx?$/.test(file))
+  const expected = partitionNodeTestBodies(readNodeTestBodies(root)).local
   const read = (role) => {
     const file = join(scratch, role, 'results.json')
     return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')).testResults ?? []) : []
@@ -39,7 +43,7 @@ function checkContractTestMembership() {
   const name = (entry) => relative(join(root, 'mobile'), entry.name).replaceAll('\\', '/')
   const bun = new Map(read('bun').map((entry) => [name(entry), entry]))
   const node = new Set(read('node').map(name))
-  const problems = []
+  const problems = expected.length === 0 ? ['no phone-local contract test is named'] : []
   for (const file of expected) {
     const assertions = bun.get(file)?.assertionResults ?? []
     if (

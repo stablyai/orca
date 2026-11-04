@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-
+import { describe, expect, it, vi } from 'vitest'
+import { getRemoteRuntimeRequestAdmissionEvidence } from '../../../src/shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
 import { harness, ID, OTHER, subscribeFrame, type Harness } from './bridge-host-test-harness'
 import { BRIDGE_MAX_UNACKED_BYTES, BRIDGE_MAX_UNACKED_FRAMES } from './bridge-host-subscriptions'
 import {
@@ -7,7 +7,9 @@ import {
   clientFrame,
   createFakeRpcClient,
   flushBridge,
-  rpcSuccess
+  rpcSuccess,
+  shellFence,
+  shellLocalCall
 } from './bridge-host-test-fakes'
 import {
   BRIDGE_MAX_MESSAGE_BYTES,
@@ -17,8 +19,35 @@ import {
 } from './bridge/bridge-caps'
 import type { BridgeHostMessage } from './bridge/bridge-envelope'
 import { BridgeReplyAssembler } from './bridge/bridge-reply-chunking'
+import { BRIDGE_REQUEST_RETIRED } from './bridge-host-requests'
 
 describe('requests', () => {
+  it('replays the arity the page used', () => {
+    const bridge = harness({ ready: true })
+    bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
+    bridge.host.receive(
+      clientFrame({ type: 'request', id: bridgeId(3), method: 'status.get', params: { a: 1 } })
+    )
+    bridge.host.receive(
+      clientFrame({
+        type: 'request',
+        id: bridgeId(4),
+        method: 'status.get',
+        options: { timeoutMs: 50 }
+      })
+    )
+    // The shell adds only its local pre-send fence; method, params and the page's options pass through.
+    expect(bridge.client.requests.map(({ args }) => shellLocalCall(args))).toEqual([
+      ['status.get', undefined, {}, 'function'],
+      ['status.get', { a: 1 }, {}, 'function'],
+      ['status.get', undefined, { timeoutMs: 50 }, 'function']
+    ])
+    const fence = (index: number) => shellFence(bridge.client.requests[index]!.args)
+    bridge.host.receive(clientFrame({ type: 'cancel', id: ID, target: 'request' }))
+    expect(fence(0)).toThrow(BRIDGE_REQUEST_RETIRED)
+    expect(fence(1)).not.toThrow()
+  })
+
   it('answers a synchronous throw from the client and frees the slot', () => {
     const client = createFakeRpcClient()
     const bridge = harness({
@@ -67,7 +96,36 @@ describe('requests', () => {
     })
   })
 
+  it('reopens a slot when a request settles', async () => {
+    const baseline = getRemoteRuntimeRequestAdmissionEvidence()
+    const bridge = harness({ ready: true })
+    for (let index = 0; index < BRIDGE_MAX_PENDING_DESKTOP_REQUESTS; index += 1) {
+      bridge.host.receive(
+        clientFrame({ type: 'request', id: bridgeId(index), method: 'status.get' })
+      )
+    }
+    bridge.client.requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
+    await vi.waitFor(() =>
+      expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(
+        baseline.pendingRequestCount + BRIDGE_MAX_PENDING_DESKTOP_REQUESTS - 1
+      )
+    )
+    bridge.host.receive(
+      clientFrame({
+        type: 'request',
+        id: bridgeId(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS),
+        method: 'x.get'
+      })
+    )
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS + 1)
+    for (const request of bridge.client.requests) {
+      request.resolve(rpcSuccess('wire-1', 'ok'))
+    }
+    await vi.waitFor(() => expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual(baseline))
+  })
+
   it('holds the cap against a page that closes between batches', async () => {
+    const baseline = getRemoteRuntimeRequestAdmissionEvidence()
     const bridge = harness({ ready: true })
     const fill = (offset: number): void => {
       for (let index = 0; index < BRIDGE_MAX_PENDING_DESKTOP_REQUESTS; index += 1) {
@@ -90,9 +148,13 @@ describe('requests', () => {
     for (const request of bridge.client.requests) {
       request.resolve(rpcSuccess('wire-1', 'ok'))
     }
-    await flushBridge()
+    await vi.waitFor(() => expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual(baseline))
     fill(200)
     expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS * 2)
+    for (const request of bridge.client.requests) {
+      request.resolve(rpcSuccess('wire-1', 'ok'))
+    }
+    await vi.waitFor(() => expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual(baseline))
   })
 
   it('stops answering a cancelled request without pretending the desktop stopped running it', async () => {
@@ -107,18 +169,21 @@ describe('requests', () => {
 
 describe('replies too big for one frame', () => {
   it('chunks and reassembles to the same payload', async () => {
+    const baseline = getRemoteRuntimeRequestAdmissionEvidence()
     const bridge = harness({ ready: true })
     bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'worktree.list' }))
     const payload = rpcSuccess('wire-1', 'y'.repeat(BRIDGE_MAX_MESSAGE_BYTES * 2))
     bridge.client.requests[0]?.resolve(payload)
-    await flushBridge()
-    const replies = bridge.frames()
-    expect(replies.length).toBeGreaterThan(1)
-    const assembler = new BridgeReplyAssembler()
-    const assembled = replies.map((frame) =>
-      frame.type === 'reply' ? assembler.accept(frame) : { status: 'pending' as const }
-    )
-    expect(assembled.at(-1)).toEqual({ status: 'complete', payload })
+    await vi.waitFor(() => {
+      const replies = bridge.frames()
+      expect(replies.length).toBeGreaterThan(1)
+      const assembler = new BridgeReplyAssembler()
+      const assembled = replies.map((frame) =>
+        frame.type === 'reply' ? assembler.accept(frame) : { status: 'pending' as const }
+      )
+      expect(assembled.at(-1)).toEqual({ status: 'complete', payload })
+    })
+    await vi.waitFor(() => expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual(baseline))
   })
 
   it('aborts the request over the reply ceiling rather than truncating an answer', async () => {

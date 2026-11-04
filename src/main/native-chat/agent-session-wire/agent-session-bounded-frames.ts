@@ -2,13 +2,18 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { boundedFrameItem } from './agent-session-bounded-frame-item'
+import { subscriberReadsSettledBodies } from './agent-session-settled-body-subscriber-field'
 import { boundedQueuePublication } from './agent-session-bounded-queue'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import {
   BOUNDED_FRAME_CONTENT_BUDGET_BYTES,
   type HistoryReader
 } from './agent-session-history-page-bounds'
-import { agentJournalItemForWire, CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
+import {
+  agentJournalItemForWire,
+  CLIENT_HISTORY_READER,
+  SETTLED_BODY_HISTORY_READER
+} from './agent-session-item-wire-form'
 import { jsonBytes, shortenJsonStringsToFit } from './json-string-shortening'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
 // Fit phone bridge limits by splitting queue/roster lists into side batches.
@@ -19,13 +24,25 @@ const BOUNDED_FRAME_READER: HistoryReader = {
   budgetBytes: BOUNDED_FRAME_CONTENT_BUDGET_BYTES
 }
 
+const SETTLED_BODY_BOUNDED_READER: HistoryReader = {
+  form: (item) => boundedFrameItem(agentJournalItemForWire(item, true)),
+  budgetBytes: BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+}
 /** How a subscriber's rows are read, and so how its pages are sized. */
 export function subscriberHistoryReader(subscriber: {
   boundedFrames: boolean
+  emit?: (event: AgentSessionSubscribeEvent) => void
   readHistorySnapshot?: HistoryReader['snapshot']
   readQueueSourceIds?: HistoryReader['queueSourceIds']
 }): HistoryReader {
-  const reader = subscriber.boundedFrames ? BOUNDED_FRAME_READER : CLIENT_HISTORY_READER
+  // The settled-body capability picks each row's form; an older queued-image reader adds its snapshot.
+  const reader = subscriberReadsSettledBodies(subscriber.emit)
+    ? subscriber.boundedFrames
+      ? SETTLED_BODY_BOUNDED_READER
+      : SETTLED_BODY_HISTORY_READER
+    : subscriber.boundedFrames
+      ? BOUNDED_FRAME_READER
+      : CLIENT_HISTORY_READER
   return subscriber.readHistorySnapshot
     ? {
         ...reader,

@@ -1,3 +1,4 @@
+import { SETTLED_BODY_HISTORY_READER } from './agent-session-item-wire-form'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -30,13 +31,17 @@ export function readStructuredAgentSessionHistoryResult(input: {
   scope?: AgentSessionHistoryScope
   reader?: HistoryReader
   replaceNormalizedHistory?: boolean
+  readsSettledBodies?: boolean
   /** The host's current-work projection, which the page's turn and prompt fields state. */
   work?: AgentSessionPublishedWork
 }): AgentSessionHistoryResult {
   const result = withPublishedWorkResult(
     readAgentSessionHistory(input.journal, input.request, {
       scope: input.scope,
-      reader: input.reader,
+      // A settled-body reader forms and sizes each row; an older queued-image reader keeps its snapshot.
+      reader: input.readsSettledBodies
+        ? { ...input.reader, ...SETTLED_BODY_HISTORY_READER }
+        : input.reader,
       rowReplay: input.replaceNormalizedHistory === false
     }),
     input.work

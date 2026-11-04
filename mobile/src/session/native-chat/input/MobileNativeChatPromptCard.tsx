@@ -22,7 +22,10 @@ import type {
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
+import type {
+  MobileChatPermission,
+  MobilePermissionResponse
+} from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { MobileNativeChatStructuredAsk } from './MobileNativeChatStructuredAsk'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
@@ -69,7 +72,7 @@ export function MobileNativeChatPromptCard({
   onCollapsePrompt?: () => void
   collapsedPrompt?: { title: string; expand: () => void } | null
   permission?: MobileChatPermission | null
-  onRespondPermission?: (send: string) => Promise<boolean>
+  onRespondPermission?: MobilePermissionResponse
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
 }): React.JSX.Element | null {
@@ -119,9 +122,11 @@ export function MobileNativeChatPromptCard({
       />
     ) : permission ? (
       <MobileNativeChatPermission
-        key={JSON.stringify(permission)}
+        key={JSON.stringify(permission.form && permission.prompt ? permission.prompt : permission)}
         permission={permission}
-        onRespond={async (send) => (await onRespondPermission?.(send)) ?? false}
+        onRespond={async (send, content, rendered) =>
+          (await onRespondPermission?.(send, content, rendered)) ?? false
+        }
         onCancel={onCancelPrompt}
         onCollapse={onCollapsePrompt}
       />

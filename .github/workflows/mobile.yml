@@ -41,6 +41,14 @@ on:
       - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
       - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
+      # Phone/host contract bodies kept beside their desktop subjects, and their declaration producer's inputs.
+      - 'src/main/codex/**'
+      - 'src/renderer/**'
+      - 'src/main/native-chat/agent-session-journal/**'
+      - 'src/main/runtime/mobile-desktop-relay/**'
+      - 'src/main/sqlite/**'
+      - 'config/tsconfig.test.pane-launch.json'
+      - 'config/tsconfig.web.json'
       # Rerun the only Fastfile-loading checks for release-workflow/Fastfile edits.
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
@@ -57,6 +65,7 @@ on:
       - '.github/workflows/mobile-ios-release.yml'
       - 'config/scripts/mobile-release-check-scope*'
       - 'config/scripts/mobile-test-change-scope*'
+      - 'config/scripts/phone-host-contract-bodies.mjs'
       - 'config/scripts/pr-code-change-scope.mjs'
       - 'config/scripts/pr-package-test-paths.mjs'
       - 'config/scripts/pr-layout-oracle-route.mjs'
@@ -71,6 +80,13 @@ on:
       - '!src/main/**/*.test.[jt]s'
       - '!src/main/**/*.test.[jt]sx'
       - '!src/main/**/*.test.[cm][jt]s'
+      - '!src/renderer/**/*.test.[jt]s'
+      - '!src/renderer/**/*.test.[jt]sx'
+      - '!src/renderer/**/*.test.[cm][jt]s'
+      # These desktop suites are checked by the phone/host contract program, so their edits still route here.
+      - 'src/main/codex/codex-form-transport-envelope.test.ts'
+      - 'src/main/codex/codex-url-opener-contract.test.ts'
+      - 'src/renderer/src/components/native-chat/NativeChatForm.contract.test.tsx'
   # Check matching source inputs on main too: independently passing PRs can conflict after merge, and verify is PR-only.
   push:
     branches:
@@ -105,9 +121,18 @@ on:
       - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
       - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
+      # Phone/host contract bodies kept beside their desktop subjects, and their declaration producer's inputs.
+      - 'src/main/codex/**'
+      - 'src/renderer/**'
+      - 'src/main/native-chat/agent-session-journal/**'
+      - 'src/main/runtime/mobile-desktop-relay/**'
+      - 'src/main/sqlite/**'
+      - 'config/tsconfig.test.pane-launch.json'
+      - 'config/tsconfig.web.json'
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
       - 'config/scripts/run-mobile-ci-tests.mjs'
+      - 'config/scripts/phone-host-contract-bodies.mjs'
       - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
       - 'config/scripts/tsrs-typecheck-compiler.mjs'
       - 'config/scripts/pinned-bun-executable.mjs'
@@ -124,6 +149,13 @@ on:
       - '!src/main/**/*.test.[jt]s'
       - '!src/main/**/*.test.[jt]sx'
       - '!src/main/**/*.test.[cm][jt]s'
+      - '!src/renderer/**/*.test.[jt]s'
+      - '!src/renderer/**/*.test.[jt]sx'
+      - '!src/renderer/**/*.test.[cm][jt]s'
+      # These desktop suites are checked by the phone/host contract program, so their edits still route here.
+      - 'src/main/codex/codex-form-transport-envelope.test.ts'
+      - 'src/main/codex/codex-url-opener-contract.test.ts'
+      - 'src/renderer/src/components/native-chat/NativeChatForm.contract.test.tsx'
 
 concurrency:
   # Key main concurrency by commit: GitHub replaces pending runs even with cancel-in-progress:false, hiding middle-merge regressions.

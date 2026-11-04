@@ -11,6 +11,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 class OrcaMobileWebShellModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("OrcaMobileWebShell")
+    Constants("inboundMessageBytes" to MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES)
 
     // Takes a FileProvider content:// URI; the grant lets the chosen viewer read Orca's cache file.
     AsyncFunction("presentPdf") { uri: String ->

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  createAgentSessionSettledBodyReader,
+  type AgentSessionSettledBodyOwner
+} from '../../../src/shared/agent-session-settled-body-reader'
+import { readMobileSettledBody } from './native-chat/mobile-native-chat-item-read'
+import { agentSessionRefusalError } from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import type {
   AgentSessionQueuedMessage,
@@ -38,7 +44,9 @@ export function useMobileStructuredAgentState(args: {
   enabled: boolean
   // Reacquire holds after transport loss while keeping the transcript visible through the outage.
   connected: boolean
+  settledBodiesSupported?: boolean
 }): {
+  settledBodyOwner: AgentSessionSettledBodyOwner | null
   state: StructuredAgentSessionState
   stateRef: { readonly current: StructuredAgentSessionState }
   /** Null until the host publishes a queue (older hosts never do). */
@@ -48,6 +56,22 @@ export function useMobileStructuredAgentState(args: {
   loadEarlier: () => void
 } {
   const { client, connected, enabled, sessionId, sessionKey } = args
+  const settledReader = useMemo(
+    () =>
+      createAgentSessionSettledBodyReader((request) => {
+        if (!client || !sessionId || args.settledBodiesSupported !== true) {
+          return Promise.reject(
+            agentSessionRefusalError('structured_agent_session_unsupported', {
+              reason: 'hostUnsupported'
+            })
+          )
+        }
+        return readMobileSettledBody({ client, sessionId }, request)
+      }),
+    [client, sessionId, sessionKey, args.settledBodiesSupported]
+  )
+  useEffect(() => () => settledReader.clear(), [settledReader])
+  useEffect(() => subscribeConnectionRevival(() => settledReader.retry()), [settledReader])
   const commandsChanged = useRef(args.onCommandsChanged)
   useLayoutEffect(() => {
     commandsChanged.current = args.onCommandsChanged
@@ -229,7 +253,12 @@ export function useMobileStructuredAgentState(args: {
     loadEarlier()
   }, [drawsNothingFrom, loadEarlier, loadingEarlier])
 
+  const settledBodyOwner = useMemo(
+    () => (sessionId ? { reader: settledReader, sessionId, epoch: state.epoch } : null),
+    [sessionId, settledReader, state.epoch]
+  )
   return {
+    settledBodyOwner,
     state,
     stateRef,
     // A published null is an empty queue; only an absent list is no claim.

@@ -7,6 +7,7 @@ import { runProcessSync } from '@orca/process-host'
 import { scanAstGrep } from './ast-grep-scan.mjs'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
+import { rootTypeAwareLintArgs } from './phone-host-contract-bodies.mjs'
 import { createExistingTypeAssertionMatcher } from './existing-type-assertions.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
@@ -57,7 +58,8 @@ export const OXLINT_SCANS = [
   },
   {
     label: 'type-aware code quality',
-    args: ['--type-aware', '--config', 'config/oxlint-code-quality-type-aware.json']
+    // The phone/host contract bodies lint against their declarations in the checker's own pass.
+    args: rootTypeAwareLintArgs()
   },
   {
     label: 'React Doctor',

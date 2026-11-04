@@ -1,3 +1,4 @@
+import { BRIDGE_EXTERNAL_LINK_FULL_URL } from './bridge/bridge-frame-fields'
 // Decode through the page’s real reader to prove the binary frame the host emits is one the page reconstructs; literals alone could agree on the wrong shape.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -206,7 +207,9 @@ describe('the binary lane is served only to a route granted it', () => {
     const bridge = harness({ ready: true, routeGrants: ['navigate', 'storage'] })
     expect(bridge.last()).toMatchObject({
       type: 'init',
-      grants: { native: ['fault', 'rpcEnvelope', 'navigate', 'storage'] }
+      grants: {
+        native: [BRIDGE_EXTERNAL_LINK_FULL_URL, 'fault', 'rpcEnvelope', 'navigate', 'storage']
+      }
     })
     bridge.host.receive(screencastSubscribe(ID, true))
     expect(bridge.diagnostics).toEqual([{ kind: 'binary-lane-refused', id: ID }])

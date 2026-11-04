@@ -22,6 +22,7 @@ export const BRIDGE_NAVIGATE_BACK_NOTIFY = 'navigate-back'
 
 // External-link opening is separate from in-app navigation; shells may implement one without the other, so policy needs distinct grants.
 export const BRIDGE_EXTERNAL_LINK_GRANT = 'externalLink'
+export const BRIDGE_EXTERNAL_LINK_FULL_URL = 'externalLink.fullUrl'
 
 // Negotiate rpcEnvelope before relying on extra wire fields; older shells drop unknown fields and could execute without caller-required metadata.
 export const BRIDGE_RPC_ENVELOPE_GRANT = 'rpcEnvelope'
