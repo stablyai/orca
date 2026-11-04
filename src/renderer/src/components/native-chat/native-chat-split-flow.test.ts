@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import type * as importCreation from '@/runtime/web-runtime-terminal-creation'
 import type * as WorktreeRuntimeOwner from '@/lib/worktree-runtime-owner'
 import type * as WorktreeOperationRoute from '@/lib/worktree-operation-route'
@@ -46,7 +47,8 @@ createTabsSliceMockApi()
 
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
   vi.clearAllMocks()
   runtimeOwners.clear()
   store = createTestStore()
@@ -93,55 +95,62 @@ it.each([
   }
 )
 
-it.each(['failed', 'rejected', 'populated'] as const)(
-  'settles a paired folder split safely when %s',
-  async (result) => {
-    const worktreeId = folderWorkspaceKey('paired-folder')
-    const { source, target } = sourceChat(worktreeId)
-    runtimeOwners.set(worktreeId, 'paired-host')
-    let settle: (outcome: { status: 'created' | 'failed' }) => void = () => {}
-    let reject: (error: Error) => void = () => {}
-    createRemote.mockReturnValue(
-      new Promise((resolve, fail) => {
-        settle = resolve
-        reject = fail
-      })
-    )
-    expect(runNativeChatSplitTarget(target, 'right')).toBe(true)
-    const groupId = store.getState().activeGroupIdByWorktree[worktreeId]
-    // Changing the global selection must not redirect an already-requested split.
-    store.setState({ activeWorktreeId: 'another-workspace' })
-    await vi.waitFor(() =>
-      expect(createRemote).toHaveBeenCalledExactlyOnceWith(
-        {
-          worktreeId,
-          environmentId: 'paired-host',
-          targetGroupId: groupId,
-          activate: true
-        },
-        { userAct: true }
-      )
-    )
-    if (result === 'populated') {
-      store.getState().createTab(worktreeId, groupId)
-    }
-    if (result === 'rejected') {
-      reject(new Error('disconnected'))
-    } else {
-      settle({ status: 'failed' })
-    }
-    await vi.waitFor(() => {
-      expect(store.getState().groupsByWorktree[worktreeId]).toHaveLength(
-        result === 'populated' ? 2 : 1
-      )
-      if (result === 'rejected') {
-        expect(toast.error).toHaveBeenCalledOnce()
-      }
+it.each([
+  ['failed', 'en'],
+  ['rejected', 'en'],
+  ['populated', 'en'],
+  ['rejected', 'de']
+] as const)('settles a paired folder split safely when %s in %s', async (result, locale) => {
+  await i18n.changeLanguage(await loadRendererUiLanguage(locale))
+  const worktreeId = folderWorkspaceKey('paired-folder')
+  const { source, target } = sourceChat(worktreeId)
+  runtimeOwners.set(worktreeId, 'paired-host')
+  let settle: (outcome: { status: 'created' | 'failed' }) => void = () => {}
+  let reject: (error: Error) => void = () => {}
+  createRemote.mockReturnValue(
+    new Promise((resolve, fail) => {
+      settle = resolve
+      reject = fail
     })
-    expect(store.getState().unifiedTabsByWorktree[worktreeId][0]).toEqual(source)
-    expect(store.getState().activeWorktreeId).toBe('another-workspace')
+  )
+  expect(runNativeChatSplitTarget(target, 'right')).toBe(true)
+  const groupId = store.getState().activeGroupIdByWorktree[worktreeId]
+  // Changing the global selection must not redirect an already-requested split.
+  store.setState({ activeWorktreeId: 'another-workspace' })
+  await vi.waitFor(() =>
+    expect(createRemote).toHaveBeenCalledExactlyOnceWith(
+      {
+        worktreeId,
+        environmentId: 'paired-host',
+        targetGroupId: groupId,
+        activate: true
+      },
+      { userAct: true }
+    )
+  )
+  if (result === 'populated') {
+    store.getState().createTab(worktreeId, groupId)
   }
-)
+  if (result === 'rejected') {
+    reject(new Error('disconnected'))
+  } else {
+    settle({ status: 'failed' })
+  }
+  await vi.waitFor(() => {
+    expect(store.getState().groupsByWorktree[worktreeId]).toHaveLength(
+      result === 'populated' ? 2 : 1
+    )
+    if (result === 'rejected') {
+      expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+        locale === 'de'
+          ? 'Für diesen Arbeitsbereich konnte kein Terminal geöffnet werden'
+          : 'Could not open a terminal for this workspace'
+      )
+    }
+  })
+  expect(store.getState().unifiedTabsByWorktree[worktreeId][0]).toEqual(source)
+  expect(store.getState().activeWorktreeId).toBe('another-workspace')
+})
 
 it('removes an empty split when accepted host creation cannot be mirrored', async () => {
   const actual = await vi.importActual<typeof importCreation>(
