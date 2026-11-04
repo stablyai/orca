@@ -56,6 +56,8 @@ export async function submitFolderWorkspaceCreate({
   terminalWindowsShell,
   launchSource = 'sidebar',
   runtimeEnvironmentId = null,
+  folderPath,
+  connectionId,
   createFolderWorkspace,
   onOpenChange
 }: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
@@ -184,8 +186,9 @@ export async function submitFolderWorkspaceCreate({
   const workspace = await createFolderWorkspace({
     projectGroupId: projectGroup.id,
     name: workspaceName,
+    ...(folderPath ? { folderPath } : {}),
     // Retain the SSH target even when another host owns the focused runtime.
-    connectionId: projectGroup.connectionId ?? null,
+    connectionId: connectionId !== undefined ? connectionId : (projectGroup.connectionId ?? null),
     linkedTask: toFolderWorkspaceLinkedTask(linkedWorkItem),
     ...(linkedTaskSourceContext ? { linkedTaskSourceContext } : {}),
     ...(quickAgent ? { createdWithAgent: quickAgent } : {}),
