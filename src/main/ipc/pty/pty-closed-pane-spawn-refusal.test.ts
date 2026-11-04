@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   _resetClosedPaneFencesForTests,
   fencedIfLayoutOwner,

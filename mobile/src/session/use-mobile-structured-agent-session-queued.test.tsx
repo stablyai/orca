@@ -1,5 +1,3 @@
-// Test capability-gated queue writes with authoritative cards; Stop preserves host-held drafts and legacy Edit copies before deleting.
-
 import { createElement } from 'react'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -28,6 +26,7 @@ import {
   queuedDraft,
   snapshotEvent
 } from './use-mobile-structured-agent-session-queued.test-fixture'
+// Test capability-gated queue writes with authoritative cards; Stop preserves host-held drafts and legacy Edit copies before deleting.
 
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -649,6 +648,7 @@ describe('mobile structured queued messages', () => {
           text: 'text of draft-1',
           line: 'text of draft-1',
           state: 'waiting',
+          resumeEligible: true,
           hold: 'turn',
           needsAttention: false,
           caption: null,

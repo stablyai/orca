@@ -6,7 +6,7 @@ import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrenc
 import { readExactWorkerOutput } from '../worker/worker-output'
 import { exposeWorkerRetainReceipt } from '../worker/worker-terminal-resource-presentation'
 import { archiveWorkerOutputBeforeStop } from '../worker/worker-stop-archive'
-import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
+import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import {
   inspectRemoteAttachment,
   observeRemoteAttachmentLiveness,

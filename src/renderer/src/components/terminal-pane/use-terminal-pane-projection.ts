@@ -21,7 +21,7 @@ import { canContinueAgentSessionInNewSession } from './terminal-agent-session-co
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { canPaneOfferResumeInNewChat } from '../tab-bar/tab-session-history-switch'
 

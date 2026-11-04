@@ -1,3 +1,5 @@
+import { statusFeed } from './structured-agent-session-rpc-status.test-fixture'
+export { STATUS_SESSION, STATUS_ITEMS } from './structured-agent-session-rpc-status.test-fixture'
 import {
   SESSION,
   FINGERPRINT,
@@ -5,27 +7,21 @@ import {
   request
 } from './structured-agent-session-rpc-client.test-fixture'
 import { availableRevealWorkspace } from '../../session-tabs/structured-workspace-authority.test-fixture'
-// Share one dispatcher harness; repopulate stable hostCalls/runtimeCalls objects per test so imports keep their identities.
-
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { vi } from 'vitest'
-import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import {
   getStructuredAgentSessionHost,
   setStructuredAgentSessionHost
 } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import {
-  StructuredAgentSessionStatusFeed,
-  type StructuredAgentSessionStatusSubscriber
-} from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import type { StructuredAgentSessionStatusSubscriber } from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { RpcAnyMethodDeclaration, RpcResponse } from '../core'
+import type { RpcAnyMethodDeclaration, RpcContext, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { resetStructuredAgentSessionClosesBeforeCreateForTests } from './structured-agent-session-close-before-create'
+// Share one dispatcher harness; repopulate stable hostCalls/runtimeCalls objects per test so imports keep their identities.
 
 export const hostCalls: Record<string, ReturnType<typeof vi.fn>> = {}
 export const runtimeCalls: Record<string, ReturnType<typeof vi.fn>> = {}
@@ -35,61 +31,6 @@ function reset(record: Record<string, ReturnType<typeof vi.fn>>): void {
     delete record[key]
   }
 }
-
-export const STATUS_SESSION = 'session-status'
-export const STATUS_ITEMS: ReturnType<AgentSessionJournal['snapshot']>['items'] = [
-  {
-    itemId: 'user-1',
-    sequence: 1,
-    revision: 1,
-    observedAt: 1,
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] }
-  },
-  {
-    itemId: 'turn-1',
-    sequence: 2,
-    revision: 1,
-    observedAt: 2,
-    body: { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } }
-  }
-]
-
-/** One indexed session over a journal that reads back fixed items; the projection is real. */
-const statusFeed = () =>
-  new StructuredAgentSessionStatusFeed({
-    logger: createStructuredAgentSessionLogger(),
-    sessions: new Map([
-      [
-        STATUS_SESSION,
-        {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
-          journal: {
-            cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
-            lastActivityAt: () => 2,
-            context: { floor: () => null },
-            stopMarks: { latest: () => null, revision: () => 0 },
-            snapshot: () => ({ items: STATUS_ITEMS, submissions: [] }),
-            item: ((itemId) =>
-              STATUS_ITEMS.find((item) => item.itemId === itemId) ??
-              null) satisfies AgentSessionJournal['item'],
-            itemFence: () => undefined,
-            runningTurn: () => null
-          } as unknown as AgentSessionJournal,
-          params: {
-            location: {
-              executionHostId: 'local',
-              wslDistro: null,
-              workspaceId: 'workspace-1',
-              workspaceKind: 'git-worktree' as const
-            },
-            provider: 'codex' as const
-          }
-        }
-      ]
-    ]),
-    getConversation: () => null,
-    now: () => 1_000
-  })
 
 export function hostStub(): StructuredAgentSessionHost {
   reset(hostCalls)
@@ -246,12 +187,10 @@ export function dispatcher(
 export async function call(
   method: string,
   params: unknown,
-  client?: {
-    clientId?: string
-    clientKind?: 'mobile' | 'runtime'
-    clientCapabilities?: readonly string[]
-    signal?: AbortSignal
-  },
+  client?: Pick<
+    RpcContext,
+    'clientId' | 'connectionId' | 'clientKind' | 'clientCapabilities' | 'signal'
+  >,
   runtimeOverrides: Record<string, unknown> = {},
   methods?: readonly RpcAnyMethodDeclaration[]
 ): Promise<RpcResponse> {

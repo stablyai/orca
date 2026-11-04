@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { provideServerLayoutApplyRoutes } from '@/runtime/server-layout-apply-routes'
 import { splitPaneInMain, splitServerPane } from './terminal-pane-split-in-main'
 

@@ -1,4 +1,4 @@
-import { formatTerminalStartFailure } from '../../../../../../shared/terminal-start-failure'
+import { formatTerminalStartFailure } from '../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { WorkerDispatchRow } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'

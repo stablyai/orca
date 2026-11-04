@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
 import {

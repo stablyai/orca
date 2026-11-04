@@ -7,7 +7,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
 } from '../../../../shared/execution-host'
-import { isCachedMergedBranchPRCurrentForWorktree } from '@/components/sidebar/worktree-card-pr-display'
+import { isCachedMergedBranchPRCurrentForWorktree } from '@/components/sidebar/workspace-card/review/worktree-card-pr-display'
 import type { AppState } from '@/store/types'
 import {
   getGitHubPRCacheKey,

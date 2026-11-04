@@ -5,7 +5,7 @@ import type {
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
-import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-send-contract'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { AgentPaneWorkspace } from '../agent-hooks/agent-transition-detector'

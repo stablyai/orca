@@ -13,8 +13,8 @@ import {
   GIT_KEY
 } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
-import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { ownedEditorFileId } from '../../../shared/workspace-session/workspace-session-pane-ownership'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'

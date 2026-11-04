@@ -1,4 +1,4 @@
-import type { TerminalForegroundSample } from '../../shared/terminal-foreground-observation'
+import type { TerminalForegroundSample } from '../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import './mock-descendant-sweep'
 import { describe, expect, it, vi } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'

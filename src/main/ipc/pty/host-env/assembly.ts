@@ -5,7 +5,7 @@ import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
 } from '../../../../shared/pi-agent-kind'
-import { applyTerminalGitCredentialPromptGuard } from '../../../../shared/terminal-git-credential-guard'
+import { applyTerminalGitCredentialPromptGuard } from '../../../../shared/shell/launch/terminal-git-credential-guard'
 import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/opencode-startup-prompt-installer'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
 import { agentHookServer } from '../../../agent-hooks/server'

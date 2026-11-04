@@ -11,7 +11,7 @@ import {
   resetAgentLaunchPanesForTests
 } from '../../../../main/agent-launch/agent-launch-pane-attachment'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   makePaneSpawnReservationKey,
   paneSpawnReservationsByOwnerKey

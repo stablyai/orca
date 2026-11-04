@@ -12,7 +12,7 @@ import {
   shouldInspectWindowsAgentForeground,
   type AgentForegroundResolutionOptions
 } from './windows-agent-foreground-process'
-import { isShellProcess } from '../../shared/shell-process-detection'
+import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 import {
   selectForegroundProcessCandidate,
   type SelectedForegroundProcess

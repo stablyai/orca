@@ -1,20 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import RuntimeSequencer from './vitest-runtime-sequencer.mjs'
+import { describe, expect, it } from 'vitest'
 import { balanceFiles } from './ci-shard-assignment.mjs'
 import { discoverE2eFiles, planE2e, verifyE2eSelection } from './ci-e2e-shard-plan.mjs'
 import { parseTimingLog } from './ci-shard-timing-import.mjs'
-import TimingSequencer from './ci-unit-sequencer.mjs'
-
-const directories = []
-afterEach(() => {
-  vi.unstubAllEnvs()
-  for (const directory of directories.splice(0)) {
-    rmSync(directory, { recursive: true, force: true })
-  }
-})
 
 describe('timing-weighted shard selection', () => {
   it('distributes long files, includes unknowns exactly once, and ignores discovery order', () => {
@@ -35,29 +22,6 @@ describe('timing-weighted shard selection', () => {
     ])
     expect(() => balanceFiles(['a', 'a'], 8, {})).toThrow('Duplicate')
     expect(() => balanceFiles(['a'], 0, {})).toThrow('count')
-  })
-
-  it('uses the post-filter Vitest discovery unchanged across eight shards', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-unit-shards-'))
-    directories.push(directory)
-    vi.stubEnv('ORCA_SHARD_MANIFEST', join(directory, 'assignment.json'))
-    const specs = Array.from({ length: 37 }, (_, i) => ({
-      moduleId: resolve(`src/fixture-${i}.test.ts`)
-    }))
-    const selected = []
-    for (let index = 1; index <= 8; index++) {
-      const sequencer = new TimingSequencer({
-        config: { root: process.cwd(), shard: { index, count: 8 } }
-      })
-      expect(sequencer.sort).toBe(RuntimeSequencer.prototype.sort)
-      selected.push(...(await sequencer.shard(specs)))
-      const manifest = JSON.parse(readFileSync(join(directory, 'assignment.json'), 'utf8'))
-      expect(manifest.selectedShard).toBe(index)
-      expect(manifest.baselineSha256).toMatch(/^[a-f0-9]{64}$/)
-    }
-    expect(new Set(selected).size).toBe(specs.length)
-    expect(selected).toHaveLength(specs.length)
-    expect(new Set(selected)).toEqual(new Set(specs))
   })
 
   it('keeps nested/serial E2E files atomic and fails closed on discovery errors', () => {

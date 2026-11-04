@@ -25,7 +25,7 @@ import { useFolderSubmitOrchestration } from '@/hooks/composer-state/folder-subm
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from './sidebar/folder-workspace-composer-submit-fixtures'
+} from './sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 const mocks = vi.hoisted(() => ({
   submit: vi.fn(),

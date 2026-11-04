@@ -63,6 +63,7 @@ export function AgentLaunchPickerMenu({
   runLaunch,
   entries,
   hideSearch,
+  initialQuery = '',
   onSelectAgent
 }: {
   model?: NewTabAgentMenuModel
@@ -76,6 +77,8 @@ export function AgentLaunchPickerMenu({
   runLaunch: Launch
   entries: AgentPickerEntry[]
   hideSearch?: boolean
+  /** Seeds the search field; read once when the menu mounts. */
+  initialQuery?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
 }) {
   useEffect(() => {
@@ -103,7 +106,7 @@ export function AgentLaunchPickerMenu({
       mode
     )
   }, [entries, draftScope, mode])
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const [activeSetup, setActiveSetup] = useState<{
     id: string
     agent: AgentPickerEntry['agent']
@@ -156,6 +159,11 @@ export function AgentLaunchPickerMenu({
             value={query}
             density="compact"
             autoFocus
+            onFocus={(event) => {
+              // Why: a seeded query must keep the caret after the typed key.
+              const end = event.currentTarget.value.length
+              event.currentTarget.setSelectionRange(end, end)
+            }}
             placeholder={translate('agentPicker.search', 'Search agents and setups…')}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {

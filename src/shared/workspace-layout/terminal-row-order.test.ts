@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../constants'
 import type { Tab } from '../tab-types'
-import type { TerminalTab } from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { orderTerminalRowsByTabGroups } from './terminal-row-order'
 
 const WT = 'repo-1::/Users/dev/orca'

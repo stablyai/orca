@@ -10,7 +10,7 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import type { AppState } from '@/store/types'
 import type { AgentPaneThread } from './activity-thread-types'

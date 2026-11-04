@@ -19,7 +19,7 @@ import { supportsStructuredAgentSessionCliSource } from '@/runtime/structured-ag
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { toHostSessionPaneKey } from '../../../../shared/terminal-surface-id'
+import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { resolveCliChatResumeSource, type CliChatResumeSource } from './cli-chat-resume-source'
 import {
   cliChatResumeExitUnprovenText,

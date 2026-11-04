@@ -1,7 +1,7 @@
 import {
   readTerminalStartFailure,
   type TerminalStartFailure
-} from '../../../../shared/terminal-start-failure'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import {
   AGENT_LAUNCH_PANE_REFUSED_CODE,
   type AgentLaunchPaneAddress,

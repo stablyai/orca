@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   nativeChatAppearanceStyle,
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS

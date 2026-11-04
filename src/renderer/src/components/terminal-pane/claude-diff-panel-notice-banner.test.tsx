@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ClaudeDiffPanelNoticeBanner } from './ClaudeDiffPanelNoticeBanner'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
